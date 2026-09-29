@@ -131,6 +131,7 @@ export const ISSUES: readonly RemoteUiSettingsIssue[] = [
   "acme-needs-internet-mode",
   "acme-incomplete",
   "invalid-network",
+  "public-network",
   "invalid-host-name",
   "invalid-session-limits",
 ];
@@ -188,6 +189,67 @@ function isCidr(text: string): boolean {
   return Number(prefix) <= (parseIpv4(ip) !== null ? 32 : 128);
 }
 
+/** `value` as a string of `width` binary digits. */
+function binary(value: number, width: number): string {
+  return value.toString(2).padStart(width, "0");
+}
+
+/** The 128 bits of an IPv6 address as binary digits (`null` when invalid). */
+function ipv6Bits(text: string): string | null {
+  if (!isIpv6(text)) return null;
+  const toBits = (part: string): string[] =>
+    part === ""
+      ? []
+      : part.split(":").map((g) => {
+          const v4 = parseIpv4(g);
+          return v4 !== null ? v4.map((b) => binary(b, 8)).join("") : binary(parseInt(g, 16), 16);
+        });
+  const [head = "", tail] = text.split("::");
+  const left = toBits(head).join("");
+  const right = tail === undefined ? "" : toBits(tail).join("");
+  return left + "0".repeat(Math.max(128 - left.length - right.length, 0)) + right;
+}
+
+/** Local ranges as (binary prefix): loopback, RFC 1918, link-local, CGNAT. */
+const LOCAL_V4: readonly string[] = [
+  binary(127, 8),
+  binary(10, 8),
+  binary(172, 8) + binary(16, 8).slice(0, 4),
+  binary(192, 8) + binary(168, 8),
+  binary(169, 8) + binary(254, 8),
+  binary(100, 8) + binary(64, 8).slice(0, 2),
+];
+/** Local IPv6 ranges: loopback, unique local (fc00::/7), link-local (fe80::/10). */
+const LOCAL_V6: readonly string[] = [
+  "0".repeat(127) + "1",
+  binary(0xfc00, 16).slice(0, 7),
+  binary(0xfe80, 16).slice(0, 10),
+];
+
+/** Whether the network `bits`/`prefix` lies within one of `ranges`. */
+function withinRanges(bits: string, prefix: number, ranges: readonly string[]): boolean {
+  return ranges.some((range) => prefix >= range.length && bits.startsWith(range));
+}
+
+/**
+ * Whether the CIDR network lies entirely within local ranges, like the
+ * core's `is_local_network` (IPv4-mapped IPv6 counts as IPv4).
+ */
+export function isLocalNetwork(text: string): boolean {
+  if (!isCidr(text)) return false;
+  const [ip = "", prefixText = ""] = text.trim().split("/");
+  const prefix = Number(prefixText);
+  const v4 = parseIpv4(ip);
+  if (v4 !== null) return withinRanges(v4.map((b) => binary(b, 8)).join(""), prefix, LOCAL_V4);
+  const bits = ipv6Bits(ip);
+  if (bits === null) return false;
+  const mappedPrefix = "0".repeat(80) + "1".repeat(16);
+  if (bits.startsWith(mappedPrefix) && prefix >= 96) {
+    return withinRanges(bits.slice(96), prefix - 96, LOCAL_V4);
+  }
+  return withinRanges(bits, prefix, LOCAL_V6);
+}
+
 function isDnsName(name: string): boolean {
   const n = name.endsWith(".") ? name.slice(0, -1) : name;
   if (n === "" || n.length > 253 || isIpAddress(n)) return false;
@@ -224,6 +286,7 @@ export function settingsIssues(settings: RemoteUiSettings): RemoteUiSettingsIssu
     }
   }
   if (!settings.allowed_networks.every(isCidr)) issues.push("invalid-network");
+  else if (!settings.allowed_networks.every(isLocalNetwork)) issues.push("public-network");
   if (settings.host_name !== null && !isDnsName(settings.host_name)) {
     issues.push("invalid-host-name");
   }

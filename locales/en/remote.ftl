@@ -172,6 +172,7 @@ remote-issue-internet-mode-locked = Internet mode is locked.
 remote-issue-acme-needs-internet-mode = Let’s Encrypt certificates need internet mode, which is locked.
 remote-issue-acme-incomplete = Let’s Encrypt needs a domain name and accepted terms.
 remote-issue-invalid-network = Each allowed network must look like 192.168.1.0/24.
+remote-issue-public-network = Allowed networks must be local networks (such as 192.168.1.0/24) while internet mode is locked.
 remote-issue-invalid-host-name = The host name is not valid (letters, digits and dashes; not an IP address).
 remote-issue-invalid-session-limits = Session limits must be at least 1, and the idle limit cannot be longer than the maximum.
 

@@ -12,12 +12,17 @@
 //!   [`ThrottlePolicy::lockout_secs`], doubling with every further failure
 //!   in the window (up to [`ThrottlePolicy::max_lockout_secs`]); the caller
 //!   raises the lockout alert and writes the audit entry. The global
-//!   pairing key only pauses briefly (no backoff, no escalation), so an
-//!   attacker cannot shut pairing down for long.
+//!   pairing key only pauses briefly (no backoff, no escalation), and its
+//!   count has a short window of its own
+//!   ([`ThrottlePolicy::global_window_secs`]), so an attacker cannot keep
+//!   pairing shut with a trickle of wrong codes: it takes
+//!   [`ThrottlePolicy::global_lockout_failures`] failures within that
+//!   window, from addresses that each hit their own backoff and lockout.
 //!
-//! The window is long (a week) on purpose: with a short window, waiting
-//! out the backoff would also age the count out and the lockout would
-//! never be reached. A success clears the address's and account's counts.
+//! The address and account window is long (a week) on purpose: with a
+//! short window, waiting out the backoff would also age the count out and
+//! the lockout would never be reached. A success clears the address's and
+//! account's counts (and a successful pairing the global pairing count).
 
 use std::net::IpAddr;
 
@@ -28,8 +33,12 @@ use crate::error::Result;
 /// Limits of the brute-force protection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThrottlePolicy {
-    /// Failures older than this start a new count.
+    /// Failures older than this start a new count (address and account
+    /// keys).
     pub window_secs: i64,
+    /// The same for the global pairing key: short, so a slow stream of
+    /// failures cannot keep pairing paused.
+    pub global_window_secs: i64,
     /// Failures within the window before any delay applies.
     pub free_failures: u32,
     /// First delay after the free failures.
@@ -54,6 +63,7 @@ impl Default for ThrottlePolicy {
     fn default() -> Self {
         Self {
             window_secs: 7 * 24 * 60 * 60,
+            global_window_secs: 60 * 60,
             free_failures: 3,
             base_delay_secs: 1,
             max_delay_secs: 5 * 60,
@@ -201,7 +211,12 @@ impl ThrottlePolicy {
     pub fn record_failure(&self, store: &Store, keys: &[String], now: i64) -> Result<Vec<Lockout>> {
         let mut lockouts = Vec::new();
         for key in keys {
-            let record = store.record_auth_failure(key, now, self.window_secs)?;
+            let window = if key.starts_with("global:") {
+                self.global_window_secs
+            } else {
+                self.window_secs
+            };
+            let record = store.record_auth_failure(key, now, window)?;
             let already = record.locked_until.is_some_and(|until| until > now);
             if let Some(duration) = self.lockout_for(key, record.failures)
                 && !already
@@ -396,5 +411,29 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    /// One wrong code a minute cannot keep pairing paused: the global
+    /// count starts over after its short window, so the pause comes back
+    /// only after the threshold is reached again within one window.
+    #[test]
+    fn a_trickle_of_failures_does_not_keep_pairing_paused() {
+        let store = Store::open_in_memory().unwrap();
+        let policy = ThrottlePolicy::default();
+        let keys = [GLOBAL_PAIRING_KEY.to_owned()];
+        let minute = 60;
+        let mut locked_minutes = 0;
+        let hours = 6;
+        for i in 0..(hours * 60) {
+            let now = 1_000 + i * minute;
+            policy.record_failure(&store, &keys, now).unwrap();
+            // The owner tries half a minute later.
+            if policy.check(&store, &keys, now + 30).unwrap() != Gate::Open {
+                locked_minutes += 1;
+            }
+        }
+        // 60 failures an hour never reach the threshold of 100.
+        assert_eq!(locked_minutes, 0);
+        assert!(policy.global_window_secs < policy.window_secs);
     }
 }

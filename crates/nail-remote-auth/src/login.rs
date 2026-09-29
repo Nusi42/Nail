@@ -523,7 +523,9 @@ impl RemoteAuth {
             self.end_current(cookies, client);
             let (session, session_cookie) =
                 self.start_session(&user, &device, RemoteAuthMethod::Pairing, client)?;
-            if let Err(e) = self.policy().throttle.clear(store, &keys[..1]) {
+            // The address's count and the global pairing count: a pairing
+            // went through, so a pause must not outlive it.
+            if let Err(e) = self.policy().throttle.clear(store, &keys) {
                 tracing::warn!("could not clear the throttle: {e}");
             }
             self.audit(

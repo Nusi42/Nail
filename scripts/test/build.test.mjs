@@ -9,6 +9,7 @@ import {
   buildBase,
   checksumLines,
   installerConfigOverlay,
+  listFiles,
   parseArgs,
   portableLayout,
   tauriArch,
@@ -65,13 +66,42 @@ test("artifact names follow the Tauri bundler", () => {
   });
 });
 
-test("the portable zip has the marker and the CLI in bin", () => {
-  assert.deepEqual(portableLayout({ appExe: "a.exe", cliExe: "n.exe" }), [
+test("the portable zip has the marker, the CLI in bin and the UI in ui", () => {
+  const ui = { uiDir: "dist", uiFiles: ["index.html", path.join("assets", "app.js")] };
+  assert.deepEqual(portableLayout({ appExe: "a.exe", cliExe: "n.exe", ...ui }), [
     { from: "a.exe", to: "Nail.exe" },
     { from: "n.exe", to: "bin/nail.exe" },
+    { from: path.join("dist", "assets", "app.js"), to: "ui/assets/app.js" },
+    { from: path.join("dist", "index.html"), to: "ui/index.html" },
     { content: "", to: "portable" },
   ]);
-  assert.equal(portableLayout({ appExe: "a.exe", cliExe: null }).length, 2);
+  assert.equal(portableLayout({ appExe: "a.exe", cliExe: null, ...ui }).length, 4);
+});
+
+test("the portable zip refuses a missing UI build", () => {
+  assert.throws(
+    () => portableLayout({ appExe: "a.exe", cliExe: null, uiDir: "dist", uiFiles: [] }),
+    /UI build is missing/,
+  );
+});
+
+test("listFiles walks a directory tree", () => {
+  const tree = {
+    root: [
+      { name: "index.html", isDirectory: () => false, isFile: () => true },
+      { name: "assets", isDirectory: () => true, isFile: () => false },
+    ],
+    [path.join("root", "assets")]: [
+      { name: "b.js", isDirectory: () => false, isFile: () => true },
+      { name: "a.css", isDirectory: () => false, isFile: () => true },
+    ],
+  };
+  const readdir = (dir) => tree[path.normalize(dir)] ?? [];
+  assert.deepEqual(listFiles("root", readdir), [
+    path.join("assets", "a.css"),
+    path.join("assets", "b.js"),
+    "index.html",
+  ]);
 });
 
 test("checksum lines are sorted and sha256sum-compatible", () => {

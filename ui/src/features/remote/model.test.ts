@@ -7,6 +7,7 @@ import {
   grantIsWithin,
   groupFingerprint,
   isIpAddress,
+  isLocalNetwork,
   isLoopbackAddress,
   issueOfMessage,
   normalizePairingCode,
@@ -108,6 +109,11 @@ describe("settingsIssues", () => {
     expect(settingsIssues(with_({ allowed_networks: ["10.0.0.0/33"] }))).toEqual([
       "invalid-network",
     ]);
+    // Internet mode is locked: only local networks may be allowed.
+    expect(settingsIssues(with_({ allowed_networks: ["0.0.0.0/0"] }))).toEqual(["public-network"]);
+    expect(settingsIssues(with_({ allowed_networks: ["2001:db8::/32"] }))).toEqual([
+      "public-network",
+    ]);
     expect(settingsIssues(with_({ host_name: "nail-desktop.local" }))).toEqual([]);
     expect(settingsIssues(with_({ host_name: "192.168.1.2" }))).toEqual(["invalid-host-name"]);
     expect(settingsIssues(with_({ host_name: "-bad.local" }))).toEqual(["invalid-host-name"]);
@@ -116,6 +122,35 @@ describe("settingsIssues", () => {
     expect(settingsIssues(with_({ session_idle_minutes: 61, session_max_hours: 1 }))).toEqual([
       "invalid-session-limits",
     ]);
+  });
+
+  it("tells local networks from public ones like the core", () => {
+    for (const net of [
+      "192.168.1.0/24",
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "169.254.0.0/16",
+      "100.64.0.0/10",
+      "127.0.0.1/32",
+      "fd00::/8",
+      "fe80::/64",
+      "::1/128",
+      "::ffff:192.168.0.0/112",
+    ]) {
+      expect(isLocalNetwork(net), net).toBe(true);
+    }
+    for (const net of [
+      "10.0.0.0/7",
+      "0.0.0.0/0",
+      "203.0.113.0/24",
+      "172.32.0.0/16",
+      "::/0",
+      "2001:db8::/32",
+      "::ffff:8.8.8.0/120",
+      "not a network",
+    ]) {
+      expect(isLocalNetwork(net), net).toBe(false);
+    }
   });
 
   it("finds the issue a core error names", () => {

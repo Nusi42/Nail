@@ -79,12 +79,14 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
         let _ = tx.send(event.into()).await;
     }
 
-    // Events: forward everything the core broadcasts.
+    // Events: forward what the core broadcasts; a remote session only what
+    // its (current) grant covers (`Service::remote_event`).
     let forwarder = {
         let tx = tx.clone();
         let service = service.clone();
         let mut events = service.subscribe();
         let own_session = session.as_ref().map(|s| current(s).session.id);
+        let session = session.clone();
         let end_tx = end_tx.clone();
         tokio::spawn(async move {
             loop {
@@ -103,6 +105,16 @@ async fn serve_socket(socket: WebSocket, service: Service, session: Option<Sessi
                         (&event, &own_session),
                         (Event::RemoteSessionEnded { session_id, .. }, Some(own)) if session_id == own
                     );
+                    let event = match &session {
+                        Some(session) => {
+                            let ctx = current(session);
+                            match service.remote_event(&ctx, event).await {
+                                Some(event) => event,
+                                None => continue,
+                            }
+                        }
+                        None => event,
+                    };
                     if tx.send(event.into()).await.is_err() {
                         return;
                     }

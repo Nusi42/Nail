@@ -5,4 +5,4 @@
  * `invalid_request` (or `forbidden` for internet mode) and names it in
  * the message.
  */
-export type RemoteUiSettingsIssue = "invalid-bind-address" | "invalid-port" | "tls-required" | "internet-mode-locked" | "acme-needs-internet-mode" | "acme-incomplete" | "invalid-network" | "invalid-host-name" | "invalid-session-limits";
+export type RemoteUiSettingsIssue = "invalid-bind-address" | "invalid-port" | "tls-required" | "internet-mode-locked" | "acme-needs-internet-mode" | "acme-incomplete" | "invalid-network" | "public-network" | "invalid-host-name" | "invalid-session-limits";

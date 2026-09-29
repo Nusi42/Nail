@@ -106,4 +106,6 @@ normal locations instead.
 
 The portable version does not register itself for links or file types and
 does not start with Windows. It needs the WebView2 runtime, which Windows 11
-already has. The command-line tool is in `Nail\bin\nail.exe`.
+already has. The command-line tool is in `Nail\bin\nail.exe`; the `Nail\ui`
+folder holds the pages that remote access and `nail serve` show in a
+browser.

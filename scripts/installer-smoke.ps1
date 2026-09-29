@@ -81,6 +81,7 @@ try {
   Check ($p.ExitCode -eq 0) "installer exit code 0 (was $($p.ExitCode))"
   Check (Test-Path (Join-Path $app 'Nail.exe')) 'Nail.exe installed'
   Check (Test-Path (Join-Path $bin 'nail.exe')) 'bin\nail.exe installed'
+  Check (Test-Path (Join-Path $app 'ui\index.html')) 'ui\index.html installed (remote UI, nail serve)'
   Check (Test-Path (Join-Path $app 'uninstall.exe')) 'uninstall.exe written'
   Check (Test-Path $uninstallKey) 'uninstall entry (HKCU)'
 

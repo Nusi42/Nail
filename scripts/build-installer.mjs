@@ -3,7 +3,7 @@
  * Builds Nail's Windows release artifacts (plan M2b WP44):
  *
  *   Nail_<version>_<arch>-setup.exe      per-user NSIS installer (Tauri bundler)
- *   Nail_<version>_<arch>-portable.zip   Nail.exe + bin\nail.exe + `portable` marker
+ *   Nail_<version>_<arch>-portable.zip   Nail.exe + bin\nail.exe + ui\ + `portable` marker
  *   Nail_<version>_<arch>-{rust,ui}.cdx.json   CycloneDX SBOMs
  *   Nail_<version>_<arch>-SHA256SUMS.txt
  *
@@ -23,7 +23,15 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +42,7 @@ import {
   buildBase,
   checksumLines,
   installerConfigOverlay,
+  listFiles,
   parseArgs,
   portableLayout,
 } from "./lib/build.mjs";
@@ -124,7 +133,8 @@ function main() {
   );
   copyFileSync(installer, path.join(outDir, names.installer));
 
-  // Portable zip: Nail/ with the app, bin\nail.exe and the marker.
+  // Portable zip: Nail/ with the app, bin\nail.exe, the UI files (ui\, as
+  // the installer lays them out) and the marker.
   const appExe = firstExisting(
     [path.join(release, "Nail.exe"), path.join(release, "nail-app.exe")],
     "the app executable",
@@ -132,7 +142,9 @@ function main() {
   const staging = path.join(targetDir, "portable-staging");
   rmSync(staging, { recursive: true, force: true });
   const root = path.join(staging, "Nail");
-  for (const file of portableLayout({ appExe, cliExe })) {
+  const uiDir = path.join(repoRoot, "ui", "dist");
+  const uiFiles = existsSync(uiDir) ? listFiles(uiDir, readdirSync) : [];
+  for (const file of portableLayout({ appExe, cliExe, uiDir, uiFiles })) {
     const to = path.join(root, file.to);
     mkdirSync(path.dirname(to), { recursive: true });
     if (file.from) copyFileSync(file.from, to);

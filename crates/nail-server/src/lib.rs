@@ -151,9 +151,13 @@ pub struct TransportOptions {
     /// Names browsers use besides the loopback names: the host name, the
     /// machine's LAN addresses. `Host` / `Origin` must name one of them.
     pub host_names: Vec<String>,
-    /// Peers allowed to connect (loopback always may); empty = anyone
-    /// who reaches the port.
+    /// Peers allowed to connect (loopback always may); empty = any peer
+    /// from a local network (or anyone, with `public_peers`).
     pub allowed_networks: Vec<IpNet>,
+    /// Whether peers outside local networks may connect (internet mode,
+    /// locked in M2). Off: only loopback, RFC 1918, link-local, CGNAT and
+    /// IPv6 unique-local peers ([`nail_api::remote::is_local_address`]).
+    pub public_peers: bool,
     /// The remote-content proxy (route on both origins).
     pub proxy: Option<Arc<Proxy>>,
     /// The sandbox origin for mail HTML (needs `proxy`).
@@ -177,6 +181,7 @@ impl std::fmt::Debug for TransportOptions {
             .field("tls", &self.tls.is_some())
             .field("host_names", &self.host_names)
             .field("allowed_networks", &self.allowed_networks)
+            .field("public_peers", &self.public_peers)
             .field("proxy", &self.proxy.is_some())
             .field("sandbox", &self.sandbox)
             .field("headers", &self.headers)
@@ -209,11 +214,11 @@ async fn listen(addr: SocketAddr) -> Result<(TcpListener, SocketAddr), ServerErr
 async fn serve(
     listener: TcpListener,
     tls: Option<Arc<rustls::ServerConfig>>,
-    networks: Vec<IpNet>,
+    peers: tls::PeerPolicy,
     app: axum::Router,
     mut stop: watch::Receiver<bool>,
 ) -> std::io::Result<()> {
-    let incoming = tls::Incoming::start(listener, tls, networks)?;
+    let incoming = tls::Incoming::start(listener, tls, peers)?;
     axum::serve(
         incoming,
         app.into_make_service_with_connect_info::<ClientAddr>(),
@@ -292,10 +297,14 @@ impl Server {
         );
 
         let (tx, rx) = watch::channel(false);
+        let peers = tls::PeerPolicy {
+            networks: transport.allowed_networks.clone(),
+            public_peers: transport.public_peers,
+        };
         let app_serve = serve(
             listener,
             transport.tls.clone(),
-            transport.allowed_networks.clone(),
+            peers.clone(),
             app,
             rx.clone(),
         );
@@ -320,13 +329,7 @@ impl Server {
                     sandbox_hosts,
                     tls,
                 );
-                Some(serve(
-                    listener,
-                    transport.tls.clone(),
-                    transport.allowed_networks.clone(),
-                    router,
-                    rx,
-                ))
+                Some(serve(listener, transport.tls.clone(), peers, router, rx))
             }
             _ => None,
         };

@@ -30,7 +30,8 @@ Open **Settings → Remote access**.
 - **Encryption (TLS)** — Nail makes its own certificate. Encryption can
   only be switched off when Nail listens on this computer only.
 - **Allowed networks** — optionally limit access to networks such as
-  `192.168.1.0/24`, one per line.
+  `192.168.1.0/24`, one per line. Only local networks can be listed while
+  internet access is locked (see below).
 - **Sessions** — how long a device stays signed in when idle, at most,
   and how long a fresh confirmation lasts for sensitive changes.
 
@@ -53,6 +54,14 @@ The option **Allow access from the internet** is shown but locked: it
 stays off until an external security test (penetration test) of Nail has
 passed. To use Nail while away, connect to your home network with a VPN
 such as WireGuard or Tailscale and use the network address.
+
+Until then Nail only accepts connections from local network addresses:
+this computer, private home and office networks (`10.x.x.x`,
+`172.16.x.x`–`172.31.x.x`, `192.168.x.x`), link-local addresses, the
+`100.64.x.x` range that Tailscale and some providers use, and private IPv6
+networks (`fd…`, `fe80::…`). Connections from any other address are
+dropped, even if a router forwards the port or the computer has a public
+IPv6 address.
 
 ## Users
 

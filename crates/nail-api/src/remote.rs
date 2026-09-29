@@ -191,6 +191,9 @@ pub enum RemoteUiSettingsIssue {
     AcmeIncomplete,
     /// An entry of `allowed_networks` is not a CIDR network.
     InvalidNetwork,
+    /// An entry of `allowed_networks` reaches beyond local networks
+    /// ([`is_local_network`]) while internet mode is locked.
+    PublicNetwork,
     /// `host_name` is not a DNS name.
     InvalidHostName,
     /// A session limit is 0, or the idle limit exceeds the maximum age.
@@ -201,7 +204,9 @@ impl RemoteUiSettingsIssue {
     /// Error code the core answers with for this issue.
     pub fn error_code(self) -> ErrorCode {
         match self {
-            Self::InternetModeLocked | Self::AcmeNeedsInternetMode => ErrorCode::Forbidden,
+            Self::InternetModeLocked | Self::AcmeNeedsInternetMode | Self::PublicNetwork => {
+                ErrorCode::Forbidden
+            }
             _ => ErrorCode::InvalidRequest,
         }
     }
@@ -246,6 +251,10 @@ impl RemoteUiSettings {
         }
         if !self.allowed_networks.iter().all(|n| is_cidr(n)) {
             issues.push(I::InvalidNetwork);
+        } else if (!self.internet_mode || internet_mode_lock().is_some())
+            && !self.allowed_networks.iter().all(|n| is_local_network(n))
+        {
+            issues.push(I::PublicNetwork);
         }
         if self.host_name.as_deref().is_some_and(|h| !is_dns_name(h)) {
             issues.push(I::InvalidHostName);
@@ -270,6 +279,73 @@ fn is_cidr(text: &str) -> bool {
         return false;
     };
     prefix <= if ip.is_ipv4() { 32 } else { 128 }
+}
+
+/// Local address ranges: loopback, RFC 1918, link-local, CGNAT
+/// (RFC 6598), IPv6 unique local (fc00::/7) and link-local (fe80::/10).
+/// Outside internet mode only peers from these ranges may connect.
+const LOCAL_V4: [([u8; 4], u8); 6] = [
+    ([127, 0, 0, 0], 8),
+    ([10, 0, 0, 0], 8),
+    ([172, 16, 0, 0], 12),
+    ([192, 168, 0, 0], 16),
+    ([169, 254, 0, 0], 16),
+    ([100, 64, 0, 0], 10),
+];
+const LOCAL_V6: [(u128, u8); 3] = [(1, 128), (0xfc00_u128 << 112, 7), (0xfe80_u128 << 112, 10)];
+
+fn v4_in(ip: u32, prefix: u8, (base, len): ([u8; 4], u8)) -> bool {
+    let mask = if len == 0 { 0 } else { u32::MAX << (32 - len) };
+    prefix >= len && ip & mask == u32::from_be_bytes(base)
+}
+
+fn v6_in(ip: u128, prefix: u8, (base, len): (u128, u8)) -> bool {
+    let mask = if len == 0 {
+        0
+    } else {
+        u128::MAX << (128 - len)
+    };
+    prefix >= len && ip & mask == base
+}
+
+/// Whether the network `ip/prefix` lies entirely within the local ranges.
+/// IPv4-mapped IPv6 addresses count as their IPv4 address.
+fn local_net(ip: IpAddr, prefix: u8) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let ip = u32::from(v4);
+            LOCAL_V4.iter().any(|&range| v4_in(ip, prefix, range))
+        }
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) if prefix >= 96 => local_net(IpAddr::V4(v4), prefix - 96),
+            _ => {
+                let ip = u128::from(v6);
+                LOCAL_V6.iter().any(|&range| v6_in(ip, prefix, range))
+            }
+        },
+    }
+}
+
+/// Whether `ip` is a local address (loopback, private, link-local, CGNAT,
+/// IPv6 unique local): the only peers the remote UI accepts while
+/// internet mode is off.
+pub fn is_local_address(ip: IpAddr) -> bool {
+    local_net(ip, if ip.is_ipv4() { 32 } else { 128 })
+}
+
+/// Whether the CIDR network `text` lies entirely within local ranges
+/// ([`is_local_address`]); `false` for text that is not a CIDR network.
+pub fn is_local_network(text: &str) -> bool {
+    if !is_cidr(text) {
+        return false;
+    }
+    let Some((ip, prefix)) = text.trim().split_once('/') else {
+        return false;
+    };
+    match (ip.parse::<IpAddr>(), prefix.parse::<u8>()) {
+        (Ok(ip), Ok(prefix)) => local_net(ip, prefix),
+        _ => false,
+    }
 }
 
 /// A conservative DNS host name check (LDH labels, 1–63 characters, not
@@ -1064,6 +1140,72 @@ mod tests {
         assert_eq!(
             value["acme"]["directory_url"],
             json!(LETS_ENCRYPT_DIRECTORY)
+        );
+    }
+
+    #[test]
+    fn local_addresses_and_networks() {
+        let local = |ip: &str| is_local_address(ip.parse().unwrap());
+        for ip in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.16.0.1",
+            "172.31.255.255",
+            "192.168.1.20",
+            "169.254.3.4",
+            "100.64.0.1",
+            "100.127.255.254",
+            "::1",
+            "fd12:3456::1",
+            "fc00::1",
+            "fe80::1",
+            "::ffff:192.168.1.20",
+        ] {
+            assert!(local(ip), "{ip}");
+        }
+        for ip in [
+            "8.8.8.8",
+            "172.32.0.1",
+            "100.128.0.1",
+            "192.169.0.1",
+            "2001:db8::1",
+            "2a00:1450::1",
+            "::ffff:8.8.8.8",
+            "::",
+            "0.0.0.0",
+        ] {
+            assert!(!local(ip), "{ip}");
+        }
+        assert!(is_local_network("192.168.1.0/24"));
+        assert!(is_local_network("10.0.0.0/8"));
+        assert!(is_local_network("fd00::/8"));
+        assert!(is_local_network("::ffff:192.168.0.0/112"));
+        // Wider than the local range, or public.
+        assert!(!is_local_network("10.0.0.0/7"));
+        assert!(!is_local_network("0.0.0.0/0"));
+        assert!(!is_local_network("::/0"));
+        assert!(!is_local_network("203.0.113.0/24"));
+        assert!(!is_local_network("not a network"));
+    }
+
+    #[test]
+    fn public_allowed_networks_are_refused_while_internet_mode_is_locked() {
+        use RemoteUiSettingsIssue as I;
+        let lan = RemoteUiSettings {
+            bind_address: "0.0.0.0".into(),
+            allowed_networks: vec!["192.168.1.0/24".into(), "fd00::/8".into()],
+            ..RemoteUiSettings::default()
+        };
+        assert!(lan.issues().is_empty());
+        let public = RemoteUiSettings {
+            allowed_networks: vec!["192.168.1.0/24".into(), "0.0.0.0/0".into()],
+            ..lan
+        };
+        assert_eq!(public.issues(), [I::PublicNetwork]);
+        assert_eq!(I::PublicNetwork.error_code(), ErrorCode::Forbidden);
+        assert_eq!(
+            serde_json::to_value(I::PublicNetwork).unwrap(),
+            json!("public-network")
         );
     }
 

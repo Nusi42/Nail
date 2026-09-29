@@ -569,3 +569,541 @@ async fn proxy_keys_live_in_the_keychain_and_survive_restarts() {
         .unwrap();
     assert_eq!(grant.message_id, "m-1");
 }
+
+// ---------------------------------------------------------------------------
+// Review fixes (M2b): every request is checked against the grant, drafts
+// and searches respect the `encrypted` gate, events are filtered.
+// ---------------------------------------------------------------------------
+
+fn grant_with(preset: RemoteAccessPreset, extra: &[McpScope]) -> RemoteGrant {
+    let mut grant = preset.grant();
+    grant.mail.scopes.extend_from_slice(extra);
+    grant
+}
+
+/// The Full preset, but for another account only.
+fn elsewhere(extra: &[McpScope]) -> RemoteGrant {
+    let mut grant = grant_with(RemoteAccessPreset::Full, extra);
+    grant.mail.all_accounts = false;
+    grant.mail.accounts = vec![AccountId::new("somewhere-else")];
+    grant
+}
+
+/// Marks a message as end-to-end encrypted (what the reader records after
+/// decrypting it).
+fn mark_encrypted(f: &Fixture, id: &MessageId) {
+    let status: nail_api::security::SecurityStatus = serde_json::from_value(serde_json::json!({
+        "technology": "openpgp",
+        "encryption": { "state": "decrypted" },
+    }))
+    .unwrap();
+    f.service
+        .store()
+        .put_message_security(&nail_store::MessageSecurityRecord {
+            message_id: id.clone(),
+            status: Some(status),
+            auth_results: None,
+            checked_at: 1,
+        })
+        .unwrap();
+}
+
+/// The demo data with an `accounts.kdl` naming the demo account, so it
+/// has an identity to compose with (no servers are contacted).
+fn setup_with_identity() -> Fixture {
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    std::fs::write(
+        config.path().join("accounts.kdl"),
+        format!(
+            "account \"{DEMO_ACCOUNT_ID}\" email=\"ada@demo.example\" name=\"Demo\" {{
+                 imap host=\"127.0.0.1\" port=1 tls=\"plaintext\"
+                 smtp host=\"127.0.0.1\" port=1 tls=\"plaintext\"
+                 identity \"ada@demo.example\" name=\"Ada\"
+}}
+"
+        ),
+    )
+    .unwrap();
+    let mut options = ServiceOptions::new(data.path(), config.path());
+    options.watch_config = false;
+    options.start_engines = false;
+    let service = Service::open(demo_options(options)).unwrap();
+    seed_demo(service.store(), service.blobs()).unwrap();
+    Fixture {
+        service,
+        _data: data,
+        _config: config,
+    }
+}
+
+async fn demo_identity(f: &Fixture) -> nail_api::IdentityId {
+    match request(f, Request::ListIdentities { account_id: None }).await {
+        Response::Identities { identities } => identities[0].id.clone(),
+        other => panic!("{other:?}"),
+    }
+}
+
+fn reply_draft(identity: nail_api::IdentityId, original: &MessageId) -> nail_api::Draft {
+    nail_api::Draft {
+        id: None,
+        identity_id: identity,
+        to: vec![nail_api::Address {
+            name: None,
+            email: "someone@example.org".into(),
+        }],
+        cc: vec![],
+        bcc: vec![],
+        subject: "Re: secret".into(),
+        mode: nail_api::accounts::ComposerMode::Plain,
+        text: "> the decrypted text".into(),
+        html: None,
+        markdown: None,
+        attachments: vec![],
+        context: Some(nail_api::DraftContext {
+            mode: nail_api::DraftContextMode::Reply,
+            message_id: original.clone(),
+        }),
+        signature: nail_api::SignatureChoice::Identity,
+        markdown_part: false,
+        automatic: None,
+        crypto: None,
+    }
+}
+
+fn new_draft(mode: nail_api::DraftContextMode, message_id: &MessageId) -> Request {
+    Request::NewDraft {
+        identity_id: None,
+        account_id: None,
+        mode: None,
+        context: Some(nail_api::DraftContext {
+            mode,
+            message_id: message_id.clone(),
+        }),
+    }
+}
+
+#[tokio::test]
+async fn drafts_and_the_composer_respect_the_encrypted_gate() {
+    let f = setup_with_identity();
+    let service = &f.service;
+    let messages = demo_messages(&f);
+    let secret = messages[0].id.clone();
+    mark_encrypted(&f, &secret);
+    let identity = demo_identity(&f).await;
+    // A reply draft made on the desktop quotes the decrypted text.
+    let Response::DraftSaved { draft_id } = request(
+        &f,
+        Request::SaveDraft {
+            draft: reply_draft(identity.clone(), &secret),
+        },
+    )
+    .await
+    else {
+        panic!("draft not saved")
+    };
+
+    let plain = remote_session(&f, "plain", grant_with(RemoteAccessPreset::Full, &[])).await;
+    // Forwarding (or replying to) the encrypted message would copy its
+    // decrypted body and attachments into the answer.
+    for mode in [
+        nail_api::DraftContextMode::Forward,
+        nail_api::DraftContextMode::Reply,
+    ] {
+        let forward = service
+            .handle_remote(&plain, new_draft(mode, &secret))
+            .await;
+        assert_eq!(
+            error_code(&forward),
+            Some(ErrorCode::Forbidden),
+            "{forward:?}"
+        );
+    }
+    // The desktop's reply draft is hidden, and cannot be read or sent.
+    match service.handle_remote(&plain, Request::ListDrafts).await {
+        Response::Drafts { drafts } => {
+            assert!(drafts.iter().all(|d| d.id.as_ref() != Some(&draft_id)))
+        }
+        other => panic!("{other:?}"),
+    }
+    let mut redirect = reply_draft(identity.clone(), &secret);
+    redirect.context = None;
+    redirect.automatic = Some(nail_api::AutomaticMail::Redirect {
+        message_id: secret.clone(),
+    });
+    for denied in [
+        Request::GetDraft {
+            draft_id: draft_id.clone(),
+        },
+        Request::SendDraft {
+            draft_id: draft_id.clone(),
+            delay_secs: None,
+            send_at: None,
+            crypto: None,
+        },
+        Request::SaveDraft {
+            draft: reply_draft(identity.clone(), &secret),
+        },
+        // A redirect sends the stored message itself.
+        Request::SaveDraft { draft: redirect },
+    ] {
+        let name = format!("{denied:?}");
+        let response = service.handle_remote(&plain, denied).await;
+        assert_eq!(
+            error_code(&response),
+            Some(ErrorCode::Forbidden),
+            "{name}: {response:?}"
+        );
+    }
+
+    // Replying to a plain message still works.
+    let reply = service
+        .handle_remote(
+            &plain,
+            new_draft(nail_api::DraftContextMode::Reply, &messages[1].id),
+        )
+        .await;
+    assert!(matches!(reply, Response::Draft { .. }), "{reply:?}");
+
+    // With the `encrypted` scope the draft is there.
+    let trusted = remote_session(
+        &f,
+        "trusted",
+        grant_with(RemoteAccessPreset::Full, &[McpScope::Encrypted]),
+    )
+    .await;
+    match service.handle_remote(&trusted, Request::ListDrafts).await {
+        Response::Drafts { drafts } => {
+            assert!(drafts.iter().any(|d| d.id.as_ref() == Some(&draft_id)))
+        }
+        other => panic!("{other:?}"),
+    }
+    let read = service
+        .handle_remote(&trusted, Request::GetDraft { draft_id })
+        .await;
+    assert!(matches!(read, Response::Draft { .. }), "{read:?}");
+}
+
+#[tokio::test]
+async fn requests_naming_data_outside_the_grant_are_refused() {
+    let f = setup_with_identity();
+    let service = &f.service;
+    let messages = demo_messages(&f);
+    let message = messages[0].clone();
+    let identity = demo_identity(&f).await;
+    // Desktop state the narrow session must not see.
+    let Response::DraftSaved { draft_id } = request(
+        &f,
+        Request::SaveDraft {
+            draft: reply_draft(identity.clone(), &message.id),
+        },
+    )
+    .await
+    else {
+        panic!("draft not saved")
+    };
+    request(
+        &f,
+        Request::AllowRemoteContent {
+            message_id: message.id.clone(),
+            scope: RemoteContentScope::Message,
+        },
+    )
+    .await;
+
+    let narrow = remote_session(&f, "narrow", elsewhere(&[McpScope::Encrypted])).await;
+    let mut own_draft = reply_draft(identity.clone(), &message.id);
+    own_draft.context = None;
+    let mut forbidden = vec![
+        // A draft forwarding a message of another account.
+        new_draft(nail_api::DraftContextMode::Forward, &message.id),
+        // Composing as another account's identity.
+        Request::NewDraft {
+            identity_id: Some(identity.clone()),
+            account_id: None,
+            mode: None,
+            context: None,
+        },
+        Request::SaveDraft { draft: own_draft },
+        Request::GetDraft {
+            draft_id: draft_id.clone(),
+        },
+        Request::DeleteDraft {
+            draft_id: draft_id.clone(),
+        },
+        Request::SendDraft {
+            draft_id: draft_id.clone(),
+            delay_secs: None,
+            send_at: None,
+            crypto: None,
+        },
+        Request::CheckRecipientKeys {
+            identity_id: identity.clone(),
+            recipients: vec!["someone@example.org".into()],
+            lookup: false,
+        },
+        // Rules span every account; runs on named messages are checked.
+        Request::ListRules,
+        Request::RunRule {
+            rule_id: nail_api::RuleId::from("any"),
+            message_ids: vec![message.id.clone()],
+            folder_id: None,
+        },
+        Request::RunRule {
+            rule_id: nail_api::RuleId::from("any"),
+            message_ids: vec![],
+            folder_id: None,
+        },
+        // The folder belongs to an account outside the grant.
+        Request::ListMessages {
+            folder_id: message.folder_id.clone(),
+            offset: 0,
+            limit: 10,
+        },
+        Request::RemoveRemoteContentAllow {
+            scope: RemoteContentScope::Message,
+            value: message.id.as_str().to_owned(),
+        },
+    ];
+    if let Some(thread_id) = message.thread_id.clone() {
+        forbidden.push(Request::GetThread { thread_id });
+    }
+    for request in forbidden {
+        let name = format!("{request:?}");
+        let response = service.handle_remote(&narrow, request).await;
+        assert_eq!(
+            error_code(&response),
+            Some(ErrorCode::Forbidden),
+            "{name}: {response:?}"
+        );
+    }
+    // Lists leave the other account's entries out.
+    match service.handle_remote(&narrow, Request::ListDrafts).await {
+        Response::Drafts { drafts } => assert_eq!(drafts, vec![]),
+        other => panic!("{other:?}"),
+    }
+    match service.handle_remote(&narrow, Request::ListOutbox).await {
+        Response::Outbox { entries } => assert_eq!(entries, vec![]),
+        other => panic!("{other:?}"),
+    }
+    match service
+        .handle_remote(&narrow, Request::ListRemoteContentAllows)
+        .await
+    {
+        Response::RemoteContentAllows { entries } => assert!(
+            entries
+                .iter()
+                .all(|e| e.scope != RemoteContentScope::Message)
+        ),
+        other => panic!("{other:?}"),
+    }
+    match service
+        .handle_remote(&narrow, Request::ListIdentities { account_id: None })
+        .await
+    {
+        Response::Identities { identities } => assert_eq!(identities, vec![]),
+        other => panic!("{other:?}"),
+    }
+    // Collected addresses are not per account.
+    match service
+        .handle_remote(
+            &narrow,
+            Request::SuggestAddresses {
+                prefix: String::new(),
+                limit: 10,
+            },
+        )
+        .await
+    {
+        Response::AddressSuggestions { addresses } => assert_eq!(addresses, vec![]),
+        other => panic!("{other:?}"),
+    }
+    // The UI context names nothing outside the grant.
+    request(
+        &f,
+        Request::ReportUiContext {
+            context: UiContext {
+                account_id: Some(message.account_id.clone()),
+                folder_id: Some(message.folder_id.clone()),
+                message_id: Some(message.id.clone()),
+                selected_text: Some("private words".into()),
+                selected_message_ids: vec![message.id.clone()],
+                draft_id: Some(draft_id.clone()),
+                ..UiContext::default()
+            },
+        },
+    )
+    .await;
+    let watcher = remote_session(
+        &f,
+        "watcher",
+        elsewhere(&[McpScope::Context, McpScope::Encrypted]),
+    )
+    .await;
+    match service.handle_remote(&watcher, Request::GetUiContext).await {
+        Response::UiContext { context } => assert_eq!(context, UiContext::default()),
+        other => panic!("{other:?}"),
+    }
+
+    // The same requests with a full grant go through.
+    let full = remote_session(
+        &f,
+        "full",
+        grant_with(
+            RemoteAccessPreset::Full,
+            &[McpScope::Encrypted, McpScope::Context],
+        ),
+    )
+    .await;
+    match service.handle_remote(&full, Request::GetUiContext).await {
+        Response::UiContext { context } => {
+            assert_eq!(context.message_id, Some(message.id.clone()));
+            assert_eq!(context.selected_text.as_deref(), Some("private words"));
+            assert_eq!(context.draft_id, Some(draft_id.clone()));
+        }
+        other => panic!("{other:?}"),
+    }
+    let get = service
+        .handle_remote(&full, Request::GetDraft { draft_id })
+        .await;
+    assert!(matches!(get, Response::Draft { .. }), "{get:?}");
+    let rules = service.handle_remote(&full, Request::ListRules).await;
+    assert!(matches!(rules, Response::Rules { .. }), "{rules:?}");
+}
+
+#[tokio::test]
+async fn remote_search_hides_encrypted_mail_while_the_index_holds_decrypted_text() {
+    let f = setup();
+    let service = &f.service;
+    service.rebuild_search_index().unwrap();
+    let messages = demo_messages(&f);
+    let secret = messages[0].clone();
+    mark_encrypted(&f, &secret.id);
+    let query = |text: &str| Request::Search {
+        query: nail_api::SearchQuery {
+            text: text.into(),
+            account_id: None,
+            folder_id: None,
+            offset: 0,
+            limit: 50,
+            sort: Default::default(),
+        },
+    };
+    let ids = |response: Response| match response {
+        Response::SearchResults { hits, total, .. } => {
+            assert!(total as usize >= hits.len());
+            hits.into_iter().map(|h| h.message.id).collect::<Vec<_>>()
+        }
+        other => panic!("{other:?}"),
+    };
+    let text = format!("from:{}", secret.from.clone().unwrap().email);
+    let plain = remote_session(&f, "plain", RemoteAccessPreset::ReadOnly.grant()).await;
+    let trusted = remote_session(
+        &f,
+        "trusted",
+        grant_with(RemoteAccessPreset::ReadOnly, &[McpScope::Encrypted]),
+    )
+    .await;
+    // Decrypted indexing off: the index holds no decrypted text.
+    assert!(ids(service.handle_remote(&plain, query(&text)).await).contains(&secret.id));
+
+    f.service
+        .store()
+        .set_setting(
+            nail_store::SECURITY_SETTINGS_KEY,
+            &nail_api::security::SecuritySettings {
+                index_decrypted: vec![AccountId::new(DEMO_ACCOUNT_ID)],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let hidden = ids(service.handle_remote(&plain, query(&text)).await);
+    assert!(!hidden.contains(&secret.id), "{hidden:?}");
+    assert!(ids(service.handle_remote(&trusted, query(&text)).await).contains(&secret.id));
+
+    // A narrowed grant pages over what it may see only.
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    match service.handle_remote(&narrow, query("")).await {
+        Response::SearchResults { total, hits, .. } => {
+            assert_eq!((total, hits.len()), (0, 0));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn remote_sockets_get_only_the_events_their_grant_covers() {
+    let f = setup();
+    let service = &f.service;
+    let message = demo_messages(&f)[0].clone();
+    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let mut admin_grant = RemoteAccessPreset::Full.grant();
+    admin_grant.admin = true;
+    let admin = remote_session(&f, "admin", admin_grant).await;
+
+    let alert = nail_api::Event::RemoteSecurityAlert {
+        alert: nail_api::remote::RemoteAlert::Lockout {
+            user_name: Some("ada".into()),
+            ip: Some("192.168.1.9".into()),
+            until: "2026-01-01T00:00:00Z".into(),
+        },
+    };
+    let status = nail_api::Event::RemoteUiStatusChanged {
+        status: RemoteUiStatus::stopped(),
+    };
+    for admin_only in [
+        alert,
+        status,
+        nail_api::Event::RemoteAccessChanged,
+        nail_api::Event::McpClientsChanged,
+    ] {
+        assert_eq!(
+            service.remote_event(&reader, admin_only.clone()).await,
+            None
+        );
+        assert_eq!(
+            service.remote_event(&admin, admin_only.clone()).await,
+            Some(admin_only)
+        );
+    }
+    let new_mail = nail_api::Event::NewMail {
+        account_id: message.account_id.clone(),
+        folder_id: message.folder_id.clone(),
+        message_ids: vec![message.id.clone()],
+    };
+    let changed = nail_api::Event::MailChanged {
+        folder_ids: vec![message.folder_id.clone()],
+    };
+    let failed = nail_api::Event::SyncFailed {
+        account_id: message.account_id.clone(),
+        code: ErrorCode::Network,
+        message: "connection refused".into(),
+    };
+    for mail in [new_mail, changed, failed] {
+        assert_eq!(service.remote_event(&narrow, mail.clone()).await, None);
+        assert_eq!(
+            service.remote_event(&reader, mail.clone()).await,
+            Some(mail)
+        );
+    }
+    // Only the session's own end.
+    let ended = |session_id| nail_api::Event::RemoteSessionEnded {
+        session_id,
+        reason: nail_api::remote::SessionEndReason::Revoked,
+    };
+    assert_eq!(
+        service
+            .remote_event(&reader, ended(narrow.session.id.clone()))
+            .await,
+        None
+    );
+    let own = ended(reader.session.id.clone());
+    assert_eq!(service.remote_event(&reader, own.clone()).await, Some(own));
+    assert_eq!(
+        service
+            .remote_event(&reader, nail_api::Event::LaunchRequested)
+            .await,
+        None
+    );
+}

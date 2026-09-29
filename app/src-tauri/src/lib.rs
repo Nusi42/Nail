@@ -251,12 +251,17 @@ pub async fn proxy_response(
 }
 
 /// The UI files the remote UI serves: `NAIL_UI_DIR`, the bundled `ui`
-/// resource, or the repository's `ui/dist` (development).
-fn remote_ui_dir(resource_dir: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
-    std::env::var_os("NAIL_UI_DIR")
-        .map(std::path::PathBuf::from)
-        .into_iter()
+/// resource, `ui` beside the executable (the portable zip; the installer's
+/// resource directory is the same place), or the repository's `ui/dist`
+/// (development). Candidates without an `index.html` are skipped.
+fn remote_ui_dir(
+    env: Option<std::path::PathBuf>,
+    resource_dir: Option<std::path::PathBuf>,
+    exe: Option<&std::path::Path>,
+) -> Option<std::path::PathBuf> {
+    env.into_iter()
         .chain(resource_dir.map(|d| d.join("ui")))
+        .chain(exe.and_then(std::path::Path::parent).map(|d| d.join("ui")))
         .chain(std::iter::once(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui/dist"),
         ))
@@ -435,7 +440,11 @@ pub fn run() {
                 tracing::warn!(%err, "cannot start minimized");
             }
             service.push_launch_requests(launch_requests.clone());
-            let ui_dir = remote_ui_dir(app.path().resource_dir().ok());
+            let ui_dir = remote_ui_dir(
+                std::env::var_os("NAIL_UI_DIR").map(std::path::PathBuf::from),
+                app.path().resource_dir().ok(),
+                std::env::current_exe().ok().as_deref(),
+            );
             let remote_ui = tauri::async_runtime::block_on(async {
                 nail_server::RemoteUiHost::start(
                     service.clone(),
@@ -469,6 +478,30 @@ mod tests {
     #[test]
     fn event_channel_name() {
         assert_eq!(EVENT_CHANNEL, "nail://event");
+    }
+
+    /// The portable zip's `Nail\ui` beside `Nail\Nail.exe` is found without
+    /// the build machine's `ui/dist`; candidates need an `index.html`.
+    #[test]
+    fn the_remote_ui_files_are_found_beside_the_app() {
+        let root = tempfile::tempdir().unwrap();
+        let exe = root.path().join("Nail.exe");
+        let empty = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("ui")).unwrap();
+        std::fs::write(root.path().join("ui").join("index.html"), "x").unwrap();
+        assert_eq!(
+            remote_ui_dir(
+                Some(empty.path().to_path_buf()),
+                Some(empty.path().to_path_buf()),
+                Some(&exe)
+            ),
+            Some(root.path().join("ui"))
+        );
+        std::fs::write(empty.path().join("index.html"), "x").unwrap();
+        assert_eq!(
+            remote_ui_dir(Some(empty.path().to_path_buf()), None, Some(&exe)),
+            Some(empty.path().to_path_buf())
+        );
     }
 
     #[test]

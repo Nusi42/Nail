@@ -268,7 +268,7 @@ Core wiring: decrypt/verify on read (never persist decrypted bodies unless the i
 
 ### Wave M2b — Remote UI hardening, installer and CI
 
-**Status:** WP40–WP45 done (ADRs 0036–0041); automated suites green (cargo, Vitest, Playwright incl. `remote.spec.ts`, `remote-content.spec.ts` and the desktop smoke test with a `mailto:` start). Next: the two reviews (one security), fixes, independent verify; the first CI run of the `installer`, `deny` and `interop` jobs; the M2 human security review gate stays open, internet mode stays locked.
+**Status:** WP40–WP45 done (ADRs 0036–0041); automated suites green (cargo, Vitest, Playwright incl. `remote.spec.ts`, `remote-content.spec.ts` and the desktop smoke test with a `mailto:` start). Review findings fixed (ADR 0042): every remote request is checked against the grant (exhaustive, incl. drafts, the composer's original message, identities, outbox, operations, rules, remote-content allows, the UI context) with the `encrypted` gate on drafts and searches over decrypted text; remote sockets get only the events their grant covers (admin events only for admins); outside internet mode only local peers may connect and allowed networks must be local; the portable zip ships the UI files and the installed CLI finds them; the global pairing count has a one-hour window and a successful pairing clears it. Next: independent verify; the first CI run of the `installer`, `deny` and `interop` jobs; the M2 human security review gate stays open, internet mode stays locked.
 
 #### WP40 — Contract (sequential)
 Remote-UI settings (enabled, bind address, port, TLS mode self-signed/ACME, internet mode locked flag), users and credentials (password hash, TOTP secret, passkeys), sessions and devices, pairing codes, scopes per session, remote-content policy (per message / sender / domain allow-lists), audit entries for logins.
@@ -298,7 +298,8 @@ Wire the remote UI with auth into `nail serve` and the desktop app; migrate exis
 - **Throttle window**: 7 days because the store resets a count after the window from the *first* failure; a v7 change (window from the last failure) would allow hours.
 - **Passkeys** are discoverable-only (no `allowCredentials` for non-resident security keys); `credProtect` is requested, not enforced by the browser (ADR 0041).
 - **Login page** is unstyled (runs before the theme); serve the default theme without a session.
-- **Events on remote sockets** are not narrowed per grant (ids and counts only); render tokens are bearer capabilities for one message for an hour (bind them to the session).
+- **Render tokens** are bearer capabilities for one message for an hour (bind them to the session). Events on remote sockets are filtered per grant since the review fixes (ADR 0042).
+- **Remote grants narrowed to some accounts** see no address suggestions (collected addresses are not per account), no rules (rules span every account, like MCP) and a search `total` that counts only the hits found for the page (ADR 0042).
 - **Remote content**: no "load once" scope; no per-session proxy rate limit; the `TargetCheck` re-reads the allow-lists but not whether the message still references the URL.
 - **CSRF key** is per process: browsers fetch a new token after a restart (handled by the UI).
 - **Audit growth**: remote audit entries are purged after 90 days with the other history.

@@ -77,6 +77,9 @@ always applies). Blobs need `raw-source` and a grant for all accounts.
 
 Events are forwarded to remote sockets unfiltered (they carry ids and
 counts, not content); narrowing events per grant is a follow-up.
+*Superseded by ADR 0042:* every request is checked (exhaustive match,
+drafts and the composer included), the `encrypted` gate covers drafts and
+searches, and events are filtered per grant.
 
 ### Remote content
 

@@ -189,6 +189,8 @@ impl Running {
             tls,
             host_names: host_names.clone(),
             allowed_networks,
+            // Internet mode is refused above: local peers only.
+            public_peers: false,
             sandbox: proxy.as_ref().map(|_| SandboxOptions {
                 port: 0,
                 source: None,

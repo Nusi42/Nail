@@ -187,6 +187,12 @@ npm run tauri dev                          # desktop app with Vite hot reload
   (`MessageBody.render_url`). Launch requests (`mailto:`, `.eml`) go through the core
   (`TakeLaunchRequests`, `ImportMessageFile`; desktop only). E2E remote tests trust the
   self-signed certificate by SPKI (`trustingBrowser`) where WebAuthn needs it.
+- M2b review fixes (ADR 0042): `Service::check_remote_request` is an exhaustive match (a new
+  `Request` must say what it names); drafts need their identity's account and a readable original
+  (`encrypted` gate); remote search filters before paging; remote sockets get
+  `Service::remote_event`; outside internet mode only local peers connect
+  (`TransportOptions::public_peers`, `nail_api::remote::is_local_address`); the portable zip
+  carries `Nail/ui/`.
 - `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
   endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
   (`open_editor`).

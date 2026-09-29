@@ -222,6 +222,19 @@ async fn guessing_from_many_addresses_pauses_pairing() {
     h.clock.advance(60);
     logged_in(&phone.pair(&h, &code, "Phone").await);
     assert!(h.clock.now() > T0);
+    // The successful pairing cleared the global count: one more wrong code
+    // does not pause pairing again at once.
+    assert_eq!(
+        h.store
+            .auth_throttle(nail_remote_auth::throttle::GLOBAL_PAIRING_KEY)
+            .unwrap(),
+        None
+    );
+    let mut evil = Browser::new("203.0.113.99");
+    evil.pair(&h, "BBBB-CCCC", "Evil").await;
+    let code = h.code(&ada, None);
+    let mut tablet = Browser::new("192.0.2.11");
+    logged_in(&tablet.pair(&h, &code, "Tablet").await);
 }
 
 #[tokio::test]

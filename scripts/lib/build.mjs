@@ -91,14 +91,38 @@ export function artifactNames(version, arch) {
 
 /**
  * Files of the portable zip, relative to its `Nail/` folder: the app, the
- * CLI in `bin\` (as in the installer) and the `portable` marker that keeps
- * data beside the executable (app/src-tauri/src/portable.rs).
+ * CLI in `bin\` (as in the installer), the UI files in `ui\` (the remote
+ * UI and `nail serve` serve them from disk; the installer puts them at the
+ * same place through tauri.conf.json `bundle.resources`) and the
+ * `portable` marker that keeps data beside the executable
+ * (app/src-tauri/src/portable.rs). `uiFiles` are paths relative to `uiDir`
+ * (see `listFiles`); they must include `index.html`.
  */
-export function portableLayout({ appExe, cliExe }) {
+export function portableLayout({ appExe, cliExe, uiDir, uiFiles }) {
+  if (!uiFiles?.some((f) => f.split(/[\\/]/).join("/") === "index.html")) {
+    throw new Error(`the UI build is missing (no index.html in ${uiDir})`);
+  }
   const files = [{ from: appExe, to: "Nail.exe" }];
   if (cliExe) files.push({ from: cliExe, to: "bin/nail.exe" });
+  for (const file of [...uiFiles].sort()) {
+    files.push({ from: path.join(uiDir, file), to: `ui/${file.split(/[\\/]/).join("/")}` });
+  }
   files.push({ content: "", to: "portable" });
   return files;
+}
+
+/** Every file below `dir`, relative to it, sorted (`readdir` = fs.readdirSync). */
+export function listFiles(dir, readdir) {
+  const out = [];
+  const walk = (rel) => {
+    for (const entry of readdir(path.join(dir, rel), { withFileTypes: true })) {
+      const child = rel ? path.join(rel, entry.name) : entry.name;
+      if (entry.isDirectory()) walk(child);
+      else if (entry.isFile()) out.push(child);
+    }
+  };
+  walk("");
+  return out.sort();
 }
 
 /** `sha256sum`-style lines ("<hex>  <name>"), sorted by name. */

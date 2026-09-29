@@ -265,9 +265,11 @@ impl TestControl for DemoControl {
 }
 
 /// The UI directory: `--ui-dir`, else `$NAIL_UI_DIR`, else `ui` next to the
-/// executable, else the repository's `ui/dist` (development builds).
-/// Candidates without an `index.html` are skipped (except an explicit
-/// `--ui-dir`, which is used as given).
+/// executable, else `ui` in its parent directory (the installed and
+/// portable layouts: `<Nail>\bin\nail.exe` beside `<Nail>\ui`), else the
+/// repository's `ui/dist` (development builds). Candidates without an
+/// `index.html` are skipped (except an explicit `--ui-dir`, which is used
+/// as given).
 pub fn resolve_ui_dir(
     arg: Option<PathBuf>,
     env: Option<PathBuf>,
@@ -276,10 +278,13 @@ pub fn resolve_ui_dir(
     if arg.is_some() {
         return arg;
     }
-    let beside_exe = exe.and_then(Path::parent).map(|dir| dir.join("ui"));
+    let exe_dir = exe.and_then(Path::parent);
+    let beside_exe = exe_dir.map(|dir| dir.join("ui"));
+    let install_root = exe_dir.and_then(Path::parent).map(|dir| dir.join("ui"));
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui/dist");
     env.into_iter()
         .chain(beside_exe)
+        .chain(install_root)
         .chain(std::iter::once(repo))
         .find(|dir| dir.join("index.html").is_file())
 }
@@ -368,6 +373,21 @@ mod tests {
         assert_eq!(
             resolve_ui_dir(Some("x".into()), Some("y".into()), None),
             Some(PathBuf::from("x"))
+        );
+    }
+
+    /// `<Nail>\bin\nail.exe` of the installer and the portable zip finds
+    /// `<Nail>\ui`.
+    #[test]
+    fn the_installed_cli_finds_the_ui_of_its_install_root() {
+        let root = tempfile::tempdir().unwrap();
+        let exe = root.path().join("bin").join("nail.exe");
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::create_dir(root.path().join("ui")).unwrap();
+        std::fs::write(root.path().join("ui").join("index.html"), "x").unwrap();
+        assert_eq!(
+            resolve_ui_dir(None, None, Some(&exe)),
+            Some(root.path().join("ui"))
         );
     }
 

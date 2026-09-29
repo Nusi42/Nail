@@ -105,14 +105,34 @@ impl std::fmt::Debug for Incoming {
     }
 }
 
-/// Whether `peer` may connect: loopback always, else any of `networks`
-/// (empty = everyone who reaches the port).
-pub(crate) fn peer_allowed(networks: &[IpNet], peer: std::net::IpAddr) -> bool {
+/// Who may connect besides loopback peers (which always may).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PeerPolicy {
+    /// Peers must be in one of these networks; empty = no further limit.
+    pub networks: Vec<IpNet>,
+    /// Whether peers outside local networks may connect at all
+    /// ([`nail_api::remote::is_local_address`]). Only internet mode (locked
+    /// in M2) sets this; otherwise a public or global address is refused
+    /// even when the port is reachable from the internet (port forward,
+    /// public IPv6, a cloud host).
+    pub public_peers: bool,
+}
+
+/// Whether `peer` may connect: loopback always; else only a local address
+/// unless `policy.public_peers`, and within `policy.networks` if any.
+/// IPv4-mapped IPv6 peers count as their IPv4 address.
+pub(crate) fn peer_allowed(policy: &PeerPolicy, peer: std::net::IpAddr) -> bool {
     let peer = match peer {
         std::net::IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(peer, std::net::IpAddr::V4),
         v4 => v4,
     };
-    peer.is_loopback() || networks.is_empty() || networks.iter().any(|n| n.contains(&peer))
+    if peer.is_loopback() {
+        return true;
+    }
+    if !policy.public_peers && !nail_api::remote::is_local_address(peer) {
+        return false;
+    }
+    policy.networks.is_empty() || policy.networks.iter().any(|n| n.contains(&peer))
 }
 
 impl Incoming {
@@ -120,7 +140,7 @@ impl Incoming {
     pub(crate) fn start(
         listener: TcpListener,
         tls: Option<Arc<ServerConfig>>,
-        networks: Vec<IpNet>,
+        peers: PeerPolicy,
     ) -> std::io::Result<Self> {
         let local = listener.local_addr()?;
         let (tx, rx) = mpsc::channel::<(Box<dyn Conn>, SocketAddr)>(MAX_HANDSHAKES);
@@ -136,7 +156,7 @@ impl Incoming {
                         continue;
                     }
                 };
-                if !peer_allowed(&networks, peer.ip()) {
+                if !peer_allowed(&peers, peer.ip()) {
                     tracing::info!(%peer, "connection from outside the allowed networks dropped");
                     drop(stream);
                     continue;
@@ -221,15 +241,64 @@ mod tests {
 
     #[test]
     fn peers_outside_the_allowed_networks_are_refused() {
-        let nets: Vec<IpNet> = vec!["192.168.1.0/24".parse().unwrap()];
-        let ok = |ip: &str| peer_allowed(&nets, ip.parse().unwrap());
+        let policy = PeerPolicy {
+            networks: vec!["192.168.1.0/24".parse().unwrap()],
+            public_peers: false,
+        };
+        let ok = |ip: &str| peer_allowed(&policy, ip.parse().unwrap());
         assert!(ok("192.168.1.20"));
         assert!(ok("::ffff:192.168.1.20"));
         assert!(ok("127.0.0.1"));
         assert!(ok("::1"));
+        assert!(ok("::ffff:127.0.0.1"));
         assert!(!ok("192.168.2.1"));
         assert!(!ok("10.0.0.1"));
         assert!(!ok("fe80::1"));
-        assert!(peer_allowed(&[], "10.0.0.1".parse().unwrap()));
+        assert!(peer_allowed(
+            &PeerPolicy::default(),
+            "10.0.0.1".parse().unwrap()
+        ));
+    }
+
+    /// Outside internet mode an empty allow-list means "the local
+    /// networks", never "everyone who reaches the port".
+    #[test]
+    fn public_peers_are_refused_outside_internet_mode() {
+        let lan = PeerPolicy::default();
+        let ok = |policy: &PeerPolicy, ip: &str| peer_allowed(policy, ip.parse().unwrap());
+        for ip in [
+            "192.168.1.20",
+            "10.0.0.1",
+            "172.20.1.1",
+            "169.254.1.1",
+            "100.64.1.1",
+            "fd00::1",
+            "fe80::1",
+            "::ffff:10.0.0.1",
+        ] {
+            assert!(ok(&lan, ip), "{ip}");
+        }
+        for ip in [
+            "8.8.8.8",
+            "203.0.113.9",
+            "2001:db8::1",
+            "2a00::1",
+            "::ffff:8.8.8.8",
+        ] {
+            assert!(!ok(&lan, ip), "{ip}");
+        }
+        // A public network in the list does not open the door either.
+        let listed = PeerPolicy {
+            networks: vec!["0.0.0.0/0".parse().unwrap()],
+            public_peers: false,
+        };
+        assert!(!ok(&listed, "8.8.8.8"));
+        assert!(ok(&listed, "192.168.1.2"));
+        // Internet mode (locked in M2) would allow them.
+        let internet = PeerPolicy {
+            networks: Vec::new(),
+            public_peers: true,
+        };
+        assert!(ok(&internet, "8.8.8.8"));
     }
 }
