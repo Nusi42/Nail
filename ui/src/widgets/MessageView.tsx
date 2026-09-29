@@ -1,0 +1,153 @@
+import { useMemo, type ReactNode } from "react";
+import { errorMessageIdOf } from "../api/client";
+import type { Address, MessageBody } from "../api/generated";
+import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
+import { optionList, type WidgetProps } from "../layout/widgetRegistry";
+import { useMessage } from "../state/queries";
+import { useUi } from "../state/uiStore";
+import { useReaderCss } from "../theme/ThemeProvider";
+import { readerDocument } from "../theme/reader";
+
+/** Header fields the widget can show (`headers` option). */
+export const HEADER_FIELDS = ["from", "to", "cc", "reply-to", "date"] as const;
+type HeaderField = (typeof HEADER_FIELDS)[number];
+
+function isHeaderField(value: string): value is HeaderField {
+  return (HEADER_FIELDS as readonly string[]).includes(value);
+}
+
+function formatAddresses(addresses: readonly Address[]): string {
+  return addresses.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(", ");
+}
+
+function headerValue(message: MessageBody, field: HeaderField, locale: string): string {
+  const h = message.headers;
+  switch (field) {
+    case "from":
+      return formatAddresses(h.from);
+    case "to":
+      return formatAddresses(h.to);
+    case "cc":
+      return formatAddresses(h.cc);
+    case "reply-to":
+      return formatAddresses(h.reply_to);
+    case "date": {
+      if (!h.date) return "";
+      const date = new Date(h.date);
+      return Number.isNaN(date.getTime())
+        ? h.date
+        : new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(date);
+    }
+  }
+}
+
+function formatSize(bytes: number, locale: string): string {
+  const kb = bytes / 1024;
+  return kb < 1024
+    ? new Intl.NumberFormat(locale, {
+        style: "unit",
+        unit: "kilobyte",
+        maximumFractionDigits: 0,
+      }).format(Math.max(1, kb))
+    : new Intl.NumberFormat(locale, {
+        style: "unit",
+        unit: "megabyte",
+        maximumFractionDigits: 1,
+      }).format(kb / 1024);
+}
+
+function Body({ message }: { message: MessageBody }) {
+  const t = useT();
+  const css = useReaderCss();
+  const html = message.sanitized_html;
+  const srcDoc = useMemo(() => (html === null ? null : readerDocument(html, css)), [html, css]);
+  if (srcDoc !== null) {
+    return (
+      <iframe
+        data-part="message-view.body"
+        sandbox=""
+        srcDoc={srcDoc}
+        referrerPolicy="no-referrer"
+        title={t("message-view-body-title", { subject: message.headers.subject })}
+      />
+    );
+  }
+  return <pre data-part="message-view.text">{message.text}</pre>;
+}
+
+/** Headers and body of the selected message. */
+export function MessageView({ node }: WidgetProps) {
+  const t = useT();
+  const label = useLabel();
+  const locale = useLocale();
+  const selectedId = useUi((s) => s.selectedMessageId);
+  const query = useMessage(selectedId);
+  const fields = optionList(node, "headers", ["from", "to", "cc", "date"]).filter(isHeaderField);
+  const message = query.data;
+
+  let content: ReactNode;
+  if (selectedId === null) {
+    content = <div data-part="message-view.empty">{t("message-view-empty")}</div>;
+  } else if (query.isError) {
+    content = <div data-part="message-view.error">{t(errorMessageIdOf(query.error))}</div>;
+  } else if (!message) {
+    content = <div data-part="message-view.loading">{t("message-view-loading")}</div>;
+  } else {
+    content = (
+      <>
+        <header data-part="message-view.header">
+          <h1 data-part="message-view.header.subject">
+            {message.headers.subject || t("message-no-subject")}
+          </h1>
+          {fields.map((field) => {
+            const value = headerValue(message, field, locale);
+            if (!value) return null;
+            return (
+              <div key={field} data-part="message-view.header.field" data-field={field}>
+                <span data-part="message-view.header.label">{t(`message-header-${field}`)}</span>
+                <span data-part="message-view.header.value">{value}</span>
+              </div>
+            );
+          })}
+        </header>
+        {message.remote_content_blocked && (
+          <div data-part="message-view.remote-content-banner" role="note">
+            {t("message-view-remote-blocked")}
+          </div>
+        )}
+        <Body message={message} />
+        {message.attachments.length > 0 && (
+          <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>
+            {message.attachments.map((a) => (
+              <li
+                key={a.index}
+                data-part="message-view.attachment"
+                data-mime={a.mime}
+                data-inline={a.inline ? "" : undefined}
+              >
+                <span data-part="message-view.attachment.name">
+                  {a.filename ?? t("message-view-attachment-unnamed")}
+                </span>
+                <span data-part="message-view.attachment.size">{formatSize(a.size, locale)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <article
+      data-part="message-view"
+      data-key-context="reader"
+      data-node-id={node.id ?? undefined}
+      data-message={message?.id}
+      tabIndex={-1}
+      aria-label={node.label ? label(node.label) : t("message-view-label")}
+      aria-busy={query.isFetching}
+    >
+      {content}
+    </article>
+  );
+}

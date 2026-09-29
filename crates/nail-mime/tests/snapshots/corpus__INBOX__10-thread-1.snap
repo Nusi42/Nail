@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-14T09:00:00+02:00",
+      "from": [
+        {
+          "email": "grace@navy.example",
+          "name": "Grace Hopper"
+        }
+      ],
+      "message_id": "ng-1@navy.example",
+      "reply_to": [],
+      "subject": "Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hi Sam,\r\n\r\nwe are starting Project Nightingale next week. The goal is a\r\nfaster sync engine for the mobile client. Can you join the kickoff on\r\nMonday at 10:00?\r\n\r\nGrace"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-14T09:00:00+02:00",
+    "flags": {
+      "answered": true,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "grace@navy.example",
+      "name": "Grace Hopper"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hi Sam, we are starting Project Nightingale next week. The goal is a faster sync engine for the mobile client. Can you join the kickoff on Monday at 10:00? Grace",
+    "subject": "Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

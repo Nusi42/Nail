@@ -1,0 +1,539 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nail layout.kdl",
+  "description": "A `layout.kdl` file as written (possibly sparse).\n\nKDL mapping: the file holds one node `layout \"<name>\" extends=… { … }`\nwhose children are `window`, `breakpoint`, `action(s)`, `keys`,\n`toolbar(s)` and `menu(s)` nodes.",
+  "type": "object",
+  "properties": {
+    "actions": {
+      "description": "`action \"<id>\" label=… icon=… alias-of=… <args>…`, merged field by\nfield onto the base.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ActionSchema"
+      },
+      "default": {}
+    },
+    "extends": {
+      "description": "Base layout to merge onto; only `\"default\"` exists. Without it the\nfile must be complete.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "keys": {
+      "description": "`keys context=\"…\" { bind \"<key>\" \"<action> <args>…\"; unbind \"<key>\" }`.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/KeyDef"
+      }
+    },
+    "menus": {
+      "description": "`menu \"app\" | \"context:<part>\" { item …; separator; submenu \"<label>\" { … } }`;\nreplaces a base menu of the same name.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/MenuItemSchema"
+        }
+      },
+      "default": {}
+    },
+    "name": {
+      "description": "Layout name (`layout \"<name>\"`).",
+      "type": "string"
+    },
+    "toolbars": {
+      "description": "`toolbar \"<name>\" { item \"<action>\"; spacer; separator }`; replaces a\nbase toolbar of the same name.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ToolbarItemSchema"
+        }
+      },
+      "default": {}
+    },
+    "windows": {
+      "description": "Window trees: `window \"<name>\" { <node> }`, optionally inside\n`breakpoint min-width=… max-width=… { … }`. A window defined in a\nsparse file replaces all breakpoints of that window in the base.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/BreakpointSchema"
+        }
+      },
+      "default": {}
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "$defs": {
+    "ActionSchema": {
+      "description": "`action \"<id>\" label=… icon=… alias-of=… <args>…`.",
+      "type": "object",
+      "properties": {
+        "alias-of": {
+          "description": "For aliases: the action this one invokes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "args": {
+          "description": "Arguments for `alias-of`.",
+          "type": "array",
+          "default": [],
+          "items": true
+        },
+        "icon": {
+          "description": "Icon name from the theme.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Label: literal text or `@message.id`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "BreakpointSchema": {
+      "description": "One window tree for a range of window widths\n(`breakpoint min-width=… max-width=… { window \"<name>\" { … } }`).",
+      "type": "object",
+      "properties": {
+        "max_width": {
+          "description": "Maximum window width in CSS pixels (inclusive).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "min_width": {
+          "description": "Minimum window width in CSS pixels (inclusive).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "root": {
+          "description": "The window's single root node.",
+          "$ref": "#/$defs/NodeSchema"
+        }
+      },
+      "required": [
+        "root"
+      ]
+    },
+    "KeyDef": {
+      "description": "A `bind` or `unbind` entry.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Action id; `null` for `unbind`, which removes earlier bindings of the\nkey in the context.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "args": {
+          "description": "Action arguments.",
+          "type": "array",
+          "default": [],
+          "items": true
+        },
+        "context": {
+          "description": "Context (`global` when the `keys` block has none).",
+          "type": "string"
+        },
+        "key": {
+          "description": "Key sequence, e.g. `\"ctrl+shift+m\"` or `\"g i\"`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "context",
+        "key"
+      ]
+    },
+    "MenuItemSchema": {
+      "description": "A menu entry.",
+      "oneOf": [
+        {
+          "description": "`item \"<action> <args>…\" label=… icon=…`.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "description": "Action id and arguments.",
+              "type": "string"
+            },
+            "icon": {
+              "description": "Icon override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Label override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "item"
+            }
+          },
+          "required": [
+            "type",
+            "action"
+          ]
+        },
+        {
+          "description": "`separator`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "separator"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "`submenu \"<label>\" { … }`.",
+          "type": "object",
+          "properties": {
+            "items": {
+              "description": "Entries.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MenuItemSchema"
+              }
+            },
+            "label": {
+              "description": "Label.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "submenu"
+            }
+          },
+          "required": [
+            "type",
+            "label",
+            "items"
+          ]
+        }
+      ]
+    },
+    "NodeSchema": {
+      "description": "A container or widget node.",
+      "oneOf": [
+        {
+          "description": "`split \"horizontal\"|\"vertical\" sizes=\"240px 1fr\" min-sizes=\"160px none\"\nmax-sizes=\"480px none\" collapsible=\"true false\" resizable=#true { … }`.",
+          "type": "object",
+          "properties": {
+            "children": {
+              "description": "Child nodes.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/NodeSchema"
+              }
+            },
+            "collapsible": {
+              "description": "One `true`/`false` per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "description": "Stable node id.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Label: literal text or `@message.id`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "max_sizes": {
+              "description": "One maximum size (or `none`) per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "min_sizes": {
+              "description": "One minimum size (or `none`) per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "orientation": {
+              "description": "`horizontal` (side by side) or `vertical`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/OrientationSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "resizable": {
+              "description": "Whether dividers can be dragged (default true).",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "sizes": {
+              "description": "One CSS track size per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "split"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ]
+        },
+        {
+          "description": "`stack sizes=\"auto 1fr\" { … }`: children top to bottom.",
+          "type": "object",
+          "properties": {
+            "children": {
+              "description": "Child nodes.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/NodeSchema"
+              }
+            },
+            "id": {
+              "description": "Stable node id.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Label.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sizes": {
+              "description": "One CSS track size per child.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "stack"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ]
+        },
+        {
+          "description": "`tabs active=0 { … }`: one child at a time.",
+          "type": "object",
+          "properties": {
+            "active": {
+              "description": "Index of the initially active tab.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "children": {
+              "description": "Child nodes, one per tab.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/NodeSchema"
+              }
+            },
+            "id": {
+              "description": "Stable node id.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Label.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "tabs"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ]
+        },
+        {
+          "description": "A widget: `<kind> id=… label=… <option>=<value>… { row \"<template>\" }`.",
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "Stable node id.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "description": "Widget kind: account-switcher, folder-tree, message-list,\nmessage-view, toolbar, status-bar, text, spacer (M0), or\nplugin.<id>.<name>.",
+              "type": "string"
+            },
+            "label": {
+              "description": "Label.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "options": {
+              "description": "Widget options (all other properties of the node).",
+              "type": "object",
+              "additionalProperties": true,
+              "default": {}
+            },
+            "rows": {
+              "description": "Row templates, e.g. `\"{from.name}  {date | relative}\"`.",
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "widget"
+            }
+          },
+          "required": [
+            "type",
+            "kind"
+          ]
+        }
+      ]
+    },
+    "OrientationSchema": {
+      "description": "Split direction.",
+      "oneOf": [
+        {
+          "description": "Side by side.",
+          "type": "string",
+          "const": "horizontal"
+        },
+        {
+          "description": "Top to bottom.",
+          "type": "string",
+          "const": "vertical"
+        }
+      ]
+    },
+    "ToolbarItemSchema": {
+      "description": "A toolbar entry.",
+      "oneOf": [
+        {
+          "description": "`item \"<action> <args>…\" label=… icon=…`.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "description": "Action id and arguments.",
+              "type": "string"
+            },
+            "icon": {
+              "description": "Icon override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Label override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "item"
+            }
+          },
+          "required": [
+            "type",
+            "action"
+          ]
+        },
+        {
+          "description": "`spacer`: pushes the following items to the end.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "spacer"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "`separator`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "separator"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-30T07:00:00+02:00",
+      "from": [
+        {
+          "email": "calendar@nail.example",
+          "name": "Team Calendar"
+        }
+      ],
+      "message_id": "reminder-ng-review@nail.example",
+      "reply_to": [],
+      "subject": "Reminder: Nightingale review, Thursday 10:00",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Nightingale review\r\nThursday, October 1, 2026, 10:00-11:00\r\nRoom: Babbage\r\n\r\nAgenda: prototype results, next steps."
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-30T07:00:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "calendar@nail.example",
+      "name": "Team Calendar"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Nightingale review Thursday, October 1, 2026, 10:00-11:00 Room: Babbage Agenda: prototype results, next steps.",
+    "subject": "Reminder: Nightingale review, Thursday 10:00",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

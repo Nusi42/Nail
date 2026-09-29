@@ -1,0 +1,15 @@
+From: Ada Lovelace <ada@lovelace.example>
+To: Sam Taylor <sam@nail.example>
+Subject: Re: Project Nightingale kickoff
+Date: Sat, 19 Sep 2026 08:05:00 +0200
+Message-ID: <ng-5@lovelace.example>
+In-Reply-To: <ng-4@nail.example>
+References: <ng-1@navy.example> <ng-2@nail.example> <ng-3@navy.example> <ng-4@nail.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Then headers first and bodies on demand should cut p50 in half.
+I can prototype that.
+
+Ada

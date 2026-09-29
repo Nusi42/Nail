@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-19T09:20:00+02:00",
+      "from": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ],
+      "message_id": "ng-6@nail.example",
+      "reply_to": [],
+      "subject": "Re: Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "ada@lovelace.example",
+          "name": "Ada Lovelace"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Great, go for it. I'll set up the benchmark harness so we can compare.\r\n\r\nSam"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-19T09:20:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "sam@nail.example",
+      "name": "Sam Taylor"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Great, go for it. I'll set up the benchmark harness so we can compare. Sam",
+    "subject": "Re: Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "ada@lovelace.example",
+        "name": "Ada Lovelace"
+      }
+    ]
+  }
+}

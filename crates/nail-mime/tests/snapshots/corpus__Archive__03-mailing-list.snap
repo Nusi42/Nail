@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-02T05:00:00Z",
+      "from": [
+        {
+          "email": "digest@rust-weekly.example",
+          "name": "Rust Weekly"
+        }
+      ],
+      "message_id": "issue-512@rust-weekly.example",
+      "reply_to": [],
+      "subject": "[rust-weekly] Issue 512",
+      "to": [
+        {
+          "email": "rust-weekly@lists.example",
+          "name": null
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hello Rustaceans,\r\n\r\nthis week: async closures everywhere, a new borrow checker blog post and\r\n23 crates of the week.\r\n\r\nUnsubscribe: https://lists.example/rust-weekly"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-02T05:00:00Z",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "digest@rust-weekly.example",
+      "name": "Rust Weekly"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hello Rustaceans, this week: async closures everywhere, a new borrow checker blog post and 23 crates of the week. Unsubscribe: https://lists.example/rust-weekly",
+    "subject": "[rust-weekly] Issue 512",
+    "to": [
+      {
+        "email": "rust-weekly@lists.example",
+        "name": null
+      }
+    ]
+  }
+}

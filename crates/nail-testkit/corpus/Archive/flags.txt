@@ -1,0 +1,5 @@
+# <file> <IMAP flags...>; files not listed have no flags
+01-flight-itinerary.eml \Seen
+02-forwarded-message.eml \Seen
+03-mailing-list.eml \Seen
+04-receipt.eml \Seen

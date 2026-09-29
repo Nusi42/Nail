@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-29T02:14:00Z",
+      "from": [
+        {
+          "email": "support@micros0ft-helpdesk.example",
+          "name": "IT Support"
+        }
+      ],
+      "message_id": "verify-now-99@micros0ft-helpdesk.example",
+      "reply_to": [],
+      "subject": "Action required: verify your mailbox",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": true,
+    "sanitized_html": "<h2>Your mailbox is almost full</h2>\n<p>Please <a rel=\"noopener noreferrer\">verify your account</a>\nor <a rel=\"noopener noreferrer\">click here</a>.</p>\n<p><a rel=\"noopener noreferrer\">Old school</a> and\n<a href=\"https://evil.example/login\" rel=\"noopener noreferrer\">the real login page</a>.</p>\n<img>\n<img>\n\n\n\n\n\n<div style=\"color: red\">Styled</div>\n<div>Bad background</div>\n<p style=\"position: fixed; top: 0; left: 0\">Overlay</p>\n\n<p>Regards,<br>IT Support</p>",
+    "text": "Your mailbox is almost full Please verify your account or click here.\nOld school and the real login page.\n StyledBad background Overlay\n Regards,\nIT Support"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-29T02:14:00Z",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "support@micros0ft-helpdesk.example",
+      "name": "IT Support"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Your mailbox is almost full Please verify your account or click here. Old school and the real login page. StyledBad background Overlay Regards, IT Support",
+    "subject": "Action required: verify your mailbox",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-18T16:45:00+02:00",
+      "from": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ],
+      "message_id": "ng-4@nail.example",
+      "reply_to": [],
+      "subject": "Re: Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "grace@navy.example",
+          "name": "Grace Hopper"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Numbers are in: p50 41 s, p95 97 s on a mid-range phone. Most of the\r\ntime goes into fetching full bodies up front.\r\n\r\nSam"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-18T16:45:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "sam@nail.example",
+      "name": "Sam Taylor"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Numbers are in: p50 41 s, p95 97 s on a mid-range phone. Most of the time goes into fetching full bodies up front. Sam",
+    "subject": "Re: Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "grace@navy.example",
+        "name": "Grace Hopper"
+      }
+    ]
+  }
+}

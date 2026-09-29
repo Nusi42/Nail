@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-22T14:00:00+02:00",
+      "from": [
+        {
+          "email": "grace@navy.example",
+          "name": "Grace Hopper"
+        }
+      ],
+      "message_id": "ng-7@navy.example",
+      "reply_to": [],
+      "subject": "Re: Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Prototype results look promising: p50 is down to 17 s. Let's review\r\non Thursday.\r\n\r\nGrace"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-22T14:00:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "grace@navy.example",
+      "name": "Grace Hopper"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Prototype results look promising: p50 is down to 17 s. Let's review on Thursday. Grace",
+    "subject": "Re: Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

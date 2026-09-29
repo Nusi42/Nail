@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-28T08:15:00+02:00",
+      "from": [
+        {
+          "email": "ada@lovelace.example",
+          "name": "Ada Lovelace"
+        }
+      ],
+      "message_id": "welcome-0001@lovelace.example",
+      "reply_to": [],
+      "subject": "Welcome to Nail",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hi Sam,\r\n\r\nwelcome aboard! This inbox is filled with demo messages so you can try\r\nthings out: plain text, HTML newsletters, attachments, a long thread and\r\na few deliberately broken or hostile messages.\r\n\r\nUse j and k to move through the list.\r\n\r\nCheers,\r\nAda"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-28T08:15:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "ada@lovelace.example",
+      "name": "Ada Lovelace"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hi Sam, welcome aboard! This inbox is filled with demo messages so you can try things out: plain text, HTML newsletters, attachments, a long thread and a few deliberately broken or hostile messages.",
+    "subject": "Welcome to Nail",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

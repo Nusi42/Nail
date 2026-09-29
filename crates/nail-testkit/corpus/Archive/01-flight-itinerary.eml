@@ -1,0 +1,28 @@
+From: SkyWays <no-reply@skyways.example>
+To: Sam Taylor <sam@nail.example>
+Subject: Your itinerary: FRA -> LIS, 12 Aug 2026
+Date: Mon, 03 Aug 2026 12:00:00 +0000
+Message-ID: <itin-XK42Q@skyways.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+
+Booking reference: XK42Q
+SW 1234 Frankfurt (FRA) 07:25 -> Lisbon (LIS) 09:30
+Seat 14A
+
+--b1
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<table border="1" cellpadding="4">
+<tr><th>Flight</th><th>From</th><th>To</th><th>Seat</th></tr>
+<tr><td>SW 1234</td><td>Frankfurt (FRA) 07:25</td><td>Lisbon (LIS) 09:30</td><td>14A</td></tr>
+</table>
+<p>Booking reference: <strong>XK42Q</strong></p>
+<p><img src="https://skyways.example/logo.png" alt="SkyWays"></p>
+</body></html>
+
+--b1--

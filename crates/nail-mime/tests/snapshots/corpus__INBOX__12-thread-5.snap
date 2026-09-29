@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-19T08:05:00+02:00",
+      "from": [
+        {
+          "email": "ada@lovelace.example",
+          "name": "Ada Lovelace"
+        }
+      ],
+      "message_id": "ng-5@lovelace.example",
+      "reply_to": [],
+      "subject": "Re: Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Then headers first and bodies on demand should cut p50 in half.\r\nI can prototype that.\r\n\r\nAda"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-19T08:05:00+02:00",
+    "flags": {
+      "answered": true,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "ada@lovelace.example",
+      "name": "Ada Lovelace"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Then headers first and bodies on demand should cut p50 in half. I can prototype that. Ada",
+    "subject": "Re: Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

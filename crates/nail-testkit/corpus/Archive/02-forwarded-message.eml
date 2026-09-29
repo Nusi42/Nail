@@ -1,0 +1,27 @@
+From: Ada Lovelace <ada@lovelace.example>
+To: Sam Taylor <sam@nail.example>
+Subject: Fwd: Analytical Engine notes
+Date: Fri, 10 Jul 2026 15:00:00 +0100
+Message-ID: <fwd-notes@lovelace.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="fwd-b"
+
+--fwd-b
+Content-Type: text/plain; charset=utf-8
+
+Forwarding the original notes, see attached.
+
+--fwd-b
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="Analytical Engine notes.eml"
+
+From: Charles Babbage <charles@engine.example>
+To: Ada Lovelace <ada@lovelace.example>
+Subject: Analytical Engine notes
+Date: Thu, 09 Jul 2026 10:00:00 +0100
+Message-ID: <engine-notes@engine.example>
+Content-Type: text/plain; charset=utf-8
+
+The mill and the store are finally connected.
+
+--fwd-b--

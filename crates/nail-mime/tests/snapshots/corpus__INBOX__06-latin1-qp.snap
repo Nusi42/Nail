@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-24T19:30:00+02:00",
+      "from": [
+        {
+          "email": "juergen@mueller.example",
+          "name": "Jürgen Müller"
+        }
+      ],
+      "message_id": "gruesse-muenchen@mueller.example",
+      "reply_to": [],
+      "subject": "Grüße aus München",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hallo Sam,\r\n\r\nviele Grüße aus München! Das Wetter ist großartig, die Wiesn ist\r\nvoll und das Bier kostet 15,80 Euro... fast.\r\n\r\nBis bald,\r\nJürgen"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-24T19:30:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "juergen@mueller.example",
+      "name": "Jürgen Müller"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hallo Sam, viele Grüße aus München! Das Wetter ist großartig, die Wiesn ist voll und das Bier kostet 15,80 Euro... fast. Bis bald, Jürgen",
+    "subject": "Grüße aus München",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

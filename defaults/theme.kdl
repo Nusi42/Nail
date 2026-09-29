@@ -1,0 +1,357 @@
+// Nail default theme.
+//
+// This file is the complete default look of Nail. Your own theme.kdl can
+// start with `theme "My theme" extends="default" { ... }` and override only
+// what you want to change. See userDocs/en/theme-reference.md.
+
+theme "default" mode="system" {
+    tokens {
+        // Colours: the first value is the light (base) value; `dark=` and
+        // `high-contrast=` override it in those modes.
+        color "bg"           "#ffffff" dark="#1b1e24" high-contrast="#000000"
+        color "bg-subtle"    "#f5f6f8" dark="#22262d" high-contrast="#000000"
+        color "bg-raised"    "#e9ebef" dark="#2c313a" high-contrast="#1a1a1a"
+        color "fg"           "#1d2129" dark="#e3e6eb" high-contrast="#ffffff"
+        color "fg-muted"     "#5c6370" dark="#9aa2ae" high-contrast="#ffffff"
+        color "border"       "#d8dce3" dark="#353b45" high-contrast="#ffffff"
+        color "accent"       "#2e5eaa" dark="#7aa7e8" high-contrast="#ffff00"
+        color "accent-fg"    "#ffffff" dark="#10233f" high-contrast="#000000"
+        color "selection"    "#dbe6f7" dark="#2b3f5e" high-contrast="#ffff00"
+        color "selection-fg" "#10233f" dark="#eef3fb" high-contrast="#000000"
+        color "unread"       "#2e5eaa" dark="#7aa7e8" high-contrast="#ffff00"
+        color "flagged"      "#c9302c" dark="#ef6b67" high-contrast="#ff6060"
+        color "danger"       "#c9302c" dark="#ef6b67" high-contrast="#ff6060"
+        color "focus-ring"   "#2e5eaa" dark="#7aa7e8" high-contrast="#00ffff"
+        color "quote-1"      "#2e5eaa" dark="#7aa7e8"
+        color "quote-2"      "#3b8a5a" dark="#7cc49a"
+        color "quote-3"      "#8a6d3b" dark="#d2b074"
+
+        font "ui"     #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
+        font "reader" #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
+        font "mono"   #""Cascadia Mono", Consolas, ui-monospace, monospace"#
+
+        // Unitless numbers are pixels for font-size, space, size and radius.
+        font-size "xs" 11
+        font-size "sm" 12
+        font-size "md" 14
+        font-size "lg" 16
+        font-size "xl" 20
+
+        font-weight "regular" 400
+        font-weight "medium"  500
+        font-weight "bold"    650
+
+        line-height "tight"  1.25
+        line-height "normal" 1.5
+
+        space "xxs" 2
+        space "xs"  4
+        space "sm"  8
+        space "md"  12
+        space "lg"  16
+        space "xl"  24
+        space "row" 6
+
+        size "icon"         16
+        size "touch-target" 48
+        size "toolbar"      40
+        size "divider"      1
+
+        radius "sm" 4
+        radius "md" 6
+        radius "lg" 10
+
+        border "thin" "1px solid $color.border"
+
+        shadow "raised"  "0 1px 3px rgb(0 0 0 / 0.12)" dark="0 1px 3px rgb(0 0 0 / 0.5)"
+        shadow "overlay" "0 8px 24px rgb(0 0 0 / 0.2)" dark="0 8px 24px rgb(0 0 0 / 0.6)"
+
+        motion "fast"   "100ms"
+        motion "normal" "200ms"
+        motion "ease"   "cubic-bezier(0.2, 0, 0, 1)"
+
+        opacity "disabled" 0.45
+        opacity "muted"    0.7
+    }
+
+    // ---- Application frame and containers ----
+
+    part "app" {
+        font-family "$font.ui"
+        font-size "$font-size.md"
+        line-height "$line-height.tight"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+
+    part "split.divider" {
+        background-color "$color.border"
+        flex-basis "$size.divider"
+        transition "background-color $motion.fast $motion.ease"
+    }
+    part "split.divider:hover" { background-color "$color.accent"; }
+
+    part "tabs.tab-list" {
+        display "flex"
+        gap "$space.xs"
+        padding "$space.xs" "$space.sm"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "tabs.tab" {
+        padding "$space.xs" "$space.md"
+        border-radius "$radius.sm"
+        color "$color.fg-muted"
+        background-color "transparent"
+    }
+    part "tabs.tab:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+
+    // ---- Toolbar and status bar ----
+
+    part "toolbar" {
+        display "flex"
+        align-items "center"
+        gap "$space.xs"
+        min-height "$size.toolbar"
+        padding 0 "$space.sm"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "toolbar.button" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xs"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "toolbar.button:hover" { background-color "$color.bg-raised"; }
+    part "toolbar.button:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset 1
+    }
+    part "toolbar.button:disabled" { opacity "$opacity.disabled"; }
+    part "toolbar.button.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+    part "toolbar.spacer" { flex-grow 1; }
+    part "toolbar.separator" {
+        align-self "stretch"
+        width "$size.divider"
+        margin "$space.sm" "$space.xs"
+        background-color "$color.border"
+    }
+
+    part "status-bar" {
+        display "flex"
+        gap "$space.md"
+        padding "$space.xxs" "$space.sm"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+        border-top "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+
+    // ---- Accounts and folders ----
+
+    part "account-switcher" {
+        padding "$space.sm"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "account-switcher.item" {
+        padding "$space.xs" "$space.sm"
+        border-radius "$radius.sm"
+    }
+    part "account-switcher.item:selected" {
+        font-weight "$font-weight.medium"
+        background-color "$color.bg-raised"
+    }
+
+    part "folder-tree" {
+        padding "$space.xs"
+        background-color "$color.bg-subtle"
+        overflow-y "auto"
+    }
+    part "folder-tree.item" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.xs" "$space.sm"
+        border-radius "$radius.sm"
+        cursor "default"
+    }
+    part "folder-tree.item[role=\"inbox\"]" { font-weight "$font-weight.medium"; }
+    part "folder-tree.item:hover" { background-color "$color.bg-raised"; }
+    part "folder-tree.item:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "folder-tree.item:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset -2
+    }
+    part "folder-tree.item.icon" {
+        width "$size.icon"
+        height "$size.icon"
+        color "$color.fg-muted"
+    }
+    part "folder-tree.item.name" {
+        flex-grow 1
+        overflow "hidden"
+        text-overflow "ellipsis"
+        white-space "nowrap"
+    }
+    part "folder-tree.item.unread-count" {
+        font-size "$font-size.sm"
+        font-weight "$font-weight.bold"
+        color "$color.unread"
+    }
+
+    // ---- Message list ----
+
+    part "message-list" {
+        overflow-y "auto"
+        background-color "$color.bg"
+    }
+    part "message-list.row" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding "$space.row" "$space.md"
+        border-bottom "$border.thin"
+        border-left "3px solid transparent"
+        cursor "default"
+    }
+    part "message-list.row:hover" { background-color "$color.bg-subtle"; }
+    part "message-list.row:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "message-list.row:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset -2
+    }
+    part "message-list.row:unread" { border-left-color "$color.unread"; }
+    part "message-list.row:flagged" { border-left-color "$color.flagged"; }
+    part "message-list.row.line" {
+        display "flex"
+        gap "$space.sm"
+        overflow "hidden"
+        white-space "nowrap"
+        text-overflow "ellipsis"
+    }
+    part "message-list.row:unread .subject" { font-weight "$font-weight.bold"; }
+    part "message-list.row:unread .from" { font-weight "$font-weight.bold"; }
+    part "message-list.row.date" {
+        margin-left "auto"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "message-list.row.preview" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "message-list.empty" {
+        padding "$space.xl"
+        text-align "center"
+        color "$color.fg-muted"
+    }
+
+    // ---- Message view ----
+
+    part "message-view" {
+        display "flex"
+        flex-direction "column"
+        overflow "hidden"
+        background-color "$color.bg"
+    }
+    part "message-view.header" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding "$space.md" "$space.lg"
+        border-bottom "$border.thin"
+    }
+    part "message-view.header.subject" {
+        font-size "$font-size.xl"
+        font-weight "$font-weight.bold"
+    }
+    part "message-view.header.field" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "message-view.remote-content-banner" {
+        padding "$space.xs" "$space.lg"
+        font-size "$font-size.sm"
+        background-color "$color.bg-raised"
+    }
+    part "message-view.body" {
+        flex-grow 1
+        border "none"
+        background-color "$color.bg"
+    }
+    part "message-view.attachments" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+        padding "$space.sm" "$space.lg"
+        border-top "$border.thin"
+    }
+    part "message-view.attachment" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.md"
+        font-size "$font-size.sm"
+    }
+    part "message-view.empty" {
+        margin "auto"
+        color "$color.fg-muted"
+    }
+
+    // ---- Simple widgets ----
+
+    part "text" { padding "$space.xs" "$space.sm"; }
+    part "spacer" { flex-grow 1; }
+
+    // ---- Icons (SVG path data on a 24x24 grid) ----
+
+    icons {
+        icon "reply"     svg="M10 5 3 12l7 7v-4.5c5 0 8.5 1.5 11 5-1-5-4-10-11-11z"
+        icon "reply-all" svg="M8 5 1 12l7 7v-3l-4-4 4-4z M15 5l-7 7 7 7v-4.5c4 0 7 1.5 8 5-.5-5-3-10-8-11z"
+        icon "forward"   svg="M14 5l7 7-7 7v-4.5c-5 0-8.5 1.5-11 5 1-5 4-10 11-11z"
+        icon "archive"   svg="M3 3h18v5H3z M4 9h16v12H4z M9 12v2h6v-2z"
+        icon "delete"    svg="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"
+        icon "flag"      svg="M5 3h2v18H5z M8 4h11l-3 4 3 4H8z"
+        icon "mark-read" svg="M2 5h20v14H2z M4 7v1l8 5 8-5V7l-8 5z"
+        icon "sync"      svg="M12 4a8 8 0 0 1 7.4 5H17v2h6V5h-2v2.3A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z M12 20a8 8 0 0 1-7.4-5H7v-2H1v6h2v-2.3A10 10 0 0 0 22 12h-2a8 8 0 0 1-8 8z"
+        icon "folder"    svg="M2 5h7l2 2h11v12H2z"
+        icon "inbox"     svg="M3 4h18v16H3z M5 6v7h4l1 2h4l1-2h4V6z"
+        icon "sent"      svg="M2 21 23 12 2 3v7l15 2-15 2z"
+        icon "drafts"    svg="M4 16 15 5l4 4L8 20H4z M16 4l2-2 4 4-2 2z"
+        icon "junk"      svg="M12 2 2 20h20z M11 9h2v5h-2z M11 16h2v2h-2z"
+        icon "trash"     svg="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"
+    }
+
+    // ---- Reading mail ----
+
+    message {
+        font-family "$font.reader"
+        text-font-family "$font.mono"
+        font-size "$font-size.md"
+        line-height "$line-height.normal"
+        max-width "80ch"
+        quote-colors "$color.quote-1" "$color.quote-2" "$color.quote-3"
+        html-dark-mode "smart"
+    }
+
+    // Notification sounds per event, e.g. `mail.new "chime"`. Silent by default.
+    sounds {
+    }
+}

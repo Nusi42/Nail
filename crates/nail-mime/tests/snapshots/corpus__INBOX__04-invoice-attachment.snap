@@ -1,0 +1,72 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [
+      {
+        "filename": "INV-2026-09-5521.pdf",
+        "index": 0,
+        "inline": false,
+        "mime": "application/pdf",
+        "size": 142
+      },
+      {
+        "filename": "usage.csv",
+        "index": 1,
+        "inline": false,
+        "mime": "text/csv",
+        "size": 76
+      }
+    ],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-30T03:00:00Z",
+      "from": [
+        {
+          "email": "billing@cloudhost.example",
+          "name": "Billing"
+        }
+      ],
+      "message_id": "inv-2026-09-5521@cloudhost.example",
+      "reply_to": [],
+      "subject": "Your invoice for September 2026",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hello Sam,\r\n\r\nyour invoice INV-2026-09-5521 is attached. The amount of 12.00 EUR will be\r\ncharged to your card ending in 4242.\r\n\r\nThank you for using CloudHost."
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-30T03:00:00Z",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "billing@cloudhost.example",
+      "name": "Billing"
+    },
+    "has_attachments": true,
+    "id": "m1",
+    "preview": "Hello Sam, your invoice INV-2026-09-5521 is attached. The amount of 12.00 EUR will be charged to your card ending in 4242. Thank you for using CloudHost.",
+    "subject": "Your invoice for September 2026",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

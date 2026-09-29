@@ -1,0 +1,15 @@
+From: Rust Weekly <digest@rust-weekly.example>
+To: rust-weekly@lists.example
+Subject: [rust-weekly] Issue 512
+Date: Wed, 02 Sep 2026 05:00:00 +0000
+Message-ID: <issue-512@rust-weekly.example>
+List-Id: Rust Weekly <rust-weekly.lists.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8; format=flowed
+
+Hello Rustaceans,
+
+this week: async closures everywhere, a new borrow checker blog post and
+23 crates of the week.
+
+Unsubscribe: https://lists.example/rust-weekly

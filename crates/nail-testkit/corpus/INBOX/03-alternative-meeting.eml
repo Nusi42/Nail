@@ -1,0 +1,41 @@
+From: Grace Hopper <grace@navy.example>
+To: Sam Taylor <sam@nail.example>
+Cc: Ada Lovelace <ada@lovelace.example>
+Subject: Notes from Tuesday's planning meeting
+Date: Tue, 22 Sep 2026 17:42:10 -0400
+Message-ID: <notes-tue@navy.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt-7f3a"
+
+This is a multi-part message in MIME format.
+
+--alt-7f3a
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Hi all,
+
+quick notes from Tuesday:
+
+* Release candidate on October 5
+* Ada owns the migration guide
+* Sam reviews the sync engine
+
+Grace
+
+--alt-7f3a
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<html><body>
+<p>Hi all,</p>
+<p>quick notes from Tuesday:</p>
+<ul>
+<li>Release candidate on <b>October 5</b></li>
+<li>Ada owns the migration guide</li>
+<li>Sam reviews the sync engine</li>
+</ul>
+<p>Grace</p>
+</body></html>
+
+--alt-7f3a--

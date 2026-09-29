@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const localesDir = fileURLToPath(new URL("../locales", import.meta.url));
+// Reference theme/layout fixtures of nail-api, used by the mock transport (`?mock=1`).
+const fixturesDir = fileURLToPath(new URL("../crates/nail-api/fixtures", import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
@@ -16,7 +18,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    fs: { allow: [".", localesDir] },
+    fs: { allow: [".", localesDir, fixturesDir] },
   },
   build: {
     outDir: "dist",

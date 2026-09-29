@@ -1,0 +1,32 @@
+From: "Weekly Garden News" <news@garden-weekly.example>
+To: sam@nail.example
+Subject: =?utf-8?q?Your_weekly_garden_digest_=F0=9F=8C=B1?=
+Date: Sun, 27 Sep 2026 06:00:00 +0000
+Message-ID: <digest-2026-39@garden-weekly.example>
+List-Unsubscribe: <https://garden-weekly.example/unsubscribe?u=4711>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html>
+<html><head><title>Garden digest</title>
+<style>body { background: url(https://garden-weekly.example/bg.png); }</style>
+<link rel=3D"stylesheet" href=3D"https://garden-weekly.example/mail.css">
+</head>
+<body bgcolor=3D"#f4f1e8">
+<table width=3D"600" cellpadding=3D"0" cellspacing=3D"0" background=3D"http=
+s://garden-weekly.example/paper.jpg">
+<tr><td style=3D"font-family: Georgia, serif; color: #2d4a22; padding: 16px">
+<h1>Autumn is here</h1>
+<img src=3D"https://garden-weekly.example/img/pumpkins.jpg" alt=3D"Pumpkins=
+" width=3D"560">
+<p>Time to plant garlic and tulip bulbs. Read our
+<a href=3D"https://garden-weekly.example/r/abc123?to=3Dbulbs">bulb guide</a=
+>.</p>
+<p style=3D"background-image: url('https://garden-weekly.example/leaf.png')=
+; color: #555">Leaf of the week.</p>
+</td></tr>
+</table>
+<img src=3D"https://track.garden-weekly.example/open.gif?u=3D4711" width=3D=
+"1" height=3D"1" alt=3D"">
+</body></html>

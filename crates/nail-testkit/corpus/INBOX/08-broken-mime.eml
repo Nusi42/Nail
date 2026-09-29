@@ -1,0 +1,24 @@
+To: sam@nail.example
+Subject: Broken message (missing From, bad boundaries)
+Date: not a real date
+Message-ID: <broken-1@spam.invalid>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="never-closed"
+This header line has no colon and breaks the header block
+
+--never-closed
+Content-Type: text/plain; charset=unknown-8bit-charset
+
+This part claims a charset nobody knows.
+
+--never-closed
+Content-Type: application/octet-stream; name="data.bin"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="data.bin"
+
+!!!! this is not base64 at all ====
+--never-closed
+Content-Type: text/html
+Content-Transfer-Encoding: quoted-printable
+
+<p>Unclosed <b>tags <i>everywhere=

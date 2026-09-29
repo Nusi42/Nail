@@ -1,0 +1,22 @@
+From: Corner Bookshop <shop@corner-books.example>
+To: Sam Taylor <sam@nail.example>
+Subject: Receipt #88213
+Date: Sat, 15 Aug 2026 14:22:00 +0200
+Message-ID: <receipt-88213@corner-books.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="r-b"
+
+--r-b
+Content-Type: text/plain; charset=utf-8
+
+Thanks for your purchase!
+
+  1 x "Structure and Interpretation of Computer Programs"   42.00 EUR
+
+--r-b
+Content-Type: text/plain; charset=utf-8; name="receipt-88213.txt"
+Content-Disposition: attachment; filename="receipt-88213.txt"
+
+Receipt 88213 - total 42.00 EUR - paid by card
+
+--r-b--

@@ -1,0 +1,5 @@
+# <file> <IMAP flags...>; files not listed have no flags
+01-thread-2.eml \Seen
+02-thread-4.eml \Seen
+03-thread-6.eml \Seen
+04-dinner.eml \Seen

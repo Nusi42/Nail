@@ -1,0 +1,15 @@
+From: Grace Hopper <grace@navy.example>
+To: Sam Taylor <sam@nail.example>
+Subject: Re: Project Nightingale kickoff
+Date: Tue, 22 Sep 2026 14:00:00 +0200
+Message-ID: <ng-7@navy.example>
+In-Reply-To: <ng-6@nail.example>
+References: <ng-1@navy.example> <ng-2@nail.example> <ng-3@navy.example> <ng-4@nail.example> <ng-5@lovelace.example> <ng-6@nail.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Prototype results look promising: p50 is down to 17 s. Let's review
+on Thursday.
+
+Grace

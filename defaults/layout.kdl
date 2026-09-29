@@ -1,0 +1,116 @@
+// Nail default layout: the three-pane mail window.
+//
+// Your own layout.kdl can start with `layout "My layout" extends="default" { ... }`
+// and override only what you want to change. See userDocs/en/layout-reference.md.
+
+layout "default" {
+    // Wide windows: folders | message list | reader, with a status bar.
+    breakpoint min-width=900 {
+        window "main" {
+            stack id="root" sizes="1fr auto" {
+                split "horizontal" id="panes" \
+                    sizes="240px 1fr 1.4fr" \
+                    min-sizes="160px 280px 320px" \
+                    max-sizes="480px none none" \
+                    collapsible="true false true" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr" {
+                        account-switcher id="accounts"
+                        folder-tree id="folders" show-unread=#true
+                    }
+                    message-list id="list" label="@layout.pane.messages" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                        row "{preview}"
+                    }
+                    stack id="reader" label="@layout.pane.message" sizes="auto 1fr" {
+                        toolbar id="reader-toolbar" toolbar="reader"
+                        message-view id="message" headers="from to cc date"
+                    }
+                }
+                status-bar id="status" items="sync-progress folder-counts"
+            }
+        }
+    }
+
+    // Narrow windows (phones, small browser windows): one pane at a time.
+    breakpoint max-width=899 {
+        window "main" {
+            stack id="root" sizes="1fr auto" {
+                tabs id="panes" active=1 {
+                    folder-tree id="folders" label="@layout.pane.folders" show-unread=#true
+                    message-list id="list" label="@layout.pane.messages" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                    }
+                    stack id="reader" label="@layout.pane.message" sizes="auto 1fr" {
+                        toolbar id="reader-toolbar" toolbar="reader"
+                        message-view id="message" headers="from date"
+                    }
+                }
+                status-bar id="status" items="sync-progress"
+            }
+        }
+    }
+
+    actions {
+        action "mail.next"        label="@mail.action.next"
+        action "mail.previous"    label="@mail.action.previous"
+        action "mail.reply"       label="@mail.action.reply"       icon="reply"
+        action "mail.reply-all"   label="@mail.action.reply-all"   icon="reply-all"
+        action "mail.forward"     label="@mail.action.forward"     icon="forward"
+        action "mail.archive"     label="@mail.action.archive"     icon="archive"
+        action "mail.delete"      label="@mail.action.delete"      icon="delete"
+        action "mail.toggle-read" label="@mail.action.toggle-read" icon="mark-read"
+        action "mail.toggle-flag" label="@mail.action.toggle-flag" icon="flag"
+        action "view.toggle"      label="@view.action.toggle"
+        action "sync.now"         label="@sync.action.now"         icon="sync"
+    }
+
+    keys context="list" {
+        bind "j" "mail.next"
+        bind "k" "mail.previous"
+        bind "arrowdown" "mail.next"
+        bind "arrowup" "mail.previous"
+    }
+
+    keys context="reader" {
+        bind "j" "mail.next"
+        bind "k" "mail.previous"
+    }
+
+    keys {
+        bind "r" "mail.reply"
+        bind "a" "mail.reply-all"
+        bind "f" "mail.forward"
+        bind "e" "mail.archive"
+        bind "delete" "mail.delete"
+        bind "u" "mail.toggle-read"
+        bind "s" "mail.toggle-flag"
+        bind "f5" "sync.now"
+        bind "ctrl+b" "view.toggle \"sidebar\""
+        bind "g r" "view.toggle \"reader\""
+    }
+
+    toolbar "reader" {
+        item "mail.reply"
+        item "mail.reply-all"
+        item "mail.forward"
+        spacer
+        item "mail.archive"
+        item "mail.delete"
+        separator
+        item "mail.toggle-flag"
+    }
+
+    menu "context:message-list.row" {
+        item "mail.reply"
+        item "mail.reply-all"
+        item "mail.forward"
+        separator
+        item "mail.toggle-read"
+        item "mail.toggle-flag"
+        separator
+        item "mail.archive"
+        item "mail.delete"
+    }
+}

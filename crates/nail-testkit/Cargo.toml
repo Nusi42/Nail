@@ -9,10 +9,16 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
-serde_json.workspace = true
-anyhow.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+base64 = "0.23.1"
+mail-parser.workspace = true
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring", "pem"] }
+tokio-rustls.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

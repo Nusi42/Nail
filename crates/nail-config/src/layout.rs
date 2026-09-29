@@ -1,0 +1,1189 @@
+//! `layout.kdl`: the file model, the KDL reader, merging onto the defaults and
+//! resolution into [`ResolvedLayout`].
+
+use std::collections::HashSet;
+
+use indexmap::IndexMap;
+use kdl::{KdlEntry, KdlNode};
+use nail_api::{
+    ActionDef, Breakpoint, KeyBinding, LayoutNode, MenuItem, Orientation, ResolvedLayout,
+    SourceLocation, ToolbarItem,
+};
+use schemars::JsonSchema;
+use serde_json::{Map, Value};
+
+use crate::error::ConfigError;
+use crate::kdl_util::{
+    self as k, Located, Source, arg_str, args, check_max_args, check_no_children, check_props,
+    children, describe, is_dotted_kebab, is_kebab, prop_str, prop_u32, to_json,
+};
+use crate::schema::{ActionSchema, BreakpointSchema, MenuItemSchema, ToolbarItemSchema};
+use crate::theme::{read_extends, single_root};
+
+/// Type of a widget option.
+#[derive(Debug, Clone, Copy)]
+enum OptionType {
+    Bool,
+    UInt,
+    Str,
+    OneOf(&'static [&'static str]),
+}
+
+/// A widget kind known to the layout.
+struct WidgetSpec {
+    kind: &'static str,
+    /// `None`: the widget is not implemented yet; any options are accepted.
+    options: Option<&'static [(&'static str, OptionType)]>,
+    /// Required options.
+    required: &'static [&'static str],
+    /// Whether the widget takes `row "<template>"` children.
+    rows: bool,
+}
+
+const fn widget(
+    kind: &'static str,
+    options: &'static [(&'static str, OptionType)],
+    required: &'static [&'static str],
+    rows: bool,
+) -> WidgetSpec {
+    WidgetSpec {
+        kind,
+        options: Some(options),
+        required,
+        rows,
+    }
+}
+
+const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
+    WidgetSpec {
+        kind,
+        options: None,
+        required: &[],
+        rows,
+    }
+}
+
+/// The widget registry (M0 widgets have typed options).
+const WIDGETS: &[WidgetSpec] = &[
+    widget("account-switcher", &[], &[], false),
+    widget(
+        "folder-tree",
+        &[
+            ("show-unread", OptionType::Bool),
+            ("show-account-badges", OptionType::Bool),
+        ],
+        &[],
+        false,
+    ),
+    widget(
+        "message-list",
+        &[
+            ("page-size", OptionType::UInt),
+            ("group-by", OptionType::OneOf(&["none", "date", "sender"])),
+            (
+                "threads",
+                OptionType::OneOf(&["off", "collapsed", "expanded"]),
+            ),
+        ],
+        &[],
+        true,
+    ),
+    widget("message-view", &[("headers", OptionType::Str)], &[], true),
+    widget(
+        "toolbar",
+        &[("toolbar", OptionType::Str)],
+        &["toolbar"],
+        false,
+    ),
+    widget("status-bar", &[("items", OptionType::Str)], &[], false),
+    widget("text", &[("text", OptionType::Str)], &[], false),
+    widget("spacer", &[], &[], false),
+    future_widget("search-bar", false),
+    future_widget("thread-view", true),
+    future_widget("composer", false),
+    future_widget("calendar", false),
+    future_widget("agenda", true),
+    future_widget("mini-month", false),
+    future_widget("task-list", true),
+    future_widget("contact-list", true),
+    future_widget("contact-card", false),
+];
+
+/// Containers from the design that M0 does not support yet.
+const FUTURE_CONTAINERS: &[&str] = &["grid", "dock", "scroll", "overlay"];
+
+/// A `layout.kdl` file as written (possibly sparse).
+///
+/// KDL mapping: the file holds one node `layout "<name>" extends=… { … }`
+/// whose children are `window`, `breakpoint`, `action(s)`, `keys`,
+/// `toolbar(s)` and `menu(s)` nodes.
+#[derive(Debug, Clone, PartialEq, JsonSchema)]
+pub struct LayoutFile {
+    /// Layout name (`layout "<name>"`).
+    pub name: Located<String>,
+    /// Base layout to merge onto; only `"default"` exists. Without it the
+    /// file must be complete.
+    pub extends: Option<String>,
+    /// Window trees: `window "<name>" { <node> }`, optionally inside
+    /// `breakpoint min-width=… max-width=… { … }`. A window defined in a
+    /// sparse file replaces all breakpoints of that window in the base.
+    #[schemars(with = "IndexMap<String, Vec<BreakpointSchema>>")]
+    #[serde(default)]
+    pub windows: IndexMap<String, Vec<Breakpoint>>,
+    /// `action "<id>" label=… icon=… alias-of=… <args>…`, merged field by
+    /// field onto the base.
+    #[schemars(with = "IndexMap<String, ActionSchema>")]
+    #[serde(default)]
+    pub actions: IndexMap<String, ActionDef>,
+    /// `keys context="…" { bind "<key>" "<action> <args>…"; unbind "<key>" }`.
+    #[serde(default)]
+    pub keys: Vec<KeyDef>,
+    /// `toolbar "<name>" { item "<action>"; spacer; separator }`; replaces a
+    /// base toolbar of the same name.
+    #[schemars(with = "IndexMap<String, Vec<ToolbarItemSchema>>")]
+    #[serde(default)]
+    pub toolbars: IndexMap<String, Vec<ToolbarItem>>,
+    /// `menu "app" | "context:<part>" { item …; separator; submenu "<label>" { … } }`;
+    /// replaces a base menu of the same name.
+    #[schemars(with = "IndexMap<String, Vec<MenuItemSchema>>")]
+    #[serde(default)]
+    pub menus: IndexMap<String, Vec<MenuItem>>,
+}
+
+/// A `bind` or `unbind` entry.
+#[derive(Debug, Clone, PartialEq, JsonSchema)]
+pub struct KeyDef {
+    /// Context (`global` when the `keys` block has none).
+    pub context: String,
+    /// Key sequence, e.g. `"ctrl+shift+m"` or `"g i"`.
+    pub key: String,
+    /// Action id; `null` for `unbind`, which removes earlier bindings of the
+    /// key in the context.
+    pub action: Option<String>,
+    /// Action arguments.
+    #[serde(default)]
+    pub args: Vec<Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Reading KDL
+
+impl LayoutFile {
+    /// Reads a layout file without merging or resolving it.
+    pub fn parse(text: &str, file: &str) -> Result<Self, ConfigError> {
+        let src = Source::new(file, text);
+        let doc = src.parse()?;
+        let root = single_root(&src, &doc, "layout")?;
+        LayoutReader { src: &src }.layout(root)
+    }
+
+    /// Merges `overlay` (a sparse file extending this one) onto `self`.
+    pub fn merge(mut self, overlay: LayoutFile) -> LayoutFile {
+        self.name = overlay.name;
+        self.extends = None;
+        self.windows.extend(overlay.windows);
+        for (id, def) in overlay.actions {
+            let target = self.actions.entry(id).or_default();
+            target.label = def.label.or(target.label.take());
+            target.icon = def.icon.or(target.icon.take());
+            target.alias_of = def.alias_of.or(target.alias_of.take());
+            if !def.args.is_empty() {
+                target.args = def.args;
+            }
+        }
+        self.keys.extend(overlay.keys);
+        self.toolbars.extend(overlay.toolbars);
+        self.menus.extend(overlay.menus);
+        self
+    }
+}
+
+struct LayoutReader<'s, 'a> {
+    src: &'s Source<'a>,
+}
+
+impl LayoutReader<'_, '_> {
+    fn layout(&self, node: &KdlNode) -> Result<LayoutFile, ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["extends"])?;
+        check_max_args(src, node, 1)?;
+        let (name, name_entry) = arg_str(src, node, 0, "the layout name")?;
+        let mut file = LayoutFile {
+            name: src.located(name_entry, name.to_owned()),
+            extends: read_extends(src, node)?,
+            windows: IndexMap::new(),
+            actions: IndexMap::new(),
+            keys: Vec::new(),
+            toolbars: IndexMap::new(),
+            menus: IndexMap::new(),
+        };
+        for child in children(node) {
+            match k::name(child) {
+                "window" => self.window(&mut file, child, None, None)?,
+                "breakpoint" => self.breakpoint(&mut file, child)?,
+                "action" => self.action(&mut file, child)?,
+                "actions" => {
+                    self.block(child)?;
+                    for action in children(child) {
+                        self.expect(action, "action", "actions")?;
+                        self.action(&mut file, action)?;
+                    }
+                }
+                "keys" => self.keys(&mut file, child)?,
+                "toolbar" => self.toolbar(&mut file, child)?,
+                "toolbars" => {
+                    self.block(child)?;
+                    for toolbar in children(child) {
+                        self.expect(toolbar, "toolbar", "toolbars")?;
+                        self.toolbar(&mut file, toolbar)?;
+                    }
+                }
+                "menu" => self.menu(&mut file, child)?,
+                "menus" => {
+                    self.block(child)?;
+                    for menu in children(child) {
+                        self.expect(menu, "menu", "menus")?;
+                        self.menu(&mut file, menu)?;
+                    }
+                }
+                other => {
+                    return Err(src.node_err(
+                        child,
+                        format!(
+                            "unknown layout section `{other}` (expected window, breakpoint, action(s), keys, toolbar(s) or menu(s))"
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(file)
+    }
+
+    /// A plain section block: no arguments or properties.
+    fn block(&self, node: &KdlNode) -> Result<(), ConfigError> {
+        check_props(self.src, node, &[])?;
+        check_max_args(self.src, node, 0)
+    }
+
+    fn expect(&self, node: &KdlNode, expected: &str, section: &str) -> Result<(), ConfigError> {
+        if k::name(node) == expected {
+            Ok(())
+        } else {
+            Err(self.src.node_err(
+                node,
+                format!(
+                    "`{section}` may only contain `{expected}` nodes, found `{}`",
+                    k::name(node)
+                ),
+            ))
+        }
+    }
+
+    fn breakpoint(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["min-width", "max-width"])?;
+        check_max_args(src, node, 0)?;
+        let min = prop_u32(src, node, "min-width")?;
+        let max = prop_u32(src, node, "max-width")?;
+        if let (Some(lo), Some(hi)) = (min, max)
+            && lo > hi
+        {
+            return Err(src.node_err(
+                node,
+                format!("min-width {lo} is larger than max-width {hi}"),
+            ));
+        }
+        let windows = children(node);
+        if windows.is_empty() {
+            return Err(src.node_err(node, "`breakpoint` needs at least one `window`"));
+        }
+        for window in windows {
+            self.expect(window, "window", "breakpoint")?;
+            self.window(file, window, min, max)?;
+        }
+        Ok(())
+    }
+
+    fn window(
+        &self,
+        file: &mut LayoutFile,
+        node: &KdlNode,
+        min_width: Option<u32>,
+        max_width: Option<u32>,
+    ) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &[])?;
+        check_max_args(src, node, 1)?;
+        let (name, name_entry) = arg_str(src, node, 0, "the window name")?;
+        if !is_kebab(name) {
+            return Err(src.entry_err(name_entry, format!("invalid window name `{name}`")));
+        }
+        let [root] = children(node) else {
+            return Err(src.node_err(
+                node,
+                format!(
+                    "window `{name}` must contain exactly one root node (a container or widget)"
+                ),
+            ));
+        };
+        let root_node = root;
+        let root = self.node(root_node)?;
+        self.check_unique_ids(root_node, &mut HashSet::new())?;
+        file.windows
+            .entry(name.to_owned())
+            .or_default()
+            .push(Breakpoint {
+                min_width,
+                max_width,
+                root,
+            });
+        Ok(())
+    }
+
+    /// Checks that ids are unique within one window tree (the tree is
+    /// already validated, so every `id` is a string).
+    fn check_unique_ids(
+        &self,
+        node: &KdlNode,
+        seen: &mut HashSet<String>,
+    ) -> Result<(), ConfigError> {
+        if let Some(entry) = node.entry("id")
+            && let Some(id) = entry.value().as_string()
+            && !seen.insert(id.to_owned())
+        {
+            return Err(self.src.entry_err(
+                entry,
+                format!("the id `{id}` is used twice in this window tree"),
+            ));
+        }
+        for child in children(node) {
+            self.check_unique_ids(child, seen)?;
+        }
+        Ok(())
+    }
+
+    /// Common `id` / `label` properties.
+    fn id_label(&self, node: &KdlNode) -> Result<(Option<String>, Option<String>), ConfigError> {
+        let src = self.src;
+        let id = match prop_str(src, node, "id")? {
+            None => None,
+            Some((id, entry)) => {
+                if !is_kebab(id) {
+                    return Err(src.entry_err(
+                        entry,
+                        format!("invalid id `{id}`: use lowercase words like `reader-pane`"),
+                    ));
+                }
+                Some(id.to_owned())
+            }
+        };
+        let label = match prop_str(src, node, "label")? {
+            None => None,
+            Some((label, entry)) => Some(self.label(label, entry)?),
+        };
+        Ok((id, label))
+    }
+
+    fn label(&self, label: &str, entry: &KdlEntry) -> Result<String, ConfigError> {
+        if let Some(id) = label.strip_prefix('@') {
+            let valid = id.starts_with(|c: char| c.is_ascii_alphabetic())
+                && id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+            if !valid {
+                return Err(self.src.entry_err(
+                    entry,
+                    format!("invalid message id in label `{label}`, e.g. \"@mail.action.reply\""),
+                ));
+            }
+        }
+        Ok(label.to_owned())
+    }
+
+    fn node(&self, node: &KdlNode) -> Result<LayoutNode, ConfigError> {
+        let src = self.src;
+        match k::name(node) {
+            "split" => {
+                check_props(
+                    src,
+                    node,
+                    &[
+                        "id",
+                        "label",
+                        "orientation",
+                        "sizes",
+                        "min-sizes",
+                        "max-sizes",
+                        "collapsible",
+                        "resizable",
+                    ],
+                )?;
+                check_max_args(src, node, 1)?;
+                let (id, label) = self.id_label(node)?;
+                let orientation_entry = args(node)
+                    .first()
+                    .copied()
+                    .or_else(|| node.entry("orientation"));
+                let orientation = match orientation_entry {
+                    None => Orientation::Horizontal,
+                    Some(entry) => match k::entry_str(src, entry, "the orientation")? {
+                        "horizontal" => Orientation::Horizontal,
+                        "vertical" => Orientation::Vertical,
+                        other => {
+                            return Err(src.entry_err(
+                                entry,
+                                format!(
+                                    "unknown orientation `{other}` (use horizontal or vertical)"
+                                ),
+                            ));
+                        }
+                    },
+                };
+                let children = self.children(node)?;
+                let n = children.len();
+                let sizes = self.list(node, "sizes", n)?.unwrap_or_default();
+                let optional = |key: &str| -> Result<Vec<Option<String>>, ConfigError> {
+                    Ok(self
+                        .list(node, key, n)?
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|s| (s != "none").then_some(s))
+                        .collect())
+                };
+                let min_sizes = optional("min-sizes")?;
+                let max_sizes = optional("max-sizes")?;
+                let collapsible = match self.list(node, "collapsible", n)? {
+                    None => Vec::new(),
+                    Some(flags) => flags
+                        .iter()
+                        .map(|f| match f.as_str() {
+                            "true" => Ok(true),
+                            "false" => Ok(false),
+                            _ => Err(src.node_err(
+                                node,
+                                "collapsible must list `true` or `false` per child, e.g. \"true false true\"",
+                            )),
+                        })
+                        .collect::<Result<_, _>>()?,
+                };
+                let resizable = match node.entry("resizable") {
+                    None => true,
+                    Some(entry) => entry.value().as_bool().ok_or_else(|| {
+                        src.entry_err(
+                            entry,
+                            format!(
+                                "resizable must be #true or #false, found {}",
+                                describe(entry.value())
+                            ),
+                        )
+                    })?,
+                };
+                Ok(LayoutNode::Split {
+                    id,
+                    label,
+                    orientation,
+                    sizes,
+                    min_sizes,
+                    max_sizes,
+                    collapsible,
+                    resizable,
+                    children,
+                })
+            }
+            "stack" => {
+                check_props(src, node, &["id", "label", "sizes"])?;
+                check_max_args(src, node, 0)?;
+                let (id, label) = self.id_label(node)?;
+                let children = self.children(node)?;
+                let sizes = self
+                    .list(node, "sizes", children.len())?
+                    .unwrap_or_default();
+                Ok(LayoutNode::Stack {
+                    id,
+                    label,
+                    sizes,
+                    children,
+                })
+            }
+            "tabs" => {
+                check_props(src, node, &["id", "label", "active"])?;
+                check_max_args(src, node, 0)?;
+                let (id, label) = self.id_label(node)?;
+                let children = self.children(node)?;
+                let active = prop_u32(src, node, "active")?.unwrap_or(0);
+                if active as usize >= children.len() {
+                    return Err(src.node_err(
+                        node,
+                        format!(
+                            "active={active} but the tabs have only {} children",
+                            children.len()
+                        ),
+                    ));
+                }
+                Ok(LayoutNode::Tabs {
+                    id,
+                    label,
+                    active,
+                    children,
+                })
+            }
+            other if FUTURE_CONTAINERS.contains(&other) => Err(src.node_err(
+                node,
+                format!("the `{other}` container is not supported yet (use split, stack or tabs)"),
+            )),
+            _ => self.widget(node),
+        }
+    }
+
+    fn children(&self, node: &KdlNode) -> Result<Vec<LayoutNode>, ConfigError> {
+        let nodes = children(node);
+        if nodes.is_empty() {
+            return Err(self.src.node_err(
+                node,
+                format!("`{}` needs at least one child", k::name(node)),
+            ));
+        }
+        nodes.iter().map(|n| self.node(n)).collect()
+    }
+
+    /// A whitespace-separated list property with one entry per child.
+    fn list(
+        &self,
+        node: &KdlNode,
+        key: &str,
+        count: usize,
+    ) -> Result<Option<Vec<String>>, ConfigError> {
+        let Some((value, entry)) = prop_str(self.src, node, key)? else {
+            return Ok(None);
+        };
+        let items: Vec<String> = value.split_whitespace().map(str::to_owned).collect();
+        if items.len() != count {
+            return Err(self.src.entry_err(
+                entry,
+                format!(
+                    "`{key}` lists {} values but `{}` has {count} children",
+                    items.len(),
+                    k::name(node)
+                ),
+            ));
+        }
+        Ok(Some(items))
+    }
+
+    fn widget(&self, node: &KdlNode) -> Result<LayoutNode, ConfigError> {
+        let src = self.src;
+        let kind = k::name(node);
+        let spec = WIDGETS.iter().find(|w| w.kind == kind);
+        let is_plugin = kind
+            .strip_prefix("plugin.")
+            .is_some_and(|rest| rest.split('.').count() >= 2 && is_dotted_kebab(rest));
+        if spec.is_none() && !is_plugin {
+            return Err(src.node_err(
+                node,
+                format!(
+                    "unknown widget or container `{kind}` (containers: split, stack, tabs; widgets: {})",
+                    WIDGETS.iter().map(|w| w.kind).collect::<Vec<_>>().join(", ")
+                ),
+            ));
+        }
+        check_max_args(src, node, 0)?;
+        let (id, label) = self.id_label(node)?;
+
+        let mut options = Map::new();
+        for (key, entry) in k::props(node) {
+            if key == "id" || key == "label" {
+                continue;
+            }
+            if let Some(allowed) = spec.and_then(|s| s.options) {
+                let Some((_, ty)) = allowed.iter().find(|(name, _)| *name == key) else {
+                    let names: Vec<_> = allowed.iter().map(|(n, _)| *n).collect();
+                    let hint = if names.is_empty() {
+                        "it has no options".to_owned()
+                    } else {
+                        format!("options: {}", names.join(", "))
+                    };
+                    return Err(src.entry_err(
+                        entry,
+                        format!("unknown option `{key}` for `{kind}` ({hint})"),
+                    ));
+                };
+                check_option(src, entry, key, *ty)?;
+            }
+            options.insert(key.to_owned(), to_json(src, entry)?);
+        }
+        if let Some(spec) = spec {
+            for required in spec.required {
+                if !options.contains_key(*required) {
+                    return Err(
+                        src.node_err(node, format!("`{kind}` needs the option `{required}`"))
+                    );
+                }
+            }
+        }
+
+        let mut rows = Vec::new();
+        for row in children(node) {
+            if k::name(row) != "row" {
+                return Err(src.node_err(
+                    row,
+                    format!(
+                        "unexpected `{}` inside `{kind}`; widgets only contain `row` templates",
+                        k::name(row)
+                    ),
+                ));
+            }
+            if spec.is_some_and(|s| !s.rows) {
+                return Err(src.node_err(row, format!("`{kind}` does not take row templates")));
+            }
+            check_props(src, row, &[])?;
+            check_max_args(src, row, 1)?;
+            check_no_children(src, row)?;
+            let (template, entry) = arg_str(src, row, 0, "the row template")?;
+            check_template(template).map_err(|msg| src.entry_err(entry, msg))?;
+            rows.push(template.to_owned());
+        }
+
+        Ok(LayoutNode::Widget {
+            id,
+            label,
+            kind: kind.to_owned(),
+            options,
+            rows,
+            source: Some(src.node_loc(node)),
+        })
+    }
+
+    fn action(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["label", "icon", "alias-of"])?;
+        check_no_children(src, node)?;
+        let (id, id_entry) = arg_str(src, node, 0, "the action id")?;
+        check_action_id(src, id_entry, id)?;
+        let label = match prop_str(src, node, "label")? {
+            None => None,
+            Some((label, entry)) => Some(self.label(label, entry)?),
+        };
+        let icon = match prop_str(src, node, "icon")? {
+            None => None,
+            Some((icon, entry)) => {
+                if !is_kebab(icon) {
+                    return Err(src.entry_err(entry, format!("invalid icon name `{icon}`")));
+                }
+                Some(icon.to_owned())
+            }
+        };
+        let alias_of = match prop_str(src, node, "alias-of")? {
+            None => None,
+            Some((target, entry)) => {
+                check_action_id(src, entry, target)?;
+                Some(target.to_owned())
+            }
+        };
+        let extra = &args(node)[1..];
+        if alias_of.is_none()
+            && let Some(first) = extra.first()
+        {
+            return Err(src.entry_err(
+                first,
+                "action arguments are only allowed together with alias-of",
+            ));
+        }
+        let args = extra
+            .iter()
+            .map(|e| to_json(src, e))
+            .collect::<Result<_, _>>()?;
+        file.actions.insert(
+            id.to_owned(),
+            ActionDef {
+                label,
+                icon,
+                alias_of,
+                args,
+            },
+        );
+        Ok(())
+    }
+
+    fn keys(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["context"])?;
+        check_max_args(src, node, 0)?;
+        let context = match prop_str(src, node, "context")? {
+            None => "global".to_owned(),
+            Some((ctx, entry)) => {
+                if !is_kebab(ctx) {
+                    return Err(src.entry_err(
+                        entry,
+                        format!("invalid context `{ctx}`, e.g. list, reader, global"),
+                    ));
+                }
+                ctx.to_owned()
+            }
+        };
+        for bind in children(node) {
+            check_props(src, bind, &[])?;
+            check_no_children(src, bind)?;
+            let (key, key_entry) = arg_str(src, bind, 0, "the key")?;
+            let key = normalize_key(key).map_err(|msg| src.entry_err(key_entry, msg))?;
+            match k::name(bind) {
+                "bind" => {
+                    let (action, args) = self.action_ref(bind, 1)?;
+                    file.keys.push(KeyDef {
+                        context: context.clone(),
+                        key,
+                        action: Some(action),
+                        args,
+                    });
+                }
+                "unbind" => {
+                    check_max_args(src, bind, 1)?;
+                    file.keys.push(KeyDef {
+                        context: context.clone(),
+                        key,
+                        action: None,
+                        args: Vec::new(),
+                    });
+                }
+                other => {
+                    return Err(src.node_err(
+                        bind,
+                        format!("unexpected `{other}` in `keys` (use bind or unbind)"),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Reads `"<action> <args>…"` at argument `index`, plus any further
+    /// arguments of the node.
+    fn action_ref(
+        &self,
+        node: &KdlNode,
+        index: usize,
+    ) -> Result<(String, Vec<Value>), ConfigError> {
+        let src = self.src;
+        let (spec, entry) = arg_str(src, node, index, "the action")?;
+        let (action, mut action_args) =
+            parse_action_spec(spec).map_err(|msg| src.entry_err(entry, msg))?;
+        check_action_id(src, entry, &action)?;
+        for extra in &args(node)[index + 1..] {
+            action_args.push(to_json(src, extra)?);
+        }
+        Ok((action, action_args))
+    }
+
+    fn toolbar(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &[])?;
+        check_max_args(src, node, 1)?;
+        let (name, name_entry) = arg_str(src, node, 0, "the toolbar name")?;
+        if !is_kebab(name) {
+            return Err(src.entry_err(name_entry, format!("invalid toolbar name `{name}`")));
+        }
+        let mut items = Vec::new();
+        for item in children(node) {
+            match k::name(item) {
+                "item" => {
+                    check_props(src, item, &["label", "icon"])?;
+                    check_no_children(src, item)?;
+                    let (action, args) = self.action_ref(item, 0)?;
+                    let (label, icon) = self.item_overrides(item)?;
+                    items.push(ToolbarItem::Action {
+                        action,
+                        args,
+                        label,
+                        icon,
+                    });
+                }
+                "spacer" | "separator" => {
+                    self.block(item)?;
+                    check_no_children(src, item)?;
+                    items.push(if k::name(item) == "spacer" {
+                        ToolbarItem::Spacer
+                    } else {
+                        ToolbarItem::Separator
+                    });
+                }
+                other => {
+                    return Err(src.node_err(
+                        item,
+                        format!("unexpected `{other}` in toolbar (use item, spacer or separator)"),
+                    ));
+                }
+            }
+        }
+        file.toolbars.insert(name.to_owned(), items);
+        Ok(())
+    }
+
+    fn item_overrides(
+        &self,
+        item: &KdlNode,
+    ) -> Result<(Option<String>, Option<String>), ConfigError> {
+        let src = self.src;
+        let label = match prop_str(src, item, "label")? {
+            None => None,
+            Some((label, entry)) => Some(self.label(label, entry)?),
+        };
+        let icon = prop_str(src, item, "icon")?.map(|(icon, _)| icon.to_owned());
+        Ok((label, icon))
+    }
+
+    fn menu(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &[])?;
+        check_max_args(src, node, 1)?;
+        let (name, name_entry) = arg_str(src, node, 0, "the menu name")?;
+        let valid = name == "app" || name.strip_prefix("context:").is_some_and(is_dotted_kebab);
+        if !valid {
+            return Err(src.entry_err(
+                name_entry,
+                format!("invalid menu name `{name}`: use \"app\" or \"context:<part>\""),
+            ));
+        }
+        let items = self.menu_items(node)?;
+        file.menus.insert(name.to_owned(), items);
+        Ok(())
+    }
+
+    fn menu_items(&self, node: &KdlNode) -> Result<Vec<MenuItem>, ConfigError> {
+        let src = self.src;
+        let mut items = Vec::new();
+        for item in children(node) {
+            items.push(match k::name(item) {
+                "item" => {
+                    check_props(src, item, &["label", "icon"])?;
+                    check_no_children(src, item)?;
+                    let (action, args) = self.action_ref(item, 0)?;
+                    let (label, icon) = self.item_overrides(item)?;
+                    MenuItem::Action {
+                        action,
+                        args,
+                        label,
+                        icon,
+                    }
+                }
+                "separator" => {
+                    self.block(item)?;
+                    check_no_children(src, item)?;
+                    MenuItem::Separator
+                }
+                "submenu" => {
+                    check_props(src, item, &[])?;
+                    check_max_args(src, item, 1)?;
+                    let (label, entry) = arg_str(src, item, 0, "the submenu label")?;
+                    let label = self.label(label, entry)?;
+                    MenuItem::Submenu {
+                        label,
+                        items: self.menu_items(item)?,
+                    }
+                }
+                other => {
+                    return Err(src.node_err(
+                        item,
+                        format!("unexpected `{other}` in menu (use item, separator or submenu)"),
+                    ));
+                }
+            });
+        }
+        Ok(items)
+    }
+}
+
+fn check_option(
+    src: &Source<'_>,
+    entry: &KdlEntry,
+    key: &str,
+    ty: OptionType,
+) -> Result<(), ConfigError> {
+    let value = entry.value();
+    let ok = match ty {
+        OptionType::Bool => value.is_bool(),
+        OptionType::UInt => value.as_integer().is_some_and(|i| i >= 0),
+        OptionType::Str => value.is_string(),
+        OptionType::OneOf(choices) => value.as_string().is_some_and(|s| choices.contains(&s)),
+    };
+    if ok {
+        return Ok(());
+    }
+    let expected = match ty {
+        OptionType::Bool => "#true or #false".to_owned(),
+        OptionType::UInt => "a non-negative whole number".to_owned(),
+        OptionType::Str => "a string".to_owned(),
+        OptionType::OneOf(choices) => format!("one of {}", choices.join(", ")),
+    };
+    Err(src.entry_err(
+        entry,
+        format!(
+            "option `{key}` must be {expected}, found {}",
+            describe(value)
+        ),
+    ))
+}
+
+fn check_action_id(src: &Source<'_>, entry: &KdlEntry, id: &str) -> Result<(), ConfigError> {
+    if is_dotted_kebab(id) && id.contains('.') {
+        Ok(())
+    } else {
+        Err(src.entry_err(
+            entry,
+            format!("invalid action id `{id}`: use dotted lowercase names like `mail.reply`"),
+        ))
+    }
+}
+
+/// Splits `nav.goto-folder "Inbox" 2` into the action id and its arguments.
+/// Quoted words are strings; bare numbers are numbers; other bare words are
+/// strings.
+fn parse_action_spec(spec: &str) -> Result<(String, Vec<Value>), String> {
+    let mut words: Vec<Value> = Vec::new();
+    let mut chars = spec.trim().chars().peekable();
+    let mut action: Option<String> = None;
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next();
+            continue;
+        }
+        let value = if c == '"' {
+            chars.next();
+            let mut word = String::new();
+            loop {
+                match chars.next() {
+                    Some('"') => break,
+                    Some(ch) => word.push(ch),
+                    None => return Err(format!("unterminated quote in `{spec}`")),
+                }
+            }
+            Value::String(word)
+        } else {
+            let mut word = String::new();
+            while let Some(&ch) = chars.peek() {
+                if ch.is_whitespace() {
+                    break;
+                }
+                word.push(ch);
+                chars.next();
+            }
+            if action.is_none() {
+                action = Some(word);
+                continue;
+            }
+            if let Ok(i) = word.parse::<i64>() {
+                Value::from(i)
+            } else if let Some(n) = word
+                .parse::<f64>()
+                .ok()
+                .and_then(serde_json::Number::from_f64)
+            {
+                Value::Number(n)
+            } else {
+                Value::String(word)
+            }
+        };
+        if action.is_none() {
+            return Err(format!("`{spec}` must start with an action id"));
+        }
+        words.push(value);
+    }
+    let action = action.ok_or_else(|| "the action must not be empty".to_owned())?;
+    Ok((action, words))
+}
+
+/// Lowercases a key sequence and checks its shape (`ctrl+shift+m`, `g i`).
+fn normalize_key(key: &str) -> Result<String, String> {
+    let steps: Vec<String> = key.split_whitespace().map(str::to_lowercase).collect();
+    if steps.is_empty() {
+        return Err("the key must not be empty".to_owned());
+    }
+    for step in &steps {
+        // `+` alone (or as the last key of a chord, `ctrl++`) is the plus key.
+        let keys = step.strip_suffix("++").map_or_else(
+            || step.split('+').collect::<Vec<_>>(),
+            |head| head.split('+').chain(std::iter::once("+")).collect(),
+        );
+        if step != "+" && keys.iter().any(|k| k.is_empty()) {
+            return Err(format!(
+                "invalid key `{key}`: join chord keys with `+`, e.g. \"ctrl+shift+m\""
+            ));
+        }
+    }
+    Ok(steps.join(" "))
+}
+
+/// Checks that `{…}` placeholders in a row template are balanced.
+fn check_template(template: &str) -> Result<(), String> {
+    let mut open = false;
+    for c in template.chars() {
+        match (c, open) {
+            ('{', false) => open = true,
+            ('}', true) => open = false,
+            ('{', true) => return Err(format!("nested `{{` in template `{template}`")),
+            ('}', false) => return Err(format!("unmatched `}}` in template `{template}`")),
+            _ => {}
+        }
+    }
+    if open {
+        return Err(format!("unclosed `{{` in template `{template}`"));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Resolution
+
+impl LayoutFile {
+    /// Resolves a complete (already merged) layout file.
+    pub fn resolve(&self) -> Result<ResolvedLayout, ConfigError> {
+        if !self.windows.contains_key("main") {
+            return Err(ConfigError::invalid(
+                &self.name.loc,
+                "the layout defines no `main` window",
+            ));
+        }
+
+        // Keys: a later binding of the same key in the same context replaces
+        // the earlier one in place; `unbind` removes it.
+        let mut keys: Vec<KeyBinding> = Vec::new();
+        for def in &self.keys {
+            let existing = keys
+                .iter()
+                .position(|k| k.context == def.context && k.key == def.key);
+            match (&def.action, existing) {
+                (None, Some(i)) => {
+                    keys.remove(i);
+                }
+                (None, None) => {}
+                (Some(action), existing) => {
+                    let binding = KeyBinding {
+                        context: def.context.clone(),
+                        key: def.key.clone(),
+                        action: action.clone(),
+                        args: def.args.clone(),
+                    };
+                    match existing {
+                        Some(i) => keys[i] = binding,
+                        None => keys.push(binding),
+                    }
+                }
+            }
+        }
+
+        // Every toolbar widget must name an existing toolbar.
+        for breakpoints in self.windows.values() {
+            for bp in breakpoints {
+                check_toolbar_refs(&bp.root, &self.toolbars)?;
+            }
+        }
+
+        // Every used action gets an entry in `actions`.
+        let mut actions = self.actions.clone();
+        let mut used: Vec<&str> = keys.iter().map(|k| k.action.as_str()).collect();
+        for items in self.toolbars.values() {
+            used.extend(items.iter().filter_map(|i| match i {
+                ToolbarItem::Action { action, .. } => Some(action.as_str()),
+                _ => None,
+            }));
+        }
+        fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
+            for item in items {
+                match item {
+                    MenuItem::Action { action, .. } => out.push(action),
+                    MenuItem::Submenu { items, .. } => menu_actions(items, out),
+                    MenuItem::Separator => {}
+                }
+            }
+        }
+        for items in self.menus.values() {
+            menu_actions(items, &mut used);
+        }
+        for action in used {
+            if !actions.contains_key(action) {
+                actions.insert(action.to_owned(), ActionDef::default());
+            }
+        }
+
+        Ok(ResolvedLayout {
+            name: self.name.value.clone(),
+            windows: self.windows.clone(),
+            actions,
+            keys,
+            toolbars: self.toolbars.clone(),
+            menus: self.menus.clone(),
+        })
+    }
+}
+
+fn check_toolbar_refs(
+    node: &LayoutNode,
+    toolbars: &IndexMap<String, Vec<ToolbarItem>>,
+) -> Result<(), ConfigError> {
+    if let LayoutNode::Widget {
+        kind,
+        options,
+        source,
+        ..
+    } = node
+        && kind == "toolbar"
+        && let Some(name) = options.get("toolbar").and_then(Value::as_str)
+        && !toolbars.contains_key(name)
+    {
+        let loc = source.clone().unwrap_or_else(|| SourceLocation {
+            file: String::new(),
+            line: 1,
+            column: 1,
+        });
+        return Err(ConfigError::invalid(
+            &loc,
+            format!("unknown toolbar `{name}` (define it with `toolbar \"{name}\" {{ … }}`)"),
+        ));
+    }
+    node.children()
+        .iter()
+        .try_for_each(|child| check_toolbar_refs(child, toolbars))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn action_specs() {
+        assert_eq!(
+            parse_action_spec("mail.next").unwrap(),
+            ("mail.next".into(), vec![])
+        );
+        assert_eq!(
+            parse_action_spec("nav.goto-folder \"Inbox\"").unwrap(),
+            ("nav.goto-folder".into(), vec![json!("Inbox")])
+        );
+        assert_eq!(
+            parse_action_spec("view.toggle \"mini month\" 2 x")
+                .unwrap()
+                .1,
+            vec![json!("mini month"), json!(2), json!("x")]
+        );
+        assert!(parse_action_spec("").is_err());
+        assert!(parse_action_spec("\"x\" y").is_err());
+        assert!(parse_action_spec("a.b \"open").is_err());
+    }
+
+    #[test]
+    fn keys_are_normalized() {
+        assert_eq!(normalize_key("Ctrl+Shift+M").unwrap(), "ctrl+shift+m");
+        assert_eq!(normalize_key("g  i").unwrap(), "g i");
+        assert_eq!(normalize_key("ctrl++").unwrap(), "ctrl++");
+        assert_eq!(normalize_key("+").unwrap(), "+");
+        assert!(normalize_key("ctrl+").is_err());
+        assert!(normalize_key("  ").is_err());
+    }
+
+    #[test]
+    fn templates() {
+        assert!(check_template("{from.name | bold-if-unread}  {date | relative}").is_ok());
+        assert!(check_template("{subject").is_err());
+        assert!(check_template("subject}").is_err());
+        assert!(check_template("{a {b}}").is_err());
+    }
+}

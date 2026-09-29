@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-14T10:12:00+02:00",
+      "from": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ],
+      "message_id": "ng-2@nail.example",
+      "reply_to": [],
+      "subject": "Re: Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "grace@navy.example",
+          "name": "Grace Hopper"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hi Grace,\r\n\r\ncount me in. Should I prepare numbers on the current sync times?\r\n\r\nSam\r\n\r\n> we are starting Project Nightingale next week."
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-14T10:12:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "sam@nail.example",
+      "name": "Sam Taylor"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hi Grace, count me in. Should I prepare numbers on the current sync times? Sam",
+    "subject": "Re: Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "grace@navy.example",
+        "name": "Grace Hopper"
+      }
+    ]
+  }
+}

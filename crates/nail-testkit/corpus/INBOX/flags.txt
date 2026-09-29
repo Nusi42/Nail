@@ -1,0 +1,7 @@
+# <file> <IMAP flags...>; files not listed have no flags
+01-welcome.eml \Seen
+03-alternative-meeting.eml \Seen \Flagged
+06-latin1-qp.eml \Seen
+10-thread-1.eml \Seen \Answered
+11-thread-3.eml \Seen \Answered
+12-thread-5.eml \Seen \Answered

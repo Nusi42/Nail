@@ -1,0 +1,77 @@
+//! Every KDL example in the user references (`userDocs/en/*-reference.md`)
+//! must be valid. Complete files are parsed as they are; fragments are
+//! wrapped in a file that extends the default. Examples containing `…` are
+//! outlines and are skipped.
+
+use std::path::PathBuf;
+
+fn kdl_blocks(file: &str) -> Vec<String> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../userDocs/en")
+        .join(file);
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let mut blocks = Vec::new();
+    let mut current: Option<String> = None;
+    for line in text.lines() {
+        match (&mut current, line.trim_start()) {
+            (None, "```kdl") => current = Some(String::new()),
+            (Some(block), "```") => {
+                blocks.push(std::mem::take(block));
+                current = None;
+            }
+            (Some(block), _) => {
+                block.push_str(line);
+                block.push('\n');
+            }
+            (None, _) => {}
+        }
+    }
+    assert!(current.is_none(), "unclosed code block in {file}");
+    blocks.into_iter().filter(|b| !b.contains('…')).collect()
+}
+
+#[test]
+fn theme_reference_examples_are_valid() {
+    let blocks = kdl_blocks("theme-reference.md");
+    assert!(blocks.len() >= 8, "found only {} examples", blocks.len());
+    for block in blocks {
+        let text = if block.trim_start().starts_with("theme ") {
+            block.clone()
+        } else {
+            format!("theme \"example\" extends=\"default\" {{\n{block}}}\n")
+        };
+        if let Err(e) = nail_config::parse_theme(&text, "theme.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}
+
+#[test]
+fn layout_reference_examples_are_valid() {
+    let blocks = kdl_blocks("layout-reference.md");
+    assert!(blocks.len() >= 8, "found only {} examples", blocks.len());
+    const SECTIONS: &[&str] = &[
+        "breakpoint",
+        "window",
+        "actions",
+        "action",
+        "keys",
+        "toolbar",
+        "menu",
+    ];
+    for block in blocks {
+        let first = block.split_whitespace().next().unwrap_or_default();
+        let text = if first == "layout" {
+            block.clone()
+        } else if SECTIONS.contains(&first) {
+            format!("layout \"example\" extends=\"default\" {{\n{block}}}\n")
+        } else {
+            format!(
+                "layout \"example\" extends=\"default\" {{\nwindow \"main\" {{\n{block}}}\n}}\n"
+            )
+        };
+        if let Err(e) = nail_config::parse_layout(&text, "layout.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}

@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-14T11:30:00+02:00",
+      "from": [
+        {
+          "email": "grace@navy.example",
+          "name": "Grace Hopper"
+        }
+      ],
+      "message_id": "ng-3@navy.example",
+      "reply_to": [],
+      "subject": "Re: Project Nightingale kickoff",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Yes please, p50 and p95 for the initial sync of a 10k-message inbox.\r\n\r\n> Should I prepare numbers on the current sync times?"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-14T11:30:00+02:00",
+    "flags": {
+      "answered": true,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "grace@navy.example",
+      "name": "Grace Hopper"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Yes please, p50 and p95 for the initial sync of a 10k-message inbox.",
+    "subject": "Re: Project Nightingale kickoff",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

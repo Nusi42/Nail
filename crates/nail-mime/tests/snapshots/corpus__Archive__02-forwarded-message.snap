@@ -1,0 +1,65 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [
+      {
+        "filename": "Analytical Engine notes.eml",
+        "index": 0,
+        "inline": false,
+        "mime": "message/rfc822",
+        "size": 295
+      }
+    ],
+    "headers": {
+      "cc": [],
+      "date": "2026-07-10T15:00:00+01:00",
+      "from": [
+        {
+          "email": "ada@lovelace.example",
+          "name": "Ada Lovelace"
+        }
+      ],
+      "message_id": "fwd-notes@lovelace.example",
+      "reply_to": [],
+      "subject": "Fwd: Analytical Engine notes",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Forwarding the original notes, see attached."
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-07-10T15:00:00+01:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "ada@lovelace.example",
+      "name": "Ada Lovelace"
+    },
+    "has_attachments": true,
+    "id": "m1",
+    "preview": "Forwarding the original notes, see attached.",
+    "subject": "Fwd: Analytical Engine notes",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

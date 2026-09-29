@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-23T09:12:00+02:00",
+      "from": [
+        {
+          "email": "francoise@dupont.example",
+          "name": "Françoise Dupont"
+        }
+      ],
+      "message_id": "cafe-creme@dupont.example",
+      "reply_to": [],
+      "subject": "Café crème à la gare",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Bonjour Sam,\r\n\r\non se retrouve au café à côté de la gare ? Je t’offre un crème — promis.\r\n\r\nFrançoise"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-23T09:12:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "francoise@dupont.example",
+      "name": "Françoise Dupont"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Bonjour Sam, on se retrouve au café à côté de la gare ? Je t’offre un crème — promis. Françoise",
+    "subject": "Café crème à la gare",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

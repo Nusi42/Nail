@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nail theme.kdl",
+  "description": "A `theme.kdl` file as written (possibly sparse).\n\nKDL mapping: the file holds one node `theme \"<name>\" extends=… mode=… { … }`;\neach property below is a child section of that node.",
+  "type": "object",
+  "properties": {
+    "extends": {
+      "description": "Base theme to merge onto; only `\"default\"` exists. Without it the file\nmust be complete.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "icons": {
+      "description": "`icon \"<name>\" svg=\"<path data>\" view-box=\"0 0 24 24\"`.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/IconDef"
+      }
+    },
+    "message": {
+      "description": "`message { … }`: how received mail is displayed.",
+      "$ref": "#/$defs/MessageDef"
+    },
+    "mode": {
+      "description": "Which colour mode to use (default: follow the OS).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModeSetting"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "name": {
+      "description": "Theme name (`theme \"<name>\"`).",
+      "type": "string"
+    },
+    "parts": {
+      "description": "`part \"<selector>\" { <css-property> <value>… }` rules, in order.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PartDef"
+      }
+    },
+    "raw-css": {
+      "description": "`raw-css \"<part>\" \"<declarations>\"` (unstable escape hatch).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RawCssDef"
+      }
+    },
+    "sounds": {
+      "description": "`sounds { <event> \"<sound>\" }`, e.g. `mail.new \"chime\"`.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {}
+    },
+    "tokens": {
+      "description": "`tokens { <category> \"<name>\" <value> dark=… high-contrast=… }`:\ncategory → name → definition. Categories: color, font, font-size,\nfont-weight, line-height, space, size, radius, border, shadow, motion,\nopacity, z-index. Unitless numbers get `px` for font-size, space,\nsize and radius.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/TokenDef"
+        }
+      }
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "$defs": {
+    "HtmlDarkModeSetting": {
+      "description": "How HTML mail is adapted in dark mode (`html-dark-mode`).",
+      "oneOf": [
+        {
+          "description": "Show HTML mail as sent.",
+          "type": "string",
+          "const": "off"
+        },
+        {
+          "description": "Invert colours.",
+          "type": "string",
+          "const": "invert"
+        },
+        {
+          "description": "Recolour while keeping hues.",
+          "type": "string",
+          "const": "smart"
+        }
+      ]
+    },
+    "IconDef": {
+      "description": "One icon.",
+      "type": "object",
+      "properties": {
+        "svg": {
+          "description": "SVG path data.",
+          "type": "string"
+        },
+        "view-box": {
+          "description": "SVG viewBox (default `\"0 0 24 24\"`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "svg"
+      ]
+    },
+    "MessageDef": {
+      "description": "The `message` section; every field is optional in a sparse file.",
+      "type": "object",
+      "properties": {
+        "font-family": {
+          "description": "Reader font family.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "font-size": {
+          "description": "Base font size.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "html-dark-mode": {
+          "description": "Dark-mode handling of HTML mail.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HtmlDarkModeSetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "line-height": {
+          "description": "Line height.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max-width": {
+          "description": "Maximum reading width, e.g. `\"80ch\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quote-colors": {
+          "description": "Quote colours per level (`quote-colors \"$color.quote-1\" …`).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "text-font-family": {
+          "description": "Font family for plain-text bodies.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ModeSetting": {
+      "description": "Colour mode setting of a theme (`theme \"x\" mode=\"dark\"`).",
+      "oneOf": [
+        {
+          "description": "Follow the operating system.",
+          "type": "string",
+          "const": "system"
+        },
+        {
+          "description": "Always light.",
+          "type": "string",
+          "const": "light"
+        },
+        {
+          "description": "Always dark.",
+          "type": "string",
+          "const": "dark"
+        },
+        {
+          "description": "Always high contrast.",
+          "type": "string",
+          "const": "high-contrast"
+        }
+      ]
+    },
+    "PartDef": {
+      "description": "One part rule.",
+      "type": "object",
+      "properties": {
+        "declarations": {
+          "description": "CSS declarations from the supported subset; values may reference\ntokens as `$category.name`.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "selector": {
+          "description": "Selector, e.g. `\"message-list.row:unread .subject\"` or\n`\"folder-tree.item[role=\\\"inbox\\\"]\"`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selector",
+        "declarations"
+      ]
+    },
+    "RawCssDef": {
+      "description": "A `raw-css` block.",
+      "type": "object",
+      "properties": {
+        "css": {
+          "description": "Declarations (no braces, no `url()`, no `@import`).",
+          "type": "string"
+        },
+        "selector": {
+          "description": "Part name the CSS is scoped to.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selector",
+        "css"
+      ]
+    },
+    "TokenDef": {
+      "description": "One token definition.",
+      "type": "object",
+      "properties": {
+        "modes": {
+          "description": "Per-mode values: `light`, `dark`, `high-contrast`.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "value": {
+          "description": "Base (light) value; absent when the file only overrides modes of a\ntoken defined elsewhere (`modes { dark { color \"bg\" \"#000\" } }`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [
+      {
+        "filename": "data.bin",
+        "index": 0,
+        "inline": false,
+        "mime": "application/octet-stream",
+        "size": 35
+      },
+      {
+        "filename": null,
+        "index": 1,
+        "inline": false,
+        "mime": "text/html",
+        "size": 36
+      }
+    ],
+    "headers": {
+      "cc": [],
+      "date": null,
+      "from": [],
+      "message_id": "broken-1@spam.invalid",
+      "reply_to": [],
+      "subject": "Broken message (missing From, bad boundaries)",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": null
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "This part claims a charset nobody knows."
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "1970-01-01T00:00:00Z",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": null,
+    "has_attachments": true,
+    "id": "m1",
+    "preview": "This part claims a charset nobody knows.",
+    "subject": "Broken message (missing From, bad boundaries)",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": null
+      }
+    ]
+  }
+}

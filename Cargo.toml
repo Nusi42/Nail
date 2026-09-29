@@ -59,6 +59,11 @@ tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "sync", "ti
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 
+# Mail, TLS, storage (shared by several crates)
+mail-parser = "0.11.9"
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "logging", "tls12"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+
 # CLI
 clap = { version = "4.6", features = ["derive"] }
 

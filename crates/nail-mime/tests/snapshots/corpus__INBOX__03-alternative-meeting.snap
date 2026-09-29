@@ -1,0 +1,62 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [
+        {
+          "email": "ada@lovelace.example",
+          "name": "Ada Lovelace"
+        }
+      ],
+      "date": "2026-09-22T17:42:10-04:00",
+      "from": [
+        {
+          "email": "grace@navy.example",
+          "name": "Grace Hopper"
+        }
+      ],
+      "message_id": "notes-tue@navy.example",
+      "reply_to": [],
+      "subject": "Notes from Tuesday's planning meeting",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": "<p>Hi all,</p>\n<p>quick notes from Tuesday:</p>\n<ul>\n<li>Release candidate on <b>October 5</b></li>\n<li>Ada owns the migration guide</li>\n<li>Sam reviews the sync engine</li>\n</ul>\n<p>Grace</p>",
+    "text": "Hi all,\r\n\r\nquick notes from Tuesday:\r\n\r\n* Release candidate on October 5\r\n* Ada owns the migration guide\r\n* Sam reviews the sync engine\r\n\r\nGrace"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-22T17:42:10-04:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": true,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "grace@navy.example",
+      "name": "Grace Hopper"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hi all, quick notes from Tuesday: * Release candidate on October 5 * Ada owns the migration guide * Sam reviews the sync engine Grace",
+    "subject": "Notes from Tuesday's planning meeting",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

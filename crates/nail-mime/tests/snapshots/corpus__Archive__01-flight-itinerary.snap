@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-08-03T12:00:00Z",
+      "from": [
+        {
+          "email": "no-reply@skyways.example",
+          "name": "SkyWays"
+        }
+      ],
+      "message_id": "itin-XK42Q@skyways.example",
+      "reply_to": [],
+      "subject": "Your itinerary: FRA -> LIS, 12 Aug 2026",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": true,
+    "sanitized_html": "<table border=\"1\" cellpadding=\"4\">\n<tbody><tr><th>Flight</th><th>From</th><th>To</th><th>Seat</th></tr>\n<tr><td>SW 1234</td><td>Frankfurt (FRA) 07:25</td><td>Lisbon (LIS) 09:30</td><td>14A</td></tr>\n</tbody></table>\n<p>Booking reference: <strong>XK42Q</strong></p>\n<p><img alt=\"SkyWays\"></p>",
+    "text": "Booking reference: XK42Q\r\nSW 1234 Frankfurt (FRA) 07:25 -> Lisbon (LIS) 09:30\r\nSeat 14A"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-08-03T12:00:00Z",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "no-reply@skyways.example",
+      "name": "SkyWays"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Booking reference: XK42Q SW 1234 Frankfurt (FRA) 07:25 -> Lisbon (LIS) 09:30 Seat 14A",
+    "subject": "Your itinerary: FRA -> LIS, 12 Aug 2026",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

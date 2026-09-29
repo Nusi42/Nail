@@ -1,0 +1,57 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-24T20:10:00+02:00",
+      "from": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ],
+      "message_id": "dinner-sat@nail.example",
+      "reply_to": [],
+      "subject": "Dinner on Saturday?",
+      "to": [
+        {
+          "email": "alex@kim.example",
+          "name": "Alex Kim"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": null,
+    "text": "Hi Alex,\r\n\r\nare you free for dinner on Saturday? The new ramen place opened.\r\n\r\nSam"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-24T20:10:00+02:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": true
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "sam@nail.example",
+      "name": "Sam Taylor"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Hi Alex, are you free for dinner on Saturday? The new ramen place opened. Sam",
+    "subject": "Dinner on Saturday?",
+    "to": [
+      {
+        "email": "alex@kim.example",
+        "name": "Alex Kim"
+      }
+    ]
+  }
+}

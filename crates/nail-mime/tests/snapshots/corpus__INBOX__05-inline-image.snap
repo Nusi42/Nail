@@ -1,0 +1,65 @@
+---
+source: crates/nail-mime/tests/corpus.rs
+expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })"
+---
+{
+  "body": {
+    "attachments": [
+      {
+        "filename": "bench.png",
+        "index": 0,
+        "inline": true,
+        "mime": "image/png",
+        "size": 70
+      }
+    ],
+    "headers": {
+      "cc": [],
+      "date": "2026-09-25T11:05:00+01:00",
+      "from": [
+        {
+          "email": "linus@chem.example",
+          "name": "Linus Pauling"
+        }
+      ],
+      "message_id": "bench-photo@chem.example",
+      "reply_to": [],
+      "subject": "Photo of the new lab bench",
+      "to": [
+        {
+          "email": "sam@nail.example",
+          "name": "Sam Taylor"
+        }
+      ]
+    },
+    "id": "m1",
+    "remote_content_blocked": false,
+    "sanitized_html": "<p>Here is the new bench, finally assembled:</p>\n<p><img src=\"cid:bench-photo-1@chem.example\" alt=\"Lab bench\" width=\"320\"></p>\n<p>Linus</p>",
+    "text": "Here is the new bench, finally assembled:\n\n Linus"
+  },
+  "summary": {
+    "account_id": "a1",
+    "date": "2026-09-25T11:05:00+01:00",
+    "flags": {
+      "answered": false,
+      "draft": false,
+      "flagged": false,
+      "seen": false
+    },
+    "folder_id": "f1",
+    "from": {
+      "email": "linus@chem.example",
+      "name": "Linus Pauling"
+    },
+    "has_attachments": false,
+    "id": "m1",
+    "preview": "Here is the new bench, finally assembled: Linus",
+    "subject": "Photo of the new lab bench",
+    "to": [
+      {
+        "email": "sam@nail.example",
+        "name": "Sam Taylor"
+      }
+    ]
+  }
+}

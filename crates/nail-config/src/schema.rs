@@ -1,0 +1,180 @@
+//! JSON Schema of the theme and layout files.
+//!
+//! The schema describes the structure of a file as a JSON object: each KDL
+//! section becomes a property, each named KDL node an object key. It is
+//! generated from the file models ([`ThemeFile`], [`LayoutFile`]); the types
+//! below only describe the parts of the layout that are stored as
+//! `nail_api` types.
+
+#![allow(dead_code)] // Schema-only mirror types are never constructed.
+
+use schemars::{JsonSchema, Schema, generate::SchemaSettings};
+use serde_json::{Map, Value};
+
+use crate::layout::LayoutFile;
+use crate::theme::ThemeFile;
+
+/// JSON Schema of `theme.kdl`.
+pub fn theme_schema() -> Schema {
+    generate::<ThemeFile>("Nail theme.kdl")
+}
+
+/// JSON Schema of `layout.kdl`.
+pub fn layout_schema() -> Schema {
+    generate::<LayoutFile>("Nail layout.kdl")
+}
+
+fn generate<T: JsonSchema>(title: &str) -> Schema {
+    let mut schema = SchemaSettings::draft2020_12()
+        .into_generator()
+        .into_root_schema_for::<T>();
+    schema.insert("title".to_owned(), Value::String(title.to_owned()));
+    schema
+}
+
+/// One window tree for a range of window widths
+/// (`breakpoint min-width=… max-width=… { window "<name>" { … } }`).
+#[derive(JsonSchema)]
+pub(crate) struct BreakpointSchema {
+    /// Minimum window width in CSS pixels (inclusive).
+    min_width: Option<u32>,
+    /// Maximum window width in CSS pixels (inclusive).
+    max_width: Option<u32>,
+    /// The window's single root node.
+    root: NodeSchema,
+}
+
+/// A container or widget node.
+#[derive(JsonSchema)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub(crate) enum NodeSchema {
+    /// `split "horizontal"|"vertical" sizes="240px 1fr" min-sizes="160px none"
+    /// max-sizes="480px none" collapsible="true false" resizable=#true { … }`.
+    Split {
+        /// Stable node id.
+        id: Option<String>,
+        /// Label: literal text or `@message.id`.
+        label: Option<String>,
+        /// `horizontal` (side by side) or `vertical`.
+        orientation: Option<OrientationSchema>,
+        /// One CSS track size per child.
+        sizes: Option<String>,
+        /// One minimum size (or `none`) per child.
+        min_sizes: Option<String>,
+        /// One maximum size (or `none`) per child.
+        max_sizes: Option<String>,
+        /// One `true`/`false` per child.
+        collapsible: Option<String>,
+        /// Whether dividers can be dragged (default true).
+        resizable: Option<bool>,
+        /// Child nodes.
+        children: Vec<NodeSchema>,
+    },
+    /// `stack sizes="auto 1fr" { … }`: children top to bottom.
+    Stack {
+        /// Stable node id.
+        id: Option<String>,
+        /// Label.
+        label: Option<String>,
+        /// One CSS track size per child.
+        sizes: Option<String>,
+        /// Child nodes.
+        children: Vec<NodeSchema>,
+    },
+    /// `tabs active=0 { … }`: one child at a time.
+    Tabs {
+        /// Stable node id.
+        id: Option<String>,
+        /// Label.
+        label: Option<String>,
+        /// Index of the initially active tab.
+        active: Option<u32>,
+        /// Child nodes, one per tab.
+        children: Vec<NodeSchema>,
+    },
+    /// A widget: `<kind> id=… label=… <option>=<value>… { row "<template>" }`.
+    Widget {
+        /// Widget kind: account-switcher, folder-tree, message-list,
+        /// message-view, toolbar, status-bar, text, spacer (M0), or
+        /// plugin.<id>.<name>.
+        kind: String,
+        /// Stable node id.
+        id: Option<String>,
+        /// Label.
+        label: Option<String>,
+        /// Widget options (all other properties of the node).
+        #[serde(default)]
+        options: Map<String, Value>,
+        /// Row templates, e.g. `"{from.name}  {date | relative}"`.
+        #[serde(default)]
+        rows: Vec<String>,
+    },
+}
+
+/// Split direction.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum OrientationSchema {
+    /// Side by side.
+    Horizontal,
+    /// Top to bottom.
+    Vertical,
+}
+
+/// `action "<id>" label=… icon=… alias-of=… <args>…`.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct ActionSchema {
+    /// Label: literal text or `@message.id`.
+    label: Option<String>,
+    /// Icon name from the theme.
+    icon: Option<String>,
+    /// For aliases: the action this one invokes.
+    alias_of: Option<String>,
+    /// Arguments for `alias-of`.
+    #[serde(default)]
+    args: Vec<Value>,
+}
+
+/// A toolbar entry.
+#[derive(JsonSchema)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub(crate) enum ToolbarItemSchema {
+    /// `item "<action> <args>…" label=… icon=…`.
+    Item {
+        /// Action id and arguments.
+        action: String,
+        /// Label override.
+        label: Option<String>,
+        /// Icon override.
+        icon: Option<String>,
+    },
+    /// `spacer`: pushes the following items to the end.
+    Spacer,
+    /// `separator`.
+    Separator,
+}
+
+/// A menu entry.
+#[derive(JsonSchema)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub(crate) enum MenuItemSchema {
+    /// `item "<action> <args>…" label=… icon=…`.
+    Item {
+        /// Action id and arguments.
+        action: String,
+        /// Label override.
+        label: Option<String>,
+        /// Icon override.
+        icon: Option<String>,
+    },
+    /// `separator`.
+    Separator,
+    /// `submenu "<label>" { … }`.
+    Submenu {
+        /// Label.
+        label: String,
+        /// Entries.
+        items: Vec<MenuItemSchema>,
+    },
+}
