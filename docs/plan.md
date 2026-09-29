@@ -118,16 +118,97 @@ Gate: the default UI is driven entirely by `defaults/theme.kdl` + `defaults/layo
 - `docs/adr/*`, `docs/dev-setup.md` (build, test, run).
 - `userDocs/en/`: getting started, theme reference and layout reference (M0 subset), `userDocs/de/` placeholder.
 
-## 6. Later milestones (outline; each gets a detailed section like M0 before it starts)
+## 6. Milestone M1 — Daily-driver mail (detailed)
 
-- **M1 Daily-driver mail:** full IMAP (IDLE, CONDSTORE/QRESYNC, MOVE, flags write), SMTP submission, POP3, OAuth2 (Gmail API path, Microsoft), autoconfig, multi-account + virtual accounts, Tantivy search + query language, threading (JWZ), composer (TipTap HTML, CodeMirror Markdown, comrak rendering, CSS inlining), client-side rules, read-only MCP server (`rmcp`), UI inspector, write-back of UI changes into `layout.kdl`, merge dialog, plug-in API preview.
-- **M2 Security, rules, polish:** OpenPGP (Sequoia), Autocrypt, S/MIME, Sieve/ManageSieve, spam classifier, snooze/send later/templates, accessibility pass, remote web UI with pairing + passkeys + hardening, basic NSIS installer build.
-- **M3 Exchange and PIM:** Graph + EWS engines, CalDAV/CardDAV, calendar views, iTIP/iMIP, contacts, tasks, interop suite.
+Status of M0: done (gate passed). M0 follow-ups are folded into the work packages below (marked *carry-over*).
+
+**Automated gate:** all suites green; the Playwright scenarios listed in WP14 and WP25 pass against mock IMAP / POP3 / SMTP servers.
+**Human gate (after M1b):** the owner uses Nail as the only mail client for two weeks.
+
+**Scope decisions for M1**
+- Gmail works in M1 through IMAP + SMTP with OAuth2 (XOAUTH2). The Gmail API engine (decided in the design review) moves to M3, next to the other proprietary-API engine (Exchange); both need OAuth app registration and mock REST servers.
+- The plug-in preview moves to M2, as the design's plug-in section says.
+- OAuth needs registered client ids for Google and Microsoft. Nail reads them from configuration; registering the apps is an owner task (see "Owner tasks"). Tests use a mock OAuth server.
+
+M1 runs as two waves (two workflows), each with its own review, fix and verify stages.
+
+### Wave M1a — Mail engine
+
+#### WP10 — Contract and accounts config (first, sequential)
+- `nail-api`: account configuration types (incoming IMAP/POP3, outgoing SMTP, auth method password / OAuth2 / client certificate, TLS mode, sync policy per folder), `Identity`, `VirtualAccount` (members, folder mapping, default identity, per-domain identity rules), `ThreadSummary`, `SearchQuery` / `SearchHit`, `Draft` (plain-text body in M1a; HTML/Markdown fields reserved for M1b), op results.
+- New requests: `DiscoverAccount{email}`, `TestAccount{config}`, `AddAccount`, `UpdateAccount`, `RemoveAccount`, `ListIdentities`, virtual-account CRUD, `UpdateFlags`, `MoveMessages`, `DeleteMessages`, `ListThreads`, `GetThread`, `Search`, `SaveDraft`, `SendDraft{delay}`, `CancelSend`, `ListOutbox`. New events: `OpStatus`, `SendStatus`, `NewMail`, `AccountStatus` (online / offline / auth error).
+- `accounts.kdl` in the config dir (accounts, identities, virtual accounts; secrets never in the file, only keychain references), parsed in `nail-config` with the same error/position machinery, plus JSON Schema.
+- ADRs: accounts file format, protocol additions.
+
+#### WP11 — IMAP engine, full (parallel)
+- IDLE with reconnect and 29-minute re-issue; NOOP polling fallback; IDLE on Inbox by default, other folders configurable.
+- CONDSTORE/QRESYNC: flag changes and expunges (`VANISHED`) since `HIGHESTMODSEQ`; fallback full `UID FETCH 1:* FLAGS` diff when unsupported (*carry-over: sync picks up flag changes and deletions*).
+- Writes: `UID STORE` flags, `MOVE` (fallback `COPY` + `\Deleted` + `UID EXPUNGE`), `APPEND` (drafts, sent copies) with `UIDPLUS` results, folder `CREATE` / `RENAME` / `DELETE`.
+- SASL `XOAUTH2` and `OAUTHBEARER`; `COMPRESS=DEFLATE` when offered; `ID`.
+- Extend the testkit mock server: IDLE push, MODSEQ / CONDSTORE / QRESYNC, STORE, MOVE, COPY, APPEND, EXPUNGE, UIDPLUS, XOAUTH2, fault injection (drop connection mid-IDLE, slow server).
+
+#### WP12 — Outgoing, POP3, auth, discovery (parallel)
+- `nail-proto-smtp`: submission via `lettre` (implicit TLS 465, STARTTLS 587, PLAIN / LOGIN / XOAUTH2), size check, optional DSN; testkit mock SMTP server that records messages.
+- `nail-proto-pop3`: in-house client (STLS, USER/PASS, APOP, SASL PLAIN, CAPA, UIDL, TOP, RETR, DELE, QUIT); leave-on-server policies (delete after N days, delete when deleted locally); testkit mock POP3 server.
+- `nail-auth`: OAuth2 authorization code + PKCE with a loopback redirect, token refresh, provider registry (Google, Microsoft; client ids from configuration); secret storage in the OS keychain (`keyring`) behind a trait, with an in-memory backend for tests.
+- `nail-discovery`: Mozilla ISPDB, `autoconfig.<domain>` and `/.well-known/autoconfig`, RFC 6186 SRV records, Microsoft Autodiscover lookup, common-host guessing; ranked results returned for confirmation. Tests against mock HTTP and DNS layers.
+
+#### WP13 — Store v2, threading, search (parallel)
+- Store migration v2: identities, virtual accounts, message tags (IMAP keywords), thread ids, `message_id` / `references` columns, per-folder `highestmodseq`, outbox table.
+- Operation queue fixes (*carry-over*): per-account ordering and passes; sync-side merge that keeps local flags while a pending op for that message exists.
+- Threading: JWZ over Message-ID / In-Reply-To / References with subject fallback; incremental updates; cross-account threads for virtual accounts.
+- `nail-search`: Tantivy index (headers, decoded text, attachment names), incremental add/remove, and the design's query language (`from: to: subject: has:attachment is:unread is:flagged tag: account: folder: before: after: size>`, quotes, AND / OR / NOT, parentheses) with a hand-written parser and precise error positions.
+
+#### WP14 — Integration: accounts, sync, send, virtual accounts, UI (sequential)
+- `nail-core`: account manager (load/save `accounts.kdl`, keychain), per-account sync engines (IMAP IDLE loop + polling, POP3 schedule), op replayers (IMAP flags/move/delete/append; POP3 delete policies), outbox with undo-send delay and send-later, Sent copy via APPEND (skipped for servers that save it automatically, e.g. Gmail), virtual-account routing (folder mapping by role, Message-ID dedupe, reply identity selection), search and thread requests, `AccountStatus` events.
+- UI: account setup wizard (email → discover → confirm → test → save; password or OAuth), account and identity settings, virtual-account editor, unified inbox (built-in "All accounts" virtual account), thread view, flag / move / delete / archive actions with keybindings, search bar with query-language hints, a minimal plain-text composer (upgraded in M1b), outbox view, account status indicators.
+- Every new string in `locales/en`; every widget themeable; default layout updated.
+- **Playwright:** add an account via discovery against mock servers; unified inbox shows two accounts; flag / move / delete reach the mock IMAP server; a flag change on the server appears in the UI (IDLE); search with the query language; thread view; send a plain-text mail to the mock SMTP server, once cancelled by undo-send and once for real; a POP3 account receives mail; the offline queue replays after reconnect; a virtual account merges folders and dedupes a mailing-list message.
+- `userDocs/en`: accounts, virtual accounts, search syntax.
+
+### Wave M1b — Authoring, rules, agents, customization
+
+#### WP20 — Contract for M1b (first, sequential)
+Draft rich bodies (HTML, Markdown source, attachments, inline images, reply/forward context), rules model and requests (list / save / test / run / undo run), MCP client grants and audit entries, config write-back requests (layout patches), merge-dialog requests (preview / apply), UI-context plumbing, saved searches.
+
+#### WP21 — Composer (parallel)
+- `nail-compose`: MIME building (`mail-builder`): `multipart/alternative` (text + HTML), `multipart/related` for `cid:` images, attachments, optional `text/markdown` part; Markdown rendering with `comrak` (CommonMark + GFM + footnotes + highlighted code); per-identity mail stylesheet inlined with `css-inline`; outgoing HTML sanitized; HTML → text; reply/forward quoting (HTML blockquote, Markdown `>`), top/bottom posting and localized quote header per identity; signatures (HTML and Markdown variants); templates with variables.
+- UI: TipTap HTML editor (tables, images, links, source view), CodeMirror 6 Markdown editor with side-by-side preview rendered by the core, plain-text mode; mode switching with a lossy-conversion warning; drafts autosave (local + server Drafts); attachment reminder; identity picker; address autocomplete from collected addresses.
+
+#### WP22 — Rules engine (parallel)
+- `rules.kdl` (parsed in `nail-config`) and `nail-rules`: triggers (arrival, on send, schedule, manual), nested all / any / not conditions (headers, regex, query language, attachments, size, date, flags/tags, account, auth results, list-id), actions (move, copy, delete, archive, tag, flag, mark read, forward / redirect, reply with template, notify / suppress, stop); dry-run "test rule"; every run goes through the op queue and can be undone as one unit.
+- UI: rule list and visual editor, text view of the same rule, "create rule from message", test-results preview.
+
+#### WP23 — MCP server, read-only (parallel)
+- `nail-mcp` with `rmcp`: Streamable HTTP on 127.0.0.1 with per-client bearer tokens; `nail mcp --client <name>` stdio bridge to the running app over a named pipe; the design's resources (accounts, folders, messages incl. raw and attachments, threads, rules, `ui/context`) and read tools (`search_messages`, `get_message`, `get_thread`, `list_folders`, `get_ui_context`); resource subscriptions for new mail and UI context.
+- Grants: new clients have **no access until granted** (decided); per-account scope; separate grants for raw source, attachments, encrypted content and UI context; audit log; message content marked as untrusted data.
+- UI: MCP client settings (create token, grant scopes, revoke, audit log view); an on-screen indicator while an agent reads the UI context.
+- Tests with an MCP client (`rmcp` client) against the server.
+
+#### WP24 — Customization tooling (parallel)
+- Inspector: element-picker overlay showing part path, states, matching theme rules and the layout node, with "open file at line".
+- Write-back: split sizes, column order, toolbar order and keybinding edits made in the UI are written into `layout.kdl`, with comments and formatting preserved.
+- Merge dialog for applying a shared theme or layout (per-section keep mine / take theirs, live preview, conflict flags, backup + revert).
+- All config errors shown at once (*carry-over*): an error list per file instead of a single slot; `nail-config` reports every error in a file.
+- Saved searches as smart folders placeable in the layout.
+
+#### WP25 — Integration for M1b (sequential)
+Wire everything, update the default layout, write docs (`userDocs/en`: composer, Markdown mail, rules, MCP setup, inspector and customization), and add the Playwright scenarios below.
+- **Playwright:** compose and send HTML and Markdown mails (assert the MIME parts received by the mock SMTP server); reply quoting in both modes; draft autosave and restore; a rule moves arriving mail and its run can be undone; test-rule preview; an MCP client lists messages only after a grant; the inspector shows a part path; dragging a divider writes `layout.kdl`; the merge dialog applies a theme; the config error list shows two broken files; **desktop app smoke test over WebView2 CDP** (*carry-over*).
+
+### Owner tasks (outside the code)
+- Register OAuth apps for Google (Gmail IMAP/SMTP scope) and Microsoft (Outlook.com / Microsoft 365 IMAP/SMTP scopes) and provide the client ids.
+- Provide real test accounts for the manual two-week gate.
+
+## 7. Later milestones (outline; each gets a detailed section before it starts)
+
+- **M2 Security, rules, polish:** OpenPGP (Sequoia), Autocrypt, S/MIME, Sieve/ManageSieve, spam classifier, snooze/templates polish, accessibility pass, remote web UI with pairing + passkeys + hardening, plug-in preview (commands, dialogs, read access), basic NSIS installer build.
+- **M3 Exchange, Gmail API and PIM:** Graph + EWS engines, Gmail API engine, CalDAV/CardDAV, calendar views, iTIP/iMIP, contacts, tasks, interop suite.
 - **M4 Agents and release:** MCP write tools with grants/confirm/audit, full plug-in system (QuickJS), MAPI provider, MSI + winget + updater, EV signing, import/export, backup.
 
-## 7. How M0 is executed (orchestration)
+## 8. How milestones are executed (orchestration)
 
-Agents: Opus 5.5 at medium effort, coordinated by a workflow.
+Agents: Opus 5.5 at medium effort, coordinated by a workflow. M0 ran as the sequence below; each M1 wave uses the same shape (contract, then parallel packages in disjoint directories, then integrate, two reviews, fix and an independent verify).
 
 1. **Scaffold** (1 agent, sequential): WP0 incl. contract; commits.
 2. **Build** (4 agents in parallel, disjoint directories, separate cargo target dirs, no git writes): WP1 · WP2 · WP3 · WP4.
