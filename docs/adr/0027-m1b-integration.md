@@ -69,9 +69,10 @@ desktop smoke test) and closes the M1a follow-ups.
   recorded with their inverse, so `UndoRuleRun` queues the inverses in
   reverse order. Copies (a local copy + `AppendMessage`), forwards and
   template replies (drafts sent through the outbox without delay) and
-  redirects (the original bytes with `Resent-*` headers, submitted
-  directly) are recorded without an operation id: undo leaves them alone
-  and the rest of the run stays undoable.
+  redirects (the original bytes with `Resent-*` headers; since ADR 0028
+  also through the outbox) are recorded without an operation id: undo
+  leaves them alone and the rest of the run stays undoable. Rule mail is
+  marked against loops (ADR 0028).
 - **Contract:** `RuleMatch.explanation: ConditionHit[]` ("why it matched").
 - `notify` is planned but has no effect: the UI shows no new-mail
   notifications yet.
@@ -157,5 +158,5 @@ desktop smoke test) and closes the M1a follow-ups.
   action); editing UI for toolbars, keys and columns (write-back exists);
   lazy-loading the TipTap / CodeMirror editors (main chunk ~1.4 MB);
   `nail-mime` lists a received `text/markdown` alternative as an
-  attachment; a fixed MCP port setting for the desktop app; CI does not run
-  the desktop smoke test yet.
+  attachment; a fixed MCP port setting for the desktop app. (CI runs the
+  desktop smoke test since ADR 0028.)

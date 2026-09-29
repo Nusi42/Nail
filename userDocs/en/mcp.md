@@ -48,13 +48,19 @@ addresses and folders of every account.
 
 **Hidden folders.** Under *Hidden folders*, open an account and tick the
 folders the agent must never see, for example a folder with HR mail.
+Hidden folders and accounts you did not grant are hidden everywhere: a
+search only counts and pages through messages the agent may read, so it
+cannot even tell whether a hidden folder has mail that matches.
 
 **What is on screen** is separate on purpose: it lets an agent follow what
 you are doing ("summarize the message I have open"). While an agent reads
 it, Nail shows a notice such as *"Claude Desktop is reading what is on your
 screen"* at the bottom of the main window for a few seconds (the × hides
 it; the layout widget is `mcp-context-indicator`). If the open message is in an account the agent may not read, the
-agent only learns that a message is open, not what it says.
+agent only learns that a message is open, not what it says. The same
+goes for the draft you are writing: the agent sees it only when it is
+written from an account it may read and does not quote a message it may
+not read.
 
 ## Configuring your agent
 

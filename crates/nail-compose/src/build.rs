@@ -27,7 +27,7 @@ use mail_builder::headers::raw::Raw;
 use mail_builder::mime::{BodyPart, MimePart};
 use nail_api::accounts::ComposerMode;
 use nail_api::engine::Envelope;
-use nail_api::{Address, Draft, DraftAttachment, Identity};
+use nail_api::{Address, AutomaticMail, Draft, DraftAttachment, Identity, LOOP_HEADER};
 use sha2::{Digest, Sha256};
 
 use crate::convert::html_to_text;
@@ -275,6 +275,35 @@ fn bodies(draft: &Draft, style: &MailStyle) -> Bodies {
     }
 }
 
+/// The `Auto-Submitted` value (RFC 3834) of mail a rule sends.
+fn auto_submitted(draft: &Draft) -> Option<&'static str> {
+    match draft.automatic.as_ref()? {
+        AutomaticMail::Reply => Some("auto-replied"),
+        AutomaticMail::Forward | AutomaticMail::Redirect { .. } => Some("auto-generated"),
+    }
+}
+
+/// A redirect (RFC 5322 §3.6.6): `raw` unchanged, preceded by `Resent-*`
+/// headers and the [`LOOP_HEADER`] marker, so the redirect is not
+/// redirected again when it comes back.
+pub fn resent_message(
+    raw: &[u8],
+    sender: &str,
+    recipients: &[String],
+    meta: MessageMeta<'_>,
+) -> Vec<u8> {
+    let sender = clean_header(sender.trim());
+    let mut bytes = format!(
+        "Resent-From: {sender}\r\nResent-To: {}\r\nResent-Date: {}\r\nResent-Message-ID: <{}>\r\n{LOOP_HEADER}: {sender}\r\n",
+        clean_header(&recipients.join(", ")),
+        clean_header(meta.date),
+        bare_id(meta.message_id),
+    )
+    .into_bytes();
+    bytes.extend_from_slice(raw);
+    bytes
+}
+
 /// Builds the message for `draft`, sent as `identity`. `reply` carries the
 /// threading headers of a replied message; `blobs` supplies attachment
 /// bytes.
@@ -376,6 +405,11 @@ pub fn build_message(
         builder = builder
             .in_reply_to(MbMessageId::new(parent))
             .references(MbMessageId::new_list(refs.into_iter()));
+    }
+    if let Some(kind) = auto_submitted(draft) {
+        builder = builder
+            .header("Auto-Submitted", Raw::new(kind))
+            .header(LOOP_HEADER, Raw::new(clean_header(identity.email.trim())));
     }
     let raw = builder.body(body).write_to_vec()?;
     Ok(OutgoingMessage {

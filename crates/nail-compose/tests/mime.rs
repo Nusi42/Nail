@@ -396,3 +396,49 @@ fn message_ids_are_unique_and_in_the_sender_domain() {
     assert!(a.ends_with("@work.example"));
     assert!(nail_compose::new_message_id("nobody", b"").ends_with("@nail.invalid"));
 }
+
+#[test]
+fn rule_mail_is_marked_as_automatic() {
+    let plain = normalize(&build(&base_draft(), None).unwrap().raw);
+    assert!(!plain.contains("Auto-Submitted"), "{plain}");
+    assert!(!plain.contains(nail_api::LOOP_HEADER), "{plain}");
+    for (automatic, value) in [
+        (nail_api::AutomaticMail::Reply, "auto-replied"),
+        (nail_api::AutomaticMail::Forward, "auto-generated"),
+    ] {
+        let draft = Draft {
+            automatic: Some(automatic),
+            ..base_draft()
+        };
+        let raw = normalize(&build(&draft, None).unwrap().raw);
+        assert!(
+            raw.contains(&format!("Auto-Submitted: {value}\r\n")),
+            "{raw}"
+        );
+        assert!(raw.contains("X-Nail-Loop: ada@work.example\r\n"), "{raw}");
+        let parsed = nail_mime::header_fields(raw.as_bytes());
+        assert!(parsed.iter().any(|(n, _)| n == "X-Nail-Loop"), "{parsed:?}");
+    }
+}
+
+#[test]
+fn redirects_prepend_resent_headers_and_the_loop_marker() {
+    let original = b"From: Bob <bob@example.org>\r\nSubject: Hi\r\n\r\nBody\r\n";
+    let bytes = nail_compose::resent_message(
+        original,
+        "ada@work.example",
+        &["desk@example.org".into(), "x@example.org".into()],
+        MessageMeta {
+            date: DATE,
+            message_id: "<r1@work.example>",
+        },
+    );
+    let text = String::from_utf8(bytes).unwrap();
+    assert_eq!(
+        text,
+        "Resent-From: ada@work.example\r\nResent-To: desk@example.org, x@example.org\r\n\
+         Resent-Date: Tue, 29 Sep 2026 10:00:00 +0200\r\nResent-Message-ID: <r1@work.example>\r\n\
+         X-Nail-Loop: ada@work.example\r\n\
+         From: Bob <bob@example.org>\r\nSubject: Hi\r\n\r\nBody\r\n"
+    );
+}

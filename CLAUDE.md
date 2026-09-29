@@ -100,10 +100,12 @@ npm run tauri dev                          # desktop app with Vite hot reload
 - M1a decisions: ADRs 0015 (store v2), 0016 (search), 0017 (SMTP/POP3/auth/discovery), 0018 (IMAP), 0019 (UI), 0020 (core integration), 0021 (review fixes: UIDVALIDITY-safe replay, Sent copies via the queue, discovery warnings, query limits, `ChooseIdentity`).
 - M1b contract: ADR 0022 (requests, store v4, crate stubs, feature slots: `nail-core/src/<pkg>.rs`,
   `nail-config/src/widgets/<pkg>.rs`, `ui/src/features/<pkg>/`, `locales/{en,de}/<pkg>.ftl`). Packages:
-  ADRs 0023 (composer), 0024 (rules), 0025 (MCP), 0026 (customization); integration ADR 0027. Every M1b
-  request is implemented by the core and the UI mock.
+  ADRs 0023 (composer), 0024 (rules), 0025 (MCP), 0026 (customization); integration ADR 0027; review
+  fixes ADR 0028 (rule mail loop marks, redirects via the outbox, autosave races, MCP grant leaks, undo).
+  Every M1b request is implemented by the core and the UI mock.
 - `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
-  endpoint is in `<data-dir>/mcp-endpoint.json`. Seeded runs never open an editor (`open_editor`).
+  endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
+  (`open_editor`).
 - Python on Windows writes CRLF in text mode: when scripting file edits, write with `newline=''`
   (the repo is LF, `.gitattributes`); the `nail-compose` golden `.eml` files are CRLF on purpose.
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.

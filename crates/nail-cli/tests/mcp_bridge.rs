@@ -63,6 +63,9 @@ impl McpData for Empty {
     async fn ui_context(&self) -> DataResult<UiContext> {
         Ok(UiContext::default())
     }
+    async fn identities(&self) -> DataResult<Vec<nail_api::Identity>> {
+        Ok(Vec::new())
+    }
     async fn draft(&self, _: &DraftId) -> DataResult<Draft> {
         none()
     }

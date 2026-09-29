@@ -539,6 +539,7 @@ fn draft(identity: &str, to: &str, subject: &str) -> Draft {
         context: None,
         signature: nail_api::SignatureChoice::Identity,
         markdown_part: false,
+        automatic: None,
     }
 }
 

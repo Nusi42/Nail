@@ -5,7 +5,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{connect, connect_fails, create_client, grant, start};
+use common::{FakeData, connect, connect_fails, create_client, grant, start, start_with, summary};
 use nail_api::mcp::{McpCallKind, McpOutcome, McpScope};
 use nail_api::{Event, UiContext};
 use rmcp::model::ClientConfig;
@@ -178,6 +178,16 @@ async fn every_call_is_audited() {
     read(&client, "nail://messages/m1").await.unwrap();
     tool(&client, "search_messages", json!({"query": "plan"})).await;
     let _ = read(&client, "nail://nothing").await;
+    // Malformed arguments and unknown tools leave a trace too.
+    let bad_args = CallToolRequestParams::new("get_message")
+        .with_arguments(json!({"id": 1}).as_object().unwrap().clone());
+    assert!(client.call_tool(bad_args).await.is_err());
+    assert!(
+        client
+            .call_tool(CallToolRequestParams::new("send_message"))
+            .await
+            .is_err()
+    );
 
     let entries = env.store.list_mcp_audit(Some(&id), None, 50).unwrap();
     let seen: Vec<_> = entries
@@ -200,11 +210,21 @@ async fn every_call_is_audited() {
             ),
             (McpCallKind::Tool, "search_messages", McpOutcome::Allowed),
             (McpCallKind::Resource, "nail://nothing", McpOutcome::Error),
+            (McpCallKind::Tool, "get_message", McpOutcome::Error),
+            (McpCallKind::Tool, "send_message", McpOutcome::Error),
         ]
     );
     assert_eq!(
         entries.last().unwrap().detail.as_deref(),
         Some("scope `read` not granted")
+    );
+    assert!(
+        entries[0]
+            .detail
+            .as_deref()
+            .is_some_and(|d| d.contains("unknown tool")),
+        "{:?}",
+        entries[0]
     );
     assert!(entries.iter().all(|e| e.client_name == "auditor"));
     assert!(
@@ -269,7 +289,10 @@ async fn tools_filter_by_grant_and_mark_content() {
         .map(|m| m["id"].as_str().unwrap().to_owned())
         .collect();
     assert_eq!(ids, ["m1", "m3"], "home is not granted");
-    assert_eq!(value["data"]["hidden"], json!(1));
+    assert!(
+        value["data"].get("hidden").is_none(),
+        "nothing counts what the grant hides"
+    );
     assert_eq!(
         value["data"]["total"],
         Value::Null,
@@ -291,12 +314,14 @@ async fn tools_filter_by_grant_and_mark_content() {
 
     let result = tool(&client, "get_thread", json!({"thread_id": "t1"})).await;
     let thread = &result.structured_content.unwrap()["data"];
-    assert_eq!(thread["hidden"], json!(1));
+    assert!(thread.get("hidden").is_none());
     assert_eq!(thread["messages"].as_array().unwrap().len(), 1);
-    assert!(
-        thread.get("subject").is_none(),
-        "no aggregate when messages are hidden"
+    assert_eq!(
+        thread["subject"],
+        json!("Subject of m1"),
+        "the aggregate of the visible messages only"
     );
+    assert_eq!(thread["participants"][0]["email"], json!("ada@example.org"));
 
     let result = tool(&client, "list_folders", json!({"account_id": "work"})).await;
     let folders = result.structured_content.unwrap();
@@ -392,6 +417,45 @@ async fn ui_context_needs_its_own_grant_and_shows_the_indicator() {
             client_name: "context".into(),
             edit: false,
         }]
+    );
+
+    // Where the user is, only as far as the grant covers it.
+    env.data.set_context(UiContext {
+        account_id: Some("home".into()),
+        folder_id: Some("home-inbox".into()),
+        thread_id: Some("t3".into()),
+        draft_id: Some("draft-home".into()),
+        ..UiContext::default()
+    });
+    let data = tool(&client, "get_ui_context", json!({}))
+        .await
+        .structured_content
+        .unwrap()["data"]
+        .clone();
+    assert_eq!(data["account_id"], Value::Null);
+    assert_eq!(data["folder_id"], Value::Null);
+    assert_eq!(data["thread_id"], json!("t3"), "t3 is in work");
+    // A draft from a non-granted account, or quoting a message outside the
+    // grant, is named, not shown.
+    assert_eq!(data["draft"], json!({"id": "draft-home", "hidden": true}));
+    env.data.set_context(UiContext {
+        account_id: Some("work".into()),
+        folder_id: Some("work-inbox".into()),
+        thread_id: Some("t2-unknown".into()),
+        draft_id: Some("draft-reply-m2".into()),
+        ..UiContext::default()
+    });
+    let data = tool(&client, "get_ui_context", json!({}))
+        .await
+        .structured_content
+        .unwrap()["data"]
+        .clone();
+    assert_eq!(data["account_id"], json!("work"));
+    assert_eq!(data["folder_id"], json!("work-inbox"));
+    assert_eq!(data["thread_id"], Value::Null);
+    assert_eq!(
+        data["draft"],
+        json!({"id": "draft-reply-m2", "hidden": true})
     );
 
     // A message outside the account grant is named, not shown.
@@ -547,7 +611,7 @@ async fn the_endpoint_file_follows_the_server() {
     let path = nail_mcp::endpoint::endpoint_path(dir.path());
     let server = nail_mcp::McpServer::start(
         nail_store::Store::open_in_memory().unwrap(),
-        std::sync::Arc::new(common::FakeData::default()),
+        std::sync::Arc::new(FakeData::default()),
         nail_mcp::ServerOptions {
             port: 0,
             endpoint_file: Some(path.clone()),
@@ -642,4 +706,99 @@ async fn listen_streams_of_protocol_2026_07_28_get_updates() {
     );
     drop(subscription);
     let _ = client.cancel().await;
+}
+
+/// The data of a user with more mail than the client may see: `m4` in the
+/// excluded folder `work-hr`, `m2` in the non-granted account `home`.
+fn with_hidden_mail() -> FakeData {
+    let mut data = FakeData::default();
+    for n in 4..40 {
+        data.messages
+            .push(summary(&format!("m{n}"), "work", "work-hr", "t9"));
+    }
+    data
+}
+
+fn without_hidden_mail() -> FakeData {
+    let mut data = FakeData::default();
+    data.messages
+        .retain(|m| m.folder_id.as_str() == "work-inbox");
+    data
+}
+
+#[tokio::test]
+async fn restricted_searches_reveal_nothing_about_hidden_mail() {
+    let mut answers = Vec::new();
+    for data in [with_hidden_mail(), without_hidden_mail()] {
+        let env = start_with(data).await;
+        let (id, token) = create_client(&env.store, "search").await;
+        nail_mcp::admin::handle(
+            &env.store,
+            None,
+            nail_api::Request::UpdateMcpGrants {
+                client_id: id.clone(),
+                grant: nail_api::McpGrant {
+                    scopes: vec![McpScope::Read],
+                    accounts: vec!["work".into()],
+                    excluded_folders: vec!["work-hr".into()],
+                    ..Default::default()
+                },
+            },
+            |_| {},
+        )
+        .await
+        .unwrap();
+        let (client, _) = connect(env.server.url(), &token).await;
+        let mut pages = Vec::new();
+        for args in [
+            json!({"query": "folder:work-hr subject:salary"}),
+            json!({"query": "account:home from:x"}),
+            json!({"query": "x", "limit": 1}),
+            json!({"query": "x", "limit": 1, "offset": 1}),
+            json!({"query": "x", "limit": 1, "offset": 2}),
+        ] {
+            let result = tool(&client, "search_messages", args).await;
+            pages.push(result.structured_content.unwrap()["data"].clone());
+        }
+        let _ = client.cancel().await;
+        answers.push(pages);
+    }
+    assert_eq!(answers[0], answers[1], "hidden mail changes nothing");
+    let pages = &answers[0];
+    // Paging counts only readable messages.
+    assert_eq!(pages[2]["messages"][0]["id"], json!("m1"));
+    assert_eq!(pages[2]["next_offset"], json!(1));
+    assert_eq!(pages[3]["messages"][0]["id"], json!("m3"));
+    assert_eq!(pages[3]["next_offset"], Value::Null);
+    assert_eq!(pages[4]["messages"], json!([]));
+    assert_eq!(pages[0]["total"], Value::Null);
+    assert!(pages[0].get("hidden").is_none());
+}
+
+#[tokio::test]
+async fn refused_connections_cannot_flood_the_audit_log() {
+    let env = start().await;
+    let http = nail_mcp::bridge::loopback_http_client().unwrap();
+    let long_path = env
+        .server
+        .url()
+        .replace("/mcp", &format!("/{}", "x".repeat(500)));
+    for n in 0..60 {
+        let url = if n % 2 == 0 {
+            env.server.url().to_owned()
+        } else {
+            long_path.clone()
+        };
+        let status = http
+            .post(url)
+            .bearer_auth("nail_mcp_wrong")
+            .send()
+            .await
+            .unwrap()
+            .status();
+        assert_eq!(status.as_u16(), 401);
+    }
+    let entries = env.store.list_mcp_audit(None, None, 500).unwrap();
+    assert_eq!(entries.len(), 20, "at most 20 refusals a minute are logged");
+    assert!(entries.iter().all(|e| e.name.len() <= 70), "{entries:?}");
 }

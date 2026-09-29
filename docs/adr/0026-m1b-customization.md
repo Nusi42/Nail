@@ -143,7 +143,8 @@ revert, an inspector, and smart folders. The protocol is fixed by ADR 0022
 
 `nail-core/src/customize.rs` maps each request to one `ConfigManager` call
 and broadcasts the returned updates with `ConfigUpdate::to_event`;
-`OpenConfigFile` spawns `open_file_command` (`unsupported` in web mode).
+`OpenConfigFile` spawns `open_file_command` (`unsupported` in web mode;
+`nail serve` never opens an editor, ADR 0028).
 Connect-time error events should add `ConfigManager::error_events()` plus
 an `issues_event` for `accounts.kdl` / `rules.kdl`. Details are in the
 package report.
@@ -156,5 +157,5 @@ package report.
   guard it.
 - Known limits: containers have no source position for the inspector;
   toolbar / key / column edits have write-back helpers but no editing UI
-  yet; the merge of a part rule taken from a complete incoming theme keeps
+  yet (deferred, plan.md §6 "M1b follow-ups"); the merge of a part rule taken from a complete incoming theme keeps
   default declarations the incoming theme leaves out.

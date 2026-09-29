@@ -83,6 +83,36 @@ pub struct Draft {
     /// (RFC 7763).
     #[serde(default)]
     pub markdown_part: bool,
+    /// Set by the core for mail a filter rule sends (forward, template
+    /// reply, redirect; ADR 0028). Such mail carries `Auto-Submitted` and
+    /// the [`LOOP_HEADER`] marker, and on-send rules skip it, so rules
+    /// cannot start mail loops. Clients leave it as they got it; absent
+    /// for mail the user writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub automatic: Option<AutomaticMail>,
+}
+
+/// The header that marks mail sent by a Nail filter rule. Its value is the
+/// sending address. Rules never forward, redirect or answer a message that
+/// carries it.
+pub const LOOP_HEADER: &str = "X-Nail-Loop";
+
+/// What kind of automatic mail a rule sends ([`Draft::automatic`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AutomaticMail {
+    /// A forward (`Auto-Submitted: auto-generated`).
+    Forward,
+    /// A template reply (`Auto-Submitted: auto-replied`).
+    Reply,
+    /// A redirect: the stored message is sent unchanged to the draft's
+    /// recipients, with `Resent-*` headers (RFC 5322 §3.6.6); the draft's
+    /// body is not used.
+    Redirect {
+        /// The redirected message.
+        message_id: MessageId,
+    },
 }
 
 impl Draft {
@@ -103,6 +133,7 @@ impl Draft {
             context: None,
             signature: SignatureChoice::default(),
             markdown_part: false,
+            automatic: None,
         }
     }
 

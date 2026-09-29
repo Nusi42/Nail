@@ -10,8 +10,8 @@ use std::future::Future;
 
 use nail_api::compose::Draft;
 use nail_api::{
-    Account, AccountId, ApiError, DraftId, ErrorCode, Event, Folder, FolderId, MessageBody,
-    MessageId, MessageSummary, Request, Response, SearchQuery, ThreadId, UiContext,
+    Account, AccountId, ApiError, DraftId, ErrorCode, Event, Folder, FolderId, Identity,
+    MessageBody, MessageId, MessageSummary, Request, Response, SearchQuery, ThreadId, UiContext,
     VirtualAccountConfig,
 };
 use nail_store::{BlobStore, Store};
@@ -213,6 +213,17 @@ impl<C: CoreAccess> McpData for CoreData<C> {
     async fn ui_context(&self) -> DataResult<UiContext> {
         match self.0.handle(Request::GetUiContext).await {
             Response::UiContext { context } => Ok(context),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn identities(&self) -> DataResult<Vec<Identity>> {
+        match self
+            .0
+            .handle(Request::ListIdentities { account_id: None })
+            .await
+        {
+            Response::Identities { identities } => Ok(identities),
             other => Err(unexpected(other)),
         }
     }

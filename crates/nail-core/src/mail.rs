@@ -210,10 +210,20 @@ impl Service {
             .store
             .call(move |s| s.enqueue_all(&operations))
             .await?;
+        Ok(self.announce_enqueued(&queued))
+    }
+
+    /// Tells the UIs and the engines about operations queued in the store
+    /// (by [`Self::enqueue`], or by a store call that queued them together
+    /// with other writes).
+    pub(crate) fn announce_enqueued(&self, queued: &[Enqueued]) -> Vec<OpId> {
+        if queued.is_empty() {
+            return Vec::new();
+        }
         let mut folders: Vec<FolderId> = Vec::new();
         let mut accounts: Vec<AccountId> = Vec::new();
         let mut op_ids = Vec::with_capacity(queued.len());
-        for item in &queued {
+        for item in queued {
             for folder in &item.changed_folders {
                 if !folders.contains(folder) {
                     folders.push(folder.clone());
@@ -260,7 +270,7 @@ impl Service {
         for account in accounts {
             self.request_replay(&account);
         }
-        Ok(op_ids)
+        op_ids
     }
 
     /// `RetryOp`: puts a failed operation back into its account's queue

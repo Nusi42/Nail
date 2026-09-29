@@ -9,7 +9,10 @@
 //! catalogs (quote header, forward texts).
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::future::Future;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use base64::Engine as _;
 use nail_api::accounts::{ComposerMode, QuotePosting};
@@ -37,25 +40,77 @@ pub(crate) const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
 /// Longest address suggestion list.
 const MAX_SUGGESTIONS: u32 = 50;
 
-/// Pending uploads of drafts to the server's Drafts folder, by draft.
+/// Uploads of drafts to the server's Drafts folder (autosave), by draft.
+///
+/// An upload first waits for the autosave delay; a newer save replaces a
+/// waiting upload and sending or deleting the draft cancels it. Once an
+/// upload has *started* it is never aborted: its store writes and the
+/// operations it queues belong together (aborting between them left stale
+/// or duplicate copies on the server). It runs under the draft's lock, and
+/// whoever reads the draft's server copy afterwards (the next upload,
+/// `SendDraft`, `DeleteDraft`) takes the same lock first
+/// ([`DraftUploads::cancel`]), so it sees the finished result.
+#[derive(Default, Clone)]
+pub(crate) struct DraftUploads(Arc<UploadsInner>);
+
 #[derive(Default)]
-pub(crate) struct DraftUploads(Mutex<HashMap<DraftId, JoinHandle<()>>>);
+struct UploadsInner {
+    waiting: Mutex<HashMap<DraftId, Waiting>>,
+    locks: Mutex<HashMap<DraftId, Arc<tokio::sync::Mutex<()>>>>,
+    generation: AtomicU64,
+}
+
+/// An upload waiting for its delay.
+struct Waiting {
+    generation: u64,
+    task: JoinHandle<()>,
+}
 
 impl DraftUploads {
-    fn replace(&self, id: &DraftId, task: JoinHandle<()>) {
-        if let Some(old) = lock(&self.0).insert(id.clone(), task) {
-            old.abort();
+    fn draft_lock(&self, id: &DraftId) -> Arc<tokio::sync::Mutex<()>> {
+        Arc::clone(lock(&self.0.locks).entry(id.clone()).or_default())
+    }
+
+    /// Runs `upload` for draft `id` after `delay`, replacing an upload of
+    /// the same draft that is still waiting.
+    fn schedule<F>(&self, id: &DraftId, delay: Duration, upload: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let generation = self.0.generation.fetch_add(1, Ordering::Relaxed);
+        let this = self.clone();
+        let draft = id.clone();
+        // Held while spawning, so the task cannot claim itself before it
+        // is registered.
+        let mut waiting = lock(&self.0.waiting);
+        let task = tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            // Claim the upload: from here on nothing aborts it.
+            {
+                let mut waiting = lock(&this.0.waiting);
+                if waiting.get(&draft).map(|w| w.generation) != Some(generation) {
+                    return;
+                }
+                waiting.remove(&draft);
+            }
+            let draft_lock = this.draft_lock(&draft);
+            let _guard = draft_lock.lock().await;
+            upload.await;
+        });
+        if let Some(old) = waiting.insert(id.clone(), Waiting { generation, task }) {
+            old.task.abort();
         }
     }
 
-    fn cancel(&self, id: &DraftId) {
-        if let Some(old) = lock(&self.0).remove(id) {
-            old.abort();
+    /// Cancels a waiting upload and waits for a running one to finish. The
+    /// returned guard keeps later uploads of the draft out until the caller
+    /// is done with the draft.
+    pub(crate) async fn cancel(&self, id: &DraftId) -> tokio::sync::OwnedMutexGuard<()> {
+        let waiting = lock(&self.0.waiting).remove(id);
+        if let Some(old) = waiting {
+            old.task.abort();
         }
-    }
-
-    fn finished(&self, id: &DraftId) {
-        lock(&self.0).remove(id);
+        self.draft_lock(id).lock_owned().await
     }
 }
 
@@ -459,27 +514,30 @@ impl Service {
 
     /// Schedules the upload of a saved draft to the account's Drafts folder
     /// on the server (autosave), replacing an earlier upload of the same
-    /// draft that has not started yet.
+    /// draft that has not started yet ([`DraftUploads`]).
     pub(crate) fn schedule_draft_upload(&self, id: &DraftId) {
         if tokio::runtime::Handle::try_current().is_err() {
             return;
         }
         let service = self.clone();
         let draft_id = id.clone();
-        let delay = self.inner.timing.draft_upload;
-        let task = tokio::spawn(async move {
-            tokio::time::sleep(delay).await;
-            if let Err(err) = service.upload_draft_copy(&draft_id).await {
-                tracing::warn!(draft = %draft_id, %err, "cannot upload the draft copy");
-            }
-            service.inner.draft_uploads.finished(&draft_id);
-        });
-        self.inner.draft_uploads.replace(id, task);
+        self.inner
+            .draft_uploads
+            .schedule(id, self.inner.timing.draft_upload, async move {
+                if let Err(err) = service.upload_draft_copy(&draft_id).await {
+                    tracing::warn!(draft = %draft_id, %err, "cannot upload the draft copy");
+                }
+            });
     }
 
-    /// Cancels a pending upload (the draft is being sent or deleted).
-    pub(crate) fn cancel_draft_upload(&self, id: &DraftId) {
-        self.inner.draft_uploads.cancel(id);
+    /// Cancels a waiting upload and waits for a running one (the draft is
+    /// being sent or deleted); hold the guard while reading or changing the
+    /// draft's server copy.
+    pub(crate) async fn cancel_draft_upload(
+        &self,
+        id: &DraftId,
+    ) -> tokio::sync::OwnedMutexGuard<()> {
+        self.inner.draft_uploads.cancel(id).await
     }
 
     /// The local id of a draft's server copy in the Drafts folder.
@@ -523,13 +581,6 @@ impl Service {
             .build_draft_message(&draft, &identity, id.as_str().as_bytes())
             .await?;
         let copy_id = Self::draft_copy_id(&folder.id, &built.message_id);
-        let previous = {
-            let id = id.clone();
-            self.inner
-                .store
-                .call(move |s| s.draft_server_copy(&id))
-                .await?
-        };
         let incoming = IncomingMessage {
             id: Some(copy_id.clone()),
             flags: Flags {
@@ -541,7 +592,7 @@ impl Service {
             ..IncomingMessage::default()
         };
         let blobs = self.inner.blobs.clone();
-        let index = std::sync::Arc::clone(&self.inner.search);
+        let index = Arc::clone(&self.inner.search);
         let target = folder.clone();
         let draft_id = id.clone();
         let copy = DraftServerCopy {
@@ -549,41 +600,42 @@ impl Service {
             uid: None,
             message_id: built.message_id.clone(),
         };
-        self.inner
+        // One blocking call without an await in between: the new copy, the
+        // draft's pointer to it and the queued append / delete of the old
+        // copy are written together.
+        let queued = self
+            .inner
             .store
             .call(move |s| {
+                // Sent, being sent or deleted meanwhile: no copy.
+                if s.is_draft_queued(&draft_id)? || s.get_draft(&draft_id).is_err() {
+                    return Ok(Vec::new());
+                }
+                let previous = s.draft_server_copy(&draft_id)?;
                 ingest(s, &blobs, Some(&index), &target, 0, &[incoming])?;
-                s.set_draft_server_copy(&draft_id, Some(&copy))
+                s.set_draft_server_copy(&draft_id, Some(&copy))?;
+                let mut ops = vec![Operation::AppendMessage {
+                    message_id: copy_id,
+                    folder_id: target.id.clone(),
+                }];
+                ops.extend(previous.and_then(|p| draft_copy_removal_in(s, &p)));
+                s.enqueue_all(&ops)
             })
             .await?;
-        let mut ops = vec![Operation::AppendMessage {
-            message_id: copy_id,
-            folder_id: folder.id.clone(),
-        }];
-        if let Some(previous) = previous {
-            ops.extend(self.draft_copy_removal(&previous).await);
-        }
-        self.enqueue(ops).await?;
+        self.announce_enqueued(&queued);
         Ok(())
     }
 
     /// The operation that deletes a draft's server copy, if it still
     /// exists locally.
     async fn draft_copy_removal(&self, copy: &DraftServerCopy) -> Option<Operation> {
-        let old = Self::draft_copy_id(&copy.folder_id, &copy.message_id);
-        let probe = old.clone();
-        let exists = self
-            .inner
+        let copy = copy.clone();
+        self.inner
             .store
-            .call(move |s| Ok(s.get_message(&probe).is_ok()))
+            .call(move |s| Ok(draft_copy_removal_in(s, &copy)))
             .await
-            .unwrap_or(false);
-        exists.then_some(Operation::DeleteMessage {
-            message_id: old,
-            permanent: true,
-            source: None,
-            trash_folder_id: None,
-        })
+            .ok()
+            .flatten()
     }
 
     /// Deletes a draft's server copy (after sending, or when the draft is
@@ -621,6 +673,21 @@ impl Service {
     }
 }
 
+/// The operation that deletes a draft's server copy, if it still exists
+/// locally.
+fn draft_copy_removal_in(store: &nail_store::Store, copy: &DraftServerCopy) -> Option<Operation> {
+    let old = Service::draft_copy_id(&copy.folder_id, &copy.message_id);
+    store
+        .get_message(&old)
+        .is_ok()
+        .then_some(Operation::DeleteMessage {
+            message_id: old,
+            permanent: true,
+            source: None,
+            trash_folder_id: None,
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -643,6 +710,96 @@ mod tests {
             html: None,
             attachments: Vec::new(),
         }
+    }
+
+    /// An upload body that reports its start and waits for a release.
+    fn gated(
+        log: &Arc<Mutex<Vec<String>>>,
+        name: &'static str,
+    ) -> (
+        impl Future<Output = ()> + Send + 'static,
+        tokio::sync::oneshot::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ) {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let log = Arc::clone(log);
+        let body = async move {
+            lock(&log).push(format!("{name} started"));
+            let _ = started_tx.send(());
+            let _ = release_rx.await;
+            lock(&log).push(format!("{name} finished"));
+        };
+        (body, started_rx, release_tx)
+    }
+
+    #[tokio::test]
+    async fn a_started_draft_upload_is_never_aborted() {
+        let uploads = DraftUploads::default();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let id: DraftId = "draft-1".into();
+        let (first, first_started, release_first) = gated(&log, "first");
+        uploads.schedule(&id, Duration::ZERO, first);
+        first_started.await.unwrap();
+        // A newer save while the first upload runs: the first one is not
+        // aborted, the second one waits for it.
+        let (second, second_started, release_second) = gated(&log, "second");
+        uploads.schedule(&id, Duration::ZERO, second);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(*lock(&log), ["first started"]);
+        release_first.send(()).unwrap();
+        second_started.await.unwrap();
+        release_second.send(()).unwrap();
+        // Cancel waits for nothing now and returns the draft's lock.
+        drop(uploads.cancel(&id).await);
+        assert_eq!(
+            *lock(&log),
+            [
+                "first started",
+                "first finished",
+                "second started",
+                "second finished"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn cancel_skips_waiting_uploads_and_waits_for_running_ones() {
+        let uploads = DraftUploads::default();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let id: DraftId = "draft-1".into();
+        // A waiting upload is dropped.
+        let (waiting, _, _keep) = gated(&log, "waiting");
+        uploads.schedule(&id, Duration::from_secs(3600), waiting);
+        drop(uploads.cancel(&id).await);
+        // A replaced waiting upload never runs either.
+        let (replaced, _, _keep2) = gated(&log, "replaced");
+        uploads.schedule(&id, Duration::from_secs(3600), replaced);
+        let (running, started, release) = gated(&log, "running");
+        uploads.schedule(&id, Duration::ZERO, running);
+        started.await.unwrap();
+        // Cancelling a running upload waits until it is done.
+        let cancel = tokio::spawn({
+            let uploads = uploads.clone();
+            let id = id.clone();
+            async move {
+                let _guard = uploads.cancel(&id).await;
+            }
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(!cancel.is_finished());
+        release.send(()).unwrap();
+        cancel.await.unwrap();
+        assert_eq!(*lock(&log), ["running started", "running finished"]);
+        // While the caller holds the guard, a new upload waits.
+        let guard = uploads.cancel(&id).await;
+        let (later, mut later_started, release_later) = gated(&log, "later");
+        uploads.schedule(&id, Duration::ZERO, later);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(later_started.try_recv().is_err());
+        drop(guard);
+        later_started.await.unwrap();
+        release_later.send(()).unwrap();
     }
 
     #[test]

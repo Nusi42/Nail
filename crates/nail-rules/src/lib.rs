@@ -21,8 +21,9 @@
 //!   processing. [`run_rule`] runs one rule on a set of messages.
 //! * [`plan_actions`] — actions become [`PlannedAction`]s: queue operations
 //!   ([`nail_store::Operation`]) with the operations that undo them,
-//!   copies, forwards / redirects / template replies (never to automatic or
-//!   list mail, RFC 3834), and the notify choice.
+//!   copies, forwards / redirects / template replies (no reply to automatic
+//!   or list mail, RFC 3834; nothing sent for mail a rule sent, bounces or
+//!   automatic responses, so rules cannot loop), and the notify choice.
 //! * [`test_rule`] — the dry run behind "Test rule": matches, what would
 //!   happen and why each matched ([`ConditionHit`]s).
 //!
@@ -48,7 +49,8 @@ pub use message::{
     AccountInfo, Attachment, Env, FolderInfo, Mailbox, MessageData, MessageView, StaticMailbox,
 };
 pub use plan::{
-    Effect, Flow, MessageState, PlannedAction, SkipReason, plan_actions, refuses_automatic_reply,
+    Effect, Flow, MessageState, PlannedAction, SkipReason, is_rule_mail, plan_actions,
+    refuses_automatic_forward, refuses_automatic_reply,
 };
 pub use text::{Matcher, REGEX_SIZE_LIMIT, glob_match};
 pub use time::{days_from_civil, parse_day};

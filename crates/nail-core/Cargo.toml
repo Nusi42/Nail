@@ -45,6 +45,8 @@ open.workspace = true
 notify-debouncer-mini.workspace = true
 
 [dev-dependencies]
+# An MCP client for the test of the core-started server's subscriptions.
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 nail-testkit.workspace = true
 nail-testkit-net.workspace = true
 tempfile.workspace = true

@@ -37,7 +37,7 @@ mod template;
 
 pub use build::{
     BlobSource, MessageMeta, OutgoingMessage, ReplyHeaders, build_message, envelope_of,
-    new_message_id,
+    new_message_id, resent_message,
 };
 pub use convert::{Conversion, has_formatting, html_to_markdown, html_to_text};
 pub use draft::{
@@ -51,7 +51,9 @@ pub use quote::Posting;
 pub use sanitize::sanitize_outgoing;
 pub use signature::{SIGNATURE_SEPARATOR, signature_block, strip_signature};
 pub use style::{DEFAULT_CODE_THEME, DEFAULT_MAIL_CSS, MailStyle, code_themes, mail_document};
-pub use template::{TemplateError, expand_template, expand_template_html};
+pub use template::{
+    TemplateError, expand_template, expand_template_html, render_markdown_template,
+};
 
 /// Escapes text for HTML element content and attribute values.
 pub fn escape_html(text: &str) -> String {

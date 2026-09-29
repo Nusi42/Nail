@@ -8,7 +8,8 @@
 //!
 //! Every request needs `Authorization: Bearer <token>`; the token's SHA-256
 //! is looked up in the store ([`nail_store::hash_mcp_token`]). Unknown or
-//! revoked tokens get `401` and an audit entry. The listener binds the IPv4
+//! revoked tokens get `401` and an audit entry (at most
+//! [`DENIED_AUDITS_PER_MINUTE`] a minute; the rest are summed up). The listener binds the IPv4
 //! loopback address only; rmcp additionally checks the `Host` header
 //! (DNS rebinding) and refuses browser `Origin`s.
 
@@ -71,7 +72,62 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
         .filter(|t| !t.is_empty())
 }
 
-async fn authenticate(State(store): State<Store>, mut request: Request, next: Next) -> Response {
+/// Refused connections written to the audit log per minute; more are
+/// counted and summed up in one entry, so a local process (or a web page
+/// probing the loopback port) cannot grow the database without limit.
+const DENIED_AUDITS_PER_MINUTE: u32 = 20;
+
+/// Rate limit of the "refused connection" audit entries.
+#[derive(Debug, Default)]
+pub(crate) struct DeniedAudits {
+    window_start: i64,
+    written: u32,
+    dropped: u32,
+}
+
+impl DeniedAudits {
+    /// Whether to write an entry for a refusal at `now` (Unix seconds);
+    /// the second value is the number of refusals not written in the
+    /// previous window, to sum up.
+    pub(crate) fn admit(&mut self, now: i64) -> (bool, u32) {
+        let mut dropped = 0;
+        if now - self.window_start >= 60 {
+            dropped = std::mem::take(&mut self.dropped);
+            self.window_start = now;
+            self.written = 0;
+        }
+        if self.written < DENIED_AUDITS_PER_MINUTE {
+            self.written += 1;
+            (true, dropped)
+        } else {
+            self.dropped += 1;
+            (false, dropped)
+        }
+    }
+}
+
+/// The request path as audited: the known endpoints as they are, anything
+/// else shortened (the path is chosen by the caller).
+pub(crate) fn audited_path(path: &str) -> String {
+    const MAX: usize = 64;
+    if path == MCP_PATH || path == WHOAMI_PATH || path.len() <= MAX {
+        return path.to_owned();
+    }
+    let mut end = MAX;
+    while !path.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &path[..end])
+}
+
+#[derive(Clone)]
+struct AuthState {
+    store: Store,
+    denied: Arc<std::sync::Mutex<DeniedAudits>>,
+}
+
+async fn authenticate(State(auth): State<AuthState>, mut request: Request, next: Next) -> Response {
+    let store = auth.store.clone();
     let client = match bearer(request.headers()) {
         Some(token) => {
             let hash = hash_mcp_token(token);
@@ -91,17 +147,39 @@ async fn authenticate(State(store): State<Store>, mut request: Request, next: Ne
         } else {
             "missing bearer token"
         };
-        let record = McpAuditRecord {
-            client_id: None,
-            client_name: String::new(),
-            at: now(),
-            kind: McpCallKind::Connect,
-            name: request.uri().path().to_owned(),
-            outcome: McpOutcome::Denied,
-            detail: Some(detail.to_owned()),
-        };
-        if let Err(err) = store.call(move |s| s.append_mcp_audit(&record)).await {
-            tracing::warn!(%err, "cannot write the MCP audit log");
+        let at = now();
+        let (write, dropped) = auth
+            .denied
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .admit(at);
+        let mut records = Vec::new();
+        if dropped > 0 {
+            records.push(McpAuditRecord {
+                client_id: None,
+                client_name: String::new(),
+                at,
+                kind: McpCallKind::Connect,
+                name: MCP_PATH.to_owned(),
+                outcome: McpOutcome::Denied,
+                detail: Some(format!("{dropped} more refused connections not logged")),
+            });
+        }
+        if write {
+            records.push(McpAuditRecord {
+                client_id: None,
+                client_name: String::new(),
+                at,
+                kind: McpCallKind::Connect,
+                name: audited_path(request.uri().path()),
+                outcome: McpOutcome::Denied,
+                detail: Some(detail.to_owned()),
+            });
+        }
+        for record in records {
+            if let Err(err) = store.call(move |s| s.append_mcp_audit(&record)).await {
+                tracing::warn!(%err, "cannot write the MCP audit log");
+            }
         }
         return (
             StatusCode::UNAUTHORIZED,
@@ -149,7 +227,13 @@ impl<D: McpData> McpServer<D> {
         let router = Router::new()
             .nest_service(MCP_PATH, service)
             .route(WHOAMI_PATH, get(whoami))
-            .layer(middleware::from_fn_with_state(store, authenticate));
+            .layer(middleware::from_fn_with_state(
+                AuthState {
+                    store,
+                    denied: Arc::default(),
+                },
+                authenticate,
+            ));
 
         let listener =
             tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, options.port)))
@@ -273,6 +357,26 @@ impl<D: McpData> Drop for McpServer<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refused_connections_are_audited_at_a_bounded_rate() {
+        let mut denied = DeniedAudits::default();
+        let written = (0..100).filter(|_| denied.admit(1000).0).count();
+        assert_eq!(written, DENIED_AUDITS_PER_MINUTE as usize);
+        // The next window writes again and sums up what was dropped.
+        assert_eq!(denied.admit(1030), (false, 0));
+        assert_eq!(denied.admit(1060), (true, 81));
+        assert_eq!(denied.admit(1061), (true, 0));
+    }
+
+    #[test]
+    fn audited_paths_are_shortened() {
+        assert_eq!(audited_path("/mcp"), "/mcp");
+        let long = format!("/{}", "ä".repeat(100));
+        let short = audited_path(&long);
+        assert!(short.len() <= 64 + "…".len(), "{short}");
+        assert!(short.ends_with('…'));
+    }
 
     #[test]
     fn bearer_tokens_are_parsed() {

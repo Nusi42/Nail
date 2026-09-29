@@ -53,8 +53,8 @@ pub use accounts::{
     IncomingServer, OutgoingServer, SecretRef, ServerEndpoint, TlsMode, VirtualAccountConfig,
 };
 pub use compose::{
-    Draft, DraftAttachment, DraftContext, DraftContextMode, OutboxEntry, OutboxState,
-    SignatureChoice,
+    AutomaticMail, Draft, DraftAttachment, DraftContext, DraftContextMode, LOOP_HEADER,
+    OutboxEntry, OutboxState, SignatureChoice,
 };
 pub use config::SourceLocation;
 pub use config::layout::{

@@ -829,36 +829,19 @@ impl Service {
     }
 
     /// `UndoRuleRun`: queues the recorded inverse operations in reverse
-    /// order and marks the run undone.
+    /// order and marks the run undone, in one store transaction. Inverses
+    /// that no longer apply (the message is gone, or already back where it
+    /// was) are skipped; the rest are still restored. A refused undo
+    /// changes nothing.
     async fn undo_rule_run(&self, run_id: &RuleRunId) -> Result<Vec<nail_api::OpId>> {
         let id = run_id.clone();
-        let (record, actions) = self
-            .inner
-            .store
-            .call(move |s| Ok((s.get_rule_run(&id)?, s.rule_run_actions(&id)?)))
-            .await?;
-        if !record.undoable {
-            return Err(ApiError::new(
-                ErrorCode::Conflict,
-                format!("rule run {run_id} cannot be undone"),
-            )
-            .into());
+        let undo = self.inner.store.call(move |s| s.undo_rule_run(&id)).await?;
+        if undo.skipped > 0 {
+            tracing::info!(run = %run_id, skipped = undo.skipped, "undo skipped actions that no longer apply");
         }
-        let undo: Vec<nail_store::Operation> = actions
-            .into_iter()
-            .rev()
-            .filter(|a| a.op_id.is_some())
-            .filter_map(|a| a.undo)
-            .collect();
-        let id = run_id.clone();
-        let record = self
-            .inner
-            .store
-            .call(move |s| s.mark_rule_run_undone(&id))
-            .await?;
-        let op_ids = self.enqueue(undo).await?;
+        let op_ids = self.announce_enqueued(&undo.queued);
         self.broadcast(Event::RuleRunFinished {
-            run: Box::new(to_run(record)),
+            run: Box::new(to_run(undo.record)),
         });
         Ok(op_ids)
     }

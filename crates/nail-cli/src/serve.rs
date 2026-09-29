@@ -83,6 +83,15 @@ pub fn write_demo_multi_config(demo: &DemoMulti, config_dir: &Path) -> anyhow::R
         .with_context(|| format!("cannot write {}", path.display()))
 }
 
+/// What a `nail serve` session may start on this machine. Seeded (demo,
+/// test) runs open no browser. No run opens an editor: the UI runs in a
+/// browser that may be on another machine, so `OpenConfigFile` answers
+/// `unsupported` there (ADR 0026, userDocs "customization").
+fn browser_mode(options: &mut ServiceOptions, seed: Option<Seed>) {
+    options.open_browser = seed.is_none();
+    options.open_editor = false;
+}
+
 pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let dirs = resolve_dirs(args.data_dir, args.config_dir, args.seed)?;
     let (data_dir, config_dir) = (dirs.data.clone(), dirs.config.clone());
@@ -96,9 +105,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let mut options = ServiceOptions::new(&data_dir, &config_dir);
     options.locale = args.locale;
     options.watch_config = !args.no_watch;
-    options.open_browser = args.seed.is_none();
-    // Seeded (demo, test) runs never open windows on this machine.
-    options.open_editor = args.seed.is_none();
+    browser_mode(&mut options, args.seed);
 
     // demo-multi: mock servers first, the service is pointed at them.
     let mut demo_multi = None;
@@ -292,6 +299,17 @@ mod tests {
         let err = write_demo_multi_config(&demo, config.path()).unwrap_err();
         assert!(err.to_string().contains("real accounts"), "{err}");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), real);
+    }
+
+    #[test]
+    fn serve_never_opens_an_editor() {
+        for seed in [None, Some(Seed::Demo)] {
+            let mut options = ServiceOptions::new("d", "c");
+            options.open_editor = true;
+            browser_mode(&mut options, seed);
+            assert!(!options.open_editor, "{seed:?}");
+            assert_eq!(options.open_browser, seed.is_none());
+        }
     }
 
     #[test]

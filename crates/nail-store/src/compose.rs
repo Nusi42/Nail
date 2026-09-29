@@ -571,6 +571,15 @@ impl Store {
         })
     }
 
+    /// Whether the draft waits in the outbox or is being sent (`false` for
+    /// an unknown draft).
+    pub fn is_draft_queued(&self, id: &DraftId) -> Result<bool> {
+        let Ok(n) = parse_draft_id(id) else {
+            return Ok(false);
+        };
+        self.with_tx(|tx| draft_is_queued(tx, n))
+    }
+
     /// Records (or with `None` clears) where the draft's server copy is.
     pub fn set_draft_server_copy(
         &self,
@@ -688,6 +697,7 @@ mod tests {
             context: None,
             signature: nail_api::SignatureChoice::Identity,
             markdown_part: false,
+            automatic: None,
         }
     }
 
@@ -713,6 +723,25 @@ mod tests {
             ..draft("x")
         };
         assert!(store.save_draft(&missing).unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn queued_drafts_are_reported_and_automatic_mail_is_kept() {
+        let store = store();
+        let rule_mail = Draft {
+            automatic: Some(nail_api::AutomaticMail::Redirect {
+                message_id: "m1".into(),
+            }),
+            ..draft("Redirect")
+        };
+        let id = store.save_draft(&rule_mail).unwrap();
+        assert_eq!(store.get_draft(&id).unwrap().automatic, rule_mail.automatic);
+        assert!(!store.is_draft_queued(&id).unwrap());
+        assert!(!store.is_draft_queued(&"bogus".into()).unwrap());
+        let entry = store.schedule_send(&id, &"a1".into(), 100).unwrap();
+        assert!(store.is_draft_queued(&id).unwrap());
+        store.cancel_send(&entry.id).unwrap();
+        assert!(!store.is_draft_queued(&id).unwrap());
     }
 
     const HASH_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

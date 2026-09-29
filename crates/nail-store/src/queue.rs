@@ -578,6 +578,26 @@ fn op_from_row(row: &Row<'_>) -> rusqlite::Result<QueuedOp> {
     })
 }
 
+/// Applies `operation` locally and queues it, inside `tx`.
+pub(crate) fn enqueue_in_tx(tx: &Transaction<'_>, operation: &Operation) -> Result<Enqueued> {
+    let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
+    tx.execute(
+        "INSERT INTO op_queue (account_id, kind, payload, message_id) VALUES (?1, ?2, ?3, ?4)",
+        params![
+            account_id.as_str(),
+            stored.kind(),
+            serde_json::to_string(&stored)?,
+            stored.message_id().as_str()
+        ],
+    )?;
+    let op = op_in_tx(tx, OpId(tx.last_insert_rowid()))?;
+    tracing::debug!(id = %op.id, kind = stored.kind(), "operation enqueued");
+    Ok(Enqueued {
+        op,
+        changed_folders,
+    })
+}
+
 fn op_in_tx(tx: &Transaction<'_>, id: OpId) -> Result<QueuedOp> {
     tx.query_row(
         &format!("SELECT {OP_COLS} FROM op_queue WHERE id = ?1"),
@@ -596,49 +616,17 @@ impl Store {
     /// message does not exist). The queued operation (in the result) has
     /// the message's source location filled in for moves and deletes.
     pub fn enqueue(&self, operation: &Operation) -> Result<Enqueued> {
-        self.with_tx(|tx| {
-            let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
-            let payload = serde_json::to_string(&stored)?;
-            tx.execute(
-                "INSERT INTO op_queue (account_id, kind, payload, message_id) VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    account_id.as_str(),
-                    stored.kind(),
-                    payload,
-                    stored.message_id().as_str()
-                ],
-            )?;
-            let op = op_in_tx(tx, OpId(tx.last_insert_rowid()))?;
-            tracing::debug!(id = %op.id, kind = stored.kind(), "operation enqueued");
-            Ok(Enqueued {
-                op,
-                changed_folders,
-            })
-        })
+        self.with_tx(|tx| enqueue_in_tx(tx, operation))
     }
 
     /// Enqueues several operations in one transaction (all or nothing),
     /// e.g. one per selected message.
     pub fn enqueue_all(&self, operations: &[Operation]) -> Result<Vec<Enqueued>> {
         self.with_tx(|tx| {
-            let mut out = Vec::with_capacity(operations.len());
-            for operation in operations {
-                let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
-                tx.execute(
-                    "INSERT INTO op_queue (account_id, kind, payload, message_id) VALUES (?1, ?2, ?3, ?4)",
-                    params![
-                        account_id.as_str(),
-                        stored.kind(),
-                        serde_json::to_string(&stored)?,
-                        stored.message_id().as_str()
-                    ],
-                )?;
-                out.push(Enqueued {
-                    op: op_in_tx(tx, OpId(tx.last_insert_rowid()))?,
-                    changed_folders,
-                });
-            }
-            Ok(out)
+            operations
+                .iter()
+                .map(|operation| enqueue_in_tx(tx, operation))
+                .collect()
         })
     }
 

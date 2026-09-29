@@ -10,9 +10,9 @@ use std::future::Future;
 
 use nail_api::compose::Draft;
 use nail_api::{
-    Account, AccountId, ApiError, AttachmentInfo, DraftId, Event, Folder, FolderId, MessageBody,
-    MessageId, MessageSummary, SearchError, SearchHit, SearchQuery, ThreadId, ThreadSummary,
-    UiContext, VirtualAccountConfig,
+    Account, AccountId, ApiError, AttachmentInfo, DraftId, Event, Folder, FolderId, Identity,
+    MessageBody, MessageId, MessageSummary, SearchError, SearchHit, SearchQuery, ThreadId,
+    ThreadSummary, UiContext, VirtualAccountConfig,
 };
 
 /// Result of a data call.
@@ -128,6 +128,10 @@ pub trait McpData: Send + Sync + 'static {
 
     /// The last UI context the UI reported.
     fn ui_context(&self) -> impl Future<Output = DataResult<UiContext>> + Send;
+
+    /// The sending identities ([`nail_api::Request::ListIdentities`]); a
+    /// draft belongs to its identity's account.
+    fn identities(&self) -> impl Future<Output = DataResult<Vec<Identity>>> + Send;
 
     /// A saved draft ([`nail_api::Request::GetDraft`]).
     fn draft(&self, id: &DraftId) -> impl Future<Output = DataResult<Draft>> + Send;

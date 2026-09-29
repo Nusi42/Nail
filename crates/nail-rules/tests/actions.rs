@@ -317,6 +317,70 @@ fn sending_actions() {
 }
 
 #[test]
+fn rules_never_forward_redirect_or_answer_in_a_loop() {
+    let skipped = [Effect::Skipped(SkipReason::AutomaticMail)];
+    let sending = [
+        r#"forward "a@x.example""#,
+        r#"redirect "a@x.example""#,
+        r#"reply "I am away.""#,
+    ];
+    // Mail a Nail rule sent (a forward coming back, a redirect of our own,
+    // another Nail user's auto-reply) is never acted on again.
+    let mut rule_mail = from_boss();
+    rule_mail
+        .headers
+        .push((nail_api::LOOP_HEADER.into(), "boss@work.example".into()));
+    assert!(nail_rules::is_rule_mail(&rule_mail));
+    for then in sending {
+        assert_eq!(effects(then, &rule_mail), skipped, "{then}");
+    }
+    // A message one of the user's accounts already redirected.
+    let mut redirected = from_boss();
+    redirected
+        .headers
+        .push(("Resent-From".into(), "Me <ME@work.example>".into()));
+    for then in sending {
+        assert_eq!(effects(then, &redirected), skipped, "{then}");
+    }
+    // Bounces and automatic responses: forwarding them to a dead address
+    // would bounce again.
+    let mut bounce = from_boss();
+    bounce.from = vec![addr(None, "postmaster@work.example")];
+    let mut report = from_boss();
+    report.headers.push((
+        "Content-Type".into(),
+        "multipart/report; report-type=delivery-status".into(),
+    ));
+    let mut vacation = from_boss();
+    vacation
+        .headers
+        .push(("Auto-Submitted".into(), "auto-replied (vacation)".into()));
+    for message in [&bounce, &report, &vacation] {
+        for then in sending {
+            assert_eq!(effects(then, message), skipped, "{then}");
+        }
+    }
+    // Ordinary automatic mail (notifications) and redirects by others can
+    // still be forwarded; only the reply is refused.
+    let mut notification = from_boss();
+    notification
+        .headers
+        .push(("Auto-Submitted".into(), "auto-generated".into()));
+    notification
+        .headers
+        .push(("Resent-From".into(), "someone@else.example".into()));
+    assert!(matches!(
+        effects(sending[0], &notification)[0],
+        Effect::Forward { .. }
+    ));
+    assert!(matches!(
+        effects(sending[1], &notification)[0],
+        Effect::Redirect { .. }
+    ));
+    assert_eq!(effects(sending[2], &notification), skipped);
+}
+
+#[test]
 fn notify_and_stop() {
     let n = newsletter();
     let m = mailbox();

@@ -110,6 +110,17 @@ pub struct RuleRunAction {
     pub undo: Option<Operation>,
 }
 
+/// What [`Store::undo_rule_run`] did.
+#[derive(Debug)]
+pub struct RuleRunUndo {
+    /// The run, now `undone`.
+    pub record: RuleRunRecord,
+    /// The inverse operations it queued (newest action first).
+    pub queued: Vec<crate::queue::Enqueued>,
+    /// Inverses skipped because they no longer apply.
+    pub skipped: usize,
+}
+
 const RUN_COLS: &str =
     "id, rule_id, rule_name, cause, state, started_at, finished_at, matched, message";
 
@@ -315,6 +326,74 @@ impl Store {
             Ok(())
         })?;
         self.get_rule_run(run)
+    }
+
+    /// Undoes a run in one transaction: queues the inverse operations of
+    /// its actions, newest first, and marks it `undone`. An inverse that no
+    /// longer applies (its message was deleted or expunged, or the user
+    /// already moved it back by hand) is skipped instead of failing the
+    /// whole run, so the other messages are still restored. Fails with
+    /// [`Error::Conflict`] unless the run can be undone; then nothing is
+    /// queued and the run keeps its state.
+    pub fn undo_rule_run(&self, run: &RuleRunId) -> Result<RuleRunUndo> {
+        let n = parse_run_id(run)?;
+        let undone = self.with_tx(|tx| {
+            let record = tx
+                .query_row(
+                    &format!("SELECT {RUN_COLS} FROM rule_runs WHERE id = ?1"),
+                    [n],
+                    run_from_row,
+                )
+                .optional()?
+                .ok_or_else(|| Error::not_found("rule run", run))?;
+            if !complete_run(tx, record)?.undoable {
+                return Err(Error::Conflict(format!("rule run {run} cannot be undone")));
+            }
+            let inverses: Vec<Operation> = {
+                let mut stmt = tx.prepare_cached(
+                    "SELECT undo FROM rule_run_actions
+                     WHERE run_id = ?1 AND op_id IS NOT NULL AND undo IS NOT NULL
+                     ORDER BY seq DESC",
+                )?;
+                stmt.query_map([n], |r| {
+                    let undo: String = r.get(0)?;
+                    from_json(0, &undo)
+                })?
+                .collect::<rusqlite::Result<_>>()?
+            };
+            let mut queued = Vec::with_capacity(inverses.len());
+            let mut skipped = 0;
+            for op in &inverses {
+                tx.execute_batch("SAVEPOINT undo_op")?;
+                match crate::queue::enqueue_in_tx(tx, op) {
+                    Ok(enqueued) => {
+                        tx.execute_batch("RELEASE undo_op")?;
+                        queued.push(enqueued);
+                    }
+                    Err(
+                        err @ (Error::NotFound { .. } | Error::Conflict(_) | Error::InvalidData(_)),
+                    ) => {
+                        tx.execute_batch("ROLLBACK TO undo_op; RELEASE undo_op")?;
+                        tracing::debug!(%err, run = %run, "an inverse no longer applies; skipped");
+                        skipped += 1;
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+            let changed = tx.execute(
+                "UPDATE rule_runs SET state = 'undone' WHERE id = ?1 AND state = 'done'",
+                [n],
+            )?;
+            if changed == 0 {
+                return Err(Error::Conflict(format!("rule run {run} cannot be undone")));
+            }
+            Ok((queued, skipped))
+        })?;
+        Ok(RuleRunUndo {
+            record: self.get_rule_run(run)?,
+            queued: undone.0,
+            skipped: undone.1,
+        })
     }
 
     /// One run.
@@ -548,6 +627,115 @@ mod tests {
         assert!(
             store
                 .get_rule_run(&"run-9".into())
+                .unwrap_err()
+                .is_not_found()
+        );
+    }
+
+    fn move_back(message: &str) -> Operation {
+        Operation::MoveMessage {
+            message_id: message.into(),
+            target_folder_id: "inbox".into(),
+            source: None,
+        }
+    }
+
+    #[test]
+    fn undo_skips_stale_inverses_and_restores_the_rest() {
+        let store = store_with_message();
+        store
+            .upsert_folder(&Folder {
+                id: "archive".into(),
+                account_id: "a1".into(),
+                parent_id: None,
+                name: "Archive".into(),
+                path: "Archive".into(),
+                role: FolderRole::Archive,
+                total: 0,
+                unread: 0,
+            })
+            .unwrap();
+        let mut m2 = store.get_message(&"m1".into()).unwrap();
+        m2.summary.id = "m2".into();
+        m2.summary.folder_id = "archive".into();
+        store.upsert_message(&m2).unwrap();
+        // The run moved m1 and m2 to Archive and flagged m3. Since then the
+        // user moved m1 back by hand and m3 was expunged.
+        let run = store
+            .start_rule_run(&"r1".into(), "Archive", RuleRunCause::Manual, 1)
+            .unwrap();
+        let archive = RuleAction::Archive;
+        for (n, (message, undo)) in [
+            ("m1", move_back("m1")),
+            ("m2", move_back("m2")),
+            (
+                "m3",
+                Operation::UpdateFlags {
+                    message_id: "m3".into(),
+                    change: FlagChange::default(),
+                },
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            store
+                .record_rule_action(
+                    &run,
+                    &RuleRunAction {
+                        message_id: message.into(),
+                        op_id: Some(OpId(n as i64 + 1)),
+                        action: archive.clone(),
+                        undo: Some(undo),
+                    },
+                )
+                .unwrap();
+        }
+        store
+            .finish_rule_run(&run, RuleRunState::Done, 3, None, 2)
+            .unwrap();
+
+        let undo = store.undo_rule_run(&run).unwrap();
+        assert_eq!(undo.skipped, 2);
+        assert_eq!(undo.queued.len(), 1);
+        assert_eq!(undo.queued[0].op.operation.message_id().as_str(), "m2");
+        assert_eq!(undo.record.state, RuleRunState::Undone);
+        assert_eq!(
+            store.get_message(&"m2".into()).unwrap().summary.folder_id,
+            nail_api::FolderId::from("inbox")
+        );
+        // Once only.
+        assert!(matches!(store.undo_rule_run(&run), Err(Error::Conflict(_))));
+        assert_eq!(store.list_ops(None).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_refused_undo_changes_nothing() {
+        let store = store_with_message();
+        let run = store
+            .start_rule_run(&"r1".into(), "Move", RuleRunCause::Manual, 1)
+            .unwrap();
+        // Still running: not undoable, and nothing is queued or marked.
+        store
+            .record_rule_action(
+                &run,
+                &RuleRunAction {
+                    message_id: "m1".into(),
+                    op_id: Some(OpId(1)),
+                    action: RuleAction::Flag { flagged: true },
+                    undo: Some(flag_undo()),
+                },
+            )
+            .unwrap();
+        assert!(matches!(store.undo_rule_run(&run), Err(Error::Conflict(_))));
+        assert_eq!(
+            store.get_rule_run(&run).unwrap().state,
+            RuleRunState::Running
+        );
+        assert!(store.list_ops(None).unwrap().is_empty());
+        assert!(
+            store
+                .undo_rule_run(&"run-9".into())
                 .unwrap_err()
                 .is_not_found()
         );

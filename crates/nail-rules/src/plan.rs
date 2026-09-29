@@ -60,7 +60,8 @@ pub enum SkipReason {
     /// An earlier action deleted the message.
     Deleted,
     /// No automatic reply to automatic mail, mailing lists or bounces
-    /// (RFC 3834), so rules cannot start mail loops.
+    /// (RFC 3834), and no forward or redirect of rule mail, bounces or
+    /// automatic responses, so rules cannot start mail loops.
     AutomaticMail,
 }
 
@@ -144,10 +145,74 @@ pub struct Flow {
     pub notify: Option<bool>,
 }
 
-/// Whether a message must not get an automatic reply: it is automatic
-/// itself (`Auto-Submitted` other than `no`), bulk or list mail
-/// (`Precedence`, `List-Id`), or from a bounce / no-reply address.
+/// Whether a message was sent by a Nail filter rule: it carries the
+/// [`nail_api::LOOP_HEADER`] marker (forwards, replies and redirects made
+/// by rules; kept by redirects and by servers that forward unchanged).
+pub fn is_rule_mail(message: &dyn MessageView) -> bool {
+    !message.header_values(nail_api::LOOP_HEADER).is_empty()
+}
+
+/// Whether one of the user's own accounts already redirected the message
+/// (`Resent-From` names an own address): redirecting or forwarding it again
+/// would send it round in a circle.
+fn redirected_by_user(message: &dyn MessageView, env: &Env<'_>) -> bool {
+    let own: Vec<String> = env
+        .mailbox
+        .accounts()
+        .iter()
+        .map(|a| a.email.trim().to_ascii_lowercase())
+        .filter(|e| !e.is_empty())
+        .collect();
+    message.header_values("Resent-From").iter().any(|value| {
+        let value = value.to_ascii_lowercase();
+        own.iter().any(|email| value.contains(email.as_str()))
+    })
+}
+
+/// The local part of the sender, lower case (empty without a sender).
+fn sender_local_part(message: &dyn MessageView) -> Option<String> {
+    let from = message.addresses(nail_api::rules::AddressField::From);
+    let sender = from.first()?;
+    Some(
+        sender
+            .email
+            .split('@')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase(),
+    )
+}
+
+/// Whether the message is a bounce or another automatic response: sent by
+/// a mailer daemon / postmaster, a delivery report, or `Auto-Submitted:
+/// auto-replied` (RFC 3834).
+fn is_automatic_response(message: &dyn MessageView) -> bool {
+    if message
+        .header_values("Auto-Submitted")
+        .iter()
+        .any(|v| v.trim().to_ascii_lowercase().starts_with("auto-replied"))
+    {
+        return true;
+    }
+    if message.header_values("Content-Type").iter().any(|v| {
+        v.trim()
+            .to_ascii_lowercase()
+            .starts_with("multipart/report")
+    }) {
+        return true;
+    }
+    sender_local_part(message)
+        .is_some_and(|local| local.starts_with("mailer-daemon") || local.starts_with("postmaster"))
+}
+
+/// Whether a message must not get an automatic reply: rule mail
+/// ([`is_rule_mail`]), automatic itself (`Auto-Submitted` other than
+/// `no`), bulk or list mail (`Precedence`, `List-Id`), or from a bounce /
+/// no-reply address.
 pub fn refuses_automatic_reply(message: &dyn MessageView) -> bool {
+    if is_rule_mail(message) || is_automatic_response(message) {
+        return true;
+    }
     let header = |name: &str| message.header_values(name);
     if header("Auto-Submitted")
         .iter()
@@ -165,24 +230,27 @@ pub fn refuses_automatic_reply(message: &dyn MessageView) -> bool {
     {
         return true;
     }
-    let from = message.addresses(nail_api::rules::AddressField::From);
-    let Some(sender) = from.first() else {
+    let Some(local) = sender_local_part(message) else {
         return true;
     };
-    let local = sender
-        .email
-        .split('@')
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
     local.is_empty()
-        || local.starts_with("mailer-daemon")
-        || local.starts_with("postmaster")
         || local.starts_with("noreply")
         || local.starts_with("no-reply")
         || local.starts_with("donotreply")
         || local.starts_with("do-not-reply")
         || local.starts_with("bounce")
+}
+
+/// Whether a message must not be forwarded or redirected by a rule, so
+/// rules cannot start mail loops: rule mail ([`is_rule_mail`]), mail one of
+/// the user's accounts already redirected (`Resent-From`), and bounces or
+/// automatic responses (a forward to a dead address would otherwise
+/// forward its own bounce). Mailing-list and other automatically generated
+/// mail (notifications) can be forwarded: a forward is new mail marked
+/// `Auto-Submitted` and [`nail_api::LOOP_HEADER`], so it is not forwarded
+/// again when it comes back.
+pub fn refuses_automatic_forward(message: &dyn MessageView, env: &Env<'_>) -> bool {
+    is_rule_mail(message) || redirected_by_user(message, env) || is_automatic_response(message)
 }
 
 fn flag_change(
@@ -372,6 +440,11 @@ fn plan_one(
                 action,
             )
         }
+        RuleAction::Forward { .. } | RuleAction::Redirect { .. }
+            if refuses_automatic_forward(message, env) =>
+        {
+            skipped(SkipReason::AutomaticMail)
+        }
         RuleAction::Forward { to, identity_id } => planned(Effect::Forward {
             to: to.clone(),
             identity_id: identity_id.clone(),
@@ -381,7 +454,7 @@ fn plan_one(
             template,
             identity_id,
         } => {
-            if refuses_automatic_reply(message) {
+            if refuses_automatic_reply(message) || redirected_by_user(message, env) {
                 skipped(SkipReason::AutomaticMail)
             } else {
                 planned(Effect::Reply {

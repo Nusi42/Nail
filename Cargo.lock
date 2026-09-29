@@ -3511,6 +3511,7 @@ dependencies = [
  "open",
  "pretty_assertions",
  "reqwest",
+ "rmcp",
  "serde",
  "serde_json",
  "sha2 0.11.0",

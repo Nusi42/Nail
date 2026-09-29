@@ -60,7 +60,7 @@ pub use queue::{
     Enqueued, FlagChange, MessageSource, OpId, OpState, Operation, QueuedOp, ReplayOutcome,
     ReplayPolicy, ReplayReport, Replayer,
 };
-pub use rules::{RuleRunAction, RuleRunRecord, RuleState};
+pub use rules::{RuleRunAction, RuleRunRecord, RuleRunUndo, RuleState};
 pub use schema::SCHEMA_VERSION;
 pub use store::{BLOB_DIR_NAME, DB_FILE_NAME, Store};
 pub use thread::{ThreadPage, ThreadTreeEntry};

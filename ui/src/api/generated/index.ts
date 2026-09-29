@@ -17,6 +17,7 @@ export type * from "./AttachmentInfo";
 export type * from "./AuthConfig";
 export type * from "./AuthMethod";
 export type * from "./AuthResult";
+export type * from "./AutomaticMail";
 export type * from "./BodyPolicy";
 export type * from "./Breakpoint";
 export type * from "./Comparison";

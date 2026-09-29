@@ -103,8 +103,8 @@ How it works:
   feature does not force rebuilds of the shared target directory.
   `NAIL_APP_BIN` selects another binary. A seeded app keeps its data,
   config and WebView2 profile in a temporary directory. The test always
-  runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`
-  (the hosted runners' WebView2 setup is not verified yet).
+  runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`,
+  which the CI workflow sets after `npm run build:desktop` (ADR 0028).
 - Traces, screenshots and the CI HTML report go to
   `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
   `NAIL_BUILD_DIR` overrides the base), not into the repository.
@@ -175,9 +175,10 @@ cargo run -p nail-cli -- serve --seed demo --data-dir "$TEMP/nail-data" --config
 ```
 
 The server binds to 127.0.0.1 only and has no authentication in M0
-(ADR 0009). A seeded run never opens programs on the machine: "open file
-at line" (`OpenConfigFile`) answers `unsupported` there
-(`ServiceOptions::open_editor`).
+(ADR 0009). `nail serve` never opens an editor on the machine (the browser
+may be elsewhere): "open file at line" (`OpenConfigFile`) answers
+`unsupported` there (`ServiceOptions::open_editor`, ADR 0028). The desktop
+app opens one unless it is seeded.
 
 #### MCP server and `nail mcp`
 
@@ -297,3 +298,5 @@ For M1b:
 - **0026:** customization tooling (every config error, `layout.kdl` write-back, merge dialog, inspector)
 - **0027:** M1b integration (composer, rules, MCP and customization in the core; server Drafts
   copy, `ListDrafts`; default layout / theme; desktop smoke test over WebView2 CDP)
+- **0028:** M1b review fixes (rule mail marked against loops, redirects through the outbox,
+  escaped reply templates, autosave upload races, restricted MCP search / context, partial undo)

@@ -25,7 +25,9 @@ Open **Filter rules** to see your rules in the order they run.
 - **Run now** runs a saved rule on your mail. **Recent runs** lists what
   each run did; **Undo this run** takes back everything the run changed in
   one step (moves, tags, flags, read state, deletes to Trash). Forwards,
-  redirects, replies, copies and permanent deletes cannot be undone.
+  redirects, replies, copies and permanent deletes cannot be undone. If you
+  changed some of the messages yourself in the meantime (moved one back,
+  deleted one), undo restores the others and leaves those alone.
 
 ## The editor and the text view
 
@@ -151,7 +153,26 @@ added (the topmost one only, because senders can forge lower ones).
 A `reply` template may contain placeholders that are filled in from the
 message: `{sender.name}`, `{sender.email}`, `{subject}`, `{date}`,
 `{identity.name}` and `{identity.email}` (for example
-`reply "Hello {sender.name}, I am away until Monday."`).
+`reply "Hello {sender.name}, I am away until Monday."`). The values are
+inserted as plain text: a subject that contains Markdown, links or HTML
+shows up literally in your reply, so nobody can put a link or an image
+into your automatic answer by choosing a clever subject.
+
+### No mail loops
+
+Mail a rule sends is marked as automatic (`Auto-Submitted`, RFC 3834) and
+carries an `X-Nail-Loop` header. Nail uses the marks so that rules can
+never send mail round in a circle:
+
+- Rules never forward, redirect or answer a message that a Nail rule sent
+  (your own or someone else's), a message one of your accounts already
+  redirected, a bounce or an automatic reply such as an out-of-office
+  notice.
+- `on-send` rules do not run for mail that a rule sent. A rule "forward
+  everything I send to my archive" forwards your messages, not its own
+  forwards.
+- Mailing-list mail and notifications can still be forwarded and
+  redirected; they just never get an automatic reply.
 
 ```kdl
 rule "Old newsletters" {
@@ -192,4 +213,6 @@ and keeps running the rules it had before.
 Every change a rule makes goes through the same queue as your own changes,
 so it reaches the mail server when the account is online, and one run can
 be undone as a whole. Forwards, redirects and replies are sent through the
-outbox right away (without the undo-send delay), with a copy in Sent.
+outbox right away (without the undo-send delay), with a copy in Sent. When
+you are offline they wait in the outbox and are sent once the account is
+back online.

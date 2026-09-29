@@ -15,7 +15,7 @@
 //!   Gmail and Outlook.com; a reply marks the original answered through
 //!   the operation queue; the draft's autosave copy in the server's Drafts
 //!   folder is deleted, the recipients are recorded for autocomplete and
-//!   the on-send rules run on the Sent copy;
+//!   the on-send rules run on the Sent copy (not for mail a rule sent);
 //! * a temporary failure: back to `scheduled` with a growing delay (at
 //!   most five attempts);
 //! * a permanent failure: `failed` until the user retries or edits it.
@@ -25,8 +25,8 @@ use std::time::Duration;
 
 use nail_api::engine::{EngineError, OutgoingTransport};
 use nail_api::{
-    AccountConfig, ApiError, Draft, DraftId, Event, Flags, FolderRole, Identity, IncomingServer,
-    OutboxEntry, OutboxId, OutboxState, OutgoingServer,
+    AccountConfig, ApiError, AutomaticMail, Draft, DraftId, Event, Flags, FolderRole, Identity,
+    IncomingServer, OutboxEntry, OutboxId, OutboxState, OutgoingServer,
 };
 use nail_proto_smtp::{SendOptions, SmtpAuth, SmtpConfig, SmtpTransport};
 use nail_store::{Operation, SendOutcome};
@@ -95,7 +95,13 @@ impl Service {
     /// `SaveDraft`: HTML is sanitized before it is stored; attachments must
     /// be uploaded blobs. Schedules the autosave copy in the server's Drafts
     /// folder.
-    pub(crate) async fn save_draft(&self, mut draft: Draft) -> Result<DraftId> {
+    pub(crate) async fn save_draft(&self, draft: Draft) -> Result<DraftId> {
+        self.store_draft(draft, true).await
+    }
+
+    /// Stores a draft; `upload`: schedule the copy in the server's Drafts
+    /// folder (not for rule mail, which is sent at once).
+    pub(crate) async fn store_draft(&self, mut draft: Draft, upload: bool) -> Result<DraftId> {
         self.identity(&draft.identity_id)?;
         if let Some(html) = &draft.html {
             draft.html = Some(nail_compose::sanitize_outgoing(html));
@@ -112,7 +118,9 @@ impl Service {
             }
         }
         let id = self.inner.store.call(move |s| s.save_draft(&draft)).await?;
-        self.schedule_draft_upload(&id);
+        if upload {
+            self.schedule_draft_upload(&id);
+        }
         Ok(id)
     }
 
@@ -134,7 +142,8 @@ impl Service {
 
     /// `DeleteDraft`: the draft and its server copy.
     pub(crate) async fn delete_draft(&self, draft_id: &DraftId) -> Result<()> {
-        self.cancel_draft_upload(draft_id);
+        // Waits for a running upload, so its copy is the one deleted here.
+        let _upload = self.cancel_draft_upload(draft_id).await;
         let id = draft_id.clone();
         let copy = self
             .inner
@@ -186,8 +195,9 @@ impl Service {
         };
         let account_id = account.id.clone();
         // The draft is about to go; an upload now would only leave a copy
-        // behind.
-        self.cancel_draft_upload(&draft_id);
+        // behind. A running upload finishes first, so the sender deletes
+        // the copy it made.
+        let _upload = self.cancel_draft_upload(&draft_id).await;
         let entry = self
             .inner
             .store
@@ -284,10 +294,15 @@ impl Service {
         let (account, identity) = self
             .identity(&draft.identity_id)
             .map_err(EngineError::from)?;
-        let message = self
-            .build_draft_message(&draft, &identity, entry.id.as_str().as_bytes())
-            .await
-            .map_err(EngineError::from)?;
+        let seed = entry.id.as_str().as_bytes();
+        let message = match &draft.automatic {
+            Some(AutomaticMail::Redirect { message_id }) => {
+                self.redirect_message(&draft, &identity, message_id, seed)
+                    .await
+            }
+            _ => self.build_draft_message(&draft, &identity, seed).await,
+        }
+        .map_err(EngineError::from)?;
         let server_copy = {
             let id = entry.draft_id.clone();
             self.inner
@@ -309,7 +324,9 @@ impl Service {
     }
 
     /// The Sent copy, the answered flag, the draft's server copy, collected
-    /// addresses and on-send rules of a sent message.
+    /// addresses and on-send rules of a sent message. On-send rules do not
+    /// run for mail a rule sent (a forward on send would forward its own
+    /// forward without end).
     async fn after_send(&self, entry: &OutboxEntry, sent: Sent) {
         self.remove_draft_copy(sent.server_copy.clone()).await;
         self.record_recipients(&sent.draft).await;
@@ -332,8 +349,10 @@ impl Service {
             .file_sent_copy(&sent.account, &entry.id, &sent.raw)
             .await
         {
-            Ok(Some(copy)) => self.run_on_send_rules(&copy).await,
-            Ok(None) => {}
+            Ok(Some(copy)) if sent.draft.automatic.is_none() => {
+                self.run_on_send_rules(&copy).await;
+            }
+            Ok(_) => {}
             Err(err) => {
                 tracing::warn!(account = %sent.account.id, %err, "cannot file the Sent copy");
             }

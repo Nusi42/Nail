@@ -125,7 +125,7 @@ Status of M0: done (gate passed). M0 follow-ups are folded into the work package
 **Automated gate:** all suites green; the Playwright scenarios listed in WP14 and WP25 pass against mock IMAP / POP3 / SMTP servers.
 **Human gate (after M1b):** the owner uses Nail as the only mail client for two weeks.
 
-**Status (after WP25):** M1a done (gate passed). M1b integrated (ADR 0027); the automated gate is met on the integration run — `cargo test --workspace` 945 tests, Vitest 416, Playwright 39 scenarios incl. every WP14 and WP25 scenario and the desktop smoke test, clippy / fmt / ESLint / tsc / Prettier clean. Still to come for M1b: the review, fix and verify stages; then the human gate.
+**Status (after WP25):** M1a done (gate passed). M1b integrated (ADR 0027); the automated gate is met on the integration run — `cargo test --workspace` 945 tests, Vitest 416, Playwright 39 scenarios incl. every WP14 and WP25 scenario and the desktop smoke test, clippy / fmt / ESLint / tsc / Prettier clean. Review findings fixed (ADR 0028). WP24's toolbar / key binding / column editing UI is deferred (see "M1b follow-ups" below). Still to come for M1b: the verify stage; then the human gate.
 
 **Scope decisions for M1**
 - Gmail works in M1 through IMAP + SMTP with OAuth2 (XOAUTH2). The Gmail API engine (decided in the design review) moves to M3, next to the other proprietary-API engine (Exchange); both need OAuth app registration and mock REST servers.
@@ -199,6 +199,16 @@ Draft rich bodies (HTML, Markdown source, attachments, inline images, reply/forw
 Wire everything, update the default layout, write docs (`userDocs/en`: composer, Markdown mail, rules, MCP setup, inspector and customization), and add the Playwright scenarios below.
 - **Playwright:** compose and send HTML and Markdown mails (assert the MIME parts received by the mock SMTP server); reply quoting in both modes; draft autosave and restore; a rule moves arriving mail and its run can be undone; test-rule preview; an MCP client lists messages only after a grant; the inspector shows a part path; dragging a divider writes `layout.kdl`; the merge dialog applies a theme; the config error list shows two broken files; **desktop app smoke test over WebView2 CDP** (*carry-over*).
 - *Done (ADR 0027):* all of the above in `e2e/tests/{composer,rules,mcp,customization,desktop,a11y}.spec.ts`. Additions: `ListDrafts` (drafts are continued from the outbox window, which is how "restore" works after a reload), per-identity `posting` / `mail-style` in `accounts.kdl`, "Retry" for failed writes, axe scans of the demo-multi windows. The desktop smoke test runs locally and is gated behind `NAIL_E2E_DESKTOP=1` in CI.
+
+#### M1b follow-ups (deviations and deferrals)
+Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted.
+- **WP24 editing UI for toolbar order, key bindings and column order** — deferred to M2. The `layout.kdl` write-back for all three exists and is tested (ADR 0026, `ui/src/features/customization/writeBack.ts`); only split sizes are edited from the UI (dragging a divider). Needs a toolbar reorder, a key-binding editor and column reordering in the Customize tab.
+- **`nail mcp` bridge over loopback HTTP instead of a named pipe** — kept (ADR 0025: the pipe would need its own auth; the loopback server already checks tokens, Host and Origin).
+- **Headless start of `nail mcp`** when the app is not running — deferred to M2 (needs a single-instance lock on the data directory; ADR 0025).
+- **`notify` / `suppress` rule actions have no effect** — until new-mail notifications exist (M2 polish).
+- **"Create rule from message"** is built in the UI from the summary, without `List-Id` — M2: expose the core's `rule_from_message`.
+- **`nail-mime` lists a received `text/markdown` alternative as an attachment** — M2 fix.
+- Smaller items from ADR 0027 (right-click menus, alt text of inline images in reopened HTML drafts, lazy-loaded editors, a fixed MCP port setting) — M2 polish.
 
 ### Owner tasks (outside the code)
 - Register OAuth apps for Google (Gmail IMAP/SMTP scope) and Microsoft (Outlook.com / Microsoft 365 IMAP/SMTP scopes) and provide the client ids.

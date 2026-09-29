@@ -64,11 +64,18 @@ jobs:
       - name: Build nail-cli
         run: cargo build -p nail-cli
 
+      # The desktop smoke test (e2e/tests/desktop.spec.ts) drives the real
+      # nail-app.exe over WebView2 (preinstalled on windows-latest).
+      - name: Build desktop app
+        run: npm run build:desktop
+
       - name: Install Playwright browsers
         run: npx -w e2e playwright install --with-deps chromium
 
       - name: Playwright
         run: npm run e2e:only
+        env:
+          NAIL_E2E_DESKTOP: "1"
 
       - name: Upload Playwright report
         if: failure()

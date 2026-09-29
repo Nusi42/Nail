@@ -10,7 +10,7 @@ use nail_api::mcp::{McpGrant, McpScope};
 use nail_api::search::SearchHit;
 use nail_api::{
     Account, AccountId, AccountKind, Address, ApiError, AttachmentInfo, DraftId, Event, Flags,
-    Folder, FolderId, FolderRole, IdentityId, MessageBody, MessageHeaders, MessageId,
+    Folder, FolderId, FolderRole, Identity, IdentityId, MessageBody, MessageHeaders, MessageId,
     MessageSummary, Request, Response, SearchQuery, ThreadId, ThreadSummary, UiContext,
     VirtualAccountConfig,
 };
@@ -261,10 +261,15 @@ impl McpData for FakeData {
                 score: 1.0,
             })
             .collect();
+        let total = hits.len() as u32;
         Ok(SearchOutcome::Hits {
             offset: query.offset,
-            total: hits.len() as u32,
-            hits,
+            total,
+            hits: hits
+                .into_iter()
+                .skip(query.offset as usize)
+                .take(query.limit as usize)
+                .collect(),
         })
     }
 
@@ -276,10 +281,37 @@ impl McpData for FakeData {
         Ok(self.context.lock().unwrap().clone())
     }
 
+    async fn identities(&self) -> DataResult<Vec<Identity>> {
+        Ok(["work", "home"]
+            .into_iter()
+            .map(|account| {
+                serde_json::from_value(serde_json::json!({
+                    "id": format!("me@{account}.example"),
+                    "account_id": account,
+                    "email": format!("me@{account}.example"),
+                }))
+                .unwrap()
+            })
+            .collect())
+    }
+
+    /// `draft-home`: written from the home identity; `draft-reply-m2`: a
+    /// work draft replying to m2 (home); anything else: a work draft.
     async fn draft(&self, id: &DraftId) -> DataResult<Draft> {
-        let mut draft = Draft::new(IdentityId::new("me@work.example"));
+        let identity = if id.as_str() == "draft-home" {
+            "me@home.example"
+        } else {
+            "me@work.example"
+        };
+        let mut draft = Draft::new(IdentityId::new(identity));
         draft.id = Some(id.clone());
         draft.subject = "Re: Plan".into();
+        if id.as_str() == "draft-reply-m2" {
+            draft.context = Some(nail_api::DraftContext {
+                mode: nail_api::DraftContextMode::Reply,
+                message_id: "m2".into(),
+            });
+        }
         Ok(draft)
     }
 
@@ -295,8 +327,13 @@ pub struct Env {
 }
 
 pub async fn start() -> Env {
+    start_with(FakeData::default()).await
+}
+
+/// A server over `data`.
+pub async fn start_with(data: FakeData) -> Env {
     let store = Store::open_in_memory().unwrap();
-    let data = Arc::new(FakeData::default());
+    let data = Arc::new(data);
     let server = McpServer::start(store.clone(), data.clone(), ServerOptions::default())
         .await
         .unwrap();

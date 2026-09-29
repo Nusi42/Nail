@@ -351,14 +351,27 @@ impl<D: McpData> Shared<D> {
         }
         let mut value = json!({
             "thread_id": id,
-            "hidden": total - visible.len(),
             "messages": visible.iter().map(|m| summary_json(m)).collect::<Vec<_>>(),
         });
-        // The summary aggregates every message; only show it when nothing
-        // is hidden.
-        if visible.len() == total {
+        // The thread summary aggregates every message. A restricted grant
+        // gets the aggregate of what it may read instead (and no count of
+        // hidden messages), so nothing tells whether the thread continues
+        // in an account or folder it may not see.
+        if access.all_accounts() && !access.excludes_folders() && visible.len() == total {
             value["subject"] = json!(thread.thread.subject);
             value["participants"] = json!(thread.thread.participants);
+        } else {
+            let mut participants: Vec<&nail_api::Address> = Vec::new();
+            for from in visible.iter().filter_map(|m| m.from.as_ref()) {
+                if !participants
+                    .iter()
+                    .any(|p| p.email.eq_ignore_ascii_case(&from.email))
+                {
+                    participants.push(from);
+                }
+            }
+            value["subject"] = json!(visible[0].subject);
+            value["participants"] = json!(participants);
         }
         Ok(value)
     }
@@ -407,15 +420,22 @@ impl<D: McpData> Shared<D> {
             }
         }
         let draft = match &context.draft_id {
-            Some(id) => match self.data.draft(id).await {
-                Ok(draft) => Some(json!({
-                    "draft": draft,
-                    "cursor": context.draft_cursor,
-                })),
-                Err(err) => {
-                    tracing::debug!(%err, "open draft not readable");
-                    None
-                }
+            Some(id) => Some(self.readable_draft(access, id, context.draft_cursor).await),
+            None => None,
+        };
+        // Where the user is: only what the grant covers.
+        let account_id = context
+            .account_id
+            .as_ref()
+            .filter(|a| access.allows_account(a));
+        let folder_id = match &context.folder_id {
+            Some(folder) if self.require_folder(access, folder).await.is_ok() => Some(folder),
+            _ => None,
+        };
+        let thread_id = match &context.thread_id {
+            Some(thread) => match self.data.thread(thread).await {
+                Ok(data) if data.messages.iter().any(|m| access.allows_message(m)) => Some(thread),
+                _ => None,
             },
             None => None,
         };
@@ -425,13 +445,60 @@ impl<D: McpData> Shared<D> {
             edit: false,
         });
         Ok(json!({
-            "account_id": context.account_id,
-            "folder_id": context.folder_id,
-            "thread_id": context.thread_id,
+            "account_id": account_id,
+            "folder_id": folder_id,
+            "thread_id": thread_id,
             "message": message,
             "selected_message_ids": selected,
             "draft": draft,
         }))
+    }
+
+    /// The open draft for the UI context, if the grant covers it: its
+    /// identity's account must be granted, and the message it replies to,
+    /// forwards or redirects (whose text it may quote) must be readable.
+    /// Otherwise it is named, not shown.
+    async fn readable_draft(
+        &self,
+        access: &Access,
+        id: &nail_api::DraftId,
+        cursor: Option<u32>,
+    ) -> Value {
+        let hidden = json!({ "id": id, "hidden": true });
+        let draft = match self.data.draft(id).await {
+            Ok(draft) => draft,
+            Err(err) => {
+                tracing::debug!(%err, "open draft not readable");
+                return hidden;
+            }
+        };
+        let account = match self.data.identities().await {
+            Ok(identities) => identities
+                .into_iter()
+                .find(|i| i.id == draft.identity_id)
+                .map(|i| i.account_id),
+            Err(err) => {
+                tracing::debug!(%err, "cannot list identities");
+                None
+            }
+        };
+        if !account.is_some_and(|a| access.allows_account(&a)) {
+            return hidden;
+        }
+        let original = draft
+            .context
+            .as_ref()
+            .map(|c| c.message_id.clone())
+            .or_else(|| match &draft.automatic {
+                Some(nail_api::AutomaticMail::Redirect { message_id }) => Some(message_id.clone()),
+                _ => None,
+            });
+        if let Some(original) = original
+            && self.readable_message(access, &original).await.is_err()
+        {
+            return hidden;
+        }
+        json!({ "draft": draft, "cursor": cursor })
     }
 
     /// Reads one resource.

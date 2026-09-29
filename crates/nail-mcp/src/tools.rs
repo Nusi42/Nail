@@ -9,9 +9,9 @@
 
 use std::sync::Arc;
 
-use nail_api::mcp::{McpCallKind, McpClient, McpScope};
+use nail_api::mcp::{McpCallKind, McpClient, McpOutcome, McpScope};
 use nail_api::search::SearchSort;
-use nail_api::{AccountId, FolderId, MessageId, SearchQuery, ThreadId};
+use nail_api::{AccountId, FolderId, MessageId, MessageSummary, SearchQuery, ThreadId};
 use rmcp::ErrorData;
 use rmcp::handler::server::common::schema_for_type;
 use rmcp::model::{CallToolRequestParams, CallToolResult, JsonObject, Tool, ToolAnnotations};
@@ -162,28 +162,59 @@ pub(crate) async fn call<D: McpData>(
     request: CallToolRequestParams,
 ) -> Result<CallToolResult, ErrorData> {
     let name = request.name.to_string();
+    match dispatch(shared, client, &name, &request).await {
+        Ok(result) => {
+            let result = shared
+                .audited(client, McpCallKind::Tool, &name, result)
+                .await;
+            Ok(result.unwrap_or_else(|failure| failure_result(&failure)))
+        }
+        // Malformed arguments and unknown tools are audited too (a probing
+        // client leaves a trace); the name is the caller's, so shortened.
+        Err(err) => {
+            shared
+                .audit(
+                    Some(client),
+                    McpCallKind::Tool,
+                    &crate::http::audited_path(&name),
+                    McpOutcome::Error,
+                    Some(err.message.to_string()),
+                )
+                .await;
+            Err(err)
+        }
+    }
+}
+
+/// Runs one tool; `Err` for a protocol error (bad arguments, unknown tool).
+async fn dispatch<D: McpData>(
+    shared: &Shared<D>,
+    client: &McpClient,
+    name: &str,
+    request: &CallToolRequestParams,
+) -> Result<Result<CallToolResult, Failure>, ErrorData> {
     let access = shared.access(client).await;
-    let result: Result<CallToolResult, Failure> = match name.as_str() {
+    Ok(match name {
         "search_messages" => {
-            let a: SearchArgs = args(&request)?;
+            let a: SearchArgs = args(request)?;
             search(shared, &access, a).await
         }
         "get_message" => {
-            let a: MessageArgs = args(&request)?;
+            let a: MessageArgs = args(request)?;
             shared
                 .message_json(&access, &MessageId::new(a.message_id))
                 .await
                 .map(untrusted_result)
         }
         "get_thread" => {
-            let a: ThreadArgs = args(&request)?;
+            let a: ThreadArgs = args(request)?;
             shared
                 .thread_json(&access, &ThreadId::new(a.thread_id))
                 .await
                 .map(untrusted_result)
         }
         "list_folders" => {
-            let a: FoldersArgs = args(&request)?;
+            let a: FoldersArgs = args(request)?;
             shared
                 .folders_json(&access, &AccountId::new(a.account_id))
                 .await
@@ -195,15 +226,11 @@ pub(crate) async fn call<D: McpData>(
             .map(untrusted_result),
         _ => {
             return Err(ErrorData::invalid_params(
-                format!("unknown tool {name}"),
+                format!("unknown tool {}", crate::http::audited_path(name)),
                 None,
             ));
         }
-    };
-    let result = shared
-        .audited(client, McpCallKind::Tool, &name, result)
-        .await;
-    Ok(result.unwrap_or_else(|failure| failure_result(&failure)))
+    })
 }
 
 async fn search<D: McpData>(
@@ -229,39 +256,97 @@ async fn search<D: McpData>(
         limit,
         sort: SearchSort::Date,
     };
-    match shared.data.search(query).await? {
-        SearchOutcome::Invalid(error) => Ok(CallToolResult::structured_error(json!({
-            "error": "invalid_query",
-            "detail": error.message,
-            "kind": error.kind,
-            "start": error.start,
-            "end": error.end,
-        }))),
-        SearchOutcome::Hits {
-            offset,
-            total,
-            hits,
-        } => {
-            let returned = u32::try_from(hits.len()).unwrap_or(u32::MAX);
-            let messages: Vec<Value> = hits
-                .iter()
-                .filter(|h| access.allows_message(&h.message))
-                .map(|h| summary_json(&h.message))
-                .collect();
-            let hidden = hits.len() - messages.len();
-            let exact = access.all_accounts() && !access.excludes_folders();
-            let next = offset.saturating_add(returned);
-            Ok(untrusted_result(json!({
-                "offset": offset,
-                // Hits outside the grant are dropped; the total is exact only
-                // for an unrestricted grant.
-                "total": exact.then_some(total),
-                "hidden": hidden,
-                "next_offset": (next < total).then_some(next),
-                "messages": messages,
-            })))
+    if access.all_accounts() && !access.excludes_folders() {
+        return match shared.data.search(query).await? {
+            SearchOutcome::Invalid(error) => Ok(invalid_query(&error)),
+            SearchOutcome::Hits {
+                offset,
+                total,
+                hits,
+            } => {
+                let returned = u32::try_from(hits.len()).unwrap_or(u32::MAX);
+                let next = offset.saturating_add(returned);
+                Ok(untrusted_result(json!({
+                    "offset": offset,
+                    "total": total,
+                    "next_offset": (next < total).then_some(next),
+                    "messages": hits.iter().map(|h| summary_json(&h.message)).collect::<Vec<_>>(),
+                })))
+            }
+        };
+    }
+    restricted_search(shared, access, query).await
+}
+
+/// Hits a restricted search looks at, at most. Past this the result is
+/// cut short (no `next_offset`).
+const RESTRICTED_SCAN: u32 = 5000;
+
+fn invalid_query(error: &nail_api::SearchError) -> CallToolResult {
+    CallToolResult::structured_error(json!({
+        "error": "invalid_query",
+        "detail": error.message,
+        "kind": error.kind,
+        "start": error.start,
+        "end": error.end,
+    }))
+}
+
+/// A search for a grant limited to some accounts or folders. The query
+/// language can name any account or folder (`account:` / `folder:`), so
+/// the grant is applied to the hits *before* paging: `offset`, `limit` and
+/// `next_offset` count only messages the client may read, and nothing in
+/// the answer (no count of dropped hits, no unfiltered total) tells whether
+/// hidden accounts or excluded folders hold matching mail (ADR 0025,
+/// "Excluded folders are hidden everywhere").
+async fn restricted_search<D: McpData>(
+    shared: &Shared<D>,
+    access: &crate::access::Access,
+    query: SearchQuery,
+) -> Result<CallToolResult, Failure> {
+    let offset = query.offset as usize;
+    let limit = query.limit as usize;
+    let wanted = offset + limit + 1;
+    let mut visible: Vec<MessageSummary> = Vec::new();
+    let mut scanned: u32 = 0;
+    while scanned < RESTRICTED_SCAN && visible.len() < wanted {
+        let page = SearchQuery {
+            offset: scanned,
+            limit: MAX_PAGE,
+            ..query.clone()
+        };
+        match shared.data.search(page).await? {
+            SearchOutcome::Invalid(error) => return Ok(invalid_query(&error)),
+            SearchOutcome::Hits { total, hits, .. } => {
+                let returned = u32::try_from(hits.len()).unwrap_or(u32::MAX);
+                visible.extend(
+                    hits.into_iter()
+                        .map(|h| h.message)
+                        .filter(|m| access.allows_message(m)),
+                );
+                scanned = scanned.saturating_add(returned);
+                if returned == 0 || scanned >= total {
+                    break;
+                }
+            }
         }
     }
+    let end = visible.len().min(offset + limit);
+    let messages: Vec<Value> = visible
+        .get(offset..end)
+        .unwrap_or_default()
+        .iter()
+        .map(summary_json)
+        .collect();
+    let next = (visible.len() > offset + limit).then_some(query.offset.saturating_add(query.limit));
+    Ok(untrusted_result(json!({
+        "offset": query.offset,
+        // Withheld: an exact total of what the grant allows would need a
+        // scan of every hit.
+        "total": Value::Null,
+        "next_offset": next,
+        "messages": messages,
+    })))
 }
 
 #[cfg(test)]

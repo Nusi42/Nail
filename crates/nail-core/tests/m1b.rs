@@ -1099,9 +1099,19 @@ async fn rules_forward_redirect_reply_and_copy() {
 
     let forwarded = sent_with(&f, "Fwd: Welcome to Nail").await;
     assert!(forwarded.contains("boss@example.org"), "{forwarded}");
+    // Rule mail is marked as automatic (RFC 3834) and with the loop marker.
+    assert!(
+        forwarded.contains("Auto-Submitted: auto-generated"),
+        "{forwarded}"
+    );
+    assert!(forwarded.contains("X-Nail-Loop: "), "{forwarded}");
     let replied = sent_with(&f, "Re: Welcome to Nail").await;
     assert!(
         replied.contains("Hello Ada Lovelace, thanks for"),
+        "{replied}"
+    );
+    assert!(
+        replied.contains("Auto-Submitted: auto-replied"),
         "{replied}"
     );
     eventually("the redirect", || async {
@@ -1119,7 +1129,14 @@ async fn rules_forward_redirect_reply_and_copy() {
                         .as_str()
                         .unwrap()
                         .contains("Resent-To: desk@example.org")
+                    && m["data"].as_str().unwrap().contains("X-Nail-Loop: ")
             })
+    })
+    .await;
+    // The redirect went through the outbox: it has a Sent copy (the
+    // original subject; the forward and reply have Fwd: / Re:).
+    eventually("the redirect's Sent copy", || async {
+        server_subjects(&f, "Sent").contains(&"Welcome to Nail".to_owned())
     })
     .await;
     eventually("the copy in Archive", || async {
@@ -1134,5 +1151,403 @@ async fn rules_forward_redirect_reply_and_copy() {
             .await
             .contains(&"Welcome to Nail".to_owned())
     );
+    f.service.shutdown().await;
+}
+
+async fn save_rule(f: &Fixture, rule: Rule) -> Rule {
+    match request(
+        &f.service,
+        Request::SaveRule {
+            rule: Box::new(rule),
+            position: None,
+        },
+    )
+    .await
+    {
+        Response::RuleSaved { rule } => *rule,
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+fn smtp_subjects(f: &Fixture) -> Vec<String> {
+    smtp_data(f)
+        .iter()
+        .filter_map(|d| {
+            d.lines()
+                .find_map(|l| l.strip_prefix("Subject: ").map(str::to_owned))
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn on_send_forwards_do_not_forward_their_own_forwards() {
+    let f = setup().await;
+    synced(&f).await;
+    let rule = Rule {
+        conditions: Condition::All {
+            conditions: Vec::new(),
+        },
+        ..subject_rule(
+            "Archive what I send",
+            RuleTrigger::OnSend,
+            "",
+            RuleAction::Forward {
+                to: vec!["archive@example.org".into()],
+                identity_id: None,
+            },
+        )
+    };
+    save_rule(&f, rule).await;
+    send_now(&f, blank_draft("Loop check")).await;
+    sent_with(&f, "Fwd: Loop check").await;
+    // The forward's own Sent copy is filed without running on-send rules.
+    eventually("the forward's Sent copy", || async {
+        server_subjects(&f, "Sent").contains(&"Fwd: Loop check".to_owned())
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let subjects = smtp_subjects(&f);
+    assert_eq!(
+        subjects.iter().filter(|s| s.contains("Loop check")).count(),
+        2,
+        "{subjects:?}"
+    );
+    assert!(
+        !subjects.iter().any(|s| s.contains("Fwd: Fwd:")),
+        "{subjects:?}"
+    );
+    f.service.shutdown().await;
+}
+
+#[tokio::test]
+async fn arrival_rules_leave_rule_mail_alone_and_redirects_survive_a_delete() {
+    let f = setup().await;
+    synced(&f).await;
+    let rule = Rule {
+        actions: vec![
+            RuleAction::Redirect {
+                to: vec!["desk@example.org".into()],
+            },
+            RuleAction::Reply {
+                template: "Away. About **{subject}**: see [help](https://help.example).".into(),
+                identity_id: None,
+            },
+            RuleAction::Delete { permanent: true },
+        ],
+        ..subject_rule(
+            "Redirect everything",
+            RuleTrigger::Arrival,
+            "incoming",
+            RuleAction::Stop,
+        )
+    };
+    save_rule(&f, rule).await;
+    // Mail a rule sent (here: another Nail's redirect) is left alone …
+    control(
+        &f,
+        "imap-deliver",
+        json!({"raw": "From: Bob <bob@example.org>\r\nSubject: incoming loop\r\nX-Nail-Loop: bob@example.org\r\nMessage-ID: <loop1@example.org>\r\n\r\nHi.\r\n"}),
+    );
+    // … ordinary mail is redirected (through the outbox, after the
+    // message was already deleted by the next action) and answered.
+    control(
+        &f,
+        "imap-deliver",
+        json!({"raw": "From: Bob <bob@example.org>\r\nSubject: incoming plain [Verify](https://evil.example) <img src=https://evil.example/t.png>\r\nMessage-ID: <plain1@example.org>\r\n\r\nHi.\r\n"}),
+    );
+    eventually("the plain message redirected", || async {
+        control(&f, "smtp-messages", json!({}))
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| {
+                let data = m["data"].as_str().unwrap();
+                data.contains("Resent-To: desk@example.org")
+                    && data.contains("Subject: incoming plain")
+            })
+    })
+    .await;
+    // The sender's subject is text in the reply, never a link or image.
+    eventually("the reply", || async {
+        smtp_data(&f)
+            .iter()
+            .any(|d| d.contains("Auto-Submitted: auto-replied"))
+    })
+    .await;
+    let reply = smtp_data(&f)
+        .into_iter()
+        .find(|d| d.contains("Auto-Submitted: auto-replied"))
+        .unwrap();
+    let html = reply[reply.find("Content-Type: text/html").unwrap()..]
+        .replace("=\r\n", "")
+        .replace("=\n", "")
+        .replace("=3D", "=");
+    assert!(html.contains("href=\"https://help.example\""), "{reply}");
+    assert!(!html.contains("href=\"https://evil.example\""), "{reply}");
+    assert!(!html.contains("<img"), "{reply}");
+    eventually("both processed and deleted", || async {
+        let inbox = subjects(&f.service, MULTI_WORK_ID, FolderRole::Inbox).await;
+        !inbox.iter().any(|s| s.starts_with("incoming"))
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+    let subjects = smtp_subjects(&f);
+    assert!(
+        !subjects.iter().any(|s| s.contains("incoming loop")),
+        "{subjects:?}"
+    );
+    f.service.shutdown().await;
+}
+
+#[tokio::test]
+async fn autosaves_racing_uploads_leave_no_stale_server_drafts() {
+    let f = setup().await;
+    synced(&f).await;
+    for (round, finish) in [("sent", true), ("deleted", false)] {
+        let mut draft = blank_draft(&format!("Racing {round} 0"));
+        let id = save(&f.service, draft.clone()).await;
+        draft.id = Some(id.clone());
+        // Saves around the upload delay (300 ms in tests), so later saves
+        // land while earlier uploads run.
+        for n in 1..8 {
+            tokio::time::sleep(Duration::from_millis(40 * n)).await;
+            draft.subject = format!("Racing {round} {n}");
+            save(&f.service, draft.clone()).await;
+        }
+        tokio::time::sleep(Duration::from_millis(320)).await;
+        if finish {
+            assert!(matches!(
+                request(
+                    &f.service,
+                    Request::SendDraft {
+                        draft_id: id,
+                        delay_secs: Some(0),
+                        send_at: None,
+                    },
+                )
+                .await,
+                Response::SendQueued { .. }
+            ));
+            sent_with(&f, &format!("Racing {round} 7")).await;
+        } else {
+            assert!(matches!(
+                request(&f.service, Request::DeleteDraft { draft_id: id }).await,
+                Response::Done
+            ));
+        }
+        eventually("no copy left on the server", || async {
+            server_subjects(&f, "Drafts").is_empty()
+                && subjects(&f.service, MULTI_WORK_ID, FolderRole::Drafts)
+                    .await
+                    .is_empty()
+        })
+        .await;
+        // … and none appears later.
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        assert!(server_subjects(&f, "Drafts").is_empty(), "{round}");
+        assert!(
+            subjects(&f.service, MULTI_WORK_ID, FolderRole::Drafts)
+                .await
+                .is_empty(),
+            "{round}"
+        );
+    }
+    f.service.shutdown().await;
+}
+
+#[tokio::test]
+async fn undo_restores_what_it_can_when_a_message_was_moved_back_by_hand() {
+    let f = setup().await;
+    synced(&f).await;
+    let rule = save_rule(
+        &f,
+        Rule {
+            triggers: vec![RuleTrigger::Manual],
+            ..invoice_rule()
+        },
+    )
+    .await;
+    for n in ["A", "B"] {
+        control(
+            &f,
+            "imap-deliver",
+            json!({"raw": format!("From: Shop <shop@example.org>\r\nSubject: Old invoice {n}\r\nMessage-ID: <inv{n}@example.org>\r\n\r\nPay.\r\n")}),
+        );
+    }
+    eventually("both invoices arrived", || async {
+        let inbox = subjects(&f.service, MULTI_WORK_ID, FolderRole::Inbox).await;
+        inbox
+            .iter()
+            .filter(|s| s.starts_with("Old invoice"))
+            .count()
+            == 2
+    })
+    .await;
+    let Response::RuleRan { run } = request(
+        &f.service,
+        Request::RunRule {
+            rule_id: rule.id.clone(),
+            message_ids: Vec::new(),
+            folder_id: None,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert_eq!(run.matched, 2);
+    assert!(run.undoable);
+    // The user moves A back by hand.
+    let a = find(&f.service, FolderRole::Archive, "Old invoice A").await;
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::MoveMessages {
+                message_ids: vec![a.id.clone()],
+                target: nail_api::MoveTarget::Role(FolderRole::Inbox),
+            },
+        )
+        .await,
+        Response::Queued { .. }
+    ));
+    // Undo still restores B (and unflags both); A's move back is skipped.
+    let Response::Queued { op_ids } = request(
+        &f.service,
+        Request::UndoRuleRun {
+            run_id: run.id.clone(),
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert_eq!(op_ids.len(), 3, "{op_ids:?}");
+    eventually("both back in the inbox, unflagged", || async {
+        let folder = folder(&f.service, MULTI_WORK_ID, FolderRole::Inbox).await;
+        messages(&f.service, &folder.id)
+            .await
+            .iter()
+            .filter(|m| m.subject.starts_with("Old invoice") && !m.flags.flagged)
+            .count()
+            == 2
+    })
+    .await;
+    let Response::RuleRuns { runs } = request(
+        &f.service,
+        Request::ListRuleRuns {
+            rule_id: None,
+            limit: 10,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    assert_eq!(runs[0].state, RuleRunState::Undone);
+    assert!(!runs[0].undoable);
+    f.service.shutdown().await;
+}
+
+/// Records `notifications/resources/updated`.
+#[derive(Clone)]
+struct UpdateRecorder(tokio::sync::mpsc::UnboundedSender<String>);
+
+impl rmcp::ClientHandler for UpdateRecorder {
+    async fn on_resource_updated(
+        &self,
+        params: rmcp::model::ResourceUpdatedNotificationParam,
+        _context: rmcp::service::NotificationContext<rmcp::RoleClient>,
+    ) {
+        let _ = self.0.send(params.uri);
+    }
+
+    fn get_info(&self) -> rmcp::model::ClientConfig {
+        rmcp::model::ClientConfig::default()
+    }
+}
+
+async fn wait_for_update(rx: &mut tokio::sync::mpsc::UnboundedReceiver<String>, uri: &str) {
+    let deadline = tokio::time::Instant::now() + TIMEOUT;
+    loop {
+        let got = tokio::time::timeout_at(deadline, rx.recv())
+            .await
+            .unwrap_or_else(|_| panic!("no update of {uri}"))
+            .expect("the client is connected");
+        if got == uri {
+            return;
+        }
+    }
+}
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn the_core_feeds_new_mail_and_ui_reports_to_mcp_subscriptions() {
+    use rmcp::ServiceExt as _;
+
+    let f = setup().await;
+    synced(&f).await;
+    let running = f.service.start_mcp_server(0, None).await.unwrap();
+    let Response::McpClientCreated { token, .. } = request(
+        &f.service,
+        Request::CreateMcpClient {
+            name: "Watcher".into(),
+            grant: nail_api::mcp::McpGrant {
+                scopes: vec![
+                    nail_api::mcp::McpScope::Read,
+                    nail_api::mcp::McpScope::Context,
+                ],
+                accounts: vec![AccountId::new(MULTI_WORK_ID)],
+                ..nail_api::mcp::McpGrant::default()
+            },
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    let (tx, mut updates) = tokio::sync::mpsc::unbounded_channel();
+    let transport = rmcp::transport::StreamableHttpClientTransport::with_client(
+        nail_mcp::bridge::loopback_http_client().unwrap(),
+        rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig::with_uri(
+            running.url(),
+        )
+        .auth_header(token),
+    );
+    let client = UpdateRecorder(tx).serve(transport).await.unwrap();
+    let inbox = folder(&f.service, MULTI_WORK_ID, FolderRole::Inbox).await;
+    let messages_uri = nail_mcp::uri::folder_messages(&inbox.id);
+    for uri in [messages_uri.as_str(), "nail://ui/context"] {
+        client
+            .subscribe(rmcp::model::SubscribeRequestParams::new(uri))
+            .await
+            .unwrap_or_else(|e| panic!("{uri}: {e}"));
+    }
+
+    // New mail synced by the core reaches the folder's subscribers.
+    control(
+        &f,
+        "imap-deliver",
+        json!({"raw": "From: Bob <bob@example.org>\r\nSubject: For the agent\r\nMessage-ID: <agent1@example.org>\r\n\r\nHi.\r\n"}),
+    );
+    wait_for_update(&mut updates, &messages_uri).await;
+
+    // A UI context report wakes the context subscribers.
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::ReportUiContext {
+                context: nail_api::UiContext {
+                    folder_id: Some(inbox.id.clone()),
+                    ..nail_api::UiContext::default()
+                },
+            },
+        )
+        .await,
+        Response::Done
+    ));
+    wait_for_update(&mut updates, "nail://ui/context").await;
+
+    let _ = client.cancel().await;
+    running.shutdown().await;
     f.service.shutdown().await;
 }
