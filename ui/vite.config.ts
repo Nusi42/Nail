@@ -29,5 +29,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Widget suites drive full dialogs with userEvent; 5 s is too tight when
+    // cargo builds run in parallel on the same machine.
+    testTimeout: 20_000,
   },
 });

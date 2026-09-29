@@ -125,7 +125,7 @@ Status of M0: done (gate passed). M0 follow-ups are folded into the work package
 **Automated gate:** all suites green; the Playwright scenarios listed in WP14 and WP25 pass against mock IMAP / POP3 / SMTP servers.
 **Human gate (after M1b):** the owner uses Nail as the only mail client for two weeks.
 
-**Status (after WP25):** M1a done (gate passed). M1b integrated (ADR 0027); the automated gate is met on the integration run — `cargo test --workspace` 945 tests, Vitest 416, Playwright 39 scenarios incl. every WP14 and WP25 scenario and the desktop smoke test, clippy / fmt / ESLint / tsc / Prettier clean. Review findings fixed (ADR 0028). WP24's toolbar / key binding / column editing UI is deferred (see "M1b follow-ups" below). Still to come for M1b: the verify stage; then the human gate.
+**Status:** M1a and M1b done; the automated gate passed on an independent verify run — `cargo test --workspace` 965 tests, Vitest 416 (stable under CPU load after a timing fix), Playwright 39 scenarios incl. every WP14 and WP25 scenario and the desktop WebView2 smoke test, clippy / fmt / ESLint / tsc / Prettier clean. Review findings fixed (ADR 0028). WP24's toolbar / key binding / column editing UI is deferred (see "M1b follow-ups" below). Next: the human gate (two weeks as the only mail client), which needs the owner tasks below.
 
 **Scope decisions for M1**
 - Gmail works in M1 through IMAP + SMTP with OAuth2 (XOAUTH2). The Gmail API engine (decided in the design review) moves to M3, next to the other proprietary-API engine (Exchange); both need OAuth app registration and mock REST servers.
@@ -216,7 +216,7 @@ Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted
 
 ## 7. Later milestones (outline; each gets a detailed section before it starts)
 
-- **M2 Security, rules, polish:** OpenPGP (Sequoia), Autocrypt, S/MIME, Sieve/ManageSieve, spam classifier, snooze/templates polish, accessibility pass, remote web UI with pairing + passkeys + hardening, plug-in preview (commands, dialogs, read access), basic NSIS installer build.
+- **M2 Security, rules, polish:** OpenPGP (Sequoia), Autocrypt, S/MIME, Sieve/ManageSieve, spam classifier, snooze/templates polish, accessibility pass, remote web UI with pairing + passkeys + hardening, plug-in preview (commands, dialogs, read access), basic NSIS installer build, the deferred M1 follow-ups (see .claude/memory), and localizing user-facing strings built in Rust (config error messages, MCP denial hints) via Fluent.
 - **M3 Exchange, Gmail API and PIM:** Graph + EWS engines, Gmail API engine, CalDAV/CardDAV, calendar views, iTIP/iMIP, contacts, tasks, interop suite.
 - **M4 Agents and release:** MCP write tools with grants/confirm/audit, full plug-in system (QuickJS), MAPI provider, MSI + winget + updater, EV signing, import/export, backup.
 

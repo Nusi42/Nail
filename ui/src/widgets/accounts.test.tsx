@@ -68,18 +68,21 @@ describe("account-setup", () => {
   it("signs in with OAuth when the provider needs it", async () => {
     const user = userEvent.setup();
     const env = createEnv();
+    // Keep the sign-in pending long enough to observe the transient state even
+    // on a loaded machine; the mock's default 20 ms delay made this flaky.
+    env.transport.data.behaviour.workMs = 1500;
     const off = forwardOAuth(env);
     renderNode(widget("account-setup"), env);
     await user.type(screen.getByRole("textbox", { name: "Email address" }), "ada@gmail.com");
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(await screen.findByText("Google Mail")).toBeInTheDocument();
+    expect(await screen.findByText("Google Mail", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Sign-in method" })).toHaveValue("oauth2:google");
     expect(screen.queryByLabelText("Password")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Sign in with Google" }));
     expect(await screen.findByText("Finish signing in in your browser…")).toBeInTheDocument();
-    expect(await screen.findByText("Signed in.")).toBeInTheDocument();
+    expect(await screen.findByText("Signed in.", {}, { timeout: 5000 })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Test connection" }));
-    await screen.findByText("Nail can connect to your servers.");
+    await screen.findByText("Nail can connect to your servers.", {}, { timeout: 5000 });
     const tested = env.transport.requests.find((r) => r.type === "TestAccount");
     expect(tested?.type === "TestAccount" && tested.secrets[0]?.value.kind).toBe("oauth2");
     off();
