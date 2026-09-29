@@ -159,7 +159,8 @@ M1 runs as two waves (two workflows), each with its own review, fix and verify s
 - Threading: JWZ over Message-ID / In-Reply-To / References with subject fallback; incremental updates; cross-account threads for virtual accounts.
 - `nail-search`: Tantivy index (headers, decoded text, attachment names), incremental add/remove, and the design's query language (`from: to: subject: has:attachment is:unread is:flagged tag: account: folder: before: after: size>`, quotes, AND / OR / NOT, parentheses) with a hand-written parser and precise error positions.
 
-#### WP14 — Integration: accounts, sync, send, virtual accounts, UI (sequential)
+#### WP14 — Integration: accounts, sync, send, virtual accounts, UI
+Split in execution: the UI part (WP14-UI) runs in parallel with WP11–WP13 against the WP10 contract and `MockTransport`; the core part and the Playwright scenarios (WP14-core) run afterwards, sequentially.
 - `nail-core`: account manager (load/save `accounts.kdl`, keychain), per-account sync engines (IMAP IDLE loop + polling, POP3 schedule), op replayers (IMAP flags/move/delete/append; POP3 delete policies), outbox with undo-send delay and send-later, Sent copy via APPEND (skipped for servers that save it automatically, e.g. Gmail), virtual-account routing (folder mapping by role, Message-ID dedupe, reply identity selection), search and thread requests, `AccountStatus` events.
 - UI: account setup wizard (email → discover → confirm → test → save; password or OAuth), account and identity settings, virtual-account editor, unified inbox (built-in "All accounts" virtual account), thread view, flag / move / delete / archive actions with keybindings, search bar with query-language hints, a minimal plain-text composer (upgraded in M1b), outbox view, account status indicators.
 - Every new string in `locales/en`; every widget themeable; default layout updated.
