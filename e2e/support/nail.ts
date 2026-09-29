@@ -73,8 +73,12 @@ export interface NailServer {
 
 export interface StartOptions {
   locale?: string;
-  /** Demo data: the local corpus (default) or the in-process IMAP server. */
-  seed?: "demo" | "demo-imap";
+  /**
+   * Demo data: the local corpus (default), the in-process IMAP server, or
+   * two configured accounts on mock IMAP / POP3 / SMTP servers
+   * (`demo-multi`, with the test controls of {@link control}).
+   */
+  seed?: "demo" | "demo-imap" | "demo-multi";
 }
 
 /**
@@ -128,4 +132,42 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
       }
     },
   };
+}
+
+/**
+ * Runs a test-control command of a `--seed demo-multi` server (it drives
+ * the in-process mock servers: deliver mail, change flags on the server,
+ * go offline, read what the SMTP server received). See
+ * `nail_core::demo::DemoMulti::control` for the commands.
+ */
+export async function control<T = unknown>(
+  server: NailServer,
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  const response = await fetch(new URL(`api/test/${command}`, server.url), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!response.ok) {
+    throw new Error(`control ${command} failed: ${response.status} ${await response.text()}`);
+  }
+  return (await response.json()) as T;
+}
+
+/** A message on a mock IMAP server, as `imap-messages` lists it. */
+export interface ServerMessage {
+  uid: number;
+  subject: string;
+  flags: string[];
+}
+
+/** The messages of a mailbox on the demo IMAP server (`work` by default). */
+export function serverMessages(
+  server: NailServer,
+  mailbox: string,
+  account = "work",
+): Promise<ServerMessage[]> {
+  return control<ServerMessage[]>(server, "imap-messages", { account, mailbox });
 }

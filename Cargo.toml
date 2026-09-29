@@ -114,6 +114,10 @@ tower = { version = "0.5.3", features = ["util"] }
 futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
 tokio-tungstenite = "0.30.0"
 
+# Dates (local UTC offset, RFC 2822 / 3339)
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+notify-debouncer-mini = { version = "0.7.0", default-features = false }
+
 # CLI and platform paths
 clap = { version = "4.6", features = ["derive"] }
 dirs = "7.0.0"

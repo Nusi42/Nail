@@ -219,6 +219,9 @@ pub(crate) struct Control {
     /// Accepted OAuth2 access token.
     oauth_token: Mutex<Option<String>>,
     connections: AtomicUsize,
+    /// Simulated outage: new connections are closed at once and sessions
+    /// close on their next command.
+    pub(crate) offline: std::sync::atomic::AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -490,6 +493,21 @@ impl MockImapServer {
         self.control.connections.load(Ordering::SeqCst)
     }
 
+    /// Simulates an outage (`true`) or its end (`false`): while offline,
+    /// new connections are closed right after they are accepted, sessions
+    /// close on their next command and sessions in `IDLE` are dropped.
+    pub fn set_offline(&self, offline: bool) {
+        self.control.offline.store(offline, Ordering::SeqCst);
+        if offline {
+            self.control.idle_kill.notify_waiters();
+        }
+    }
+
+    /// Whether [`Self::set_offline`] is on.
+    pub fn is_offline(&self) -> bool {
+        self.control.offline.load(Ordering::SeqCst)
+    }
+
     /// Stops accepting and closes all connections.
     pub async fn shutdown(mut self) {
         let _ = self.shutdown.send(true);
@@ -516,6 +534,11 @@ async fn accept_loop(
             _ = shutdown.changed() => break,
             accepted = listener.accept() => {
                 let Ok((stream, peer)) = accepted else { continue };
+                if shared.control.offline.load(Ordering::SeqCst) {
+                    tracing::debug!(%peer, "mock IMAP offline: closing the connection");
+                    drop(stream);
+                    continue;
+                }
                 shared.control.connections.fetch_add(1, Ordering::SeqCst);
                 tracing::debug!(%peer, "mock IMAP connection");
                 let shared = shared.clone();

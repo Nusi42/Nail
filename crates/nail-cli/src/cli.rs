@@ -60,6 +60,11 @@ pub enum Seed {
     /// Serve the demo corpus from an in-process mock IMAP server and sync
     /// it like a real account.
     DemoImap,
+    /// Two configured accounts (IMAP with IDLE, POP3) and SMTP on
+    /// in-process mock servers, plus a discoverable third account; writes
+    /// accounts.kdl if missing, keeps secrets in memory, and exposes the
+    /// test controls at /api/test/… (for end-to-end tests).
+    DemoMulti,
 }
 
 /// `nail serve …`
@@ -171,6 +176,10 @@ mod tests {
         assert_eq!(
             serve(&["serve", "--seed", "demo-imap"]).seed,
             Some(Seed::DemoImap)
+        );
+        assert_eq!(
+            serve(&["serve", "--seed", "demo-multi"]).seed,
+            Some(Seed::DemoMulti)
         );
     }
 

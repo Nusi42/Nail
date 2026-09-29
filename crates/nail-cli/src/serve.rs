@@ -3,10 +3,12 @@
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::Context;
+use nail_core::demo::DemoMulti;
 use nail_core::{Service, ServiceOptions, paths};
-use nail_server::{Server, ServerOptions};
+use nail_server::{Server, ServerOptions, TestControl};
 
 use crate::cli::{Seed, ServeArgs};
 
@@ -34,6 +36,23 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let mut options = ServiceOptions::new(&data_dir, &config_dir);
     options.locale = args.locale;
     options.watch_config = !args.no_watch;
+    options.open_browser = args.seed.is_none();
+
+    // demo-multi: mock servers first, the service is pointed at them.
+    let mut demo_multi = None;
+    if args.seed == Some(Seed::DemoMulti) {
+        let demo = nail_core::demo::start_demo_multi().await?;
+        demo.write_config(&config_dir)
+            .with_context(|| format!("cannot write accounts.kdl to {}", config_dir.display()))?;
+        options = demo.service_options(options);
+        tracing::info!(
+            imap = %demo.work.addr(),
+            pop3 = %demo.home.addr(),
+            smtp = %demo.smtp.addr(),
+            "demo-multi mock servers running"
+        );
+        demo_multi = Some(Arc::new(demo));
+    }
     let service = Service::open(options)
         .with_context(|| format!("cannot open the data directory {}", data_dir.display()))?;
 
@@ -60,14 +79,18 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
             service.start_sync(Some(id)).await?;
             _demo_imap = Some(demo);
         }
-        None => {}
+        Some(Seed::DemoMulti) | None => {}
     }
 
+    let test_control = demo_multi
+        .clone()
+        .map(|demo| Arc::new(DemoControl(demo)) as Arc<dyn TestControl>);
     let server = Server::bind(
-        service,
+        service.clone(),
         ServerOptions {
             addr: SocketAddr::from((Ipv4Addr::LOCALHOST, args.port)),
             ui_dir,
+            test_control,
         },
     )
     .await?;
@@ -93,7 +116,22 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
             }
         })
         .await?;
+    service.shutdown().await;
+    drop(demo_multi);
     Ok(())
+}
+
+/// The demo-multi mock servers as the server's test hooks.
+struct DemoControl(Arc<DemoMulti>);
+
+impl TestControl for DemoControl {
+    fn control(
+        &self,
+        command: &str,
+        args: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        self.0.control(command, args)
+    }
 }
 
 /// The UI directory: `--ui-dir`, else `$NAIL_UI_DIR`, else `ui` next to the

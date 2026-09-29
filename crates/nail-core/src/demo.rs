@@ -1,14 +1,36 @@
-//! Demo data: the `nail-testkit` corpus as a local account, and an
-//! in-process mock IMAP server serving the same corpus.
+//! Demo data and in-process mock servers, for development and Playwright:
 //!
-//! Used by `nail serve --seed demo` (UI development, Playwright) and
-//! `nail serve --seed demo-imap` (the full sync path without a real server).
-//! No network access is involved in either.
+//! * `nail serve --seed demo`: the `nail-testkit` corpus as a local account;
+//! * `--seed demo-imap`: the corpus on a mock IMAP server, synced like a
+//!   real account;
+//! * `--seed demo-multi` ([`start_demo_multi`]): two configured accounts
+//!   (IMAP "work" with IDLE, POP3 "home"), one SMTP server for both, and a
+//!   third IMAP server plus autoconfig / DNS mocks for setting up a new
+//!   account by discovery. Secrets live in memory, never in the OS
+//!   keychain. [`DemoMulti::control`] offers the test controls the
+//!   Playwright suite uses (deliver mail, change flags, go offline, read
+//!   what SMTP received).
+//!
+//! No network access beyond `127.0.0.1` is involved in any of them.
 
-use nail_api::{Account, AccountId, AccountKind, Folder};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Duration;
+
+use nail_api::accounts::SecretKind;
+use nail_api::engine::{MemorySecretStore, SecretStore};
+use nail_api::{Account, AccountId, AccountKind, Folder, FolderRole, SecretRef};
+use nail_discovery::{Discoverer, HickoryDns, ReqwestFetch, TcpProbe};
 use nail_proto_imap::{Credentials, ImapConfig, Security};
 use nail_store::{BlobStore, Store};
-use nail_testkit::{MockImapServer, demo_corpus};
+use nail_testkit::{MailStore, MockImapConfig, MockImapServer, demo_corpus};
+use nail_testkit_net::{
+    DnsZone, MockDnsServer, MockHttpServer, MockPop3Config, MockPop3Server, MockResponse,
+    MockSmtpConfig, MockSmtpServer, Pop3Message,
+};
+use serde_json::{Value, json};
 
 use crate::error::Result;
 use crate::ids;
@@ -65,13 +87,15 @@ pub fn seed_demo(store: &Store, blobs: &BlobStore) -> Result<DemoSeed> {
             .iter()
             .zip(1u32..)
             .map(|(message, uid)| IncomingMessage {
-                uid,
+                uid: Some(uid),
                 flags: message.api_flags(),
-                internal_date: None,
                 raw: message.raw.clone(),
+                ..IncomingMessage::default()
             })
             .collect();
-        messages += ingest(store, blobs, &folder, 1, &incoming)?;
+        messages += ingest(store, blobs, None, &folder, 1, &incoming)?
+            .stored
+            .len();
         folders.push(store.get_folder(&folder.id)?);
     }
     tracing::info!(folders = folders.len(), messages, "demo data seeded");
@@ -116,6 +140,409 @@ pub async fn start_demo_imap() -> Result<DemoImap> {
         account,
         settings,
     })
+}
+
+// ---------------------------------------------------------------------------
+// demo-multi
+
+/// Id of the IMAP account of [`start_demo_multi`].
+pub const MULTI_WORK_ID: &str = "work";
+/// Id of the POP3 account of [`start_demo_multi`].
+pub const MULTI_HOME_ID: &str = "home";
+/// Address of the IMAP account.
+pub const MULTI_WORK_EMAIL: &str = "ada@work.example";
+/// Address of the POP3 account.
+pub const MULTI_HOME_EMAIL: &str = "ada@home.example";
+/// An address whose settings discovery finds (autoconfig on the mock HTTP
+/// server), with its own mock IMAP server.
+pub const MULTI_NEW_EMAIL: &str = "bob@new.example";
+/// Password of the IMAP account.
+pub const MULTI_WORK_PASSWORD: &str = "work-secret";
+/// Password of the POP3 account.
+pub const MULTI_HOME_PASSWORD: &str = "home-secret";
+/// Password of the discoverable account.
+pub const MULTI_NEW_PASSWORD: &str = "new-secret";
+
+/// A mailing-list message delivered to both demo accounts (same
+/// Message-ID): "All accounts" shows it once.
+pub const MULTI_LIST_MESSAGE: &str = "From: Nail Users <users@lists.nail.example>\r\n\
+To: users@lists.nail.example\r\n\
+Subject: [nail-users] Release notes for M1\r\n\
+Date: Tue, 29 Sep 2026 07:30:00 +0000\r\n\
+Message-ID: <m1-release@lists.nail.example>\r\n\
+List-Id: <users.lists.nail.example>\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+\r\n\
+M1 brings IMAP IDLE, POP3, SMTP, search and unified inboxes.\r\n";
+
+fn home_message(n: u32, subject: &str, body: &str) -> Vec<u8> {
+    format!(
+        "From: Grace Hopper <grace@home.example>\r\nTo: {MULTI_HOME_EMAIL}\r\n\
+         Subject: {subject}\r\nDate: Mon, 28 Sep 2026 1{n}:00:00 +0000\r\n\
+         Message-ID: <home-{n}@home.example>\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n{body}\r\n"
+    )
+    .into_bytes()
+}
+
+fn autoconfig_xml(imap_port: u16, smtp_port: u16) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<clientConfig version="1.1">
+  <emailProvider id="new.example">
+    <domain>new.example</domain>
+    <displayName>New Example Mail</displayName>
+    <incomingServer type="imap">
+      <hostname>127.0.0.1</hostname><port>{imap_port}</port><socketType>plain</socketType>
+      <username>%EMAILADDRESS%</username><authentication>password-cleartext</authentication>
+    </incomingServer>
+    <outgoingServer type="smtp">
+      <hostname>127.0.0.1</hostname><port>{smtp_port}</port><socketType>plain</socketType>
+      <username>%EMAILADDRESS%</username><authentication>password-cleartext</authentication>
+    </outgoingServer>
+  </emailProvider>
+</clientConfig>
+"#
+    )
+}
+
+/// The running mock servers of `--seed demo-multi` and the settings that
+/// point at them. Everything stops when this is dropped.
+#[derive(Debug)]
+pub struct DemoMulti {
+    /// IMAP server of the "work" account (demo corpus, IDLE).
+    pub work: MockImapServer,
+    /// POP3 server of the "home" account.
+    pub home: MockPop3Server,
+    /// SMTP server for all accounts; records what it receives.
+    pub smtp: MockSmtpServer,
+    /// IMAP server of the discoverable account ([`MULTI_NEW_EMAIL`]).
+    pub new_imap: MockImapServer,
+    /// Autoconfig / ISPDB / Autodiscover answers.
+    pub http: MockHttpServer,
+    /// DNS answers (SRV / MX; empty zone).
+    pub dns: MockDnsServer,
+    /// The in-memory keychain with the accounts' passwords.
+    pub secrets: Arc<MemorySecretStore>,
+    /// Discovery pointed at the mocks.
+    pub discoverer: Arc<Discoverer>,
+    pop3_counter: AtomicU32,
+}
+
+fn io_error(err: impl std::fmt::Display) -> std::io::Error {
+    std::io::Error::other(err.to_string())
+}
+
+/// Starts the mock servers of `--seed demo-multi`.
+pub async fn start_demo_multi() -> Result<DemoMulti> {
+    let work_store = MailStore::demo();
+    work_store.add_mailbox("Drafts", FolderRole::Drafts);
+    work_store.add_mailbox("Trash", FolderRole::Trash);
+    work_store.append("INBOX", MULTI_LIST_MESSAGE.as_bytes(), &[] as &[&str]);
+    let work = MockImapServer::start(
+        MockImapConfig {
+            username: MULTI_WORK_EMAIL.to_owned(),
+            password: MULTI_WORK_PASSWORD.to_owned(),
+            ..MockImapConfig::default()
+        },
+        work_store,
+    )
+    .await
+    .map_err(io_error)?;
+
+    let home = MockPop3Server::start(
+        MockPop3Config {
+            username: MULTI_HOME_EMAIL.to_owned(),
+            password: MULTI_HOME_PASSWORD.to_owned(),
+            ..MockPop3Config::default()
+        },
+        vec![
+            Pop3Message {
+                uid: "home-1".into(),
+                data: home_message(1, "Garden party on Saturday", "Bring a salad."),
+            },
+            Pop3Message {
+                uid: "home-2".into(),
+                data: home_message(2, "Photos from the lake", "Here they are."),
+            },
+            Pop3Message {
+                uid: "home-list".into(),
+                data: MULTI_LIST_MESSAGE.as_bytes().to_vec(),
+            },
+        ],
+    )
+    .await
+    .map_err(io_error)?;
+
+    let smtp = MockSmtpServer::start(MockSmtpConfig {
+        users: vec![
+            (MULTI_WORK_EMAIL.to_owned(), MULTI_WORK_PASSWORD.to_owned()),
+            (MULTI_HOME_EMAIL.to_owned(), MULTI_HOME_PASSWORD.to_owned()),
+            (MULTI_NEW_EMAIL.to_owned(), MULTI_NEW_PASSWORD.to_owned()),
+        ],
+        ..MockSmtpConfig::default()
+    })
+    .await
+    .map_err(io_error)?;
+
+    let new_store = MailStore::new();
+    new_store.add_mailbox("Sent", FolderRole::Sent);
+    new_store.add_mailbox("Trash", FolderRole::Trash);
+    new_store.append(
+        "INBOX",
+        format!(
+            "From: New Example <welcome@new.example>\r\nTo: {MULTI_NEW_EMAIL}\r\n\
+             Subject: Welcome to New Example Mail\r\nDate: Tue, 29 Sep 2026 08:00:00 +0000\r\n\
+             Message-ID: <welcome@new.example>\r\n\r\nYour mailbox is ready.\r\n"
+        )
+        .as_bytes(),
+        &[] as &[&str],
+    );
+    let new_imap = MockImapServer::start(
+        MockImapConfig {
+            username: MULTI_NEW_EMAIL.to_owned(),
+            password: MULTI_NEW_PASSWORD.to_owned(),
+            ..MockImapConfig::default()
+        },
+        new_store,
+    )
+    .await
+    .map_err(io_error)?;
+
+    let http = MockHttpServer::start().await.map_err(io_error)?;
+    http.get(
+        Some("autoconfig.new.example"),
+        "/mail/config-v1.1.xml",
+        MockResponse::xml(autoconfig_xml(new_imap.port(), smtp.port())),
+    );
+    let dns = MockDnsServer::start(DnsZone::new())
+        .await
+        .map_err(io_error)?;
+    let client =
+        nail_auth::http_client_builder(nail_auth::tls_config_with_roots(&[]).map_err(io_error)?)
+            .no_proxy()
+            .build()
+            .map_err(io_error)?;
+    let discoverer = Discoverer::new(
+        Arc::new(ReqwestFetch::new(client).route_all_to(http.addr())),
+        Arc::new(
+            HickoryDns::with_name_server(dns.addr(), Duration::from_secs(2))
+                .map_err(|e| io_error(e.0))?,
+        ),
+        Arc::new(TcpProbe::with_overrides(
+            Duration::from_secs(2),
+            HashMap::new(),
+        )),
+    )
+    .with_timeout(Duration::from_secs(4))
+    .with_guessing(false);
+
+    let secrets = Arc::new(MemorySecretStore::new());
+    for (account, password) in [
+        (MULTI_WORK_ID, MULTI_WORK_PASSWORD),
+        (MULTI_HOME_ID, MULTI_HOME_PASSWORD),
+    ] {
+        secrets
+            .set(
+                &SecretRef::default_for(&AccountId::new(account), SecretKind::Password),
+                password,
+            )
+            .map_err(io_error)?;
+    }
+    Ok(DemoMulti {
+        work,
+        home,
+        smtp,
+        new_imap,
+        http,
+        dns,
+        secrets,
+        discoverer: Arc::new(discoverer),
+        pop3_counter: AtomicU32::new(0),
+    })
+}
+
+fn crlf(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\n', "\r\n")
+}
+
+impl DemoMulti {
+    /// `accounts.kdl` for the two demo accounts.
+    pub fn accounts_kdl(&self) -> String {
+        let (imap, pop3, smtp) = (self.work.port(), self.home.port(), self.smtp.port());
+        format!(
+            r#"// Demo accounts of `nail serve --seed demo-multi` (mock servers on 127.0.0.1).
+undo-send-delay 5
+
+account "{MULTI_WORK_ID}" email="{MULTI_WORK_EMAIL}" name="Work" {{
+    imap host="127.0.0.1" port={imap} tls="plaintext"
+    smtp host="127.0.0.1" port={smtp} tls="plaintext"
+    identity "{MULTI_WORK_EMAIL}" name="Ada Lovelace"
+}}
+
+account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
+    pop3 host="127.0.0.1" port={pop3} tls="plaintext" leave-on-server=#true delete-when-deleted-locally=#true
+    smtp host="127.0.0.1" port={smtp} tls="plaintext"
+    identity "{MULTI_HOME_EMAIL}" name="Ada Lovelace"
+}}
+"#
+        )
+    }
+
+    /// Writes `accounts.kdl` into `config_dir` unless one exists.
+    pub fn write_config(&self, config_dir: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(config_dir)?;
+        let path = config_dir.join(crate::accounts::ACCOUNTS_FILE);
+        if !path.exists() {
+            std::fs::write(path, self.accounts_kdl())?;
+        }
+        Ok(())
+    }
+
+    /// `options` pointed at the mocks: in-memory secrets, mock discovery,
+    /// short reconnect delays.
+    pub fn service_options(&self, mut options: crate::ServiceOptions) -> crate::ServiceOptions {
+        options.secrets = Some(Arc::clone(&self.secrets) as Arc<dyn SecretStore>);
+        options.discoverer = Some(Arc::clone(&self.discoverer));
+        options.timing = crate::EngineTiming::fast();
+        options.open_browser = false;
+        options
+    }
+
+    fn imap(&self, account: &str) -> std::result::Result<&MockImapServer, String> {
+        match account {
+            MULTI_WORK_ID => Ok(&self.work),
+            "new" | "bob" => Ok(&self.new_imap),
+            other => Err(format!("no mock IMAP server for account {other:?}")),
+        }
+    }
+
+    /// Runs one test-control command (the `nail serve --seed demo-multi`
+    /// control endpoint). Commands and their JSON arguments:
+    ///
+    /// * `imap-deliver {account?, mailbox?, raw, flags?}` → `{uid}`
+    /// * `imap-flags {account?, mailbox?, subject, flags}` replaces the
+    ///   flags of the first message whose subject contains `subject`
+    /// * `imap-messages {account?, mailbox?}` → `[{uid, subject, flags}]`
+    /// * `imap-mailboxes {account?}` → `[{name, count}]`
+    /// * `imap-offline {account?, offline}`
+    /// * `pop3-deliver {raw, uid?}` → `{uid}`
+    /// * `pop3-state` → `{uids, deleted}`
+    /// * `smtp-messages` → `[{from, to, data}]`
+    ///
+    /// `account` defaults to the IMAP account `work` (`new` is the
+    /// discoverable one), `mailbox` to `INBOX`.
+    pub fn control(&self, command: &str, args: &Value) -> std::result::Result<Value, String> {
+        let text = |key: &str| args.get(key).and_then(Value::as_str);
+        let account = text("account").unwrap_or(MULTI_WORK_ID);
+        let mailbox = text("mailbox").unwrap_or("INBOX");
+        let flags: Vec<String> = args
+            .get("flags")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|f| f.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        match command {
+            "imap-deliver" => {
+                let raw = text("raw").ok_or("raw is required")?;
+                let uid = self
+                    .imap(account)?
+                    .store()
+                    .append(mailbox, crlf(raw).as_bytes(), &flags)
+                    .ok_or_else(|| format!("no mailbox {mailbox}"))?;
+                Ok(json!({ "uid": uid }))
+            }
+            "imap-flags" => {
+                let subject = text("subject").ok_or("subject is required")?;
+                let server = self.imap(account)?;
+                let uid = find_by_subject(server.store(), mailbox, subject)?;
+                server.store().set_flags(mailbox, uid, &flags);
+                Ok(json!({ "uid": uid }))
+            }
+            "imap-messages" => {
+                let server = self.imap(account)?;
+                let found = server
+                    .store()
+                    .mailbox(mailbox)
+                    .ok_or_else(|| format!("no mailbox {mailbox}"))?;
+                Ok(Value::Array(
+                    found
+                        .messages
+                        .iter()
+                        .map(|m| {
+                            json!({
+                                "uid": m.uid,
+                                "subject": subject_of(&m.raw),
+                                "flags": m.flags,
+                            })
+                        })
+                        .collect(),
+                ))
+            }
+            "imap-mailboxes" => Ok(Value::Array(
+                self.imap(account)?
+                    .store()
+                    .mailboxes()
+                    .iter()
+                    .map(|m| json!({ "name": m.name, "count": m.messages.len() }))
+                    .collect(),
+            )),
+            "imap-offline" => {
+                let offline = args
+                    .get("offline")
+                    .and_then(Value::as_bool)
+                    .ok_or("offline is required")?;
+                self.imap(account)?.set_offline(offline);
+                Ok(json!({ "offline": offline }))
+            }
+            "pop3-deliver" => {
+                let raw = text("raw").ok_or("raw is required")?;
+                let n = self.pop3_counter.fetch_add(1, Ordering::Relaxed) + 1;
+                let uid = text("uid").map_or_else(|| format!("control-{n}"), str::to_owned);
+                self.home.add_message(&uid, crlf(raw));
+                Ok(json!({ "uid": uid }))
+            }
+            "pop3-state" => Ok(json!({
+                "uids": self.home.uids(),
+                "deleted": self.home.deleted(),
+            })),
+            "smtp-messages" => Ok(Value::Array(
+                self.smtp
+                    .messages()
+                    .iter()
+                    .map(|m| {
+                        json!({
+                            "from": m.mail_from,
+                            "to": m.recipient_addresses(),
+                            "data": m.text(),
+                        })
+                    })
+                    .collect(),
+            )),
+            other => Err(format!("unknown control command {other:?}")),
+        }
+    }
+}
+
+fn subject_of(raw: &[u8]) -> String {
+    nail_mime::parse_message(raw).headers.subject
+}
+
+fn find_by_subject(
+    store: &MailStore,
+    mailbox: &str,
+    subject: &str,
+) -> std::result::Result<u32, String> {
+    store
+        .mailbox(mailbox)
+        .ok_or_else(|| format!("no mailbox {mailbox}"))?
+        .messages
+        .iter()
+        .find(|m| subject_of(&m.raw).contains(subject))
+        .map(|m| m.uid)
+        .ok_or_else(|| format!("no message with subject {subject:?} in {mailbox}"))
 }
 
 #[cfg(test)]

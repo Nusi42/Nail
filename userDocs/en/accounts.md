@@ -34,6 +34,48 @@ Click **Add account** in the toolbar (or in **Settings → Accounts**).
 5. **Done.** **Go to the inbox** opens the new account. Nail downloads your
    mail in the background.
 
+### Signing in with Google or Microsoft
+
+Google and Microsoft only let registered applications sign in. Until Nail
+ships with its own registration, add the client id of an app you registered
+to `accounts.kdl` (see [OAuth2 providers](accounts-reference.md)):
+
+```kdl
+oauth-provider "google" client-id="1234567890-abc.apps.googleusercontent.com"
+```
+
+Without it, **Sign in with Google** reports a configuration error. After
+signing in, Nail keeps only the long-lived *refresh token* in the Windows
+credential manager and asks the provider for short-lived access tokens when
+it connects. If the provider withdraws the permission, the account shows
+"Sign-in required"; sign in again in the account settings.
+
+### Where passwords are kept
+
+Passwords and sign-in tokens are stored in the Windows credential manager
+under the name `nail`, never in `accounts.kdl` or any other file. The file
+only holds a reference such as `keychain:nail/work/password`. Removing an
+account deletes its entries.
+
+## POP3 accounts
+
+POP3 servers only offer an inbox, so a POP3 account gets local folders in
+Nail: Inbox, Sent, Archive and Trash. Moving mail between them never
+touches the server. Nail checks for new mail every 10 minutes (or as set
+in the account settings) and when you press `F5`.
+
+What happens on the server after a message was downloaded is up to you
+(**Settings → Accounts → POP3 download**):
+
+| Setting | Effect |
+| --- | --- |
+| **Keep messages on the server** off | Each message is deleted from the server right after Nail downloaded it |
+| **Keep messages on the server** on (default) | Messages stay on the server… |
+| … **Delete from the server after (days)** | …until they are this many days old (counted from the download) |
+| … **Delete from the server when deleted in Nail** | …until you delete them for good in Nail (emptying Trash counts; moving to Trash does not) |
+
+Nail never deletes a message from the server that it has not downloaded.
+
 ## Connection states
 
 The dot next to each account shows its state, and the status bar names
@@ -97,6 +139,8 @@ account**:
   sender yourself.
 
 The same message received by two accounts (a mailing list, for example)
-appears once in a virtual account.
+appears once in a virtual account. Moving a message into a merged folder
+puts it into the matching folder of its own account (for example, **Archive**
+of a virtual account means the Archive of the account the message is in).
 
 Deleting a virtual account changes nothing on any server.

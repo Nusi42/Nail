@@ -7,6 +7,10 @@
 //!   [`nail_api::ServerMessage`] frames (responses by `id`, plus pushed
 //!   events). See `docs/adr/0002-rpc-protocol.md`.
 //! * `/api/blob/{hash}` — a raw message from the blob store by SHA-256.
+//! * `/api/test/{command}` — only when [`ServerOptions::test_control`] is
+//!   set (`nail serve --seed demo-multi`): `POST` a JSON body to drive the
+//!   in-process mock servers from end-to-end tests. Never present in
+//!   normal runs.
 //! * everything else — the UI bundle (`ui/dist`) with a single-page-app
 //!   fallback to `index.html`.
 //!
@@ -24,13 +28,22 @@ mod ws;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use nail_core::Service;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-pub use http::router;
+pub use http::{router, router_with_control};
+
+/// Test hooks behind `POST /api/test/{command}` (end-to-end tests against
+/// mock servers). Only servers given one expose the route.
+pub trait TestControl: Send + Sync + 'static {
+    /// Runs `command` with JSON `args`; `Err` answers `400` with the text.
+    fn control(&self, command: &str, args: &serde_json::Value)
+    -> Result<serde_json::Value, String>;
+}
 
 /// Errors starting the server.
 #[derive(Debug, thiserror::Error)]
@@ -51,12 +64,24 @@ pub enum ServerError {
 }
 
 /// What to serve and where.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct ServerOptions {
     /// Listen address; must be a loopback address. Port 0 picks a free port.
     pub addr: SocketAddr,
     /// Directory of the built UI (`ui/dist`); `None` serves the API only.
     pub ui_dir: Option<PathBuf>,
+    /// Test hooks (`/api/test/…`); `None` in normal runs.
+    pub test_control: Option<Arc<dyn TestControl>>,
+}
+
+impl std::fmt::Debug for ServerOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerOptions")
+            .field("addr", &self.addr)
+            .field("ui_dir", &self.ui_dir)
+            .field("test_control", &self.test_control.is_some())
+            .finish()
+    }
 }
 
 /// A running server. Stops on [`Server::shutdown`] or when dropped.
@@ -90,7 +115,12 @@ impl Server {
             tracing::warn!(dir = %dir.display(), "no index.html in the UI directory; run `npm run build -w ui`");
         }
 
-        let app = router(service, options.ui_dir, local_addr.port());
+        let app = router_with_control(
+            service,
+            options.ui_dir,
+            local_addr.port(),
+            options.test_control,
+        );
         let (tx, rx) = oneshot::channel::<()>();
         let task = tokio::spawn(async move {
             axum::serve(listener, app)

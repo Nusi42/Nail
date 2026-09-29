@@ -120,8 +120,12 @@ async fn lists_accounts_and_folders_with_counts() {
     let f = open(false, None);
     match f.service.handle(Request::ListAccounts).await {
         Response::Accounts { accounts } => {
-            assert_eq!(accounts.len(), 1);
-            assert_eq!(accounts[0].id, demo());
+            // The built-in "All accounts" first (ADR 0012), then the demo.
+            assert_eq!(accounts.len(), 2);
+            assert_eq!(accounts[0].id, AccountId::all());
+            assert_eq!(accounts[0].name, "");
+            assert_eq!(accounts[0].kind, nail_api::AccountKind::Virtual);
+            assert_eq!(accounts[1].id, demo());
         }
         other => panic!("unexpected {other:?}"),
     }
@@ -365,31 +369,45 @@ async fn config_changes_are_broadcast() {
 }
 
 #[tokio::test]
-async fn m1a_requests_are_unsupported_until_wired() {
+async fn m1a_requests_answer_without_accounts() {
     let fx = open(false, None);
-    for request in [
-        Request::GetAccountsConfig,
-        Request::ListOutbox,
-        Request::DiscoverAccount {
-            email: "ada@example.org".into(),
-        },
-    ] {
-        match fx.service.handle(request).await {
-            Response::Error { code, message } => {
-                assert_eq!(code, ErrorCode::Unsupported);
-                assert!(message.contains("not implemented"), "{message}");
-            }
-            other => panic!("expected unsupported, got {other:?}"),
+    assert_eq!(
+        fx.service.handle(Request::GetAccountsConfig).await,
+        Response::AccountsConfig {
+            config: nail_api::AccountsConfig::default()
         }
-    }
-    let response = fx
+    );
+    assert_eq!(
+        fx.service.handle(Request::ListOutbox).await,
+        Response::Outbox { entries: vec![] }
+    );
+    assert_eq!(
+        fx.service.handle(Request::ListAccountStatuses).await,
+        Response::AccountStatuses { statuses: vec![] }
+    );
+    // "All accounts" shows the demo account's folders merged by role.
+    let Response::Folders { folders } = fx
         .service
-        .handle(Request::DiscoverAccount {
-            email: "ada@example.org".into(),
+        .handle(Request::ListFolders {
+            account_id: AccountId::all(),
         })
-        .await;
-    let Response::Error { message, .. } = response else {
-        panic!("expected an error");
+        .await
+    else {
+        panic!("expected folders");
     };
-    assert!(message.starts_with("DiscoverAccount "), "{message}");
+    let inbox = folders
+        .iter()
+        .find(|f| f.role == FolderRole::Inbox)
+        .expect("a merged inbox");
+    assert_eq!(inbox.id.as_str(), "all/inbox");
+    assert_eq!(inbox.total, inbox_total(&fx.service).await);
+}
+
+async fn inbox_total(service: &Service) -> u32 {
+    folders(service)
+        .await
+        .into_iter()
+        .find(|f| f.role == FolderRole::Inbox)
+        .unwrap()
+        .total
 }

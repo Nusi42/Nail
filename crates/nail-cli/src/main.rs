@@ -48,9 +48,11 @@ fn schema_json(kind: SchemaKind) -> serde_json::Result<String> {
 
 fn init_tracing(verbose: u8) {
     use tracing_subscriber::EnvFilter;
+    // Tantivy logs every index commit at info level; keep it quiet unless
+    // everything is asked for.
     let default = match verbose {
-        0 => "info",
-        1 => "debug",
+        0 => "info,tantivy=warn",
+        1 => "debug,tantivy=warn",
         _ => "trace",
     };
     let filter = EnvFilter::try_from_env("NAIL_LOG").unwrap_or_else(|_| EnvFilter::new(default));

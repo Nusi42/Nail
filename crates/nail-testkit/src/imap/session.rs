@@ -369,6 +369,10 @@ impl Session {
     }
 
     async fn handle(&mut self, line: &[u8]) -> io::Result<Flow> {
+        if self.shared.control.offline.load(Ordering::SeqCst) {
+            tracing::debug!("mock IMAP offline: closing the session");
+            return Ok(Flow::Close);
+        }
         if self.shared.control.should_disconnect_line(line) {
             tracing::debug!("mock IMAP: injected disconnect (after N commands)");
             return Ok(Flow::Close);

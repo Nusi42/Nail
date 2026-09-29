@@ -551,3 +551,42 @@ async fn slow_responses_are_injected() {
     assert!(started.elapsed() < Duration::from_millis(300));
     server.clear_delay();
 }
+
+#[tokio::test]
+async fn offline_mode_refuses_and_drops_connections() {
+    let server = MockImapServer::start(MockImapConfig::default(), store())
+        .await
+        .unwrap();
+    let mut idle = Conn::login(&server).await;
+    idle.cmd("s1", "SELECT INBOX").await;
+    idle.send("i1 IDLE\r\n").await;
+    assert!(idle.line().await.starts_with('+'));
+    assert!(server.wait_for_idle(1, Duration::from_secs(5)).await);
+    let mut busy = Conn::login(&server).await;
+
+    server.set_offline(true);
+    assert!(server.is_offline());
+    // The idling session is dropped, the other closes on its next command.
+    assert_eq!(idle.line().await, "", "IDLE session dropped");
+    busy.send("n1 NOOP\r\n").await;
+    assert_eq!(busy.line().await, "", "session closed on its next command");
+    // New connections are closed before the greeting.
+    let stream = TcpStream::connect(server.addr()).await.unwrap();
+    let mut reader = BufReader::new(stream);
+    let mut greeting = String::new();
+    tokio::time::timeout(Duration::from_secs(5), reader.read_line(&mut greeting))
+        .await
+        .unwrap()
+        .ok();
+    assert_eq!(greeting, "");
+
+    server.set_offline(false);
+    let mut back = Conn::login(&server).await;
+    assert!(
+        back.cmd("n2", "NOOP")
+            .await
+            .last()
+            .unwrap()
+            .starts_with("n2 OK")
+    );
+}

@@ -12,9 +12,11 @@ test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) =>
       ws.on("framereceived", (frame) => received.push(String(frame.payload)));
     });
     await page.goto(server.url);
-    const account = page.locator('[data-part="account-switcher.item"]');
-    await expect(account).toHaveCount(1);
-    await expect(account).toHaveAttribute("data-kind", "imap");
+    // "All accounts" (the unified view, selected by default), then the account.
+    const accounts = page.locator('[data-part="account-switcher.item"]');
+    await expect(accounts).toHaveCount(2);
+    await expect(accounts.nth(0)).toHaveAttribute("data-kind", "virtual");
+    await expect(accounts.nth(1)).toHaveAttribute("data-kind", "imap");
 
     const inbox = page.locator('[data-part="folder-tree.item"][data-role="inbox"]');
     await expect(inbox).toBeVisible();

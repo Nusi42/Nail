@@ -82,6 +82,10 @@ How it works:
 - Scenarios that edit `theme.kdl` / `layout.kdl`, use another locale or
   another seed start a private server on port 0 (`startNail()` in
   `e2e/support/nail.ts`), so they never disturb each other.
+- The M1a scenarios start their own `--seed demo-multi` server each: two
+  configured accounts on in-process mock servers (see "Run" below). They
+  drive the mocks through the server's test controls with `control()` /
+  `serverMessages()` from `e2e/support/nail.ts`.
 - The binary is found through `cargo metadata` (the target directory lives
   outside the repository). `NAIL_BIN` selects another binary, `NAIL_LOG`
   (e.g. `info`) shows server logs.
@@ -94,6 +98,10 @@ How it works:
 | `e2e/tests/mail.spec.ts` | Default three-pane layout from `data-part` attributes (no inline styles or classes), seeded folders and messages, sandboxed reader iframe with remote images blocked, hostile HTML neutralised, `j`/`k` navigation, German locale falling back to English |
 | `e2e/tests/config.spec.ts` | `theme.kdl` hot reload of a CSS custom property (and keep-last-valid on errors), `layout.kdl` moving and removing panes, `--locale de` fallback |
 | `e2e/tests/sync.spec.ts` | `--seed demo-imap`: an IMAP account synced from the mock server, `F5` (`sync.now`) round trip |
+| `e2e/tests/accounts.spec.ts` | `--seed demo-multi`: unified inbox with two accounts and their status, adding an account through discovery (autoconfig mock), a POP3 account receiving mail, a virtual account merging folders and deduplicating a mailing-list message |
+| `e2e/tests/mailops.spec.ts` | `--seed demo-multi`: flag / archive / delete reach the mock IMAP server, a server-side flag change arrives through IDLE, writes made offline replay after reconnecting |
+| `e2e/tests/search-threads.spec.ts` | `--seed demo-multi`: the query language (fields, quotes, OR / NOT, error position), the thread view across folders |
+| `e2e/tests/send.spec.ts` | `--seed demo-multi`: a plain-text mail cancelled by undo send, then sent to the mock SMTP server, with the Sent copy on the IMAP server |
 | `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode; any violation, whatever its impact, fails |
 
 ### Generated files and snapshots
@@ -122,6 +130,7 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 | --- | --- |
 | `--seed demo` | Load the demo mail corpus as a local account (no network) |
 | `--seed demo-imap` | Serve the demo corpus from an in-process mock IMAP server and sync it like a real account |
+| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery. Writes `accounts.kdl` into the config dir if there is none, keeps passwords in memory (never the OS keychain) and exposes the test controls (below) |
 | `--port 0` | Use a free port; the URL is the only line printed on stdout |
 | `--data-dir DIR` | Store location (default `%LOCALAPPDATA%\Nail`) |
 | `--config-dir DIR` | `theme.kdl` / `layout.kdl` location (default `%APPDATA%\Nail`) |
@@ -139,6 +148,23 @@ cargo run -p nail-cli -- serve --seed demo --data-dir "$TEMP/nail-data" --config
 
 The server binds to 127.0.0.1 only and has no authentication in M0
 (ADR 0009).
+
+#### Test controls (`--seed demo-multi` only)
+
+With `--seed demo-multi` (and only then) the server answers
+`POST /api/test/<command>` with a JSON body, to drive the mock servers
+from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-messages`):
+
+| Command | Arguments | Effect |
+| --- | --- | --- |
+| `imap-deliver` | `account?`, `mailbox?`, `raw`, `flags?` | New message on the IMAP server (`account` `work` or `new`, mailbox `INBOX` by default) |
+| `imap-flags` | `account?`, `mailbox?`, `subject`, `flags` | Replaces the flags of the first message whose subject contains `subject` |
+| `imap-messages` | `account?`, `mailbox?` | Lists `{uid, subject, flags}` |
+| `imap-mailboxes` | `account?` | Lists `{name, count}` |
+| `imap-offline` | `account?`, `offline` | Simulates an outage (connections refused and dropped) |
+| `pop3-deliver` | `raw`, `uid?` | New message in the POP3 maildrop |
+| `pop3-state` | – | `{uids, deleted}` of the POP3 server |
+| `smtp-messages` | – | What the SMTP server received: `{from, to, data}` |
 
 For UI work with hot module reloading, run `npm run dev` (Vite on
 `http://localhost:5173`). Add `?mock=1` to use the in-memory mock core. Add
@@ -201,3 +227,9 @@ For M1a:
 - **0012:** the M1a contract (protocol additions, engine traits, crate shapes)
 - **0013:** `accounts.kdl` (format, validation, format-preserving writes)
 - **0014:** libraries for SMTP, POP3, OAuth2, keychain, discovery and search
+- **0015:** store v2, threading, drafts / outbox, sync-side merge
+- **0016:** search index and query language
+- **0017:** SMTP, POP3, OAuth2, keychain, discovery, mock network servers
+- **0018:** the IMAP engine (own client on `imap-proto`, IDLE, QRESYNC, writes)
+- **0019:** the M1a user interface (windows, forms, optimistic writes, mock core)
+- **0020:** core integration (engines, replay, outbox, virtual accounts, demo seed)

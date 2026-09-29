@@ -51,6 +51,7 @@ async fn start(service: &Service) -> Server {
         ServerOptions {
             addr: SocketAddr::from(([127, 0, 0, 1], 0)),
             ui_dir: None,
+            test_control: None,
         },
     )
     .await
@@ -106,7 +107,8 @@ async fn websocket_round_trip() {
     let Response::Accounts { accounts } = response(&mut socket, 2).await else {
         panic!("expected accounts");
     };
-    assert_eq!(accounts.len(), 1);
+    // "All accounts" and the demo account.
+    assert_eq!(accounts.len(), 2);
 
     send(
         &mut socket,
@@ -309,6 +311,7 @@ async fn refuses_non_loopback_addresses() {
         ServerOptions {
             addr: SocketAddr::from(([0, 0, 0, 0], 0)),
             ui_dir: None,
+            test_control: None,
         },
     )
     .await
@@ -489,4 +492,73 @@ async fn a_lagging_client_is_resynced() {
             _ => {}
         }
     }
+}
+
+struct Echo;
+
+impl nail_server::TestControl for Echo {
+    fn control(
+        &self,
+        command: &str,
+        args: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        match command {
+            "echo" => Ok(serde_json::json!({ "echo": args })),
+            other => Err(format!("unknown {other}")),
+        }
+    }
+}
+
+async fn post_control(
+    service: &Service,
+    control: Option<std::sync::Arc<dyn nail_server::TestControl>>,
+    uri: &str,
+    host: &str,
+    body: &str,
+) -> axum::response::Response {
+    let request = HttpRequest::post(uri)
+        .header("Host", host)
+        .body(Body::from(body.to_owned()))
+        .unwrap();
+    nail_server::router_with_control(service.clone(), None, PORT, control)
+        .oneshot(request)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_control_exists_only_when_given() {
+    let f = service();
+    let host = "127.0.0.1:4780";
+    let absent = post_control(&f.service, None, "/api/test/echo", host, "{}").await;
+    assert_eq!(absent.status(), StatusCode::NOT_FOUND);
+
+    let control: Option<std::sync::Arc<dyn nail_server::TestControl>> =
+        Some(std::sync::Arc::new(Echo));
+    let ok = post_control(
+        &f.service,
+        control.clone(),
+        "/api/test/echo",
+        host,
+        r#"{"a":1}"#,
+    )
+    .await;
+    assert_eq!(ok.status(), StatusCode::OK);
+    let value: serde_json::Value = serde_json::from_slice(&body(ok).await).unwrap();
+    assert_eq!(value, serde_json::json!({"echo": {"a": 1}}));
+
+    let unknown = post_control(&f.service, control.clone(), "/api/test/nope", host, "").await;
+    assert_eq!(unknown.status(), StatusCode::BAD_REQUEST);
+    let bad_json = post_control(&f.service, control.clone(), "/api/test/echo", host, "{").await;
+    assert_eq!(bad_json.status(), StatusCode::BAD_REQUEST);
+    // The host guard applies as everywhere.
+    let foreign = post_control(
+        &f.service,
+        control,
+        "/api/test/echo",
+        "evil.example:4780",
+        "{}",
+    )
+    .await;
+    assert_eq!(foreign.status(), StatusCode::FORBIDDEN);
 }

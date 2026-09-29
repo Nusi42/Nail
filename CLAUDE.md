@@ -42,8 +42,9 @@ crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
 crates/nail-search     Tantivy index + query language parser (ADR 0016)
 crates/nail-testkit    mock IMAP server, .eml corpus, demo seed
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
-crates/nail-core       Service: routes requests, owns store/config/sync
-crates/nail-server     axum: UI bundle, WebSocket API, blobs
+crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
+                       engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020)
+crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
 crates/nail-cli        `nail` binary
 app/src-tauri          Tauri 2 desktop shell
 ui/                    React renderer
@@ -71,6 +72,7 @@ npm run gen:api                            # regenerate ui/src/api/generated fro
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas (theme, layout, accounts)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
+cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts (test controls at /api/test/…)
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist
 npm run tauri dev                          # desktop app with Vite hot reload
 ```
@@ -79,7 +81,9 @@ npm run tauri dev                          # desktop app with Vite hot reload
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
 - `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`.
 - M1a contract: ADR 0012 (requests, events, engine traits in `nail_api::engine`, expected crate shapes); `accounts.kdl`: ADR 0013 (secrets only as `keychain:` references); libraries: ADR 0014 (TLS = rustls + `ring` only, no aws-lc).
-- Requests the core does not implement yet answer `unsupported` (explicit match arms in `Service::dispatch`). The UI `MockTransport` implements every M1a request (ADR 0019).
+- Every M1a request is implemented by the core (ADR 0020); `unsupported` remains for rich drafts (M1b) and client certificates. The UI `MockTransport` implements the same contract (ADR 0019).
+- Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets` (a `MemorySecretStore`); `Service::from_parts` does so itself. Engine timing for tests: `EngineTiming::fast()`.
+- M1a decisions: ADRs 0015 (store v2), 0016 (search), 0017 (SMTP/POP3/auth/discovery), 0018 (IMAP), 0019 (UI), 0020 (core integration).
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
 ## Git

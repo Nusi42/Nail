@@ -32,6 +32,16 @@ status bar shows "Sending…" and "Message sent.", or why it failed.
 **Send later…** shows a date and time field; **Schedule** sends the message
 then. Nail must be running at that time.
 
+## Copies in Sent
+
+After a message went out, Nail puts a copy into the account's Sent folder
+on the server. Gmail and Outlook.com file sent mail themselves, so Nail
+does not add a second copy there; `save-sent-copy` in the
+[accounts reference](accounts-reference.md) overrides this per account.
+POP3 accounts keep the copy in their local Sent folder.
+
+Replying marks the original message as answered.
+
 ## The outbox
 
 **Outbox** in the toolbar (or `g` then `o`) lists messages waiting to be

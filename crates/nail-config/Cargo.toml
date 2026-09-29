@@ -16,7 +16,7 @@ thiserror.workspace = true
 tracing.workspace = true
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 schemars = { version = "1.2.2", features = ["indexmap2"] }
-notify-debouncer-mini = { version = "0.7.0", default-features = false }
+notify-debouncer-mini.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

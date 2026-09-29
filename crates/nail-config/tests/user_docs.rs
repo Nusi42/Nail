@@ -1,5 +1,5 @@
-//! Every KDL example in the user references (`userDocs/en/*-reference.md`)
-//! and in the getting-started guide must be valid. Complete files are parsed
+//! Every KDL example in the user docs (`userDocs/en/*-reference.md`, the
+//! getting-started guide and the accounts guide) must be valid. Complete files are parsed
 //! as they are; fragments are wrapped in a file that extends the default.
 //! Examples containing `…` are outlines and are skipped.
 
@@ -98,6 +98,17 @@ fn getting_started_examples_are_valid() {
 fn accounts_reference_examples_are_valid() {
     let blocks = kdl_blocks("accounts-reference.md");
     assert!(blocks.len() >= 8, "found only {} examples", blocks.len());
+    for block in blocks {
+        if let Err(e) = nail_config::parse_accounts(&block, "accounts.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}
+
+#[test]
+fn accounts_guide_examples_are_valid() {
+    let blocks = kdl_blocks("accounts.md");
+    assert!(!blocks.is_empty());
     for block in blocks {
         if let Err(e) = nail_config::parse_accounts(&block, "accounts.kdl") {
             panic!("{e}\nin example:\n{block}");

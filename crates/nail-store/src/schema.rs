@@ -149,6 +149,24 @@ CREATE INDEX outbox_due ON outbox(state, send_at);
 CREATE INDEX outbox_draft ON outbox(draft_id);
 "#;
 
+/// Schema v3 (M1a WP14): POP3 bookkeeping. POP3 has no folders or numeric
+/// UIDs on the server; the core remembers which `UIDL`s it downloaded (and
+/// when), which local message each became, and whether the user deleted
+/// that local copy, for the leave-on-server policies.
+const V3: &str = r#"
+CREATE TABLE pop3_uids (
+    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    uidl            TEXT NOT NULL,
+    -- The local message; NULL once it was deleted locally.
+    message_id      TEXT,
+    -- Unix seconds (UTC) of the download.
+    downloaded_at   INTEGER NOT NULL,
+    deleted_locally INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, uidl)
+) WITHOUT ROWID;
+CREATE INDEX pop3_uids_message ON pop3_uids(message_id) WHERE message_id IS NOT NULL;
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -173,6 +191,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         sql: V2,
         backfill: Some(crate::thread::backfill_v2),
     },
+    Migration::sql(V3),
 ];
 
 /// The schema version this build creates and understands.
@@ -266,6 +285,7 @@ mod tests {
                 "messages",
                 "op_queue",
                 "outbox",
+                "pop3_uids",
                 "schema_version",
                 "thread_refs"
             ]

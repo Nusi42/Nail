@@ -18,6 +18,7 @@
 //!   folders and accounts, and the JWZ algorithm for reply trees.
 //! * Drafts and the outbox ([`Store::save_draft`], [`Store::schedule_send`]).
 //! * Store-side search filters ([`MessageFilter`]).
+//! * POP3 bookkeeping ([`Store::pop3_state`]).
 //!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
@@ -27,6 +28,7 @@ mod compose;
 mod error;
 mod filter;
 mod mail;
+mod pop3;
 mod queue;
 mod schema;
 pub mod store;
@@ -42,6 +44,7 @@ pub use mail::{
     FolderCounts, FolderSyncState, MergeReport, MessageMeta, MessagePage, StoredMessage,
     SyncedMessage,
 };
+pub use pop3::{Pop3State, Pop3Uid};
 pub use queue::{
     Enqueued, FlagChange, MessageSource, OpId, OpState, Operation, QueuedOp, ReplayOutcome,
     ReplayPolicy, ReplayReport, Replayer,

@@ -1,18 +1,20 @@
 //! Routes, static files, the blob endpoint and security headers.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{any, get};
+use axum::routing::{any, get, post};
 use axum::{Router, middleware};
 use nail_api::ErrorCode;
 use nail_core::Service;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
+use crate::TestControl;
 use crate::guard::{self, HostAllowlist};
 use crate::ws;
 
@@ -35,9 +37,27 @@ const BLOB_CSP: &str = "default-src 'none'; sandbox";
 /// anything else is refused with `403` (DNS-rebinding protection, see
 /// [`crate::guard`]).
 pub fn router(service: Service, ui_dir: Option<PathBuf>, port: u16) -> Router {
-    let api = Router::new()
+    router_with_control(service, ui_dir, port, None)
+}
+
+/// [`router`] plus, when `control` is given, the test hooks at
+/// `POST /api/test/{command}` (same host checks as every route).
+pub fn router_with_control(
+    service: Service,
+    ui_dir: Option<PathBuf>,
+    port: u16,
+    control: Option<Arc<dyn TestControl>>,
+) -> Router {
+    let mut api = Router::new()
         .route("/api/ws", get(ws::upgrade))
-        .route("/api/blob/{hash}", get(blob))
+        .route("/api/blob/{hash}", get(blob));
+    if let Some(control) = control {
+        let test = Router::new()
+            .route("/api/test/{command}", post(test_control))
+            .with_state(control);
+        api = api.merge(test);
+    }
+    let api = api
         .route("/api/{*rest}", any(not_found))
         .with_state(service);
 
@@ -73,6 +93,30 @@ pub fn router(service: Service, ui_dir: Option<PathBuf>, port: u16) -> Router {
 
 async fn not_found() -> StatusCode {
     StatusCode::NOT_FOUND
+}
+
+/// `POST /api/test/{command}`: a test hook (see [`TestControl`]).
+async fn test_control(
+    State(control): State<Arc<dyn TestControl>>,
+    Path(command): Path<String>,
+    body: axum::body::Bytes,
+) -> Response {
+    let args: serde_json::Value = if body.is_empty() {
+        serde_json::Value::Null
+    } else {
+        match serde_json::from_slice(&body) {
+            Ok(args) => args,
+            Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
+        }
+    };
+    match control.control(&command, &args) {
+        Ok(value) => (
+            [(header::CONTENT_TYPE, "application/json")],
+            value.to_string(),
+        )
+            .into_response(),
+        Err(err) => (StatusCode::BAD_REQUEST, err).into_response(),
+    }
 }
 
 /// `GET /api/blob/{hash}`: the raw RFC 5322 message with that SHA-256.

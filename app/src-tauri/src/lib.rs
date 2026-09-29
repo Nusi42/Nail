@@ -54,6 +54,8 @@ impl AppArgs {
             .ok_or("no default config directory; pass --config-dir")?;
         let mut options = ServiceOptions::new(data_dir, config_dir);
         options.locale = self.locale.clone();
+        // OAuth2 sign-ins open the system browser.
+        options.open_browser = true;
         Ok(options)
     }
 }
@@ -143,7 +145,10 @@ pub fn run() {
 
     tauri::Builder::default()
         .setup(move |app| {
-            let service = open_service(&args)?;
+            // Opened within Tauri's runtime, so the account engines, the
+            // outbox and the index upkeep start on it (and the accounts.kdl
+            // watcher can apply changes).
+            let service = tauri::async_runtime::block_on(async { open_service(&args) })?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(forward_events(
                 service.clone(),
@@ -232,10 +237,11 @@ mod tests {
             "{:?}",
             seen[0]
         );
+        assert_eq!(seen[1], Event::AccountsChanged);
         assert!(
-            matches!(&seen[1], Event::MailChanged { folder_ids } if !folder_ids.is_empty()),
+            matches!(&seen[2], Event::MailChanged { folder_ids } if !folder_ids.is_empty()),
             "{:?}",
-            seen[1]
+            seen[2]
         );
     }
 
@@ -256,7 +262,8 @@ mod tests {
         let Response::Accounts { accounts } = response else {
             panic!("expected accounts");
         };
-        assert_eq!(accounts.len(), 1);
+        // "All accounts" and the demo account.
+        assert_eq!(accounts.len(), 2);
         assert!(events.is_empty());
 
         let (response, events) = call(&service, Request::GetConfig).await;
