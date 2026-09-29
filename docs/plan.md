@@ -214,13 +214,107 @@ Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted
 - Register OAuth apps for Google (Gmail IMAP/SMTP scope) and Microsoft (Outlook.com / Microsoft 365 IMAP/SMTP scopes) and provide the client ids.
 - Provide real test accounts for the manual two-week gate.
 
-## 7. Later milestones (outline; each gets a detailed section before it starts)
+## 7. Milestone M2 — Security, remote UI, server-side rules, polish, plug-in preview (detailed)
 
-- **M2 Security, rules, polish:** OpenPGP (Sequoia), Autocrypt, S/MIME, Sieve/ManageSieve, spam classifier, snooze/templates polish, accessibility pass, remote web UI with pairing + passkeys + hardening, plug-in preview (commands, dialogs, read access), basic NSIS installer build, the deferred M1 follow-ups (see .claude/memory), and localizing user-facing strings built in Rust (config error messages, MCP denial hints) via Fluent.
+**Automated gate:** all suites green, including the Playwright scenarios listed per wave and the new CI jobs (installer build, desktop smoke test, real-server interop).
+**Human gates:** (1) a security review of crypto, the HTML sandbox and the remote UI (the design's M2 gate; the agents' security reviews prepare it, a human signs it off); (2) an external penetration test before the remote UI's internet mode can be unlocked — that stays locked in M2.
+
+**Scope decisions for M2**
+- **Licences.** Nail is closed source for now, so M2 adds no GPL/LGPL/AGPL dependency, and `cargo-deny` enforces a licence allowlist in CI. Consequence: OpenPGP uses **rPGP** (`pgp` crate, MIT/Apache) instead of Sequoia (LGPL), unless the owner decides otherwise. MPL-2.0 is acceptable (file-level copyleft, unmodified use).
+- **No OpenSSL build dependency** unless an ADR shows there is no pure-Rust or Windows-native alternative (S/MIME: RustCrypto `cms` + Windows certificate store; encryption at rest: evaluated in WP33).
+- **Encryption at rest** is implemented as a setting. Its default (on or off) is still an open owner decision; until then it ships **off**, with the recommendation to turn it on recorded in the UI and docs.
+- **Internet mode for the remote UI** is built (ACME, hardening) but locked behind a setting that the UI refuses to enable until the pentest gate is recorded.
+- The plug-in preview is the design's preview scope: commands, UI contributions, dialogs, read access, notifications, storage. Write access, hooks and the full extension-point list stay in M4.
+
+M2 runs as four waves (four workflows), each shaped like the M1 waves: contract → four parallel packages in disjoint directories → integrate → two reviews (one always security) → fix → independent verify.
+
+### Wave M2a — End-to-end encryption and data protection
+
+#### WP30 — Contract (sequential)
+Per-message `SecurityStatus` (signed / encrypted / verified, signer identity, key or certificate id, trust level, chain summary, header-protection state); `AuthResults` (DKIM / SPF / DMARC / ARC from `Authentication-Results`); key and certificate management requests (list, import, export public, generate OpenPGP key, delete, set trust, look up by address via WKD / keys.openpgp.org, import PKCS#12, list Windows-store certificates); per-identity crypto settings (default sign / encrypt, preferred technology, Autocrypt prefer-encrypt); compose-time recipient key status; `SendDraft` sign/encrypt options; encryption-at-rest settings and status; stub crates `nail-pgp`, `nail-smime`, `nail-vault` (at-rest encryption).
+
+#### WP31 — OpenPGP and Autocrypt (parallel)
+rPGP-based `nail-pgp`: keyring (public keys + secret keys encrypted with a passphrase or a random key kept in the OS keychain), generate (Ed25519/X25519 default, RSA import), import / export, PGP/MIME sign, encrypt, sign+encrypt, decrypt, verify (RFC 3156); inline PGP read-only; header protection for encrypted mail (encrypted subject shown as "..." on the wire); Autocrypt Level 1 (parse headers, peer state, prefer-encrypt, setup message); key discovery via WKD and keys.openpgp.org behind injectable HTTP; trust model (unknown / verified / autocrypt-gossip). Tests with interoperability vectors (messages produced by GnuPG and Thunderbird checked into the corpus).
+
+#### WP32 — S/MIME (parallel)
+`nail-smime`: CMS SignedData / EnvelopedData via RustCrypto (`cms`, `x509-cert`, `rsa`, `p256` …); S/MIME 4.0 (RFC 8551) sign (detached `multipart/signed` and opaque), encrypt (AES-GCM / AES-CBC for compatibility), decrypt, verify; certificate import from PKCS#12 and from the Windows certificate store (`windows` crate: CryptoAPI / CNG), chain building and validation against the Windows trust store, expiry and key-usage checks, revocation marked as "not checked" in M2; smartcards (PKCS#11) deferred to M4. Test vectors from OpenSSL-generated fixtures (generated once, checked in).
+
+#### WP33 — Data protection (parallel)
+`nail-vault` + store/search integration hooks: encryption at rest for the database, blob store and search index (evaluate SQLCipher-compatible options without an OpenSSL build dependency, application-level encryption of blobs with XChaCha20-Poly1305, an encrypted Tantivy `Directory`), key held in the OS keychain, migration between plain and encrypted data with crash safety; decrypted-content indexing policy (off by default, opt-in per account, index then counts as sensitive); `Authentication-Results` parsing in `nail-mime` (DKIM / SPF / DMARC / ARC, trusted-authserv-id per account); link safety analysis (display vs target mismatch, punycode look-alikes, dangerous attachment types) exposed as message warnings.
+
+#### WP34 — Security UI (parallel)
+Key and certificate manager (OpenPGP keys, S/MIME certificates, trust editing, import/export, key lookup), per-identity crypto settings, composer sign/encrypt toggles with live recipient key status, message header security badge with a details popover (signer, key id, trust, chain), auth-results badge, link and attachment warnings in the reader, encryption-at-rest settings with progress, Autocrypt setup message flow.
+
+#### WP35 — Integration (sequential)
+Core wiring: decrypt/verify on read (never persist decrypted bodies unless the indexing opt-in is on), sign/encrypt on send, Autocrypt headers on outgoing mail and peer-state updates on incoming mail, key lookup when composing, auth results and link warnings in `MessageBody`, at-rest encryption switch with migration, MCP: encrypted content only with the separate grant. **Playwright:** send a signed + encrypted OpenPGP mail between two demo accounts and read it with a valid-signature badge; tampered signature shows as invalid; S/MIME sign and encrypt round trip with a test certificate; Autocrypt enables encryption after one exchange; header protection hides the subject on the wire (assert on the mock SMTP); DKIM/DMARC badge from a seeded `Authentication-Results`; a look-alike link shows a warning; encryption at rest on/off with data intact; MCP cannot read encrypted content without the grant.
+
+### Wave M2b — Remote UI hardening, installer and CI
+
+#### WP40 — Contract (sequential)
+Remote-UI settings (enabled, bind address, port, TLS mode self-signed/ACME, internet mode locked flag), users and credentials (password hash, TOTP secret, passkeys), sessions and devices, pairing codes, scopes per session, remote-content policy (per message / sender / domain allow-lists), audit entries for logins.
+
+#### WP41 — Authentication and sessions (parallel)
+Passkeys via `webauthn-rs` (MPL-2.0, unmodified), password (Argon2id) + TOTP (`totp-rs`), one-time pairing codes approved on the desktop, device-bound short-lived sessions in `HttpOnly; Secure; SameSite=Strict` cookies with rotation, re-authentication for sensitive actions, per-IP and per-account rate limits with exponential backoff and lockout notification, session list and revoke, new-device alert, audit log. Tests incl. brute-force and replay attempts.
+
+#### WP42 — Transport and browser hardening (parallel)
+TLS 1.3 (1.2 only with forward-secret AEAD) with `rustls`; self-signed certificate generation (`rcgen`) with fingerprint shown for pinning at pairing; ACME (`instant-acme`) wired but only usable in the locked internet mode; HSTS, strict CSP without inline script, Trusted Types, COOP/COEP, `frame-ancestors 'none'`; Origin/Host checks; a separate sandbox origin for mail HTML; the remote-content proxy for desktop and web: signed URLs derived from messages, blocks private / link-local / loopback ranges, size and type limits, never an open proxy; loading remote content per message / sender / domain. Tests incl. SSRF attempts and DNS rebinding.
+
+#### WP43 — Remote-UI and privacy UI (parallel)
+Login (passkey first, password + TOTP fallback), pairing flow on both sides (desktop shows code and fingerprint, browser enters code), sessions and devices management, remote-UI settings on the desktop (enable, bind address, TLS mode, internet mode shown as locked with the reason), "load remote content" bar in the reader with per-sender/domain choices, security audit view.
+
+#### WP44 — Installer and CI (parallel)
+Tauri NSIS installer per the design (per-user by default, WebView2 bootstrapper, `mailto:` / `webcal:` protocol handlers and `.eml` / `.ics` / `.vcf` associations via RegisteredApplications + Capabilities, optional start with Windows, optional `nail` CLI on `PATH`, uninstall keeps data unless the user opts in), portable zip; `cargo-deny` with the licence allowlist and advisories; SBOM (CycloneDX) per build; CI jobs: installer build artifact, desktop smoke test on `windows-latest`, and a Linux interop job running the engine tests against real Dovecot and Stalwart containers (IMAP, POP3, SMTP, ManageSieve).
+
+#### WP45 — Integration (sequential)
+Wire the remote UI with auth into `nail serve` and the desktop app; migrate existing loopback-only behaviour; **Playwright:** pairing a second browser context with a code; passkey login via Playwright's virtual authenticator; password + TOTP login; brute force triggers backoff; session revoke logs the browser out; remote images blocked, loaded through the proxy after "allow sender", a proxy request to 127.0.0.1 or a private IP is refused; CSP blocks an injected inline script; internet mode cannot be enabled; installer build smoke (install to a temp dir, start, uninstall) in CI.
+
+### Wave M2c — Server-side rules and polish
+
+#### WP50 — Contract (sequential)
+Sieve upload status per rule (server / client / not expressible), vacation settings, junk training requests and classifier status, snooze (until time, wake folder), notification settings (per account / folder / rule, quiet hours), sync policy per folder (full / headers-only / recent N days) and on-demand body fetch, UI context-menu model, toolbar / key / column edit requests, fixed MCP port setting, localized core messages (error codes + Fluent ids + args instead of English text), `RuleFromMessage` request.
+
+#### WP51 — Sieve and vacation (parallel)
+Compile Sieve-expressible rules to Sieve (RFC 5228 + fileinto, imap4flags, vacation, regex, variables where supported) with a round-trip test harness; ManageSieve client (RFC 5804: STARTTLS, AUTHENTICATE PLAIN / XOAUTH2, PUTSCRIPT, SETACTIVE, CHECKSCRIPT, capability-aware); mock ManageSieve server in `nail-testkit-net`; vacation replies via Sieve `vacation`.
+
+#### WP52 — Spam, snooze, notifications (parallel)
+Local Bayesian classifier per account (tokenizer over headers + text, trained by "junk / not junk", honours server Junk flags, never auto-deletes); snooze via IMAP keyword + a hidden "Snoozed" folder with local wake timers (works offline, survives restart); new-mail notifications (Tauri notification plugin on desktop, Web Notifications in the remote UI) with per-account / folder / rule settings and quiet hours, which also makes the rules `notify` / `suppress` actions real.
+
+#### WP53 — Engine polish (parallel)
+Sync policy `bodies` (headers-only / recent N days) with on-demand body fetch; IMAP `SEARCH` fallback merged into search results for messages without local bodies; a separate replay connection per IMAP account; `text/markdown` alternatives treated as body alternatives in `nail-mime`; Rust-built user-facing strings (config errors, MCP hints, CLI output where user-facing) turned into codes + Fluent ids; fixed MCP port setting; headless `nail mcp` start with a single-instance lock on the data directory; `RuleFromMessage` using the full headers (List-Id).
+
+#### WP54 — UI polish and accessibility (parallel)
+Right-click context menus rendered from `layout.kdl`; toolbar-order, key-binding and column-order editors in the Customize tab (using the existing write-back); lazy-loaded TipTap / CodeMirror; inline images in reopened HTML drafts; UI for vacation, junk, snooze, notifications, sync policy; accessibility pass (axe on every window and dialog, full keyboard navigation, focus management, screen-reader labels, a high-contrast theme shipped as an example theme, reduced motion).
+
+#### WP55 — Integration (sequential)
+Wire all of the above; **Playwright:** a rule shows as "server" and its Sieve script lands on the mock ManageSieve server; vacation reply script uploaded; marking junk trains the classifier and the next similar message lands in Junk; snooze hides a message and it returns at the wake time (clock controlled); a new-mail notification fires and quiet hours suppress it; headers-only folder fetches the body on open; server-side search finds a message without a local body; right-click menu on a message works; rebinding a key writes `layout.kdl` and works; axe clean on every window.
+
+### Wave M2d — Plug-in preview
+
+#### WP60 — Contract (sequential)
+Plug-in manifest (id, name, version, apiVersion, main, permissions, contributes: commands, placements, keys, settings schema, locales), permission names for the preview (`mail.read`, `mail.read.body`, `calendar.read` placeholder, `ui.dialogs`, `notifications`, `storage`, `network:<domains>`), declarative UI component set (text, markdown, input, textarea, select, checkbox, date, contact picker, folder picker, message list, table, button, progress, image) as typed trees, plug-in admin requests (install from file/URL, enable, disable, uninstall, list, grants, logs).
+
+#### WP61 — Plug-in host (parallel)
+`nail-plugins`: one QuickJS runtime per plug-in via `rquickjs` (memory limit, interrupt-based CPU budget, no filesystem / process / sockets), permission gate in front of the Client API, API bindings for the preview (`nail.mail` read, `nail.ui.showDialog` / `notify` / `registerCommand`, `nail.storage`, `nail.http.fetch` restricted to declared domains through the core, `nail.settings`, `nail.log`), `.nailplugin` archive format (manifest.json + bundled JS + assets + locales), install / uninstall / enable, `nail plugin dev <folder>` with hot reload and a log console. Tests for isolation, limits and denied permissions.
+
+#### WP62 — Plug-in UI (parallel)
+React renderer for the declarative component set (all parts themeable, e.g. `plugin.<id>.*`), plug-in dialogs (modal and non-modal, returning values), toolbar / menu / key placements, plug-in panels as layout widgets (`plugin-panel "<id>.<name>"`), install dialog showing permissions, plug-in manager (enable/disable, grants, logs), placements proposed on install through the merge dialog.
+
+#### WP63 — SDK and example (parallel)
+`@nail/plugin-api` TypeScript package (types generated from the Rust contract, a tiny JSX runtime producing the component trees), a starter template package (`npm create nail-plugin` equivalent inside the repo: `packages/create-nail-plugin`), the design's "Follow up" example plug-in (adapted to read-only: a button + dialog that stores a reminder in plug-in storage and shows a notification), `userDocs/en/plugins/` (getting started, API reference generated from the types, manifest reference, permissions).
+
+#### WP64 — Integration (sequential)
+Wire host + UI + SDK; **Playwright:** install the example plug-in (permissions dialog), its toolbar button appears in the reader, clicking opens its dialog, submitting stores data and shows a notification, the placement is written to `layout.kdl`; a plug-in without `mail.read.body` gets a permission error; a runaway plug-in (infinite loop) is stopped and flagged while the UI stays responsive; `nail plugin dev` hot reload works.
+
+### Carried items not in M2
+PKCS#11 smartcards (M4), revocation checking for S/MIME (later), DNSSEC-validated SRV and a public-suffix list for discovery (later), atomic cross-account moves (later; current behaviour can duplicate, never loses).
+
+## 8. Later milestones (outline; each gets a detailed section before it starts)
+
+- **M2:** detailed in section 7.
 - **M3 Exchange, Gmail API and PIM:** Graph + EWS engines, Gmail API engine, CalDAV/CardDAV, calendar views, iTIP/iMIP, contacts, tasks, interop suite.
 - **M4 Agents and release:** MCP write tools with grants/confirm/audit, full plug-in system (QuickJS), MAPI provider, MSI + winget + updater, EV signing, import/export, backup.
 
-## 8. How milestones are executed (orchestration)
+## 9. How milestones are executed (orchestration)
 
 Agents: Opus 5.5 at medium effort, coordinated by a workflow. M0 ran as the sequence below; each M1 wave uses the same shape (contract, then parallel packages in disjoint directories, then integrate, two reviews, fix and an independent verify).
 
