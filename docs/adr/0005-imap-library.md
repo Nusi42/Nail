@@ -1,6 +1,6 @@
 # ADR 0005: IMAP client library, TLS stack and IMAP test server
 
-Status: accepted · 2026-09-29 · M0 WP3
+Status: accepted · 2026-09-29 · M0 WP3 · the `async-imap` choice is superseded by ADR 0018 (M1a WP11)
 
 ## Context
 

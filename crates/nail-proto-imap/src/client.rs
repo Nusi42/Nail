@@ -1,29 +1,39 @@
-//! The read-only IMAP client.
+//! The IMAP client: connection setup, command execution and reading.
+//! Writes live in `write.rs`, change tracking in `changes.rs` / `idle.rs`,
+//! flag resynchronization in `resync.rs`.
 
-use std::collections::{BTreeSet, HashMap};
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 
-use async_imap::imap_proto::types::{
+use imap_proto::types::{
     Address as ImapAddress, AttributeValue, Capability, Envelope as ImapEnvelope, MailboxDatum,
-    ResponseCode,
+    ResponseCode, UidSetMember,
 };
-use async_imap::imap_proto::{Response, Status};
-use async_imap::{Authenticator, Session};
+use imap_proto::{Response, Status};
 use nail_api::{Address, Flags};
 
 use crate::capabilities::Capabilities;
-use crate::config::{AuthMechanism, Credentials, FetchBatchLimits, ImapConfig};
+use crate::changes::MailboxChange;
+use crate::config::{Credentials, ImapConfig};
+use crate::conn::{Connection, Incoming};
 use crate::error::{ImapError, Result};
+use crate::flags::MessageFlags;
 use crate::folder::RemoteFolder;
-use crate::transport::{IdleTimeout, ImapStream, establish, with_timeout};
+use crate::sasl::{self, Login, Mechanism};
+use crate::transport::{establish, with_timeout};
 
 /// Data items fetched per message.
 const FETCH_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY.PEEK[])";
+/// The same with the mod-sequence, for CONDSTORE servers.
+const FETCH_QUERY_MODSEQ: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE MODSEQ BODY.PEEK[])";
 /// Maximum number of UIDs per metadata command (`UID FETCH … RFC822.SIZE`),
 /// which keeps command lines short for sparse UID sets.
 const METADATA_CHUNK: usize = 1000;
+/// `LITERAL-` (RFC 7888) allows non-synchronizing literals up to this size.
+const LITERAL_MINUS_MAX: usize = 4096;
 
-/// State of a mailbox after `EXAMINE`.
+/// State of a mailbox after `SELECT` / `EXAMINE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FolderStatus {
     /// UIDVALIDITY: UIDs are only comparable while this stays the same.
@@ -32,6 +42,9 @@ pub struct FolderStatus {
     pub uid_next: u32,
     /// Number of messages.
     pub exists: u32,
+    /// `HIGHESTMODSEQ` (RFC 7162) when the server supports CONDSTORE for
+    /// this mailbox; `None` without CONDSTORE or with `NOMODSEQ`.
+    pub highest_modseq: Option<u64>,
 }
 
 /// What a client remembers about a mailbox between syncs.
@@ -119,6 +132,8 @@ pub struct FetchedMessage {
     pub uid: u32,
     /// System flags.
     pub flags: Flags,
+    /// `\Deleted`: marked for removal by the next expunge.
+    pub deleted: bool,
     /// Keywords (non-system flags such as `$Forwarded`).
     pub keywords: Vec<String>,
     /// `INTERNALDATE` as RFC 3339, when the server sent a parsable one.
@@ -127,6 +142,8 @@ pub struct FetchedMessage {
     pub size: Option<u32>,
     /// Parsed `ENVELOPE`, when the server sent one.
     pub envelope: Option<Envelope>,
+    /// Mod-sequence (RFC 7162) on CONDSTORE servers.
+    pub modseq: Option<u64>,
     /// The complete raw message (`BODY[]`).
     pub raw: Vec<u8>,
 }
@@ -188,13 +205,75 @@ pub struct IncrementalFetch {
     pub next_state: SyncState,
 }
 
-/// A logged-in, read-only IMAP connection.
+/// One piece of a command: text, or a literal sent as `{n}` + bytes.
+pub(crate) enum Part<'a> {
+    Text(Cow<'a, str>),
+    Literal(&'a [u8]),
+}
+
+/// The tagged `OK` of a command.
+#[derive(Debug)]
+pub(crate) struct Completion {
+    /// The response code, e.g. `APPENDUID` or `COPYUID`.
+    pub(crate) code: Option<ResponseCode<'static>>,
+    /// The human-readable text (unknown codes such as `[MODIFIED 3]` stay
+    /// in it).
+    pub(crate) text: String,
+}
+
+/// Callback for untagged responses; returns `true` when it consumed the
+/// response (otherwise it is recorded as a mailbox change if it is one).
+pub(crate) type Handler<'h> = &'h mut (dyn FnMut(&Response<'static>) -> Result<bool> + Send);
+
+/// The mailbox currently opened with `SELECT` or `EXAMINE`.
+#[derive(Debug, Clone)]
+pub(crate) struct Selected {
+    pub(crate) path: String,
+    pub(crate) status: FolderStatus,
+    pub(crate) read_only: bool,
+}
+
+/// Extensions switched on with `ENABLE`.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Enabled {
+    pub(crate) condstore: bool,
+    pub(crate) qresync: bool,
+}
+
+/// What `SELECT` / `EXAMINE` with QRESYNC reported besides the status.
+#[derive(Debug, Default)]
+pub(crate) struct OpenResult {
+    pub(crate) status: Option<FolderStatus>,
+    /// `VANISHED (EARLIER)` UID ranges.
+    pub(crate) vanished: Vec<std::ops::RangeInclusive<u32>>,
+    /// Flag updates (`FETCH` responses).
+    pub(crate) fetched: Vec<crate::changes::FlagUpdate>,
+}
+
+/// Parameters of a QRESYNC `SELECT` / `EXAMINE` (RFC 7162 section 3.2.5).
+#[derive(Debug, Clone)]
+pub(crate) struct QresyncParams {
+    pub(crate) uid_validity: u32,
+    pub(crate) modseq: u64,
+    /// Known UIDs as an IMAP set, when short enough to send.
+    pub(crate) known_uids: Option<String>,
+}
+
+/// A logged-in IMAP connection.
+///
+/// After a transient error (connection lost, timeout) the connection is
+/// unusable: every further command fails with
+/// [`ImapError::ConnectionLost`]; connect again.
 pub struct ImapClient {
-    session: Session<IdleTimeout<ImapStream>>,
-    capabilities: Capabilities,
-    config: ImapConfig,
-    /// Mailbox currently opened with `EXAMINE`.
-    examined: Option<(String, FolderStatus)>,
+    pub(crate) conn: Connection,
+    pub(crate) capabilities: Capabilities,
+    pub(crate) config: ImapConfig,
+    pub(crate) selected: Option<Selected>,
+    pub(crate) enabled: Enabled,
+    pub(crate) server_id: Option<BTreeMap<String, String>>,
+    /// Unsolicited mailbox changes not yet taken by the caller.
+    pub(crate) changes: Vec<MailboxChange>,
+    pub(crate) broken: bool,
 }
 
 impl fmt::Debug for ImapClient {
@@ -203,58 +282,40 @@ impl fmt::Debug for ImapClient {
             .field("host", &self.config.host)
             .field("port", &self.config.port)
             .field("capabilities", &self.capabilities)
-            .field("examined", &self.examined)
+            .field("selected", &self.selected)
+            .field("compressed", &self.conn.is_compressed())
             .finish_non_exhaustive()
     }
 }
 
-struct PlainAuth<'a>(&'a Credentials);
-
-impl Authenticator for PlainAuth<'_> {
-    type Response = Vec<u8>;
-
-    fn process(&mut self, _challenge: &[u8]) -> Vec<u8> {
-        // RFC 4616: [authzid] NUL authcid NUL passwd
-        let mut response = Vec::with_capacity(self.0.username.len() + self.0.password.len() + 2);
-        response.push(0);
-        response.extend_from_slice(self.0.username.as_bytes());
-        response.push(0);
-        response.extend_from_slice(self.0.password.as_bytes());
-        response
-    }
-}
-
 impl ImapClient {
-    /// Connects, secures the connection as configured and logs in.
+    /// Connects, secures the connection as configured and logs in, then
+    /// switches on `COMPRESS=DEFLATE` (when offered and configured), sends
+    /// `ID` (when supported and configured) and enables QRESYNC or
+    /// CONDSTORE (when offered).
     pub async fn connect(config: &ImapConfig, credentials: &Credentials) -> Result<Self> {
         let (stream, preauth_caps) = establish(config).await?;
-        let mechanism = choose_mechanism(config.auth, &preauth_caps)?;
-        let client = async_imap::Client::new(IdleTimeout::new(stream, config.timeout));
-        let login = async {
-            let result = match mechanism {
-                AuthMechanism::Plain => client.authenticate("PLAIN", PlainAuth(credentials)).await,
-                AuthMechanism::Login | AuthMechanism::Auto => {
-                    client
-                        .login(&credentials.username, &credentials.password)
-                        .await
-                }
-            };
-            result.map_err(|(err, _client)| match err {
-                async_imap::error::Error::No(text) | async_imap::error::Error::Bad(text) => {
-                    ImapError::AuthFailed(text)
-                }
-                other => other.into(),
-            })
-        };
-        let session = with_timeout(config.timeout, login).await?;
+        let login = sasl::choose_login(config.auth, credentials, &preauth_caps)?;
         let mut client = Self {
-            session,
+            conn: Connection::new(stream, config.timeout),
             capabilities: preauth_caps,
             config: config.clone(),
-            examined: None,
+            selected: None,
+            enabled: Enabled::default(),
+            server_id: None,
+            changes: Vec::new(),
+            broken: false,
         };
-        // Capabilities may change after authentication (RFC 3501 6.2).
-        client.refresh_capabilities().await?;
+        let timeout = config.timeout;
+        let caps = with_timeout(timeout, client.authenticate(login, credentials)).await?;
+        match caps {
+            Some(caps) => client.capabilities = caps,
+            // Capabilities may change after authentication (RFC 3501 6.2).
+            None => {
+                client.refresh_capabilities().await?;
+            }
+        }
+        client.negotiate_extensions().await?;
         Ok(client)
     }
 
@@ -263,18 +324,218 @@ impl ImapClient {
         &self.capabilities
     }
 
+    /// Whether `COMPRESS=DEFLATE` is active.
+    pub fn is_compressed(&self) -> bool {
+        self.conn.is_compressed()
+    }
+
+    /// Whether CONDSTORE is enabled (mod-sequences are reported).
+    pub fn condstore_enabled(&self) -> bool {
+        self.enabled.condstore
+    }
+
+    /// Whether QRESYNC is enabled (expunges arrive as `VANISHED`).
+    pub fn qresync_enabled(&self) -> bool {
+        self.enabled.qresync
+    }
+
+    /// What the server said about itself in reply to `ID`.
+    pub fn server_id(&self) -> Option<&BTreeMap<String, String>> {
+        self.server_id.as_ref()
+    }
+
+    /// The path of the selected (or examined) mailbox.
+    pub fn selected_mailbox(&self) -> Option<&str> {
+        self.selected.as_ref().map(|s| s.path.as_str())
+    }
+
+    /// Whether an earlier error left the connection unusable.
+    pub fn is_broken(&self) -> bool {
+        self.broken
+    }
+
+    /// Logs in; returns the capabilities from a `[CAPABILITY]` response code.
+    async fn authenticate(
+        &mut self,
+        login: Login,
+        credentials: &Credentials,
+    ) -> Result<Option<Capabilities>> {
+        let completion = match login {
+            Login::Login => {
+                let parts = [
+                    Part::Text("LOGIN ".into()),
+                    astring(&credentials.username)?,
+                    Part::Text(" ".into()),
+                    astring(credentials.secret.expose())?,
+                ];
+                self.execute(&parts, &mut |_| Ok(false)).await
+            }
+            Login::Sasl(mechanism) => self.authenticate_sasl(mechanism, credentials).await,
+        };
+        match completion {
+            Ok(completion) => Ok(match completion.code {
+                Some(ResponseCode::Capabilities(caps)) => Some(capabilities_from(&caps)),
+                _ => None,
+            }),
+            Err(ImapError::No(text) | ImapError::Protocol(text)) => {
+                Err(ImapError::AuthFailed(text))
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn authenticate_sasl(
+        &mut self,
+        mechanism: Mechanism,
+        credentials: &Credentials,
+    ) -> Result<Completion> {
+        let initial = sasl::encode_response(&mechanism.initial_response(
+            credentials,
+            &self.config.host,
+            self.config.port,
+        ));
+        let tag = self.conn.next_tag();
+        let mut initial_sent = self.capabilities.has("SASL-IR");
+        let command = if initial_sent {
+            format!("{tag} AUTHENTICATE {} {initial}\r\n", mechanism.name())
+        } else {
+            format!("{tag} AUTHENTICATE {}\r\n", mechanism.name())
+        };
+        self.conn.write(command.as_bytes()).await?;
+        let mut server_error = None;
+        loop {
+            let response = match self.conn.read().await? {
+                Incoming::Response(response) => response,
+                Incoming::Unparsed => continue,
+            };
+            match response {
+                Response::Continue { information, .. } => {
+                    let reply = if initial_sent {
+                        // A challenge after our response: the server's error
+                        // details (OAuth) or something we cannot answer.
+                        server_error = information
+                            .as_deref()
+                            .map(sasl::describe_challenge)
+                            .filter(|d| !d.is_empty());
+                        mechanism.challenge_response().to_owned()
+                    } else {
+                        initial_sent = true;
+                        initial.clone()
+                    };
+                    self.conn.write(format!("{reply}\r\n").as_bytes()).await?;
+                }
+                Response::Done {
+                    tag: done,
+                    status,
+                    code,
+                    information,
+                } if done.0 == tag => {
+                    let text = response_text(code.as_ref(), information.as_deref());
+                    return match status {
+                        Status::Ok => Ok(Completion { code, text }),
+                        _ => Err(ImapError::AuthFailed(match server_error {
+                            Some(details) => format!("{text} ({details})"),
+                            None => text,
+                        })),
+                    };
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// `COMPRESS`, `ID` and `ENABLE` after login.
+    async fn negotiate_extensions(&mut self) -> Result<()> {
+        if self.config.compress && self.capabilities.has("COMPRESS=DEFLATE") {
+            match self.command("COMPRESS DEFLATE", |_| Ok(false)).await {
+                Ok(_) => self.conn.start_compression()?,
+                // A refusal (e.g. COMPRESSIONACTIVE) is not fatal.
+                Err(err @ (ImapError::No(_) | ImapError::Protocol(_))) if !self.broken => {
+                    tracing::debug!(%err, "COMPRESS refused");
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        if self.capabilities.has("ID")
+            && let Some(id) = self.config.client_id.clone()
+        {
+            let mut params = String::new();
+            for (key, value) in &id {
+                if !params.is_empty() {
+                    params.push(' ');
+                }
+                params.push_str(&quote(key)?);
+                params.push(' ');
+                params.push_str(&quote(value)?);
+            }
+            let mut server = None;
+            let result = self
+                .command(&format!("ID ({params})"), |response| {
+                    if let Response::Id(map) = response {
+                        server = Some(
+                            map.iter()
+                                .flatten()
+                                .map(|(k, v)| (k.to_string(), v.to_string()))
+                                .collect(),
+                        );
+                        return Ok(true);
+                    }
+                    Ok(false)
+                })
+                .await;
+            match result {
+                Ok(_) => self.server_id = server,
+                Err(err @ (ImapError::No(_) | ImapError::Protocol(_))) if !self.broken => {
+                    tracing::debug!(%err, "ID refused");
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        if self.capabilities.has("ENABLE") {
+            let wanted = if self.capabilities.has("QRESYNC") {
+                Some("QRESYNC")
+            } else if self.capabilities.has("CONDSTORE") {
+                Some("CONDSTORE")
+            } else {
+                None
+            };
+            if let Some(wanted) = wanted {
+                let mut enabled = Vec::new();
+                let result = self
+                    .command(&format!("ENABLE {wanted}"), |response| {
+                        // `* ENABLED ...` parses like a capability list.
+                        if let Response::Capabilities(caps) = response {
+                            enabled.extend(caps.iter().map(capability_name));
+                            return Ok(true);
+                        }
+                        Ok(false)
+                    })
+                    .await;
+                match result {
+                    Ok(_) => {
+                        let has = |name: &str| enabled.iter().any(|e| e.eq_ignore_ascii_case(name));
+                        self.enabled.qresync = has("QRESYNC");
+                        self.enabled.condstore = self.enabled.qresync || has("CONDSTORE");
+                    }
+                    Err(err @ (ImapError::No(_) | ImapError::Protocol(_))) if !self.broken => {
+                        tracing::debug!(%err, "ENABLE refused");
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Re-reads the capabilities from the server.
     pub async fn refresh_capabilities(&mut self) -> Result<&Capabilities> {
         let mut atoms = Vec::new();
-        self.run("CAPABILITY", |response| {
+        self.command("CAPABILITY", |response| {
             if let Response::Capabilities(caps) = response {
-                atoms.extend(caps.iter().map(|cap| match cap {
-                    Capability::Imap4rev1 => "IMAP4REV1".to_owned(),
-                    Capability::Auth(mechanism) => format!("AUTH={mechanism}"),
-                    Capability::Atom(atom) => atom.to_string(),
-                }));
+                atoms.extend(caps.iter().map(capability_name));
+                return Ok(true);
             }
-            Ok(())
+            Ok(false)
         })
         .await?;
         if atoms.is_empty() {
@@ -287,7 +548,7 @@ impl ImapClient {
     /// Lists all mailboxes (`LIST "" "*"`) with their roles.
     pub async fn list_folders(&mut self) -> Result<Vec<RemoteFolder>> {
         let mut folders = Vec::new();
-        self.run("LIST \"\" \"*\"", |response| {
+        self.command("LIST \"\" \"*\"", |response| {
             if let Response::MailboxData(MailboxDatum::List {
                 name_attributes,
                 delimiter,
@@ -299,8 +560,9 @@ impl ImapClient {
                     delimiter.as_deref(),
                     name_attributes,
                 ));
+                return Ok(true);
             }
-            Ok(())
+            Ok(false)
         })
         .await?;
         Ok(folders)
@@ -308,9 +570,64 @@ impl ImapClient {
 
     /// Opens a mailbox read-only (`EXAMINE`) and returns its state.
     pub async fn examine(&mut self, path: &str) -> Result<FolderStatus> {
-        self.examined = None;
-        let (mut exists, mut uid_validity, mut uid_next) = (None, None, None);
-        self.run(&format!("EXAMINE {}", quote(path)?), |response| {
+        self.open(path, true, None)
+            .await?
+            .status
+            .ok_or_else(|| ImapError::Protocol(format!("no status for {path}")))
+    }
+
+    /// Opens a mailbox read-write (`SELECT`) and returns its state. The
+    /// write methods select their mailbox themselves.
+    pub async fn select(&mut self, path: &str) -> Result<FolderStatus> {
+        self.open(path, false, None)
+            .await?
+            .status
+            .ok_or_else(|| ImapError::Protocol(format!("no status for {path}")))
+    }
+
+    /// Makes `path` the selected mailbox, read-write when `writable`;
+    /// reuses the current selection when it fits.
+    pub(crate) async fn ensure_selected(&mut self, path: &str, writable: bool) -> Result<()> {
+        let fits = self
+            .selected
+            .as_ref()
+            .is_some_and(|s| s.path == path && (!writable || !s.read_only));
+        if !fits {
+            self.open(path, !writable, None).await?;
+        }
+        Ok(())
+    }
+
+    /// `SELECT` / `EXAMINE`, with `(CONDSTORE)` or `(QRESYNC ...)`.
+    pub(crate) async fn open(
+        &mut self,
+        path: &str,
+        read_only: bool,
+        qresync: Option<QresyncParams>,
+    ) -> Result<OpenResult> {
+        self.selected = None;
+        self.changes.clear();
+        let verb = if read_only { "EXAMINE" } else { "SELECT" };
+        let mut command = format!("{verb} {}", quote(path)?);
+        match &qresync {
+            Some(params) if self.enabled.qresync => {
+                command.push_str(&format!(
+                    " (QRESYNC ({} {}",
+                    params.uid_validity, params.modseq
+                ));
+                if let Some(known) = &params.known_uids {
+                    command.push(' ');
+                    command.push_str(known);
+                }
+                command.push_str("))");
+            }
+            _ if self.capabilities.has("CONDSTORE") => command.push_str(" (CONDSTORE)"),
+            _ => {}
+        }
+        let (mut exists, mut uid_validity, mut uid_next, mut modseq, mut nomodseq) =
+            (None, None, None, None, false);
+        let mut result = OpenResult::default();
+        self.command(&command, |response| {
             match response {
                 Response::MailboxData(MailboxDatum::Exists(n)) => exists = Some(*n),
                 Response::Data {
@@ -321,9 +638,29 @@ impl ImapClient {
                     code: Some(ResponseCode::UidNext(n)),
                     ..
                 } => uid_next = Some(*n),
-                _ => {}
+                Response::Data {
+                    code: Some(ResponseCode::HighestModSeq(n)),
+                    ..
+                } => modseq = Some(*n),
+                Response::Data {
+                    code: None,
+                    information: Some(text),
+                    ..
+                } if text.to_ascii_uppercase().starts_with("[NOMODSEQ]") => nomodseq = true,
+                Response::Vanished {
+                    earlier: true,
+                    uids,
+                } => {
+                    result.vanished.extend(uids.iter().cloned());
+                }
+                Response::Fetch(_, attributes) => {
+                    if let Some(update) = crate::changes::flag_update(attributes) {
+                        result.fetched.push(update);
+                    }
+                }
+                _ => return Ok(false),
             }
-            Ok(())
+            Ok(true)
         })
         .await?;
         let uid_validity = uid_validity
@@ -333,8 +670,13 @@ impl ImapClient {
             uid_validity,
             uid_next: 1,
             exists,
+            highest_modseq: modseq.filter(|_| !nomodseq),
         };
-        self.examined = Some((path.to_owned(), status));
+        self.selected = Some(Selected {
+            path: path.to_owned(),
+            status,
+            read_only,
+        });
         status.uid_next = match uid_next {
             Some(uid_next) => uid_next,
             // Servers must send UIDNEXT, but some old ones do not.
@@ -344,8 +686,11 @@ impl ImapClient {
                 .last()
                 .map_or(1, |uid| uid + 1),
         };
-        self.examined = Some((path.to_owned(), status));
-        Ok(status)
+        if let Some(selected) = &mut self.selected {
+            selected.status = status;
+        }
+        result.status = Some(status);
+        Ok(result)
     }
 
     /// Fetches all messages of the examined mailbox whose UID lies in
@@ -355,7 +700,7 @@ impl ImapClient {
     /// Holds every message in memory; to sync a whole mailbox use
     /// [`Self::plan_fetch`] and [`Self::fetch_batch`] instead.
     pub async fn fetch_range(&mut self, range: UidRange) -> Result<Vec<FetchedMessage>> {
-        if self.examined.is_none() {
+        if self.selected.is_none() {
             return Err(ImapError::Protocol("no mailbox examined".to_owned()));
         }
         let uids = self.search_uids(range).await?;
@@ -373,7 +718,7 @@ impl ImapClient {
     /// Bodies can be large, so the command has no overall deadline: it fails
     /// only when the server stays silent for the configured timeout.
     pub async fn fetch_batch(&mut self, uids: &[u32]) -> Result<Vec<FetchedMessage>> {
-        if self.examined.is_none() {
+        if self.selected.is_none() {
             return Err(ImapError::Protocol("no mailbox examined".to_owned()));
         }
         let mut wanted = uids.to_vec();
@@ -382,23 +727,28 @@ impl ImapClient {
         if wanted.is_empty() {
             return Ok(Vec::new());
         }
+        let query = if self.capabilities.has("CONDSTORE") {
+            FETCH_QUERY_MODSEQ
+        } else {
+            FETCH_QUERY
+        };
         let mut fetched = Vec::with_capacity(wanted.len());
-        self.run_streaming(
-            &format!("UID FETCH {} {FETCH_QUERY}", uid_set(&wanted)),
-            |response| {
-                if let Response::Fetch(_, attributes) = response {
-                    // Unsolicited FETCH responses (flag updates) for other
-                    // messages may be interleaved; keep only what was asked.
-                    if let Some(message) =
-                        convert_fetch(attributes).filter(|m| wanted.binary_search(&m.uid).is_ok())
-                    {
-                        fetched.push(message);
-                    }
+        let command = format!("UID FETCH {} {query}", uid_set(&wanted));
+        let mut on = |response: &Response<'static>| {
+            if let Response::Fetch(_, attributes) = response {
+                // Unsolicited FETCH responses (flag updates) for other
+                // messages may be interleaved; keep only what was asked.
+                if let Some(message) =
+                    convert_fetch(attributes).filter(|m| wanted.binary_search(&m.uid).is_ok())
+                {
+                    fetched.push(message);
+                    return Ok(true);
                 }
-                Ok(())
-            },
-        )
-        .await?;
+            }
+            Ok(false)
+        };
+        self.run_parts(&[Part::Text(command.into())], &mut on, false)
+            .await?;
         self.check_complete(&wanted, &fetched).await?;
         fetched.sort_by_key(|m| m.uid);
         fetched.dedup_by_key(|m| m.uid);
@@ -441,7 +791,7 @@ impl ImapClient {
     async fn fetch_sizes(&mut self, uids: &[u32]) -> Result<HashMap<u32, u32>> {
         let mut sizes = HashMap::with_capacity(uids.len());
         for chunk in uids.chunks(METADATA_CHUNK) {
-            self.run(
+            self.command(
                 &format!("UID FETCH {} (UID RFC822.SIZE)", uid_set(chunk)),
                 |response| {
                     if let Response::Fetch(_, attributes) = response {
@@ -455,9 +805,10 @@ impl ImapClient {
                         }
                         if let (Some(uid), Some(size)) = (uid, size) {
                             sizes.insert(uid, size);
+                            return Ok(true);
                         }
                     }
-                    Ok(())
+                    Ok(false)
                 },
             )
             .await?;
@@ -482,7 +833,7 @@ impl ImapClient {
             return Ok(());
         }
         let mut still_there = Vec::new();
-        self.run(
+        self.command(
             &format!("UID SEARCH UID {}", uid_set(&missing)),
             |response| {
                 if let Response::MailboxData(MailboxDatum::Search(uids)) = response {
@@ -491,8 +842,9 @@ impl ImapClient {
                             .copied()
                             .filter(|uid| missing.binary_search(uid).is_ok()),
                     );
+                    return Ok(true);
                 }
-                Ok(())
+                Ok(false)
             },
         )
         .await?;
@@ -532,26 +884,42 @@ impl ImapClient {
         })
     }
 
-    /// Sends `NOOP` (keep-alive / poll for changes).
+    /// Sends `NOOP` (keep-alive / poll for changes; see
+    /// [`Self::take_changes`] and [`Self::poll`]).
     pub async fn noop(&mut self) -> Result<()> {
-        self.run("NOOP", |_| Ok(())).await
+        self.command("NOOP", |_| Ok(false)).await.map(drop)
     }
 
-    /// Logs out and closes the connection.
+    /// Logs out and closes the connection. The server closes its side
+    /// right after `BYE`; a connection lost after that is not an error.
     pub async fn logout(mut self) -> Result<()> {
-        self.run("LOGOUT", |_| Ok(())).await
+        match self.command("LOGOUT", |_| Ok(false)).await {
+            Ok(_) | Err(ImapError::ConnectionLost) => Ok(()),
+            Err(err) => Err(err),
+        }
     }
 
-    /// UIDs in `range` in the examined mailbox, ascending. Filters the
+    /// UIDs in `range` in the selected mailbox, ascending. Filters the
     /// result, because `n:*` always matches the highest UID even when it is
     /// below `n` (RFC 3501 6.4.8).
-    async fn search_uids(&mut self, range: UidRange) -> Result<Vec<u32>> {
+    pub(crate) async fn search_uids(&mut self, range: UidRange) -> Result<Vec<u32>> {
+        self.search(&format!("UID {range}"), |uid| range.contains(uid))
+            .await
+    }
+
+    /// `UID SEARCH <criteria>`, ascending, keeping UIDs that pass `keep`.
+    pub(crate) async fn search(
+        &mut self,
+        criteria: &str,
+        keep: impl Fn(u32) -> bool + Send + Sync,
+    ) -> Result<Vec<u32>> {
         let mut uids = Vec::new();
-        self.run(&format!("UID SEARCH UID {range}"), |response| {
+        self.command(&format!("UID SEARCH {criteria}"), |response| {
             if let Response::MailboxData(MailboxDatum::Search(found)) = response {
-                uids.extend(found.iter().copied().filter(|uid| range.contains(*uid)));
+                uids.extend(found.iter().copied().filter(|uid| keep(*uid)));
+                return Ok(true);
             }
-            Ok(())
+            Ok(false)
         })
         .await?;
         uids.sort_unstable();
@@ -559,69 +927,161 @@ impl ImapClient {
         Ok(uids)
     }
 
-    /// Sends a command and feeds every untagged response to `on_untagged`
-    /// until the tagged completion, which must be `OK`. The whole command
-    /// must finish within the configured timeout.
-    ///
-    /// `async-imap`'s streaming helpers end silently on EOF and ignore the
-    /// tagged status of `FETCH`/`SEARCH`/`LIST`; this runner turns a closed
-    /// connection into [`ImapError::ConnectionLost`] and `NO`/`BAD` into errors.
-    async fn run(
+    /// Runs a simple command with the configured deadline.
+    pub(crate) async fn command(
         &mut self,
         command: &str,
-        on_untagged: impl FnMut(&Response<'_>) -> Result<()>,
-    ) -> Result<()> {
-        let timeout = self.config.timeout;
-        with_timeout(timeout, self.run_streaming(command, on_untagged)).await
+        mut on: impl FnMut(&Response<'static>) -> Result<bool> + Send,
+    ) -> Result<Completion> {
+        self.run_parts(&[Part::Text(Cow::Borrowed(command))], &mut on, true)
+            .await
     }
 
-    /// Like [`Self::run`], but without an overall deadline: only the idle
-    /// timeout of the stream applies (for commands that download bodies).
-    async fn run_streaming(
+    /// Runs a command. With `deadline`, the whole command must finish within
+    /// the configured timeout; without, only the read idle timeout applies
+    /// (for commands that transfer message bodies).
+    ///
+    /// Transient failures mark the connection as broken.
+    pub(crate) async fn run_parts(
         &mut self,
-        command: &str,
-        mut on_untagged: impl FnMut(&Response<'_>) -> Result<()>,
-    ) -> Result<()> {
-        let timeout = self.config.timeout;
-        let session = &mut self.session;
-        let result = async {
-            let tag = session.run_command(command).await?;
-            loop {
-                let Some(response) = session.read_response().await? else {
-                    return Err(ImapError::ConnectionLost);
-                };
-                match response.parsed() {
-                    Response::Done {
-                        tag: done,
-                        status,
-                        information,
-                        ..
-                    } if *done == tag => {
-                        let text = information.as_deref().unwrap_or_default().to_owned();
-                        return match status {
-                            Status::Ok => Ok(()),
-                            Status::No => Err(ImapError::No(text)),
-                            other => Err(ImapError::Protocol(format!("{other:?} {text}"))),
-                        };
-                    }
-                    other => on_untagged(other)?,
-                }
-            }
+        parts: &[Part<'_>],
+        on: Handler<'_>,
+        deadline: bool,
+    ) -> Result<Completion> {
+        if self.broken {
+            return Err(ImapError::ConnectionLost);
         }
-        .await;
-        result.map_err(|err| match err {
+        let timeout = self.config.timeout;
+        let result = if deadline {
+            with_timeout(timeout, self.execute(parts, on)).await
+        } else {
+            self.execute(parts, on).await
+        };
+        let result = result.map_err(|err| match err {
             ImapError::Io(io) if io.kind() == std::io::ErrorKind::TimedOut => {
                 ImapError::Timeout(timeout)
             }
             other => other,
-        })
+        });
+        if let Err(err) = &result
+            && err.is_transient()
+        {
+            self.broken = true;
+        }
+        result
+    }
+
+    /// Sends a command (with literals) and reads until its tagged
+    /// completion, which must be `OK`. Untagged responses go to `on` and,
+    /// unless consumed, into the change log.
+    ///
+    /// This runner turns a closed connection into
+    /// [`ImapError::ConnectionLost`] and `NO`/`BAD` into errors, so a
+    /// truncated result is never mistaken for a complete one.
+    async fn execute(&mut self, parts: &[Part<'_>], on: Handler<'_>) -> Result<Completion> {
+        let tag = self.conn.next_tag();
+        let literal_plus = self.capabilities.has("LITERAL+");
+        let literal_minus = self.capabilities.has("LITERAL-");
+        let mut line = format!("{tag} ");
+        for part in parts {
+            match part {
+                Part::Text(text) => line.push_str(text),
+                Part::Literal(bytes) => {
+                    let non_sync =
+                        literal_plus || (literal_minus && bytes.len() <= LITERAL_MINUS_MAX);
+                    line.push_str(&format!(
+                        "{{{}{}}}\r\n",
+                        bytes.len(),
+                        if non_sync { "+" } else { "" }
+                    ));
+                    self.conn.write(line.as_bytes()).await?;
+                    line.clear();
+                    if !non_sync {
+                        self.wait_for_continuation(&tag, on).await?;
+                    }
+                    self.conn.write(bytes).await?;
+                }
+            }
+        }
+        line.push_str("\r\n");
+        self.conn.write(line.as_bytes()).await?;
+        self.finish(&tag, on).await
+    }
+
+    /// Waits for `+` after a synchronizing literal; the server may refuse
+    /// the command instead (e.g. `NO [TOOBIG]`).
+    async fn wait_for_continuation(&mut self, tag: &str, on: Handler<'_>) -> Result<()> {
+        loop {
+            match self.conn.read().await? {
+                Incoming::Response(Response::Continue { .. }) => return Ok(()),
+                Incoming::Response(Response::Done {
+                    tag: done,
+                    status,
+                    code,
+                    information,
+                }) if done.0 == tag => {
+                    let text = response_text(code.as_ref(), information.as_deref());
+                    return Err(match status {
+                        Status::No => ImapError::No(text),
+                        Status::Ok => ImapError::Protocol(format!(
+                            "command completed before its literal: {text}"
+                        )),
+                        other => ImapError::Protocol(format!("{other:?} {text}")),
+                    });
+                }
+                Incoming::Response(response) => self.dispatch(&response, on)?,
+                Incoming::Unparsed => {}
+            }
+        }
+    }
+
+    /// Reads until the tagged completion of `tag`.
+    pub(crate) async fn finish(&mut self, tag: &str, on: Handler<'_>) -> Result<Completion> {
+        loop {
+            match self.conn.read().await? {
+                Incoming::Response(Response::Done {
+                    tag: done,
+                    status,
+                    code,
+                    information,
+                }) if done.0 == tag => {
+                    let text = response_text(code.as_ref(), information.as_deref());
+                    return match status {
+                        Status::Ok => Ok(Completion { code, text }),
+                        Status::No => Err(ImapError::No(text)),
+                        other => Err(ImapError::Protocol(format!("{other:?} {text}"))),
+                    };
+                }
+                Incoming::Response(Response::Continue { information, .. }) => {
+                    return Err(ImapError::Protocol(format!(
+                        "unexpected continuation request: {}",
+                        information.as_deref().unwrap_or_default()
+                    )));
+                }
+                Incoming::Response(response) => self.dispatch(&response, on)?,
+                Incoming::Unparsed => {}
+            }
+        }
+    }
+
+    /// Passes an untagged response to the handler and records it as a
+    /// mailbox change when the handler did not consume it.
+    pub(crate) fn dispatch(&mut self, response: &Response<'static>, on: Handler<'_>) -> Result<()> {
+        if !on(response)? {
+            self.observe(response);
+        }
+        Ok(())
     }
 }
 
 /// Groups ascending `uids` into batches of at most `limits.max_messages`
 /// messages and `limits.max_bytes` bytes (by `sizes`; unknown sizes count as
 /// zero). A message larger than the byte limit gets a batch of its own.
-fn batch_uids(uids: &[u32], sizes: &HashMap<u32, u32>, limits: FetchBatchLimits) -> Vec<Vec<u32>> {
+fn batch_uids(
+    uids: &[u32],
+    sizes: &HashMap<u32, u32>,
+    limits: crate::FetchBatchLimits,
+) -> Vec<Vec<u32>> {
     let max_messages = limits.max_messages.max(1);
     let mut batches = Vec::new();
     let mut current: Vec<u32> = Vec::new();
@@ -643,11 +1103,38 @@ fn batch_uids(uids: &[u32], sizes: &HashMap<u32, u32>, limits: FetchBatchLimits)
     batches
 }
 
-/// Quotes a mailbox name as an IMAP quoted string.
-fn quote(value: &str) -> Result<String> {
+/// The text of a tagged or untagged status response, with the response
+/// codes `imap-proto` parsed put back in front (`[TRYCREATE] ...`), so
+/// error mapping can see them.
+pub(crate) fn response_text(code: Option<&ResponseCode<'_>>, information: Option<&str>) -> String {
+    let prefix = match code {
+        Some(ResponseCode::TryCreate) => "[TRYCREATE] ",
+        Some(ResponseCode::Alert) => "[ALERT] ",
+        Some(ResponseCode::ReadOnly) => "[READ-ONLY] ",
+        Some(ResponseCode::Parse) => "[PARSE] ",
+        Some(ResponseCode::UidNotSticky) => "[UIDNOTSTICKY] ",
+        _ => "",
+    };
+    format!("{prefix}{}", information.unwrap_or_default())
+}
+
+fn capability_name(capability: &Capability<'_>) -> String {
+    match capability {
+        Capability::Imap4rev1 => "IMAP4REV1".to_owned(),
+        Capability::Auth(mechanism) => format!("AUTH={mechanism}"),
+        Capability::Atom(atom) => atom.to_string(),
+    }
+}
+
+fn capabilities_from(caps: &[Capability<'_>]) -> Capabilities {
+    Capabilities::from_atoms(caps.iter().map(capability_name))
+}
+
+/// Quotes a string (mailbox name, `ID` value) as an IMAP quoted string.
+pub(crate) fn quote(value: &str) -> Result<String> {
     if value.contains(['\r', '\n', '\0']) {
-        return Err(ImapError::Protocol(
-            "mailbox name contains control characters".to_owned(),
+        return Err(ImapError::InvalidArgument(
+            "value contains control characters".to_owned(),
         ));
     }
     Ok(format!(
@@ -656,24 +1143,23 @@ fn quote(value: &str) -> Result<String> {
     ))
 }
 
-fn choose_mechanism(requested: AuthMechanism, caps: &Capabilities) -> Result<AuthMechanism> {
-    let login_disabled = caps.has("LOGINDISABLED");
-    match requested {
-        AuthMechanism::Plain => Ok(AuthMechanism::Plain),
-        AuthMechanism::Login if login_disabled => {
-            Err(ImapError::AuthUnsupported("LOGINDISABLED".to_owned()))
-        }
-        AuthMechanism::Login => Ok(AuthMechanism::Login),
-        AuthMechanism::Auto if caps.has_auth("PLAIN") => Ok(AuthMechanism::Plain),
-        AuthMechanism::Auto if login_disabled => Err(ImapError::AuthUnsupported(
-            "LOGINDISABLED without AUTH=PLAIN".to_owned(),
-        )),
-        AuthMechanism::Auto => Ok(AuthMechanism::Login),
+/// A user name or password: quoted when it is printable ASCII, otherwise a
+/// literal (8-bit passwords).
+fn astring(value: &str) -> Result<Part<'_>> {
+    if value.contains(['\r', '\n', '\0']) {
+        return Err(ImapError::InvalidArgument(
+            "credentials contain line breaks or NUL".to_owned(),
+        ));
+    }
+    if value.bytes().all(|b| (0x20..0x7f).contains(&b)) {
+        Ok(Part::Text(Cow::Owned(quote(value)?)))
+    } else {
+        Ok(Part::Literal(value.as_bytes()))
     }
 }
 
 /// Compresses sorted UIDs into an IMAP set: `1:3,7,9:10`.
-fn uid_set(uids: &[u32]) -> String {
+pub(crate) fn uid_set(uids: &[u32]) -> String {
     let mut out = String::new();
     let mut iter = uids.iter().copied().peekable();
     while let Some(start) = iter.next() {
@@ -693,33 +1179,57 @@ fn uid_set(uids: &[u32]) -> String {
     out
 }
 
+/// Sorted, deduplicated copy of `uids`; fails when empty or containing 0.
+pub(crate) fn sorted_uids(uids: &[u32]) -> Result<Vec<u32>> {
+    let mut sorted = uids.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    if sorted.is_empty() || sorted[0] == 0 {
+        return Err(ImapError::InvalidArgument(
+            "a non-empty set of non-zero UIDs is required".to_owned(),
+        ));
+    }
+    Ok(sorted)
+}
+
+/// Expands a `COPYUID` / `APPENDUID` UID set, in order.
+pub(crate) fn expand_uid_set(members: &[UidSetMember]) -> Vec<u32> {
+    let mut out = Vec::new();
+    for member in members {
+        match member {
+            UidSetMember::Uid(uid) => out.push(*uid),
+            UidSetMember::UidRange(range) => {
+                let (a, b) = (*range.start(), *range.end());
+                if a <= b {
+                    out.extend(a..=b);
+                } else {
+                    out.extend((b..=a).rev());
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Converts the attributes of one `FETCH` response; `None` without UID or body.
 fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
     let mut uid = None;
-    let mut flags = Flags::default();
-    let mut keywords = Vec::new();
+    let mut flags = MessageFlags::default();
     let mut internal_date = None;
     let mut size = None;
     let mut envelope = None;
+    let mut modseq = None;
     let mut raw = None;
     for attribute in attributes {
         match attribute {
             AttributeValue::Uid(value) => uid = Some(*value),
             AttributeValue::Flags(values) => {
-                for flag in values {
-                    match flag.to_ascii_lowercase().as_str() {
-                        "\\seen" => flags.seen = true,
-                        "\\flagged" => flags.flagged = true,
-                        "\\answered" => flags.answered = true,
-                        "\\draft" => flags.draft = true,
-                        other if other.starts_with('\\') => {}
-                        _ => keywords.push(flag.to_string()),
-                    }
-                }
+                flags = MessageFlags::from_imap(values.iter().map(AsRef::<str>::as_ref));
             }
             AttributeValue::InternalDate(value) => internal_date = internal_date_to_rfc3339(value),
             AttributeValue::Rfc822Size(value) => size = Some(*value),
             AttributeValue::Envelope(value) => envelope = Some(convert_envelope(value)),
+            AttributeValue::ModSeq(value) => modseq = Some(*value),
             AttributeValue::BodySection {
                 section: None,
                 data: Some(data),
@@ -737,11 +1247,13 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
     };
     Some(FetchedMessage {
         uid,
-        flags,
-        keywords,
+        flags: flags.flags,
+        deleted: flags.deleted,
+        keywords: flags.keywords,
         internal_date,
         size,
         envelope,
+        modseq,
         raw,
     })
 }
@@ -786,7 +1298,7 @@ fn internal_date_to_rfc3339(value: &str) -> Option<String> {
     ))
 }
 
-fn lossy(bytes: Option<&std::borrow::Cow<'_, [u8]>>) -> Option<String> {
+fn lossy(bytes: Option<&Cow<'_, [u8]>>) -> Option<String> {
     bytes.map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
@@ -821,6 +1333,7 @@ fn convert_addresses(addresses: Option<&[ImapAddress<'_>]>) -> Vec<Address> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FetchBatchLimits;
 
     #[test]
     fn batches_respect_count_and_size_limits() {
@@ -858,6 +1371,7 @@ mod tests {
                 uid_validity: 7,
                 uid_next: 20,
                 exists: 3,
+                highest_modseq: None,
             },
             uid_validity_changed: false,
             batches: vec![vec![3, 5], vec![9]],
@@ -881,6 +1395,16 @@ mod tests {
             uid_set(&[u32::MAX - 1, u32::MAX]),
             format!("{}:{}", u32::MAX - 1, u32::MAX)
         );
+        assert_eq!(sorted_uids(&[3, 1, 3]).unwrap(), [1, 3]);
+        assert!(sorted_uids(&[]).is_err());
+        assert!(sorted_uids(&[0, 2]).is_err());
+        assert_eq!(
+            expand_uid_set(&[UidSetMember::Uid(4), UidSetMember::UidRange(7..=9)]),
+            [4, 7, 8, 9]
+        );
+        #[allow(clippy::reversed_empty_ranges)] // servers may send ranges high:low
+        let reversed = UidSetMember::UidRange(9..=7);
+        assert_eq!(expand_uid_set(&[reversed]), [9, 8, 7]);
     }
 
     #[test]
@@ -891,27 +1415,6 @@ mod tests {
         assert!(UidRange::from(5).contains(5));
         assert!(!UidRange::from(5).contains(4));
         assert!(!UidRange::new(1, 3).contains(4));
-    }
-
-    #[test]
-    fn mechanism_choice() {
-        let plain = Capabilities::from_atoms(["IMAP4rev1", "AUTH=PLAIN"]);
-        let none = Capabilities::from_atoms(["IMAP4rev1"]);
-        let disabled = Capabilities::from_atoms(["IMAP4rev1", "LOGINDISABLED"]);
-        assert_eq!(
-            choose_mechanism(AuthMechanism::Auto, &plain).unwrap(),
-            AuthMechanism::Plain
-        );
-        assert_eq!(
-            choose_mechanism(AuthMechanism::Auto, &none).unwrap(),
-            AuthMechanism::Login
-        );
-        assert!(choose_mechanism(AuthMechanism::Auto, &disabled).is_err());
-        assert!(choose_mechanism(AuthMechanism::Login, &disabled).is_err());
-        assert_eq!(
-            choose_mechanism(AuthMechanism::Plain, &none).unwrap(),
-            AuthMechanism::Plain
-        );
     }
 
     #[test]
@@ -945,19 +1448,33 @@ mod tests {
         assert_eq!(quote("INBOX").unwrap(), "\"INBOX\"");
         assert_eq!(quote(r#"a"b\c"#).unwrap(), r#""a\"b\\c""#);
         assert!(quote("a\r\nb").is_err());
+        assert!(matches!(astring("sam").unwrap(), Part::Text(_)));
+        assert!(matches!(astring("pässword").unwrap(), Part::Literal(_)));
+        assert!(astring("a\nb").is_err());
+    }
+
+    #[test]
+    fn response_texts_keep_codes() {
+        assert_eq!(
+            response_text(Some(&ResponseCode::TryCreate), Some("no mailbox")),
+            "[TRYCREATE] no mailbox"
+        );
+        assert_eq!(response_text(None, Some("[TOOBIG] big")), "[TOOBIG] big");
+        assert_eq!(response_text(None, None), "");
     }
 
     #[test]
     fn fetch_conversion() {
-        use std::borrow::Cow;
         let attributes = vec![
             AttributeValue::Uid(7),
             AttributeValue::Flags(vec![
                 Cow::Borrowed("\\Seen"),
                 Cow::Borrowed("\\Recent"),
+                Cow::Borrowed("\\Deleted"),
                 Cow::Borrowed("$Forwarded"),
             ]),
             AttributeValue::Rfc822Size(3),
+            AttributeValue::ModSeq(42),
             AttributeValue::BodySection {
                 section: None,
                 index: None,
@@ -966,16 +1483,11 @@ mod tests {
         ];
         let message = convert_fetch(&attributes).unwrap();
         assert_eq!(message.uid, 7);
-        assert!(message.flags.seen && !message.flags.flagged);
+        assert!(message.flags.seen && !message.flags.flagged && message.deleted);
         assert_eq!(message.keywords, ["$Forwarded"]);
+        assert_eq!(message.modseq, Some(42));
         assert_eq!(message.raw, b"abc");
         assert!(convert_fetch(&[AttributeValue::Uid(1)]).is_none());
         assert!(convert_fetch(&[AttributeValue::Rfc822Size(1)]).is_none());
-    }
-
-    #[test]
-    fn plain_response_format() {
-        let creds = Credentials::new("sam", "pw");
-        assert_eq!(PlainAuth(&creds).process(b""), b"\0sam\0pw");
     }
 }

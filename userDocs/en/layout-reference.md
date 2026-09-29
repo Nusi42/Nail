@@ -5,7 +5,7 @@ menus and keyboard shortcuts — comes from one file, `layout.kdl`, in your
 Nail configuration folder. How things look is set in
 [`theme.kdl`](theme-reference.md).
 
-This page covers what works in the current version (M0).
+This page covers what works in the current version (M1).
 
 ## The short version
 
@@ -69,6 +69,27 @@ breakpoint max-width=899 {
 If your file defines a window (in any breakpoint), it replaces all of the
 default's trees for that window.
 
+Besides `main`, the default layout has these windows. They open over the
+main window (Escape or the close button closes them), and their content is
+laid out like any other window:
+
+| Window | Opened by | Default content |
+| --- | --- | --- |
+| `composer` | `mail.compose`, `mail.reply`, `mail.reply-all`, `mail.forward` | `composer` |
+| `outbox` | `outbox.open` | `outbox` |
+| `move` | `mail.move` | `folder-picker` |
+| `account-setup` | `account.add` | `account-setup` |
+| `settings` | `settings.open` | `tabs` with `account-settings` and `virtual-account-editor` |
+
+```kdl
+window "settings" {
+    tabs {
+        account-settings label="@settings.tab.accounts"
+        virtual-account-editor label="@settings.tab.virtual-accounts"
+    }
+}
+```
+
 ## Containers
 
 Every node can have an `id` (lowercase words, unique within one window
@@ -128,19 +149,34 @@ A widget is a node named after its kind. Its properties are its options.
 
 | Widget | Options |
 | --- | --- |
-| `account-switcher` | — |
+| `account-switcher` | `show-status` (`#true`/`#false`): a dot per account showing its connection state |
 | `folder-tree` | `show-unread` (`#true`/`#false`), `show-account-badges` (`#true`/`#false`) |
-| `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`, `collapsed`, `expanded`); `row` templates |
-| `message-view` | `headers` (e.g. `"from to cc date"`); `row` templates |
+| `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`, `collapsed`: one row per conversation, `expanded`: one row per message), `follow-search` (`#true`/`#false`: show search results while a search is active); `row` templates |
+| `message-view` | `headers` (e.g. `"from to cc date"`), `mark-read` (`#true`/`#false`: mark a message read when it is shown); `row` templates |
+| `thread-view` | `expand` (`latest`, `unread`, `all`, `none`: which messages of the conversation start opened), `hide-single` (`#true`/`#false`: hide for messages without replies) |
+| `search-bar` | `scope` (`account`, `folder`, `all`), `hints` (`#true`/`#false`: suggest search fields while typing), `live-check` (`#true`/`#false`: point out mistakes while typing) |
+| `composer` | `send-later` (`#true`/`#false`: offer "Send later") |
+| `outbox` | — |
+| `folder-picker` | — (the "Move to folder" list) |
+| `account-setup` | — (the "Add account" assistant) |
+| `account-settings` | — |
+| `virtual-account-editor` | — |
 | `toolbar` | `toolbar`: the name of a `toolbar` definition (required) |
-| `status-bar` | `items` (e.g. `"sync-progress folder-counts"`) |
+| `status-bar` | `items`: any of `sync-progress`, `account-status`, `ops` (changes being saved), `send-status` (undo send), `folder-counts` |
 | `text` | `text`: literal text or `@message.id` |
 | `spacer` | — |
 
-The widgets `search-bar`, `thread-view`, `composer`, `calendar`, `agenda`,
-`mini-month`, `task-list`, `contact-list` and `contact-card` are accepted
-in the file but not available yet. Plug-in widgets are written
-`plugin.<plugin-id>.<name>`.
+The widgets `calendar`, `agenda`, `mini-month`, `task-list`,
+`contact-list` and `contact-card` are accepted in the file but not
+available yet. Plug-in widgets are written `plugin.<plugin-id>.<name>`.
+
+```kdl
+stack sizes="auto auto 1fr" {
+    toolbar toolbar="reader"
+    thread-view expand="unread"
+    message-view headers="from date" mark-read=#false
+}
+```
 
 ### Row templates
 
@@ -184,10 +220,34 @@ actions {
 
 In a sparse file only the properties you write change.
 
-Actions in the default layout: `mail.next`, `mail.previous`, `mail.reply`,
-`mail.reply-all`, `mail.forward`, `mail.archive`, `mail.delete`,
-`mail.toggle-read`, `mail.toggle-flag`, `view.toggle` (argument: the `id` of
-a pane, e.g. `"sidebar"`), `sync.now`.
+Actions in the default layout:
+
+| Action | What it does |
+| --- | --- |
+| `mail.next`, `mail.previous` | Select the next / previous message |
+| `mail.compose` | New message (continues an unfinished one) |
+| `mail.reply`, `mail.reply-all`, `mail.forward` | Answer or forward the selected message |
+| `mail.archive` | Move the selected message to the account's Archive |
+| `mail.move` | Open "Move to folder" |
+| `mail.move-to` | Move to a folder; argument: a folder role (`"archive"`, `"trash"`, …) or folder id |
+| `mail.delete`, `mail.delete-permanently` | Move to Trash / delete for good |
+| `mail.toggle-read`, `mail.toggle-flag` | Mark read or unread, flag or unflag |
+| `composer.send`, `composer.save`, `composer.discard` | In the composer: send, save the draft, throw the message away |
+| `outbox.open`, `outbox.undo` | Show the outbox; take back the message being sent |
+| `search.focus`, `search.clear` | Jump to the search bar; end the search |
+| `account.add`, `settings.open` | Add an account; open the settings |
+| `window.open`, `window.close` | Open a window by name (argument); close the topmost window |
+| `view.toggle` | Show or hide a pane; argument: its `id`, e.g. `"sidebar"` |
+| `sync.now` | Check for new mail |
+
+```kdl
+actions {
+    action "mail.spam" alias-of="mail.move-to" "junk" label="Spam" icon="junk"
+}
+keys {
+    bind "shift+j" "mail.spam"
+}
+```
 
 ## Keys
 
@@ -200,8 +260,14 @@ keys context="list" {
 }
 ```
 
-- `context` is where the keys work: `list`, `reader`, … Without `context`
-  they work everywhere (`global`).
+- `context` is where the keys work: `list` (message list), `reader`
+  (message and conversation), `folders`, `search` (search bar), `composer`,
+  `window` (any window over the main window). Without `context` they work
+  everywhere in the main window (`global`).
+- While you type in a text field, only combinations with `Ctrl`, `Alt` or
+  `Meta` and `escape` work, and only in that field's contexts (for example
+  `ctrl+enter` in the composer). Global shortcuts do not work inside
+  windows such as the composer.
 - Keys are written like `j`, `enter`, `arrowdown`, `f5`, `delete`.
   Combinations join keys with `+` (`ctrl+b`); sequences separate steps with
   a space (`g i` = press `g`, then `i`).

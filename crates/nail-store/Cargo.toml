@@ -1,6 +1,6 @@
 [package]
 name = "nail-store"
-description = "Local store: SQLite metadata, content-addressed blob store and operation queue"
+description = "Local store: SQLite metadata, content-addressed blob store, operation queue, threading, drafts and outbox"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,6 +19,7 @@ rusqlite.workspace = true
 zstd = "0.14.0"
 sha2.workspace = true
 hex.workspace = true
+futures-util.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

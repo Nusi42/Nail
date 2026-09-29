@@ -25,6 +25,9 @@ theme "default" mode="system" {
         color "quote-1"      "#2e5eaa" dark="#7aa7e8"
         color "quote-2"      "#3b8a5a" dark="#7cc49a"
         color "quote-3"      "#8a6d3b" dark="#d2b074"
+        color "success"      "#2f7d4f" dark="#6cc38f" high-contrast="#00ff00"
+        color "warning"      "#8a5a00" dark="#e0b050" high-contrast="#ffff00"
+        color "scrim"        "rgb(0 0 0 / 0.35)" dark="rgb(0 0 0 / 0.6)" high-contrast="rgb(0 0 0 / 0.8)"
 
         font "ui"     #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
         font "reader" #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
@@ -114,6 +117,7 @@ theme "default" mode="system" {
     part "toolbar" {
         display "flex"
         align-items "center"
+        flex-wrap "wrap"
         gap "$space.xs"
         min-height "$size.toolbar"
         padding 0 "$space.sm"
@@ -127,6 +131,7 @@ theme "default" mode="system" {
         padding "$space.xs" "$space.sm"
         border "none"
         border-radius "$radius.sm"
+        white-space "nowrap"
         color "$color.fg"
         background-color "transparent"
     }
@@ -166,8 +171,16 @@ theme "default" mode="system" {
         background-color "$color.bg-subtle"
     }
     part "account-switcher.item" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        width "100%"
         padding "$space.xs" "$space.sm"
+        border "none"
         border-radius "$radius.sm"
+        text-align "left"
+        color "$color.fg"
+        background-color "transparent"
     }
     part "account-switcher.item:selected" {
         font-weight "$font-weight.medium"
@@ -213,6 +226,7 @@ theme "default" mode="system" {
         font-weight "$font-weight.bold"
         color "$color.unread"
     }
+    part "folder-tree.item:selected .unread-count" { color "inherit"; }
 
     // ---- Message list ----
 
@@ -258,6 +272,9 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
         color "$color.fg-muted"
     }
+    // Selected rows: secondary text takes the selection colour for contrast.
+    part "message-list.row:selected .date" { color "inherit"; }
+    part "message-list.row:selected .preview" { color "inherit"; }
     part "message-list.empty" {
         padding "$space.xl"
         text-align "center"
@@ -320,6 +337,710 @@ theme "default" mode="system" {
     part "text" { padding "$space.xs" "$space.sm"; }
     part "spacer" { flex-grow 1; }
 
+    // ---- Search ----
+
+    part "search-bar" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        padding "$space.sm"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "search-bar.field" {
+        display "flex"
+        align-items "center"
+        gap "$space.xs"
+        padding 0 "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+    }
+    part "search-bar.field:focus-within" { outline "2px solid $color.focus-ring"; }
+    part "search-bar.icon" {
+        width "$size.icon"
+        height "$size.icon"
+        color "$color.fg-muted"
+    }
+    part "search-bar.input" {
+        flex-grow 1
+        min-width 0
+        padding "$space.xs" 0
+        border "none"
+        outline "none"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "search-bar.clear" {
+        display "inline-flex"
+        padding "$space.xxs"
+        border "none"
+        border-radius "$radius.sm"
+        color "$color.fg-muted"
+        background-color "transparent"
+    }
+    part "search-bar.clear:hover" { background-color "$color.bg-raised"; }
+    part "search-bar.clear.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+    part "search-bar.error" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        font-size "$font-size.sm"
+        color "$color.danger"
+    }
+    part "search-bar.error.query" {
+        font-family "$font.mono"
+        color "$color.fg"
+    }
+    part "search-bar.error.mark" {
+        padding 0 1
+        border-bottom "2px solid $color.danger"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "search-bar.hints" {
+        display "flex"
+        flex-direction "column"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+        box-shadow "$shadow.raised"
+        overflow "hidden"
+    }
+    part "search-bar.hint.button" {
+        display "flex"
+        gap "$space.sm"
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        text-align "left"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "search-bar.hint.button:hover" { background-color "$color.bg-raised"; }
+    part "search-bar.hint.syntax" {
+        font-family "$font.mono"
+        color "$color.accent"
+    }
+    part "search-bar.hint.description" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "search-bar.hint:info" { padding "$space.xs" "$space.sm"; }
+    part "message-list.search-summary" {
+        padding "$space.xs" "$space.md"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+
+    // ---- Accounts: status indicators ----
+
+    part "account-switcher.item.name" { flex-grow 1; }
+    part "account-switcher.item.status" {
+        width 8
+        height 8
+        border-radius "50%"
+        background-color "$color.fg-muted"
+    }
+    part "account-switcher.item.status:online" { background-color "$color.success"; }
+    part "account-switcher.item.status:connecting" { background-color "$color.warning"; }
+    part "account-switcher.item.status:auth-error" { background-color "$color.danger"; }
+    part "status-bar.item:auth-error" { color "$color.danger"; }
+    part "status-bar.item:error" { color "$color.danger"; }
+    part "status-bar.item:failed" { color "$color.danger"; }
+    part "status-bar.button" {
+        margin-left "$space.sm"
+        padding 0 "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "status-bar.button:hover" { background-color "$color.bg-raised"; }
+
+    // ---- Thread view ----
+
+    part "thread-view" {
+        max-height "40vh"
+        overflow-y "auto"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "thread-view.header" {
+        display "flex"
+        gap "$space.sm"
+        align-items "baseline"
+        padding "$space.xs" "$space.lg"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "thread-view.subject" {
+        flex-grow 1
+        font-weight "$font-weight.medium"
+        color "$color.fg"
+    }
+    part "thread-view.item" { border-top "$border.thin"; }
+    part "thread-view.item:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "thread-view.item.header" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        padding-right "$space.lg"
+    }
+    part "thread-view.item.toggle" {
+        display "flex"
+        flex-grow 1
+        gap "$space.sm"
+        min-width 0
+        padding "$space.xs" "$space.lg"
+        border "none"
+        text-align "left"
+        color "inherit"
+        background-color "transparent"
+        white-space "nowrap"
+        overflow "hidden"
+    }
+    part "thread-view.item.toggle:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset -2
+    }
+    part "thread-view.item:unread .from" { font-weight "$font-weight.bold"; }
+    part "thread-view.item.date" { font-size "$font-size.sm"; }
+    part "thread-view.item.preview" {
+        overflow "hidden"
+        text-overflow "ellipsis"
+        font-size "$font-size.sm"
+    }
+    part "thread-view.item.open" {
+        padding 0 "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-size "$font-size.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "thread-view.item.open:disabled" { opacity "$opacity.disabled"; }
+    part "thread-view.text" { padding "$space.xs" "$space.lg" "$space.sm"; }
+    part "thread-view.body" { font-family "$font.reader"; }
+    part "thread-view.quote" {
+        padding-left "$space.sm"
+        border-left "3px solid $color.quote-1"
+        color "$color.fg-muted"
+    }
+    part "thread-view.quote-toggle" {
+        font-size "$font-size.sm"
+        color "$color.accent"
+        cursor "pointer"
+    }
+
+    // ---- Windows (composer, settings, account setup, outbox, move) ----
+
+    part "window-layer" {
+        padding "$space.xl"
+        background-color "$color.scrim"
+        z-index 100
+    }
+    part "window" {
+        width "min(960px, 100%)"
+        height "min(760px, 100%)"
+        border "$border.thin"
+        border-radius "$radius.lg"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "window[window=\"move\"]" {
+        width "min(420px, 100%)"
+        height "min(560px, 100%)"
+    }
+    part "window[window=\"account-setup\"]" { width "min(640px, 100%)"; }
+    part "window[window=\"outbox\"]" { width "min(720px, 100%)"; }
+    part "window.header" {
+        gap "$space.sm"
+        padding "$space.sm" "$space.lg"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "window.title" {
+        font-size "$font-size.lg"
+        font-weight "$font-weight.bold"
+    }
+    part "window.close" {
+        display "inline-flex"
+        padding "$space.xs"
+        border "none"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "window.close:hover" { background-color "$color.bg-raised"; }
+    part "window.close:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "window.close.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+
+    // ---- Forms (account setup, settings, virtual accounts, composer, outbox) ----
+
+    part "form.section" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        margin 0
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "form.section.title" {
+        padding 0 "$space.xs"
+        font-weight "$font-weight.bold"
+    }
+    part "form.field" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+    }
+    part "form.label" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "form.input" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "form.input:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "form.select" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "form.textarea" {
+        min-height 96
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "form.hint" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "form.check" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "form.button" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xs"
+        padding "$space.xs" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg-subtle"
+        cursor "default"
+    }
+    part "form.button:hover" { background-color "$color.bg-raised"; }
+    part "form.button:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset 1
+    }
+    part "form.button:disabled" { opacity "$opacity.disabled"; }
+    part "form.button[variant=\"primary\"]" {
+        border-color "$color.accent"
+        color "$color.accent-fg"
+        background-color "$color.accent"
+    }
+    part "form.button[variant=\"danger\"]" {
+        border-color "$color.danger"
+        color "$color.danger"
+    }
+    part "form.button:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "form.button.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+
+    part "account-setup" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+        overflow-y "auto"
+    }
+    part "account-setup.steps" {
+        display "flex"
+        gap "$space.md"
+        margin 0
+        padding 0
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "account-setup.step:selected" {
+        font-weight "$font-weight.bold"
+        color "$color.fg"
+    }
+    part "account-setup.form" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+    }
+    part "account-setup.candidates" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "account-setup.candidate" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "account-setup.candidate.servers" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "account-setup.actions" {
+        display "flex"
+        justify-content "flex-end"
+        gap "$space.sm"
+    }
+    part "account-setup.error" { color "$color.danger"; }
+    part "account-setup.results" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        margin 0
+        padding 0
+    }
+    part "account-setup.result" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding "$space.sm" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "account-setup.result:ok" { border-left "4px solid $color.success"; }
+    part "account-setup.result:error" { border-left "4px solid $color.danger"; }
+    part "account-setup.result.title" { font-weight "$font-weight.bold"; }
+    part "account-setup.result.capabilities" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "account-setup.oauth" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "account-setup.oauth.link" { color "$color.accent"; }
+
+    part "account-settings" {
+        display "grid"
+        grid-template-columns "220px minmax(0, 1fr)"
+        min-height 0
+        overflow "hidden"
+    }
+    part "account-settings.sidebar" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.sm"
+        border-right "$border.thin"
+        background-color "$color.bg-subtle"
+        overflow-y "auto"
+    }
+    part "account-settings.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "account-settings.account" {
+        display "flex"
+        flex-direction "column"
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "account-settings.account:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "account-settings.account.email" { font-size "$font-size.sm"; }
+    part "account-settings.account.status" { font-size "$font-size.xs"; }
+    part "account-settings.form" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+        overflow-y "auto"
+    }
+    part "account-settings.identities" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        margin 0
+        padding 0
+    }
+    part "account-settings.identity" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "account-settings.actions" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "account-settings.problem" { color "$color.danger"; }
+    part "account-settings.message:error" { color "$color.danger"; }
+
+    part "virtual-editor" {
+        display "grid"
+        grid-template-columns "220px minmax(0, 1fr)"
+        min-height 0
+        overflow "hidden"
+    }
+    part "virtual-editor.sidebar" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.sm"
+        border-right "$border.thin"
+        background-color "$color.bg-subtle"
+        overflow-y "auto"
+    }
+    part "virtual-editor.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "virtual-editor.account" {
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "virtual-editor.account:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "virtual-editor.form" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+        overflow-y "auto"
+    }
+    part "virtual-editor.mapping" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "virtual-editor.source" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "flex-end"
+        gap "$space.sm"
+    }
+    part "virtual-editor.rule" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "flex-end"
+        gap "$space.sm"
+    }
+    part "virtual-editor.actions" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "virtual-editor.problem" { color "$color.danger"; }
+    part "virtual-editor.message:error" { color "$color.danger"; }
+
+    // ---- Composer ----
+
+    part "composer" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md" "$space.lg"
+        min-height 0
+    }
+    part "composer.field" {
+        display "grid"
+        grid-template-columns "80px minmax(0, 1fr)"
+        align-items "center"
+        gap "$space.sm"
+        padding-bottom "$space.xs"
+        border-bottom "$border.thin"
+    }
+    part "composer.field.label" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.field.input" {
+        padding "$space.xs" 0
+        border "none"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "composer.field.input:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "composer.identity" {
+        padding "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "composer.extra-fields" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "composer.body.label" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.body" {
+        flex-grow 1
+        min-height 200
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        line-height "$line-height.normal"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "composer.body:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "composer.error" { color "$color.danger"; }
+    part "composer.send-later" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "composer.actions" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "composer.spacer" { flex-grow 1; }
+    part "composer.saved" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.empty" {
+        margin "auto"
+        color "$color.fg-muted"
+    }
+
+    // ---- Outbox and move picker ----
+
+    part "outbox" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md" "$space.lg"
+        overflow-y "auto"
+    }
+    part "outbox.item" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding "$space.sm" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "outbox.item:failed" { border-left "4px solid $color.danger"; }
+    part "outbox.item.subject" { font-weight "$font-weight.bold"; }
+    part "outbox.item.recipients" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "outbox.item.status" {
+        display "flex"
+        gap "$space.sm"
+        font-size "$font-size.sm"
+    }
+    part "outbox.item.error" { color "$color.danger"; }
+    part "outbox.item.actions" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "outbox.empty" {
+        margin "auto"
+        color "$color.fg-muted"
+    }
+    part "folder-picker" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "folder-picker.button" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "folder-picker.button:hover" { background-color "$color.bg-raised"; }
+    part "folder-picker.button:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset -2
+    }
+    part "folder-picker.button.icon" {
+        width "$size.icon"
+        height "$size.icon"
+        color "$color.fg-muted"
+    }
+
     // ---- Icons (SVG path data on a 24x24 grid) ----
 
     icons {
@@ -337,6 +1058,13 @@ theme "default" mode="system" {
         icon "drafts"    svg="M4 16 15 5l4 4L8 20H4z M16 4l2-2 4 4-2 2z"
         icon "junk"      svg="M12 2 2 20h20z M11 9h2v5h-2z M11 16h2v2h-2z"
         icon "trash"     svg="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"
+        icon "compose"   svg="M3 17.3V21h3.7L17.8 9.9l-3.7-3.7z M20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7z"
+        icon "move"      svg="M2 5h7l2 2h11v12H2z M12 10v3H8v2h4v3l4-4z"
+        icon "outbox"    svg="M3 13h5l1 2h6l1-2h5v7H3z M11 3h2v7h3l-4 4-4-4h3z"
+        icon "search"    svg="M10 3a7 7 0 0 1 5.6 11.2l5.6 5.6-1.4 1.4-5.6-5.6A7 7 0 1 1 10 3z M10 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
+        icon "settings"  svg="M10 2h4l.5 2.6 2 1.2 2.5-.9 2 3.4-2 1.7v2.4l2 1.7-2 3.4-2.5-.9-2 1.2L14 22h-4l-.5-2.6-2-1.2-2.5.9-2-3.4 2-1.7V10.6l-2-1.7 2-3.4 2.5.9 2-1.2z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
+        icon "account-add" svg="M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8z M1 20c0-3.3 3.6-6 8-6s8 2.7 8 6z M19 7h2v3h3v2h-3v3h-2v-3h-3v-2h3z"
+        icon "close"     svg="M5.6 4.2 12 10.6l6.4-6.4 1.4 1.4-6.4 6.4 6.4 6.4-1.4 1.4-6.4-6.4-6.4 6.4-1.4-1.4 6.4-6.4-6.4-6.4z"
     }
 
     // ---- Reading mail ----

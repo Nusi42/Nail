@@ -26,13 +26,18 @@ function renderApp(env = createEnv({ state: { connection: "connecting" } })) {
 const themeStyle = () => document.head.querySelector<HTMLStyleElement>("style[data-nail-theme]");
 
 describe("App", () => {
-  it("renders the default three-pane UI from the mock core", async () => {
+  it("renders the default three-pane UI with the unified inbox", async () => {
     const { container, env } = renderApp();
     await screen.findByRole("treeitem", { name: /Inbox/ });
     const app = container.querySelector('[data-part="app"]');
     expect(app).toHaveAttribute("data-layout", "default");
-    expect(env.store.getState().activeAccountId).toBe("acc-personal");
-    expect(env.store.getState().activeFolderId).toBe(INBOX);
+    // The built-in "All accounts" virtual account comes first: the unified inbox.
+    expect(env.store.getState().activeAccountId).toBe("all");
+    expect(env.store.getState().activeFolderId).toBe("all/inbox");
+    expect(screen.getByRole("button", { name: "All accounts" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect((await screen.findAllByRole("option")).length).toBeGreaterThan(0);
     expect(screen.getByText("Select a message to read it.")).toBeInTheDocument();
     expect(themeStyle()?.textContent).toContain("--nail-color-accent");
@@ -51,7 +56,9 @@ describe("App", () => {
   });
 
   it("navigates with the layout's key bindings (j/k, ctrl+b, g r)", async () => {
-    const { container, env } = renderApp();
+    const { container, env } = renderApp(
+      createEnv({ state: { connection: "connecting", activeAccountId: "acc-personal" } }),
+    );
     const list = await screen.findByRole("listbox", { name: "Messages" });
     await screen.findAllByRole("option");
     list.focus();

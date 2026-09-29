@@ -1,10 +1,20 @@
 /**
- * In-memory transport answering every M0 request from `MockData`.
- * Used by unit tests and by `?mock=1` in the dev server.
+ * In-memory transport answering every request of the contract from
+ * `MockData`, like a core with two IMAP accounts would. Used by unit tests
+ * and by `?mock=1` in the dev server.
+ *
+ * Writes are applied at once and "replayed" asynchronously with `OpStatus`
+ * events; sending honours the undo-send delay with real timers (tests use
+ * fake timers). `data.behaviour` makes the mock fail on purpose.
  */
 import { Listeners, type ConnectionStatus, type Transport } from "./client";
 import type { Event as NailEvent, Request, Response } from "./generated";
+import * as accounts from "./mockAccounts";
 import { createMockData, type MockData } from "./mockData";
+import * as mail from "./mockMail";
+import { errorResponse, type MockCore } from "./mockMail";
+import * as outbox from "./mockOutbox";
+import { parseQuery } from "./mockSearch";
 
 export interface MockTransportOptions {
   data?: MockData;
@@ -12,7 +22,7 @@ export interface MockTransportOptions {
   latencyMs?: number;
 }
 
-export class MockTransport implements Transport {
+export class MockTransport implements Transport, MockCore {
   readonly data: MockData;
   /** Every request received, in order (for assertions). */
   readonly requests: Request[] = [];
@@ -20,6 +30,7 @@ export class MockTransport implements Transport {
   private readonly events = new Listeners<NailEvent>();
   private readonly statuses = new Listeners<ConnectionStatus>();
   private closed = false;
+  private counter = 0;
 
   constructor(options: MockTransportOptions = {}) {
     this.data = options.data ?? createMockData();
@@ -37,6 +48,17 @@ export class MockTransport implements Transport {
   /** Pushes an event to all subscribers, as the core would. */
   emit(event: NailEvent): void {
     this.events.emit(event);
+  }
+
+  later(fn: () => void, ms = this.data.behaviour.workMs): void {
+    setTimeout(() => {
+      if (!this.closed) fn();
+    }, ms);
+  }
+
+  nextId(prefix: string): string {
+    this.counter++;
+    return `${prefix}${this.counter}`;
   }
 
   onEvent(listener: (event: NailEvent) => void): () => void {
@@ -59,7 +81,7 @@ export class MockTransport implements Transport {
   private answer(request: Request): Response {
     const d = this.data;
     if (this.closed) {
-      return { type: "Error", code: "unavailable", message: "mock transport closed" };
+      return errorResponse("unavailable", "mock transport closed");
     }
     switch (request.type) {
       case "Ping":
@@ -67,20 +89,14 @@ export class MockTransport implements Transport {
       case "GetConfig":
         return { type: "Config", theme: d.theme, layout: d.layout, locale: d.locale };
       case "ListAccounts":
-        return { type: "Accounts", accounts: d.accounts };
-      case "ListFolders":
-        if (!d.accounts.some((a) => a.id === request.account_id)) {
-          return notFound(`account ${request.account_id}`);
-        }
-        return {
-          type: "Folders",
-          folders: d.folders.filter((f) => f.account_id === request.account_id),
-        };
+        return { type: "Accounts", accounts: mail.listAccounts(d) };
+      case "ListFolders": {
+        const folders = mail.listFolders(d, request.account_id);
+        return folders ? { type: "Folders", folders } : notFound(`account ${request.account_id}`);
+      }
       case "ListMessages": {
-        if (!d.folders.some((f) => f.id === request.folder_id)) {
-          return notFound(`folder ${request.folder_id}`);
-        }
-        const all = d.messages.filter((m) => m.folder_id === request.folder_id);
+        const all = mail.folderMessages(d, request.folder_id);
+        if (!all) return notFound(`folder ${request.folder_id}`);
         return {
           type: "Messages",
           folder_id: request.folder_id,
@@ -101,18 +117,76 @@ export class MockTransport implements Transport {
         });
         return { type: "SyncStarted" };
       }
-      default:
-        // M1a requests (WP10 contract) are answered like a core that does
-        // not implement them yet; WP14 fills them in.
+      case "DiscoverAccount":
+        return accounts.discover(d, request.email);
+      case "TestAccount":
+        return accounts.testAccount(this, request.config, request.secrets);
+      case "StartOAuth":
+        return accounts.startOAuth(this, request.provider);
+      case "CancelOAuth":
+        return accounts.cancelOAuth(this, request.flow_id);
+      case "GetAccountsConfig":
+        return { type: "AccountsConfig", config: structuredClone(d.accountsConfig) };
+      case "AddAccount":
+        return accounts.addAccount(this, request.config);
+      case "UpdateAccount":
+        return accounts.updateAccount(this, request.config);
+      case "RemoveAccount":
+        return accounts.removeAccount(this, request.account_id);
+      case "ListIdentities":
+        return accounts.listIdentities(d, request.account_id);
+      case "ListVirtualAccounts":
         return {
-          type: "Error",
-          code: "unsupported",
-          message: `${request.type} is not implemented by the mock core`,
+          type: "VirtualAccounts",
+          virtual_accounts: structuredClone(d.accountsConfig.virtual_accounts),
         };
+      case "AddVirtualAccount":
+        return accounts.addVirtualAccount(this, request.config);
+      case "UpdateVirtualAccount":
+        return accounts.updateVirtualAccount(this, request.config);
+      case "RemoveVirtualAccount":
+        return accounts.removeVirtualAccount(this, request.account_id);
+      case "ListAccountStatuses":
+        return { type: "AccountStatuses", statuses: d.statuses.map((s) => ({ ...s })) };
+      case "UpdateFlags":
+        return mail.updateFlags(this, request.message_ids, request.change);
+      case "MoveMessages":
+        return mail.moveMessages(this, request.message_ids, request.target);
+      case "DeleteMessages":
+        return mail.deleteMessages(this, request.message_ids, request.permanent);
+      case "ListThreads": {
+        const threads = mail.listThreads(d, request.folder_id);
+        if (!threads) return notFound(`folder ${request.folder_id}`);
+        return {
+          type: "Threads",
+          folder_id: request.folder_id,
+          offset: request.offset,
+          total: threads.length,
+          threads: threads.slice(request.offset, request.offset + request.limit),
+        };
+      }
+      case "GetThread":
+        return mail.getThread(d, request.thread_id);
+      case "Search":
+        return mail.search(d, request.query);
+      case "CheckQuery":
+        return { type: "QueryChecked", error: parseQuery(request.text).error };
+      case "SaveDraft":
+        return outbox.saveDraft(this, request.draft);
+      case "GetDraft":
+        return outbox.getDraft(this, request.draft_id);
+      case "DeleteDraft":
+        return outbox.deleteDraft(this, request.draft_id);
+      case "SendDraft":
+        return outbox.sendDraft(this, request.draft_id, request.delay_secs, request.send_at);
+      case "CancelSend":
+        return outbox.cancelSend(this, request.outbox_id);
+      case "ListOutbox":
+        return outbox.listOutbox(this);
     }
   }
 }
 
 function notFound(what: string): Response {
-  return { type: "Error", code: "not_found", message: `${what} not found` };
+  return errorResponse("not_found", `${what} not found`);
 }

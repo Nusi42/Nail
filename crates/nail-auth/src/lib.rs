@@ -1,73 +1,43 @@
 //! Authentication support for Nail.
 //!
-//! **Stub (M1a WP10).** Work package WP12 fills this crate in:
+//! * [`KeychainSecretStore`]: [`nail_api::engine::SecretStore`] on the OS
+//!   keychain via [`keyring`] (Windows Credential Manager, macOS Keychain,
+//!   Secret Service), chunking values longer than one Windows credential
+//!   blob. The in-memory store for tests is
+//!   [`nail_api::engine::MemorySecretStore`].
+//! * [`ProviderRegistry`]: built-in Google and Microsoft endpoints and mail
+//!   scopes (IMAP / POP3 / SMTP), merged with the `oauth-provider` entries
+//!   of `accounts.kdl` (client ids come only from there).
+//! * [`start_flow`]: authorization code + PKCE with a loopback redirect on
+//!   `127.0.0.1:<random port>` (RFC 8252), `state` check, code exchange.
+//! * [`TokenManager`]: stores refresh tokens, caches and refreshes access
+//!   tokens; the core's [`nail_api::engine::AccessTokenProvider`].
 //!
-//! * a keychain-backed [`nail_api::engine::SecretStore`] on [`keyring`]
-//!   (Windows Credential Manager, macOS Keychain, Secret Service); the
-//!   in-memory store for tests is [`nail_api::engine::MemorySecretStore`];
-//! * OAuth2 authorization code + PKCE with a loopback redirect
-//!   (`http://127.0.0.1:<port>/`) using [`oauth2`], token refresh, and an
-//!   [`nail_api::engine::AccessTokenProvider`];
-//! * the provider registry: `google` and `microsoft` built in, client ids
-//!   from `accounts.kdl` ([`nail_api::accounts::OAuthProviderConfig`]).
-//!
-//! HTTP goes through [`reqwest`] 0.13 built with `rustls-no-provider`: build
-//! the client with [`http_client`] (ring provider + platform verifier), or
-//! hand it a preconfigured rustls config with custom roots in tests.
-//! Tests use the mock OAuth server of `nail-testkit-net`.
-//! Expected shape: `docs/adr/0012-m1a-contract.md`.
+//! HTTP goes through [`reqwest`] 0.13 built with `rustls-no-provider`:
+//! [`http_client`] (ring provider + platform verifier, no redirects).
+//! Secrets are never logged or included in errors and `Debug` output.
+//! See `docs/adr/0017-wp12-outgoing-pop3-auth-discovery.md`.
 
 #![warn(missing_docs)]
 
-use std::sync::Arc;
+mod client;
+mod error;
+mod flow;
+mod http;
+mod keychain;
+mod manager;
+pub mod providers;
 
-use tokio_rustls::rustls;
+pub use client::{OAuthClient, TokenSet};
+pub use error::AuthError;
+pub use flow::{CallbackPages, FlowCanceller, FlowOptions, PendingFlow, start_flow};
+pub use http::{
+    BuildError, HttpError, http_client, http_client_builder, tls_config, tls_config_with_roots,
+};
+pub use keychain::{CHUNK_BYTES, KeychainBackend, KeychainSecretStore, OsKeychain};
+pub use manager::{EXPIRY_MARGIN, TokenManager};
+pub use providers::{GOOGLE, MICROSOFT, ProviderRegistry, ProviderSpec, provider_for_host};
 
 /// The keychain service Nail's entries live under (see
 /// [`nail_api::accounts::SecretRef`]).
 pub const KEYCHAIN_SERVICE: &str = nail_api::accounts::SecretRef::SERVICE;
-
-/// A rustls client configuration with the `ring` provider and the
-/// platform's certificate verifier, as the rest of Nail uses.
-pub fn tls_config() -> Result<rustls::ClientConfig, rustls::Error> {
-    use rustls_platform_verifier::BuilderVerifierExt as _;
-    let provider = Arc::new(rustls::crypto::ring::default_provider());
-    Ok(rustls::ClientConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()?
-        .with_platform_verifier()?
-        .with_no_client_auth())
-}
-
-/// An HTTP client for OAuth2 and discovery requests: rustls with the
-/// platform verifier, no redirects (OAuth2 token endpoints must not
-/// redirect).
-pub fn http_client() -> Result<reqwest::Client, Box<dyn std::error::Error + Send + Sync>> {
-    Ok(reqwest::Client::builder()
-        .tls_backend_preconfigured(tls_config()?)
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?)
-}
-
-/// The type the keychain backend wraps (kept referenced so the dependency
-/// is compiled and checked on every platform).
-pub type KeychainEntry = keyring::Entry;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pkce_challenge_is_s256() {
-        let (challenge, verifier) = oauth2::PkceCodeChallenge::new_random_sha256();
-        assert_eq!(challenge.method().as_str(), "S256");
-        assert!(verifier.secret().len() >= 43);
-        let url = url::Url::parse("http://127.0.0.1:1234/callback").unwrap();
-        assert_eq!(url.port(), Some(1234));
-        assert_eq!(KEYCHAIN_SERVICE, "nail");
-    }
-
-    #[test]
-    fn http_client_builds_without_a_process_wide_crypto_provider() {
-        http_client().unwrap();
-    }
-}

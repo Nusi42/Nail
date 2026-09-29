@@ -1,28 +1,30 @@
 //! POP3 client (RFC 1939) for Nail.
 //!
-//! **Stub (M1a WP10).** Work package WP12 fills this crate in with an
-//! in-house async client: `STLS`, `USER`/`PASS`, `APOP`, SASL `PLAIN` /
-//! `XOAUTH2` (RFC 5034), `CAPA`, `UIDL`, `TOP`, `RETR`, `DELE`, `QUIT`;
-//! implicit TLS (995) and STLS (110) over `tokio-rustls`; and the
-//! leave-on-server policies of [`nail_api::accounts::Pop3Options`].
+//! An in-house async client ([`Pop3Client`]): implicit TLS (995), `STLS`
+//! (110, RFC 2595; never downgraded) or plaintext for local test servers;
+//! `CAPA` (RFC 2449); login with `USER`/`PASS`, `APOP`, SASL `PLAIN`,
+//! `XOAUTH2` or `OAUTHBEARER` (RFC 5034, including the OAuth error
+//! challenge); `STAT`, `LIST`, `UIDL`, `TOP`, `RETR`, `DELE`, `RSET`,
+//! `NOOP`, `QUIT` (which commits deletions).
 //!
-//! Tests run against the mock POP3 server of `nail-testkit-net`.
-//! Expected shape: `docs/adr/0012-m1a-contract.md`.
+//! [`policy`] plans downloads and server deletions for the leave-on-server
+//! settings of [`nail_api::accounts::Pop3Options`] as pure functions.
+//!
+//! Errors ([`Pop3Error`]) convert into [`nail_api::engine::EngineError`]; see
+//! `docs/adr/0017-wp12-outgoing-pop3-auth-discovery.md`.
 
 #![warn(missing_docs)]
 
+mod client;
+mod config;
+mod error;
+pub mod policy;
+mod transport;
+
+pub use client::{Capabilities, MAX_MESSAGE_BYTES, Pop3Client, ServerMessage, test_login};
+pub use config::{Pop3Config, Pop3Credentials, TlsTrust};
+pub use error::{Pop3Error, Result};
+pub use policy::{LeavePolicy, plan_deletions, plan_downloads, vanished};
+
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");
-
-#[cfg(test)]
-mod tests {
-    use base64::Engine as _;
-
-    #[test]
-    fn sasl_plain_encoding_is_available() {
-        // SASL PLAIN: authzid NUL authcid NUL password, base64-encoded.
-        let encoded = base64::engine::general_purpose::STANDARD.encode(b"\0ada\0secret");
-        assert_eq!(encoded, "AGFkYQBzZWNyZXQ=");
-        assert_eq!(super::CRATE, "nail-proto-pop3");
-    }
-}

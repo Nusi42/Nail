@@ -281,11 +281,13 @@ describe("toolbar", () => {
       "Reply all",
       "Forward",
       "Archive",
+      "Move to…",
       "Delete",
+      "Mark as read/unread",
       "Flag",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");
-    expect(buttons[0]).toBeDisabled(); // mail.reply arrives with M1
+    expect(buttons[0]).toBeDisabled(); // no message selected
     expect(buttons[0]).toHaveAttribute("data-state", "disabled");
     expect(buttons[0]?.querySelector('[data-part="toolbar.button.icon"]')).toHaveAttribute(
       "data-icon",

@@ -165,7 +165,19 @@ html, body { margin: 0; height: 100%; }
 [data-part="folder-tree.list"], [data-part="account-switcher"] { list-style: none; margin: 0; }
 [data-part="folder-tree.list"] { padding: 0; }
 [data-part="message-view.header.field"] { display: flex; gap: 0.5em; }
-${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${d}"] { margin-inline-start: ${d * 16}px; }`).join("\n")}`;
+[data-part="window-layer"] { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+[data-part="window"] { display: flex; flex-direction: column; max-width: 100%; max-height: 100%; min-height: 0; overflow: hidden; }
+[data-part="window"]:not([data-state~="active"]) { display: none; }
+[data-part="window.header"] { display: flex; align-items: center; flex: 0 0 auto; }
+[data-part="window.title"] { flex: 1 1 auto; margin: 0; font: inherit; }
+[data-part="window.body"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; }
+[data-part="window.body"] > * { flex: 1 1 auto; min-height: 0; }
+button, input, select, textarea { font: inherit; }
+[data-part="thread-view.body"], [data-part="thread-view.quote"] { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+[data-part="search-bar.hints"], [data-part="thread-view.list"], [data-part="outbox.list"], [data-part="folder-picker.list"] { list-style: none; margin: 0; padding: 0; }
+[data-part="search-bar.error.query"] { white-space: pre; }
+[data-part="search-bar.input"]::-webkit-search-cancel-button { display: none; }
+${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${d}"], [data-part="folder-picker.item"][data-depth="${d}"] { margin-inline-start: ${d * 16}px; }`).join("\n")}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {

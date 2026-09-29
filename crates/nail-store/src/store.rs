@@ -47,8 +47,8 @@ pub struct Store {
 
 struct Inner {
     conn: Mutex<Connection>,
-    /// Serializes [`Store::replay_pending`] passes so queue order holds.
-    replay_lock: tokio::sync::Mutex<()>,
+    /// Serializes replay passes per account so queue order holds.
+    replay_locks: crate::queue::ReplayLocks,
     path: Option<PathBuf>,
 }
 
@@ -99,11 +99,12 @@ impl Store {
         let store = Self {
             inner: Arc::new(Inner {
                 conn: Mutex::new(conn),
-                replay_lock: tokio::sync::Mutex::new(()),
+                replay_locks: crate::queue::ReplayLocks::default(),
                 path,
             }),
         };
         let recovered = store.recover_in_flight()?;
+        store.recover_sending()?;
         tracing::debug!(path = ?store.inner.path, version, recovered, "store opened");
         Ok(store)
     }
@@ -163,8 +164,8 @@ impl Store {
         })
     }
 
-    pub(crate) fn replay_lock(&self) -> &tokio::sync::Mutex<()> {
-        &self.inner.replay_lock
+    pub(crate) fn replay_locks(&self) -> &crate::queue::ReplayLocks {
+        &self.inner.replay_locks
     }
 }
 

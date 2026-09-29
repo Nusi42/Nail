@@ -10,15 +10,18 @@
 
 use nail_api::{
     Account, AccountId, AccountKind, Address, Flags, Folder, FolderId, FolderRole, MessageId,
-    MessageSummary,
+    MessageLocation, MessageSummary, ThreadId,
 };
+use std::collections::HashMap;
+
 use rusqlite::types::Type;
-use rusqlite::{OptionalExtension, Row, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::blob::{BlobHash, BlobStore};
 use crate::error::{Error, Result};
+use crate::queue::Operation;
 use crate::store::Store;
 
 /// IMAP synchronization state of a folder. All fields are `None` until the
@@ -35,6 +38,10 @@ pub struct FolderSyncState {
 }
 
 /// A message as stored: the summary shown to clients plus sync metadata.
+///
+/// In `summary`, `thread_id` is ignored on writes (the store threads
+/// messages itself) and `tags` are the server's keywords; `duplicates` is
+/// ignored.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredMessage {
     /// Everything a message list shows.
@@ -44,7 +51,8 @@ pub struct StoredMessage {
     /// Hash of the raw RFC 5322 message in the blob store, `None` while only
     /// headers are known.
     pub blob_hash: Option<BlobHash>,
-    /// Thread grouping key (JWZ root Message-ID or a provider thread id).
+    /// M0 thread grouping key (root of the reference chain). Only used for
+    /// threading when no [`MessageMeta`] was ever given for the message.
     pub thread_key: Option<String>,
 }
 
@@ -58,6 +66,40 @@ impl StoredMessage {
             thread_key: None,
         }
     }
+}
+
+/// Headers the store threads by, plus the raw size (for `size>` searches).
+/// Message-IDs may be given with or without angle brackets.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct MessageMeta {
+    /// `Message-ID`.
+    pub message_id: Option<String>,
+    /// `In-Reply-To` ids.
+    pub in_reply_to: Vec<String>,
+    /// `References` ids, oldest first.
+    pub references: Vec<String>,
+    /// Size of the raw message in bytes.
+    pub size: Option<u64>,
+}
+
+/// A message as reported by a server, for [`Store::merge_messages`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncedMessage {
+    /// Summary and sync metadata.
+    pub message: StoredMessage,
+    /// Threading headers and size; `None` keeps what is stored.
+    pub meta: Option<MessageMeta>,
+}
+
+/// What [`Store::merge_messages`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MergeReport {
+    /// Messages written (including `kept_local`).
+    pub written: usize,
+    /// Messages written with pending local flag / tag changes re-applied.
+    pub kept_local: Vec<MessageId>,
+    /// Messages not written because a move or delete is pending for them.
+    pub skipped: Vec<MessageId>,
 }
 
 /// One page of a folder's messages, newest first.
@@ -152,11 +194,17 @@ fn folder_from_row(row: &Row<'_>) -> rusqlite::Result<Folder> {
     })
 }
 
-const MESSAGE_COLS: &str = "m.id, m.folder_id, m.account_id, m.subject, m.from_name, m.from_email,
-    m.to_json, m.date, m.seen, m.flagged, m.answered, m.draft, m.has_attachments, m.preview,
-    m.uid, m.blob_hash, m.thread_key";
+pub(crate) const MESSAGE_COLS: &str = "m.id, m.folder_id, m.account_id, m.subject, m.from_name,
+    m.from_email, m.to_json, m.date, m.seen, m.flagged, m.answered, m.draft, m.has_attachments,
+    m.preview, m.uid, m.blob_hash, m.thread_key, m.thread_id";
 
-fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MessageSummary> {
+/// Number of columns in [`MESSAGE_COLS`]; extra columns selected after it
+/// start at this index.
+pub(crate) const MESSAGE_COL_COUNT: usize = 18;
+
+/// Reads a summary from a row selected with [`MESSAGE_COLS`]. `tags` stay
+/// empty; [`attach_tags`] fills them.
+pub(crate) fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MessageSummary> {
     let from_email: Option<String> = row.get(5)?;
     Ok(MessageSummary {
         id: MessageId(row.get(0)?),
@@ -181,9 +229,7 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MessageSummary> {
         },
         has_attachments: row.get(12)?,
         preview: row.get(13)?,
-        // Thread ids, tags and virtual-account duplicates arrive with the
-        // M1a store schema v2 (WP13).
-        thread_id: None,
+        thread_id: row.get::<_, Option<String>>(17)?.map(ThreadId),
         tags: Vec::new(),
         duplicates: Vec::new(),
     })
@@ -228,16 +274,78 @@ fn parents_first(folders: Vec<Folder>) -> Vec<Folder> {
 }
 
 // ---------------------------------------------------------------------------
-// Transaction-level helpers shared with the operation queue.
+// Transaction-level helpers shared with the operation queue and threading.
+
+/// Fills `tags` (sorted) of each summary from `message_tags`.
+pub(crate) fn attach_tags(
+    conn: &Connection,
+    mut messages: Vec<MessageSummary>,
+) -> Result<Vec<MessageSummary>> {
+    for m in &mut messages {
+        m.tags = tags_in_tx(conn, &m.id)?;
+    }
+    Ok(messages)
+}
+
+/// Collapses copies of the same mail (same `Message-ID`, e.g. a mailing
+/// list message received in two accounts) into the first one, listing the
+/// others in its `duplicates`. Messages without a Message-ID are kept.
+pub(crate) fn collapse_duplicates(
+    messages: Vec<(MessageSummary, Option<String>)>,
+) -> Vec<MessageSummary> {
+    let mut first_by_mid: HashMap<String, usize> = HashMap::new();
+    let mut out: Vec<MessageSummary> = Vec::with_capacity(messages.len());
+    for (summary, mid) in messages {
+        if let Some(mid) = mid {
+            if let Some(&i) = first_by_mid.get(&mid) {
+                out[i].duplicates.push(MessageLocation {
+                    message_id: summary.id,
+                    account_id: summary.account_id,
+                    folder_id: summary.folder_id,
+                });
+                continue;
+            }
+            first_by_mid.insert(mid, out.len());
+        }
+        out.push(summary);
+    }
+    out
+}
 
 pub(crate) fn message_in_tx(tx: &Transaction<'_>, id: &MessageId) -> Result<StoredMessage> {
-    tx.query_row(
-        &format!("SELECT {MESSAGE_COLS} FROM messages m WHERE m.id = ?1"),
+    let mut message = tx
+        .query_row(
+            &format!("SELECT {MESSAGE_COLS} FROM messages m WHERE m.id = ?1"),
+            [id.as_str()],
+            message_from_row,
+        )
+        .optional()?
+        .ok_or_else(|| Error::not_found("message", id))?;
+    message.summary.tags = tags_in_tx(tx, id)?;
+    Ok(message)
+}
+
+pub(crate) fn tags_in_tx(conn: &Connection, id: &MessageId) -> Result<Vec<String>> {
+    let mut stmt =
+        conn.prepare_cached("SELECT tag FROM message_tags WHERE message_id = ?1 ORDER BY tag")?;
+    let tags = stmt
+        .query_map([id.as_str()], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(tags)
+}
+
+/// Replaces a message's tags (empty tags are ignored).
+pub(crate) fn set_tags_in_tx(tx: &Transaction<'_>, id: &MessageId, tags: &[String]) -> Result<()> {
+    tx.execute(
+        "DELETE FROM message_tags WHERE message_id = ?1",
         [id.as_str()],
-        message_from_row,
-    )
-    .optional()?
-    .ok_or_else(|| Error::not_found("message", id))
+    )?;
+    let mut stmt =
+        tx.prepare_cached("INSERT OR IGNORE INTO message_tags (message_id, tag) VALUES (?1, ?2)")?;
+    for tag in tags.iter().filter(|t| !t.is_empty()) {
+        stmt.execute(params![id.as_str(), tag])?;
+    }
+    Ok(())
 }
 
 pub(crate) fn set_flags_in_tx(tx: &Transaction<'_>, id: &MessageId, flags: Flags) -> Result<()> {
@@ -257,7 +365,7 @@ pub(crate) fn set_flags_in_tx(tx: &Transaction<'_>, id: &MessageId, flags: Flags
     Ok(())
 }
 
-fn folder_account_in_tx(tx: &Transaction<'_>, folder: &FolderId) -> Result<AccountId> {
+pub(crate) fn folder_account_in_tx(tx: &Transaction<'_>, folder: &FolderId) -> Result<AccountId> {
     tx.query_row(
         "SELECT account_id FROM folders WHERE id = ?1",
         [folder.as_str()],
@@ -268,7 +376,43 @@ fn folder_account_in_tx(tx: &Transaction<'_>, folder: &FolderId) -> Result<Accou
     .ok_or_else(|| Error::not_found("folder", folder))
 }
 
-fn upsert_message_in_tx(tx: &Transaction<'_>, msg: &StoredMessage) -> Result<()> {
+/// Normalizes a Message-ID: trims whitespace and angle brackets; `None`
+/// when nothing is left.
+pub(crate) fn normalize_msgid(id: &str) -> Option<String> {
+    let id = id
+        .trim()
+        .trim_start_matches('<')
+        .trim_end_matches('>')
+        .trim();
+    (!id.is_empty()).then(|| id.to_owned())
+}
+
+fn normalize_msgids(ids: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(ids.len());
+    for id in ids.iter().filter_map(|i| normalize_msgid(i)) {
+        if !out.contains(&id) {
+            out.push(id);
+        }
+    }
+    out
+}
+
+/// What the sync-side merge did with one incoming message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MergeOutcome {
+    /// Written as the server reported it.
+    Written,
+    /// Written with pending local flag / tag changes re-applied on top.
+    Adjusted,
+    /// Not written: a pending move or delete owns the message.
+    Skipped,
+}
+
+fn upsert_message_in_tx(
+    tx: &Transaction<'_>,
+    msg: &StoredMessage,
+    meta: Option<&MessageMeta>,
+) -> Result<MergeOutcome> {
     let s = &msg.summary;
     let folder_account = folder_account_in_tx(tx, &s.folder_id)?;
     if folder_account != s.account_id {
@@ -277,6 +421,25 @@ fn upsert_message_in_tx(tx: &Transaction<'_>, msg: &StoredMessage) -> Result<()>
             s.id, s.account_id, s.folder_id, folder_account
         )));
     }
+
+    // Sync-side merge: pending user operations win over the server's view
+    // until they are replayed.
+    let pending = crate::queue::pending_ops_for_message_in_tx(tx, &s.id)?;
+    if pending.iter().any(Operation::takes_message_away) {
+        tracing::debug!(message = %s.id, "sync update skipped: a move / delete is pending");
+        return Ok(MergeOutcome::Skipped);
+    }
+    let mut flags = s.flags;
+    let mut tags = s.tags.clone();
+    let mut outcome = MergeOutcome::Written;
+    for op in &pending {
+        if let Operation::UpdateFlags { change, .. } = op {
+            flags = change.apply_to(flags);
+            change.apply_tags(&mut tags);
+            outcome = MergeOutcome::Adjusted;
+        }
+    }
+
     let changed = tx.execute(
         "INSERT INTO messages (id, account_id, folder_id, uid, subject, from_name, from_email,
              to_json, date, date_sort, seen, flagged, answered, draft, has_attachments, preview,
@@ -302,10 +465,10 @@ fn upsert_message_in_tx(tx: &Transaction<'_>, msg: &StoredMessage) -> Result<()>
             s.from.as_ref().map(|a| a.email.as_str()),
             serde_json::to_string(&s.to)?,
             s.date,
-            s.flags.seen,
-            s.flags.flagged,
-            s.flags.answered,
-            s.flags.draft,
+            flags.seen,
+            flags.flagged,
+            flags.answered,
+            flags.draft,
             s.has_attachments,
             s.preview,
             msg.blob_hash.as_ref().map(BlobHash::as_str),
@@ -318,7 +481,32 @@ fn upsert_message_in_tx(tx: &Transaction<'_>, msg: &StoredMessage) -> Result<()>
             s.id
         )));
     }
-    Ok(())
+    if let Some(meta) = meta {
+        let size = meta
+            .size
+            .map(|n| {
+                i64::try_from(n).map_err(|_| Error::InvalidData(format!("size {n} too large")))
+            })
+            .transpose()?;
+        tx.execute(
+            "UPDATE messages SET message_id = ?2, in_reply_to_json = ?3, references_json = ?4,
+                 size = ?5
+             WHERE id = ?1",
+            params![
+                s.id.as_str(),
+                meta.message_id.as_deref().and_then(normalize_msgid),
+                serde_json::to_string(&normalize_msgids(&meta.in_reply_to))?,
+                serde_json::to_string(&normalize_msgids(&meta.references))?,
+                size,
+            ],
+        )?;
+    }
+    crate::thread::set_subject_key(tx, s.id.as_str(), &s.subject)?;
+    tags.sort();
+    tags.dedup();
+    set_tags_in_tx(tx, &s.id, &tags)?;
+    crate::thread::assign_thread(tx, s.id.as_str())?;
+    Ok(outcome)
 }
 
 // ---------------------------------------------------------------------------
@@ -545,24 +733,107 @@ impl Store {
 
     // --- messages ----------------------------------------------------------
 
-    /// Inserts or updates one message (matched by id). Moving a message to
-    /// another folder of the same account is an upsert with a new
-    /// `folder_id`.
+    /// Inserts or updates one message (matched by id) as reported by the
+    /// server; see [`Store::merge_messages`] for how pending user
+    /// operations are kept. Moving a message to another folder of the same
+    /// account is an upsert with a new `folder_id`.
+    ///
+    /// Header columns (Message-ID, references, size) are left as they are;
+    /// use [`Store::merge_messages`] with a [`MessageMeta`] to set them.
     ///
     /// Fails with [`Error::NotFound`] for an unknown folder and with
     /// [`Error::InvalidData`] when the message's account differs from the
     /// folder's account.
     pub fn upsert_message(&self, message: &StoredMessage) -> Result<()> {
-        self.with_tx(|tx| upsert_message_in_tx(tx, message))
+        self.with_tx(|tx| upsert_message_in_tx(tx, message, None).map(drop))
     }
 
     /// Upserts many messages in one transaction (all or nothing), which is
-    /// much faster than one call per message during sync.
+    /// much faster than one call per message during sync. Same rules as
+    /// [`Store::upsert_message`].
     pub fn upsert_messages(&self, messages: &[StoredMessage]) -> Result<()> {
         self.with_tx(|tx| {
             messages
                 .iter()
-                .try_for_each(|m| upsert_message_in_tx(tx, m))
+                .try_for_each(|m| upsert_message_in_tx(tx, m, None).map(drop))
+        })
+    }
+
+    /// The sync-side merge: writes the server's view of `messages` in one
+    /// transaction (all or nothing) while keeping the user's pending
+    /// changes:
+    ///
+    /// * a message with a pending flag / tag operation gets the server's
+    ///   flags and tags **with the pending changes re-applied on top**, so
+    ///   the UI keeps showing what the user did until the replay lands
+    ///   (and the server's other changes still arrive);
+    /// * a message with a pending move or delete is not written at all.
+    ///
+    /// Each message is (re)threaded. `meta` (when given) sets the
+    /// threading headers and the size.
+    pub fn merge_messages(&self, messages: &[SyncedMessage]) -> Result<MergeReport> {
+        self.with_tx(|tx| {
+            let mut report = MergeReport::default();
+            for m in messages {
+                match upsert_message_in_tx(tx, &m.message, m.meta.as_ref())? {
+                    MergeOutcome::Written => report.written += 1,
+                    MergeOutcome::Adjusted => {
+                        report.written += 1;
+                        report.kept_local.push(m.message.summary.id.clone());
+                    }
+                    MergeOutcome::Skipped => report.skipped.push(m.message.summary.id.clone()),
+                }
+            }
+            Ok(report)
+        })
+    }
+
+    /// The stored threading headers and size of a message.
+    pub fn message_meta(&self, id: &MessageId) -> Result<MessageMeta> {
+        self.with_conn(|conn| {
+            conn.query_row(
+                "SELECT message_id, in_reply_to_json, references_json, size FROM messages WHERE id = ?1",
+                [id.as_str()],
+                |r| {
+                    Ok((
+                        r.get::<_, Option<String>>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, Option<i64>>(3)?,
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or_else(|| Error::not_found("message", id))
+            .and_then(|(message_id, irt, refs, size)| {
+                Ok(MessageMeta {
+                    message_id,
+                    in_reply_to: serde_json::from_str(&irt)?,
+                    references: serde_json::from_str(&refs)?,
+                    size: size.map(i64::cast_unsigned),
+                })
+            })
+        })
+    }
+
+    /// Messages whose headers were never recorded (written by the M0 sync
+    /// or migrated from schema v1) and that have a blob, so the caller can
+    /// parse the blob and backfill them with [`Store::merge_messages`].
+    pub fn messages_missing_meta(&self, limit: u32) -> Result<Vec<(MessageId, BlobHash)>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT id, blob_hash FROM messages
+                 WHERE message_id IS NULL AND size IS NULL AND blob_hash IS NOT NULL
+                 ORDER BY rowid LIMIT ?1",
+            )?;
+            let rows = stmt
+                .query_map([limit], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows.into_iter()
+                .map(|(id, hash)| Ok((MessageId(id), BlobHash::parse(&hash)?)))
+                .collect()
         })
     }
 
@@ -578,13 +849,52 @@ impl Store {
         uid: u32,
     ) -> Result<Option<StoredMessage>> {
         self.with_conn(|conn| {
-            Ok(conn
+            let found = conn
                 .query_row(
                     &format!("SELECT {MESSAGE_COLS} FROM messages m WHERE m.folder_id = ?1 AND m.uid = ?2"),
                     params![folder.as_str(), uid],
                     message_from_row,
                 )
-                .optional()?)
+                .optional()?;
+            found
+                .map(|mut m| {
+                    m.summary.tags = tags_in_tx(conn, &m.summary.id)?;
+                    Ok(m)
+                })
+                .transpose()
+        })
+    }
+
+    /// Messages with this `Message-ID` (angle brackets optional), in any
+    /// folder or account, oldest first.
+    pub fn find_messages_by_message_id(&self, message_id: &str) -> Result<Vec<MessageSummary>> {
+        let Some(mid) = normalize_msgid(message_id) else {
+            return Ok(Vec::new());
+        };
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {MESSAGE_COLS} FROM messages m WHERE m.message_id = ?1
+                 ORDER BY m.date_sort, m.id"
+            ))?;
+            let rows = stmt
+                .query_map([mid], summary_from_row)?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            attach_tags(conn, rows)
+        })
+    }
+
+    /// Sets (or clears) a message's UID, e.g. after a replayed move learned
+    /// the new UID from `COPYUID`.
+    pub fn set_message_uid(&self, id: &MessageId, uid: Option<u32>) -> Result<()> {
+        self.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE messages SET uid = ?2 WHERE id = ?1",
+                params![id.as_str(), uid],
+            )?;
+            if changed == 0 {
+                return Err(Error::not_found("message", id));
+            }
+            Ok(())
         })
     }
 
@@ -617,17 +927,128 @@ impl Store {
                  ORDER BY m.date_sort DESC, m.id DESC LIMIT ?2 OFFSET ?3"
             ))?;
             let rows = stmt.query_map(params![folder.as_str(), limit, offset], summary_from_row)?;
-            let messages = rows.collect::<rusqlite::Result<_>>()?;
+            let messages = attach_tags(tx, rows.collect::<rusqlite::Result<_>>()?)?;
             Ok(MessagePage { total, messages })
         })
     }
 
+    /// A page of the messages in several folders (the member folders of a
+    /// virtual folder), newest first. Copies of one mail (same
+    /// `Message-ID`) are collapsed into the newest copy's row with the
+    /// others in `duplicates`; `total` counts collapsed rows.
+    pub fn list_messages_in(
+        &self,
+        folders: &[FolderId],
+        offset: u32,
+        limit: u32,
+    ) -> Result<MessagePage> {
+        let folder_json =
+            serde_json::to_string(&folders.iter().map(FolderId::as_str).collect::<Vec<_>>())?;
+        self.with_tx(|tx| {
+            // One representative per mail: the newest copy.
+            const REPS: &str = "WITH scoped AS (
+                    SELECT m.id, m.date_sort, COALESCE(m.message_id, '#' || m.id) AS mail,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY COALESCE(m.message_id, '#' || m.id)
+                               ORDER BY m.date_sort DESC, m.id DESC) AS n
+                    FROM messages m WHERE m.folder_id IN (SELECT value FROM json_each(?1)))";
+            let total: u32 = tx.query_row(
+                &format!("{REPS} SELECT COUNT(*) FROM scoped WHERE n = 1"),
+                [&folder_json],
+                |r| r.get(0),
+            )?;
+            let page: Vec<(MessageSummary, String)> = {
+                let mut stmt = tx.prepare_cached(&format!(
+                    "{REPS} SELECT {MESSAGE_COLS}, s.mail FROM scoped s JOIN messages m ON m.id = s.id
+                     WHERE s.n = 1 ORDER BY s.date_sort DESC, s.id DESC LIMIT ?2 OFFSET ?3"
+                ))?;
+                stmt.query_map(params![folder_json, limit, offset], |r| {
+                    Ok((summary_from_row(r)?, r.get(MESSAGE_COL_COUNT)?))
+                })?
+                .collect::<rusqlite::Result<_>>()?
+            };
+            let mut messages = Vec::with_capacity(page.len());
+            let mut dups = tx.prepare_cached(
+                "SELECT id, account_id, folder_id FROM messages
+                 WHERE message_id = ?1 AND id <> ?2
+                   AND folder_id IN (SELECT value FROM json_each(?3))
+                 ORDER BY date_sort DESC, id DESC",
+            )?;
+            for (mut summary, mail) in page {
+                if !mail.starts_with('#') {
+                    summary.duplicates = dups
+                        .query_map(params![mail, summary.id.as_str(), folder_json], |r| {
+                            Ok(MessageLocation {
+                                message_id: MessageId(r.get(0)?),
+                                account_id: AccountId(r.get(1)?),
+                                folder_id: FolderId(r.get(2)?),
+                            })
+                        })?
+                        .collect::<rusqlite::Result<_>>()?;
+                }
+                messages.push(summary);
+            }
+            let messages = attach_tags(tx, messages)?;
+            Ok(MessagePage { total, messages })
+        })
+    }
+
+    /// Summaries of the given messages in the given order; unknown ids are
+    /// skipped.
+    pub fn message_summaries(&self, ids: &[MessageId]) -> Result<Vec<MessageSummary>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {MESSAGE_COLS} FROM messages m WHERE m.id = ?1"
+            ))?;
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                if let Some(s) = stmt.query_row([id.as_str()], summary_from_row).optional()? {
+                    out.push(s);
+                }
+            }
+            attach_tags(conn, out)
+        })
+    }
+
     /// Replaces a message's flags with the server's view (sync only; user
-    /// flag changes go through [`Store::enqueue`]). Returns the message's
-    /// folder so the caller can announce the change.
+    /// flag changes go through [`Store::enqueue`]). Flag changes of pending
+    /// operations are re-applied on top (see [`Store::merge_messages`]).
+    /// Returns the message's folder so the caller can announce the change.
     pub fn update_flags(&self, id: &MessageId, flags: Flags) -> Result<FolderId> {
         self.with_tx(|tx| {
+            let mut flags = flags;
+            for op in crate::queue::pending_ops_for_message_in_tx(tx, id)? {
+                if let Operation::UpdateFlags { change, .. } = op {
+                    flags = change.apply_to(flags);
+                }
+            }
             set_flags_in_tx(tx, id, flags)?;
+            Ok(message_in_tx(tx, id)?.summary.folder_id)
+        })
+    }
+
+    /// Replaces a message's flags **and** tags (IMAP keywords) with the
+    /// server's view, keeping pending local changes like
+    /// [`Store::update_flags`]. Returns the message's folder.
+    pub fn update_flags_and_tags(
+        &self,
+        id: &MessageId,
+        flags: Flags,
+        tags: &[String],
+    ) -> Result<FolderId> {
+        self.with_tx(|tx| {
+            let mut flags = flags;
+            let mut tags = tags.to_vec();
+            for op in crate::queue::pending_ops_for_message_in_tx(tx, id)? {
+                if let Operation::UpdateFlags { change, .. } = op {
+                    flags = change.apply_to(flags);
+                    change.apply_tags(&mut tags);
+                }
+            }
+            set_flags_in_tx(tx, id, flags)?;
+            tags.sort();
+            tags.dedup();
+            set_tags_in_tx(tx, id, &tags)?;
             Ok(message_in_tx(tx, id)?.summary.folder_id)
         })
     }

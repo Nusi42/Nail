@@ -13,9 +13,11 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 lettre.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 nail-testkit-net.workspace = true
+nail-auth.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]

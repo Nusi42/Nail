@@ -324,7 +324,7 @@ async fn implicit_tls_with_trusted_ca() {
         .await
         .unwrap_err();
     assert!(matches!(err, ImapError::Tls(_)), "{err:?}");
-    assert_eq!(err.code(), ErrorCode::Network);
+    assert_eq!(err.code(), ErrorCode::Tls);
 }
 
 #[tokio::test]

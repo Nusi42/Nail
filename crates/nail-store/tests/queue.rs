@@ -169,7 +169,7 @@ async fn replay_runs_in_enqueue_order() {
 
     assert_eq!(report.done, ids);
     assert!(report.failed.is_empty());
-    assert_eq!(report.deferred, None);
+    assert!(report.deferred.is_empty());
     assert_eq!(replayer.replayed_messages(), ["m3", "m1", "m2", "m1"]);
     assert_eq!(store.pending_op_count().unwrap(), 0);
     let done = store.list_ops(Some(OpState::Done)).unwrap();
@@ -198,7 +198,7 @@ async fn retry_stops_the_pass_and_keeps_order() {
         .replay_pending(&replayer, ReplayPolicy::default())
         .await
         .unwrap();
-    assert_eq!(report.deferred, Some(first));
+    assert_eq!(report.deferred, [first]);
     assert!(report.done.is_empty());
     assert_eq!(
         replayer.replayed_messages(),
@@ -239,7 +239,7 @@ async fn permanent_failure_and_attempt_limit() {
     // Pass 1: a fails permanently, the pass continues; b is deferred.
     let report = store.replay_pending(&replayer, policy).await.unwrap();
     assert_eq!(report.failed, [a]);
-    assert_eq!(report.deferred, Some(b));
+    assert_eq!(report.deferred, [b]);
     // Pass 2: b reaches the limit and fails; c proceeds.
     let report = store.replay_pending(&replayer, policy).await.unwrap();
     assert_eq!(report.failed, [b]);

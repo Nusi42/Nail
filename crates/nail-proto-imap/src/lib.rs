@@ -1,35 +1,69 @@
-//! Read-only IMAP client engine (M0).
+//! IMAP client engine.
 //!
 //! [`ImapClient::connect`] opens a connection with implicit TLS (default),
-//! STARTTLS or — for tests only — plaintext, reads the capabilities and logs
-//! in with `AUTHENTICATE PLAIN` or `LOGIN`. A connected client can
-//! [list folders](ImapClient::list_folders) with roles (RFC 6154 SPECIAL-USE,
-//! falling back to well-known names), [examine](ImapClient::examine) a
-//! mailbox, [fetch a UID range](ImapClient::fetch_range) as raw messages with
-//! flags, and [plan what is new](ImapClient::plan_fetch) since a stored
-//! [`SyncState`], detecting UIDVALIDITY changes, then
-//! [fetch it batch by batch](ImapClient::fetch_batch) (or
-//! [all at once](ImapClient::fetch_new)).
+//! STARTTLS or — for tests only — plaintext, logs in (`PLAIN`, `LOGIN`,
+//! `XOAUTH2`, `OAUTHBEARER`), and then switches on `COMPRESS=DEFLATE`, sends
+//! `ID` and enables QRESYNC / CONDSTORE when the server offers them.
 //!
-//! The client never modifies the server: mailboxes are opened with `EXAMINE`
-//! and bodies are fetched with `BODY.PEEK[]`.
+//! Reading: [list folders](ImapClient::list_folders) with roles (RFC 6154
+//! SPECIAL-USE, falling back to well-known names),
+//! [plan what is new](ImapClient::plan_fetch) since a stored [`SyncState`]
+//! and [fetch it batch by batch](ImapClient::fetch_batch), and
+//! [resynchronize flags and expunges](ImapClient::resync_flags) of known
+//! messages (QRESYNC, CONDSTORE or a full flag diff).
 //!
-//! Built on `async-imap` (see `docs/adr/0005-imap-library.md`) with
-//! `tokio-rustls` (ring provider) and the platform certificate verifier.
+//! Writing: [flags](ImapClient::store_flags) (also from an API
+//! [`nail_api::FlagChange`]), [move](ImapClient::move_messages) (`MOVE` or
+//! `COPY` + `\Deleted` + `UID EXPUNGE`), [copy](ImapClient::copy_messages),
+//! [expunge](ImapClient::expunge_messages), [append](ImapClient::append)
+//! with UIDPLUS results, and folder
+//! [create](ImapClient::create_folder) / [rename](ImapClient::rename_folder)
+//! / [delete](ImapClient::delete_folder).
+//!
+//! Push: [`ImapClient::idle`] waits for changes on one connection;
+//! [`MailboxWatcher`] keeps a dedicated connection in `IDLE` (re-issued
+//! every 29 minutes) or polls with `NOOP`, reconnects with backoff and
+//! reports [`WatchEvent`]s as a stream.
+//!
+//! The protocol layer is in-house over the `imap-proto` parser, with
+//! `tokio-rustls` (ring provider) and the platform certificate verifier;
+//! see `docs/adr/0005-imap-library.md` and
+//! `docs/adr/0018-wp11-imap-engine.md`.
 
 mod capabilities;
+mod changes;
 mod client;
 mod config;
+mod conn;
 mod error;
+mod flags;
 mod folder;
+mod idle;
+mod resync;
+mod sasl;
 mod transport;
+mod watch;
+mod write;
 
 pub use capabilities::Capabilities;
+pub use changes::{FlagUpdate, MailboxChange};
 pub use client::{
     Envelope, FetchPlan, FetchedMessage, FolderStatus, ImapClient, IncrementalFetch, SyncState,
     UidRange,
 };
-pub use config::{AuthMechanism, Credentials, FetchBatchLimits, ImapConfig, Security, TlsTrust};
+pub use config::{
+    AuthMechanism, ClientId, Credentials, FetchBatchLimits, ImapConfig, Secret, Security, TlsTrust,
+    default_client_id,
+};
 pub use error::{ImapError, Result};
-pub use folder::{RemoteFolder, decode_modified_utf7, role_from_name};
+pub use flags::{Flag, MessageFlags};
+pub use folder::{
+    RemoteFolder, decode_modified_utf7, encode_modified_utf7, folder_path, role_from_name,
+};
+pub use idle::{IDLE_REISSUE, IdleEnd, IdleOutcome};
+pub use resync::{FlagResync, ResyncMethod, ResyncState};
 pub use transport::ImapStream;
+pub use watch::{CredentialProvider, MailboxWatcher, WatchConfig, WatchEvent, WatchMode};
+pub use write::{
+    AppendResult, CopyResult, ExpungeMethod, MoveMethod, MoveResult, StoreMode, StoreResult,
+};

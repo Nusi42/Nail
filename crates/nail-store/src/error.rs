@@ -46,6 +46,10 @@ pub enum Error {
     /// account differs from its folder's account).
     #[error("invalid data: {0}")]
     InvalidData(String),
+    /// The request conflicts with the current state (e.g. cancelling a
+    /// message that is already being sent).
+    #[error("conflict: {0}")]
+    Conflict(String),
     /// A blocking store task panicked or was cancelled.
     #[error("store task failed: {0}")]
     Task(#[from] tokio::task::JoinError),
@@ -70,6 +74,7 @@ impl From<Error> for ApiError {
         let code = match &err {
             Error::NotFound { .. } => ErrorCode::NotFound,
             Error::InvalidData(_) | Error::InvalidHash(_) => ErrorCode::InvalidRequest,
+            Error::Conflict(_) => ErrorCode::Conflict,
             _ => ErrorCode::Internal,
         };
         ApiError::new(code, err.to_string())
@@ -88,6 +93,9 @@ mod tests {
 
         let api: ApiError = Error::InvalidData("x".into()).into();
         assert_eq!(api.code, ErrorCode::InvalidRequest);
+
+        let api: ApiError = Error::Conflict("sending".into()).into();
+        assert_eq!(api.code, ErrorCode::Conflict);
 
         let api: ApiError = Error::Io(std::io::Error::other("disk")).into();
         assert_eq!(api.code, ErrorCode::Internal);

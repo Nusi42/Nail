@@ -8,6 +8,7 @@
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -86,8 +87,36 @@ impl AsyncWrite for ImapStream {
     }
 }
 
+/// The idle timeout of an [`IdleTimeout`] stream, shared with the code that
+/// drives it so it can be switched off while waiting in `IDLE`.
+#[derive(Debug, Clone)]
+pub(crate) struct ReadTimeout(Arc<AtomicU64>);
+
+impl ReadTimeout {
+    pub(crate) fn new(timeout: Duration) -> Self {
+        let this = Self(Arc::new(AtomicU64::new(0)));
+        this.set(Some(timeout));
+        this
+    }
+
+    /// `None` switches the timeout off.
+    pub(crate) fn set(&self, timeout: Option<Duration>) {
+        let millis = timeout.map_or(0, |t| {
+            u64::try_from(t.as_millis()).unwrap_or(u64::MAX).max(1)
+        });
+        self.0.store(millis, Ordering::Relaxed);
+    }
+
+    pub(crate) fn get(&self) -> Option<Duration> {
+        match self.0.load(Ordering::Relaxed) {
+            0 => None,
+            millis => Some(Duration::from_millis(millis)),
+        }
+    }
+}
+
 /// A stream whose reads fail with [`std::io::ErrorKind::TimedOut`] when the
-/// peer sends nothing for `idle` while a read is waiting.
+/// peer sends nothing for the [`ReadTimeout`] while a read is waiting.
 ///
 /// Unlike a timeout around a whole command, this never fires while data is
 /// flowing, so a `FETCH` of large bodies over a slow link can take as long as
@@ -95,18 +124,18 @@ impl AsyncWrite for ImapStream {
 #[derive(Debug)]
 pub(crate) struct IdleTimeout<S> {
     inner: S,
-    idle: Duration,
+    timeout: ReadTimeout,
     sleep: Pin<Box<tokio::time::Sleep>>,
     /// Whether `sleep` is set for the current wait.
     armed: bool,
 }
 
 impl<S> IdleTimeout<S> {
-    pub(crate) fn new(inner: S, idle: Duration) -> Self {
+    pub(crate) fn new(inner: S, timeout: ReadTimeout) -> Self {
         Self {
             inner,
-            idle,
-            sleep: Box::pin(tokio::time::sleep(idle)),
+            timeout,
+            sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
             armed: false,
         }
     }
@@ -125,8 +154,12 @@ impl<S: AsyncRead + Unpin> AsyncRead for IdleTimeout<S> {
                 Poll::Ready(result)
             }
             Poll::Pending => {
+                let Some(idle) = this.timeout.get() else {
+                    this.armed = false;
+                    return Poll::Pending;
+                };
                 if !this.armed {
-                    let deadline = tokio::time::Instant::now() + this.idle;
+                    let deadline = tokio::time::Instant::now() + idle;
                     this.sleep.as_mut().reset(deadline);
                     this.armed = true;
                 }
@@ -135,7 +168,7 @@ impl<S: AsyncRead + Unpin> AsyncRead for IdleTimeout<S> {
                         this.armed = false;
                         Poll::Ready(Err(std::io::Error::new(
                             std::io::ErrorKind::TimedOut,
-                            format!("no data from the server for {:?}", this.idle),
+                            format!("no data from the server for {idle:?}"),
                         )))
                     }
                     Poll::Pending => Poll::Pending,
@@ -371,7 +404,8 @@ mod tests {
     async fn idle_timeout_fires_only_when_the_peer_is_silent() {
         let idle = Duration::from_millis(150);
         let (client, mut server) = tokio::io::duplex(64);
-        let mut stream = IdleTimeout::new(client, idle);
+        let timeout = ReadTimeout::new(idle);
+        let mut stream = IdleTimeout::new(client, timeout.clone());
 
         // A slow but steady sender: 12 bytes over ~600 ms, far longer than
         // `idle` in total, but never silent for that long.
@@ -392,6 +426,12 @@ mod tests {
         let err = stream.read_u8().await.unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
         assert!(started.elapsed() >= idle);
+
+        // Switched off (as while waiting in IDLE), a silent peer is fine.
+        timeout.set(None);
+        assert_eq!(timeout.get(), None);
+        let silent = tokio::time::timeout(idle * 3, stream.read_u8()).await;
+        assert!(silent.is_err(), "the read must still be pending");
     }
 
     #[test]

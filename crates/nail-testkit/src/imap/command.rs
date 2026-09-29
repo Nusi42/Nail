@@ -162,6 +162,13 @@ impl SequenceSet {
     /// UID or sequence number in use). As in RFC 3501, `n:*` with `n > max`
     /// still contains `max`.
     pub(crate) fn contains(&self, value: u32, max: u32) -> bool {
+        if max == 0 {
+            // An empty mailbox: `*` matches nothing.
+            return self.0.iter().any(|&(a, b)| match (a, b) {
+                (SeqBound::Num(a), SeqBound::Num(b)) => (a.min(b)..=a.max(b)).contains(&value),
+                _ => false,
+            });
+        }
         self.0.iter().any(|&(a, b)| {
             let resolve = |bound| match bound {
                 SeqBound::Num(n) => n,
@@ -191,6 +198,8 @@ pub(crate) enum FetchItem {
     InternalDate,
     Size,
     Envelope,
+    /// `MODSEQ` (RFC 7162).
+    ModSeq,
     /// A body section; `peek` avoids setting `\Seen`.
     Body {
         section: Section,
@@ -256,6 +265,7 @@ fn parse_fetch_atom(atom: &str) -> Result<FetchItem, String> {
         "INTERNALDATE" => FetchItem::InternalDate,
         "RFC822.SIZE" => FetchItem::Size,
         "ENVELOPE" => FetchItem::Envelope,
+        "MODSEQ" => FetchItem::ModSeq,
         "RFC822" => FetchItem::Rfc822(Section::Full),
         "RFC822.HEADER" => FetchItem::Rfc822(Section::Header),
         "RFC822.TEXT" => FetchItem::Rfc822(Section::Text),

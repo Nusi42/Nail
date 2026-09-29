@@ -1,0 +1,140 @@
+# Nail — English UI strings: account setup, account settings, virtual accounts.
+
+## Servers (shared by setup and settings)
+
+server-incoming = Incoming mail
+server-outgoing = Outgoing mail
+server-protocol = Protocol
+server-protocol-imap = IMAP
+server-protocol-pop3 = POP3
+server-host = Server
+server-port = Port
+server-tls = Security
+server-tls-implicit = TLS
+server-tls-starttls = STARTTLS
+server-tls-plaintext = None (unencrypted)
+server-username = User name
+sign-in-password = Password
+sign-in-oauth-google = Sign in with Google
+sign-in-oauth-microsoft = Sign in with Microsoft
+oauth-provider-google = Google
+oauth-provider-microsoft = Microsoft
+
+## Account setup
+
+setup-label = Add an account
+setup-steps = Setup steps
+setup-step-address = Address
+setup-step-servers = Servers
+setup-step-test = Test
+setup-step-done = Done
+setup-intro = Enter your email address. Nail looks up the server settings for you.
+setup-name = Your name
+setup-email = Email address
+setup-error-email = Enter a complete email address, like ada@example.org.
+setup-continue = Continue
+setup-discovering = Looking up settings…
+setup-found = Settings found
+setup-nothing-found = No settings were found for this address. Enter them yourself.
+setup-candidate-servers = Incoming { $incoming }, outgoing { $outgoing }
+setup-source-autoconfig = Your provider's configuration
+setup-source-well-known = Your provider's configuration
+setup-source-ispdb = Mozilla's provider database
+setup-source-srv = DNS records of the domain
+setup-source-autodiscover = Microsoft Autodiscover
+setup-source-guess = Common server names (please check)
+setup-edit-servers = Edit server settings
+setup-sign-in = Sign-in method
+setup-password = Password
+setup-password-hint = Stored in the Windows credential manager, never in a file.
+setup-oauth-start = Sign in with { $provider }
+setup-oauth-waiting = Finish signing in in your browser…
+setup-oauth-open = Open the sign-in page to continue.
+setup-oauth-link = Open sign-in page
+setup-oauth-cancel = Cancel sign-in
+setup-oauth-done = Signed in.
+setup-oauth-failed = Sign-in failed: { $reason }
+setup-oauth-retry = Try again
+setup-back = Back
+setup-test = Test connection
+setup-testing = Testing…
+setup-test-ok = Connected and signed in.
+setup-test-capabilities = Server supports: { $capabilities }
+setup-test-passed = Nail can connect to your servers.
+setup-test-failed = Nail could not connect to every server. Go back to fix the settings, or add the account anyway.
+setup-save = Add account
+setup-save-anyway = Add anyway
+setup-done = “{ $name }” was added. Nail is now downloading your mail.
+setup-finish = Go to the inbox
+
+## Account settings
+
+settings-accounts-label = Accounts
+settings-add-account = Add account
+settings-no-accounts = No accounts yet. Add one to get started.
+settings-general = Account
+settings-name = Account name
+settings-email = Email address
+settings-enabled = Synchronize this account
+settings-poll-interval = Check for new mail every (seconds)
+settings-poll-interval-hint = Used for folders without push updates. Leave empty for the default.
+settings-pop3 = POP3 download
+settings-leave-on-server = Keep messages on the server
+settings-delete-after-days = Delete from the server after (days)
+settings-delete-when-deleted = Delete from the server when deleted in Nail
+settings-new-password = New password
+settings-new-password-hint = Leave empty to keep the current password.
+settings-identities = Identities
+settings-save = Save
+settings-saved = Settings saved.
+settings-remove = Remove account
+settings-remove-confirm = Remove “{ $name }”? Its local mail is deleted; nothing changes on the server.
+settings-remove-yes = Remove
+settings-removed = Account removed.
+settings-cancel = Cancel
+settings-error-email = The account needs a valid email address.
+settings-error-host = Every server needs a host name.
+settings-error-no-identity = The account needs at least one identity.
+settings-error-identity = Every identity needs a valid email address.
+identity-email = Sender address
+identity-name = Sender name
+identity-reply-to = Reply-to address
+identity-signature = Signature
+identity-add = Add identity
+identity-remove = Remove identity
+
+## Virtual accounts
+
+virtual-label = Virtual accounts
+virtual-none = No virtual accounts yet. "All accounts" is always there.
+virtual-new = New virtual account
+virtual-name = Name
+virtual-members = Accounts in it
+virtual-member = { $name }
+virtual-folders = Folders
+virtual-merge-roles = Merge Inbox, Sent, Drafts, Archive, Junk and Trash of all accounts
+virtual-mapping-name = Folder name
+virtual-add-mapping = Add merged folder
+virtual-remove-mapping = Remove merged folder
+virtual-source-account = Account
+virtual-source-folder = Folder
+virtual-source-choose = Choose…
+virtual-add-source = Add folder
+virtual-remove-source = Remove folder
+virtual-identities = Sending
+virtual-default-identity = Identity for new messages
+virtual-default-identity-auto = First account's default
+virtual-rule-pattern = Recipients
+virtual-rule-pattern-hint = For example *@client.com or *@*.client.com
+virtual-rule-identity = Send as
+virtual-add-rule = Add rule
+virtual-remove-rule = Remove rule
+virtual-create = Create
+virtual-save = Save
+virtual-saved = Virtual account saved.
+virtual-delete = Delete virtual account
+virtual-removed = Virtual account deleted.
+virtual-error-name = Give the virtual account a name.
+virtual-error-members = Choose at least one account.
+virtual-error-mapping = Every merged folder needs a name and at least one folder.
+virtual-error-rule = Every rule needs a pattern with @ and an identity.

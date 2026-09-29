@@ -7,12 +7,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ActionsProvider } from "./actions/ActionsProvider";
 import type { NailClient } from "./api/client";
 import { errorMessageIdOf } from "./api/client";
-import type { ThemeMode } from "./api/generated";
+import type { AccountStatus, ThemeMode } from "./api/generated";
 import { normalizeLayout, normalizeTheme } from "./api/normalize";
 import { createClient } from "./api/select";
 import { I18nProvider, useT } from "./i18n/I18nProvider";
 import { LayoutContext } from "./layout/LayoutContext";
 import { WindowView } from "./layout/LayoutRenderer";
+import { WindowLayer } from "./layout/WindowLayer";
 import { WidgetRegistryContext, type WidgetRegistry } from "./layout/widgetRegistry";
 import {
   ClientContext,
@@ -133,10 +134,17 @@ function useCoreEvents(): void {
   const store = useUiStoreApi();
   useEffect(() => {
     const ui = () => store.getState();
-    const refreshMail = () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.allFolders });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.allMessages });
+    const invalidate = (...keys: (readonly unknown[])[]) => {
+      for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
     };
+    const refreshMail = () =>
+      invalidate(
+        queryKeys.allFolders,
+        queryKeys.allMessages,
+        queryKeys.allThreads,
+        queryKeys.allThreadDetails,
+        queryKeys.allSearches,
+      );
     const offEvents = client.subscribe((event) => {
       switch (event.type) {
         case "ConfigChanged":
@@ -166,6 +174,49 @@ function useCoreEvents(): void {
           ui().setSync({ accountId: event.account_id, done: event.done, total: event.total });
           ui().setSyncError(null);
           if (event.total > 0 && event.done >= event.total) refreshMail();
+          break;
+        case "NewMail":
+          refreshMail();
+          break;
+        case "OpStatus":
+          if (event.status.state === "done" || event.status.state === "failed") {
+            ui().opFinished(event.status.op_id, event.status.error);
+            // A failed write: show the core's state again.
+            if (event.status.state === "failed") refreshMail();
+          }
+          break;
+        case "SendStatus": {
+          const last = ui().lastSend;
+          if (last?.id === event.outbox_id) {
+            ui().setLastSend({
+              ...last,
+              state: event.state,
+              error: event.error,
+              message: event.message,
+            });
+          }
+          invalidate(queryKeys.outbox);
+          break;
+        }
+        case "AccountStatus":
+          queryClient.setQueryData<AccountStatus[]>(queryKeys.accountStatuses, (old = []) => [
+            ...old.filter((s) => s.account_id !== event.status.account_id),
+            event.status,
+          ]);
+          break;
+        case "AccountsChanged":
+          invalidate(
+            queryKeys.accounts,
+            queryKeys.accountsConfig,
+            queryKeys.allIdentities,
+            queryKeys.virtualAccounts,
+            queryKeys.accountStatuses,
+            queryKeys.allFolders,
+            queryKeys.allMessages,
+          );
+          break;
+        case "OAuthFinished":
+          ui().setOAuthResult(event.flow_id, event.error);
           break;
       }
     });
@@ -231,6 +282,7 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
                   data-theme={config.data.theme.name}
                 >
                   <WindowView layout={config.data.layout} name={windowName} />
+                  <WindowLayer layout={config.data.layout} />
                 </main>
               </WidgetRegistryContext.Provider>
             </ActionsProvider>

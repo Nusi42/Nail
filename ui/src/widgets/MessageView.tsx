@@ -1,8 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { Address, MessageBody } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
-import { optionList, type WidgetProps } from "../layout/widgetRegistry";
+import { optionBool, optionList, type WidgetProps } from "../layout/widgetRegistry";
+import { useComposeContext } from "../state/hooks";
+import { findSummary, setFlags } from "../state/mailOps";
 import { useMessage } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { useReaderCss } from "../theme/ThemeProvider";
@@ -83,7 +85,19 @@ export function MessageView({ node }: WidgetProps) {
   const selectedId = useUi((s) => s.selectedMessageId);
   const query = useMessage(selectedId);
   const fields = optionList(node, "headers", ["from", "to", "cc", "date"]).filter(isHeaderField);
+  const markRead = optionBool(node, "mark-read", true);
+  const ctx = useComposeContext();
   const message = query.data;
+
+  // Reading a message marks it as read (a queued write, like any other).
+  const loadedId = message?.id ?? null;
+  useEffect(() => {
+    if (!markRead || loadedId === null) return;
+    const summary = findSummary(ctx.queryClient, loadedId);
+    if (summary && !summary.flags.seen) {
+      setFlags(ctx, [loadedId], { seen: true }, { quiet: true }).catch(() => {});
+    }
+  }, [markRead, loadedId, ctx]);
 
   let content: ReactNode;
   if (selectedId === null) {

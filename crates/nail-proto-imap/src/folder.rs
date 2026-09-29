@@ -1,7 +1,7 @@
 //! Mailbox listing: roles (RFC 6154 SPECIAL-USE with name heuristics) and
 //! modified UTF-7 names (RFC 3501 section 5.1.3).
 
-use async_imap::types::NameAttribute;
+use imap_proto::types::NameAttribute;
 use nail_api::FolderRole;
 
 /// A mailbox as listed by the server.
@@ -92,6 +92,80 @@ pub fn role_from_name(name: &str) -> Option<FolderRole> {
     Some(role)
 }
 
+/// Encodes a mailbox name as IMAP modified UTF-7 (`Entwürfe` →
+/// `Entw&APw-rfe`, `&` → `&-`).
+pub fn encode_modified_utf7(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut pending: Vec<u16> = Vec::new();
+    for c in input.chars() {
+        if (' '..='~').contains(&c) {
+            flush_utf16(&mut out, &mut pending);
+            if c == '&' {
+                out.push_str("&-");
+            } else {
+                out.push(c);
+            }
+        } else {
+            let mut units = [0u16; 2];
+            pending.extend_from_slice(c.encode_utf16(&mut units));
+        }
+    }
+    flush_utf16(&mut out, &mut pending);
+    out
+}
+
+fn flush_utf16(out: &mut String, pending: &mut Vec<u16>) {
+    if pending.is_empty() {
+        return;
+    }
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
+    let bytes: Vec<u8> = pending.drain(..).flat_map(u16::to_be_bytes).collect();
+    out.push('&');
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            chunk.get(1).copied().unwrap_or(0),
+            chunk.get(2).copied().unwrap_or(0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        let symbols = chunk.len() + 1;
+        for i in 0..symbols {
+            let index = (n >> (18 - 6 * i)) & 0x3f;
+            out.push(char::from(ALPHABET[index as usize]));
+        }
+    }
+    out.push('-');
+}
+
+/// Builds the server path of a new mailbox named `name` (display form)
+/// below `parent` (a server path, `None` for top level), using the
+/// hierarchy `delimiter` from `LIST`. Fails when `name` is empty or
+/// contains the delimiter or control characters.
+pub fn folder_path(
+    parent: Option<&str>,
+    delimiter: Option<&str>,
+    name: &str,
+) -> crate::Result<String> {
+    let invalid = name.trim().is_empty()
+        || name.chars().any(char::is_control)
+        || delimiter.is_some_and(|d| !d.is_empty() && name.contains(d));
+    if invalid {
+        return Err(crate::ImapError::InvalidArgument(format!(
+            "{name:?} is not a valid folder name"
+        )));
+    }
+    let leaf = encode_modified_utf7(name);
+    match (parent, delimiter) {
+        (Some(parent), Some(delimiter)) if !parent.is_empty() => {
+            Ok(format!("{parent}{delimiter}{leaf}"))
+        }
+        (Some(parent), None) if !parent.is_empty() => Err(crate::ImapError::InvalidArgument(
+            "the server has no folder hierarchy".to_owned(),
+        )),
+        _ => Ok(leaf),
+    }
+}
+
 /// Decodes an IMAP modified UTF-7 mailbox name (`Entw&APw-rfe` → `Entwürfe`).
 /// Invalid sequences are kept verbatim.
 pub fn decode_modified_utf7(input: &str) -> String {
@@ -165,6 +239,46 @@ mod tests {
         assert_eq!(decode_modified_utf7("&ZeVnLIqe-"), "日本語");
         assert_eq!(decode_modified_utf7("broken&"), "broken&");
         assert_eq!(decode_modified_utf7("bad&!!-x"), "bad&!!-x");
+    }
+
+    #[test]
+    fn modified_utf7_encoding_round_trips() {
+        for (plain, encoded) in [
+            ("INBOX", "INBOX"),
+            ("Entwürfe", "Entw&APw-rfe"),
+            ("Gelöschte Elemente", "Gel&APY-schte Elemente"),
+            ("Tom & Jerry", "Tom &- Jerry"),
+            ("日本語", "&ZeVnLIqe-"),
+            ("😀", "&2D3eAA-"),
+        ] {
+            assert_eq!(encode_modified_utf7(plain), encoded, "{plain}");
+            assert_eq!(decode_modified_utf7(encoded), plain, "{encoded}");
+        }
+    }
+
+    #[test]
+    fn folder_paths() {
+        assert_eq!(
+            folder_path(None, Some("/"), "Entwürfe").unwrap(),
+            "Entw&APw-rfe"
+        );
+        assert_eq!(
+            folder_path(Some("INBOX"), Some("."), "Work").unwrap(),
+            "INBOX.Work"
+        );
+        assert!(folder_path(Some("INBOX"), Some("."), "a.b").is_err());
+        assert!(folder_path(None, Some("/"), " ").is_err());
+        assert!(
+            folder_path(
+                None,
+                Some("/"),
+                "a
+b"
+            )
+            .is_err()
+        );
+        assert!(folder_path(Some("X"), None, "y").is_err());
+        assert_eq!(folder_path(None, None, "y").unwrap(), "y");
     }
 
     #[test]

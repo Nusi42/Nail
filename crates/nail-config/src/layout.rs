@@ -63,9 +63,15 @@ const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
     }
 }
 
-/// The widget registry (M0 widgets have typed options).
+/// The widget registry. Implemented widgets have typed options; future ones
+/// accept any options until they exist.
 const WIDGETS: &[WidgetSpec] = &[
-    widget("account-switcher", &[], &[], false),
+    widget(
+        "account-switcher",
+        &[("show-status", OptionType::Bool)],
+        &[],
+        false,
+    ),
     widget(
         "folder-tree",
         &[
@@ -84,11 +90,48 @@ const WIDGETS: &[WidgetSpec] = &[
                 "threads",
                 OptionType::OneOf(&["off", "collapsed", "expanded"]),
             ),
+            ("follow-search", OptionType::Bool),
         ],
         &[],
         true,
     ),
-    widget("message-view", &[("headers", OptionType::Str)], &[], true),
+    widget(
+        "message-view",
+        &[
+            ("headers", OptionType::Str),
+            ("mark-read", OptionType::Bool),
+        ],
+        &[],
+        true,
+    ),
+    widget(
+        "thread-view",
+        &[
+            (
+                "expand",
+                OptionType::OneOf(&["latest", "unread", "all", "none"]),
+            ),
+            ("hide-single", OptionType::Bool),
+        ],
+        &[],
+        false,
+    ),
+    widget(
+        "search-bar",
+        &[
+            ("scope", OptionType::OneOf(&["all", "account", "folder"])),
+            ("hints", OptionType::Bool),
+            ("live-check", OptionType::Bool),
+        ],
+        &[],
+        false,
+    ),
+    widget("composer", &[("send-later", OptionType::Bool)], &[], false),
+    widget("outbox", &[], &[], false),
+    widget("folder-picker", &[], &[], false),
+    widget("account-setup", &[], &[], false),
+    widget("account-settings", &[], &[], false),
+    widget("virtual-account-editor", &[], &[], false),
     widget(
         "toolbar",
         &[("toolbar", OptionType::Str)],
@@ -98,9 +141,6 @@ const WIDGETS: &[WidgetSpec] = &[
     widget("status-bar", &[("items", OptionType::Str)], &[], false),
     widget("text", &[("text", OptionType::Str)], &[], false),
     widget("spacer", &[], &[], false),
-    future_widget("search-bar", false),
-    future_widget("thread-view", true),
-    future_widget("composer", false),
     future_widget("calendar", false),
     future_widget("agenda", true),
     future_widget("mini-month", false),

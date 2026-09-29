@@ -23,7 +23,7 @@ rustls-platform-verifier.workspace = true
 
 [dev-dependencies]
 nail-testkit-net.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
 
 [lints]
 workspace = true

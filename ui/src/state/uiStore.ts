@@ -8,7 +8,19 @@ import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionStatus } from "../api/client";
-import type { AccountId, ErrorCode, FolderId, MessageId, ThemeMode } from "../api/generated";
+import type {
+  AccountId,
+  DraftId,
+  ErrorCode,
+  FolderId,
+  IdentityId,
+  MessageId,
+  OpId,
+  OutboxEntry,
+  SearchError,
+  ThemeMode,
+  ThreadId,
+} from "../api/generated";
 
 export interface SyncState {
   accountId: AccountId;
@@ -26,6 +38,43 @@ export interface ConfigErrorState {
   line: number;
   column: number;
   message: string;
+}
+
+/** The message being written in the composer (plain text, M1a). */
+export interface ComposerState {
+  /** Saved draft id, `null` until the first save. */
+  draftId: DraftId | null;
+  identityId: IdentityId | null;
+  /** Recipient fields as typed (comma-separated addresses). */
+  to: string;
+  cc: string;
+  bcc: string;
+  subject: string;
+  text: string;
+  inReplyTo: MessageId | null;
+  showCc: boolean;
+  showBcc: boolean;
+  /** `true` once the user picked an identity by hand (rules stop applying). */
+  identityPicked: boolean;
+  busy: "saving" | "sending" | null;
+  /** Fluent id of the last problem, with its arguments. */
+  error: { id: string; args?: Record<string, string | number> } | null;
+}
+
+/** An active search (the message list shows its results). */
+export interface SearchState {
+  text: string;
+  /** Scope chosen when the search started (`null` = everywhere). */
+  accountId: AccountId | null;
+  folderId: FolderId | null;
+  /** Set when the core rejected the query. */
+  error: SearchError | null;
+}
+
+/** A focus request for a widget (`search.focus`), identified by a counter. */
+export interface FocusRequest {
+  target: string;
+  seq: number;
 }
 
 export interface UiState {
@@ -51,6 +100,23 @@ export interface UiState {
   modeOverride: ThemeMode | null;
   /** User override of the UI language. */
   localeOverride: string | null;
+  /** The thread of the selected message, when known. */
+  selectedThreadId: ThreadId | null;
+  /** Secondary windows open over the main window (layout window names), topmost last. */
+  windows: string[];
+  composer: ComposerState | null;
+  search: SearchState | null;
+  /** What is typed in the search bar (not yet necessarily searched). */
+  searchInput: string;
+  focusRequest: FocusRequest | null;
+  /** Queued writes not yet replayed. */
+  pendingOps: OpId[];
+  /** The last failed write, until the next one succeeds or it is dismissed. */
+  opError: ErrorCode | null;
+  /** The last message handed to the outbox (undo-send countdown). */
+  lastSend: OutboxEntry | null;
+  /** Results of OAuth sign-ins by flow id (`null` = success). */
+  oauthResults: Record<string, ErrorCode | null>;
 
   selectAccount(id: AccountId): void;
   selectFolder(id: FolderId | null): void;
@@ -66,6 +132,20 @@ export interface UiState {
   setConfigError(error: ConfigErrorState | null): void;
   setModeOverride(mode: ThemeMode | null): void;
   setLocaleOverride(locale: string | null): void;
+  selectThread(id: ThreadId | null): void;
+  openWindow(name: string): void;
+  /** Closes the named window, or the topmost one. */
+  closeWindow(name?: string): void;
+  setComposer(composer: ComposerState | null): void;
+  updateComposer(patch: Partial<ComposerState>): void;
+  setSearch(search: SearchState | null): void;
+  setSearchInput(text: string): void;
+  requestFocus(target: string): void;
+  opQueued(ids: OpId[]): void;
+  opFinished(id: OpId, error: ErrorCode | null): void;
+  dismissOpError(): void;
+  setLastSend(entry: OutboxEntry | null): void;
+  setOAuthResult(flowId: string, error: ErrorCode | null): void;
 }
 
 export type UiStore = StoreApi<UiState>;
@@ -86,6 +166,16 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     configError: null,
     modeOverride: null,
     localeOverride: null,
+    selectedThreadId: null,
+    windows: [],
+    composer: null,
+    search: null,
+    searchInput: "",
+    focusRequest: null,
+    pendingOps: [],
+    opError: null,
+    lastSend: null,
+    oauthResults: {},
 
     selectAccount: (id) =>
       set((s) =>
@@ -95,14 +185,22 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
               activeAccountId: id,
               activeFolderId: null,
               selectedMessageId: null,
+              selectedThreadId: null,
               messageOrder: [],
+              search: null,
             },
       ),
     selectFolder: (id) =>
       set((s) =>
         s.activeFolderId === id
           ? s
-          : { activeFolderId: id, selectedMessageId: null, messageOrder: [] },
+          : {
+              activeFolderId: id,
+              selectedMessageId: null,
+              selectedThreadId: null,
+              messageOrder: [],
+              search: null,
+            },
       ),
     selectMessage: (id) => set({ selectedMessageId: id }),
     setMessageOrder: (ids) => set({ messageOrder: ids }),
@@ -122,6 +220,40 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     setConfigError: (configError) => set({ configError }),
     setModeOverride: (modeOverride) => set({ modeOverride }),
     setLocaleOverride: (localeOverride) => set({ localeOverride }),
+    selectThread: (selectedThreadId) => set({ selectedThreadId }),
+    openWindow: (name) => set((s) => ({ windows: [...s.windows.filter((w) => w !== name), name] })),
+    closeWindow: (name) =>
+      set((s) => ({
+        windows: name === undefined ? s.windows.slice(0, -1) : s.windows.filter((w) => w !== name),
+      })),
+    setComposer: (composer) => set({ composer }),
+    updateComposer: (patch) =>
+      set((s) => (s.composer ? { composer: { ...s.composer, ...patch } } : s)),
+    setSearch: (search) =>
+      set((s) =>
+        search === null
+          ? { search: null, searchInput: "" }
+          : {
+              search,
+              // A new search starts without a selection.
+              ...(s.search?.text === search.text
+                ? {}
+                : { selectedMessageId: null, selectedThreadId: null, messageOrder: [] }),
+            },
+      ),
+    setSearchInput: (searchInput) => set({ searchInput }),
+    requestFocus: (target) =>
+      set((s) => ({ focusRequest: { target, seq: (s.focusRequest?.seq ?? 0) + 1 } })),
+    opQueued: (ids) => set((s) => ({ pendingOps: [...s.pendingOps, ...ids] })),
+    opFinished: (id, error) =>
+      set((s) => ({
+        pendingOps: s.pendingOps.filter((p) => p !== id),
+        opError: error ?? (s.pendingOps.includes(id) ? null : s.opError),
+      })),
+    dismissOpError: () => set({ opError: null }),
+    setLastSend: (lastSend) => set({ lastSend }),
+    setOAuthResult: (flowId, error) =>
+      set((s) => ({ oauthResults: { ...s.oauthResults, [flowId]: error } })),
     ...initial,
   }));
 }

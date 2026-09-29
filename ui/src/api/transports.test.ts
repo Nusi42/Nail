@@ -22,7 +22,12 @@ describe("MockTransport", () => {
   it("serves accounts, folders, message pages and bodies", async () => {
     const c = client();
     const { accounts } = await c.request({ type: "ListAccounts" }, "Accounts");
-    expect(accounts.map((a) => a.name)).toEqual(["Personal", "Work"]);
+    // The built-in "All accounts" comes first, without a name of its own.
+    expect(accounts.map((a) => [a.id, a.name, a.kind])).toEqual([
+      ["all", "", "virtual"],
+      ["acc-personal", "Personal", "imap"],
+      ["acc-work", "Work", "imap"],
+    ]);
     const { folders } = await c.request(
       { type: "ListFolders", account_id: "acc-personal" },
       "Folders",
@@ -49,12 +54,11 @@ describe("MockTransport", () => {
     expect(config.theme.parts.length).toBeGreaterThan(10);
   });
 
-  it("answers requests it does not implement with unsupported", async () => {
-    await expect(
-      client().request({ type: "GetAccountsConfig" }, "AccountsConfig"),
-    ).rejects.toMatchObject({ code: "unsupported" });
+  it("answers the M1a requests of the contract", async () => {
+    const { config } = await client().request({ type: "GetAccountsConfig" }, "AccountsConfig");
+    expect(config.accounts.map((a) => a.id)).toEqual(["acc-personal", "acc-work"]);
     const response = await client().call({ type: "ListOutbox" });
-    expect(response).toMatchObject({ type: "Error", code: "unsupported" });
+    expect(response).toEqual({ type: "Outbox", entries: [] });
   });
 
   it("answers errors for unknown ids", async () => {

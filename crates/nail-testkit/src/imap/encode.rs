@@ -34,6 +34,37 @@ pub(crate) fn push_literal(out: &mut Vec<u8>, bytes: &[u8]) {
     out.extend_from_slice(bytes);
 }
 
+/// Formats ascending numbers as an IMAP sequence set: `1:3,7,9:10`.
+pub(crate) fn number_set(numbers: &[u32]) -> String {
+    let mut out = String::new();
+    let mut iter = numbers.iter().copied().peekable();
+    while let Some(start) = iter.next() {
+        let mut end = start;
+        while iter.peek() == Some(&end.wrapping_add(1)) {
+            end = iter.next().unwrap_or(end);
+        }
+        if !out.is_empty() {
+            out.push(',');
+        }
+        if start == end {
+            out.push_str(&start.to_string());
+        } else {
+            out.push_str(&format!("{start}:{end}"));
+        }
+    }
+    out
+}
+
+/// Formats numbers in the given order as a comma list (for `COPYUID`,
+/// where source and destination sets must correspond position by position).
+pub(crate) fn number_list(numbers: &[u32]) -> String {
+    numbers
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 /// Appends the `ENVELOPE` structure (RFC 3501 section 7.4.2) for a message.
 pub(crate) fn push_envelope(out: &mut Vec<u8>, raw: &[u8]) {
     let parsed = MessageParser::default().parse_headers(raw);
@@ -157,6 +188,13 @@ mod tests {
              ((NIL NIL \"sam\" \"nail.example\")(\"Bob\" NIL \"bob\" \"x.example\")) \
              NIL NIL NIL \"<m1@x>\")"
         );
+    }
+
+    #[test]
+    fn number_sets() {
+        assert_eq!(number_set(&[1, 2, 3, 7, 9, 10]), "1:3,7,9:10");
+        assert_eq!(number_set(&[]), "");
+        assert_eq!(number_list(&[4, 2]), "4,2");
     }
 
     #[test]

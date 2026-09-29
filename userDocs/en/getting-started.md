@@ -32,14 +32,18 @@ broken or hostile messages. They show how Nail protects you.
 
 ## Find your way around
 
-The default window has three panes:
+The default window has a toolbar at the top (new message, check for mail,
+outbox, add account, settings) and three panes:
 
-1. **Folders** (left): your accounts at the top, the folder tree below.
-   The number next to a folder is its count of unread messages.
+1. **Folders** (left): the search bar, your accounts and the folder tree.
+   "All accounts" shows every account together (the unified inbox). The dot
+   next to an account shows whether it is connected. The number next to a
+   folder is its count of unread messages.
 2. **Messages** (middle): the selected folder, newest first. Unread
    messages are bold.
-3. **Message** (right): the selected message with its headers, attachments
-   and text.
+3. **Message** (right): the actions for the message, the other messages of
+   its conversation, and the selected message with its headers,
+   attachments and text.
 
 The status bar at the bottom shows whether Nail is up to date, the progress
 of a running check for new mail, and the number of messages in the folder.
@@ -53,6 +57,17 @@ is narrow, the panes become tabs.
 | --- | --- |
 | `j` / `↓` | Next message |
 | `k` / `↑` | Previous message |
+| `c` | New message |
+| `r` / `a` / `f` | Reply / reply all / forward |
+| `e` | Archive |
+| `v` | Move to folder |
+| `Delete` / `Shift+Delete` | Move to Trash / delete for good |
+| `u` / `s` | Mark read or unread / flag or unflag |
+| `/` | Search (`Esc` ends the search) |
+| `Ctrl+Enter` | Send (in the composer) |
+| `Esc` | Close the composer, settings or another window |
+| `g` then `o` | Show the outbox |
+| `Ctrl+,` | Settings |
 | `F5` | Check for new mail |
 | `Ctrl+B` | Show or hide the folder pane |
 | `g` then `r` | Show or hide the message pane |

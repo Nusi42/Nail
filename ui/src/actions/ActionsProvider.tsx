@@ -4,6 +4,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { JsonValue, ResolvedLayout } from "../api/generated";
+import { useLocale, useT } from "../i18n/I18nProvider";
 import { useClient } from "../state/queries";
 import { useUi, useUiStoreApi } from "../state/uiStore";
 import { KeyMatcher, comboFromEvent } from "./keys";
@@ -22,6 +23,29 @@ export const SEQUENCE_TIMEOUT_MS = 1000;
 /** The keyboard context of an element: its closest `data-key-context`. */
 export function contextOf(element: Element | null): string | null {
   return element?.closest("[data-key-context]")?.getAttribute("data-key-context") ?? null;
+}
+
+/**
+ * All keyboard contexts around an element, innermost first (e.g.
+ * `["composer", "window"]`), so an inner context falls back to outer ones.
+ */
+export function contextsOf(element: Element | null): string[] {
+  const out: string[] = [];
+  let current = element?.closest("[data-key-context]") ?? null;
+  while (current) {
+    const context = current.getAttribute("data-key-context");
+    if (context && !out.includes(context)) out.push(context);
+    current = current.parentElement?.closest("[data-key-context]") ?? null;
+  }
+  return out;
+}
+
+/**
+ * Whether a key typed into a text field may trigger a binding: only chords
+ * with Ctrl / Alt / Meta and Escape, so typing text never runs actions.
+ */
+export function isFieldCombo(combo: string): boolean {
+  return /^(ctrl|alt|meta)\+/.test(combo) || combo === "escape";
 }
 
 function isEditable(target: EventTarget | null): boolean {
@@ -43,9 +67,11 @@ export function ActionsProvider({
   const client = useClient();
   const store = useUiStoreApi();
   const queryClient = useQueryClient();
+  const t = useT();
+  const locale = useLocale();
   const dispatcher = useMemo(
-    () => createDispatcher({ client, store, queryClient, layout }, handlers),
-    [client, store, queryClient, layout, handlers],
+    () => createDispatcher({ client, store, queryClient, layout, t, locale }, handlers),
+    [client, store, queryClient, layout, handlers, t, locale],
   );
 
   // Track the keyboard context of whatever gets focus.
@@ -67,13 +93,27 @@ export function ActionsProvider({
       timer = null;
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || isEditable(event.target)) return;
+      if (event.defaultPrevented || event.isComposing) return;
       const combo = comboFromEvent(event);
       if (!combo) return;
       const focused =
         event.target instanceof Element && event.target !== document.body ? event.target : null;
-      const context = contextOf(focused) ?? store.getState().keyContext;
-      const result = matcher.feed(combo, [context, "global"]);
+      const around = contextsOf(focused);
+      let contexts: string[];
+      if (isEditable(event.target)) {
+        // In text fields only the field's own contexts apply, and only chords.
+        if (!isFieldCombo(combo) || around.length === 0 || matcher.pending) return;
+        contexts = around;
+      } else if (focused?.closest("[data-key-modal]")) {
+        // Inside a modal window, main-window (global) bindings do not apply.
+        contexts = around;
+      } else if (store.getState().windows.length > 0) {
+        contexts = ["window"];
+      } else {
+        const own = around.length > 0 ? around : [store.getState().keyContext];
+        contexts = [...own, "global"];
+      }
+      const result = matcher.feed(combo, contexts);
       clearTimer();
       if (result.kind === "none") return;
       event.preventDefault();
@@ -115,5 +155,8 @@ export function useActionEnabled(id: string, args: readonly JsonValue[] = []): b
   // Subscribe to the state the built-in `enabled` checks read.
   useUi((s) => s.messageOrder.length > 0);
   useUi((s) => s.selectedMessageId);
+  useUi((s) => s.composer !== null);
+  useUi((s) => s.windows.length);
+  useUi((s) => s.lastSend?.state);
   return dispatcher.isEnabled(id, args);
 }

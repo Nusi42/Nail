@@ -1,9 +1,16 @@
-import type { JSX } from "react";
-import { errorMessageId } from "../api/client";
-import { useT } from "../i18n/I18nProvider";
+import { useEffect, useState, type JSX } from "react";
+import { errorMessageId, errorMessageIdOf } from "../api/client";
+import { useLocale, useT } from "../i18n/I18nProvider";
 import { optionList, type WidgetProps } from "../layout/widgetRegistry";
-import { useFolders } from "../state/queries";
+import { cancelSend } from "../state/compose";
+import { useComposeContext } from "../state/hooks";
+import { useAccounts, useAccountStatuses, useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
+
+/** How long "Message sent" stays in the status bar. */
+export const SENT_NOTICE_MS = 5000;
+/** A send further away than this is shown as scheduled, not as a countdown. */
+export const COUNTDOWN_LIMIT_SECS = 120;
 
 function SyncItem() {
   const t = useT();
@@ -54,10 +61,153 @@ function FolderCountsItem() {
   );
 }
 
+/** Accounts that are not online (offline, sign-in required, connecting). */
+function AccountStatusItem() {
+  const t = useT();
+  const statuses = useAccountStatuses();
+  const accounts = useAccounts();
+  const problems = (statuses.data ?? []).filter(
+    (s) => s.state !== "online" && s.state !== "disabled",
+  );
+  const first = problems[0];
+  if (!first) return null;
+  const name = accounts.data?.find((a) => a.id === first.account_id)?.name ?? first.account_id;
+  const state = t(`account-state-${first.state}`);
+  return (
+    <span
+      data-part="status-bar.item"
+      data-item="account-status"
+      data-state={first.state}
+      data-account={first.account_id}
+    >
+      {problems.length === 1
+        ? t("status-account", { account: name, state })
+        : t("status-accounts", { account: name, state, count: problems.length - 1 })}
+    </span>
+  );
+}
+
+/** Queued writes still being replayed, or the last one that failed. */
+function OpsItem() {
+  const t = useT();
+  const pending = useUi((s) => s.pendingOps.length);
+  const error = useUi((s) => s.opError);
+  const dismiss = useUi((s) => s.dismissOpError);
+  if (error) {
+    return (
+      <span data-part="status-bar.item" data-item="ops" data-state="error">
+        <span data-part="status-bar.text">
+          {t("status-op-failed", { reason: t(errorMessageId(error)) })}
+        </span>
+        <button type="button" data-part="status-bar.button" onClick={dismiss}>
+          {t("status-dismiss")}
+        </button>
+      </span>
+    );
+  }
+  if (pending === 0) return null;
+  return (
+    <span data-part="status-bar.item" data-item="ops" data-state="pending">
+      {t("status-ops-pending", { count: pending })}
+    </span>
+  );
+}
+
+function useSecondsUntil(iso: string | null): number {
+  const target = iso === null ? Number.NaN : Date.parse(iso);
+  const compute = () => Math.max(0, Math.ceil((target - Date.now()) / 1000));
+  const [seconds, setSeconds] = useState(compute);
+  useEffect(() => {
+    if (Number.isNaN(target)) return;
+    const tick = () => setSeconds(Math.max(0, Math.ceil((target - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [target]);
+  return seconds;
+}
+
+/** The last sent message: undo-send countdown, sending, sent, failed. */
+function SendStatusItem() {
+  const t = useT();
+  const locale = useLocale();
+  const ctx = useComposeContext();
+  const entry = useUi((s) => s.lastSend);
+  const setLastSend = useUi((s) => s.setLastSend);
+  const seconds = useSecondsUntil(entry?.state === "scheduled" ? entry.send_at : null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const sentId = entry?.state === "sent" ? entry.id : null;
+  useEffect(() => {
+    if (sentId === null) return;
+    const timer = setTimeout(() => {
+      const current = ctx.store.getState().lastSend;
+      if (current?.id === sentId) setLastSend(null);
+    }, SENT_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [sentId, setLastSend, ctx.store]);
+
+  if (!entry || entry.state === "cancelled") return null;
+  let text: string;
+  let undo = false;
+  switch (entry.state) {
+    case "scheduled":
+      undo = true;
+      if (seconds > COUNTDOWN_LIMIT_SECS) {
+        const date = new Date(entry.send_at);
+        text = t("status-send-scheduled", {
+          time: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+            date,
+          ),
+        });
+      } else {
+        text = t("status-send-countdown", { seconds });
+      }
+      break;
+    case "sending":
+      text = t("status-sending");
+      break;
+    case "sent":
+      text = t("status-sent");
+      break;
+    case "failed":
+      text = t("status-send-failed", {
+        reason: t(errorMessageId(entry.error ?? "internal")),
+      });
+      break;
+  }
+  return (
+    <span data-part="status-bar.item" data-item="send-status" data-state={entry.state}>
+      <span data-part="status-bar.text">{failure ? t(failure) : text}</span>
+      {undo && (
+        <button
+          type="button"
+          data-part="status-bar.button"
+          data-action="outbox.undo"
+          onClick={() => {
+            setFailure(null);
+            cancelSend(ctx, entry.id).catch((error: unknown) => {
+              setFailure(errorMessageIdOf(error));
+            });
+          }}
+        >
+          {t("status-undo-send")}
+        </button>
+      )}
+    </span>
+  );
+}
+
 const ITEMS: Record<string, () => JSX.Element | null> = {
   "sync-progress": SyncItem,
   "folder-counts": FolderCountsItem,
+  "account-status": AccountStatusItem,
+  ops: OpsItem,
+  "send-status": SendStatusItem,
 };
+
+/** Items the status bar knows (`items` option). */
+export const STATUS_ITEMS = Object.keys(ITEMS);
 
 /** Status line; items come from the `items` option. */
 export function StatusBar({ node }: WidgetProps) {

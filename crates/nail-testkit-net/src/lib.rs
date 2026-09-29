@@ -1,24 +1,53 @@
 //! Network mock servers for Nail's tests (M1a).
 //!
-//! **Stub (M1a WP10).** Work package WP12 fills this crate in; all servers
-//! bind to `127.0.0.1:0`, never touch the network and record what they
-//! receive:
+//! Every server binds to `127.0.0.1:0`, never touches the network, records
+//! what it receives and stops when dropped:
 //!
-//! * mock **SMTP** submission server (plaintext / implicit TLS / STARTTLS,
-//!   AUTH PLAIN / LOGIN / XOAUTH2, SIZE, recorded messages, fault injection);
-//! * mock **POP3** server (STLS, USER/PASS, APOP, SASL, UIDL, TOP, RETR, DELE);
-//! * mock **OAuth2** authorization server (authorize redirect, token and
-//!   refresh endpoints, PKCE check) on [`axum`];
-//! * mock **HTTP** server for autoconfig / ISPDB / Autodiscover documents;
-//! * mock **DNS** answers for SRV lookups ([`hickory_proto`] messages).
+//! * [`MockSmtpServer`]: SMTP submission (plaintext / implicit TLS /
+//!   STARTTLS, AUTH PLAIN / LOGIN / XOAUTH2 / OAUTHBEARER, SIZE, DSN,
+//!   recorded messages, fault injection);
+//! * [`MockPop3Server`]: POP3 (STLS, USER/PASS, APOP, SASL, CAPA, UIDL, TOP,
+//!   RETR, DELE with commit on QUIT, fault injection);
+//! * [`MockOAuthServer`]: OAuth2 authorization code + PKCE and refresh
+//!   tokens, on [`axum`];
+//! * [`MockHttpServer`]: canned documents by host and path, for autoconfig,
+//!   ISPDB and Autodiscover;
+//! * [`MockDnsServer`] / [`DnsZone`]: SRV / MX / A answers over UDP
+//!   ([`hickory_proto`] messages) or in memory.
 //!
-//! TLS certificates come from [`nail_testkit::tls`]. The mock IMAP server
-//! stays in `nail-testkit`. Expected shape: `docs/adr/0012-m1a-contract.md`.
+//! TLS certificates come from [`nail_testkit::tls`]; clients trust
+//! `ca_der()` of the server. The mock IMAP server stays in `nail-testkit`.
 
 #![warn(missing_docs)]
 
+pub mod dns;
+pub mod http;
+pub mod oauth;
+pub mod pop3;
+mod sasl;
+pub mod smtp;
+mod stream;
+
+pub use dns::{DnsZone, MockDnsServer, MxAnswer, SrvAnswer, ZoneAnswer};
+pub use http::{MockHttpServer, MockResponse, RecordedRequest};
+pub use nail_testkit::MockTls;
+pub use oauth::{IssuedToken, MockOAuthConfig, MockOAuthServer, TokenRequest};
+pub use pop3::{MockPop3Config, MockPop3Server, Pop3Message, apop_digest};
+pub use smtp::{MockSmtpConfig, MockSmtpServer, ReceivedMail, Recipient};
+
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");
+
+/// Errors when starting a mock server.
+#[derive(Debug, thiserror::Error)]
+pub enum MockNetError {
+    /// Binding the socket failed.
+    #[error("binding a mock server: {0}")]
+    Io(#[from] std::io::Error),
+    /// Generating TLS material failed.
+    #[error(transparent)]
+    Tls(#[from] nail_testkit::tls::TestTlsError),
+}
 
 /// Binds a TCP listener on a free loopback port, as every mock server here
 /// does.
@@ -36,14 +65,6 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         assert!(addr.ip().is_loopback());
         assert_ne!(addr.port(), 0);
-    }
-
-    #[test]
-    fn dns_messages_encode() {
-        use hickory_proto::op::Message;
-        let message = Message::query();
-        let bytes = message.to_vec().unwrap();
-        assert!(bytes.len() >= 12, "DNS header is 12 bytes");
         assert_eq!(CRATE, "nail-testkit-net");
     }
 }

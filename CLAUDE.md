@@ -31,16 +31,17 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        engine traits (SecretStore, OutgoingTransport, AccessTokenProvider; Rust only)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument)
-crates/nail-store      SQLite metadata, blob store, operation queue
+crates/nail-store      SQLite metadata (v2), blob store, per-account operation queue with sync-side
+                       merge, threading (JWZ), drafts/outbox, search filters (ADR 0015)
 crates/nail-mime       MIME parsing, HTML sanitizing
-crates/nail-proto-imap IMAP client
-crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport          [M1a stub → WP12]
-crates/nail-proto-pop3 POP3 client (in-house)                                [M1a stub → WP12]
-crates/nail-auth       OAuth2 (PKCE, loopback), keychain SecretStore          [M1a stub → WP12]
-crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover               [M1a stub → WP12]
-crates/nail-search     Tantivy index + query language parser                 [M1a stub → WP13]
+crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
+crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
+crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
+crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
+crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
+crates/nail-search     Tantivy index + query language parser (ADR 0016)
 crates/nail-testkit    mock IMAP server, .eml corpus, demo seed
-crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers        [M1a stub → WP12]
+crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
 crates/nail-core       Service: routes requests, owns store/config/sync
 crates/nail-server     axum: UI bundle, WebSocket API, blobs
 crates/nail-cli        `nail` binary
@@ -78,7 +79,7 @@ npm run tauri dev                          # desktop app with Vite hot reload
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
 - `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`.
 - M1a contract: ADR 0012 (requests, events, engine traits in `nail_api::engine`, expected crate shapes); `accounts.kdl`: ADR 0013 (secrets only as `keychain:` references); libraries: ADR 0014 (TLS = rustls + `ring` only, no aws-lc).
-- Requests the core does not implement yet answer `unsupported` (explicit match arms in `Service::dispatch`; the UI `MockTransport` does the same).
+- Requests the core does not implement yet answer `unsupported` (explicit match arms in `Service::dispatch`). The UI `MockTransport` implements every M1a request (ADR 0019).
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
 ## Git

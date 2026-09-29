@@ -1,6 +1,6 @@
 [package]
 name = "nail-proto-imap"
-description = "IMAP client engine (read-only in M0)"
+description = "IMAP client engine: sync, IDLE, CONDSTORE/QRESYNC, writes"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,10 +12,12 @@ nail-api.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
-async-imap = { version = "0.11.3", default-features = false, features = ["runtime-tokio"] }
+imap-proto = "0.16.7"
+async-compression = { version = "0.4.48", default-features = false, features = ["tokio", "deflate"] }
+base64.workspace = true
 futures = "0.3.34"
 tokio-rustls.workspace = true
-rustls-platform-verifier = "0.7.1"
+rustls-platform-verifier.workspace = true
 webpki-roots = "1.0.9"
 
 [dev-dependencies]

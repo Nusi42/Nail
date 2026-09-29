@@ -14,6 +14,8 @@ function context(layout = defaultLayout()): ActionContext & { transport: MockTra
     store: createUiStore({ messageOrder: ["a", "b", "c"], activeAccountId: "acc-work" }),
     queryClient: new QueryClient(),
     layout,
+    t: (id) => id,
+    locale: "en",
   };
 }
 

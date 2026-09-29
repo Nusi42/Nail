@@ -45,41 +45,100 @@ impl fmt::Debug for TlsTrust {
 /// SASL mechanism / command used to authenticate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AuthMechanism {
-    /// `AUTHENTICATE PLAIN` when advertised (`AUTH=PLAIN`), else `LOGIN`.
+    /// Chosen from the credentials and the server's capabilities: for a
+    /// password `AUTHENTICATE PLAIN` when advertised (`AUTH=PLAIN`), else
+    /// `LOGIN`; for an OAuth2 access token `OAUTHBEARER` when advertised,
+    /// else `XOAUTH2`.
     #[default]
     Auto,
-    /// The `LOGIN` command.
+    /// The `LOGIN` command (password).
     Login,
-    /// `AUTHENTICATE PLAIN` (RFC 4616).
+    /// `AUTHENTICATE PLAIN` (RFC 4616; password).
     Plain,
+    /// `AUTHENTICATE XOAUTH2` (Google / Microsoft; access token).
+    XOAuth2,
+    /// `AUTHENTICATE OAUTHBEARER` (RFC 7628; access token).
+    OAuthBearer,
 }
 
-/// User name and password. `Debug` never prints the password.
+impl AuthMechanism {
+    /// Whether the mechanism takes an OAuth2 access token.
+    pub fn is_oauth(self) -> bool {
+        matches!(self, Self::XOAuth2 | Self::OAuthBearer)
+    }
+}
+
+/// The secret part of [`Credentials`].
+#[derive(Clone, PartialEq, Eq)]
+pub enum Secret {
+    /// A password or app password (`LOGIN`, `PLAIN`).
+    Password(String),
+    /// An OAuth2 access token (`XOAUTH2`, `OAUTHBEARER`). Tokens expire:
+    /// long-running users such as [`crate::MailboxWatcher`] fetch a fresh
+    /// one through a [`crate::CredentialProvider`] for every connection.
+    AccessToken(String),
+}
+
+impl Secret {
+    /// The secret text.
+    pub fn expose(&self) -> &str {
+        match self {
+            Self::Password(s) | Self::AccessToken(s) => s,
+        }
+    }
+}
+
+/// User name and secret. `Debug` never prints the secret.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Credentials {
     /// User name (often the email address).
     pub username: String,
-    /// Password or app password.
-    pub password: String,
+    /// Password or access token.
+    pub secret: Secret,
 }
 
 impl Credentials {
-    /// Creates credentials.
+    /// User name and password.
     pub fn new(username: impl Into<String>, password: impl Into<String>) -> Self {
         Self {
             username: username.into(),
-            password: password.into(),
+            secret: Secret::Password(password.into()),
+        }
+    }
+
+    /// User name and OAuth2 access token (for `XOAUTH2` / `OAUTHBEARER`).
+    pub fn oauth2(username: impl Into<String>, access_token: impl Into<String>) -> Self {
+        Self {
+            username: username.into(),
+            secret: Secret::AccessToken(access_token.into()),
         }
     }
 }
 
 impl fmt::Debug for Credentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self.secret {
+            Secret::Password(_) => "password",
+            Secret::AccessToken(_) => "access token",
+        };
         f.debug_struct("Credentials")
             .field("username", &self.username)
-            .field("password", &"<redacted>")
+            .field("secret", &format_args!("<redacted {kind}>"))
             .finish()
     }
+}
+
+/// What the client tells the server about itself with `ID` (RFC 2971), as
+/// key / value pairs. `None` in [`ImapConfig::client_id`] sends nothing.
+pub type ClientId = Vec<(String, String)>;
+
+/// The default `ID`: `name` "Nail" and the crate version. Some providers
+/// (e.g. 163.com) refuse access without `ID`; none needs more than this.
+pub fn default_client_id() -> ClientId {
+    vec![
+        ("name".to_owned(), "Nail".to_owned()),
+        ("version".to_owned(), env!("CARGO_PKG_VERSION").to_owned()),
+    ]
 }
 
 /// How to reach and log in to an IMAP server.
@@ -102,6 +161,11 @@ pub struct ImapConfig {
     /// How [`ImapClient::fetch_batch`](crate::ImapClient::fetch_batch)
     /// batches are sized.
     pub fetch_batch: FetchBatchLimits,
+    /// Switch on `COMPRESS=DEFLATE` (RFC 4978) when the server offers it.
+    /// Default `true`.
+    pub compress: bool,
+    /// Sent with `ID` when the server supports it; `None` sends nothing.
+    pub client_id: Option<ClientId>,
 }
 
 /// Upper bounds of one body-fetch batch (one `UID FETCH` command). A batch
@@ -137,6 +201,8 @@ impl ImapConfig {
             auth: AuthMechanism::Auto,
             timeout: Self::DEFAULT_TIMEOUT,
             fetch_batch: FetchBatchLimits::default(),
+            compress: true,
+            client_id: Some(default_client_id()),
         }
     }
 
@@ -181,6 +247,20 @@ impl ImapConfig {
         self.fetch_batch = limits;
         self
     }
+
+    /// Enables or disables `COMPRESS=DEFLATE`.
+    #[must_use]
+    pub fn with_compress(mut self, compress: bool) -> Self {
+        self.compress = compress;
+        self
+    }
+
+    /// Sets what is sent with `ID` (`None`: no `ID` command).
+    #[must_use]
+    pub fn with_client_id(mut self, client_id: Option<ClientId>) -> Self {
+        self.client_id = client_id;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -194,13 +274,22 @@ mod tests {
         assert_eq!(config.security, Security::ImplicitTls);
         assert_eq!(config.tls_trust, TlsTrust::Platform);
         assert_eq!(config.auth, AuthMechanism::Auto);
+        assert!(config.compress);
+        let id = config.client_id.unwrap();
+        assert_eq!(id[0], ("name".to_owned(), "Nail".to_owned()));
     }
 
     #[test]
-    fn debug_hides_password() {
+    fn debug_hides_secrets() {
         let text = format!("{:?}", Credentials::new("sam", "hunter2"));
         assert!(text.contains("sam"));
         assert!(!text.contains("hunter2"));
+        let text = format!("{:?}", Credentials::oauth2("sam", "ya29.token"));
+        assert!(text.contains("access token"));
+        assert!(!text.contains("ya29"));
+        assert_eq!(Credentials::oauth2("s", "t").secret.expose(), "t");
+        assert!(AuthMechanism::XOAuth2.is_oauth());
+        assert!(!AuthMechanism::Plain.is_oauth());
         let trust = format!("{:?}", TlsTrust::CustomRoots(vec![vec![1, 2, 3]]));
         assert_eq!(trust, "CustomRoots(1 certificates)");
     }

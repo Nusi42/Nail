@@ -166,8 +166,14 @@ fn message_round_trips_all_fields() {
         draft: true,
     };
     msg.summary.has_attachments = true;
+    msg.summary.tags = vec!["work".into(), "$label1".into(), "work".into()];
     store.upsert_message(&msg).unwrap();
-    assert_eq!(store.get_message(&"m1".into()).unwrap(), msg);
+    let got = store.get_message(&"m1".into()).unwrap();
+    // The store threads messages itself and keeps tags sorted and unique.
+    assert!(got.summary.thread_id.is_some());
+    msg.summary.thread_id = got.summary.thread_id.clone();
+    msg.summary.tags = vec!["$label1".into(), "work".into()];
+    assert_eq!(got, msg);
 
     // Malformed mail without From and recipients.
     let mut bare = message("m2", "a1", "inbox", "2026-09-29T08:15:00Z");
@@ -175,7 +181,9 @@ fn message_round_trips_all_fields() {
     bare.summary.to.clear();
     bare.summary.subject.clear();
     store.upsert_message(&bare).unwrap();
-    assert_eq!(store.get_message(&"m2".into()).unwrap(), bare);
+    let got = store.get_message(&"m2".into()).unwrap();
+    bare.summary.thread_id = got.summary.thread_id.clone();
+    assert_eq!(got, bare);
 
     // Update in place, including a move to another folder.
     msg.summary.subject = "Changed".into();

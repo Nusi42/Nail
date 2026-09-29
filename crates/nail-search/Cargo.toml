@@ -9,12 +9,16 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+nail-store.workspace = true
+nail-mime.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tantivy.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+pretty_assertions.workspace = true
+proptest = "1.11"
 
 [lints]
 workspace = true

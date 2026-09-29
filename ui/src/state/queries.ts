@@ -3,13 +3,15 @@
  */
 import { createContext, useContext } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import type { NailClient } from "../api/client";
+import { NailError, type NailClient } from "../api/client";
 import type {
   AccountId,
+  AccountStatus,
   FolderId,
   MessageId,
   ResolvedLayout,
   ResolvedTheme,
+  ThreadId,
 } from "../api/generated";
 import { normalizeLayout, normalizeTheme } from "../api/normalize";
 
@@ -34,7 +36,27 @@ export const queryKeys = {
     ["messages", folderId, pageSize] as const,
   allMessages: ["messages"] as const,
   message: (id: MessageId | null) => ["message", id] as const,
+  accountsConfig: ["accounts-config"] as const,
+  identities: (accountId: AccountId | null) => ["identities", accountId] as const,
+  allIdentities: ["identities"] as const,
+  virtualAccounts: ["virtual-accounts"] as const,
+  accountStatuses: ["account-statuses"] as const,
+  threads: (folderId: FolderId | null, pageSize: number) =>
+    ["threads", folderId, pageSize] as const,
+  allThreads: ["threads"] as const,
+  thread: (id: ThreadId | null) => ["thread", id] as const,
+  allThreadDetails: ["thread"] as const,
+  search: (text: string, accountId: AccountId | null, folderId: FolderId | null, size: number) =>
+    ["search", text, accountId, folderId, size] as const,
+  allSearches: ["search"] as const,
+  checkQuery: (text: string) => ["check-query", text] as const,
+  outbox: ["outbox"] as const,
 };
+
+/** Whether an error means "the core does not implement this yet". */
+export function isUnsupported(error: unknown): boolean {
+  return error instanceof NailError && error.code === "unsupported";
+}
 
 export interface AppConfig {
   theme: ResolvedTheme;
@@ -102,5 +124,154 @@ export function useMessage(id: MessageId | null) {
     queryFn: async () =>
       (await client.request({ type: "GetMessage", id: id ?? "" }, "Message")).message,
     enabled: id !== null,
+  });
+}
+
+export function useAccountsConfig() {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.accountsConfig,
+    queryFn: async () =>
+      (await client.request({ type: "GetAccountsConfig" }, "AccountsConfig")).config,
+  });
+}
+
+/** Identities of an account (real or virtual), or of all accounts for `null`. */
+export function useIdentities(accountId: AccountId | null, enabled = true) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.identities(accountId),
+    queryFn: async () =>
+      (await client.request({ type: "ListIdentities", account_id: accountId }, "Identities"))
+        .identities,
+    enabled,
+  });
+}
+
+export function useVirtualAccounts() {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.virtualAccounts,
+    queryFn: async () =>
+      (await client.request({ type: "ListVirtualAccounts" }, "VirtualAccounts")).virtual_accounts,
+  });
+}
+
+/**
+ * Connection states by account id. A core without status support answers
+ * `unsupported`; that is an empty map, not an error.
+ */
+export function useAccountStatuses() {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.accountStatuses,
+    queryFn: async (): Promise<AccountStatus[]> => {
+      try {
+        return (await client.request({ type: "ListAccountStatuses" }, "AccountStatuses")).statuses;
+      } catch (error) {
+        if (isUnsupported(error)) return [];
+        throw error;
+      }
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function useThreads(folderId: FolderId | null, pageSize: number, enabled = true) {
+  const client = useClient();
+  return useInfiniteQuery({
+    queryKey: queryKeys.threads(folderId, pageSize),
+    queryFn: ({ pageParam }) =>
+      client.request(
+        { type: "ListThreads", folder_id: folderId ?? "", offset: pageParam, limit: pageSize },
+        "Threads",
+      ),
+    initialPageParam: 0,
+    getNextPageParam: (last) => {
+      const next = last.offset + last.threads.length;
+      return next < last.total && last.threads.length > 0 ? next : undefined;
+    },
+    enabled: enabled && folderId !== null,
+  });
+}
+
+export function useThread(id: ThreadId | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.thread(id),
+    queryFn: () => client.request({ type: "GetThread", thread_id: id ?? "" }, "Thread"),
+    enabled: id !== null,
+  });
+}
+
+export interface SearchScope {
+  text: string;
+  accountId: AccountId | null;
+  folderId: FolderId | null;
+}
+
+/** Search hits page by page; an invalid query resolves to its error. */
+export function useSearch(scope: SearchScope | null, pageSize: number) {
+  const client = useClient();
+  return useInfiniteQuery({
+    queryKey: queryKeys.search(
+      scope?.text ?? "",
+      scope?.accountId ?? null,
+      scope?.folderId ?? null,
+      pageSize,
+    ),
+    queryFn: async ({ pageParam }) => {
+      const response = await client.call({
+        type: "Search",
+        query: {
+          text: scope?.text ?? "",
+          account_id: scope?.accountId ?? null,
+          folder_id: scope?.folderId ?? null,
+          offset: pageParam,
+          limit: pageSize,
+          sort: "date",
+        },
+      });
+      if (response.type === "Error") throw new NailError(response.code, response.message);
+      if (response.type === "InvalidQuery") {
+        return { offset: pageParam, total: 0, hits: [], error: response.error };
+      }
+      if (response.type !== "SearchResults") {
+        throw new NailError("internal", `unexpected ${response.type} to Search`);
+      }
+      return { offset: response.offset, total: response.total, hits: response.hits, error: null };
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last) => {
+      const next = last.offset + last.hits.length;
+      return last.error === null && next < last.total && last.hits.length > 0 ? next : undefined;
+    },
+    enabled: scope !== null && scope.text.trim() !== "",
+  });
+}
+
+/** Live syntax check of a query (`null` = valid or not checked). */
+export function useCheckQuery(text: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.checkQuery(text),
+    queryFn: async () => {
+      try {
+        return (await client.request({ type: "CheckQuery", text }, "QueryChecked")).error;
+      } catch (error) {
+        if (isUnsupported(error)) return null;
+        throw error;
+      }
+    },
+    enabled: text.trim() !== "",
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function useOutbox() {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.outbox,
+    queryFn: async () => (await client.request({ type: "ListOutbox" }, "Outbox")).entries,
   });
 }

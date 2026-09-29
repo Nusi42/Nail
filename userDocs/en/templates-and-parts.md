@@ -30,6 +30,8 @@ message-list page-size=100 {
 | `preview` | The first words of the message |
 | `unread`, `flagged`, `has_attachments` | `true` / `false` |
 | `account` | The account the message belongs to |
+| `tags` | The message's tags (use `chips`) |
+| `count` | Messages in the conversation (`threads="collapsed"`), or copies of the message in a virtual account |
 
 An unknown field shows nothing.
 
@@ -114,13 +116,14 @@ recoloured.
 - **Folders:** arrow keys, Home and End move through the folder tree.
 - **Key bindings** come from the `keys` section of `layout.kdl`. A binding with
   `context="list"` works while the message list has focus, `context="reader"`
-  while the message view has focus, and `context="global"` everywhere. Keys
-  never fire while you type in a text field. Sequences such as `"g r"` wait
-  one second for the next key.
+  while the message view has focus, and `context="global"` everywhere in
+  the main window. While you type in a text field only chords with Ctrl, Alt
+  or Meta and Escape work (for example `Ctrl+Enter` to send). Sequences such
+  as `"g r"` wait one second for the next key.
+- **Windows** (composer, settings, …) keep the keyboard to themselves:
+  Escape closes them, and main-window shortcuts do not fire inside them.
 
-The default keys: `j` / `↓` next message, `k` / `↑` previous message,
-`Ctrl+B` show/hide the folder pane, `g` then `r` show/hide the reader, `F5`
-check for new mail.
+The default keys are listed in [Getting started](getting-started.md#keyboard-shortcuts).
 
 ## Language and colour mode
 

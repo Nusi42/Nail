@@ -1,11 +1,17 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useId, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
-import type { MessageSummary } from "../api/generated";
+import type { MessageSummary, ThreadSummary } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
-import { optionNumber, type WidgetProps } from "../layout/widgetRegistry";
+import {
+  optionBool,
+  optionNumber,
+  optionString,
+  type WidgetNode,
+  type WidgetProps,
+} from "../layout/widgetRegistry";
 import { useNow } from "../state/clock";
-import { useMessages } from "../state/queries";
+import { isUnsupported, useMessages, useSearch, useThreads } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import {
   compileTemplate,
@@ -42,6 +48,17 @@ export function rowStates(message: MessageSummary, selected: boolean): string | 
   return states.length > 0 ? states.join(" ") : undefined;
 }
 
+/** Space-separated `data-state` tokens of a thread row. */
+export function threadStates(thread: ThreadSummary, selected: boolean): string | undefined {
+  const states: string[] = [];
+  if (selected) states.push("selected");
+  if (thread.unread_count > 0) states.push("unread");
+  if (thread.flagged) states.push("flagged");
+  if (thread.has_attachments) states.push("has-attachments");
+  if (thread.message_count > 1) states.push("thread");
+  return states.length > 0 ? states.join(" ") : undefined;
+}
+
 /** Template data of a message: the summary plus derived fields. */
 function templateData(message: MessageSummary) {
   return {
@@ -49,7 +66,87 @@ function templateData(message: MessageSummary) {
     unread: !message.flags.seen,
     flagged: message.flags.flagged,
     account: message.account_id,
+    count: 1 + message.duplicates.length,
   };
+}
+
+/** Template data of a thread row: the fields a message row offers, plus `count`. */
+export function threadTemplateData(thread: ThreadSummary) {
+  return {
+    ...thread,
+    from: thread.participants[thread.participants.length - 1] ?? null,
+    unread: thread.unread_count > 0,
+    account: thread.account_ids.join(" "),
+    count: thread.message_count,
+  };
+}
+
+/** One row of the list: a message, or a thread represented by its newest message. */
+interface Row {
+  key: string;
+  /** The message selected when the row is chosen. */
+  messageId: string;
+  threadId: string | null;
+  accountId: string;
+  states: (selected: boolean) => string | undefined;
+  data: object;
+  unread: boolean;
+}
+
+function messageRow(m: MessageSummary): Row {
+  return {
+    key: m.id,
+    messageId: m.id,
+    threadId: m.thread_id,
+    accountId: m.account_id,
+    states: (selected) => rowStates(m, selected),
+    data: templateData(m),
+    unread: !m.flags.seen,
+  };
+}
+
+function threadRow(thread: ThreadSummary): Row {
+  return {
+    key: thread.id,
+    messageId: thread.latest_message_id,
+    threadId: thread.id,
+    accountId: thread.account_ids.join(" "),
+    states: (selected) => threadStates(thread, selected),
+    data: threadTemplateData(thread),
+    unread: thread.unread_count > 0,
+  };
+}
+
+/**
+ * The rows of the list: search hits while a search is active, threads when
+ * the `threads` option asks for them (and the core supports it), else the
+ * folder's messages.
+ */
+function useRows(node: WidgetNode, pageSize: number) {
+  const folderId = useUi((s) => s.activeFolderId);
+  const search = useUi((s) => s.search);
+  const followSearch = optionBool(node, "follow-search", true);
+  const activeSearch = followSearch && search !== null ? search : null;
+  const threadMode = optionString(node, "threads", "off") === "collapsed";
+  const threads = useThreads(folderId, pageSize, threadMode && activeSearch === null);
+  const threadRows = threadMode && activeSearch === null && !isUnsupported(threads.error);
+  const messages = useMessages(activeSearch === null && !threadRows ? folderId : null, pageSize);
+  const hits = useSearch(activeSearch, pageSize);
+  const query = activeSearch ? hits : threadRows ? threads : messages;
+
+  const rows = useMemo((): Row[] => {
+    if (activeSearch) {
+      return (hits.data?.pages ?? []).flatMap((p) => p.hits.map((h) => messageRow(h.message)));
+    }
+    if (threadRows) {
+      return (threads.data?.pages ?? []).flatMap((p) => p.threads.map(threadRow));
+    }
+    return (messages.data?.pages ?? []).flatMap((p) => p.messages.map(messageRow));
+  }, [activeSearch, threadRows, hits.data, threads.data, messages.data]);
+
+  const searchError = hits.data?.pages.find((p) => p.error !== null)?.error ?? null;
+  const total = activeSearch ? (hits.data?.pages[0]?.total ?? 0) : null;
+  return { rows, query, activeSearch, searchError, total };
 }
 
 function SegmentView({ segment }: { segment: Segment }) {
@@ -78,7 +175,7 @@ function SegmentView({ segment }: { segment: Segment }) {
   }
 }
 
-/** The virtualized message list of the active folder. */
+/** The virtualized message list of the active folder, or of the active search. */
 export function MessageList({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
@@ -88,25 +185,32 @@ export function MessageList({ node }: WidgetProps) {
   const folderId = useUi((s) => s.activeFolderId);
   const selectedId = useUi((s) => s.selectedMessageId);
   const selectMessage = useUi((s) => s.selectMessage);
+  const selectThread = useUi((s) => s.selectThread);
   const setMessageOrder = useUi((s) => s.setMessageOrder);
+  const setSearch = useUi((s) => s.setSearch);
   const pageSize = Math.max(1, Math.min(1000, optionNumber(node, "page-size", 100)));
-  const query = useMessages(folderId, pageSize);
+  const { rows, query, activeSearch, searchError, total } = useRows(node, pageSize);
   const templates = useMemo(() => compileRows(node.rows), [node.rows]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const messages = useMemo(() => query.data?.pages.flatMap((p) => p.messages) ?? [], [query.data]);
-
   useEffect(() => {
-    setMessageOrder(messages.map((m) => m.id));
-  }, [messages, setMessageOrder]);
+    setMessageOrder(rows.map((r) => r.messageId));
+  }, [rows, setMessageOrder]);
+
+  // Report a query the core rejected to the search bar.
+  useEffect(() => {
+    if (activeSearch && searchError && activeSearch.error !== searchError) {
+      setSearch({ ...activeSearch, error: searchError });
+    }
+  }, [activeSearch, searchError, setSearch]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns non-memoizable functions by design.
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 20 * templates.length + 14,
     overscan: 8,
-    getItemKey: (index) => messages[index]?.id ?? index,
+    getItemKey: (index) => rows[index]?.key ?? index,
   });
   const items = virtualizer.getVirtualItems();
   const first = items[0];
@@ -120,21 +224,32 @@ export function MessageList({ node }: WidgetProps) {
   const lastIndex = last?.index ?? -1;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && lastIndex >= messages.length - 5) {
+    if (hasNextPage && !isFetchingNextPage && lastIndex >= rows.length - 5) {
       void fetchNextPage();
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, messages.length]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, rows.length]);
 
   // Keep the selection visible (keyboard navigation).
-  const selectedIndex = selectedId === null ? -1 : messages.findIndex((m) => m.id === selectedId);
+  const selectedIndex =
+    selectedId === null ? -1 : rows.findIndex((r) => r.messageId === selectedId);
   useEffect(() => {
     if (selectedIndex >= 0) virtualizer.scrollToIndex(selectedIndex, { align: "auto" });
   }, [selectedIndex, virtualizer]);
 
+  // Keep the selected message's thread in the UI state (thread view).
+  const selectedThread = selectedIndex >= 0 ? (rows[selectedIndex]?.threadId ?? null) : undefined;
+  useEffect(() => {
+    if (selectedThread !== undefined) selectThread(selectedThread);
+  }, [selectedThread, selectThread]);
+
   const rowId = (index: number) => `${geom}-row-${index}`;
   let status: ReactNode = null;
-  if (folderId === null || (query.isSuccess && messages.length === 0)) {
+  if (activeSearch && searchError) {
+    status = <div data-part="message-list.empty">{t("message-list-search-invalid")}</div>;
+  } else if (!activeSearch && (folderId === null || (query.isSuccess && rows.length === 0))) {
     status = <div data-part="message-list.empty">{t("message-list-empty")}</div>;
+  } else if (activeSearch && query.isSuccess && rows.length === 0) {
+    status = <div data-part="message-list.empty">{t("message-list-search-empty")}</div>;
   } else if (query.isError) {
     status = <div data-part="message-list.error">{t(errorMessageIdOf(query.error))}</div>;
   } else if (query.isPending) {
@@ -147,6 +262,7 @@ export function MessageList({ node }: WidgetProps) {
       data-part="message-list"
       data-key-context="list"
       data-node-id={node.id ?? undefined}
+      data-state={activeSearch ? "search" : undefined}
       role="listbox"
       tabIndex={0}
       aria-label={node.label ? label(node.label) : t("message-list-label")}
@@ -157,14 +273,18 @@ export function MessageList({ node }: WidgetProps) {
       }
       aria-busy={query.isFetching}
     >
+      {activeSearch && total !== null && !searchError && query.isSuccess && (
+        <div data-part="message-list.search-summary">
+          {t("message-list-search-results", { count: total, query: activeSearch.text })}
+        </div>
+      )}
       {status}
       <div data-part="message-list.spacer" data-geom={`${geom}-before`} aria-hidden="true" />
       {items.map((item) => {
-        const message = messages[item.index];
-        if (!message) return null;
-        const selected = message.id === selectedId;
-        const ctx = { locale, now, unread: !message.flags.seen };
-        const data = templateData(message);
+        const row = rows[item.index];
+        if (!row) return null;
+        const selected = row.messageId === selectedId;
+        const ctx = { locale, now, unread: row.unread };
         return (
           <div
             key={item.key}
@@ -174,17 +294,19 @@ export function MessageList({ node }: WidgetProps) {
             role="option"
             aria-selected={selected}
             data-part="message-list.row"
-            data-state={rowStates(message, selected)}
-            data-account={message.account_id}
-            data-message={message.id}
+            data-state={row.states(selected)}
+            data-account={row.accountId}
+            data-message={row.messageId}
+            data-thread={row.threadId ?? undefined}
             onClick={() => {
-              selectMessage(message.id);
+              selectMessage(row.messageId);
+              selectThread(row.threadId);
               scrollRef.current?.focus({ preventScroll: true });
             }}
           >
             {templates.map((template, line) => (
               <div key={line} data-part="message-list.row.line">
-                {renderTemplate(template, data, ctx).map((segment, index) => (
+                {renderTemplate(template, row.data, ctx).map((segment, index) => (
                   <SegmentView key={index} segment={segment} />
                 ))}
               </div>

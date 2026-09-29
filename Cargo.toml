@@ -85,7 +85,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 # M1a engines (ADR 0012). TLS everywhere is rustls with the `ring` provider,
 # chosen explicitly per connection (no aws-lc, no process-wide default).
 # SMTP submission: tokio + rustls, raw MIME is built elsewhere.
-lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "pool", "hostname", "tokio1", "tokio1-rustls", "ring", "rustls-platform-verifier", "tracing"] }
+lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "pool", "hostname", "tokio1", "tokio1-rustls", "ring", "rustls-platform-verifier"] }
 # OS keychain (Windows Credential Manager, macOS Keychain, Secret Service).
 keyring = "4.2.0"
 # OAuth2 client (PKCE, token exchange/refresh); HTTP through our reqwest.

@@ -1,19 +1,22 @@
-// Nail default layout: the three-pane mail window.
+// Nail default layout: the three-pane mail window and its secondary windows.
 //
 // Your own layout.kdl can start with `layout "My layout" extends="default" { ... }`
 // and override only what you want to change. See userDocs/en/layout-reference.md.
 
 layout "default" {
-    // Wide windows: folders | message list | reader, with a status bar.
+    // Wide windows: folders | message list | reader, with a toolbar on top and
+    // a status bar at the bottom.
     breakpoint min-width=900 {
         window "main" {
-            stack id="root" sizes="1fr auto" {
+            stack id="root" sizes="auto 1fr auto" {
+                toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
                 split "horizontal" id="panes" \
                     sizes="240px 1fr 1.4fr" \
                     min-sizes="160px 280px 320px" \
                     max-sizes="480px none none" \
                     collapsible="true false true" {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr" {
+                        search-bar id="search" scope="account"
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
                     }
@@ -22,12 +25,13 @@ layout "default" {
                         row "{subject}"
                         row "{preview}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
+                        thread-view id="thread" expand="none"
                         message-view id="message" headers="from to cc date"
                     }
                 }
-                status-bar id="status" items="sync-progress folder-counts"
+                status-bar id="status" items="sync-progress account-status ops send-status folder-counts"
             }
         }
     }
@@ -35,33 +39,74 @@ layout "default" {
     // Narrow windows (phones, small browser windows): one pane at a time.
     breakpoint max-width=899 {
         window "main" {
-            stack id="root" sizes="1fr auto" {
+            stack id="root" sizes="auto auto 1fr auto" {
+                toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
+                search-bar id="search" scope="account"
                 tabs id="panes" active=1 {
-                    folder-tree id="folders" label="@layout.pane.folders" show-unread=#true
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr" {
+                        account-switcher id="accounts"
+                        folder-tree id="folders" show-unread=#true
+                    }
                     message-list id="list" label="@layout.pane.messages" page-size=100 {
                         row "{from.name}  {date | relative}"
                         row "{subject}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
+                        thread-view id="thread" expand="none"
                         message-view id="message" headers="from date"
                     }
                 }
-                status-bar id="status" items="sync-progress"
+                status-bar id="status" items="sync-progress ops send-status"
             }
+        }
+    }
+
+    // Secondary windows, opened over the main window.
+    window "composer" {
+        composer id="composer"
+    }
+    window "outbox" {
+        outbox id="outbox"
+    }
+    window "move" {
+        folder-picker id="move-picker"
+    }
+    window "account-setup" {
+        account-setup id="account-setup"
+    }
+    window "settings" {
+        tabs id="settings-tabs" {
+            account-settings id="account-settings" label="@settings.tab.accounts"
+            virtual-account-editor id="virtual-accounts" label="@settings.tab.virtual-accounts"
         }
     }
 
     actions {
         action "mail.next"        label="@mail.action.next"
         action "mail.previous"    label="@mail.action.previous"
+        action "mail.compose"     label="@mail.action.compose"     icon="compose"
         action "mail.reply"       label="@mail.action.reply"       icon="reply"
         action "mail.reply-all"   label="@mail.action.reply-all"   icon="reply-all"
         action "mail.forward"     label="@mail.action.forward"     icon="forward"
         action "mail.archive"     label="@mail.action.archive"     icon="archive"
+        action "mail.move"        label="@mail.action.move"        icon="move"
+        action "mail.move-to"     label="@mail.action.move-to"     icon="move"
         action "mail.delete"      label="@mail.action.delete"      icon="delete"
+        action "mail.delete-permanently" label="@mail.action.delete-permanently" icon="delete"
         action "mail.toggle-read" label="@mail.action.toggle-read" icon="mark-read"
         action "mail.toggle-flag" label="@mail.action.toggle-flag" icon="flag"
+        action "composer.send"    label="@composer.action.send"    icon="sent"
+        action "composer.save"    label="@composer.action.save"
+        action "composer.discard" label="@composer.action.discard" icon="delete"
+        action "outbox.undo"      label="@outbox.action.undo"
+        action "outbox.open"      label="@outbox.action.open"      icon="outbox" alias-of="window.open" "outbox"
+        action "search.focus"     label="@search.action.focus"     icon="search"
+        action "search.clear"     label="@search.action.clear"
+        action "account.add"      label="@account.action.add"      icon="account-add"
+        action "settings.open"    label="@settings.action.open"    icon="settings" alias-of="window.open" "settings"
+        action "window.open"      label="@window.action.open"
+        action "window.close"     label="@window.action.close"     icon="close"
         action "view.toggle"      label="@view.action.toggle"
         action "sync.now"         label="@sync.action.now"         icon="sync"
     }
@@ -78,17 +123,46 @@ layout "default" {
         bind "k" "mail.previous"
     }
 
+    keys context="composer" {
+        bind "ctrl+enter" "composer.send"
+        bind "ctrl+s" "composer.save"
+    }
+
+    keys context="search" {
+        bind "escape" "search.clear"
+    }
+
+    keys context="window" {
+        bind "escape" "window.close"
+    }
+
     keys {
+        bind "c" "mail.compose"
         bind "r" "mail.reply"
         bind "a" "mail.reply-all"
         bind "f" "mail.forward"
         bind "e" "mail.archive"
+        bind "v" "mail.move"
         bind "delete" "mail.delete"
+        bind "shift+delete" "mail.delete-permanently"
         bind "u" "mail.toggle-read"
         bind "s" "mail.toggle-flag"
+        bind "/" "search.focus"
         bind "f5" "sync.now"
         bind "ctrl+b" "view.toggle \"sidebar\""
         bind "g r" "view.toggle \"reader\""
+        bind "g o" "outbox.open"
+        bind "ctrl+," "settings.open"
+    }
+
+    toolbar "main" {
+        item "mail.compose"
+        item "sync.now"
+        separator
+        item "outbox.open"
+        spacer
+        item "account.add"
+        item "settings.open"
     }
 
     toolbar "reader" {
@@ -97,8 +171,10 @@ layout "default" {
         item "mail.forward"
         spacer
         item "mail.archive"
+        item "mail.move"
         item "mail.delete"
         separator
+        item "mail.toggle-read"
         item "mail.toggle-flag"
     }
 
@@ -111,6 +187,7 @@ layout "default" {
         item "mail.toggle-flag"
         separator
         item "mail.archive"
+        item "mail.move"
         item "mail.delete"
     }
 }

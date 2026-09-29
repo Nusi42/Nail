@@ -3,8 +3,9 @@
 //! [`Store::enqueue`] applies an [`Operation`] to the local tables **and**
 //! records it in `op_queue` in one transaction, so the UI sees the change at
 //! once and the change cannot be lost or applied without being queued.
-//! A sync engine later calls [`Store::replay_pending`] with a [`Replayer`]
-//! that performs the operation on the server.
+//! A sync engine later calls [`Store::replay_account`] (or
+//! [`Store::replay_pending`] for every account) with a [`Replayer`] that
+//! performs the operation on the server.
 //!
 //! # States
 //!
@@ -15,9 +16,13 @@
 //!               └─ crash: reset on Store::open
 //! ```
 //!
-//! * Operations replay strictly in enqueue order. A [`ReplayOutcome::Retry`]
-//!   ends the pass, so later operations never overtake an earlier one that
-//!   is still waiting (e.g. while offline).
+//! * Operations of one account replay strictly in enqueue order. A
+//!   [`ReplayOutcome::Retry`] ends **that account's** pass, so its later
+//!   operations never overtake an earlier one that is still waiting (e.g.
+//!   while offline). Other accounts are not affected: each account has its
+//!   own pass and its own lock, and [`Store::replay_pending`] runs the
+//!   accounts' passes concurrently, so one blocked (or hanging) account
+//!   never stalls the others.
 //! * An operation that was `in_flight` when the process died goes back to
 //!   `pending` when the store is opened again and is replayed once more.
 //!   A replayer may therefore see an operation twice and must be idempotent;
@@ -26,15 +31,21 @@
 //! * A `failed` operation stays applied locally. The next sync overwrites
 //!   the local state with the server's (server wins for flags, design.md
 //!   "Sync engine").
+//! * While an operation for a message is `pending` or `in_flight`, the sync
+//!   merge ([`Store::merge_messages`], [`Store::update_flags`]) re-applies
+//!   its flag changes on top of the server's state, and does not touch a
+//!   message with a pending move or delete at all.
 
+use std::collections::HashMap;
 use std::future::Future;
+use std::sync::{Arc, PoisonError};
 
-use nail_api::{AccountId, Flags, FolderId, MessageId};
+use nail_api::{AccountId, Flags, FolderId, FolderRole, MessageId};
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
-use crate::mail::{message_in_tx, set_flags_in_tx};
+use crate::mail::{folder_account_in_tx, message_in_tx, set_flags_in_tx, set_tags_in_tx};
 use crate::store::Store;
 
 /// Identifies a queued operation. Increases with enqueue order.
@@ -47,8 +58,8 @@ impl std::fmt::Display for OpId {
     }
 }
 
-/// A change to some flags; `None` leaves a flag as it is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+/// A change to some flags and tags; `None` / empty leaves a value as it is.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FlagChange {
     /// New `\Seen` state.
@@ -63,6 +74,12 @@ pub struct FlagChange {
     /// New `\Draft` state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub draft: Option<bool>,
+    /// Tags (IMAP keywords) to add.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub add_tags: Vec<String>,
+    /// Tags to remove.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub remove_tags: Vec<String>,
 }
 
 impl FlagChange {
@@ -76,10 +93,57 @@ impl FlagChange {
         }
     }
 
+    /// Applies the tag part: removes `remove_tags`, then adds `add_tags`
+    /// (no duplicates). The result is sorted.
+    pub fn apply_tags(&self, tags: &mut Vec<String>) {
+        tags.retain(|t| !self.remove_tags.contains(t));
+        for tag in &self.add_tags {
+            if !tag.is_empty() && !tags.contains(tag) {
+                tags.push(tag.clone());
+            }
+        }
+        tags.sort();
+    }
+
     /// Whether the change sets nothing.
     pub fn is_empty(&self) -> bool {
-        *self == Self::default()
+        self.seen.is_none()
+            && self.flagged.is_none()
+            && self.answered.is_none()
+            && self.draft.is_none()
+            && self.add_tags.is_empty()
+            && self.remove_tags.is_empty()
     }
+
+    /// Whether the change touches tags.
+    pub fn changes_tags(&self) -> bool {
+        !self.add_tags.is_empty() || !self.remove_tags.is_empty()
+    }
+}
+
+impl From<nail_api::FlagChange> for FlagChange {
+    fn from(c: nail_api::FlagChange) -> Self {
+        Self {
+            seen: c.seen,
+            flagged: c.flagged,
+            answered: c.answered,
+            draft: c.draft,
+            add_tags: c.add_tags,
+            remove_tags: c.remove_tags,
+        }
+    }
+}
+
+/// Where a message was before a move or delete: what the replayer needs
+/// to find it on the server. Recorded by [`Store::enqueue`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageSource {
+    /// The account it was in.
+    pub account_id: AccountId,
+    /// The folder it was in.
+    pub folder_id: FolderId,
+    /// Its UID in that folder (`None` for a local-only message).
+    pub uid: Option<u32>,
 }
 
 /// A user-initiated write. Stored as JSON in `op_queue.payload`, so variants
@@ -88,12 +152,41 @@ impl FlagChange {
 #[serde(tag = "type", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Operation {
-    /// Set or clear system flags of one message.
+    /// Set or clear system flags and tags of one message.
     UpdateFlags {
         /// The message.
         message_id: MessageId,
         /// The flags to change.
         change: FlagChange,
+    },
+    /// Move one message to another folder. Within an account the server
+    /// moves it (`MOVE`); into another account the replayer copies it to
+    /// the target server and deletes it from the source, as one operation.
+    /// Locally the message row moves at once (its UID becomes unknown).
+    MoveMessage {
+        /// The message.
+        message_id: MessageId,
+        /// The target folder.
+        target_folder_id: FolderId,
+        /// Filled in by [`Store::enqueue`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<MessageSource>,
+    },
+    /// Delete one message: move it to its account's Trash, or expunge it
+    /// when `permanent` or when it is already in Trash.
+    DeleteMessage {
+        /// The message.
+        message_id: MessageId,
+        /// Expunge instead of moving to Trash.
+        #[serde(default)]
+        permanent: bool,
+        /// Filled in by [`Store::enqueue`].
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<MessageSource>,
+        /// The Trash folder it was moved to, filled in by
+        /// [`Store::enqueue`]; `None` = expunged (the local row is gone).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        trash_folder_id: Option<FolderId>,
     },
 }
 
@@ -102,12 +195,30 @@ impl Operation {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::UpdateFlags { .. } => "update_flags",
+            Self::MoveMessage { .. } => "move_message",
+            Self::DeleteMessage { .. } => "delete_message",
         }
     }
 
+    /// The message the operation is about.
+    pub fn message_id(&self) -> &MessageId {
+        match self {
+            Self::UpdateFlags { message_id, .. }
+            | Self::MoveMessage { message_id, .. }
+            | Self::DeleteMessage { message_id, .. } => message_id,
+        }
+    }
+
+    /// Whether the operation moves the message out of its folder (the
+    /// sync merge must then leave the local row alone).
+    pub fn takes_message_away(&self) -> bool {
+        matches!(self, Self::MoveMessage { .. } | Self::DeleteMessage { .. })
+    }
+
     /// Applies the operation to the local tables. Returns the account it
-    /// belongs to and the folders whose contents changed.
-    fn apply_local(&self, tx: &Transaction<'_>) -> Result<(AccountId, Vec<FolderId>)> {
+    /// belongs to, the folders whose contents changed and the operation
+    /// as it is stored (with the source filled in).
+    fn apply_local(&self, tx: &Transaction<'_>) -> Result<(AccountId, Vec<FolderId>, Operation)> {
         match self {
             Self::UpdateFlags { message_id, change } => {
                 if change.is_empty() {
@@ -115,12 +226,139 @@ impl Operation {
                 }
                 let summary = message_in_tx(tx, message_id)?.summary;
                 set_flags_in_tx(tx, message_id, change.apply_to(summary.flags))?;
-                Ok((summary.account_id, vec![summary.folder_id]))
+                if change.changes_tags() {
+                    let mut tags = summary.tags.clone();
+                    change.apply_tags(&mut tags);
+                    set_tags_in_tx(tx, message_id, &tags)?;
+                }
+                Ok((summary.account_id, vec![summary.folder_id], self.clone()))
+            }
+            Self::MoveMessage {
+                message_id,
+                target_folder_id,
+                ..
+            } => {
+                let stored = message_in_tx(tx, message_id)?;
+                let source = MessageSource {
+                    account_id: stored.summary.account_id.clone(),
+                    folder_id: stored.summary.folder_id.clone(),
+                    uid: stored.uid,
+                };
+                if *target_folder_id == source.folder_id {
+                    return Err(Error::InvalidData(format!(
+                        "message {message_id} is already in folder {target_folder_id}"
+                    )));
+                }
+                let target_account = folder_account_in_tx(tx, target_folder_id)?;
+                move_row(tx, message_id, &target_account, target_folder_id)?;
+                let changed = vec![source.folder_id.clone(), target_folder_id.clone()];
+                Ok((
+                    source.account_id.clone(),
+                    changed,
+                    Self::MoveMessage {
+                        message_id: message_id.clone(),
+                        target_folder_id: target_folder_id.clone(),
+                        source: Some(source),
+                    },
+                ))
+            }
+            Self::DeleteMessage {
+                message_id,
+                permanent,
+                ..
+            } => {
+                let stored = message_in_tx(tx, message_id)?;
+                let source = MessageSource {
+                    account_id: stored.summary.account_id.clone(),
+                    folder_id: stored.summary.folder_id.clone(),
+                    uid: stored.uid,
+                };
+                let trash = if *permanent {
+                    None
+                } else {
+                    let trash = role_folder_in_tx(tx, &source.account_id, FolderRole::Trash)?
+                        .ok_or_else(|| {
+                            Error::not_found("trash folder of account", &source.account_id)
+                        })?;
+                    (trash != source.folder_id).then_some(trash)
+                };
+                let mut changed = vec![source.folder_id.clone()];
+                match &trash {
+                    Some(trash) => {
+                        move_row(tx, message_id, &source.account_id, trash)?;
+                        changed.push(trash.clone());
+                    }
+                    None => {
+                        tx.execute("DELETE FROM messages WHERE id = ?1", [message_id.as_str()])?;
+                    }
+                }
+                Ok((
+                    source.account_id.clone(),
+                    changed,
+                    Self::DeleteMessage {
+                        message_id: message_id.clone(),
+                        permanent: *permanent,
+                        source: Some(source),
+                        trash_folder_id: trash,
+                    },
+                ))
             }
         }
     }
 }
 
+/// Moves a message row locally; its UID becomes unknown until the replay
+/// (or the next sync) tells.
+fn move_row(
+    tx: &Transaction<'_>,
+    id: &MessageId,
+    account: &AccountId,
+    folder: &FolderId,
+) -> Result<()> {
+    tx.execute(
+        "UPDATE messages SET account_id = ?2, folder_id = ?3, uid = NULL WHERE id = ?1",
+        params![id.as_str(), account.as_str(), folder.as_str()],
+    )?;
+    Ok(())
+}
+
+/// The folder with a role in an account (the first by path).
+pub(crate) fn role_folder_in_tx(
+    tx: &Transaction<'_>,
+    account: &AccountId,
+    role: FolderRole,
+) -> Result<Option<FolderId>> {
+    let role = match serde_json::to_value(role)? {
+        serde_json::Value::String(s) => s,
+        other => return Err(Error::InvalidData(format!("folder role {other}"))),
+    };
+    Ok(tx
+        .query_row(
+            "SELECT id FROM folders WHERE account_id = ?1 AND role = ?2 ORDER BY path LIMIT 1",
+            params![account.as_str(), role],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()?
+        .map(FolderId))
+}
+
+/// Pending and in-flight operations for one message, oldest first.
+pub(crate) fn pending_ops_for_message_in_tx(
+    tx: &Transaction<'_>,
+    id: &MessageId,
+) -> Result<Vec<Operation>> {
+    let mut stmt = tx.prepare_cached(
+        "SELECT payload FROM op_queue
+         WHERE message_id = ?1 AND state IN ('pending', 'in_flight') ORDER BY id",
+    )?;
+    let payloads = stmt
+        .query_map([id.as_str()], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    payloads
+        .iter()
+        .map(|p| serde_json::from_str(p).map_err(Error::from))
+        .collect()
+}
 /// Lifecycle state of a queued operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -221,15 +459,16 @@ impl Default for ReplayPolicy {
     }
 }
 
-/// Summary of one [`Store::replay_pending`] pass.
+/// Summary of a [`Store::replay_account`] / [`Store::replay_pending`] pass.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReplayReport {
     /// Operations that were replayed successfully.
     pub done: Vec<OpId>,
     /// Operations that failed permanently in this pass.
     pub failed: Vec<OpId>,
-    /// The operation that asked to be retried and ended the pass, if any.
-    pub deferred: Option<OpId>,
+    /// Operations that asked to be retried; each ended its account's pass
+    /// (at most one per account).
+    pub deferred: Vec<OpId>,
 }
 
 const OP_COLS: &str =
@@ -275,22 +514,63 @@ const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 impl Store {
     /// Applies `operation` locally and queues it for replay, atomically.
     /// Nothing is changed or queued when the local apply fails (e.g. the
-    /// message does not exist).
+    /// message does not exist). The queued operation (in the result) has
+    /// the message's source location filled in for moves and deletes.
     pub fn enqueue(&self, operation: &Operation) -> Result<Enqueued> {
-        let payload = serde_json::to_string(operation)?;
         self.with_tx(|tx| {
-            let (account_id, changed_folders) = operation.apply_local(tx)?;
+            let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
+            let payload = serde_json::to_string(&stored)?;
             tx.execute(
-                "INSERT INTO op_queue (account_id, kind, payload) VALUES (?1, ?2, ?3)",
-                params![account_id.as_str(), operation.kind(), payload],
+                "INSERT INTO op_queue (account_id, kind, payload, message_id) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    account_id.as_str(),
+                    stored.kind(),
+                    payload,
+                    stored.message_id().as_str()
+                ],
             )?;
             let op = op_in_tx(tx, OpId(tx.last_insert_rowid()))?;
-            tracing::debug!(id = %op.id, kind = operation.kind(), "operation enqueued");
+            tracing::debug!(id = %op.id, kind = stored.kind(), "operation enqueued");
             Ok(Enqueued {
                 op,
                 changed_folders,
             })
         })
+    }
+
+    /// Enqueues several operations in one transaction (all or nothing),
+    /// e.g. one per selected message.
+    pub fn enqueue_all(&self, operations: &[Operation]) -> Result<Vec<Enqueued>> {
+        self.with_tx(|tx| {
+            let mut out = Vec::with_capacity(operations.len());
+            for operation in operations {
+                let (account_id, changed_folders, stored) = operation.apply_local(tx)?;
+                tx.execute(
+                    "INSERT INTO op_queue (account_id, kind, payload, message_id) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        account_id.as_str(),
+                        stored.kind(),
+                        serde_json::to_string(&stored)?,
+                        stored.message_id().as_str()
+                    ],
+                )?;
+                out.push(Enqueued {
+                    op: op_in_tx(tx, OpId(tx.last_insert_rowid()))?,
+                    changed_folders,
+                });
+            }
+            Ok(out)
+        })
+    }
+
+    /// The folder with a role (e.g. Trash, Archive) in an account, if any
+    /// (the first by path when several have it).
+    pub fn folder_with_role(
+        &self,
+        account: &AccountId,
+        role: FolderRole,
+    ) -> Result<Option<FolderId>> {
+        self.with_tx(|tx| role_folder_in_tx(tx, account, role))
     }
 
     /// One queued operation.
@@ -309,6 +589,19 @@ impl Store {
         })
     }
 
+    /// Operations waiting for replay (`pending` or `in_flight`) that are
+    /// about one message, oldest first.
+    pub fn pending_ops_for_message(&self, id: &MessageId) -> Result<Vec<QueuedOp>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(&format!(
+                "SELECT {OP_COLS} FROM op_queue
+                 WHERE message_id = ?1 AND state IN ('pending', 'in_flight') ORDER BY id"
+            ))?;
+            let rows = stmt.query_map([id.as_str()], op_from_row)?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
     /// Number of operations waiting for replay (`pending` or `in_flight`).
     pub fn pending_op_count(&self) -> Result<u32> {
         self.with_conn(|conn| {
@@ -317,6 +610,19 @@ impl Store {
                 [],
                 |row| row.get(0),
             )?)
+        })
+    }
+
+    /// Accounts with operations waiting for replay, in order of their
+    /// oldest waiting operation.
+    pub fn accounts_with_pending_ops(&self) -> Result<Vec<AccountId>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT account_id FROM op_queue WHERE state = 'pending'
+                 GROUP BY account_id ORDER BY MIN(id)",
+            )?;
+            let rows = stmt.query_map([], |r| Ok(AccountId(r.get(0)?)))?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
         })
     }
 
@@ -371,13 +677,15 @@ impl Store {
         })
     }
 
-    /// Marks the oldest `pending` operation `in_flight`, counting an attempt.
-    fn claim_next_op(&self) -> Result<Option<QueuedOp>> {
+    /// Marks the account's oldest `pending` operation `in_flight`, counting
+    /// an attempt.
+    fn claim_next_op(&self, account: &AccountId) -> Result<Option<QueuedOp>> {
         self.with_tx(|tx| {
             let id: Option<i64> = tx
                 .query_row(
-                    "SELECT id FROM op_queue WHERE state = 'pending' ORDER BY id LIMIT 1",
-                    [],
+                    "SELECT id FROM op_queue WHERE account_id = ?1 AND state = 'pending'
+                     ORDER BY id LIMIT 1",
+                    [account.as_str()],
                     |row| row.get(0),
                 )
                 .optional()?;
@@ -406,21 +714,37 @@ impl Store {
         })
     }
 
-    /// Replays pending operations in enqueue order until the queue is empty
-    /// or an operation asks to be retried. Only one pass runs at a time per
-    /// store; a concurrent call waits for the running one.
+    /// The replay lock of one account.
+    fn account_lock(&self, account: &AccountId) -> Arc<tokio::sync::Mutex<()>> {
+        let mut locks = self
+            .replay_locks()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        locks.entry(account.clone()).or_default().clone()
+    }
+
+    /// Replays one account's pending operations in enqueue order until none
+    /// is left or one asks to be retried. Only one pass per account runs at
+    /// a time; a concurrent call for the same account waits for the running
+    /// one. Passes of different accounts run independently.
     ///
     /// Must be called from within a tokio runtime (database access runs on
     /// the blocking pool). Operations enqueued during the pass are picked up
     /// by the same pass.
-    pub async fn replay_pending<R: Replayer>(
+    pub async fn replay_account<R: Replayer>(
         &self,
+        account: &AccountId,
         replayer: &R,
         policy: ReplayPolicy,
     ) -> Result<ReplayReport> {
-        let _pass = self.replay_lock().lock().await;
+        let lock = self.account_lock(account);
+        let _pass = lock.lock().await;
         let mut report = ReplayReport::default();
-        while let Some(op) = self.call(Store::claim_next_op).await? {
+        loop {
+            let claim_account = account.clone();
+            let Some(op) = self.call(move |s| s.claim_next_op(&claim_account)).await? else {
+                break;
+            };
             // Puts the op back to `pending` unless it is finished below: the
             // pass may be cancelled while `replay` runs, or `finish_op` may
             // fail. Otherwise it would stay `in_flight` until a restart.
@@ -430,6 +754,7 @@ impl Store {
             };
             let outcome = replayer.replay(&op).await;
             let id = op.id;
+            let mut deferred = false;
             let (state, error) = match outcome {
                 ReplayOutcome::Done => {
                     report.done.push(id);
@@ -447,22 +772,59 @@ impl Store {
                 }
                 ReplayOutcome::Retry(err) => {
                     tracing::debug!(%id, error = %err, "operation deferred");
-                    report.deferred = Some(id);
+                    report.deferred.push(id);
+                    deferred = true;
                     (OpState::Pending, Some(err))
                 }
             };
             self.call(move |s| s.finish_op(id, state, error.as_deref()))
                 .await?;
             claim.id = None;
-            if report.deferred.is_some() {
+            if deferred {
                 break;
             }
         }
         Ok(report)
     }
+
+    /// Replays the pending operations of every account: one
+    /// [`Store::replay_account`] pass per account, run concurrently, so an
+    /// account that is offline (retry) or slow does not hold up the others.
+    /// The report lists all accounts' results (per-account order is kept;
+    /// `deferred` has at most one operation per account). When a pass
+    /// fails, the others still finish and the first error is returned.
+    pub async fn replay_pending<R: Replayer>(
+        &self,
+        replayer: &R,
+        policy: ReplayPolicy,
+    ) -> Result<ReplayReport> {
+        let accounts = self.call(Store::accounts_with_pending_ops).await?;
+        let passes = accounts
+            .iter()
+            .map(|account| self.replay_account(account, replayer, policy));
+        let results = futures_util::future::join_all(passes).await;
+        let mut report = ReplayReport::default();
+        let mut first_error = None;
+        for result in results {
+            match result {
+                Ok(r) => {
+                    report.done.extend(r.done);
+                    report.failed.extend(r.failed);
+                    report.deferred.extend(r.deferred);
+                }
+                Err(err) => {
+                    first_error.get_or_insert(err);
+                }
+            }
+        }
+        match first_error {
+            Some(err) => Err(err),
+            None => Ok(report),
+        }
+    }
 }
 
-/// An operation claimed by a replay pass; see [`Store::replay_pending`].
+/// An operation claimed by a replay pass; see [`Store::replay_account`].
 struct ClaimGuard<'a> {
     store: &'a Store,
     /// `None` once the operation is finished.
@@ -480,3 +842,6 @@ impl Drop for ClaimGuard<'_> {
         }
     }
 }
+
+/// Replay locks by account (see [`Store::replay_account`]).
+pub(crate) type ReplayLocks = std::sync::Mutex<HashMap<AccountId, Arc<tokio::sync::Mutex<()>>>>;

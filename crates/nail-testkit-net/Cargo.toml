@@ -19,6 +19,9 @@ axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 hickory-proto.workspace = true
+url.workspace = true
+sha2.workspace = true
+md5 = { package = "md-5", version = "0.11" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

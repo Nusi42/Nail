@@ -3,9 +3,17 @@
 //!
 //! * [`corpus`]: realistic, malformed and hostile `.eml` messages in
 //!   `INBOX` / `Sent` / `Archive`, embedded at build time ([`demo_corpus`]).
-//! * [`MailStore`]: the mailbox state a mock server serves.
+//! * [`MailStore`]: the mailbox state a mock server serves. Tests change it
+//!   while clients are connected ([`MailStore::add_message`],
+//!   [`MailStore::remove_message`], [`MailStore::set_flags`], ...); every
+//!   change bumps the mailbox mod-sequence and is pushed to sessions in
+//!   `IDLE`.
 //! * [`MockImapServer`]: an IMAP4rev1 server on `127.0.0.1:0` with plaintext,
-//!   implicit TLS or STARTTLS, configurable credentials and failure injection.
+//!   implicit TLS or STARTTLS, configurable credentials and OAuth2 token,
+//!   configurable extensions ([`MockCapabilities`]: IDLE, CONDSTORE,
+//!   QRESYNC, MOVE, UIDPLUS, COMPRESS, ID, SASL-IR, LITERAL+, APPENDLIMIT),
+//!   a command log, and failure injection (disconnects, `NO`s, dropped IDLE
+//!   connections, slow responses).
 //!
 //! ```no_run
 //! # async fn demo() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,5 +33,9 @@ pub use corpus::{
     CorpusFolder, CorpusMessage, corpus_dir, corpus_message, demo_corpus, demo_corpus_raw,
     load_mail_dir,
 };
-pub use imap::{MockImapConfig, MockImapServer, MockServerError, MockTls};
-pub use mailstore::{MailStore, Mailbox, StoredMessage};
+pub use imap::{
+    ClientId, MockCapabilities, MockImapConfig, MockImapServer, MockServerError, MockTls,
+};
+pub use mailstore::{
+    FlagUpdate, MailStore, Mailbox, MailboxError, StoreOutcome, StoredFlags, StoredMessage,
+};
