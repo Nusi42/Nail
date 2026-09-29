@@ -1,0 +1,21 @@
+# Rust
+/target/
+**/target/
+# Local cargo config (points target-dir outside OneDrive)
+/.cargo/config.toml
+# Node
+node_modules/
+ui/dist/
+dist/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+# Tauri
+app/src-tauri/gen/
+# Misc
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db
