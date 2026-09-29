@@ -19,3 +19,6 @@ app/src-tauri/gen/
 .env.*
 .DS_Store
 Thumbs.db
+
+# Claude Code local settings (machine-specific, e.g. autoMemoryDirectory)
+/.claude/settings.local.json
