@@ -79,7 +79,12 @@ export function Composer({ node }: WidgetProps) {
     () => parseAddressList(recipients).addresses.map((a) => a.email),
     [recipients],
   );
-  const chosen = useChosenIdentity(accountId, emails, composer?.inReplyTo ?? null, !picked);
+  const chosen = useChosenIdentity(
+    accountId,
+    emails,
+    composer?.context?.message_id ?? null,
+    !picked,
+  );
   useEffect(() => {
     if (picked || chosen.data === undefined || chosen.data === null) return;
     if (chosen.data !== currentIdentity) updateComposer({ identityId: chosen.data });

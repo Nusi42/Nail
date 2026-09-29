@@ -4,14 +4,22 @@ import type { AccountConfig } from "./AccountConfig";
 import type { AccountStatus } from "./AccountStatus";
 import type { AccountTestResult } from "./AccountTestResult";
 import type { AccountsConfig } from "./AccountsConfig";
+import type { Address } from "./Address";
+import type { ConfigBackup } from "./ConfigBackup";
+import type { ConfigIssue } from "./ConfigIssue";
+import type { ConfigMergePreview } from "./ConfigMergePreview";
 import type { DiscoveredAccount } from "./DiscoveredAccount";
 import type { Draft } from "./Draft";
+import type { DraftAttachment } from "./DraftAttachment";
 import type { DraftId } from "./DraftId";
 import type { ErrorCode } from "./ErrorCode";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
+import type { McpAuditEntry } from "./McpAuditEntry";
+import type { McpClient } from "./McpClient";
+import type { McpServerInfo } from "./McpServerInfo";
 import type { MessageBody } from "./MessageBody";
 import type { MessageSummary } from "./MessageSummary";
 import type { OAuthFlowId } from "./OAuthFlowId";
@@ -19,9 +27,14 @@ import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
+import type { Rule } from "./Rule";
+import type { RuleMatch } from "./RuleMatch";
+import type { RuleRun } from "./RuleRun";
+import type { SavedSearch } from "./SavedSearch";
 import type { SearchError } from "./SearchError";
 import type { SearchHit } from "./SearchHit";
 import type { ThreadSummary } from "./ThreadSummary";
+import type { UiContext } from "./UiContext";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
 
 /**
@@ -198,7 +211,119 @@ draft_id: DraftId, } | { "type": "Outbox",
 /**
  * Entries, earliest send time first.
  */
-entries: Array<OutboxEntry>, } | { "type": "Error", 
+entries: Array<OutboxEntry>, } | { "type": "PreviewRendered", 
+/**
+ * The HTML as it would be sent.
+ */
+html: string, } | { "type": "DraftConverted", 
+/**
+ * The draft in the new mode.
+ */
+draft: Draft, 
+/**
+ * Whether formatting was dropped (the UI warns before switching).
+ */
+lossy: boolean, } | { "type": "AttachmentUploaded", 
+/**
+ * The attachment to add to the draft.
+ */
+attachment: DraftAttachment, } | { "type": "AddressSuggestions", 
+/**
+ * Best first.
+ */
+addresses: Array<Address>, } | { "type": "Rules", 
+/**
+ * The rules in file order.
+ */
+rules: Array<Rule>, } | { "type": "RuleSaved", 
+/**
+ * The rule as saved (with its id and source location).
+ */
+rule: Rule, } | { "type": "RuleTested", 
+/**
+ * Messages examined.
+ */
+scanned: number, 
+/**
+ * Matches, up to the limit, newest first.
+ */
+matches: Array<RuleMatch>, } | { "type": "RuleRan", 
+/**
+ * The run (usually still `running`).
+ */
+run: RuleRun, } | { "type": "RuleRuns", 
+/**
+ * Newest first.
+ */
+runs: Array<RuleRun>, } | { "type": "RuleText", 
+/**
+ * The rule in `rules.kdl` syntax.
+ */
+text: string, } | { "type": "RuleParsed", 
+/**
+ * The rule, `null` when the text has errors.
+ */
+rule: Rule | null, 
+/**
+ * Every error found (positions within `text`).
+ */
+errors: Array<ConfigIssue>, } | { "type": "McpClients", 
+/**
+ * Clients, oldest first.
+ */
+clients: Array<McpClient>, } | { "type": "McpClientCreated", 
+/**
+ * The new client.
+ */
+client: McpClient, 
+/**
+ * The bearer token. Shown once; the core keeps only its hash.
+ */
+token: string, } | { "type": "McpClientSaved", 
+/**
+ * The client as saved.
+ */
+client: McpClient, } | { "type": "McpAudit", 
+/**
+ * Newest first.
+ */
+entries: Array<McpAuditEntry>, } | { "type": "McpServer", 
+/**
+ * State and endpoint.
+ */
+info: McpServerInfo, } | { "type": "UiContext", 
+/**
+ * The last reported context (empty when none was reported).
+ */
+context: UiContext, } | { "type": "ConfigMergePreview", 
+/**
+ * The comparison.
+ */
+preview: ConfigMergePreview, } | { "type": "ConfigMergeResolved", 
+/**
+ * The resolved theme (for a theme merge), else `null`.
+ */
+theme: ResolvedTheme | null, 
+/**
+ * The resolved layout (for a layout merge), else `null`.
+ */
+layout: ResolvedLayout | null, } | { "type": "ConfigMergeApplied", 
+/**
+ * The backup of the previous file (for revert).
+ */
+backup: ConfigBackup, } | { "type": "ConfigBackups", 
+/**
+ * Newest first.
+ */
+backups: Array<ConfigBackup>, } | { "type": "SavedSearches", 
+/**
+ * In display order.
+ */
+searches: Array<SavedSearch>, } | { "type": "SavedSearchSaved", 
+/**
+ * The saved search (with its id).
+ */
+search: SavedSearch, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

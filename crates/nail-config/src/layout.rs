@@ -19,135 +19,7 @@ use crate::kdl_util::{
 };
 use crate::schema::{ActionSchema, BreakpointSchema, MenuItemSchema, ToolbarItemSchema};
 use crate::theme::{read_extends, single_root};
-
-/// Type of a widget option.
-#[derive(Debug, Clone, Copy)]
-enum OptionType {
-    Bool,
-    UInt,
-    Str,
-    OneOf(&'static [&'static str]),
-}
-
-/// A widget kind known to the layout.
-struct WidgetSpec {
-    kind: &'static str,
-    /// `None`: the widget is not implemented yet; any options are accepted.
-    options: Option<&'static [(&'static str, OptionType)]>,
-    /// Required options.
-    required: &'static [&'static str],
-    /// Whether the widget takes `row "<template>"` children.
-    rows: bool,
-}
-
-const fn widget(
-    kind: &'static str,
-    options: &'static [(&'static str, OptionType)],
-    required: &'static [&'static str],
-    rows: bool,
-) -> WidgetSpec {
-    WidgetSpec {
-        kind,
-        options: Some(options),
-        required,
-        rows,
-    }
-}
-
-const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
-    WidgetSpec {
-        kind,
-        options: None,
-        required: &[],
-        rows,
-    }
-}
-
-/// The widget registry. Implemented widgets have typed options; future ones
-/// accept any options until they exist.
-const WIDGETS: &[WidgetSpec] = &[
-    widget(
-        "account-switcher",
-        &[("show-status", OptionType::Bool)],
-        &[],
-        false,
-    ),
-    widget(
-        "folder-tree",
-        &[
-            ("show-unread", OptionType::Bool),
-            ("show-account-badges", OptionType::Bool),
-        ],
-        &[],
-        false,
-    ),
-    widget(
-        "message-list",
-        &[
-            ("page-size", OptionType::UInt),
-            ("group-by", OptionType::OneOf(&["none", "date", "sender"])),
-            (
-                "threads",
-                OptionType::OneOf(&["off", "collapsed", "expanded"]),
-            ),
-            ("follow-search", OptionType::Bool),
-        ],
-        &[],
-        true,
-    ),
-    widget(
-        "message-view",
-        &[
-            ("headers", OptionType::Str),
-            ("mark-read", OptionType::Bool),
-        ],
-        &[],
-        true,
-    ),
-    widget(
-        "thread-view",
-        &[
-            (
-                "expand",
-                OptionType::OneOf(&["latest", "unread", "all", "none"]),
-            ),
-            ("hide-single", OptionType::Bool),
-        ],
-        &[],
-        false,
-    ),
-    widget(
-        "search-bar",
-        &[
-            ("scope", OptionType::OneOf(&["all", "account", "folder"])),
-            ("hints", OptionType::Bool),
-            ("live-check", OptionType::Bool),
-        ],
-        &[],
-        false,
-    ),
-    widget("composer", &[("send-later", OptionType::Bool)], &[], false),
-    widget("outbox", &[], &[], false),
-    widget("folder-picker", &[], &[], false),
-    widget("account-setup", &[], &[], false),
-    widget("account-settings", &[], &[], false),
-    widget("virtual-account-editor", &[], &[], false),
-    widget(
-        "toolbar",
-        &[("toolbar", OptionType::Str)],
-        &["toolbar"],
-        false,
-    ),
-    widget("status-bar", &[("items", OptionType::Str)], &[], false),
-    widget("text", &[("text", OptionType::Str)], &[], false),
-    widget("spacer", &[], &[], false),
-    future_widget("calendar", false),
-    future_widget("agenda", true),
-    future_widget("mini-month", false),
-    future_widget("task-list", true),
-    future_widget("contact-list", true),
-    future_widget("contact-card", false),
-];
+use crate::widgets::{self, OptionType};
 
 /// Containers from the design that M0 does not support yet.
 const FUTURE_CONTAINERS: &[&str] = &["grid", "dock", "scroll", "overlay"];
@@ -613,7 +485,7 @@ impl LayoutReader<'_, '_> {
     fn widget(&self, node: &KdlNode) -> Result<LayoutNode, ConfigError> {
         let src = self.src;
         let kind = k::name(node);
-        let spec = WIDGETS.iter().find(|w| w.kind == kind);
+        let spec = widgets::find(kind);
         let is_plugin = kind
             .strip_prefix("plugin.")
             .is_some_and(|rest| rest.split('.').count() >= 2 && is_dotted_kebab(rest));
@@ -622,7 +494,7 @@ impl LayoutReader<'_, '_> {
                 node,
                 format!(
                     "unknown widget or container `{kind}` (containers: split, stack, tabs; widgets: {})",
-                    WIDGETS.iter().map(|w| w.kind).collect::<Vec<_>>().join(", ")
+                    widgets::kinds().collect::<Vec<_>>().join(", ")
                 ),
             ));
         }

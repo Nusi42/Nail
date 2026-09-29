@@ -1,7 +1,12 @@
-//! Drafts and the outbox (runtime state of the composer, ADR 0012).
+//! Drafts and the outbox (runtime state of the composer, ADR 0012 and
+//! ADR 0022).
 //!
 //! * Drafts are stored as their `nail-api` JSON ([`Draft`]) with ids
-//!   `draft-<n>`.
+//!   `draft-<n>`. Since schema v4 the mode, the reply / forward context and
+//!   the copy in the server's Drafts folder ([`DraftServerCopy`]) are also
+//!   columns, and the draft's attachments are rows of `draft_attachments`
+//!   so blob garbage collection keeps their blobs
+//!   ([`Store::draft_blob_hashes`]).
 //! * [`Store::schedule_send`] puts a draft into the outbox with a send time
 //!   (undo-send delay or send later). Until the entry is claimed for sending
 //!   it can be cancelled ([`Store::cancel_send`]), which turns it back into
@@ -16,11 +21,14 @@
 //! (retry later)`; `scheduled | failed ─cancel─▶ cancelled`;
 //! `failed ─retry─▶ scheduled`.
 
+use nail_api::accounts::ComposerMode;
 use nail_api::{
-    AccountId, Address, Draft, DraftId, ErrorCode, IdentityId, OutboxEntry, OutboxId, OutboxState,
+    AccountId, Address, Draft, DraftContext, DraftContextMode, DraftId, ErrorCode, FolderId,
+    IdentityId, MessageId, OutboxEntry, OutboxId, OutboxState,
 };
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 
+use crate::blob::BlobHash;
 use crate::error::{Error, Result};
 use crate::store::Store;
 
@@ -154,6 +162,100 @@ fn draft_is_queued(tx: &Transaction<'_>, draft: i64) -> Result<bool> {
         .is_some())
 }
 
+fn mode_str(mode: ComposerMode) -> &'static str {
+    match mode {
+        ComposerMode::Plain => "plain",
+        ComposerMode::Html => "html",
+        ComposerMode::Markdown => "markdown",
+    }
+}
+
+fn context_mode_str(mode: DraftContextMode) -> &'static str {
+    match mode {
+        DraftContextMode::Reply => "reply",
+        DraftContextMode::ReplyAll => "reply-all",
+        DraftContextMode::Forward => "forward",
+    }
+}
+
+/// Writes the indexed columns and the attachment rows of draft `n`.
+fn write_draft_details(tx: &Transaction<'_>, n: i64, draft: &Draft) -> Result<()> {
+    tx.execute(
+        "UPDATE drafts SET mode = ?2, context_mode = ?3, context_message_id = ?4 WHERE id = ?1",
+        params![
+            n,
+            mode_str(draft.mode),
+            draft.context.as_ref().map(|c| context_mode_str(c.mode)),
+            draft.context.as_ref().map(|c| c.message_id.as_str()),
+        ],
+    )?;
+    tx.execute("DELETE FROM draft_attachments WHERE draft_id = ?1", [n])?;
+    let mut stmt = tx.prepare_cached(
+        "INSERT INTO draft_attachments
+         (draft_id, position, filename, mime, size, blob_hash, content_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )?;
+    for (position, a) in draft.attachments.iter().enumerate() {
+        let hash = BlobHash::parse(&a.blob)?;
+        stmt.execute(params![
+            n,
+            position as i64,
+            a.filename,
+            a.mime,
+            i64::try_from(a.size).unwrap_or(i64::MAX),
+            hash.as_str(),
+            a.content_id,
+        ])?;
+    }
+    Ok(())
+}
+
+/// Schema v4 backfill: M1a drafts stored the replied-to message as
+/// `in_reply_to`; it becomes a reply [`DraftContext`] (payload and columns).
+pub(crate) fn backfill_v4(tx: &Transaction<'_>) -> Result<()> {
+    let rows: Vec<(i64, String)> = {
+        let mut stmt = tx.prepare("SELECT id, payload FROM drafts")?;
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?
+    };
+    for (n, payload) in rows {
+        let mut value: serde_json::Value = serde_json::from_str(&payload)?;
+        let Some(object) = value.as_object_mut() else {
+            continue;
+        };
+        let replied = object
+            .remove("in_reply_to")
+            .and_then(|v| v.as_str().map(str::to_owned));
+        if let Some(message_id) = replied {
+            let context = DraftContext {
+                mode: DraftContextMode::Reply,
+                message_id: MessageId(message_id),
+            };
+            object.insert("context".into(), serde_json::to_value(&context)?);
+        }
+        let draft: Draft = serde_json::from_value(value)?;
+        let mut stored = draft.clone();
+        stored.id = None;
+        tx.execute(
+            "UPDATE drafts SET payload = ?2 WHERE id = ?1",
+            params![n, serde_json::to_string(&stored)?],
+        )?;
+        write_draft_details(tx, n, &draft)?;
+    }
+    Ok(())
+}
+
+/// Where a draft's copy in the server's Drafts folder is (autosave).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DraftServerCopy {
+    /// The Drafts folder.
+    pub folder_id: FolderId,
+    /// UID of the copy; `None` while the upload is queued.
+    pub uid: Option<u32>,
+    /// `Message-ID` header of the copy (without angle brackets).
+    pub message_id: String,
+}
+
 fn draft_in_tx(tx: &Transaction<'_>, n: i64) -> Result<Draft> {
     let payload: String = tx
         .query_row("SELECT payload FROM drafts WHERE id = ?1", [n], |r| {
@@ -181,7 +283,9 @@ impl Store {
                     "INSERT INTO drafts (identity_id, payload) VALUES (?1, ?2)",
                     params![draft.identity_id.as_str(), payload],
                 )?;
-                Ok(draft_id(tx.last_insert_rowid()))
+                let n = tx.last_insert_rowid();
+                write_draft_details(tx, n, draft)?;
+                Ok(draft_id(n))
             }
             Some(id) => {
                 let n = parse_draft_id(id)?;
@@ -198,6 +302,7 @@ impl Store {
                 if changed == 0 {
                     return Err(Error::not_found("draft", id));
                 }
+                write_draft_details(tx, n, draft)?;
                 Ok(id.clone())
             }
         })
@@ -436,6 +541,91 @@ impl Store {
         })
     }
 
+    /// Drafts replying to or forwarding `message`, most recent first (e.g.
+    /// to reopen an unfinished reply).
+    pub fn drafts_with_context(&self, message: &MessageId) -> Result<Vec<DraftId>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT id FROM drafts WHERE context_message_id = ?1
+                 ORDER BY updated_at DESC, id DESC",
+            )?;
+            let ids = stmt
+                .query_map([message.as_str()], |r| r.get::<_, i64>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(ids.into_iter().map(draft_id).collect())
+        })
+    }
+
+    /// The distinct blobs referenced by draft attachments (garbage
+    /// collection of uploads that no draft uses any more is the caller's
+    /// job; [`Store::remove_unreferenced_blobs`] keeps these).
+    pub fn draft_blob_hashes(&self) -> Result<Vec<BlobHash>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT DISTINCT blob_hash FROM draft_attachments ORDER BY blob_hash",
+            )?;
+            let hashes = stmt
+                .query_map([], |r| r.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            hashes.iter().map(|h| BlobHash::parse(h)).collect()
+        })
+    }
+
+    /// Records (or with `None` clears) where the draft's server copy is.
+    pub fn set_draft_server_copy(
+        &self,
+        id: &DraftId,
+        copy: Option<&DraftServerCopy>,
+    ) -> Result<()> {
+        let n = parse_draft_id(id)?;
+        self.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE drafts SET server_folder_id = ?2, server_uid = ?3, server_message_id = ?4
+                 WHERE id = ?1",
+                params![
+                    n,
+                    copy.map(|c| c.folder_id.as_str()),
+                    copy.and_then(|c| c.uid),
+                    copy.map(|c| c.message_id.as_str()),
+                ],
+            )?;
+            if changed == 0 {
+                return Err(Error::not_found("draft", id));
+            }
+            Ok(())
+        })
+    }
+
+    /// Where the draft's server copy is, `None` when it has none.
+    pub fn draft_server_copy(&self, id: &DraftId) -> Result<Option<DraftServerCopy>> {
+        let n = parse_draft_id(id)?;
+        self.with_conn(|conn| {
+            let row = conn
+                .query_row(
+                    "SELECT server_folder_id, server_uid, server_message_id FROM drafts
+                     WHERE id = ?1",
+                    [n],
+                    |r| {
+                        Ok((
+                            r.get::<_, Option<String>>(0)?,
+                            r.get::<_, Option<u32>>(1)?,
+                            r.get::<_, Option<String>>(2)?,
+                        ))
+                    },
+                )
+                .optional()?
+                .ok_or_else(|| Error::not_found("draft", id))?;
+            Ok(match row {
+                (Some(folder), uid, Some(message_id)) => Some(DraftServerCopy {
+                    folder_id: FolderId(folder),
+                    uid,
+                    message_id,
+                }),
+                _ => None,
+            })
+        })
+    }
+
     /// Crash recovery: entries left `sending` become `failed` (see the
     /// module docs). Runs on every [`Store::open`].
     pub(crate) fn recover_sending(&self) -> Result<usize> {
@@ -495,7 +685,9 @@ mod tests {
             html: None,
             markdown: None,
             attachments: vec![],
-            in_reply_to: None,
+            context: None,
+            signature: nail_api::SignatureChoice::Identity,
+            markdown_part: false,
         }
     }
 
@@ -521,6 +713,128 @@ mod tests {
             ..draft("x")
         };
         assert!(store.save_draft(&missing).unwrap_err().is_not_found());
+    }
+
+    const HASH_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const HASH_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn attachment(blob: &str, cid: Option<&str>) -> nail_api::DraftAttachment {
+        nail_api::DraftAttachment {
+            filename: "f.png".into(),
+            mime: "image/png".into(),
+            size: 10,
+            blob: blob.into(),
+            content_id: cid.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn rich_drafts_keep_columns_and_attachments() {
+        let store = store();
+        let rich = Draft {
+            mode: ComposerMode::Html,
+            html: Some("<p>Hi <img src=\"cid:logo\"></p>".into()),
+            attachments: vec![attachment(HASH_A, Some("logo")), attachment(HASH_B, None)],
+            context: Some(DraftContext {
+                mode: DraftContextMode::Forward,
+                message_id: "m1".into(),
+            }),
+            ..draft("Rich")
+        };
+        let id = store.save_draft(&rich).unwrap();
+        let back = store.get_draft(&id).unwrap();
+        assert_eq!(back.attachments, rich.attachments);
+        assert_eq!(back.context, rich.context);
+        assert_eq!(back.mode, ComposerMode::Html);
+        assert_eq!(
+            store.drafts_with_context(&"m1".into()).unwrap(),
+            std::slice::from_ref(&id)
+        );
+        let hashes: Vec<String> = store
+            .draft_blob_hashes()
+            .unwrap()
+            .iter()
+            .map(|h| h.as_str().to_owned())
+            .collect();
+        assert_eq!(hashes, [HASH_A, HASH_B]);
+        let (mode, context): (String, Option<String>) = store
+            .with_conn(|c| {
+                Ok(c.query_row(
+                    "SELECT mode, context_mode FROM drafts WHERE id = 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?)
+            })
+            .unwrap();
+        assert_eq!(
+            (mode.as_str(), context.as_deref()),
+            ("html", Some("forward"))
+        );
+
+        // Replacing the attachments replaces the rows; deleting the draft
+        // drops them.
+        let fewer = Draft {
+            attachments: vec![attachment(HASH_B, None)],
+            ..back
+        };
+        store.save_draft(&fewer).unwrap();
+        assert_eq!(store.draft_blob_hashes().unwrap().len(), 1);
+        assert!(store.delete_draft(&id).unwrap());
+        assert!(store.draft_blob_hashes().unwrap().is_empty());
+
+        // A bad blob reference is refused and nothing is saved.
+        let bad = Draft {
+            attachments: vec![attachment("nope", None)],
+            ..draft("Bad")
+        };
+        assert!(matches!(store.save_draft(&bad), Err(Error::InvalidHash(_))));
+        assert!(store.list_drafts().unwrap().is_empty());
+    }
+
+    #[test]
+    fn blob_gc_keeps_draft_attachments() {
+        let store = store();
+        let dir = tempfile::tempdir().unwrap();
+        let blobs = crate::BlobStore::open(dir.path()).unwrap();
+        let kept = blobs.put(b"attachment").unwrap();
+        let gone = blobs.put(b"orphan").unwrap();
+        let d = Draft {
+            attachments: vec![attachment(kept.as_str(), None)],
+            ..draft("With file")
+        };
+        store.save_draft(&d).unwrap();
+        assert!(store.blob_is_referenced(&kept).unwrap());
+        assert!(!store.blob_is_referenced(&gone).unwrap());
+        let removed = store
+            .remove_unreferenced_blobs(&blobs, &[kept.clone(), gone.clone()])
+            .unwrap();
+        assert_eq!(removed, 1);
+        assert!(blobs.contains(&kept) && !blobs.contains(&gone));
+    }
+
+    #[test]
+    fn server_copy_is_recorded() {
+        let store = store();
+        let id = store.save_draft(&draft("Hi")).unwrap();
+        assert_eq!(store.draft_server_copy(&id).unwrap(), None);
+        let copy = DraftServerCopy {
+            folder_id: "drafts".into(),
+            uid: Some(7),
+            message_id: "d1@nail".into(),
+        };
+        store.set_draft_server_copy(&id, Some(&copy)).unwrap();
+        assert_eq!(store.draft_server_copy(&id).unwrap(), Some(copy));
+        // Saving the draft again keeps the copy until the core replaces it.
+        store.save_draft(&store.get_draft(&id).unwrap()).unwrap();
+        assert!(store.draft_server_copy(&id).unwrap().is_some());
+        store.set_draft_server_copy(&id, None).unwrap();
+        assert_eq!(store.draft_server_copy(&id).unwrap(), None);
+        assert!(
+            store
+                .set_draft_server_copy(&"draft-9".into(), None)
+                .unwrap_err()
+                .is_not_found()
+        );
     }
 
     #[test]

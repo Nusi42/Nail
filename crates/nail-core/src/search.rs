@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use nail_api::{Response, SearchQuery};
+use nail_api::{ApiError, Event, Response, SavedSearch, SavedSearchId, SearchQuery};
 use nail_search::{SearchContext, SearchScope, VirtualAccountScope, run_request};
 use nail_store::MessageFilter;
 
@@ -23,6 +23,39 @@ pub(crate) fn local_utc_offset() -> i32 {
 }
 
 impl Service {
+    /// `SaveSavedSearch`: the query must parse.
+    pub(crate) async fn save_saved_search(&self, search: SavedSearch) -> Result<SavedSearch> {
+        if let Err(err) = nail_search::parse_query(&search.query) {
+            return Err(ApiError::invalid_request(format!(
+                "the saved search's query does not parse: {}",
+                err.message
+            ))
+            .into());
+        }
+        let saved = self
+            .inner
+            .store
+            .call(move |s| s.save_saved_search(&search))
+            .await?;
+        self.broadcast(Event::SavedSearchesChanged);
+        Ok(saved)
+    }
+
+    /// `DeleteSavedSearch`.
+    pub(crate) async fn delete_saved_search(&self, id: SavedSearchId) -> Result<()> {
+        let key = id.clone();
+        if !self
+            .inner
+            .store
+            .call(move |s| s.delete_saved_search(&key))
+            .await?
+        {
+            return Err(ApiError::not_found(format!("saved search {id}")).into());
+        }
+        self.broadcast(Event::SavedSearchesChanged);
+        Ok(())
+    }
+
     /// `Search`: parse, scope (a virtual account or folder means its
     /// members), run.
     pub(crate) async fn search(&self, mut query: SearchQuery) -> Result<Response> {

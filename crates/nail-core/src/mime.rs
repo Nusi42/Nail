@@ -282,7 +282,9 @@ mod tests {
             html: None,
             markdown: None,
             attachments: vec![],
-            in_reply_to: None,
+            context: None,
+            signature: nail_api::SignatureChoice::Identity,
+            markdown_part: false,
         }
     }
 

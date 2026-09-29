@@ -66,6 +66,14 @@ pub fn op_id(id: nail_store::OpId) -> OpId {
     OpId::new(format!("op-{}", id.0))
 }
 
+/// The store's id of a wire op id; `None` when it is not one of ours.
+pub fn parse_op_id(id: &OpId) -> Option<nail_store::OpId> {
+    id.as_str()
+        .strip_prefix("op-")
+        .and_then(|n| n.parse().ok())
+        .map(nail_store::OpId)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,6 +108,9 @@ mod tests {
         );
         let op = op_id(nail_store::OpId(42));
         assert_eq!(op.as_str(), "op-42");
+        assert_eq!(parse_op_id(&op), Some(nail_store::OpId(42)));
+        assert_eq!(parse_op_id(&OpId::new("op-x")), None);
+        assert_eq!(parse_op_id(&OpId::new("42")), None);
         let f = FolderId::new("f-1");
         assert_ne!(local_message_id(&f, "a"), local_message_id(&f, "b"));
     }

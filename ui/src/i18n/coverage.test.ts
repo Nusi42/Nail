@@ -17,6 +17,14 @@ import type {
 } from "../api/generated";
 import { QUERY_HINTS, hintMessageId } from "../widgets/SearchBar";
 import { errorMessageId } from "../api/client";
+import * as composerMessages from "../features/composer/messages";
+import * as customizationMessages from "../features/customization/messages";
+import * as mcpMessages from "../features/mcp/messages";
+import * as rulesMessages from "../features/rules/messages";
+import { shippedCatalogs } from "./catalogs";
+
+/** Each feature slot lists its own message prefixes and runtime ids. */
+const FEATURE_MESSAGES = [composerMessages, rulesMessages, mcpMessages, customizationMessages];
 
 const srcDir = resolve(process.cwd(), "src");
 const localesDir = resolve(process.cwd(), "../locales");
@@ -69,6 +77,7 @@ const PREFIXES = [
   "toolbar-",
   "layout-",
   "app-",
+  ...FEATURE_MESSAGES.flatMap((m) => m.prefixes),
 ];
 /** Literals with those prefixes that are not message ids (part names). */
 const NOT_MESSAGES = new Set([
@@ -77,6 +86,7 @@ const NOT_MESSAGES = new Set([
   "virtual-accounts",
   "virtual-account-editor",
   "virtual-editor",
+  ...FEATURE_MESSAGES.flatMap((m) => m.notMessages),
 ]);
 
 function literalIds(): Set<string> {
@@ -140,6 +150,7 @@ function runtimeIds(): string[] {
     ...["composer", "outbox", "move", "account-setup", "settings"].map((w) => `window-${w}`),
     ...[...QUERY_HINTS, ...VALUE_HINTS].map(hintMessageId),
     "account-all",
+    ...FEATURE_MESSAGES.flatMap((m) => m.runtimeIds()),
   ];
 }
 
@@ -155,11 +166,21 @@ describe("English catalog coverage", () => {
     expect(missing).toEqual([]);
   });
 
+  const files = (locale: string) =>
+    readdirSync(join(localesDir, locale))
+      .filter((f) => f.endsWith(".ftl"))
+      .sort();
+
   it("keeps the German catalogs as the same (empty) files", () => {
-    const files = (locale: string) =>
-      readdirSync(join(localesDir, locale))
-        .filter((f) => f.endsWith(".ftl"))
-        .sort();
     expect(files("de")).toEqual(files("en"));
+    for (const feature of ["composer", "rules", "mcp", "customization"]) {
+      expect(files("en")).toContain(`${feature}.ftl`);
+    }
+  });
+
+  it("bundles every catalog file without a list to maintain", () => {
+    for (const locale of ["en", "de"]) {
+      expect(shippedCatalogs[locale]?.length).toBe(files(locale).length);
+    }
   });
 });

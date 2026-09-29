@@ -15,6 +15,10 @@ import * as mail from "./mockMail";
 import { errorResponse, type MockCore } from "./mockMail";
 import * as outbox from "./mockOutbox";
 import { parseQuery } from "./mockSearch";
+import { answerComposer, isComposerRequest } from "../features/composer/mock";
+import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
+import { answerMcp, isMcpRequest } from "../features/mcp/mock";
+import { answerRules, isRulesRequest } from "../features/rules/mock";
 
 export interface MockTransportOptions {
   data?: MockData;
@@ -83,6 +87,11 @@ export class MockTransport implements Transport, MockCore {
     if (this.closed) {
       return errorResponse("unavailable", "mock transport closed");
     }
+    // M1b feature packages answer their own requests (src/features/*/mock.ts).
+    if (isComposerRequest(request)) return answerComposer(this, request);
+    if (isRulesRequest(request)) return answerRules(this, request);
+    if (isMcpRequest(request)) return answerMcp(this, request);
+    if (isCustomizationRequest(request)) return answerCustomization(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };
@@ -185,6 +194,13 @@ export class MockTransport implements Transport, MockCore {
         return outbox.cancelSend(this, request.outbox_id);
       case "ListOutbox":
         return outbox.listOutbox(this);
+      case "RetryOp":
+        return mail.retryOp(this, request.op_id);
+      case "ReportUiContext":
+        d.uiContext = structuredClone(request.context);
+        return { type: "Done" };
+      case "GetUiContext":
+        return { type: "UiContext", context: structuredClone(d.uiContext) };
     }
   }
 }

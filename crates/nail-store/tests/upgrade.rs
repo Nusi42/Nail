@@ -93,18 +93,8 @@ fn upgrades_a_v1_database() {
 
     // New v2 features work on the upgraded database.
     let draft = nail_api::Draft {
-        id: None,
-        identity_id: "ada@example.org".into(),
-        to: vec![],
-        cc: vec![],
-        bcc: vec![],
         subject: "Hi".into(),
-        mode: nail_api::accounts::ComposerMode::Plain,
-        text: String::new(),
-        html: None,
-        markdown: None,
-        attachments: vec![],
-        in_reply_to: None,
+        ..nail_api::Draft::new("ada@example.org")
     };
     let id = store.save_draft(&draft).unwrap();
     store.schedule_send(&id, &"a1".into(), 0).unwrap();

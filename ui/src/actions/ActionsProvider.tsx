@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { JsonValue, ResolvedLayout } from "../api/generated";
 import { useLocale, useT } from "../i18n/I18nProvider";
+import { useDialogRegistry } from "../layout/dialogRegistry";
 import { useClient } from "../state/queries";
 import { useUi, useUiStoreApi } from "../state/uiStore";
 import { KeyMatcher, comboFromEvent } from "./keys";
@@ -69,9 +70,11 @@ export function ActionsProvider({
   const queryClient = useQueryClient();
   const t = useT();
   const locale = useLocale();
+  const dialogRegistry = useDialogRegistry();
+  const dialogs = useMemo(() => new Set(Object.keys(dialogRegistry)), [dialogRegistry]);
   const dispatcher = useMemo(
-    () => createDispatcher({ client, store, queryClient, layout, t, locale }, handlers),
-    [client, store, queryClient, layout, handlers, t, locale],
+    () => createDispatcher({ client, store, queryClient, layout, t, locale, dialogs }, handlers),
+    [client, store, queryClient, layout, handlers, t, locale, dialogs],
   );
 
   // Track the keyboard context of whatever gets focus.

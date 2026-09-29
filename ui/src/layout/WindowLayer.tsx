@@ -10,6 +10,7 @@ import { useT } from "../i18n/I18nProvider";
 import { useUi } from "../state/uiStore";
 import { Icon } from "../widgets/Icon";
 import { WindowView } from "./LayoutRenderer";
+import { useDialogRegistry } from "./dialogRegistry";
 
 const FOCUSABLE =
   'input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex="0"]';
@@ -30,7 +31,10 @@ function WindowDialog({
 }) {
   const t = useT();
   const closeWindow = useUi((s) => s.closeWindow);
+  const dialogs = useDialogRegistry();
   const ref = useRef<HTMLDivElement>(null);
+  // A layout window wins; a feature dialog fills in for a name the layout lacks.
+  const Dialog = Object.hasOwn(layout.windows, name) ? undefined : dialogs[name];
   const titleId = `nail-window-${name}-title`;
 
   // Focus the first field when the window opens; give focus back on close.
@@ -73,7 +77,11 @@ function WindowDialog({
         </button>
       </div>
       <div data-part="window.body">
-        <WindowView layout={layout} name={name} />
+        {Dialog ? (
+          <Dialog name={name} close={() => closeWindow(name)} />
+        ) : (
+          <WindowView layout={layout} name={name} />
+        )}
       </div>
     </div>
   );

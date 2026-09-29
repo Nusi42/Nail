@@ -31,6 +31,8 @@ export interface ActionContext {
   t: (id: string, args?: MessageArgs) => string;
   /** Locale for dates in generated text. */
   locale: string;
+  /** Names of the dialogs features registered (`window.open` can open them). */
+  dialogs?: ReadonlySet<string>;
 }
 
 /** Layout windows the built-in actions open. */
@@ -189,7 +191,8 @@ export const builtinActions: Record<string, ActionHandler> = {
       if (typeof args[0] === "string") ctx.store.getState().openWindow(args[0]);
     },
     enabled: (ctx, args) =>
-      typeof args[0] === "string" && Object.hasOwn(ctx.layout.windows, args[0]),
+      typeof args[0] === "string" &&
+      (Object.hasOwn(ctx.layout.windows, args[0]) || (ctx.dialogs?.has(args[0]) ?? false)),
   },
   "window.close": {
     run: (ctx, args) =>

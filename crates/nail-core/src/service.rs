@@ -163,6 +163,8 @@ pub(crate) struct Inner {
     pub(crate) timing: EngineTiming,
     /// Whether [`Service::start`] ran (engines follow account changes).
     pub(crate) started: std::sync::atomic::AtomicBool,
+    /// The last UI context a client reported (M1b, for MCP).
+    pub(crate) ui_context: Mutex<nail_api::UiContext>,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -286,6 +288,7 @@ impl Service {
                 open_browser: options.open_browser,
                 timing: options.timing,
                 started: std::sync::atomic::AtomicBool::new(false),
+                ui_context: Mutex::new(nail_api::UiContext::default()),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -720,6 +723,58 @@ impl Service {
             Request::ListOutbox => Response::Outbox {
                 entries: self.inner.store.call(|s| s.list_outbox()).await?,
             },
+            Request::RetryOp { op_id } => Response::Queued {
+                op_ids: self.retry_op(&op_id).await?,
+            },
+
+            // --- M1b: UI context and saved searches (core) ---
+            Request::ReportUiContext { context } => {
+                self.report_ui_context(context);
+                Response::Done
+            }
+            Request::GetUiContext => Response::UiContext {
+                context: self.ui_context(),
+            },
+            Request::ListSavedSearches => Response::SavedSearches {
+                searches: self.inner.store.call(|s| s.list_saved_searches()).await?,
+            },
+            Request::SaveSavedSearch { search } => Response::SavedSearchSaved {
+                search: self.save_saved_search(search).await?,
+            },
+            Request::DeleteSavedSearch { search_id } => {
+                self.delete_saved_search(search_id).await?;
+                Response::Done
+            }
+
+            // --- M1b feature packages: one arm per module (ADR 0022) ---
+            request @ (Request::NewDraft { .. }
+            | Request::RenderPreview { .. }
+            | Request::ConvertDraft { .. }
+            | Request::UploadAttachment { .. }
+            | Request::SuggestAddresses { .. }) => crate::composer::handle(self, request).await?,
+            request @ (Request::ListRules
+            | Request::SaveRule { .. }
+            | Request::DeleteRule { .. }
+            | Request::ReorderRules { .. }
+            | Request::TestRule { .. }
+            | Request::RunRule { .. }
+            | Request::ListRuleRuns { .. }
+            | Request::UndoRuleRun { .. }
+            | Request::RuleToText { .. }
+            | Request::RuleFromText { .. }) => crate::rules::handle(self, request).await?,
+            request @ (Request::ListMcpClients
+            | Request::CreateMcpClient { .. }
+            | Request::UpdateMcpGrants { .. }
+            | Request::RevokeMcpClient { .. }
+            | Request::ListMcpAudit { .. }
+            | Request::GetMcpServerInfo) => crate::mcp::handle(self, request).await?,
+            request @ (Request::UpdateLayout { .. }
+            | Request::PreviewConfigMerge { .. }
+            | Request::ResolveConfigMerge { .. }
+            | Request::ApplyConfigMerge { .. }
+            | Request::ListConfigBackups { .. }
+            | Request::RevertConfig { .. }
+            | Request::OpenConfigFile { .. }) => crate::customize::handle(self, request).await?,
         })
     }
 
@@ -739,4 +794,12 @@ impl Service {
         })
         .await?
     }
+}
+
+/// The wire name of a request (its `type`), for messages and logs.
+pub(crate) fn request_name(request: &Request) -> String {
+    serde_json::to_value(request)
+        .ok()
+        .and_then(|v| v.get("type").and_then(|t| t.as_str().map(str::to_owned)))
+        .unwrap_or_else(|| "request".to_owned())
 }

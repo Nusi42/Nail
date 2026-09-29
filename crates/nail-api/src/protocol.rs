@@ -20,16 +20,25 @@ use crate::accounts::{
     AccountConfig, AccountStatus, AccountTestResult, AccountsConfig, DiscoveredAccount, Identity,
     SecretInput, VirtualAccountConfig,
 };
-use crate::compose::{Draft, OutboxEntry, OutboxState};
+use crate::compose::{
+    ComposerMode, Draft, DraftAttachment, DraftContext, OutboxEntry, OutboxState,
+};
 use crate::config::layout::ResolvedLayout;
 use crate::config::theme::ResolvedTheme;
-use crate::domain::{Account, Folder, MessageBody, MessageSummary, ThreadSummary};
+use crate::context::UiContext;
+use crate::customize::{
+    ConfigBackup, ConfigFile, ConfigIssue, ConfigMergePreview, LayoutPatch, MergeChoice, MergeTake,
+};
+use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
 use crate::ids::{
-    AccountId, DraftId, FolderId, IdentityId, MessageId, OAuthFlowId, OpId, OutboxId, ThreadId,
+    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, McpClientId, MessageId, OAuthFlowId,
+    OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
+use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
-use crate::search::{SearchError, SearchHit, SearchQuery};
+use crate::rules::{Rule, RuleMatch, RuleRun};
+use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery};
 
 /// Version of this protocol. Bumped on incompatible changes; returned by
 /// [`Response::Pong`] so clients can detect a mismatched core.
@@ -283,6 +292,288 @@ pub enum Request {
     /// Messages in the outbox (scheduled, sending, failed). Answered with
     /// [`Response::Outbox`].
     ListOutbox,
+    /// Put a failed operation back into the queue and replay it. Answered
+    /// with [`Response::Queued`] (the same op id); `conflict` when the
+    /// operation has not failed.
+    RetryOp {
+        /// The operation (from [`Event::OpStatus`]).
+        op_id: OpId,
+    },
+
+    // --- Composer (M1b WP21) ---
+    /// A new draft, not yet saved: identity (given or chosen as by
+    /// [`Request::ChooseIdentity`]), mode (given or the identity's default),
+    /// signature and, for a reply or forward, recipients, subject and the
+    /// quoted original in that mode (forwards also carry the original
+    /// attachments). Answered with [`Response::Draft`] (`id: null`).
+    NewDraft {
+        /// The identity; `null` = choose one.
+        #[serde(default)]
+        identity_id: Option<IdentityId>,
+        /// The active account (real or virtual), for choosing the identity.
+        #[serde(default)]
+        account_id: Option<AccountId>,
+        /// The editing mode; `null` = the identity's default.
+        #[serde(default)]
+        mode: Option<ComposerMode>,
+        /// Reply or forward; `null` for a new message.
+        #[serde(default)]
+        context: Option<DraftContext>,
+    },
+    /// Render Markdown to the HTML that would be sent (sanitized, with the
+    /// identity's mail stylesheet inlined), for the preview. Answered with
+    /// [`Response::PreviewRendered`].
+    RenderPreview {
+        /// Markdown source.
+        markdown: String,
+        /// Whose mail stylesheet to apply; `null` = none.
+        #[serde(default)]
+        identity_id: Option<IdentityId>,
+    },
+    /// Convert a draft's body to another mode (Markdown → HTML is
+    /// lossless; HTML → Markdown / plain text is best effort). Answered with
+    /// [`Response::DraftConverted`]; nothing is saved.
+    ConvertDraft {
+        /// The draft as edited.
+        draft: Box<Draft>,
+        /// The target mode.
+        mode: ComposerMode,
+    },
+    /// Store a file for a draft in the blob store. Answered with
+    /// [`Response::AttachmentUploaded`]; add the attachment to the draft and
+    /// save it. `too_large` above the size limit.
+    UploadAttachment {
+        /// File name.
+        filename: String,
+        /// MIME type (`application/octet-stream` when unknown).
+        mime: String,
+        /// The content, base64 (standard alphabet, padded).
+        data: String,
+        /// `Content-ID` for an inline image; `null` for an attachment.
+        #[serde(default)]
+        content_id: Option<String>,
+    },
+    /// Addresses for autocomplete, from the addresses collected from sent
+    /// and received mail, best first. Answered with
+    /// [`Response::AddressSuggestions`].
+    SuggestAddresses {
+        /// What the user typed (matches name or address, case-insensitive).
+        prefix: String,
+        /// Maximum number of suggestions.
+        limit: u32,
+    },
+
+    // --- Rules (M1b WP22) ---
+    /// All rules in `rules.kdl` order. Answered with [`Response::Rules`].
+    ListRules,
+    /// Create or replace a rule (matched by `rule.id`) in `rules.kdl`.
+    /// Answered with [`Response::RuleSaved`].
+    SaveRule {
+        /// The rule; an empty `id` creates a new rule.
+        rule: Box<Rule>,
+        /// Position for a new rule (0 = first); `null` = last. Ignored for
+        /// existing rules.
+        #[serde(default)]
+        position: Option<u32>,
+    },
+    /// Remove a rule. Answered with [`Response::Done`].
+    DeleteRule {
+        /// The rule.
+        rule_id: RuleId,
+    },
+    /// Reorder rules; `rule_ids` must list every rule once. Answered with
+    /// [`Response::Done`].
+    ReorderRules {
+        /// All rule ids in the new order.
+        rule_ids: Vec<RuleId>,
+    },
+    /// Dry run: which messages would match and what would happen. Nothing
+    /// changes. Answered with [`Response::RuleTested`].
+    TestRule {
+        /// The rule (need not be saved).
+        rule: Box<Rule>,
+        /// Test in this folder; `null` = the rule's scope.
+        #[serde(default)]
+        folder_id: Option<FolderId>,
+        /// Maximum number of matches to return.
+        limit: u32,
+    },
+    /// Run a saved rule now. Answered with [`Response::RuleRan`]; progress
+    /// arrives as [`Event::RuleRunFinished`].
+    RunRule {
+        /// The rule.
+        rule_id: RuleId,
+        /// Run on these messages; empty = on `folder_id` or the rule's scope.
+        #[serde(default)]
+        message_ids: Vec<MessageId>,
+        /// Run on this folder; `null` = the rule's scope.
+        #[serde(default)]
+        folder_id: Option<FolderId>,
+    },
+    /// Recent rule runs, newest first. Answered with [`Response::RuleRuns`].
+    ListRuleRuns {
+        /// Runs of this rule; `null` = of all rules.
+        #[serde(default)]
+        rule_id: Option<RuleId>,
+        /// Maximum number of runs.
+        limit: u32,
+    },
+    /// Undo everything a run did, as one unit (the inverse operations go
+    /// through the queue). Answered with [`Response::Queued`]; `conflict`
+    /// when the run is not undoable.
+    UndoRuleRun {
+        /// The run.
+        run_id: RuleRunId,
+    },
+    /// The text form (`rules.kdl` syntax) of a rule, for the editor's text
+    /// view. Answered with [`Response::RuleText`].
+    RuleToText {
+        /// The rule.
+        rule: Box<Rule>,
+    },
+    /// Parse the text form of one rule. Answered with
+    /// [`Response::RuleParsed`].
+    RuleFromText {
+        /// One `rule "<name>" { … }` node.
+        text: String,
+    },
+
+    // --- MCP clients (M1b WP23) ---
+    /// Registered MCP clients (revoked ones included). Answered with
+    /// [`Response::McpClients`].
+    ListMcpClients,
+    /// Register a client and issue its bearer token. Answered with
+    /// [`Response::McpClientCreated`], the only time the token is shown.
+    CreateMcpClient {
+        /// Display name (unique among active clients; `conflict` otherwise).
+        name: String,
+        /// Initial permissions (usually the empty default).
+        #[serde(default)]
+        grant: McpGrant,
+    },
+    /// Replace a client's permissions. Answered with
+    /// [`Response::McpClientSaved`].
+    UpdateMcpGrants {
+        /// The client.
+        client_id: McpClientId,
+        /// The new permissions.
+        grant: McpGrant,
+    },
+    /// Revoke a client: its token stops working at once, its audit entries
+    /// stay. Answered with [`Response::Done`].
+    RevokeMcpClient {
+        /// The client.
+        client_id: McpClientId,
+    },
+    /// A page of the MCP audit log, newest first. Answered with
+    /// [`Response::McpAudit`].
+    ListMcpAudit {
+        /// Entries of this client; `null` = of all clients.
+        #[serde(default)]
+        client_id: Option<McpClientId>,
+        /// Only entries with a smaller id (paging); `null` = the newest.
+        #[serde(default)]
+        before: Option<u64>,
+        /// Maximum number of entries.
+        limit: u32,
+    },
+    /// Whether the MCP server runs and where. Answered with
+    /// [`Response::McpServer`].
+    GetMcpServerInfo,
+
+    // --- UI context (M1b; read by MCP clients) ---
+    /// Report what the UI shows now (see [`crate::context`]). Answered with
+    /// [`Response::Done`].
+    ReportUiContext {
+        /// The current context (replaces the previous report).
+        context: UiContext,
+    },
+    /// The last reported UI context. Answered with [`Response::UiContext`].
+    GetUiContext,
+
+    // --- Customization (M1b WP24) ---
+    /// Write UI edits into `layout.kdl`, keeping comments and formatting.
+    /// Answered with [`Response::Done`]; the new layout follows as
+    /// [`Event::ConfigChanged`]. `config` when `layout.kdl` is invalid.
+    UpdateLayout {
+        /// The edits, applied in order as one write.
+        patches: Vec<LayoutPatch>,
+    },
+    /// Compare an incoming theme or layout with the user's file. Answered
+    /// with [`Response::ConfigMergePreview`].
+    PreviewConfigMerge {
+        /// `theme` or `layout`.
+        file: ConfigFile,
+        /// The incoming file's text.
+        incoming: String,
+    },
+    /// Resolve a merge without writing it, for the live preview. Answered
+    /// with [`Response::ConfigMergeResolved`].
+    ResolveConfigMerge {
+        /// `theme` or `layout`.
+        file: ConfigFile,
+        /// The incoming file's text.
+        incoming: String,
+        /// Choices per item; items without one use `default`.
+        choices: Vec<MergeChoice>,
+        /// The side for items without a choice.
+        #[serde(default)]
+        default: MergeTake,
+    },
+    /// Write the merge result after backing up the current file. Answered
+    /// with [`Response::ConfigMergeApplied`].
+    ApplyConfigMerge {
+        /// `theme` or `layout`.
+        file: ConfigFile,
+        /// The incoming file's text.
+        incoming: String,
+        /// Choices per item; items without one use `default`.
+        choices: Vec<MergeChoice>,
+        /// The side for items without a choice.
+        #[serde(default)]
+        default: MergeTake,
+    },
+    /// Backups of a configuration file, newest first. Answered with
+    /// [`Response::ConfigBackups`].
+    ListConfigBackups {
+        /// The file.
+        file: ConfigFile,
+    },
+    /// Restore a backup (the current file is backed up first). Answered
+    /// with [`Response::Done`].
+    RevertConfig {
+        /// The file.
+        file: ConfigFile,
+        /// The backup; `null` = the newest.
+        #[serde(default)]
+        backup_id: Option<ConfigBackupId>,
+    },
+    /// Open a configuration file in the system editor at a position (the
+    /// inspector's "open file at line"). Answered with [`Response::Done`];
+    /// `unsupported` in web mode.
+    OpenConfigFile {
+        /// The file.
+        file: ConfigFile,
+        /// 1-based line.
+        line: u32,
+        /// 1-based column.
+        column: u32,
+    },
+    /// Saved searches in display order. Answered with
+    /// [`Response::SavedSearches`].
+    ListSavedSearches,
+    /// Create (`id: null`) or replace a saved search. Answered with
+    /// [`Response::SavedSearchSaved`]; `invalid_request` when the query does
+    /// not parse.
+    SaveSavedSearch {
+        /// The saved search.
+        search: SavedSearch,
+    },
+    /// Remove a saved search. Answered with [`Response::Done`].
+    DeleteSavedSearch {
+        /// The saved search.
+        search_id: SavedSearchId,
+    },
 }
 
 /// The core's answer to one [`Request`].
@@ -463,6 +754,131 @@ pub enum Response {
         /// Entries, earliest send time first.
         entries: Vec<OutboxEntry>,
     },
+    /// Answer to [`Request::RenderPreview`].
+    PreviewRendered {
+        /// The HTML as it would be sent.
+        html: String,
+    },
+    /// Answer to [`Request::ConvertDraft`].
+    DraftConverted {
+        /// The draft in the new mode.
+        draft: Box<Draft>,
+        /// Whether formatting was dropped (the UI warns before switching).
+        lossy: bool,
+    },
+    /// Answer to [`Request::UploadAttachment`].
+    AttachmentUploaded {
+        /// The attachment to add to the draft.
+        attachment: DraftAttachment,
+    },
+    /// Answer to [`Request::SuggestAddresses`].
+    AddressSuggestions {
+        /// Best first.
+        addresses: Vec<Address>,
+    },
+    /// Answer to [`Request::ListRules`].
+    Rules {
+        /// The rules in file order.
+        rules: Vec<Rule>,
+    },
+    /// Answer to [`Request::SaveRule`].
+    RuleSaved {
+        /// The rule as saved (with its id and source location).
+        rule: Box<Rule>,
+    },
+    /// Answer to [`Request::TestRule`].
+    RuleTested {
+        /// Messages examined.
+        scanned: u32,
+        /// Matches, up to the limit, newest first.
+        matches: Vec<RuleMatch>,
+    },
+    /// Answer to [`Request::RunRule`].
+    RuleRan {
+        /// The run (usually still `running`).
+        run: Box<RuleRun>,
+    },
+    /// Answer to [`Request::ListRuleRuns`].
+    RuleRuns {
+        /// Newest first.
+        runs: Vec<RuleRun>,
+    },
+    /// Answer to [`Request::RuleToText`].
+    RuleText {
+        /// The rule in `rules.kdl` syntax.
+        text: String,
+    },
+    /// Answer to [`Request::RuleFromText`].
+    RuleParsed {
+        /// The rule, `null` when the text has errors.
+        rule: Option<Box<Rule>>,
+        /// Every error found (positions within `text`).
+        errors: Vec<ConfigIssue>,
+    },
+    /// Answer to [`Request::ListMcpClients`].
+    McpClients {
+        /// Clients, oldest first.
+        clients: Vec<McpClient>,
+    },
+    /// Answer to [`Request::CreateMcpClient`].
+    McpClientCreated {
+        /// The new client.
+        client: Box<McpClient>,
+        /// The bearer token. Shown once; the core keeps only its hash.
+        token: String,
+    },
+    /// Answer to [`Request::UpdateMcpGrants`].
+    McpClientSaved {
+        /// The client as saved.
+        client: Box<McpClient>,
+    },
+    /// Answer to [`Request::ListMcpAudit`].
+    McpAudit {
+        /// Newest first.
+        entries: Vec<McpAuditEntry>,
+    },
+    /// Answer to [`Request::GetMcpServerInfo`].
+    McpServer {
+        /// State and endpoint.
+        info: McpServerInfo,
+    },
+    /// Answer to [`Request::GetUiContext`].
+    UiContext {
+        /// The last reported context (empty when none was reported).
+        context: UiContext,
+    },
+    /// Answer to [`Request::PreviewConfigMerge`].
+    ConfigMergePreview {
+        /// The comparison.
+        preview: Box<ConfigMergePreview>,
+    },
+    /// Answer to [`Request::ResolveConfigMerge`].
+    ConfigMergeResolved {
+        /// The resolved theme (for a theme merge), else `null`.
+        theme: Option<Box<ResolvedTheme>>,
+        /// The resolved layout (for a layout merge), else `null`.
+        layout: Option<Box<ResolvedLayout>>,
+    },
+    /// Answer to [`Request::ApplyConfigMerge`].
+    ConfigMergeApplied {
+        /// The backup of the previous file (for revert).
+        backup: ConfigBackup,
+    },
+    /// Answer to [`Request::ListConfigBackups`].
+    ConfigBackups {
+        /// Newest first.
+        backups: Vec<ConfigBackup>,
+    },
+    /// Answer to [`Request::ListSavedSearches`].
+    SavedSearches {
+        /// In display order.
+        searches: Vec<SavedSearch>,
+    },
+    /// Answer to [`Request::SaveSavedSearch`].
+    SavedSearchSaved {
+        /// The saved search (with its id).
+        search: SavedSearch,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -588,6 +1004,42 @@ pub enum Event {
         /// Diagnostic detail (English), else `null`.
         message: Option<String>,
     },
+    /// Every error of one configuration file (M1b; supersedes
+    /// [`Event::ConfigError`], which the core keeps sending for the first
+    /// error until WP25 switches the UI over). An empty `errors` list
+    /// means the file is valid again. Sent for `theme.kdl`, `layout.kdl`,
+    /// `accounts.kdl` and `rules.kdl`.
+    ConfigErrors {
+        /// File name, e.g. `"layout.kdl"`.
+        file: String,
+        /// The errors, in file order.
+        errors: Vec<ConfigIssue>,
+    },
+    /// `rules.kdl` changed (by a request or by hand); clients refetch
+    /// [`Request::ListRules`]. An invalid file is reported as
+    /// [`Event::ConfigErrors`].
+    RulesChanged,
+    /// A rule run changed state (finished, failed or undone).
+    RuleRunFinished {
+        /// The run.
+        run: Box<RuleRun>,
+    },
+    /// An MCP client read or edited what is on screen (the UI shows an
+    /// indicator).
+    McpContextAccess {
+        /// The client.
+        client_id: McpClientId,
+        /// Its name.
+        client_name: String,
+        /// `true` when it edited the open draft, `false` for a read.
+        edit: bool,
+    },
+    /// MCP clients or their grants changed; clients refetch
+    /// [`Request::ListMcpClients`].
+    McpClientsChanged,
+    /// Saved searches changed; clients refetch
+    /// [`Request::ListSavedSearches`].
+    SavedSearchesChanged,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).
@@ -799,6 +1251,121 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Event::AccountsChanged).unwrap(),
             json!({"type": "AccountsChanged"})
+        );
+    }
+
+    #[test]
+    fn m1b_requests_serialize() {
+        assert_eq!(
+            serde_json::to_value(Request::RetryOp {
+                op_id: "op-3".into()
+            })
+            .unwrap(),
+            json!({"type": "RetryOp", "op_id": "op-3"})
+        );
+        let new_draft: Request = serde_json::from_value(json!({
+            "type": "NewDraft",
+            "context": {"mode": "forward", "message_id": "m1"}
+        }))
+        .unwrap();
+        assert_eq!(
+            new_draft,
+            Request::NewDraft {
+                identity_id: None,
+                account_id: None,
+                mode: None,
+                context: Some(DraftContext {
+                    mode: crate::compose::DraftContextMode::Forward,
+                    message_id: "m1".into(),
+                }),
+            }
+        );
+        let update: Request = serde_json::from_value(json!({
+            "type": "UpdateLayout",
+            "patches": [{"op": "toolbar-order", "toolbar": "reader",
+                         "items": [{"type": "action", "action": "mail.reply"}, {"type": "spacer"}]}]
+        }))
+        .unwrap();
+        let Request::UpdateLayout { patches } = update else {
+            panic!("wrong variant");
+        };
+        assert_eq!(patches.len(), 1);
+        let merge: Request = serde_json::from_value(json!({
+            "type": "ApplyConfigMerge", "file": "theme", "incoming": "theme \"x\" {}",
+            "choices": [{"item_id": "tokens/color.bg", "take": "theirs"}]
+        }))
+        .unwrap();
+        assert!(matches!(
+            merge,
+            Request::ApplyConfigMerge {
+                default: MergeTake::Mine,
+                ..
+            }
+        ));
+        assert_eq!(
+            serde_json::to_value(Request::ReportUiContext {
+                context: UiContext {
+                    message_id: Some("m1".into()),
+                    ..UiContext::default()
+                }
+            })
+            .unwrap()["context"]["message_id"],
+            json!("m1")
+        );
+        let grants: Request = serde_json::from_value(json!({
+            "type": "CreateMcpClient", "name": "claude"
+        }))
+        .unwrap();
+        assert!(matches!(grants, Request::CreateMcpClient { grant, .. } if grant.is_empty()));
+    }
+
+    #[test]
+    fn m1b_responses_and_events_serialize() {
+        let created = Response::McpClientCreated {
+            client: Box::new(McpClient {
+                id: "mcp-1".into(),
+                name: "claude".into(),
+                created_at: "2026-09-29T10:00:00Z".into(),
+                last_used_at: None,
+                token_hint: "x1y2".into(),
+                grant: McpGrant::default(),
+                revoked_at: None,
+            }),
+            token: "secret".into(),
+        };
+        let value = serde_json::to_value(&created).unwrap();
+        assert_eq!(value["type"], json!("McpClientCreated"));
+        assert_eq!(value["client"]["grant"]["scopes"], json!([]));
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), created);
+        let errors = Event::ConfigErrors {
+            file: "layout.kdl".into(),
+            errors: vec![
+                ConfigIssue {
+                    line: 1,
+                    column: 2,
+                    message: "a".into(),
+                },
+                ConfigIssue {
+                    line: 5,
+                    column: 1,
+                    message: "b".into(),
+                },
+            ],
+        };
+        let value = serde_json::to_value(&errors).unwrap();
+        assert_eq!(value["errors"][1]["line"], json!(5));
+        assert_eq!(serde_json::from_value::<Event>(value).unwrap(), errors);
+        assert_eq!(
+            serde_json::to_value(Event::RulesChanged).unwrap(),
+            json!({"type": "RulesChanged"})
+        );
+        assert_eq!(
+            serde_json::to_value(Response::ConfigMergeResolved {
+                theme: None,
+                layout: None
+            })
+            .unwrap(),
+            json!({"type": "ConfigMergeResolved", "theme": null, "layout": null})
         );
     }
 

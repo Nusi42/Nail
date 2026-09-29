@@ -168,7 +168,7 @@ describe("composer flows", () => {
     expect(c).toMatchObject({
       identityId: "ada@work.example",
       to: "Edsger Dijkstra <ewd@tue.example>",
-      inReplyTo: id,
+      context: { mode: "reply", message_id: id },
     });
     expect(c?.subject).toMatch(/^Re: /);
     expect(c?.text).toContain("composer-quote-header");
@@ -190,7 +190,7 @@ describe("composer flows", () => {
     const f = ctx.store.getState().composer;
     expect(f?.to).toBe("");
     expect(f?.subject).toBe("Fwd: Compiler notes for Monday");
-    expect(f?.inReplyTo).toBeNull();
+    expect(f?.context).toEqual({ mode: "forward", message_id: id });
     expect(f?.text).toContain("composer-forward-header");
   });
 

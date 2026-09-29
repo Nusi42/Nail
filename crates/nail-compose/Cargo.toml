@@ -1,0 +1,18 @@
+[package]
+name = "nail-compose"
+description = "Composer: MIME building, Markdown rendering, mail stylesheets, quoting, signatures and templates"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+mail-builder.workspace = true
+comrak.workspace = true
+css-inline.workspace = true
+ammonia.workspace = true
+
+[lints]
+workspace = true

@@ -28,11 +28,14 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 
 ```
 crates/nail-api        shared types + Request/Response/Event protocol (ts-rs → ui/src/api/generated);
-                       engine traits (SecretStore, OutgoingTransport, AccessTokenProvider; Rust only)
+                       engine traits (SecretStore, OutgoingTransport, AccessTokenProvider; Rust only);
+                       M1b: rich drafts, rules, mcp, context (UI context), customize (ADR 0022)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
-                       format-preserving accounts.kdl writer (AccountsDocument)
-crates/nail-store      SQLite metadata (v2), blob store, per-account operation queue with sync-side
-                       merge, threading (JWZ), drafts/outbox, search filters (ADR 0015)
+                       format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
+                       feature in src/widgets/; rules.kdl in src/rules.rs (WP22)
+crates/nail-store      SQLite metadata (v4), blob store, per-account operation queue with sync-side
+                       merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
+                       v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches
 crates/nail-mime       MIME parsing, HTML sanitizing
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
@@ -42,12 +45,16 @@ crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
 crates/nail-search     Tantivy index + query language parser (ADR 0016)
 crates/nail-testkit    mock IMAP server, .eml corpus, demo seed
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
+crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (WP21)
+crates/nail-rules      rules engine: conditions, actions → queued ops, dry runs, undo (WP22)
+crates/nail-mcp        MCP server (rmcp): Streamable HTTP + stdio, grants, audit (WP23)
 crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
-                       engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020)
+                       engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020);
+                       M1b requests per package in src/{composer,rules,mcp,customize}.rs
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
 crates/nail-cli        `nail` binary
 app/src-tauri          Tauri 2 desktop shell
-ui/                    React renderer
+ui/                    React renderer; M1b feature slots in ui/src/features/<name>/ (README there)
 e2e/                   Playwright tests
 defaults/              shipped theme.kdl + layout.kdl
 locales/               Fluent catalogs (en, de)
@@ -84,6 +91,11 @@ npm run tauri dev                          # desktop app with Vite hot reload
 - Every M1a request is implemented by the core (ADR 0020); `unsupported` remains for rich drafts (M1b) and client certificates. The UI `MockTransport` implements the same contract (ADR 0019).
 - Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets` (a `MemorySecretStore`); `Service::from_parts` does so itself. Engine timing for tests: `EngineTiming::fast()`.
 - M1a decisions: ADRs 0015 (store v2), 0016 (search), 0017 (SMTP/POP3/auth/discovery), 0018 (IMAP), 0019 (UI), 0020 (core integration), 0021 (review fixes: UIDVALIDITY-safe replay, Sent copies via the queue, discovery warnings, query limits, `ChooseIdentity`).
+- M1b contract: ADR 0022 (requests, store v4, crate stubs, collision-free slots). Each package edits
+  only its slot: `nail-core/src/<pkg>.rs`, `nail-config/src/widgets/<pkg>.rs`, `ui/src/features/<pkg>/`,
+  `locales/{en,de}/<pkg>.ftl`. Shared files (`service.rs`, `App.tsx`, `src/api/mock.ts`, `uiStore.ts`,
+  `defaults/*.kdl`, store migrations, `nail-api`) are integrator-owned. Until a package lands its requests
+  answer `unsupported`; `RetryOp`, UI context and saved searches are implemented already.
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
 ## Git

@@ -234,3 +234,10 @@ For M1a:
 - **0018:** the IMAP engine (own client on `imap-proto`, IDLE, QRESYNC, writes)
 - **0019:** the M1a user interface (windows, forms, optimistic writes, mock core)
 - **0020:** core integration (engines, replay, outbox, virtual accounts, demo seed)
+- **0021:** M1a review fixes (UIDVALIDITY-safe replay, Sent copies via the queue, `ChooseIdentity`)
+
+For M1b:
+
+- **0022:** the M1b contract (rich drafts, rules, MCP, UI context, config write-back and merge,
+  saved searches, `RetryOp`), store v4, the `nail-compose` / `nail-rules` / `nail-mcp` stubs
+  and the per-package slots (`ui/src/features/README.md`)

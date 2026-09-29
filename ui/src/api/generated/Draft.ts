@@ -2,9 +2,10 @@
 import type { Address } from "./Address";
 import type { ComposerMode } from "./ComposerMode";
 import type { DraftAttachment } from "./DraftAttachment";
+import type { DraftContext } from "./DraftContext";
 import type { DraftId } from "./DraftId";
 import type { IdentityId } from "./IdentityId";
-import type { MessageId } from "./MessageId";
+import type { SignatureChoice } from "./SignatureChoice";
 
 /**
  * A message being written.
@@ -36,29 +37,41 @@ bcc: Array<Address>,
  */
 subject: string, 
 /**
- * Which body is the source the user edits. M1a: always `plain`.
+ * Which body is the source the user edits.
  */
 mode: ComposerMode, 
 /**
- * Plain-text body (the source in `plain` mode; in the other modes the
- * core derives it when sending).
+ * Plain-text body: the source in `plain` mode. In the other modes the
+ * core derives the text part when sending and ignores this value.
  */
 text: string, 
 /**
- * HTML body (M1b; must be `null` in M1a).
+ * HTML body: the source in `html` mode (sanitized by the core on save
+ * and on send). `null` in the other modes.
  */
 html: string | null, 
 /**
- * Markdown source (M1b; must be `null` in M1a).
+ * Markdown source: the source in `markdown` mode. `null` in the other
+ * modes.
  */
 markdown: string | null, 
 /**
- * Attachments (M1b; must be empty in M1a).
+ * Attachments and inline images, in display order.
  */
 attachments: Array<DraftAttachment>, 
 /**
- * The message this one replies to: sets `In-Reply-To` / `References`
- * and marks the original `\Answered` once sent. `null` for a new
- * message.
+ * The message this draft replies to or forwards. A reply sets
+ * `In-Reply-To` / `References` and marks the original `\Answered` once
+ * sent; a forward marks it `$Forwarded`. `null` for a new message.
  */
-in_reply_to: MessageId | null, };
+context: DraftContext | null, 
+/**
+ * Which signature the draft carries. The composer inserts it into the
+ * body and swaps it when the identity changes.
+ */
+signature: SignatureChoice, 
+/**
+ * Markdown mode: also send the source as a `text/markdown` part
+ * (RFC 7763).
+ */
+markdown_part: boolean, };

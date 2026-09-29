@@ -10,10 +10,12 @@ import { errorMessageIdOf } from "./api/client";
 import type { AccountStatus, ThemeMode } from "./api/generated";
 import { normalizeLayout, normalizeTheme } from "./api/normalize";
 import { createClient } from "./api/select";
+import { appRegistry } from "./features/registry";
 import { I18nProvider, useT } from "./i18n/I18nProvider";
 import { LayoutContext } from "./layout/LayoutContext";
 import { WindowView } from "./layout/LayoutRenderer";
 import { WindowLayer } from "./layout/WindowLayer";
+import { DialogRegistryContext } from "./layout/dialogRegistry";
 import { WidgetRegistryContext, type WidgetRegistry } from "./layout/widgetRegistry";
 import {
   ClientContext,
@@ -26,7 +28,6 @@ import {
 } from "./state/queries";
 import { UiStoreContext, createUiStore, useUi, useUiStoreApi, type UiStore } from "./state/uiStore";
 import { ThemeProvider } from "./theme/ThemeProvider";
-import { builtinWidgets } from "./widgets";
 
 export interface AppProps {
   /** Client to use; by default one is created for the environment. */
@@ -95,7 +96,7 @@ export function App({
   if (client) {
     content = (
       <ClientContext.Provider value={client}>
-        <Shell widgets={widgets ?? builtinWidgets} windowName={windowName ?? "main"} />
+        <Shell widgets={widgets ?? appRegistry.widgets} windowName={windowName ?? "main"} />
       </ClientContext.Provider>
     );
   } else {
@@ -146,6 +147,14 @@ function useCoreEvents(): void {
         queryKeys.allSearches,
       );
     const offEvents = client.subscribe((event) => {
+      // Feature slots (src/features/*) handle their own events.
+      for (const handler of appRegistry.events) {
+        try {
+          handler(event, { client, queryClient, store });
+        } catch (error) {
+          console.error("nail: a feature event handler failed", error);
+        }
+      }
       switch (event.type) {
         case "ConfigChanged":
           queryClient.setQueryData<AppConfig>(queryKeys.config, (old) => ({
@@ -261,6 +270,17 @@ function useDefaultSelection(): void {
   }, [folders.data, folderId, selectFolder]);
 }
 
+/** Background components of the feature slots (render nothing). */
+function FeatureEffects() {
+  return (
+    <>
+      {appRegistry.effects.map((Effect, index) => (
+        <Effect key={index} />
+      ))}
+    </>
+  );
+}
+
 function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: string }) {
   const config = useConfig();
   const localeOverride = useUi((s) => s.localeOverride);
@@ -274,18 +294,21 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
       {config.data ? (
         <ThemeProvider theme={config.data.theme} modeOverride={modeOverride}>
           <LayoutContext.Provider value={config.data.layout}>
-            <ActionsProvider layout={config.data.layout}>
-              <WidgetRegistryContext.Provider value={widgets}>
-                <main
-                  data-part="app"
-                  data-layout={config.data.layout.name}
-                  data-theme={config.data.theme.name}
-                >
-                  <WindowView layout={config.data.layout} name={windowName} />
-                  <WindowLayer layout={config.data.layout} />
-                </main>
-              </WidgetRegistryContext.Provider>
-            </ActionsProvider>
+            <DialogRegistryContext.Provider value={appRegistry.dialogs}>
+              <ActionsProvider layout={config.data.layout} handlers={appRegistry.actions}>
+                <WidgetRegistryContext.Provider value={widgets}>
+                  <main
+                    data-part="app"
+                    data-layout={config.data.layout.name}
+                    data-theme={config.data.theme.name}
+                  >
+                    <WindowView layout={config.data.layout} name={windowName} />
+                    <WindowLayer layout={config.data.layout} />
+                  </main>
+                  <FeatureEffects />
+                </WidgetRegistryContext.Provider>
+              </ActionsProvider>
+            </DialogRegistryContext.Provider>
           </LayoutContext.Provider>
         </ThemeProvider>
       ) : config.isError ? (

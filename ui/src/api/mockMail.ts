@@ -242,23 +242,37 @@ function queue(core: MockCore, targets: MessageSummary[], apply: () => FolderId[
   const accounts = [...new Set(targets.map((m) => m.account_id))];
   const opIds = accounts.map(() => core.nextId("op-"));
   core.emit({ type: "MailChanged", folder_ids: folders });
-  accounts.forEach((accountId, index) => {
-    const op_id = opIds[index] as string;
-    const base = { op_id, account_id: accountId, error: null, message: null };
+  accounts.forEach((accountId, index) => replay(core, opIds[index] as string, accountId));
+  return { type: "Queued", op_ids: opIds };
+}
+
+/** `RetryOp`: a failed write is queued and replayed again. */
+export function retryOp(core: MockCore, opId: string): Response {
+  const accountId = core.data.failedOps.get(opId);
+  if (accountId === undefined) return errorResponse("conflict", `operation ${opId} has not failed`);
+  core.data.failedOps.delete(opId);
+  const base = { op_id: opId, account_id: accountId, error: null, message: null };
+  queueMicrotask(() => core.emit({ type: "OpStatus", status: { ...base, state: "pending" } }));
+  replay(core, opId, accountId);
+  return { type: "Queued", op_ids: [opId] };
+}
+
+/** Replays one queued write asynchronously with `OpStatus` events. */
+function replay(core: MockCore, op_id: string, accountId: string): void {
+  const base = { op_id, account_id: accountId, error: null, message: null };
+  core.later(() => {
+    core.emit({ type: "OpStatus", status: { ...base, state: "in-flight" } });
     core.later(() => {
-      core.emit({ type: "OpStatus", status: { ...base, state: "in-flight" } });
-      core.later(() => {
-        const error = core.data.behaviour.opError;
-        core.emit({
-          type: "OpStatus",
-          status: error
-            ? { ...base, state: "failed", error, message: "mock replay failed" }
-            : { ...base, state: "done" },
-        });
+      const error = core.data.behaviour.opError;
+      if (error) core.data.failedOps.set(op_id, accountId);
+      core.emit({
+        type: "OpStatus",
+        status: error
+          ? { ...base, state: "failed", error, message: "mock replay failed" }
+          : { ...base, state: "done" },
       });
     });
   });
-  return { type: "Queued", op_ids: opIds };
 }
 
 export function updateFlags(core: MockCore, ids: MessageId[], change: FlagChange): Response {

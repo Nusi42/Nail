@@ -25,8 +25,16 @@ import type {
   OutboxEntry,
   ResolvedLayout,
   ResolvedTheme,
+  UiContext,
 } from "./generated";
 import { normalizeLayout, normalizeTheme } from "./normalize";
+import { createComposerMockState, type ComposerMockState } from "../features/composer/mock";
+import {
+  createCustomizationMockState,
+  type CustomizationMockState,
+} from "../features/customization/mock";
+import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
+import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
 
 export interface MockData {
   /** Real accounts, in display order. */
@@ -48,8 +56,35 @@ export interface MockData {
   discovery: Record<string, DiscoveredAccount[]>;
   /** OAuth flows by id (a `done` flow has "tokens" the core can use). */
   oauthFlows: Map<string, "pending" | "done" | "failed" | "cancelled">;
+  /** Failed queued writes (op id → account), for `RetryOp`. */
+  failedOps: Map<string, string>;
+  /** The last reported UI context. */
+  uiContext: UiContext;
+  /** State of the M1b feature mocks (`src/features/<name>/mock.ts`). */
+  features: MockFeatures;
   /** Behaviour switches for tests. */
   behaviour: MockBehaviour;
+}
+
+/** Each feature's mock state; only that feature's `mock.ts` touches it. */
+export interface MockFeatures {
+  composer: ComposerMockState;
+  rules: RulesMockState;
+  mcp: McpMockState;
+  customization: CustomizationMockState;
+}
+
+export function emptyUiContext(): UiContext {
+  return {
+    account_id: null,
+    folder_id: null,
+    message_id: null,
+    thread_id: null,
+    selected_message_ids: [],
+    selected_text: null,
+    draft_id: null,
+    draft_cursor: null,
+  };
 }
 
 /** Knobs tests use to make the mock core fail or slow down. */
@@ -392,6 +427,14 @@ export function createMockData(inboxSize = 250): MockData {
           warnings: [],
         },
       ],
+    },
+    failedOps: new Map(),
+    uiContext: emptyUiContext(),
+    features: {
+      composer: createComposerMockState(),
+      rules: createRulesMockState(),
+      mcp: createMcpMockState(),
+      customization: createCustomizationMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

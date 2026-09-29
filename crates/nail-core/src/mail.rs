@@ -263,6 +263,40 @@ impl Service {
         Ok(op_ids)
     }
 
+    /// `RetryOp`: puts a failed operation back into its account's queue
+    /// and replays it.
+    pub(crate) async fn retry_op(&self, id: &OpId) -> Result<Vec<OpId>> {
+        let op =
+            ids::parse_op_id(id).ok_or_else(|| ApiError::not_found(format!("operation {id}")))?;
+        let (queued, retried) = self
+            .inner
+            .store
+            .call(move |s| {
+                let queued = s.get_op(op)?;
+                let retried = s.retry_op(op)?;
+                Ok((queued, retried))
+            })
+            .await?;
+        if !retried {
+            return Err(ApiError::new(
+                nail_api::ErrorCode::Conflict,
+                format!("operation {id} has not failed"),
+            )
+            .into());
+        }
+        self.broadcast(Event::OpStatus {
+            status: OpStatus {
+                op_id: id.clone(),
+                account_id: queued.account_id.clone(),
+                state: OpState::Pending,
+                error: None,
+                message: None,
+            },
+        });
+        self.request_replay(&queued.account_id);
+        Ok(vec![id.clone()])
+    }
+
     /// `UpdateFlags`: one operation per message.
     pub(crate) async fn update_flags(
         &self,

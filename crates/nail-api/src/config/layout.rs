@@ -221,7 +221,7 @@ pub struct ActionDef {
 }
 
 /// A key binding.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct KeyBinding {
     /// Context in which the binding is active: `"global"`, `"list"`,
     /// `"reader"`, `"composer"`, `"calendar"`, …
@@ -243,7 +243,7 @@ fn default_context() -> String {
 }
 
 /// An entry of a toolbar.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ToolbarItem {
     /// A button invoking an action.

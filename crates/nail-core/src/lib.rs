@@ -19,7 +19,10 @@
 #![warn(missing_docs)]
 
 mod accounts;
+mod composer;
+mod context;
 mod creds;
+mod customize;
 #[cfg(feature = "demo")]
 pub mod demo;
 mod engine;
@@ -28,12 +31,14 @@ mod ids;
 mod imap_engine;
 mod ingest;
 mod mail;
+mod mcp;
 mod mime;
 mod oauth;
 mod outbox;
 pub mod paths;
 mod pop3_engine;
 mod replay;
+mod rules;
 mod search;
 mod service;
 mod setup;

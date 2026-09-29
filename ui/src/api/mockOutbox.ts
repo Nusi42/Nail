@@ -106,8 +106,10 @@ function deliver(core: MockCore, entry: OutboxEntry, draft: Draft): void {
       d.bodies.set(summary.id, mockBody(summary, { text: draft.text }));
       core.emit({ type: "MailChanged", folder_ids: [sent.id] });
     }
-    if (draft.in_reply_to) {
-      const original = d.messages.find((m) => m.id === draft.in_reply_to);
+    const replied =
+      draft.context && draft.context.mode !== "forward" ? draft.context.message_id : null;
+    if (replied) {
+      const original = d.messages.find((m) => m.id === replied);
       if (original) original.flags = { ...original.flags, answered: true };
     }
     d.drafts.delete(entry.draft_id);

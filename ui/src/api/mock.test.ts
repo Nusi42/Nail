@@ -26,7 +26,9 @@ const draft = (patch: Partial<Draft> = {}): Draft => ({
   html: null,
   markdown: null,
   attachments: [],
-  in_reply_to: null,
+  context: null,
+  signature: "identity",
+  markdown_part: false,
   ...patch,
 });
 
@@ -492,5 +494,96 @@ describe("drafts and the outbox in the mock core", () => {
     expect(
       await client.call({ type: "SendDraft", draft_id, delay_secs: 0, send_at: null }),
     ).toMatchObject({ code: "invalid_request" });
+  });
+});
+
+describe("M1b requests in the mock core", () => {
+  it("retries a failed write", async () => {
+    const { client, transport, events } = setup();
+    transport.data.behaviour.opError = "network";
+    const { op_ids } = await client.request(
+      {
+        type: "UpdateFlags",
+        message_ids: ["acc-personal/Inbox#2"],
+        change: {
+          seen: null,
+          flagged: true,
+          answered: null,
+          draft: null,
+          add_tags: [],
+          remove_tags: [],
+        },
+      },
+      "Queued",
+    );
+    const opId = op_ids[0] as string;
+    await vi.waitFor(() => expect(transport.data.failedOps.has(opId)).toBe(true));
+    transport.data.behaviour.opError = null;
+    expect(await client.request({ type: "RetryOp", op_id: opId }, "Queued")).toEqual({
+      type: "Queued",
+      op_ids: [opId],
+    });
+    await vi.waitFor(() =>
+      expect(
+        events.filter((e) => e.type === "OpStatus" && e.status.op_id === opId).at(-1),
+      ).toMatchObject({ status: { state: "done" } }),
+    );
+    expect(await client.call({ type: "RetryOp", op_id: opId })).toMatchObject({
+      code: "conflict",
+    });
+  });
+
+  it("keeps the reported UI context", async () => {
+    const { client } = setup();
+    const before = await client.request({ type: "GetUiContext" }, "UiContext");
+    expect(before.context.message_id).toBeNull();
+    const context = { ...before.context, message_id: "m1", selected_message_ids: ["m1"] };
+    await client.request({ type: "ReportUiContext", context }, "Done");
+    expect((await client.request({ type: "GetUiContext" }, "UiContext")).context).toEqual(context);
+  });
+
+  it("saves, lists and deletes saved searches", async () => {
+    const { client, events } = setup();
+    const base = {
+      id: null,
+      name: "Unread",
+      query: "is:unread",
+      account_id: null,
+      folder_id: null,
+      sort: "date" as const,
+      position: 0,
+    };
+    const { search } = await client.request(
+      { type: "SaveSavedSearch", search: base },
+      "SavedSearchSaved",
+    );
+    expect(search.id).not.toBeNull();
+    expect(events.at(-1)).toEqual({ type: "SavedSearchesChanged" });
+    const second = await client.request(
+      { type: "SaveSavedSearch", search: { ...base, name: "Flagged", query: "is:flagged" } },
+      "SavedSearchSaved",
+    );
+    expect(second.search.position).toBe(1);
+    const { searches } = await client.request({ type: "ListSavedSearches" }, "SavedSearches");
+    expect(searches.map((s) => s.name)).toEqual(["Unread", "Flagged"]);
+    expect(
+      await client.call({ type: "SaveSavedSearch", search: { ...base, query: "from:" } }),
+    ).toMatchObject({ code: "invalid_request" });
+    await client.request({ type: "DeleteSavedSearch", search_id: search.id as string }, "Done");
+    expect(
+      await client.call({ type: "DeleteSavedSearch", search_id: search.id as string }),
+    ).toMatchObject({ code: "not_found" });
+  });
+
+  it("answers the feature packages' requests with unsupported until they land", async () => {
+    const { client } = setup();
+    for (const request of [
+      { type: "RenderPreview", markdown: "# x", identity_id: null },
+      { type: "ListRules" },
+      { type: "ListMcpClients" },
+      { type: "ListConfigBackups", file: "theme" },
+    ] as const) {
+      expect(await client.call(request)).toMatchObject({ code: "unsupported" });
+    }
   });
 });

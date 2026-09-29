@@ -1,0 +1,23 @@
+[package]
+name = "nail-mcp"
+description = "MCP server: resources and tools over Streamable HTTP and stdio, grants and audit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+rmcp.workspace = true
+
+[dev-dependencies]
+nail-auth.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+axum.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
+
+[lints]
+workspace = true

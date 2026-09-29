@@ -9,7 +9,13 @@
 //!   virtual accounts, account setup and status.
 //! * [`ops`]: message writes and operation-queue status.
 //! * [`search`]: search queries, hits and query errors.
-//! * [`compose`]: drafts and the outbox.
+//! * [`compose`]: drafts (plain text, HTML, Markdown, attachments,
+//!   reply / forward context) and the outbox.
+//! * [`rules`]: filter rules (triggers, nested conditions, actions, runs).
+//! * [`mcp`]: MCP clients, grants and the audit log.
+//! * [`context`]: the UI context reported to the core (for MCP).
+//! * [`customize`]: configuration errors, layout write-back, the merge
+//!   dialog and backups.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -28,12 +34,16 @@
 pub mod accounts;
 pub mod compose;
 pub mod config;
+pub mod context;
+pub mod customize;
 pub mod domain;
 pub mod engine;
 pub mod error;
 pub mod ids;
+pub mod mcp;
 pub mod ops;
 pub mod protocol;
+pub mod rules;
 pub mod search;
 
 use std::path::{Path, PathBuf};
@@ -42,7 +52,10 @@ pub use accounts::{
     AccountConfig, AccountState, AccountStatus, AccountsConfig, AuthConfig, Identity,
     IncomingServer, OutgoingServer, SecretRef, ServerEndpoint, TlsMode, VirtualAccountConfig,
 };
-pub use compose::{Draft, OutboxEntry, OutboxState};
+pub use compose::{
+    Draft, DraftAttachment, DraftContext, DraftContextMode, OutboxEntry, OutboxState,
+    SignatureChoice,
+};
 pub use config::SourceLocation;
 pub use config::layout::{
     ActionDef, Breakpoint, KeyBinding, LayoutNode, MenuItem, Orientation, ResolvedLayout,
@@ -52,19 +65,24 @@ pub use config::theme::{
     AncestorSelector, HtmlDarkMode, Icon, MessageDisplay, PartCondition, PartRule, RawCss,
     ResolvedTheme, ThemeMode, TokenSet,
 };
+pub use context::UiContext;
+pub use customize::{ConfigFile, ConfigIssue, LayoutNodeRef, LayoutPatch};
 pub use domain::{
     Account, AccountKind, Address, AttachmentInfo, Flags, Folder, FolderRole, MessageBody,
     MessageHeaders, MessageLocation, MessageSummary, ThreadSummary,
 };
 pub use error::{ApiError, ErrorCode};
 pub use ids::{
-    AccountId, DraftId, FolderId, IdentityId, MessageId, OAuthFlowId, OpId, OutboxId, ThreadId,
+    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, McpClientId, MessageId, OAuthFlowId,
+    OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
+pub use mcp::{McpClient, McpGrant, McpScope};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
 };
-pub use search::{SearchError, SearchErrorKind, SearchHit, SearchQuery};
+pub use rules::{Condition, Rule, RuleAction, RuleRun, RuleTrigger};
+pub use search::{SavedSearch, SearchError, SearchErrorKind, SearchHit, SearchQuery};
 
 /// Name of the barrel file written by [`export_typescript`].
 pub const TS_INDEX_FILE: &str = "index.ts";
@@ -94,6 +112,8 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     SourceLocation::export_all(&cfg)?;
     accounts::MailProtocol::export_all(&cfg)?;
     accounts::SecretKind::export_all(&cfg)?;
+    McpScope::export_all(&cfg)?;
+    ConfigFile::export_all(&cfg)?;
 
     let mut files = Vec::new();
     collect_ts_files(out_dir, out_dir, &mut files)?;

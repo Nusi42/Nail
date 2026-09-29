@@ -33,7 +33,7 @@ export function emptyComposer(): ComposerState {
     bcc: "",
     subject: "",
     text: "",
-    inReplyTo: null,
+    context: null,
     showCc: false,
     showBcc: false,
     identityPicked: false,
@@ -164,8 +164,9 @@ export async function startReply(
       `${ctx.t("message-header-to")}: ${formatAddressList(h.to)}`,
     ];
     composer.text = `${signatureBlock(identity)}\n\n${lines.join("\n")}\n\n${message.text}`;
+    composer.context = { mode: "forward", message_id: message.id };
   } else {
-    composer.inReplyTo = message.id;
+    composer.context = { mode, message_id: message.id };
     composer.subject = withPrefix(h.subject, REPLY_PREFIX);
     const replyTo = h.reply_to.length > 0 ? h.reply_to : h.from;
     composer.to = formatAddressList(replyTo);
@@ -207,7 +208,9 @@ export function draftOf(c: ComposerState): { draft: Draft; invalid: string[] } {
       html: null,
       markdown: null,
       attachments: [],
-      in_reply_to: c.inReplyTo,
+      context: c.context,
+      signature: "identity",
+      markdown_part: false,
     },
     invalid: [...to.invalid, ...cc.invalid, ...bcc.invalid],
   };
@@ -310,7 +313,7 @@ export async function openDraft(ctx: ComposeContext, draftId: DraftId): Promise<
     showBcc: draft.bcc.length > 0,
     subject: draft.subject,
     text: draft.text,
-    inReplyTo: draft.in_reply_to,
+    context: draft.context,
   });
 }
 

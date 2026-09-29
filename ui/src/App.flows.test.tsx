@@ -54,7 +54,7 @@ describe("M1a flows", () => {
     );
     // Global mail keys do not fire inside the dialog.
     fireEvent.keyDown(within(dialog).getByRole("button", { name: "Send" }), { key: "r" });
-    expect(env.store.getState().composer?.inReplyTo).toBeNull();
+    expect(env.store.getState().composer?.context).toBeNull();
 
     await user.type(within(dialog).getByRole("textbox", { name: "To" }), "grace@navy.example");
     await user.type(within(dialog).getByRole("textbox", { name: "Subject" }), "Lunch");

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::domain::MessageSummary;
-use crate::ids::{AccountId, FolderId};
+use crate::ids::{AccountId, FolderId, SavedSearchId};
 
 /// A search request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -121,6 +121,32 @@ impl SearchErrorKind {
     }
 }
 
+/// A saved search (smart folder): a named query, optionally scoped. The
+/// layout can place saved searches like folders (M1b WP24).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SavedSearch {
+    /// Stable id; `null` in [`crate::Request::SaveSavedSearch`] creates a
+    /// new one.
+    #[serde(default)]
+    pub id: Option<SavedSearchId>,
+    /// Display name.
+    pub name: String,
+    /// The query in the query language.
+    pub query: String,
+    /// Restrict to an account (real or virtual); `null` = all accounts.
+    #[serde(default)]
+    pub account_id: Option<AccountId>,
+    /// Restrict to a folder (real or virtual); `null` = all folders.
+    #[serde(default)]
+    pub folder_id: Option<FolderId>,
+    /// Result order.
+    #[serde(default)]
+    pub sort: SearchSort,
+    /// Display position (ascending); new searches go last.
+    #[serde(default)]
+    pub position: u32,
+}
+
 /// Converts a byte offset into `text` to a UTF-16 offset for
 /// [`SearchError`]. Offsets inside a character round down to its start.
 pub fn utf16_offset(text: &str, byte_offset: usize) -> u32 {
@@ -154,6 +180,15 @@ mod tests {
         assert_eq!(q.offset, 0);
         assert_eq!(q.sort, SearchSort::Date);
         assert_eq!(q.account_id, None);
+    }
+
+    #[test]
+    fn saved_search_defaults() {
+        let s: SavedSearch =
+            serde_json::from_value(json!({"name": "Unread", "query": "is:unread"})).unwrap();
+        assert_eq!(s.id, None);
+        assert_eq!(s.sort, SearchSort::Date);
+        assert_eq!(s.position, 0);
     }
 
     #[test]

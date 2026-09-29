@@ -232,7 +232,7 @@ impl Service {
         let (account, identity) = self
             .identity(&draft.identity_id)
             .map_err(EngineError::from)?;
-        let reply = match &draft.in_reply_to {
+        let reply = match draft.replied_message() {
             Some(parent) => {
                 let parent = parent.clone();
                 self.inner
@@ -255,7 +255,7 @@ impl Service {
         Ok(Sent {
             account,
             raw: message.raw,
-            in_reply_to: draft.in_reply_to,
+            in_reply_to: draft.replied_message().cloned(),
         })
     }
 

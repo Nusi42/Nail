@@ -22,6 +22,8 @@
 //! JSON Schema. It is loaded by the core's account manager, not by
 //! [`ConfigManager`].
 //!
+//! `rules.kdl` (filter rules) is parsed by [`rules`] (M1b WP22).
+//!
 //! The file formats are documented for users in `userDocs/en/theme-reference.md`,
 //! `userDocs/en/layout-reference.md` and `userDocs/en/accounts-reference.md`.
 
@@ -33,9 +35,11 @@ mod error;
 mod kdl_util;
 mod layout;
 mod manager;
+pub mod rules;
 mod schema;
 mod selector;
 mod theme;
+mod widgets;
 
 use std::sync::OnceLock;
 

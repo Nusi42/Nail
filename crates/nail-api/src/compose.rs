@@ -1,9 +1,22 @@
-//! Drafts and the outbox.
+//! Drafts, the outbox and the composer's helper requests.
 //!
-//! M1a composes plain text only. The HTML / Markdown bodies and attachments
-//! are part of the contract already so the M1b composer can fill them in
-//! without breaking clients; in M1a the core rejects a draft that sets them
-//! with `unsupported`.
+//! A [`Draft`] is plain text, HTML or Markdown ([`ComposerMode`]); the
+//! source the user edits is `text`, `html` or `markdown` by mode, and the
+//! core derives the other parts when sending (M1b, ADR 0022):
+//!
+//! * `plain`: `text/plain; format=flowed`.
+//! * `html`: `multipart/alternative` of a generated `text/plain` and the
+//!   HTML with the identity's mail stylesheet inlined; inline images
+//!   ([`DraftAttachment::content_id`]) as `multipart/related`.
+//! * `markdown`: the Markdown source as `text/plain` plus the HTML the core
+//!   renders from it (the same renderer as [`crate::Request::RenderPreview`]);
+//!   optionally a `text/markdown` part ([`Draft::markdown_part`]).
+//!
+//! Attachments are blobs in the core's blob store, uploaded with
+//! [`crate::Request::UploadAttachment`]. Replies and forwards carry a
+//! [`DraftContext`]; [`crate::Request::NewDraft`] builds a draft with the
+//! quote, recipients, subject, signature and forwarded attachments already
+//! filled in.
 //!
 //! Sending: [`crate::Request::SendDraft`] moves a saved draft into the
 //! outbox with a delay (undo send) or a time (send later). Until the entry
@@ -13,7 +26,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::accounts::ComposerMode;
+pub use crate::accounts::ComposerMode;
 use crate::domain::Address;
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, DraftId, IdentityId, MessageId, OutboxId};
@@ -39,41 +52,119 @@ pub struct Draft {
     /// Subject.
     #[serde(default)]
     pub subject: String,
-    /// Which body is the source the user edits. M1a: always `plain`.
+    /// Which body is the source the user edits.
     #[serde(default)]
     pub mode: ComposerMode,
-    /// Plain-text body (the source in `plain` mode; in the other modes the
-    /// core derives it when sending).
+    /// Plain-text body: the source in `plain` mode. In the other modes the
+    /// core derives the text part when sending and ignores this value.
     #[serde(default)]
     pub text: String,
-    /// HTML body (M1b; must be `null` in M1a).
+    /// HTML body: the source in `html` mode (sanitized by the core on save
+    /// and on send). `null` in the other modes.
     #[serde(default)]
     pub html: Option<String>,
-    /// Markdown source (M1b; must be `null` in M1a).
+    /// Markdown source: the source in `markdown` mode. `null` in the other
+    /// modes.
     #[serde(default)]
     pub markdown: Option<String>,
-    /// Attachments (M1b; must be empty in M1a).
+    /// Attachments and inline images, in display order.
     #[serde(default)]
     pub attachments: Vec<DraftAttachment>,
-    /// The message this one replies to: sets `In-Reply-To` / `References`
-    /// and marks the original `\Answered` once sent. `null` for a new
-    /// message.
+    /// The message this draft replies to or forwards. A reply sets
+    /// `In-Reply-To` / `References` and marks the original `\Answered` once
+    /// sent; a forward marks it `$Forwarded`. `null` for a new message.
     #[serde(default)]
-    pub in_reply_to: Option<MessageId>,
+    pub context: Option<DraftContext>,
+    /// Which signature the draft carries. The composer inserts it into the
+    /// body and swaps it when the identity changes.
+    #[serde(default)]
+    pub signature: SignatureChoice,
+    /// Markdown mode: also send the source as a `text/markdown` part
+    /// (RFC 7763).
+    #[serde(default)]
+    pub markdown_part: bool,
 }
 
 impl Draft {
-    /// Whether the draft uses anything beyond plain text (not supported
-    /// before M1b).
+    /// An empty plain-text draft from `identity_id`.
+    pub fn new(identity_id: impl Into<IdentityId>) -> Self {
+        Self {
+            id: None,
+            identity_id: identity_id.into(),
+            to: Vec::new(),
+            cc: Vec::new(),
+            bcc: Vec::new(),
+            subject: String::new(),
+            mode: ComposerMode::Plain,
+            text: String::new(),
+            html: None,
+            markdown: None,
+            attachments: Vec::new(),
+            context: None,
+            signature: SignatureChoice::default(),
+            markdown_part: false,
+        }
+    }
+
+    /// Whether the draft uses anything beyond plain text (rich bodies or
+    /// attachments).
     pub fn uses_rich_content(&self) -> bool {
         self.mode != ComposerMode::Plain
             || self.html.is_some()
             || self.markdown.is_some()
             || !self.attachments.is_empty()
     }
+
+    /// The message a reply answers (`In-Reply-To`); `None` for new
+    /// messages and forwards.
+    pub fn replied_message(&self) -> Option<&MessageId> {
+        self.context
+            .as_ref()
+            .filter(|c| c.mode.is_reply())
+            .map(|c| &c.message_id)
+    }
 }
 
-/// An attachment of a draft (reserved for M1b).
+/// What a draft answers or forwards.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DraftContext {
+    /// Reply, reply to all or forward.
+    pub mode: DraftContextMode,
+    /// The original message.
+    pub message_id: MessageId,
+}
+
+/// How a draft relates to its original message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum DraftContextMode {
+    /// Reply to the sender (or `Reply-To`).
+    Reply,
+    /// Reply to the sender and all other recipients.
+    ReplyAll,
+    /// Forward inline (quoted body, original attachments attached).
+    Forward,
+}
+
+impl DraftContextMode {
+    /// Whether this is a reply (sets threading headers and `\Answered`).
+    pub fn is_reply(self) -> bool {
+        matches!(self, Self::Reply | Self::ReplyAll)
+    }
+}
+
+/// Which signature a draft carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignatureChoice {
+    /// The sending identity's signature, in the variant of the draft's mode.
+    #[default]
+    Identity,
+    /// No signature.
+    None,
+}
+
+/// An attachment or inline image of a draft.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DraftAttachment {
     /// File name.
@@ -82,10 +173,12 @@ pub struct DraftAttachment {
     pub mime: String,
     /// Size in bytes.
     pub size: u64,
-    /// Hash of the content in the core's blob store.
+    /// Hash of the content in the core's blob store (from
+    /// [`crate::Request::UploadAttachment`], or copied from a forwarded
+    /// message by [`crate::Request::NewDraft`]).
     pub blob: String,
-    /// `Content-ID` for inline images referenced as `cid:`; `null` for a
-    /// regular attachment.
+    /// `Content-ID` (without angle brackets) of an inline image the HTML
+    /// references as `cid:<id>`; `null` for a regular attachment.
     #[serde(default)]
     pub content_id: Option<String>,
 }
@@ -151,15 +244,63 @@ mod tests {
         .unwrap();
         assert_eq!(draft.id, None);
         assert_eq!(draft.mode, ComposerMode::Plain);
+        assert_eq!(draft.signature, SignatureChoice::Identity);
         assert!(!draft.uses_rich_content());
+        assert_eq!(draft.replied_message(), None);
         let rich = Draft {
             html: Some("<p>x</p>".into()),
-            ..draft
+            ..draft.clone()
         };
         assert!(rich.uses_rich_content());
+        let empty = Draft {
+            to: Vec::new(),
+            subject: String::new(),
+            text: String::new(),
+            ..draft
+        };
+        assert_eq!(Draft::new("ada@example.org"), empty);
         assert_eq!(
             serde_json::to_value(OutboxState::Scheduled).unwrap(),
             json!("scheduled")
         );
+    }
+
+    #[test]
+    fn rich_draft_round_trips() {
+        let draft = Draft {
+            mode: ComposerMode::Markdown,
+            markdown: Some("# Hi".into()),
+            attachments: vec![DraftAttachment {
+                filename: "logo.png".into(),
+                mime: "image/png".into(),
+                size: 3,
+                blob: "ab".into(),
+                content_id: Some("logo@nail".into()),
+            }],
+            context: Some(DraftContext {
+                mode: DraftContextMode::ReplyAll,
+                message_id: "m1".into(),
+            }),
+            signature: SignatureChoice::None,
+            markdown_part: true,
+            ..Draft::new("ada@example.org")
+        };
+        let value = serde_json::to_value(&draft).unwrap();
+        assert_eq!(
+            value["context"],
+            json!({"mode": "reply-all", "message_id": "m1"})
+        );
+        assert_eq!(value["signature"], json!("none"));
+        assert_eq!(value["mode"], json!("markdown"));
+        assert_eq!(serde_json::from_value::<Draft>(value).unwrap(), draft);
+        assert_eq!(draft.replied_message(), Some(&MessageId::from("m1")));
+        let forward = Draft {
+            context: Some(DraftContext {
+                mode: DraftContextMode::Forward,
+                message_id: "m1".into(),
+            }),
+            ..draft
+        };
+        assert_eq!(forward.replied_message(), None);
     }
 }

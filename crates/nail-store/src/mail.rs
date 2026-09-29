@@ -1119,9 +1119,9 @@ impl Store {
         })
     }
 
-    /// Deletes those `candidates` from `blobs` that no message references
-    /// any more (garbage collection after deleting messages). Returns how
-    /// many blob files were removed.
+    /// Deletes those `candidates` from `blobs` that no message and no draft
+    /// attachment references any more (garbage collection after deleting
+    /// messages or drafts). Returns how many blob files were removed.
     ///
     /// Each check and removal happens while holding the connection, so no
     /// message row referencing the blob can be written in between. A writer
@@ -1133,8 +1133,7 @@ impl Store {
         candidates: &[BlobHash],
     ) -> Result<usize> {
         self.with_conn(|conn| {
-            let mut stmt =
-                conn.prepare_cached("SELECT 1 FROM messages WHERE blob_hash = ?1 LIMIT 1")?;
+            let mut stmt = conn.prepare_cached(REFERENCED_SQL)?;
             let mut removed = 0;
             for hash in candidates {
                 if !stmt.exists([hash.as_str()])? && blobs.remove(hash)? {
@@ -1145,18 +1144,18 @@ impl Store {
         })
     }
 
-    /// Whether any message still references this blob (for garbage
-    /// collection of the blob store).
+    /// Whether any message or draft attachment still references this blob
+    /// (for garbage collection of the blob store).
     pub fn blob_is_referenced(&self, hash: &BlobHash) -> Result<bool> {
         self.with_conn(|conn| {
             Ok(conn
-                .query_row(
-                    "SELECT 1 FROM messages WHERE blob_hash = ?1 LIMIT 1",
-                    [hash.as_str()],
-                    |_| Ok(()),
-                )
+                .query_row(REFERENCED_SQL, [hash.as_str()], |_| Ok(()))
                 .optional()?
                 .is_some())
         })
     }
 }
+
+/// Whether a blob is referenced by a message or a draft attachment.
+const REFERENCED_SQL: &str = "SELECT 1 WHERE EXISTS (SELECT 1 FROM messages WHERE blob_hash = ?1)
+    OR EXISTS (SELECT 1 FROM draft_attachments WHERE blob_hash = ?1)";

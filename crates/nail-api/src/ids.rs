@@ -90,6 +90,29 @@ string_id!(
     OAuthFlowId
 );
 
+string_id!(
+    /// Identifies a filter rule. For rules from `rules.kdl` it is the
+    /// `id=` written there, or one the core derives from the name.
+    RuleId
+);
+string_id!(
+    /// Identifies one run of a rule (the unit that can be undone).
+    RuleRunId
+);
+string_id!(
+    /// Identifies an MCP client registered in Settings → MCP clients.
+    McpClientId
+);
+string_id!(
+    /// Identifies a saved search (smart folder).
+    SavedSearchId
+);
+string_id!(
+    /// Identifies a backup of a configuration file, kept when the file is
+    /// rewritten by a merge or a revert.
+    ConfigBackupId
+);
+
 impl AccountId {
     /// Id of the built-in "All accounts" virtual account (the unified
     /// inbox). It is reserved: `accounts.kdl` cannot define an account or a

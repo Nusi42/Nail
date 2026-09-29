@@ -14,11 +14,12 @@ import { normalizeNode } from "../api/normalize";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { Catalogs } from "../i18n/localizer";
 import { LayoutContext } from "../layout/LayoutContext";
+import { DialogRegistryContext } from "../layout/dialogRegistry";
 import { WidgetRegistryContext, type WidgetNode } from "../layout/widgetRegistry";
+import { appRegistry } from "../features/registry";
 import { ClientContext } from "../state/queries";
 import { UiStoreContext, createUiStore, type UiState, type UiStore } from "../state/uiStore";
 import { ThemeProvider } from "../theme/ThemeProvider";
-import { builtinWidgets } from "../widgets";
 import { NodeView } from "../layout/LayoutRenderer";
 
 export interface Env {
@@ -65,11 +66,13 @@ export function Providers({
           <I18nProvider locale={locale} {...(catalogs ? { catalogs } : {})}>
             <ThemeProvider theme={theme ?? env.transport.data.theme}>
               <LayoutContext.Provider value={resolvedLayout}>
-                <ActionsProvider layout={resolvedLayout}>
-                  <WidgetRegistryContext.Provider value={builtinWidgets}>
-                    {children}
-                  </WidgetRegistryContext.Provider>
-                </ActionsProvider>
+                <DialogRegistryContext.Provider value={appRegistry.dialogs}>
+                  <ActionsProvider layout={resolvedLayout} handlers={appRegistry.actions}>
+                    <WidgetRegistryContext.Provider value={appRegistry.widgets}>
+                      {children}
+                    </WidgetRegistryContext.Provider>
+                  </ActionsProvider>
+                </DialogRegistryContext.Provider>
               </LayoutContext.Provider>
             </ThemeProvider>
           </I18nProvider>

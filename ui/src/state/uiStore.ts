@@ -10,6 +10,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionStatus } from "../api/client";
 import type {
   AccountId,
+  DraftContext,
   DraftId,
   ErrorCode,
   FolderId,
@@ -51,7 +52,8 @@ export interface ComposerState {
   bcc: string;
   subject: string;
   text: string;
-  inReplyTo: MessageId | null;
+  /** The message replied to or forwarded (`null` for a new message). */
+  context: DraftContext | null;
   showCc: boolean;
   showBcc: boolean;
   /** `true` once the user picked an identity by hand (rules stop applying). */

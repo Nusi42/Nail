@@ -167,6 +167,145 @@ CREATE TABLE pop3_uids (
 CREATE INDEX pop3_uids_message ON pop3_uids(message_id) WHERE message_id IS NOT NULL;
 "#;
 
+/// Schema v4 (M1b WP20, ADR 0022): rich drafts, collected addresses,
+/// rule runs, MCP clients and saved searches.
+///
+/// * Drafts keep their full `nail-api` JSON in `payload`; the new columns
+///   index what the core queries (mode, reply / forward context, the copy
+///   in the server's Drafts folder), and `draft_attachments` lists the
+///   blobs a draft references so blob garbage collection keeps them.
+/// * Rules themselves live in `rules.kdl` (the source of truth, like
+///   `accounts.kdl`); the store keeps their runtime state, the run history
+///   with every queued action and its inverse (undo as one unit), and the
+///   messages waiting for arrival rules.
+/// * MCP clients are stored with a SHA-256 hash of their token only.
+const V4: &str = r#"
+ALTER TABLE drafts ADD COLUMN mode TEXT NOT NULL DEFAULT 'plain'
+    CHECK (mode IN ('plain', 'html', 'markdown'));
+ALTER TABLE drafts ADD COLUMN context_mode TEXT
+    CHECK (context_mode IN ('reply', 'reply-all', 'forward'));
+ALTER TABLE drafts ADD COLUMN context_message_id TEXT;
+-- The copy in the server's Drafts folder (autosave); NULL until uploaded.
+ALTER TABLE drafts ADD COLUMN server_folder_id TEXT;
+ALTER TABLE drafts ADD COLUMN server_uid INTEGER;
+-- Message-ID header of the uploaded copy (to find it again after UIDVALIDITY changes).
+ALTER TABLE drafts ADD COLUMN server_message_id TEXT;
+CREATE INDEX drafts_context ON drafts(context_message_id) WHERE context_message_id IS NOT NULL;
+
+CREATE TABLE draft_attachments (
+    draft_id   INTEGER NOT NULL REFERENCES drafts(id) ON DELETE CASCADE,
+    position   INTEGER NOT NULL,
+    filename   TEXT NOT NULL,
+    mime       TEXT NOT NULL,
+    size       INTEGER NOT NULL,
+    blob_hash  TEXT NOT NULL,
+    content_id TEXT,
+    PRIMARY KEY (draft_id, position)
+) WITHOUT ROWID;
+CREATE INDEX draft_attachments_blob ON draft_attachments(blob_hash);
+
+-- Addresses seen in sent and received mail, for autocomplete.
+CREATE TABLE collected_addresses (
+    email     TEXT PRIMARY KEY NOT NULL COLLATE NOCASE,
+    name      TEXT,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    -- Unix seconds (UTC).
+    last_used INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX collected_addresses_rank ON collected_addresses(use_count DESC, last_used DESC);
+
+CREATE TABLE rule_state (
+    rule_id     TEXT PRIMARY KEY NOT NULL,
+    -- Unix seconds (UTC).
+    last_run_at INTEGER,
+    next_run_at INTEGER,
+    run_count   INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
+
+CREATE TABLE rule_runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id     TEXT NOT NULL,
+    rule_name   TEXT NOT NULL,
+    cause       TEXT NOT NULL CHECK (cause IN ('arrival', 'on-send', 'schedule', 'manual')),
+    state       TEXT NOT NULL DEFAULT 'running'
+                CHECK (state IN ('running', 'done', 'failed', 'undone')),
+    -- Unix seconds (UTC).
+    started_at  INTEGER NOT NULL,
+    finished_at INTEGER,
+    matched     INTEGER NOT NULL DEFAULT 0,
+    message     TEXT
+);
+CREATE INDEX rule_runs_rule ON rule_runs(rule_id, id DESC);
+
+-- Every action a run took, with the queued operation and its inverse.
+CREATE TABLE rule_run_actions (
+    run_id     INTEGER NOT NULL REFERENCES rule_runs(id) ON DELETE CASCADE,
+    seq        INTEGER NOT NULL,
+    message_id TEXT NOT NULL,
+    -- op_queue id; NULL for actions without a queued operation (notify, stop).
+    op_id      INTEGER,
+    -- nail_api::rules::RuleAction JSON.
+    action     TEXT NOT NULL,
+    -- nail_store::Operation JSON that undoes it; NULL = cannot be undone.
+    undo       TEXT,
+    PRIMARY KEY (run_id, seq)
+) WITHOUT ROWID;
+
+-- New messages waiting for the arrival rules (survives a restart).
+CREATE TABLE rule_inbox (
+    message_id TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    -- Unix seconds (UTC).
+    queued_at  INTEGER NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE mcp_clients (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                    TEXT NOT NULL,
+    -- Lowercase hex SHA-256 of the bearer token; the token itself is never stored.
+    token_hash              TEXT NOT NULL UNIQUE,
+    token_hint              TEXT NOT NULL,
+    -- Unix seconds (UTC).
+    created_at              INTEGER NOT NULL,
+    last_used_at            INTEGER,
+    revoked_at              INTEGER,
+    all_accounts            INTEGER NOT NULL DEFAULT 0,
+    skip_draft_confirmation INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX mcp_clients_active_name ON mcp_clients(name) WHERE revoked_at IS NULL;
+
+-- Grant rows: scopes, accounts and excluded folders.
+CREATE TABLE mcp_grants (
+    client_id INTEGER NOT NULL REFERENCES mcp_clients(id) ON DELETE CASCADE,
+    kind      TEXT NOT NULL CHECK (kind IN ('scope', 'account', 'exclude-folder')),
+    value     TEXT NOT NULL,
+    PRIMARY KEY (client_id, kind, value)
+) WITHOUT ROWID;
+
+CREATE TABLE mcp_audit (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id   INTEGER REFERENCES mcp_clients(id) ON DELETE SET NULL,
+    client_name TEXT NOT NULL,
+    -- Unix seconds (UTC).
+    at          INTEGER NOT NULL,
+    kind        TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    outcome     TEXT NOT NULL,
+    detail      TEXT
+);
+CREATE INDEX mcp_audit_client ON mcp_audit(client_id, id DESC);
+
+CREATE TABLE saved_searches (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    query      TEXT NOT NULL,
+    -- No foreign keys: may name virtual accounts / folders.
+    account_id TEXT,
+    folder_id  TEXT,
+    sort       TEXT NOT NULL DEFAULT 'date' CHECK (sort IN ('date', 'relevance')),
+    position   INTEGER NOT NULL
+);
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -192,6 +331,10 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         backfill: Some(crate::thread::backfill_v2),
     },
     Migration::sql(V3),
+    Migration {
+        sql: V4,
+        backfill: Some(crate::compose::backfill_v4),
+    },
 ];
 
 /// The schema version this build creates and understands.
@@ -279,13 +422,23 @@ mod tests {
             tables(&conn),
             [
                 "accounts",
+                "collected_addresses",
+                "draft_attachments",
                 "drafts",
                 "folders",
+                "mcp_audit",
+                "mcp_clients",
+                "mcp_grants",
                 "message_tags",
                 "messages",
                 "op_queue",
                 "outbox",
                 "pop3_uids",
+                "rule_inbox",
+                "rule_run_actions",
+                "rule_runs",
+                "rule_state",
+                "saved_searches",
                 "schema_version",
                 "thread_refs"
             ]
@@ -363,6 +516,63 @@ mod tests {
         assert!(migrate_with(&mut conn, &broken).is_err());
         assert_eq!(current_version(&conn).unwrap(), 0);
         assert!(!tables(&conn).contains(&"ok".to_owned()));
+    }
+
+    #[test]
+    fn v4_upgrades_m1a_drafts() {
+        // A database as M1a (schema v2 / v3) left it: a plain reply draft
+        // with `in_reply_to` and a new one, one of them in the outbox.
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        assert_eq!(migrate_to_version(&mut conn, 3).unwrap(), 3);
+        conn.execute_batch(
+            r#"
+            INSERT INTO accounts VALUES ('a1', 'A', 'a@example.org', 'imap');
+            INSERT INTO drafts (identity_id, payload) VALUES ('ada@example.org',
+                '{"identity_id":"ada@example.org","to":[],"cc":[],"bcc":[],"subject":"Re: Hi",
+                  "mode":"plain","text":"> hi","html":null,"markdown":null,"attachments":[],
+                  "in_reply_to":"m7"}');
+            INSERT INTO drafts (identity_id, payload) VALUES ('ada@example.org',
+                '{"identity_id":"ada@example.org","subject":"New","text":"x","in_reply_to":null}');
+            INSERT INTO outbox (draft_id, account_id, identity_id, send_at) VALUES (2, 'a1', 'ada@example.org', 0);
+            "#,
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+
+        let rows: Vec<(String, String, Option<String>, Option<String>)> = {
+            let mut stmt = conn
+                .prepare("SELECT payload, mode, context_mode, context_message_id FROM drafts ORDER BY id")
+                .unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap()
+        };
+        let reply: nail_api::Draft = serde_json::from_str(&rows[0].0).unwrap();
+        assert_eq!(
+            reply.context,
+            Some(nail_api::DraftContext {
+                mode: nail_api::DraftContextMode::Reply,
+                message_id: "m7".into(),
+            })
+        );
+        assert!(!rows[0].0.contains("in_reply_to"));
+        assert_eq!(
+            (
+                rows[0].1.as_str(),
+                rows[0].2.as_deref(),
+                rows[0].3.as_deref()
+            ),
+            ("plain", Some("reply"), Some("m7"))
+        );
+        let new: nail_api::Draft = serde_json::from_str(&rows[1].0).unwrap();
+        assert_eq!((new.subject.as_str(), new.context), ("New", None));
+        assert_eq!(rows[1].2, None);
+        let outbox: i64 = conn
+            .query_row("SELECT COUNT(*) FROM outbox", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(outbox, 1);
     }
 
     #[test]

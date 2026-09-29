@@ -13,6 +13,9 @@ members = [
     "crates/nail-search",
     "crates/nail-testkit",
     "crates/nail-testkit-net",
+    "crates/nail-compose",
+    "crates/nail-rules",
+    "crates/nail-mcp",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -34,6 +37,9 @@ default-members = [
     "crates/nail-search",
     "crates/nail-testkit",
     "crates/nail-testkit-net",
+    "crates/nail-compose",
+    "crates/nail-rules",
+    "crates/nail-mcp",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -61,6 +67,9 @@ nail-discovery = { path = "crates/nail-discovery" }
 nail-search = { path = "crates/nail-search" }
 nail-testkit = { path = "crates/nail-testkit" }
 nail-testkit-net = { path = "crates/nail-testkit-net" }
+nail-compose = { path = "crates/nail-compose" }
+nail-rules = { path = "crates/nail-rules" }
+nail-mcp = { path = "crates/nail-mcp" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -102,6 +111,21 @@ quick-xml = "0.42.0"
 # Full-text search.
 tantivy = "0.26.2"
 base64 = "0.23.1"
+
+# M1b (ADR 0022). Composer: MIME building, Markdown, CSS inlining; the
+# sanitizer (ammonia) is already used by nail-mime.
+mail-builder = "1.0.0"
+# Syntax highlighting through syntect's pure-Rust regex engine (no oniguruma C build).
+comrak = { version = "0.55.0", default-features = false, features = ["syntect-fancy"] }
+# No `http` / `file` features: stylesheets are passed in, never fetched.
+css-inline = { version = "0.21.2", default-features = false }
+ammonia = "4.2.0"
+# Rules: regex conditions.
+regex = "1.13.1"
+# MCP server (Streamable HTTP + stdio) and client (tests).
+# Server side here; tests add `client` + `transport-streamable-http-client-reqwest`
+# (reqwest stays on the workspace's `rustls-no-provider` build, no aws-lc).
+rmcp = { version = "3.5.0", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

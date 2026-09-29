@@ -411,3 +411,174 @@ async fn inbox_total(service: &Service) -> u32 {
         .unwrap()
         .total
 }
+
+/// Fails every operation (to test `RetryOp`).
+struct FailAll;
+
+impl nail_store::Replayer for FailAll {
+    async fn replay(&self, _op: &nail_store::QueuedOp) -> nail_store::ReplayOutcome {
+        nail_store::ReplayOutcome::Fail("rejected".into())
+    }
+}
+
+#[tokio::test]
+async fn retry_op_requeues_a_failed_operation() {
+    let fx = open(false, None);
+    let Response::Messages { messages, .. } =
+        page(&fx.service, inbox(&fx.service).await, 0, 1).await
+    else {
+        panic!("expected messages");
+    };
+    let message = messages[0].id.clone();
+    let store = fx.service.store().clone();
+    let queued = store
+        .enqueue(&nail_store::Operation::UpdateFlags {
+            message_id: message,
+            change: nail_store::FlagChange {
+                flagged: Some(true),
+                ..nail_store::FlagChange::default()
+            },
+        })
+        .unwrap();
+    store
+        .replay_account(&demo(), &FailAll, nail_store::ReplayPolicy::default())
+        .await
+        .unwrap();
+    let op_id = nail_api::OpId::new(format!("op-{}", queued.op.id.0));
+
+    let mut events = fx.service.subscribe();
+    assert_eq!(
+        fx.service
+            .handle(Request::RetryOp {
+                op_id: op_id.clone()
+            })
+            .await,
+        Response::Queued {
+            op_ids: vec![op_id.clone()]
+        }
+    );
+    match next_event(&mut events).await {
+        Event::OpStatus { status } => {
+            assert_eq!(status.op_id, op_id);
+            assert_eq!(status.state, nail_api::OpState::Pending);
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+    // Only failed operations can be retried; unknown ids are not found.
+    assert_eq!(
+        error_code(fx.service.handle(Request::RetryOp { op_id }).await),
+        ErrorCode::Conflict
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::RetryOp {
+                    op_id: "bogus".into()
+                })
+                .await
+        ),
+        ErrorCode::NotFound
+    );
+}
+
+#[tokio::test]
+async fn ui_context_and_saved_searches() {
+    let fx = open(false, None);
+    assert_eq!(
+        fx.service.handle(Request::GetUiContext).await,
+        Response::UiContext {
+            context: nail_api::UiContext::default()
+        }
+    );
+    let context = nail_api::UiContext {
+        message_id: Some("m1".into()),
+        selected_message_ids: vec!["m1".into()],
+        ..nail_api::UiContext::default()
+    };
+    assert_eq!(
+        fx.service
+            .handle(Request::ReportUiContext {
+                context: context.clone()
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(fx.service.ui_context(), context);
+
+    let mut events = fx.service.subscribe();
+    let search = nail_api::SavedSearch {
+        id: None,
+        name: "Unread".into(),
+        query: "is:unread".into(),
+        account_id: None,
+        folder_id: None,
+        sort: nail_api::search::SearchSort::Date,
+        position: 0,
+    };
+    let Response::SavedSearchSaved { search: saved } = fx
+        .service
+        .handle(Request::SaveSavedSearch {
+            search: search.clone(),
+        })
+        .await
+    else {
+        panic!("expected a saved search");
+    };
+    assert!(saved.id.is_some());
+    assert_eq!(next_event(&mut events).await, Event::SavedSearchesChanged);
+    assert_eq!(
+        fx.service.handle(Request::ListSavedSearches).await,
+        Response::SavedSearches {
+            searches: vec![saved.clone()]
+        }
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::SaveSavedSearch {
+                    search: nail_api::SavedSearch {
+                        query: "from:".into(),
+                        ..search
+                    }
+                })
+                .await
+        ),
+        ErrorCode::InvalidRequest
+    );
+    let id = saved.id.unwrap();
+    assert_eq!(
+        fx.service
+            .handle(Request::DeleteSavedSearch {
+                search_id: id.clone()
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::DeleteSavedSearch { search_id: id })
+                .await
+        ),
+        ErrorCode::NotFound
+    );
+}
+
+#[tokio::test]
+async fn m1b_package_requests_are_unsupported_until_they_land() {
+    let fx = open(false, None);
+    for request in [
+        Request::RenderPreview {
+            markdown: "# x".into(),
+            identity_id: None,
+        },
+        Request::ListRules,
+        Request::ListMcpClients,
+        Request::ListConfigBackups {
+            file: nail_api::ConfigFile::Theme,
+        },
+    ] {
+        let response = fx.service.handle(request).await;
+        assert_eq!(error_code(response), ErrorCode::Unsupported);
+    }
+}
