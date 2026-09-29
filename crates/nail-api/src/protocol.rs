@@ -16,6 +16,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::accounts::BodyPolicy;
 use crate::accounts::{
     AccountConfig, AccountStatus, AccountTestResult, AccountsConfig, DiscoveredAccount, Identity,
     SecretInput, VirtualAccountConfig,
@@ -37,7 +38,8 @@ use crate::ids::{
     RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 use crate::launch::LaunchRequest;
-use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo};
+use crate::localized::LocalizedMessage;
+use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
 use crate::remote::{
     PairingCode, RemoteAlert, RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession,
@@ -46,11 +48,16 @@ use crate::remote::{
 };
 use crate::remote_content::{RemoteContentAllow, RemoteContentScope};
 use crate::rules::{Rule, RuleMatch, RuleRun};
-use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery};
+use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery, ServerSearch};
 use crate::security::{
     CryptoKey, KeyAlgorithm, KeyEncoding, KeyFilter, KeyImportResult, KeyLookupCandidate,
     KeyLookupFailure, KeyLookupSource, RecipientKeysReport, SecretProtection, SecuritySettings,
     SendCrypto, TrustDecision, VaultStatus, WindowsCertStore, WindowsCertificate,
+};
+use crate::sieve::{RuleSieveStatus, SieveAccountStatus, VacationSettings};
+use crate::sync::FolderSyncPolicy;
+use crate::triage::{
+    JunkSettings, JunkStatus, MailNotification, NotificationSettings, SnoozedMessage,
 };
 
 /// Version of this protocol. Bumped on incompatible changes; returned by
@@ -990,6 +997,169 @@ pub enum Request {
         /// Absolute path of the file.
         path: String,
     },
+
+    // --- Server-side rules and vacation (M2c WP50, ADR 0043) ---
+    /// Where each rule runs (server / client / not expressible) and the
+    /// state of each IMAP account's Sieve script. Answered with
+    /// [`Response::SieveStatus`].
+    GetSieveStatus {
+        /// One account; `null` = every account with a `sieve` node.
+        #[serde(default)]
+        account_id: Option<AccountId>,
+    },
+    /// Upload the account's script now (e.g. after a failure). Answered
+    /// with [`Response::SieveStatus`] for the account (usually
+    /// `uploading`); the outcome arrives as [`Event::SieveStatusChanged`].
+    /// `unsupported` when the account has no ManageSieve settings.
+    SyncSieve {
+        /// The account.
+        account_id: AccountId,
+    },
+    /// The script Nail uploads for an account, for display. Answered with
+    /// [`Response::SieveScript`].
+    PreviewSieveScript {
+        /// The account.
+        account_id: AccountId,
+    },
+    /// The account's vacation reply. Answered with [`Response::Vacation`].
+    GetVacation {
+        /// The account.
+        account_id: AccountId,
+    },
+    /// Save the vacation reply; the script is re-uploaded. Answered with
+    /// [`Response::Vacation`]; `invalid_request` for invalid settings
+    /// ([`crate::sieve::VacationSettings::issues`]), `unsupported` for an
+    /// account without ManageSieve settings.
+    UpdateVacation {
+        /// The account.
+        account_id: AccountId,
+        /// The new settings.
+        settings: VacationSettings,
+    },
+
+    // --- Junk (M2c) ---
+    /// "Mark as junk" / "Not junk": trains the account's classifier, sets
+    /// `$Junk` / `$NotJunk` and moves the messages to Junk (or from Junk
+    /// back to the Inbox), through the operation queue. Answered with
+    /// [`Response::Queued`].
+    MarkJunk {
+        /// The messages.
+        message_ids: Vec<MessageId>,
+        /// `true` = junk, `false` = not junk.
+        junk: bool,
+    },
+    /// The classifier of an account. Answered with
+    /// [`Response::JunkStatus`].
+    GetJunkStatus {
+        /// The account.
+        account_id: AccountId,
+    },
+    /// Change an account's junk settings. Answered with
+    /// [`Response::JunkStatus`]; `invalid_request` for invalid settings.
+    UpdateJunkSettings {
+        /// The account.
+        account_id: AccountId,
+        /// The new settings.
+        settings: JunkSettings,
+    },
+    /// Forget everything the account's classifier learned. Answered with
+    /// [`Response::JunkStatus`].
+    ResetJunkClassifier {
+        /// The account.
+        account_id: AccountId,
+    },
+
+    // --- Snooze (M2c) ---
+    /// Snooze messages until a time: keyword + move to the hidden Snoozed
+    /// folder through the operation queue; they come back at `until`.
+    /// Answered with [`Response::Queued`]; `invalid_request` for a time
+    /// in the past.
+    SnoozeMessages {
+        /// The messages.
+        message_ids: Vec<MessageId>,
+        /// When they come back (RFC 3339).
+        until: String,
+        /// Where they come back to; `null` = the folder each is in now.
+        #[serde(default)]
+        wake_folder_id: Option<FolderId>,
+    },
+    /// Bring snoozed messages back now. Answered with
+    /// [`Response::Queued`].
+    UnsnoozeMessages {
+        /// The messages.
+        message_ids: Vec<MessageId>,
+    },
+    /// Snoozed messages, soonest first. Answered with
+    /// [`Response::Snoozed`].
+    ListSnoozed {
+        /// One account (real or virtual); `null` = all.
+        #[serde(default)]
+        account_id: Option<AccountId>,
+    },
+
+    // --- Notifications (M2c) ---
+    /// Answered with [`Response::NotificationSettings`].
+    GetNotificationSettings,
+    /// Answered with [`Response::NotificationSettings`];
+    /// `invalid_request` for invalid settings.
+    UpdateNotificationSettings {
+        /// The new settings.
+        settings: NotificationSettings,
+    },
+    /// Push a test [`Event::NotificationRequested`] (ignores quiet hours).
+    /// Answered with [`Response::Done`].
+    TestNotification,
+
+    // --- Sync policy and bodies (M2c) ---
+    /// The resolved sync policy of a folder. Answered with
+    /// [`Response::FolderSyncPolicy`].
+    GetFolderSyncPolicy {
+        /// The folder (of a real account).
+        folder_id: FolderId,
+    },
+    /// Write the rule for exactly this folder into the account's `sync`
+    /// block in `accounts.kdl`; `null` fields are left out of the rule, all
+    /// `null` removes it. Answered with [`Response::FolderSyncPolicy`];
+    /// followed by [`Event::AccountsChanged`].
+    SetFolderSyncPolicy {
+        /// The folder (of a real account).
+        folder_id: FolderId,
+        /// What to download.
+        #[serde(default)]
+        bodies: Option<BodyPolicy>,
+        /// Whether to synchronize it.
+        #[serde(default)]
+        enabled: Option<bool>,
+        /// Whether to watch it with IDLE.
+        #[serde(default)]
+        idle: Option<bool>,
+    },
+    /// Download the bodies of messages that have none locally (e.g. before
+    /// going offline). Answered with [`Response::BodiesFetched`] when done.
+    FetchMessageBodies {
+        /// The messages.
+        message_ids: Vec<MessageId>,
+    },
+
+    // --- MCP settings (M2c) ---
+    /// Answered with [`Response::McpSettings`].
+    GetMcpSettings,
+    /// Save the MCP settings; the server restarts on the new port.
+    /// Answered with [`Response::McpSettings`]; `invalid_request` for a
+    /// port below 1024, `conflict` when the port is taken.
+    UpdateMcpSettings {
+        /// The new settings.
+        settings: McpSettings,
+    },
+
+    // --- Rules from messages (M2c) ---
+    /// A new (unsaved) rule pre-filled from a message, using all its
+    /// headers (`List-Id`, sender, …). Answered with
+    /// [`Response::RuleSuggested`].
+    RuleFromMessage {
+        /// The message.
+        message_id: MessageId,
+    },
 }
 
 /// The core's answer to one [`Request`].
@@ -1134,6 +1304,10 @@ pub enum Response {
         total: u32,
         /// The page of hits.
         hits: Vec<SearchHit>,
+        /// The server-side part (M2c), absent when no server was asked.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        server: Option<ServerSearch>,
     },
     /// Answer to [`Request::Search`] when the query does not parse.
     InvalidQuery {
@@ -1466,6 +1640,67 @@ pub enum Response {
         /// The imported message.
         message: Box<MessageSummary>,
     },
+    /// Answer to [`Request::GetSieveStatus`] and [`Request::SyncSieve`].
+    SieveStatus {
+        /// One entry per account asked for.
+        accounts: Vec<SieveAccountStatus>,
+    },
+    /// Answer to [`Request::PreviewSieveScript`].
+    SieveScript {
+        /// The account.
+        account_id: AccountId,
+        /// The script text (RFC 5228).
+        script: String,
+        /// Where each rule runs.
+        rules: Vec<RuleSieveStatus>,
+    },
+    /// Answer to [`Request::GetVacation`] and [`Request::UpdateVacation`].
+    Vacation {
+        /// The account.
+        account_id: AccountId,
+        /// Its vacation reply.
+        settings: VacationSettings,
+    },
+    /// Answer to the junk requests.
+    JunkStatus {
+        /// The account's classifier.
+        status: JunkStatus,
+    },
+    /// Answer to [`Request::ListSnoozed`].
+    Snoozed {
+        /// Soonest first.
+        messages: Vec<SnoozedMessage>,
+    },
+    /// Answer to the notification-settings requests.
+    NotificationSettings {
+        /// The settings.
+        settings: NotificationSettings,
+    },
+    /// Answer to [`Request::GetFolderSyncPolicy`] and
+    /// [`Request::SetFolderSyncPolicy`].
+    FolderSyncPolicy {
+        /// The folder's policy.
+        policy: FolderSyncPolicy,
+    },
+    /// Answer to [`Request::FetchMessageBodies`].
+    BodiesFetched {
+        /// Messages whose body is now stored.
+        fetched: Vec<MessageId>,
+        /// Messages that could not be fetched (offline, gone).
+        failed: Vec<MessageId>,
+    },
+    /// Answer to the MCP-settings requests.
+    McpSettings {
+        /// The settings.
+        settings: McpSettings,
+        /// Where the server runs now.
+        info: McpServerInfo,
+    },
+    /// Answer to [`Request::RuleFromMessage`].
+    RuleSuggested {
+        /// The unsaved rule (empty id).
+        rule: Box<Rule>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -1473,6 +1708,11 @@ pub enum Response {
         /// Diagnostic detail (English, for logs and developer tools). The UI
         /// shows a localized text chosen by `code`.
         message: String,
+        /// The user-facing text (Fluent id + arguments) when the core has a more
+        /// specific one than the error class; else `null` (ADR 0043).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        localized: Option<Box<LocalizedMessage>>,
     },
 }
 
@@ -1481,6 +1721,7 @@ impl From<ApiError> for Response {
         Self::Error {
             code: err.code,
             message: err.message,
+            localized: err.localized,
         }
     }
 }
@@ -1489,7 +1730,15 @@ impl Response {
     /// Converts an [`Response::Error`] into `Err(ApiError)`, anything else into `Ok`.
     pub fn into_result(self) -> Result<Self, ApiError> {
         match self {
-            Self::Error { code, message } => Err(ApiError { code, message }),
+            Self::Error {
+                code,
+                message,
+                localized,
+            } => Err(ApiError {
+                code,
+                message,
+                localized,
+            }),
             other => Ok(other),
         }
     }
@@ -1519,6 +1768,11 @@ pub enum Event {
         column: u32,
         /// Diagnostic message (English, like a compiler message).
         message: String,
+        /// The user-facing text (Fluent id + arguments) when the core has a more
+        /// specific one than the error class; else `null` (ADR 0043).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        localized: Option<LocalizedMessage>,
     },
     /// Messages or counts in these folders changed; clients should refetch
     /// what they display from them.
@@ -1544,6 +1798,11 @@ pub enum Event {
         code: ErrorCode,
         /// Diagnostic detail (English, for logs and developer tools).
         message: String,
+        /// The user-facing text (Fluent id + arguments) when the core has a more
+        /// specific one than the error class; else `null` (ADR 0043).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        localized: Option<LocalizedMessage>,
     },
     /// A queued operation changed state.
     OpStatus {
@@ -1560,6 +1819,11 @@ pub enum Event {
         error: Option<ErrorCode>,
         /// Diagnostic detail (English), else `null`.
         message: Option<String>,
+        /// The user-facing text (Fluent id + arguments) when the core has a more
+        /// specific one than the error class; else `null` (ADR 0043).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        localized: Option<LocalizedMessage>,
     },
     /// New messages arrived from a server (for notifications; lists are
     /// refreshed through [`Event::MailChanged`]).
@@ -1590,6 +1854,11 @@ pub enum Event {
         error: Option<ErrorCode>,
         /// Diagnostic detail (English), else `null`.
         message: Option<String>,
+        /// The user-facing text (Fluent id + arguments) when the core has a more
+        /// specific one than the error class; else `null` (ADR 0043).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        localized: Option<LocalizedMessage>,
     },
     /// Every error of one configuration file (M1b; supersedes
     /// [`Event::ConfigError`], which the core keeps sending for the first
@@ -1667,6 +1936,32 @@ pub enum Event {
     /// A launch request arrived (the app was asked to open a link or a
     /// file); the UI takes it with [`Request::TakeLaunchRequests`].
     LaunchRequested,
+    /// An account's Sieve state changed (upload started, finished or
+    /// failed; rule placements changed); clients refetch
+    /// [`Request::GetSieveStatus`].
+    SieveStatusChanged {
+        /// The account.
+        account_id: AccountId,
+    },
+    /// An account's classifier was trained, reset or reconfigured.
+    JunkStatusChanged {
+        /// The account.
+        account_id: AccountId,
+    },
+    /// Messages were snoozed or came back; clients refetch
+    /// [`Request::ListSnoozed`].
+    SnoozeChanged,
+    /// The notification settings changed.
+    NotificationSettingsChanged,
+    /// Show a notification (the desktop shell shows an OS notification,
+    /// the remote UI a Web Notification). Only sent when the policy allows
+    /// it (settings, rules, quiet hours).
+    NotificationRequested {
+        /// What to show.
+        notification: MailNotification,
+    },
+    /// The MCP settings changed (and the server may have moved).
+    McpSettingsChanged,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).
@@ -1871,6 +2166,7 @@ mod tests {
                 state: crate::ops::OpState::Done,
                 error: None,
                 message: None,
+                localized: None,
             },
         };
         let value = serde_json::to_value(&event).unwrap();
@@ -1972,11 +2268,13 @@ mod tests {
                     line: 1,
                     column: 2,
                     message: "a".into(),
+                    localized: None,
                 },
                 ConfigIssue {
                     line: 5,
                     column: 1,
                     message: "b".into(),
+                    localized: None,
                 },
             ],
         };
@@ -2119,6 +2417,7 @@ mod tests {
                 source: KeyLookupSource::Wkd,
                 code: ErrorCode::Network,
                 message: "offline".into(),
+                localized: None,
             }],
         };
         let value = serde_json::to_value(&lookup).unwrap();
@@ -2235,5 +2534,165 @@ mod tests {
         let err = response.into_result().unwrap_err();
         assert_eq!(err.code, ErrorCode::NotFound);
         assert!(Response::SyncStarted.into_result().is_ok());
+
+        // M2c: the localized text survives both conversions.
+        let localized = LocalizedMessage::new("sieve-error-connect").arg("host", "h");
+        let response: Response = ApiError::new(ErrorCode::Network, "refused")
+            .with_localized(localized.clone())
+            .into();
+        assert_eq!(
+            serde_json::to_value(&response).unwrap(),
+            json!({"type": "Error", "code": "network", "message": "refused",
+                   "localized": {"id": "sieve-error-connect", "args": {"host": "h"}}})
+        );
+        assert_eq!(
+            response.into_result().unwrap_err().localized,
+            Some(Box::new(localized))
+        );
+    }
+
+    #[test]
+    fn m2c_requests_serialize() {
+        let status: Request = serde_json::from_value(json!({"type": "GetSieveStatus"})).unwrap();
+        assert_eq!(status, Request::GetSieveStatus { account_id: None });
+        let snooze: Request = serde_json::from_value(json!({
+            "type": "SnoozeMessages", "message_ids": ["m1"], "until": "2026-10-01T08:00:00Z"
+        }))
+        .unwrap();
+        assert!(matches!(
+            snooze,
+            Request::SnoozeMessages {
+                wake_folder_id: None,
+                ..
+            }
+        ));
+        let policy: Request = serde_json::from_value(json!({
+            "type": "SetFolderSyncPolicy", "folder_id": "f1",
+            "bodies": {"mode": "recent", "days": 14}
+        }))
+        .unwrap();
+        assert_eq!(
+            policy,
+            Request::SetFolderSyncPolicy {
+                folder_id: "f1".into(),
+                bodies: Some(BodyPolicy::Recent { days: 14 }),
+                enabled: None,
+                idle: None,
+            }
+        );
+        let vacation: Request = serde_json::from_value(json!({
+            "type": "UpdateVacation", "account_id": "work",
+            "settings": {"enabled": true, "body": "Away"}
+        }))
+        .unwrap();
+        let Request::UpdateVacation { settings, .. } = vacation else {
+            panic!("wrong variant");
+        };
+        assert!(settings.enabled && settings.days == 7 && settings.issues().is_empty());
+        assert_eq!(
+            serde_json::to_value(Request::MarkJunk {
+                message_ids: vec!["m1".into()],
+                junk: true,
+            })
+            .unwrap(),
+            json!({"type": "MarkJunk", "message_ids": ["m1"], "junk": true})
+        );
+        assert_eq!(
+            serde_json::to_value(Request::UpdateMcpSettings {
+                settings: McpSettings { port: Some(4799) },
+            })
+            .unwrap(),
+            json!({"type": "UpdateMcpSettings", "settings": {"port": 4799}})
+        );
+        assert_eq!(
+            serde_json::to_value(Request::RuleFromMessage {
+                message_id: "m1".into(),
+            })
+            .unwrap(),
+            json!({"type": "RuleFromMessage", "message_id": "m1"})
+        );
+        for plain in [
+            "TestNotification",
+            "GetNotificationSettings",
+            "GetMcpSettings",
+        ] {
+            let request: Request = serde_json::from_value(json!({ "type": plain })).unwrap();
+            assert_eq!(
+                serde_json::to_value(&request).unwrap()["type"],
+                json!(plain)
+            );
+        }
+    }
+
+    #[test]
+    fn m2c_responses_and_events_serialize() {
+        let results = Response::SearchResults {
+            offset: 0,
+            total: 0,
+            hits: vec![],
+            server: None,
+        };
+        assert!(
+            serde_json::to_value(&results)
+                .unwrap()
+                .get("server")
+                .is_none()
+        );
+        let parsed: Response =
+            serde_json::from_value(json!({"type": "SearchResults", "offset": 0, "total": 0,
+                "hits": [], "server": {"accounts": ["work"], "hits": 2, "failed": []}}))
+            .unwrap();
+        assert!(matches!(
+            parsed,
+            Response::SearchResults {
+                server: Some(ServerSearch { hits: 2, .. }),
+                ..
+            }
+        ));
+        let fetched = Response::BodiesFetched {
+            fetched: vec!["m1".into()],
+            failed: vec![],
+        };
+        assert_eq!(
+            serde_json::to_value(&fetched).unwrap(),
+            json!({"type": "BodiesFetched", "fetched": ["m1"], "failed": []})
+        );
+        let failed = Event::SyncFailed {
+            account_id: "work".into(),
+            code: ErrorCode::Network,
+            message: "down".into(),
+            localized: None,
+        };
+        assert!(
+            serde_json::to_value(&failed)
+                .unwrap()
+                .get("localized")
+                .is_none()
+        );
+        let parsed: Event = serde_json::from_value(json!({
+            "type": "SyncFailed", "account_id": "work", "code": "network", "message": "down"
+        }))
+        .unwrap();
+        assert_eq!(parsed, failed);
+        let requested = Event::NotificationRequested {
+            notification: MailNotification {
+                id: "n1".into(),
+                tag: "t".into(),
+                kind: crate::triage::NotificationKind::NewMail,
+                account_id: None,
+                folder_id: None,
+                message_ids: vec![],
+                title: LocalizedMessage::new("notification-new-mail-title"),
+                body: None,
+                sound: false,
+            },
+        };
+        let value = serde_json::to_value(&requested).unwrap();
+        assert_eq!(value["type"], json!("NotificationRequested"));
+        assert_eq!(serde_json::from_value::<Event>(value).unwrap(), requested);
+        assert_eq!(
+            serde_json::to_value(Event::SnoozeChanged).unwrap(),
+            json!({"type": "SnoozeChanged"})
+        );
     }
 }

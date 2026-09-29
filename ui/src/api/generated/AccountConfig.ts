@@ -2,6 +2,7 @@
 import type { AccountId } from "./AccountId";
 import type { Identity } from "./Identity";
 import type { IncomingServer } from "./IncomingServer";
+import type { ManageSieveConfig } from "./ManageSieveConfig";
 import type { OutgoingServer } from "./OutgoingServer";
 import type { SyncPolicy } from "./SyncPolicy";
 
@@ -62,4 +63,10 @@ save_sent_copy: boolean | null,
  * trusted without being configured here
  * ([`crate::Request::SuggestAuthservId`] proposes one).
  */
-authserv_ids?: Array<string>, };
+authserv_ids?: Array<string>, 
+/**
+ * ManageSieve (M2c): server-side rules and vacation replies, IMAP
+ * accounts only (the `sieve` node). Absent = off; rules run on the
+ * client.
+ */
+sieve?: ManageSieveConfig, };

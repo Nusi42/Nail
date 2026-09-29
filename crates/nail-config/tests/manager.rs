@@ -86,6 +86,7 @@ fn reload_keeps_the_last_valid_configuration() {
             line: 2,
             column: 27,
             message: "unknown token `$color.nope`".into(),
+            localized: None,
         }
     );
     assert_eq!(

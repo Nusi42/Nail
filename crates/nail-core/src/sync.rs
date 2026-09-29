@@ -271,6 +271,7 @@ pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<Sy
                     paths.join(", "),
                     first.message
                 ),
+                localized: None,
             });
         }
         Ok(report) => tracing::info!(%account, ?report, "sync finished"),
@@ -280,6 +281,7 @@ pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<Sy
                 account_id: account.clone(),
                 code: err.code(),
                 message: err.to_string(),
+                localized: None,
             });
         }
     }

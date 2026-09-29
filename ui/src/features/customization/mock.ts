@@ -32,7 +32,9 @@ import type {
   Response,
   SavedSearch,
 } from "../../api/generated";
+import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { normalizeLayout } from "../../api/normalize";
 import { parseQuery } from "../../api/mockSearch";
 
 /** The requests this feature answers. */
@@ -132,6 +134,11 @@ function nodeAt(root: LayoutNode, path: readonly number[]): LayoutNode | null {
   return node ?? null;
 }
 
+/** The shipped default layout (what the reset patches go back to). */
+function defaultLayout(): ResolvedLayout {
+  return normalizeLayout(defaultLayoutJson);
+}
+
 /** Applies one patch to a layout; returns an error message or `null`. */
 export function applyPatch(layout: ResolvedLayout, patch: LayoutPatch): string | null {
   switch (patch.op) {
@@ -170,6 +177,21 @@ export function applyPatch(layout: ResolvedLayout, patch: LayoutPatch): string |
     case "remove-key-binding": {
       const key = patch.key.toLowerCase();
       layout.keys = layout.keys.filter((k) => !(k.context === patch.context && k.key === key));
+      return null;
+    }
+    // M2c: back to the default layout's version.
+    case "reset-toolbar": {
+      const items = defaultLayout().toolbars[patch.toolbar];
+      layout.toolbars = Object.fromEntries(
+        Object.entries(layout.toolbars).filter(([name]) => name !== patch.toolbar),
+      );
+      if (items) layout.toolbars[patch.toolbar] = items;
+      return null;
+    }
+    case "reset-key-binding": {
+      const key = patch.key.toLowerCase();
+      const same = (k: KeyBinding) => k.context === patch.context && k.key === key;
+      layout.keys = [...layout.keys.filter((k) => !same(k)), ...defaultLayout().keys.filter(same)];
       return null;
     }
   }

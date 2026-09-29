@@ -212,7 +212,7 @@ fn check_rule(rule: &Rule) -> Result<()> {
     Err(ApiError::invalid_request(text).into())
 }
 
-fn rfc3339(at: i64) -> String {
+pub(crate) fn rfc3339(at: i64) -> String {
     chrono::DateTime::from_timestamp(at, 0)
         .unwrap_or_default()
         .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
@@ -232,6 +232,7 @@ fn to_run(record: RuleRunRecord) -> RuleRun {
         op_ids: record.op_ids.into_iter().map(crate::ids::op_id).collect(),
         undoable: record.undoable,
         message: record.message,
+        localized: None,
     }
 }
 
@@ -377,6 +378,15 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             })?;
             Response::Done
         }
+        Request::RuleFromMessage { message_id } => {
+            let (views, _) = service.load_views(vec![message_id.clone()]).await?;
+            let (view, _) = views
+                .first()
+                .ok_or_else(|| ApiError::not_found(format!("message {message_id}")))?;
+            Response::RuleSuggested {
+                rule: Box::new(nail_rules::rule_from_message(view)),
+            }
+        }
         Request::RuleToText { rule } => Response::RuleText {
             text: nail_config::rules::rule_to_text(&rule),
         },
@@ -389,6 +399,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                         line,
                         column,
                         message: issue.to_string(),
+                        localized: None,
                     })
                     .collect();
                 Response::RuleParsed {

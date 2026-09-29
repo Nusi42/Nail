@@ -138,6 +138,7 @@ impl Vault {
                 .is_some_and(|r| self.keys.contains(&SecretRef(r.clone()))),
             error,
             message,
+            localized: None,
         }
     }
 

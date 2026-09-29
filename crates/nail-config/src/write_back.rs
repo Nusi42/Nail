@@ -194,6 +194,8 @@ impl LayoutEditor {
                 args,
             } => self.set_binding(context, key, Some((action, args))),
             LayoutPatch::RemoveKeyBinding { context, key } => self.set_binding(context, key, None),
+            LayoutPatch::ResetToolbar { toolbar } => self.reset_toolbar(toolbar),
+            LayoutPatch::ResetKeyBinding { context, key } => self.reset_binding(context, key),
         }
     }
 
@@ -438,6 +440,87 @@ impl LayoutEditor {
         Ok(())
     }
 
+    /// Removes the file's definitions of a toolbar; a full (non-sparse)
+    /// file gets the default items written back.
+    fn reset_toolbar(&mut self, name: &str) -> Result<(), EditError> {
+        if !is_kebab(name) {
+            return Err(invalid(format!("invalid toolbar name `{name}`")));
+        }
+        let style = self.style.clone();
+        let sites = Self::named_sites(self.body(), "toolbar", name);
+        let mut emptied = Vec::new();
+        for &(block, index) in sites.iter().rev() {
+            let body = self.body();
+            match block {
+                None => remove_node(body, index, &style),
+                Some(top) => {
+                    let inner = body.nodes_mut()[top].ensure_children();
+                    remove_node(inner, index, &style);
+                    if inner.nodes().is_empty() && !emptied.contains(&top) {
+                        emptied.push(top);
+                    }
+                }
+            }
+        }
+        emptied.sort_unstable_by(|a, b| b.cmp(a));
+        for top in emptied {
+            remove_node(self.body(), top, &style);
+        }
+        if !self.sparse
+            && let Some(items) = default_layout().toolbars.get(name)
+        {
+            self.set_toolbar(name, items)?;
+        }
+        Ok(())
+    }
+
+    /// Removes the file's `bind` / `unbind` lines for a key; a full
+    /// (non-sparse) file gets the default binding written back.
+    fn reset_binding(&mut self, context: &str, key: &str) -> Result<(), EditError> {
+        if context != "global" && !is_kebab(context) {
+            return Err(invalid(format!("invalid key context `{context}`")));
+        }
+        let key = normalize_key(key).map_err(invalid)?;
+        let style = self.style.clone();
+        let blocks = Self::keys_blocks(self.body(), context);
+        let mut emptied = Vec::new();
+        for &b in blocks.iter().rev() {
+            let block = self.body().nodes_mut()[b].ensure_children();
+            let matching: Vec<usize> = block
+                .nodes()
+                .iter()
+                .enumerate()
+                .filter(|(_, child)| {
+                    matches!(child.name().value(), "bind" | "unbind")
+                        && first_arg(child).and_then(|k| normalize_key(k).ok()) == Some(key.clone())
+                })
+                .map(|(i, _)| i)
+                .collect();
+            if matching.is_empty() {
+                continue;
+            }
+            for &i in matching.iter().rev() {
+                remove_node(block, i, &style);
+            }
+            if block.nodes().is_empty() {
+                emptied.push(b);
+            }
+        }
+        for b in emptied {
+            remove_node(self.body(), b, &style);
+        }
+        if !self.sparse
+            && let Some(binding) = default_layout()
+                .keys
+                .iter()
+                .rev()
+                .find(|k| k.context == context && k.key == key)
+        {
+            self.set_binding(context, &key, Some((&binding.action, &binding.args)))?;
+        }
+        Ok(())
+    }
+
     // --- key bindings ------------------------------------------------------
 
     fn keys_blocks(body: &KdlDocument, context: &str) -> Vec<usize> {
@@ -634,5 +717,84 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, EditError::Invalid(_)));
+    }
+
+    #[test]
+    fn reset_toolbar_and_key_binding_restore_the_defaults() {
+        let file = "layout \"mine\" extends=\"default\" {\n    toolbar \"customize\" {\n        item \"customize.merge\"\n    }\n    keys context=\"list\" {\n        bind \"j\" \"mail.archive\"\n    }\n    keys {\n        unbind \"e\"\n    }\n}\n";
+        let custom = crate::parse_layout(file, "layout.kdl").unwrap();
+        let defaults = default_layout();
+        assert_ne!(custom.toolbars["customize"], defaults.toolbars["customize"]);
+
+        let out = apply_layout_patches(
+            Some(file),
+            &[
+                LayoutPatch::ResetToolbar {
+                    toolbar: "customize".into(),
+                },
+                LayoutPatch::ResetKeyBinding {
+                    context: "list".into(),
+                    key: "J".into(),
+                },
+                LayoutPatch::ResetKeyBinding {
+                    context: "global".into(),
+                    key: "e".into(),
+                },
+            ],
+            "layout.kdl",
+        )
+        .unwrap();
+        assert!(!out.contains("toolbar"), "{out}");
+        assert!(!out.contains("keys"), "{out}");
+        let reset = crate::parse_layout(&out, "layout.kdl").unwrap();
+        assert_eq!(reset.toolbars, defaults.toolbars);
+        assert_eq!(reset.keys, defaults.keys);
+
+        // Resetting what the file does not change is a no-op.
+        let same = apply_layout_patches(
+            Some(&out),
+            &[LayoutPatch::ResetToolbar {
+                toolbar: "customize".into(),
+            }],
+            "layout.kdl",
+        )
+        .unwrap();
+        assert_eq!(same, out);
+        let err = apply_layout_patches(
+            Some(&out),
+            &[LayoutPatch::ResetToolbar {
+                toolbar: "Not Kebab".into(),
+            }],
+            "layout.kdl",
+        )
+        .unwrap_err();
+        assert!(matches!(err, EditError::Invalid(_)));
+    }
+
+    #[test]
+    fn reset_in_a_full_file_writes_the_default_back() {
+        let file = DEFAULT_LAYOUT_KDL.replacen(
+            "bind \"e\" \"mail.archive\"",
+            "bind \"e\" \"mail.delete\"",
+            1,
+        );
+        assert!(file.contains("\"mail.delete\""));
+        let out = apply_layout_patches(
+            Some(&file),
+            &[LayoutPatch::ResetKeyBinding {
+                context: "global".into(),
+                key: "e".into(),
+            }],
+            "layout.kdl",
+        )
+        .unwrap();
+        let reset = crate::parse_layout(&out, "layout.kdl").unwrap();
+        let e = reset
+            .keys
+            .iter()
+            .rev()
+            .find(|k| k.context == "global" && k.key == "e")
+            .unwrap();
+        assert_eq!(e.action, "mail.archive");
     }
 }

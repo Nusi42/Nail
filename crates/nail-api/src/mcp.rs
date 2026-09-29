@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::{AccountId, FolderId, McpClientId};
+use crate::localized::LocalizedMessage;
 
 /// What a client may do. Reading message content needs `read`; raw
 /// source, attachment bytes, encrypted content and the UI context each
@@ -162,6 +163,54 @@ pub struct McpAuditEntry {
     pub outcome: McpOutcome,
     /// Diagnostic detail (English), e.g. the missing scope; else `null`.
     pub detail: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
+}
+
+/// MCP server settings (M2c), kept in the store.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct McpSettings {
+    /// A fixed loopback port, `null` = any free port (written to
+    /// `mcp-endpoint.json`). `nail serve --mcp-port` overrides it for one
+    /// run. Takes effect when the server (re)starts.
+    pub port: Option<u16>,
+}
+
+impl McpSettings {
+    /// Lowest port accepted for [`Self::port`] (no privileged ports).
+    pub const MIN_PORT: u16 = 1024;
+
+    /// Problems with the settings (empty = valid).
+    pub fn issues(&self) -> Vec<McpSettingsIssue> {
+        match self.port {
+            Some(port) if port < Self::MIN_PORT => vec![McpSettingsIssue::Port],
+            _ => Vec::new(),
+        }
+    }
+}
+
+/// A problem with [`McpSettings`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum McpSettingsIssue {
+    /// The port is below 1024.
+    Port,
+}
+
+impl McpSettingsIssue {
+    /// All issues.
+    pub const ALL: [McpSettingsIssue; 1] = [Self::Port];
+
+    /// Fluent message id, e.g. `mcp-settings-issue-port`.
+    pub fn message_id(self) -> &'static str {
+        match self {
+            Self::Port => "mcp-settings-issue-port",
+        }
+    }
 }
 
 /// Where the MCP server listens.
@@ -200,5 +249,21 @@ mod tests {
         );
         let unique: std::collections::BTreeSet<_> = McpScope::ALL.iter().collect();
         assert_eq!(unique.len(), McpScope::ALL.len());
+    }
+
+    #[test]
+    fn mcp_settings_validate_the_port() {
+        let s: McpSettings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(s.port, None);
+        assert!(s.issues().is_empty());
+        assert!(McpSettings { port: Some(4799) }.issues().is_empty());
+        assert_eq!(
+            McpSettings { port: Some(80) }.issues(),
+            [McpSettingsIssue::Port]
+        );
+        assert_eq!(
+            McpSettingsIssue::Port.message_id(),
+            "mcp-settings-issue-port"
+        );
     }
 }

@@ -43,7 +43,15 @@ pub struct CoreData<C>(pub C);
 
 fn unexpected(response: Response) -> ApiError {
     match response {
-        Response::Error { code, message } => ApiError::new(code, message),
+        Response::Error {
+            code,
+            message,
+            localized,
+        } => ApiError {
+            code,
+            message,
+            localized,
+        },
         other => ApiError::internal(format!(
             "unexpected response {}",
             serde_json::to_value(&other)
@@ -192,6 +200,7 @@ impl<C: CoreAccess> McpData for CoreData<C> {
                 offset,
                 total,
                 hits,
+                ..
             } => Ok(SearchOutcome::Hits {
                 offset,
                 total,

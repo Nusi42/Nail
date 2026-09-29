@@ -65,4 +65,9 @@ tags: Array<string>,
  * In a virtual account: the same message (same `Message-ID`) in other
  * member accounts, collapsed into this row. Empty elsewhere.
  */
-duplicates: Array<MessageLocation>, };
+duplicates: Array<MessageLocation>, 
+/**
+ * The body is not stored locally (sync policy headers-only or recent
+ * N days, M2c); opening the message fetches it. Absent = `false`.
+ */
+headers_only?: boolean, };

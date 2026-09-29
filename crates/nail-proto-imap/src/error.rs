@@ -123,6 +123,7 @@ impl From<ImapError> for EngineError {
             code: err.code(),
             retryable: err.is_transient(),
             message: err.to_string(),
+            localized: None,
         }
     }
 }

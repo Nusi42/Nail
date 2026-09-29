@@ -453,7 +453,7 @@ async fn missing_keys_and_locked_keys_refuse_to_send() {
     )
     .await;
     assert!(
-        matches!(&refused, Response::Error { code: ErrorCode::NoKey, message } if message.contains("grace@navy.example")),
+        matches!(&refused, Response::Error { code: ErrorCode::NoKey, message, .. } if message.contains("grace@navy.example")),
         "{refused:?}"
     );
     // A passphrase key must be unlocked to sign.

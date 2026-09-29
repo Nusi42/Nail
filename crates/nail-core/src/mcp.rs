@@ -13,9 +13,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use nail_api::{ApiError, Event, MessageId, Request, Response};
+use nail_api::{ApiError, Event, LocalizedMessage, McpSettings, MessageId, Request, Response};
 use nail_mcp::{CoreAccess, CoreData, McpServer, ServerOptions};
-use nail_store::{BlobStore, Store};
+use nail_store::{BlobStore, MCP_SETTINGS_KEY, Store};
 
 use crate::error::Result;
 use crate::service::{Service, lock};
@@ -29,6 +29,48 @@ pub fn mcp_endpoint_path(data_dir: &std::path::Path) -> PathBuf {
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     let info = lock(&service.inner.mcp_info).clone();
+    // M2c (ADR 0043): the settings are the core's; the server picks the
+    // port up when it (re)starts (wired by WP53 / WP55).
+    let running = || {
+        info.clone().unwrap_or(nail_api::mcp::McpServerInfo {
+            running: false,
+            url: None,
+        })
+    };
+    match request {
+        Request::GetMcpSettings => {
+            let settings: McpSettings = service
+                .store()
+                .call(|s| s.setting(MCP_SETTINGS_KEY))
+                .await?
+                .unwrap_or_default();
+            return Ok(Response::McpSettings {
+                settings,
+                info: running(),
+            });
+        }
+        Request::UpdateMcpSettings { settings } => {
+            if let Some(issue) = settings.issues().first() {
+                return Err(ApiError::invalid_request(format!(
+                    "invalid MCP settings ({})",
+                    issue.message_id()
+                ))
+                .with_localized(LocalizedMessage::new(issue.message_id()))
+                .into());
+            }
+            let saved = settings.clone();
+            service
+                .store()
+                .call(move |s| s.set_setting(MCP_SETTINGS_KEY, &saved))
+                .await?;
+            service.broadcast(Event::McpSettingsChanged);
+            return Ok(Response::McpSettings {
+                settings,
+                info: running(),
+            });
+        }
+        _ => {}
+    }
     let events = service.clone();
     Ok(
         nail_mcp::admin::handle(service.store(), info, request, move |event| {

@@ -25,6 +25,13 @@
 //!   audit log and the browser login protocol (M2b, ADR 0036).
 //! * [`remote_content`]: remote content in mail — allow-lists per
 //!   message / sender / domain and the proxy URL form (M2b, ADR 0036).
+//! * M2c (ADR 0043): [`localized`] (user-facing messages built by the core
+//!   as Fluent id + arguments; every diagnostic in the contract has a
+//!   `localized` sibling), [`sieve`] (ManageSieve settings, rule placement
+//!   server / client / not expressible, vacation), [`triage`] (junk
+//!   classifier, snooze, notification settings and requests), [`sync`]
+//!   (per-folder sync policy, on-demand bodies), [`menus`] (context menus
+//!   resolved from the layout).
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -50,7 +57,9 @@ pub mod engine;
 pub mod error;
 pub mod ids;
 pub mod launch;
+pub mod localized;
 pub mod mcp;
+pub mod menus;
 pub mod ops;
 pub mod protocol;
 pub mod remote;
@@ -58,6 +67,9 @@ pub mod remote_content;
 pub mod rules;
 pub mod search;
 pub mod security;
+pub mod sieve;
+pub mod sync;
+pub mod triage;
 
 use std::path::{Path, PathBuf};
 
@@ -91,7 +103,9 @@ pub use ids::{
     RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 pub use launch::{LaunchRequest, MailtoLink};
-pub use mcp::{McpClient, McpGrant, McpScope};
+pub use localized::{LocalizedMessage, MessageArg};
+pub use mcp::{McpClient, McpGrant, McpScope, McpSettings};
+pub use menus::{ResolvedMenu, ResolvedMenuEntry};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
@@ -106,6 +120,14 @@ pub use search::{SavedSearch, SearchError, SearchErrorKind, SearchHit, SearchQue
 pub use security::{
     AuthResults, CryptoKey, CryptoTechnology, IdentityCrypto, MessageWarning, SecurityStatus,
     SendCrypto, TrustLevel, VaultStatus,
+};
+pub use sieve::{
+    ManageSieveConfig, RulePlacement, RuleSieveStatus, SieveAccountStatus, SieveState,
+    VacationSettings,
+};
+pub use sync::{BodyState, FolderSyncPolicy};
+pub use triage::{
+    JunkSettings, JunkStatus, JunkVerdict, MailNotification, NotificationSettings, SnoozedMessage,
 };
 
 /// Name of the barrel file written by [`export_typescript`].
@@ -151,6 +173,18 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     remote::RemoteUiSettingsIssue::export_all(&cfg)?;
     remote::RemoteAccessPreset::export_all(&cfg)?;
     RemoteContentInfo::export_all(&cfg)?;
+    // M2c: validation issues (named by the UI), context menus (resolved in
+    // the UI from the layout), body states and optional fields.
+    sieve::ManageSieveIssue::export_all(&cfg)?;
+    sieve::VacationIssue::export_all(&cfg)?;
+    triage::JunkIssue::export_all(&cfg)?;
+    triage::NotificationIssue::export_all(&cfg)?;
+    mcp::McpSettingsIssue::export_all(&cfg)?;
+    ResolvedMenu::export_all(&cfg)?;
+    BodyState::export_all(&cfg)?;
+    ManageSieveConfig::export_all(&cfg)?;
+    JunkVerdict::export_all(&cfg)?;
+    LocalizedMessage::export_all(&cfg)?;
 
     let mut files = Vec::new();
     collect_ts_files(out_dir, out_dir, &mut files)?;

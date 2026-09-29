@@ -541,6 +541,7 @@ mod tests {
             thread_id: None,
             tags: Vec::new(),
             duplicates: Vec::new(),
+            headers_only: false,
         };
         store
             .upsert_message(&crate::StoredMessage::new(summary))

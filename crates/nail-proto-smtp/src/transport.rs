@@ -264,11 +264,13 @@ pub async fn test_login(config: &SmtpConfig, auth: &SmtpAuth) -> EndpointTestRes
             error: None,
             message: None,
             capabilities,
+            localized: None,
         },
         Err(err) => EndpointTestResult {
             error: Some(err.code),
             message: Some(err.message),
             capabilities,
+            localized: err.localized.map(|l| *l),
         },
     }
 }

@@ -78,6 +78,7 @@ impl ConfigError {
             line: self.line,
             column: self.column,
             message: self.message.clone(),
+            localized: None,
         }
     }
 
@@ -88,6 +89,7 @@ impl ConfigError {
             line: self.line,
             column: self.column,
             message: self.message.clone(),
+            localized: None,
         }
     }
 }
@@ -156,6 +158,7 @@ mod tests {
                 line: 3,
                 column: 7,
                 message: "unknown token `$color.nope`".into(),
+                localized: None,
             }
         );
         let api: ApiError = err.clone().into();

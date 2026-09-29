@@ -4,6 +4,8 @@ import type { AccountStatus } from "./AccountStatus";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ErrorCode } from "./ErrorCode";
 import type { FolderId } from "./FolderId";
+import type { LocalizedMessage } from "./LocalizedMessage";
+import type { MailNotification } from "./MailNotification";
 import type { McpClientId } from "./McpClientId";
 import type { MessageId } from "./MessageId";
 import type { OAuthFlowId } from "./OAuthFlowId";
@@ -46,7 +48,12 @@ column: number,
 /**
  * Diagnostic message (English, like a compiler message).
  */
-message: string, } | { "type": "MailChanged", 
+message: string, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, } | { "type": "MailChanged", 
 /**
  * The affected folders.
  */
@@ -74,7 +81,12 @@ code: ErrorCode,
 /**
  * Diagnostic detail (English, for logs and developer tools).
  */
-message: string, } | { "type": "OpStatus", 
+message: string, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, } | { "type": "OpStatus", 
 /**
  * The new status.
  */
@@ -94,7 +106,12 @@ error: ErrorCode | null,
 /**
  * Diagnostic detail (English), else `null`.
  */
-message: string | null, } | { "type": "NewMail", 
+message: string | null, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, } | { "type": "NewMail", 
 /**
  * The account.
  */
@@ -123,7 +140,12 @@ error: ErrorCode | null,
 /**
  * Diagnostic detail (English), else `null`.
  */
-message: string | null, } | { "type": "ConfigErrors", 
+message: string | null, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, } | { "type": "ConfigErrors", 
 /**
  * File name, e.g. `"layout.kdl"`.
  */
@@ -167,4 +189,16 @@ reason: SessionEndReason, } | { "type": "RemoteSecurityAlert",
 /**
  * The alert.
  */
-alert: RemoteAlert, } | { "type": "RemoteContentPolicyChanged" } | { "type": "LaunchRequested" };
+alert: RemoteAlert, } | { "type": "RemoteContentPolicyChanged" } | { "type": "LaunchRequested" } | { "type": "SieveStatusChanged", 
+/**
+ * The account.
+ */
+account_id: AccountId, } | { "type": "JunkStatusChanged", 
+/**
+ * The account.
+ */
+account_id: AccountId, } | { "type": "SnoozeChanged" } | { "type": "NotificationSettingsChanged" } | { "type": "NotificationRequested", 
+/**
+ * What to show.
+ */
+notification: MailNotification, } | { "type": "McpSettingsChanged" };

@@ -105,6 +105,17 @@
             "null"
           ]
         },
+        "sieve": {
+          "description": "`sieve host=… port=… tls=… script=… enabled=…`: ManageSieve for\nserver-side rules and vacation replies (IMAP accounts only; the\nlogin is the IMAP login).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SieveSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "smtp": {
           "description": "`smtp host=… { auth … }`: outgoing server.",
           "anyOf": [
@@ -845,6 +856,54 @@
       "description": "A keychain reference: `keychain:<service>/<name>`.",
       "type": "string",
       "pattern": "^keychain:[^/\\s]+/\\S+$"
+    },
+    "SieveSchema": {
+      "description": "`sieve host=… port=… tls=… script=… enabled=…` (every property optional).",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "`#false` keeps the settings but runs every rule in Nail (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "host": {
+          "description": "Host name or IP address (default: the IMAP host).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "description": "Port (default 4190).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "script": {
+          "description": "Name of Nail's script on the server (default \"nail\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tls": {
+          "description": "Transport security (default starttls).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TlsSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "SignatureSchema": {
       "description": "A signature.",

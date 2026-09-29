@@ -546,11 +546,13 @@ pub async fn test_login(
             error: None,
             message: None,
             capabilities,
+            localized: None,
         },
         Err(err) => nail_api::accounts::EndpointTestResult {
             error: Some(err.code()),
             message: Some(err.to_string()),
             capabilities,
+            localized: None,
         },
     }
 }

@@ -658,6 +658,7 @@ impl<'a> Keyring<'a> {
                     item,
                     code: ErrorCode::Crypto,
                     message,
+                    localized: None,
                 })
                 .collect(),
         };
@@ -666,6 +667,7 @@ impl<'a> Keyring<'a> {
                 item: "#1".into(),
                 code: ErrorCode::InvalidRequest,
                 message: "no OpenPGP key found".into(),
+                localized: None,
             });
         }
         let now = self.now();
@@ -692,6 +694,7 @@ impl<'a> Keyring<'a> {
                         item,
                         code: e.code(),
                         message: e.to_string(),
+                        localized: None,
                     });
                 }
             }

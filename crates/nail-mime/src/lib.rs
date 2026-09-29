@@ -99,6 +99,7 @@ impl ParsedMessage {
             thread_id: None,
             tags: Vec::new(),
             duplicates: Vec::new(),
+            headers_only: false,
         }
     }
 
@@ -119,6 +120,7 @@ impl ParsedMessage {
             // Filled by the core (M2b): allow-lists and proxied URLs.
             remote_content: None,
             render_url: None,
+            junk: None,
         }
     }
 }

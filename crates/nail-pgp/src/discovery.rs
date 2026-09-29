@@ -230,6 +230,7 @@ pub async fn lookup(
                 source: *source,
                 code,
                 message,
+                localized: None,
             }),
         }
     }

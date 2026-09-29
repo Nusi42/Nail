@@ -73,6 +73,7 @@ mod tests {
             code: ErrorCode::Unavailable,
             message: "keychain locked".into(),
             retryable: true,
+            localized: None,
         };
         assert_eq!(
             AuthError::from(locked).to_api().code,

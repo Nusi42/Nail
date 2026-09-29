@@ -98,6 +98,27 @@ struct AccountSchema {
     /// write into `Authentication-Results`; only their results are shown
     /// (default: learned from recent mail).
     authserv_id: Option<Vec<String>>,
+    /// `sieve host=… port=… tls=… script=… enabled=…`: ManageSieve for
+    /// server-side rules and vacation replies (IMAP accounts only; the
+    /// login is the IMAP login).
+    sieve: Option<SieveSchema>,
+}
+
+/// `sieve host=… port=… tls=… script=… enabled=…` (every property optional).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct SieveSchema {
+    /// `#false` keeps the settings but runs every rule in Nail (default `#true`).
+    enabled: Option<bool>,
+    /// Host name or IP address (default: the IMAP host).
+    host: Option<String>,
+    /// Port (default 4190).
+    #[schemars(range(min = 1, max = 65535))]
+    port: Option<u32>,
+    /// Transport security (default starttls).
+    tls: Option<TlsSchema>,
+    /// Name of Nail's script on the server (default "nail").
+    script: Option<String>,
 }
 
 /// Transport security.

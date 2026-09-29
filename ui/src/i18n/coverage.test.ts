@@ -23,6 +23,10 @@ import * as mcpMessages from "../features/mcp/messages";
 import * as rulesMessages from "../features/rules/messages";
 import * as remoteMessages from "../features/remote/messages";
 import * as securityMessages from "../features/security/messages";
+import * as menusMessages from "../features/menus/messages";
+import * as sieveMessages from "../features/sieve/messages";
+import * as syncMessages from "../features/sync/messages";
+import * as triageMessages from "../features/triage/messages";
 import { shippedCatalogs } from "./catalogs";
 
 /** Each feature slot lists its own message prefixes and runtime ids. */
@@ -33,6 +37,10 @@ const FEATURE_MESSAGES = [
   customizationMessages,
   securityMessages,
   remoteMessages,
+  sieveMessages,
+  triageMessages,
+  syncMessages,
+  menusMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

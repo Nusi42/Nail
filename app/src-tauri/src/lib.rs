@@ -396,6 +396,10 @@ pub fn run() {
             }
         }));
     }
+    // OS notifications (M2c, ADR 0043): the shell shows the core's
+    // `NotificationRequested` events from Rust (wired by WP55); the web
+    // content gets no notification permission.
+    builder = builder.plugin(tauri_plugin_notification::init());
     builder
         .register_asynchronous_uri_scheme_protocol(PROXY_PROTOCOL, |ctx, request, responder| {
             let proxy = ctx

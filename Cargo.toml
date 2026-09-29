@@ -21,6 +21,8 @@ members = [
     "crates/nail-vault",
     "crates/nail-remote-auth",
     "crates/nail-proxy",
+    "crates/nail-sieve",
+    "crates/nail-triage",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -50,6 +52,8 @@ default-members = [
     "crates/nail-vault",
     "crates/nail-remote-auth",
     "crates/nail-proxy",
+    "crates/nail-sieve",
+    "crates/nail-triage",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -85,6 +89,8 @@ nail-smime = { path = "crates/nail-smime" }
 nail-vault = { path = "crates/nail-vault" }
 nail-remote-auth = { path = "crates/nail-remote-auth" }
 nail-proxy = { path = "crates/nail-proxy" }
+nail-sieve = { path = "crates/nail-sieve" }
+nail-triage = { path = "crates/nail-triage" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -199,6 +205,17 @@ ipnet = "2.12.2"
 rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "ring"] }
 instant-acme = { version = "0.8.5", default-features = false, features = ["ring", "hyper-rustls"] }
+
+# M2c (ADR 0043). Licences: MIT / Apache-2.0 only; no OpenSSL.
+# nail-sieve (WP51) uses the workspace tokio / rustls (ring) / base64 /
+# regex; nail-triage (WP52) the workspace chrono plus word boundaries:
+unicode-segmentation = "1.13.2"
+# Fluent in Rust (localized core messages rendered by the CLI and OS
+# notifications; nail-config `l10n`, WP53): the same `.ftl` catalogs as the UI.
+fluent-bundle = "0.16.0"
+unic-langid = "0.9.6"
+# Desktop OS notifications (the shell shows `NotificationRequested`, WP55).
+tauri-plugin-notification = "2.5.0"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

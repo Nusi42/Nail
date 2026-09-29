@@ -81,11 +81,13 @@ fn test_result(result: std::result::Result<Vec<String>, EngineError>) -> Endpoin
             error: None,
             message: None,
             capabilities,
+            localized: None,
         },
         Err(err) => EndpointTestResult {
             error: Some(err.code),
             message: Some(err.message),
             capabilities: Vec::new(),
+            localized: err.localized.map(|l| *l),
         },
     }
 }
@@ -293,6 +295,7 @@ impl Service {
                 flow_id: id,
                 error,
                 message,
+                localized: None,
             });
         });
         let opened = self.inner.open_browser && open::that_detached(&authorize_url).is_ok();

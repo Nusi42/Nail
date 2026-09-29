@@ -43,6 +43,7 @@ use ts_rs::TS;
 
 use crate::error::ErrorCode;
 use crate::ids::{PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId, RemoteUserId};
+use crate::localized::LocalizedMessage;
 use crate::mcp::{McpGrant, McpScope};
 
 // ---------------------------------------------------------------------------
@@ -445,6 +446,11 @@ pub struct RemoteUiStatus {
     pub error: Option<ErrorCode>,
     /// Diagnostic detail (English), else `null`.
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 impl RemoteUiStatus {
@@ -460,6 +466,7 @@ impl RemoteUiStatus {
             active_sessions: 0,
             error: None,
             message: None,
+            localized: None,
         }
     }
 }
@@ -897,6 +904,11 @@ pub struct RemoteAuditEntry {
     pub error: Option<ErrorCode>,
     /// Diagnostic detail (English), else `null`.
     pub detail: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 /// A security alert for the desktop (and every admin session): shown as a

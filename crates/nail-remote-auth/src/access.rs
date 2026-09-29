@@ -240,6 +240,40 @@ pub fn required_access(request: &Request) -> RequestAccess {
         // --- Launch requests: they read local files of the desktop ---
         Request::TakeLaunchRequests => ("TakeLaunchRequests", DesktopOnly),
         Request::ImportMessageFile { .. } => ("ImportMessageFile", DesktopOnly),
+
+        // --- Server-side rules and vacation (M2c): rule placements and the
+        // script reveal every rule, like `ListRules` ---
+        Request::GetSieveStatus { .. } => ("GetSieveStatus", Scope(S::Read)),
+        Request::SyncSieve { .. } => ("SyncSieve", Admin),
+        Request::PreviewSieveScript { .. } => ("PreviewSieveScript", Scope(S::Rules)),
+        Request::GetVacation { .. } => ("GetVacation", Scope(S::Read)),
+        Request::UpdateVacation { .. } => ("UpdateVacation", Admin),
+
+        // --- Junk and snooze: organizing mail; settings are administration ---
+        Request::MarkJunk { .. } => ("MarkJunk", Scope(S::Organize)),
+        Request::GetJunkStatus { .. } => ("GetJunkStatus", Scope(S::Read)),
+        Request::UpdateJunkSettings { .. } => ("UpdateJunkSettings", Admin),
+        Request::ResetJunkClassifier { .. } => ("ResetJunkClassifier", Admin),
+        Request::SnoozeMessages { .. } => ("SnoozeMessages", Scope(S::Organize)),
+        Request::UnsnoozeMessages { .. } => ("UnsnoozeMessages", Scope(S::Organize)),
+        Request::ListSnoozed { .. } => ("ListSnoozed", Scope(S::Read)),
+
+        // --- Notifications ---
+        Request::GetNotificationSettings => ("GetNotificationSettings", Scope(S::Read)),
+        Request::UpdateNotificationSettings { .. } => ("UpdateNotificationSettings", Admin),
+        Request::TestNotification => ("TestNotification", Session),
+
+        // --- Sync policy (account settings) and bodies (reading) ---
+        Request::GetFolderSyncPolicy { .. } => ("GetFolderSyncPolicy", Scope(S::Read)),
+        Request::SetFolderSyncPolicy { .. } => ("SetFolderSyncPolicy", Admin),
+        Request::FetchMessageBodies { .. } => ("FetchMessageBodies", Scope(S::Read)),
+
+        // --- MCP settings ---
+        Request::GetMcpSettings => ("GetMcpSettings", Admin),
+        Request::UpdateMcpSettings { .. } => ("UpdateMcpSettings", Admin),
+
+        // --- Rules from messages ---
+        Request::RuleFromMessage { .. } => ("RuleFromMessage", Scope(S::Rules)),
     };
     RequestAccess { name, access }
 }
@@ -413,6 +447,21 @@ mod tests {
             Request::ListRemoteContentAllows,
             Request::ListMcpClients,
             Request::GetUiContext,
+            Request::GetSieveStatus { account_id: None },
+            Request::MarkJunk {
+                message_ids: vec![],
+                junk: true,
+            },
+            Request::ListSnoozed { account_id: None },
+            Request::GetNotificationSettings,
+            Request::TestNotification,
+            Request::FetchMessageBodies {
+                message_ids: vec![],
+            },
+            Request::GetMcpSettings,
+            Request::RuleFromMessage {
+                message_id: "m1".into(),
+            },
         ] {
             let wire = serde_json::to_value(&request).unwrap();
             assert_eq!(wire["type"], required_access(&request).name);

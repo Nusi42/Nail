@@ -30,6 +30,7 @@ pub use crate::accounts::ComposerMode;
 use crate::domain::Address;
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, DraftId, IdentityId, MessageId, OutboxId};
+use crate::localized::LocalizedMessage;
 use crate::security::SendCrypto;
 
 /// A message being written.
@@ -269,6 +270,11 @@ pub struct OutboxEntry {
     pub error: Option<ErrorCode>,
     /// Diagnostic detail of the last failed attempt, else `null`.
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 #[cfg(test)]

@@ -35,6 +35,12 @@
 //!   rotation), pairing codes, login throttling, the remote audit log
 //!   ([`RemoteAuditRecord`]) and the remote-content allow-lists
 //!   ([`Store::remote_content_allowed_by`]).
+//! * M2c (schema v7, ADR 0043): message body state for sync policies
+//!   ([`Store::set_body_state`]), snooze wake times ([`SnoozeRecord`]), the
+//!   junk classifier with hashed tokens ([`Store::train_junk`],
+//!   [`hash_junk_token`]) and verdicts, notification settings with
+//!   per-account / per-folder overrides ([`Store::notification_settings`])
+//!   and the Sieve state per account ([`SieveRecord`], vacation settings).
 //! * Encryption-at-rest hooks (M2a WP33, [`seal`]): a [`DataCipher`]
 //!   installed with [`Store::set_cipher`] / [`BlobStore::set_cipher`] seals
 //!   sensitive columns and blob files; [`Store::convert_fields`],
@@ -60,6 +66,7 @@ mod schema;
 pub mod seal;
 pub mod store;
 pub mod thread;
+mod triage;
 
 use std::path::Path;
 
@@ -94,6 +101,10 @@ pub use seal::{
 };
 pub use store::{BLOB_DIR_NAME, DB_FILE_NAME, Store};
 pub use thread::{ThreadPage, ThreadTreeEntry};
+pub use triage::{
+    JunkStats, MCP_SETTINGS_KEY, NOTIFICATION_SETTINGS_KEY, SieveRecord, SnoozeRecord, TokenCounts,
+    TrainOutcome, hash_junk_token, hash_sieve_script,
+};
 
 /// Opens the metadata database and blob store inside a data directory
 /// (`<dir>/nail.sqlite3` and `<dir>/blobs/`), creating them if needed.

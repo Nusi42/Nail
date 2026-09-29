@@ -17,6 +17,9 @@ tracing.workspace = true
 kdl = { version = "6.7.1", default-features = false, features = ["span"] }
 schemars = { version = "1.2.2", features = ["indexmap2"] }
 notify-debouncer-mini.workspace = true
+# Localized messages rendered in Rust (src/l10n.rs, M2c WP53).
+fluent-bundle.workspace = true
+unic-langid.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -12,6 +12,7 @@ use nail_api::accounts::{
     VirtualAccountConfig, default_port,
 };
 use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
+use nail_api::sieve::{ManageSieveConfig, is_script_name};
 use nail_api::{AccountId, FolderRole, IdentityId};
 
 use super::{
@@ -325,6 +326,7 @@ impl Reader<'_, '_> {
         let mut identities = Vec::new();
         let mut sync: Option<SyncPolicy> = None;
         let mut authserv_ids: Option<Vec<String>> = None;
+        let mut sieve: Option<(ManageSieveConfig, &KdlNode)> = None;
         let mut providers = Vec::new();
         for child in children(node) {
             match name(child) {
@@ -377,11 +379,17 @@ impl Reader<'_, '_> {
                     }
                     sync = Some(self.sync(child)?);
                 }
+                "sieve" => {
+                    if sieve.is_some() {
+                        return Err(self.src.node_err(child, "`sieve` is set twice"));
+                    }
+                    sieve = Some((self.sieve(child)?, child));
+                }
                 other => {
                     return Err(self.src.node_err(
                         child,
                         format!(
-                            "unknown node `{other}` in `account` (expected imap, pop3, smtp, identity, sync or authserv-id)"
+                            "unknown node `{other}` in `account` (expected imap, pop3, smtp, identity, sync, sieve or authserv-id)"
                         ),
                     ));
                 }
@@ -396,6 +404,13 @@ impl Reader<'_, '_> {
                 ),
             )
         })?;
+        if let Some((_, child)) = &sieve
+            && !matches!(incoming, IncomingServer::Imap { .. })
+        {
+            return Err(self
+                .src
+                .node_err(child, "`sieve` (ManageSieve) needs an IMAP account"));
+        }
         if identities.is_empty() {
             identities.push(Identity {
                 id: IdentityId::new(email.clone()),
@@ -438,9 +453,72 @@ impl Reader<'_, '_> {
                 sync: sync.unwrap_or_default(),
                 save_sent_copy,
                 authserv_ids: authserv_ids.unwrap_or_default(),
+                sieve: sieve.map(|(config, _)| config),
             },
             providers,
         ))
+    }
+
+    /// Reads `sieve host="…" port=4190 tls="starttls" script="nail"
+    /// enabled=#true` (ManageSieve, M2c); every property is optional.
+    fn sieve(&self, node: &KdlNode) -> Result<ManageSieveConfig, ConfigError> {
+        self.check_props(node, &["enabled", "host", "port", "tls", "script"])?;
+        self.check_unique_props(node)?;
+        check_max_args(self.src, node, 0)?;
+        check_no_children(self.src, node)?;
+        let host = match prop_str(self.src, node, "host")? {
+            None => None,
+            Some((h, entry)) => {
+                if h.is_empty()
+                    || h.chars().any(|c| c.is_whitespace() || c.is_control())
+                    || h.contains('/')
+                {
+                    return Err(self.src.entry_err(
+                        entry,
+                        format!("`host` must be a host name or IP address, found {h:?}"),
+                    ));
+                }
+                Some(h.to_owned())
+            }
+        };
+        let tls = match prop_str(self.src, node, "tls")? {
+            None => None,
+            Some(("implicit", _)) => Some(TlsMode::Implicit),
+            Some(("starttls", _)) => Some(TlsMode::Starttls),
+            Some(("plaintext", _)) => Some(TlsMode::Plaintext),
+            Some((t, entry)) => {
+                return Err(self.src.entry_err(
+                    entry,
+                    format!(
+                        "`tls` must be \"implicit\", \"starttls\" or \"plaintext\", found {t:?}"
+                    ),
+                ));
+            }
+        };
+        let port = self
+            .prop_u32_range(node, "port", 1, 65535)?
+            .map(|p| u16::try_from(p).unwrap_or(u16::MAX));
+        let script_name = match prop_str(self.src, node, "script")? {
+            None => None,
+            Some((s, entry)) => {
+                if !is_script_name(s) {
+                    return Err(self.src.entry_err(
+                        entry,
+                        format!(
+                            "`script` must be 1 to 128 characters without control characters or slashes, found {s:?}"
+                        ),
+                    ));
+                }
+                Some(s.to_owned())
+            }
+        };
+        Ok(ManageSieveConfig {
+            enabled: self.prop_bool(node, "enabled")?,
+            host,
+            port,
+            tls,
+            script_name,
+        })
     }
 
     /// Reads `authserv-id "mx.example.net" …`: the `Authentication-Results`

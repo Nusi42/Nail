@@ -95,3 +95,7 @@ mcp-indicator-label = Agent activity
 mcp-indicator-reading = { $client } is reading what is on your screen
 mcp-indicator-editing = { $client } is editing your draft
 mcp-indicator-dismiss = Hide agent indicator
+
+## MCP settings (M2c, nail_api::mcp::McpSettingsIssue)
+
+mcp-settings-issue-port = Choose a port between 1024 and 65535.

@@ -2,6 +2,7 @@
 import type { AccountId } from "./AccountId";
 import type { AccountState } from "./AccountState";
 import type { ErrorCode } from "./ErrorCode";
+import type { LocalizedMessage } from "./LocalizedMessage";
 
 /**
  * Connection state of an account, shown by status indicators.
@@ -26,4 +27,9 @@ error: ErrorCode | null,
 /**
  * Diagnostic detail (English), `null` when there is no error.
  */
-message: string | null, };
+message: string | null, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, };

@@ -21,6 +21,9 @@ import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerRemote, decorateRemoteContent, isRemoteRequest } from "../features/remote/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
 import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
+import { answerSieve, isSieveRequest } from "../features/sieve/mock";
+import { answerSync, isSyncRequest } from "../features/sync/mock";
+import { answerTriage, isTriageRequest } from "../features/triage/mock";
 
 export interface MockTransportOptions {
   data?: MockData;
@@ -102,6 +105,9 @@ export class MockTransport implements Transport, MockCore {
     if (isCustomizationRequest(request)) return answerCustomization(this, request);
     if (isSecurityRequest(request)) return answerSecurity(this, request);
     if (isRemoteRequest(request)) return answerRemote(this, request);
+    if (isSieveRequest(request)) return answerSieve(this, request);
+    if (isTriageRequest(request)) return answerTriage(this, request);
+    if (isSyncRequest(request)) return answerSync(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };

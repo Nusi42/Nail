@@ -162,6 +162,7 @@ fn fixture() -> Fixture {
             thread_id: None,
             tags: m.tags.iter().map(|t| (*t).to_owned()).collect(),
             duplicates: vec![],
+            headers_only: false,
         };
         synced.push(SyncedMessage {
             message: StoredMessage::new(summary),

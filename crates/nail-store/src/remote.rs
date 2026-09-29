@@ -1567,6 +1567,7 @@ impl Store {
                     name: r.get(11)?,
                     error: error.map(|e| enum_from(12, e)).transpose()?,
                     detail: r.get(13)?,
+                    localized: None,
                 })
             })?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)

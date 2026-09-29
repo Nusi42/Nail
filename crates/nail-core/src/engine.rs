@@ -171,6 +171,7 @@ impl Service {
                 since: now_rfc3339(),
                 error,
                 message,
+                localized: None,
             };
             statuses.insert(account.clone(), status.clone());
             status
@@ -200,6 +201,7 @@ impl Service {
                         since: now_rfc3339(),
                         error: None,
                         message: None,
+                        localized: None,
                     })
             })
             .collect()

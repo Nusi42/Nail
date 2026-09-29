@@ -17,18 +17,24 @@ import type { DraftId } from "./DraftId";
 import type { ErrorCode } from "./ErrorCode";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
+import type { FolderSyncPolicy } from "./FolderSyncPolicy";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
+import type { JunkStatus } from "./JunkStatus";
 import type { KeyEncoding } from "./KeyEncoding";
 import type { KeyImportResult } from "./KeyImportResult";
 import type { KeyLookupCandidate } from "./KeyLookupCandidate";
 import type { KeyLookupFailure } from "./KeyLookupFailure";
 import type { LaunchRequest } from "./LaunchRequest";
+import type { LocalizedMessage } from "./LocalizedMessage";
 import type { McpAuditEntry } from "./McpAuditEntry";
 import type { McpClient } from "./McpClient";
 import type { McpServerInfo } from "./McpServerInfo";
+import type { McpSettings } from "./McpSettings";
 import type { MessageBody } from "./MessageBody";
+import type { MessageId } from "./MessageId";
 import type { MessageSummary } from "./MessageSummary";
+import type { NotificationSettings } from "./NotificationSettings";
 import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
@@ -47,13 +53,18 @@ import type { ResolvedTheme } from "./ResolvedTheme";
 import type { Rule } from "./Rule";
 import type { RuleMatch } from "./RuleMatch";
 import type { RuleRun } from "./RuleRun";
+import type { RuleSieveStatus } from "./RuleSieveStatus";
 import type { SavedSearch } from "./SavedSearch";
 import type { SearchError } from "./SearchError";
 import type { SearchHit } from "./SearchHit";
 import type { SecuritySettings } from "./SecuritySettings";
+import type { ServerSearch } from "./ServerSearch";
+import type { SieveAccountStatus } from "./SieveAccountStatus";
+import type { SnoozedMessage } from "./SnoozedMessage";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TotpEnrollment } from "./TotpEnrollment";
 import type { UiContext } from "./UiContext";
+import type { VacationSettings } from "./VacationSettings";
 import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
 import type { WindowsCertificate } from "./WindowsCertificate";
@@ -204,7 +215,11 @@ total: number,
 /**
  * The page of hits.
  */
-hits: Array<SearchHit>, } | { "type": "InvalidQuery", 
+hits: Array<SearchHit>, 
+/**
+ * The server-side part (M2c), absent when no server was asked.
+ */
+server?: ServerSearch, } | { "type": "InvalidQuery", 
 /**
  * What is wrong and where.
  */
@@ -503,7 +518,67 @@ requests: Array<LaunchRequest>, } | { "type": "MessageImported",
 /**
  * The imported message.
  */
-message: MessageSummary, } | { "type": "Error", 
+message: MessageSummary, } | { "type": "SieveStatus", 
+/**
+ * One entry per account asked for.
+ */
+accounts: Array<SieveAccountStatus>, } | { "type": "SieveScript", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * The script text (RFC 5228).
+ */
+script: string, 
+/**
+ * Where each rule runs.
+ */
+rules: Array<RuleSieveStatus>, } | { "type": "Vacation", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * Its vacation reply.
+ */
+settings: VacationSettings, } | { "type": "JunkStatus", 
+/**
+ * The account's classifier.
+ */
+status: JunkStatus, } | { "type": "Snoozed", 
+/**
+ * Soonest first.
+ */
+messages: Array<SnoozedMessage>, } | { "type": "NotificationSettings", 
+/**
+ * The settings.
+ */
+settings: NotificationSettings, } | { "type": "FolderSyncPolicy", 
+/**
+ * The folder's policy.
+ */
+policy: FolderSyncPolicy, } | { "type": "BodiesFetched", 
+/**
+ * Messages whose body is now stored.
+ */
+fetched: Array<MessageId>, 
+/**
+ * Messages that could not be fetched (offline, gone).
+ */
+failed: Array<MessageId>, } | { "type": "McpSettings", 
+/**
+ * The settings.
+ */
+settings: McpSettings, 
+/**
+ * Where the server runs now.
+ */
+info: McpServerInfo, } | { "type": "RuleSuggested", 
+/**
+ * The unsaved rule (empty id).
+ */
+rule: Rule, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */
@@ -512,4 +587,9 @@ code: ErrorCode,
  * Diagnostic detail (English, for logs and developer tools). The UI
  * shows a localized text chosen by `code`.
  */
-message: string, };
+message: string, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, };

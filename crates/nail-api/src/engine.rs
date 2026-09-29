@@ -25,6 +25,7 @@ use std::sync::{Mutex, PoisonError};
 
 use crate::accounts::SecretRef;
 use crate::error::{ApiError, ErrorCode};
+use crate::localized::LocalizedMessage;
 
 /// A boxed, `Send` future, as returned by the async trait methods here.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -42,6 +43,9 @@ pub struct EngineError {
     /// locked): the caller keeps the work queued and retries. `false` for
     /// permanent ones (SMTP 5xx, rejected credentials, message too large).
     pub retryable: bool,
+    /// The user-facing text (Fluent id + arguments), when the engine has a
+    /// more specific one than the error class (ADR 0043).
+    pub localized: Option<Box<LocalizedMessage>>,
 }
 
 impl EngineError {
@@ -51,6 +55,7 @@ impl EngineError {
             code,
             message: message.into(),
             retryable: false,
+            localized: None,
         }
     }
 
@@ -60,13 +65,25 @@ impl EngineError {
             code,
             message: message.into(),
             retryable: true,
+            localized: None,
         }
+    }
+
+    /// Attaches the user-facing text (Fluent id + arguments).
+    #[must_use]
+    pub fn with_localized(mut self, localized: LocalizedMessage) -> Self {
+        self.localized = Some(Box::new(localized));
+        self
     }
 }
 
 impl From<EngineError> for ApiError {
     fn from(err: EngineError) -> Self {
-        ApiError::new(err.code, err.message)
+        ApiError {
+            code: err.code,
+            message: err.message,
+            localized: err.localized,
+        }
     }
 }
 

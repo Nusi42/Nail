@@ -1079,6 +1079,7 @@ async fn remote_sockets_get_only_the_events_their_grant_covers() {
         account_id: message.account_id.clone(),
         code: ErrorCode::Network,
         message: "connection refused".into(),
+        localized: None,
     };
     for mail in [new_mail, changed, failed] {
         assert_eq!(service.remote_event(&narrow, mail.clone()).await, None);
@@ -1106,4 +1107,108 @@ async fn remote_sockets_get_only_the_events_their_grant_covers() {
             .await,
         None
     );
+}
+
+/// M2c (ADR 0043): the new requests are checked against the grant like the
+/// others: rule placements need every account, messages must be granted,
+/// settings are administration, and a narrowed session sees only its own
+/// notification overrides.
+#[tokio::test]
+async fn m2c_requests_respect_the_grant() {
+    let f = setup();
+    let service = &f.service;
+    let message = demo_messages(&f)[0].id.clone();
+    let full = remote_session(&f, "full", grant_with(RemoteAccessPreset::Full, &[])).await;
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+
+    // Rule placements span every account.
+    let status = Request::GetSieveStatus { account_id: None };
+    assert!(matches!(
+        service.handle_remote(&full, status.clone()).await,
+        Response::SieveStatus { .. }
+    ));
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, status).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // Messages outside the grant.
+    for request in [
+        Request::FetchMessageBodies {
+            message_ids: vec![message.clone()],
+        },
+        Request::RuleFromMessage {
+            message_id: message.clone(),
+        },
+        Request::MarkJunk {
+            message_ids: vec![message.clone()],
+            junk: true,
+        },
+    ] {
+        assert_eq!(
+            error_code(&service.handle_remote(&narrow, request).await),
+            Some(ErrorCode::Forbidden)
+        );
+    }
+    assert!(matches!(
+        service
+            .handle_remote(
+                &full,
+                Request::FetchMessageBodies {
+                    message_ids: vec![message.clone()],
+                },
+            )
+            .await,
+        Response::BodiesFetched { .. }
+    ));
+    // Accounts outside the grant.
+    assert_eq!(
+        error_code(
+            &service
+                .handle_remote(
+                    &narrow,
+                    Request::GetJunkStatus {
+                        account_id: DEMO_ACCOUNT_ID.into(),
+                    },
+                )
+                .await
+        ),
+        Some(ErrorCode::Forbidden)
+    );
+    // Administration needs `admin` (and a fresh login).
+    for request in [
+        Request::GetMcpSettings,
+        Request::UpdateNotificationSettings {
+            settings: Default::default(),
+        },
+    ] {
+        assert!(error_code(&service.handle_remote(&full, request).await).is_some());
+    }
+    // Notification overrides are narrowed to the grant.
+    let settings = nail_api::triage::NotificationSettings {
+        overrides: vec![nail_api::triage::NotificationOverride {
+            scope: nail_api::triage::NotificationScope::Account {
+                account_id: DEMO_ACCOUNT_ID.into(),
+            },
+            notify: false,
+        }],
+        ..Default::default()
+    };
+    assert!(matches!(
+        request(&f, Request::UpdateNotificationSettings { settings }).await,
+        Response::NotificationSettings { .. }
+    ));
+    match service
+        .handle_remote(&narrow, Request::GetNotificationSettings)
+        .await
+    {
+        Response::NotificationSettings { settings } => assert!(settings.overrides.is_empty()),
+        other => panic!("{other:?}"),
+    }
+    match service
+        .handle_remote(&full, Request::GetNotificationSettings)
+        .await
+    {
+        Response::NotificationSettings { settings } => assert_eq!(settings.overrides.len(), 1),
+        other => panic!("{other:?}"),
+    }
 }

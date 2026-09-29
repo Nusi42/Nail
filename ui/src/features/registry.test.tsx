@@ -22,7 +22,7 @@ import type { DialogProps } from "../layout/dialogRegistry";
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the M1b, M2a and M2b slots and contains every built-in", () => {
+  it("has the M1b, M2a, M2b and M2c slots and contains every built-in", () => {
     expect(Object.keys(features)).toEqual([
       "composer",
       "rules",
@@ -31,6 +31,10 @@ describe("feature registry", () => {
       "security",
       "remote",
       "launch",
+      "sieve",
+      "triage",
+      "sync",
+      "menus",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);

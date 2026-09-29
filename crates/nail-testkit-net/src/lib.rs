@@ -13,7 +13,8 @@
 //! * [`MockHttpServer`]: canned documents by host and path, for autoconfig,
 //!   ISPDB and Autodiscover;
 //! * [`MockDnsServer`] / [`DnsZone`]: SRV / MX / A answers over UDP
-//!   ([`hickory_proto`] messages) or in memory.
+//!   ([`hickory_proto`] messages) or in memory;
+//! * [`managesieve`]: the mock ManageSieve server (M2c WP51).
 //!
 //! TLS certificates come from [`nail_testkit::tls`]; clients trust
 //! `ca_der()` of the server. The mock IMAP server stays in `nail-testkit`.
@@ -22,6 +23,7 @@
 
 pub mod dns;
 pub mod http;
+pub mod managesieve;
 pub mod oauth;
 pub mod pop3;
 mod sasl;

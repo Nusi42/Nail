@@ -427,7 +427,11 @@ struct Plan {
 }
 
 fn conflict(kind: MergeConflictKind, message: String) -> MergeConflict {
-    MergeConflict { kind, message }
+    MergeConflict {
+        kind,
+        message,
+        localized: None,
+    }
 }
 
 impl Plan {

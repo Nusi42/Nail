@@ -196,17 +196,19 @@ fn folder_from_row(row: &Row<'_>) -> rusqlite::Result<Folder> {
 
 pub(crate) const MESSAGE_COLS: &str = "m.id, m.folder_id, m.account_id, m.subject, m.from_name,
     m.from_email, m.to_json, m.date, m.seen, m.flagged, m.answered, m.draft, m.has_attachments,
-    nail_open('messages.preview', m.preview), m.uid, m.blob_hash, m.thread_key, m.thread_id";
+    nail_open('messages.preview', m.preview), m.uid, m.blob_hash, m.thread_key, m.thread_id,
+    m.body_state = 'headers-only'";
 
 /// Number of columns in [`MESSAGE_COLS`]; extra columns selected after it
 /// start at this index.
-pub(crate) const MESSAGE_COL_COUNT: usize = 18;
+pub(crate) const MESSAGE_COL_COUNT: usize = 19;
 
 /// Reads a summary from a row selected with [`MESSAGE_COLS`]. `tags` stay
 /// empty; [`attach_tags`] fills them.
 pub(crate) fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MessageSummary> {
     let from_email: Option<String> = row.get(5)?;
     Ok(MessageSummary {
+        headers_only: row.get(18)?,
         id: MessageId(row.get(0)?),
         folder_id: FolderId(row.get(1)?),
         account_id: AccountId(row.get(2)?),

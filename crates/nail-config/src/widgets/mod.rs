@@ -5,7 +5,8 @@
 //! file (ADR 0022): [`core`] holds the built-in widgets, [`composer`],
 //! [`rules`], [`mcp`] and [`customization`] the widgets of WP21–WP24,
 //! [`security`] those of M2a WP34 (ADR 0029), [`remote`] those of M2b
-//! WP43 (ADR 0036). The
+//! WP43 (ADR 0036), [`sieve`], [`triage`] and [`sync`] those of M2c WP54
+//! (ADR 0043). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -16,6 +17,9 @@ mod mcp;
 mod remote;
 mod rules;
 mod security;
+mod sieve;
+mod sync;
+mod triage;
 
 /// Type of a widget option.
 #[derive(Debug, Clone, Copy)]
@@ -75,6 +79,9 @@ const TABLES: &[&[WidgetSpec]] = &[
     customization::WIDGETS,
     security::WIDGETS,
     remote::WIDGETS,
+    sieve::WIDGETS,
+    triage::WIDGETS,
+    sync::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

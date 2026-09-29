@@ -60,6 +60,7 @@ impl EventReplayer<'_> {
                 state,
                 error: error.map(|e| e.code),
                 message: error.map(|e| e.message.clone()),
+                localized: error.and_then(|e| e.localized.as_deref().cloned()),
             },
         });
     }

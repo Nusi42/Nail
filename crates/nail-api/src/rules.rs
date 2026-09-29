@@ -30,6 +30,7 @@ use ts_rs::TS;
 use crate::config::SourceLocation;
 use crate::domain::{FolderRole, MessageSummary};
 use crate::ids::{AccountId, IdentityId, OpId, RuleId, RuleRunId};
+use crate::localized::LocalizedMessage;
 
 /// A filter rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -518,6 +519,11 @@ pub struct RuleRun {
     pub undoable: bool,
     /// Diagnostic detail when `failed` (English), else `null`.
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 #[cfg(test)]

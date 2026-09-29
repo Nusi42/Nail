@@ -149,7 +149,10 @@ impl Service {
             | Request::UnlockKey { .. }
             | Request::GetSecuritySettings
             | Request::GetVaultStatus
-            | Request::ListRemoteContentAllows => Ok(()),
+            | Request::ListRemoteContentAllows
+            | Request::GetNotificationSettings
+            | Request::TestNotification
+            | Request::ListSnoozed { account_id: None } => Ok(()),
 
             // Administration (`admin` and a fresh login, checked by
             // `authorize`), self-service on the session's own user, or
@@ -216,7 +219,12 @@ impl Service {
             | Request::CancelPairingCode { .. }
             | Request::ListRemoteAudit { .. }
             | Request::TakeLaunchRequests
-            | Request::ImportMessageFile { .. } => {
+            | Request::ImportMessageFile { .. }
+            | Request::SyncSieve { .. }
+            | Request::UpdateNotificationSettings { .. }
+            | Request::SetFolderSyncPolicy { .. }
+            | Request::GetMcpSettings
+            | Request::UpdateMcpSettings { .. } => {
                 // Defence in depth: this arm relies on `authorize`; if a
                 // request here were ever made a plain scope request, it
                 // would need its own target check instead.
@@ -385,6 +393,40 @@ impl Service {
                     self.check_folder(access, folder).await?;
                 }
                 self.check_messages(access, message_ids).await
+            }
+
+            // M2c: rule placements and scripts reveal every rule.
+            Request::GetSieveStatus { .. } | Request::PreviewSieveScript { .. } => {
+                check_full(access)
+            }
+            Request::GetVacation { account_id }
+            | Request::UpdateVacation { account_id, .. }
+            | Request::GetJunkStatus { account_id }
+            | Request::UpdateJunkSettings { account_id, .. }
+            | Request::ResetJunkClassifier { account_id }
+            | Request::ListSnoozed {
+                account_id: Some(account_id),
+            } => check_account(access, account_id),
+            Request::MarkJunk { message_ids, .. }
+            | Request::UnsnoozeMessages { message_ids }
+            | Request::FetchMessageBodies { message_ids } => {
+                self.check_messages(access, message_ids).await
+            }
+            Request::SnoozeMessages {
+                message_ids,
+                wake_folder_id,
+                ..
+            } => {
+                if let Some(folder) = wake_folder_id {
+                    self.check_folder(access, folder).await?;
+                }
+                self.check_messages(access, message_ids).await
+            }
+            Request::GetFolderSyncPolicy { folder_id } => {
+                self.check_folder(access, folder_id).await
+            }
+            Request::RuleFromMessage { message_id } => {
+                self.check_readable(access, message_id).await
             }
         }
     }
@@ -649,6 +691,7 @@ impl Service {
             offset: query.offset,
             total,
             hits,
+            server: None,
         })
     }
 
@@ -702,13 +745,43 @@ impl Service {
                 offset,
                 total,
                 mut hits,
+                server,
             } => {
                 hits.retain(|h| keep(&h.message));
+                let server = server.map(|mut s| {
+                    s.accounts.retain(|a| access.allows_account(a));
+                    s.failed.retain(|a| access.allows_account(a));
+                    s
+                });
                 Response::SearchResults {
                     offset,
                     total,
                     hits,
+                    server,
                 }
+            }
+            Response::Snoozed { mut messages } => {
+                messages.retain(|m| keep(&m.message));
+                Response::Snoozed { messages }
+            }
+            Response::NotificationSettings { mut settings } => {
+                let mut kept = Vec::with_capacity(settings.overrides.len());
+                for o in settings.overrides {
+                    let visible = match &o.scope {
+                        nail_api::triage::NotificationScope::Account { account_id } => {
+                            access.allows_account(account_id)
+                        }
+                        nail_api::triage::NotificationScope::Folder { folder_id } => self
+                            .folder_allowed(access, folder_id)
+                            .await
+                            .unwrap_or(false),
+                    };
+                    if visible {
+                        kept.push(o);
+                    }
+                }
+                settings.overrides = kept;
+                Response::NotificationSettings { settings }
             }
             Response::AccountStatuses { mut statuses } => {
                 statuses.retain(|s| access.allows_account(&s.account_id));
@@ -905,6 +978,22 @@ impl Service {
             Event::RemoteSessionEnded { session_id, .. } => admin || *session_id == ctx.session.id,
             // Desktop-only flows.
             Event::OAuthFinished { .. } | Event::LaunchRequested => false,
+            // M2c.
+            Event::SieveStatusChanged { .. } => full(&access),
+            Event::JunkStatusChanged { account_id } => access.allows_account(account_id),
+            Event::SnoozeChanged | Event::NotificationSettingsChanged => true,
+            Event::NotificationRequested { notification } => {
+                let account_ok = notification
+                    .account_id
+                    .as_ref()
+                    .is_none_or(|a| access.allows_account(a));
+                let folder_ok = match &notification.folder_id {
+                    Some(folder) => self.folder_allowed(&access, folder).await.unwrap_or(false),
+                    None => true,
+                };
+                account_ok && folder_ok
+            }
+            Event::McpSettingsChanged => admin,
         };
         allowed.then_some(event)
     }

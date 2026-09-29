@@ -36,9 +36,16 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        sessions, pairing codes, RemoteGrant, audit, the POST /api/auth login
                        protocol), remote_content (allow-lists, nail-proxy: URLs) (ADR 0036);
                        launch (LaunchRequest / MailtoLink: mailto: and opened files; ADR 0041)
+                       M2c: localized (LocalizedMessage = Fluent id + args; every English
+                       diagnostic has an optional `localized` sibling), sieve (ManageSieve
+                       settings, rule placement, vacation), triage (junk, snooze,
+                       notifications), sync (folder sync policy, body state), menus
+                       (context menus resolved from the layout) (ADR 0043)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
-                       feature in src/widgets/; rules.kdl in src/rules.rs (WP22)
+                       feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
+                       M2c: `sieve` node of an IMAP account, reset-toolbar / reset-key-binding
+                       write-back, src/l10n.rs (fluent-bundle, WP53) (ADR 0043)
 crates/nail-store      SQLite metadata (v6), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -48,7 +55,9 @@ crates/nail-store      SQLite metadata (v6), blob store, per-account operation q
                        set_cipher / convert / hashes / remove_temp_files (ADR 0032);
                        v6: remote.rs — remote users (Argon2id hash / keychain TOTP ref only),
                        passkeys, devices, sessions (token hashes, rotation), pairing codes,
-                       throttle, remote audit, remote-content allow-lists (ADR 0036)
+                       throttle, remote audit, remote-content allow-lists (ADR 0036);
+                       v7: triage.rs — messages.body_state, snoozes, junk classifier (hashed
+                       tokens), notification overrides, Sieve state + vacation (ADR 0043)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
                        warnings) (ADR 0032); remote_content.rs: ProxyRewriter, parse_message_with
@@ -63,7 +72,9 @@ crates/nail-search     Tantivy index + query language parser (ADR 0016); open_wi
 crates/nail-testkit    mock IMAP server, .eml corpus, demo seed; corpus/crypto/{pgp,smime}: end-to-end
                        test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
                        smime/ada-{work,home}.p12 are the demo-multi certificates)
-crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
+crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers; managesieve.rs (M2c WP51)
+crates/nail-sieve      rules + vacation → Sieve, ManageSieve client (M2c WP51; ADR 0043)
+crates/nail-triage     pure logic: junk classifier, snooze scheduler, notification policy (M2c WP52)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -93,7 +104,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M2b: remote.rs (requests, RemoteState: RemoteAuth, lazy proxy Signer / Proxy,
                        RemoteUiCommand host link), remote_access.rs (handle_remote: authorize, grant
                        narrowing, encrypted gate, render_url), launch.rs (launch requests,
-                       ImportMessageFile) (ADRs 0036, 0041)
+                       ImportMessageFile) (ADRs 0036, 0041);
+                       M2c: sieve.rs, triage.rs, sync_policy.rs (store-backed parts served,
+                       the rest `unsupported` until WP55), MCP settings, RuleFromMessage (ADR 0043)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041)
@@ -102,11 +115,12 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server and the remo
                        window created in code; nail-proxy protocol; single instance); launch.rs,
                        portable.rs, setup_helper.rs; installer/ (NSIS template copy + hooks; ADR 0040)
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
-                       M2a: security/; M2b: remote/, launch/); RemoteGate.tsx (login gate),
+                       M2a: security/; M2b: remote/, launch/; M2c: sieve/, triage/, sync/,
+                       menus/ (resolve.ts)); RemoteGate.tsx (login gate),
                        api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc)
 e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts)
 defaults/              shipped theme.kdl + layout.kdl
-locales/               Fluent catalogs (en, de)
+locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c)
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
 ```
@@ -193,6 +207,13 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `Service::remote_event`; outside internet mode only local peers connect
   (`TransportOptions::public_peers`, `nail_api::remote::is_local_address`); the portable zip
   carries `Nail/ui/`.
+- M2c contract: ADR 0043 (`LocalizedMessage` + `localized` siblings on every diagnostic; Sieve /
+  vacation, junk / snooze / notifications, folder sync policies + `headers_only`, context menus,
+  `reset-toolbar` / `reset-key-binding`, MCP settings, `RuleFromMessage`; store v7; stub crates
+  `nail-sieve` / `nail-triage`; slots incl. `nail-config/src/l10n.rs`,
+  `nail-testkit-net/src/managesieve.rs`, `locales/*/core{,-sieve,-triage}.ftl`). The core serves
+  the store-backed requests; `SyncSieve`, `PreviewSieveScript`, `MarkJunk`, `(Un)SnoozeMessages`
+  answer `unsupported` until WP55. `nail-api/tests/catalog.rs` checks contract Fluent ids.
 - `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
   endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
   (`open_editor`).

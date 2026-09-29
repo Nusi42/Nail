@@ -121,6 +121,7 @@ async fn oauth_accounts_sign_in_test_save_and_sync() {
         sync: Default::default(),
         save_sent_copy: None,
         authserv_ids: Vec::new(),
+        sieve: None,
     };
     let sign_in = vec![SecretInput {
         endpoint: EndpointSlot::Incoming,

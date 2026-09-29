@@ -101,6 +101,7 @@ pub(crate) async fn run(
             account_id: account.id.clone(),
             code,
             message: err.to_string(),
+            localized: None,
         });
         if !pause(backoff, &signals, &mut stop).await {
             break;

@@ -174,6 +174,7 @@ fn work() -> AccountConfig {
         },
         save_sent_copy: None,
         authserv_ids: Vec::new(),
+        sieve: None,
     }
 }
 
@@ -214,6 +215,7 @@ fn home() -> AccountConfig {
         sync: SyncPolicy::default(),
         save_sent_copy: Some(false),
         authserv_ids: Vec::new(),
+        sieve: None,
     }
 }
 
@@ -1177,4 +1179,70 @@ fn authserv_ids_are_read_and_written() {
         let (_, _, message) = error(&account_with(&format!("    imap host=\"h\"\n    {body}")));
         assert!(message.contains(needle), "{body}: {message}");
     }
+}
+
+/// M2c WP50: `sieve` (ManageSieve) settings of an IMAP account; read,
+/// validated, written back.
+#[test]
+fn sieve_settings_are_read_and_written() {
+    use nail_api::accounts::TlsMode;
+    use nail_api::sieve::ManageSieveConfig;
+
+    let text = account_with(
+        "    imap host=\"h\"\n    sieve host=\"sieve.example.org\" port=2000 tls=\"implicit\" script=\"Nail rules\" enabled=#false",
+    );
+    let config = parse_accounts(&text, "accounts.kdl").unwrap();
+    assert_eq!(
+        config.accounts[0].sieve,
+        Some(ManageSieveConfig {
+            enabled: Some(false),
+            host: Some("sieve.example.org".into()),
+            port: Some(2000),
+            tls: Some(TlsMode::Implicit),
+            script_name: Some("Nail rules".into()),
+        })
+    );
+    let bare = parse_accounts(
+        &account_with("    imap host=\"h\"\n    sieve"),
+        "accounts.kdl",
+    )
+    .unwrap();
+    assert_eq!(bare.accounts[0].sieve, Some(ManageSieveConfig::default()));
+    let plain = parse_accounts(&account_with("    imap host=\"h\""), "accounts.kdl").unwrap();
+    assert_eq!(plain.accounts[0].sieve, None);
+
+    let mut d = AccountsDocument::empty("accounts.kdl");
+    d.set_config(config.clone()).unwrap();
+    assert!(
+        d.text().contains(
+            "sieve enabled=#false host=\"sieve.example.org\" port=2000 tls=\"implicit\" script=\"Nail rules\""
+        ),
+        "{}",
+        d.text()
+    );
+    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+
+    let mut d = doc(&text);
+    let mut account = d.config().accounts[0].clone();
+    account.sieve = Some(ManageSieveConfig::default());
+    d.upsert_account(account.clone()).unwrap();
+    assert_eq!(d.config().accounts[0], account);
+    account.sieve = None;
+    d.upsert_account(account).unwrap();
+    assert!(!d.text().contains("sieve"), "{}", d.text());
+
+    for (body, needle) in [
+        ("    imap host=\"h\"\n    sieve port=0", "port"),
+        ("    imap host=\"h\"\n    sieve tls=\"none\"", "tls"),
+        ("    imap host=\"h\"\n    sieve script=\"a/b\"", "script"),
+        ("    imap host=\"h\"\n    sieve host=\"a b\"", "host"),
+        ("    imap host=\"h\"\n    sieve\n    sieve", "set twice"),
+        ("    imap host=\"h\"\n    sieve \"x\"", "argument"),
+        ("    pop3 host=\"h\"\n    sieve", "IMAP"),
+    ] {
+        let (_, _, message) = error(&account_with(body));
+        assert!(message.contains(needle), "{body}: {message}");
+    }
+    let schema = serde_json::to_string(&nail_config::accounts_schema()).unwrap();
+    assert!(schema.contains("ManageSieve"), "{schema}");
 }

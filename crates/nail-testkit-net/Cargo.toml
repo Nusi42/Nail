@@ -1,6 +1,6 @@
 [package]
 name = "nail-testkit-net"
-description = "Test support: mock SMTP, POP3, OAuth2, HTTP and DNS servers on localhost"
+description = "Test support: mock SMTP, POP3, OAuth2, HTTP, DNS and ManageSieve servers on localhost"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

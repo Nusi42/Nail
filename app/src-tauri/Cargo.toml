@@ -25,6 +25,8 @@ nail-core = { workspace = true, features = ["demo"] }
 nail-server.workspace = true
 nail-proxy.workspace = true
 tauri-plugin-single-instance.workspace = true
+# OS notifications for new mail (M2c; shown from Rust, ADR 0043).
+tauri-plugin-notification.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

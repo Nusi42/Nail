@@ -46,6 +46,7 @@ mod customize;
 mod error;
 mod kdl_edit;
 mod kdl_util;
+pub mod l10n;
 mod layout;
 mod manager;
 mod merge;

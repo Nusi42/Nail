@@ -50,6 +50,7 @@ pub fn summary(id: &str, account: &str, folder: &str, thread: &str) -> MessageSu
         thread_id: Some(thread.into()),
         tags: vec![],
         duplicates: vec![],
+        headers_only: false,
     }
 }
 
@@ -199,6 +200,7 @@ impl McpData for FakeData {
             warnings: Vec::new(),
             remote_content: None,
             render_url: None,
+            junk: None,
         })
     }
 

@@ -55,4 +55,16 @@ context: string,
 /**
  * Key sequence.
  */
+key: string, } | { "op": "reset-toolbar", 
+/**
+ * Toolbar name.
+ */
+toolbar: string, } | { "op": "reset-key-binding", 
+/**
+ * Context.
+ */
+context: string, 
+/**
+ * Key sequence.
+ */
 key: string, };

@@ -950,6 +950,7 @@ async fn accounts_are_discovered_tested_added_and_removed() {
         sync: Default::default(),
         save_sent_copy: None,
         authserv_ids: Vec::new(),
+        sieve: None,
     };
     let password = |p: &str| {
         vec![SecretInput {

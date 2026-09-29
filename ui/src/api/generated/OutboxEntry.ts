@@ -4,6 +4,7 @@ import type { Address } from "./Address";
 import type { DraftId } from "./DraftId";
 import type { ErrorCode } from "./ErrorCode";
 import type { IdentityId } from "./IdentityId";
+import type { LocalizedMessage } from "./LocalizedMessage";
 import type { OutboxId } from "./OutboxId";
 import type { OutboxState } from "./OutboxState";
 
@@ -54,4 +55,9 @@ error: ErrorCode | null,
 /**
  * Diagnostic detail of the last failed attempt, else `null`.
  */
-message: string | null, };
+message: string | null, 
+/**
+ * The user-facing text (Fluent id + arguments) when the core has a more
+ * specific one than the error class; else `null` (ADR 0043).
+ */
+localized?: LocalizedMessage, };

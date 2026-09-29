@@ -950,6 +950,33 @@ impl Service {
             request @ (Request::TakeLaunchRequests | Request::ImportMessageFile { .. }) => {
                 crate::launch::handle(self, request).await?
             }
+            // M2c (ADR 0043).
+            request @ (Request::GetSieveStatus { .. }
+            | Request::SyncSieve { .. }
+            | Request::PreviewSieveScript { .. }
+            | Request::GetVacation { .. }
+            | Request::UpdateVacation { .. }) => crate::sieve::handle(self, request).await?,
+            request @ (Request::MarkJunk { .. }
+            | Request::GetJunkStatus { .. }
+            | Request::UpdateJunkSettings { .. }
+            | Request::ResetJunkClassifier { .. }
+            | Request::SnoozeMessages { .. }
+            | Request::UnsnoozeMessages { .. }
+            | Request::ListSnoozed { .. }
+            | Request::GetNotificationSettings
+            | Request::UpdateNotificationSettings { .. }
+            | Request::TestNotification) => crate::triage::handle(self, request).await?,
+            request @ (Request::GetFolderSyncPolicy { .. }
+            | Request::SetFolderSyncPolicy { .. }
+            | Request::FetchMessageBodies { .. }) => {
+                crate::sync_policy::handle(self, request).await?
+            }
+            request @ (Request::GetMcpSettings | Request::UpdateMcpSettings { .. }) => {
+                crate::mcp::handle(self, request).await?
+            }
+            request @ Request::RuleFromMessage { .. } => {
+                crate::rules::handle(self, request).await?
+            }
         })
     }
 }

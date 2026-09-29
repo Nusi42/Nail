@@ -84,6 +84,7 @@ Inside the account:
 | `identity` | A sending identity (any number; the first is the default) |
 | `sync` | Which folders to synchronize and how much to download |
 | `authserv-id` | Which receiving servers' sender checks to trust (see below) |
+| `sieve` | Server-side rules and vacation replies over ManageSieve (IMAP accounts; see below) |
 
 ### Trusted sender checks (`authserv-id`)
 
@@ -109,6 +110,32 @@ name that belongs to the server that received the mail); it counts once
 you save it. Check it first: in the source of a received message it is
 the first word after `Authentication-Results:` in the topmost such
 header.
+
+### Server-side rules (`sieve`)
+
+Many IMAP providers run filters on the server with **Sieve**, managed over
+**ManageSieve**. With a `sieve` node, Nail uploads the rules it can express
+in Sieve (and your vacation reply) to the server, so they apply even while
+Nail is closed; the rules editor shows for each rule whether it runs on the
+server or in Nail. Nail signs in with the account's IMAP login.
+
+```kdl
+account "work" email="ada@work.example" {
+    imap host="imap.work.example"
+    sieve
+}
+```
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `host` | ManageSieve server | the IMAP host |
+| `port` | Port number | 4190 |
+| `tls` | `"starttls"`, `"implicit"` or `"plaintext"` (test servers only) | `"starttls"` |
+| `script` | Name of Nail's script on the server (Nail makes it the active one; other scripts stay untouched) | `"nail"` |
+| `enabled` | `#false` keeps the settings but runs every rule in Nail | `#true` |
+
+Without a `sieve` node every rule runs in Nail. POP3 accounts cannot use
+`sieve`.
 
 ## Servers
 

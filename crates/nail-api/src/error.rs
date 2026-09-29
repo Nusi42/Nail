@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::localized::LocalizedMessage;
+
 /// Machine-readable error classes. The UI maps each code to the Fluent
 /// message `error-<code with "_" replaced by "-">`, e.g. `not_found` →
 /// `error-not-found`.
@@ -120,7 +122,8 @@ impl std::fmt::Display for ErrorCode {
     }
 }
 
-/// An error returned by the API: a code plus a diagnostic message.
+/// An error returned by the API: a code, a diagnostic message (English, for
+/// logs) and optionally the user-facing text ([`LocalizedMessage`]).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, TS)]
 #[error("{code}: {message}")]
 pub struct ApiError {
@@ -128,6 +131,11 @@ pub struct ApiError {
     pub code: ErrorCode,
     /// Diagnostic detail (English, for logs and developer tools).
     pub message: String,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<Box<LocalizedMessage>>,
 }
 
 impl ApiError {
@@ -136,7 +144,15 @@ impl ApiError {
         Self {
             code,
             message: message.into(),
+            localized: None,
         }
+    }
+
+    /// Attaches the user-facing text (Fluent id + arguments).
+    #[must_use]
+    pub fn with_localized(mut self, localized: LocalizedMessage) -> Self {
+        self.localized = Some(Box::new(localized));
+        self
     }
 
     /// Shorthand for [`ErrorCode::NotFound`].

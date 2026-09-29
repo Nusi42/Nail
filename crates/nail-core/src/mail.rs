@@ -240,6 +240,7 @@ impl Service {
                     state: OpState::Pending,
                     error: None,
                     message: None,
+                    localized: None,
                 },
             });
             op_ids.push(op_id);
@@ -301,6 +302,7 @@ impl Service {
                 state: OpState::Pending,
                 error: None,
                 message: None,
+                localized: None,
             },
         });
         self.request_replay(&queued.account_id);

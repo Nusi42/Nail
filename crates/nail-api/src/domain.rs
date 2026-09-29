@@ -10,6 +10,7 @@ use ts_rs::TS;
 use crate::ids::{AccountId, FolderId, MessageId, ThreadId};
 use crate::remote_content::RemoteContentInfo;
 use crate::security::{AuthResults, MessageWarning, SecurityStatus};
+use crate::triage::JunkVerdict;
 
 /// The protocol family behind an account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -152,6 +153,11 @@ pub struct MessageSummary {
     /// member accounts, collapsed into this row. Empty elsewhere.
     #[serde(default)]
     pub duplicates: Vec<MessageLocation>,
+    /// The body is not stored locally (sync policy headers-only or recent
+    /// N days, M2c); opening the message fetches it. Absent = `false`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub headers_only: bool,
 }
 
 /// Where a copy of a message lives.
@@ -282,6 +288,11 @@ pub struct MessageBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub render_url: Option<String>,
+    /// Junk verdict (M2c): absent when the message was neither marked nor
+    /// classified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub junk: Option<JunkVerdict>,
 }
 
 #[cfg(test)]
@@ -337,6 +348,7 @@ mod tests {
             thread_id: Some("t1".into()),
             tags: vec!["work".into()],
             duplicates: vec![],
+            headers_only: false,
         };
         let json = serde_json::to_value(&summary).unwrap();
         assert_eq!(

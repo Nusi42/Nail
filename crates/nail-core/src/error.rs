@@ -122,6 +122,7 @@ impl From<CoreError> for EngineError {
                 code: other.code(),
                 retryable: other.is_transient(),
                 message: other.to_string(),
+                localized: None,
             },
         }
     }

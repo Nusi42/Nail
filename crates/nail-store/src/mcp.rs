@@ -311,6 +311,7 @@ impl Store {
                     name: r.get(5)?,
                     outcome: enum_from(6, r.get(6)?)?,
                     detail: r.get(7)?,
+                    localized: None,
                 })
             })?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)

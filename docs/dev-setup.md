@@ -382,3 +382,11 @@ For M2b:
 - **0040:** installer, portable build, cargo-deny, SBOMs, CI jobs
 - **0041:** M2b integration (remote-UI host, `handle_remote`, remote content through the proxy,
   Trusted Types, sandbox rendering, launch requests, e2e)
+
+For M2c:
+
+- **0043:** the M2c contract (localized core messages, Sieve / vacation, junk / snooze /
+  notifications, folder sync policies and on-demand bodies, context menus, layout reset
+  patches, MCP port setting, `RuleFromMessage`, store v7, the `nail-sieve` / `nail-triage`
+  stubs, slots). Fluent texts built in Rust live in `locales/<lang>/core*.ftl`;
+  `cargo test -p nail-api --test catalog` checks that every id the contract names exists.

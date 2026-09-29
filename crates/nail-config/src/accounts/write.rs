@@ -275,6 +275,15 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
     if account.sync != SyncPolicy::default() {
         children.push(render_sync(&account.sync, indent));
     }
+    if let Some(sieve) = &account.sieve {
+        let line = Line::new("sieve")
+            .bool_opt("enabled", sieve.enabled)
+            .prop_opt("host", sieve.host.as_deref())
+            .num_opt("port", sieve.port.map(u32::from))
+            .prop_opt("tls", sieve.tls.map(tls_name))
+            .prop_opt("script", sieve.script_name.as_deref());
+        children.push(line.finish(1, indent, &[]));
+    }
     if !account.authserv_ids.is_empty() {
         let mut ids = Line::new("authserv-id");
         for id in &account.authserv_ids {
@@ -487,6 +496,7 @@ const SINGLETONS: &[&str] = &[
     "crypto",
     "scopes",
     "authserv-id",
+    "sieve",
 ];
 
 /// Properties that identify a child among siblings of the same name.

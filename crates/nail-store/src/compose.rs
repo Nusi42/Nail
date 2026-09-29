@@ -136,6 +136,7 @@ fn entry_from_row(row: &Row<'_>) -> rusqlite::Result<OutboxEntry> {
         attempts: row.get(8)?,
         error: error.as_deref().and_then(code_from_sql),
         message: row.get(10)?,
+        localized: None,
     })
 }
 

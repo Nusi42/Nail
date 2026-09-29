@@ -21,6 +21,7 @@ use ts_rs::TS;
 
 use crate::config::layout::ToolbarItem;
 use crate::ids::ConfigBackupId;
+use crate::localized::LocalizedMessage;
 
 /// A configuration file in the config directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -65,6 +66,11 @@ pub struct ConfigIssue {
     pub column: u32,
     /// Diagnostic message (English, like a compiler message).
     pub message: String,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 /// Addresses a node of a layout window tree: the window, the index of the
@@ -122,6 +128,23 @@ pub enum LayoutPatch {
     /// Remove a key binding (written as `unbind` when it comes from the
     /// defaults).
     RemoveKeyBinding {
+        /// Context.
+        context: String,
+        /// Key sequence.
+        key: String,
+    },
+    /// Restore a toolbar to the default layout's version (M2c): the file's
+    /// definitions of it are removed from a sparse file (`extends`), or
+    /// replaced by the default items in a full one. A toolbar the defaults
+    /// do not have is removed.
+    ResetToolbar {
+        /// Toolbar name.
+        toolbar: String,
+    },
+    /// Restore the default binding of a key (M2c): the file's `bind` /
+    /// `unbind` lines for the key are removed; in a full file the default
+    /// binding, if any, is written back.
+    ResetKeyBinding {
         /// Context.
         context: String,
         /// Key sequence.
@@ -197,6 +220,11 @@ pub struct MergeConflict {
     pub kind: MergeConflictKind,
     /// Diagnostic detail (English).
     pub message: String,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 /// One item the user chooses for.
@@ -311,6 +339,14 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(add, LayoutPatch::AddKeyBinding { args, .. } if args.is_empty()));
+        let reset: LayoutPatch =
+            serde_json::from_value(json!({"op": "reset-toolbar", "toolbar": "reader"})).unwrap();
+        assert!(matches!(reset, LayoutPatch::ResetToolbar { .. }));
+        let reset: LayoutPatch = serde_json::from_value(
+            json!({"op": "reset-key-binding", "context": "list", "key": "e"}),
+        )
+        .unwrap();
+        assert!(matches!(reset, LayoutPatch::ResetKeyBinding { .. }));
         assert_eq!(MergeTake::default(), MergeTake::Mine);
     }
 }

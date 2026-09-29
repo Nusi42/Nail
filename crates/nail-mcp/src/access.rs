@@ -165,6 +165,7 @@ mod tests {
             thread_id: None,
             tags: vec![],
             duplicates: vec![],
+            headers_only: false,
         }
     }
 

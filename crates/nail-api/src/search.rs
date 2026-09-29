@@ -34,6 +34,20 @@ pub struct SearchQuery {
     pub sort: SearchSort,
 }
 
+/// The server-side part of a search (M2c): messages whose body is not
+/// stored locally ([`crate::MessageSummary::headers_only`]) are searched on
+/// the server (IMAP `SEARCH`) and the hits merged into the result.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+pub struct ServerSearch {
+    /// Accounts asked.
+    pub accounts: Vec<AccountId>,
+    /// Hits that came only from the server.
+    pub hits: u32,
+    /// Accounts that could not be asked (offline, error); their
+    /// headers-only messages were matched on headers only.
+    pub failed: Vec<AccountId>,
+}
+
 /// Order of search hits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]

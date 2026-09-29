@@ -31,6 +31,7 @@ use ts_rs::TS;
 
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, KeyId};
+use crate::localized::LocalizedMessage;
 
 // ---------------------------------------------------------------------------
 // Technologies and trust
@@ -693,6 +694,11 @@ pub struct KeyImportIssue {
     pub code: ErrorCode,
     /// Diagnostic detail (English).
     pub message: String,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 /// Result of an import.
@@ -764,6 +770,11 @@ pub struct KeyLookupFailure {
     pub code: ErrorCode,
     /// Diagnostic detail (English).
     pub message: String,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 /// Windows certificate stores Nail can read.
@@ -1108,6 +1119,11 @@ pub struct VaultStatus {
     /// Diagnostic detail (English), else `null`.
     #[serde(default)]
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 impl VaultStatus {
@@ -1121,6 +1137,7 @@ impl VaultStatus {
             key_in_keychain: false,
             error: None,
             message: None,
+            localized: None,
         }
     }
 }

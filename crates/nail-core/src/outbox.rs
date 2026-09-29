@@ -73,6 +73,7 @@ fn send_status(service: &Service, entry: &OutboxEntry) {
         state: entry.state,
         error: entry.error,
         message: entry.message.clone(),
+        localized: None,
     });
 }
 
@@ -241,6 +242,7 @@ impl Service {
             state: OutboxState::Cancelled,
             error: None,
             message: None,
+            localized: None,
         });
         Ok(draft)
     }

@@ -27,6 +27,7 @@ import {
 } from "../../api/mockMail";
 import { MOCK_NOW } from "../../api/mockData";
 import { explain, resolveFolder } from "./mockEval";
+import { ruleFromMessage } from "./model";
 import { ruleFromText, ruleIdBase, ruleToText } from "./mockText";
 import type { ExplainedMatch } from "./types";
 
@@ -42,6 +43,7 @@ export const RULES_REQUESTS = [
   "UndoRuleRun",
   "RuleToText",
   "RuleFromText",
+  "RuleFromMessage",
 ] as const satisfies readonly Request["type"][];
 
 export type RulesRequest = Extract<Request, { type: (typeof RULES_REQUESTS)[number] }>;
@@ -413,6 +415,11 @@ export function answerRules(core: MockCore, request: RulesRequest): Response {
     case "RuleFromText": {
       const { rule, errors } = ruleFromText(request.text);
       return { type: "RuleParsed", rule, errors };
+    }
+    case "RuleFromMessage": {
+      const message = core.data.messages.find((m) => m.id === request.message_id);
+      if (!message) return errorResponse("not_found", `message ${request.message_id} not found`);
+      return { type: "RuleSuggested", rule: ruleFromMessage(message) };
     }
   }
 }

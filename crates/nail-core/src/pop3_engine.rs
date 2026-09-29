@@ -237,6 +237,7 @@ pub(crate) async fn run(
                     account_id: account.id.clone(),
                     code,
                     message: err.to_string(),
+                    localized: None,
                 });
                 let delay = backoff;
                 backoff = (backoff * 2).min(timing.reconnect_max);

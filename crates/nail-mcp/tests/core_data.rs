@@ -45,6 +45,7 @@ impl CoreAccess for FakeCore {
             Request::ListRules => Response::Error {
                 code: ErrorCode::Unsupported,
                 message: "rules arrive with WP22".into(),
+                localized: None,
             },
             Request::GetUiContext => Response::UiContext {
                 context: UiContext {
@@ -56,6 +57,7 @@ impl CoreAccess for FakeCore {
                 offset: query.offset,
                 total: 0,
                 hits: vec![],
+                server: None,
             },
             _ => Response::Done,
         }

@@ -59,6 +59,7 @@ pub fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessa
         thread_id: None,
         tags: Vec::new(),
         duplicates: Vec::new(),
+        headers_only: false,
     })
 }
 

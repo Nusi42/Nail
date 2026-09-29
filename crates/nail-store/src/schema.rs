@@ -594,6 +594,109 @@ CREATE TABLE remote_content_allow (
 ) WITHOUT ROWID;
 "#;
 
+/// Schema v7 (M2c WP50, ADR 0043): sync policies, snooze, the junk
+/// classifier, notification overrides and the Sieve state.
+///
+/// * `messages.body_state` — where the body is (`synced`, `headers-only`,
+///   `on-demand`; `nail_api::sync::BodyState`). Existing rows are `synced`.
+///   The policy itself stays in `accounts.kdl`.
+/// * `snoozed_messages` — wake times of snoozed messages (the message sits
+///   in the hidden Snoozed folder with the `$Snoozed` keyword). No foreign
+///   key to `messages`: a resync may give the message a new row; the core
+///   rebinds it by `rfc_message_id` or drops the entry.
+/// * `junk_settings`, `junk_tokens`, `junk_training`, `junk_verdicts` — the
+///   per-account classifier. Tokens are stored **hashed** (64-bit prefix of
+///   SHA-256, [`crate::hash_junk_token`]) so the table does not spell out
+///   words of the mail; training is recorded per message (by `Message-ID`)
+///   so re-marking a message moves it between classes instead of counting
+///   it twice.
+/// * `notify_overrides` — per-account / per-folder notification overrides
+///   (removed with their account or folder by triggers); the global
+///   notification settings live in `app_settings`.
+/// * `sieve_state` — per account: hash and time of the uploaded script,
+///   the server's extensions and other scripts, the vacation settings and
+///   the last error.
+const V7: &str = r#"
+ALTER TABLE messages ADD COLUMN body_state TEXT NOT NULL DEFAULT 'synced'
+    CHECK (body_state IN ('synced', 'headers-only', 'on-demand'));
+CREATE INDEX messages_headers_only ON messages(folder_id) WHERE body_state = 'headers-only';
+
+CREATE TABLE snoozed_messages (
+    message_id     TEXT PRIMARY KEY NOT NULL,
+    account_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- Unix seconds (UTC).
+    until          INTEGER NOT NULL,
+    wake_folder_id TEXT NOT NULL,
+    snoozed_at     INTEGER NOT NULL,
+    -- Message-ID header (without angle brackets), to find the message again.
+    rfc_message_id TEXT
+) WITHOUT ROWID;
+CREATE INDEX snoozed_until ON snoozed_messages(until);
+
+CREATE TABLE junk_settings (
+    account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- JSON (nail_api::triage::JunkSettings).
+    settings   TEXT NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE junk_tokens (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- 16 hex characters: the first 64 bits of SHA-256 of the token.
+    token      TEXT NOT NULL CHECK (length(token) = 16),
+    junk       INTEGER NOT NULL DEFAULT 0 CHECK (junk >= 0),
+    ham        INTEGER NOT NULL DEFAULT 0 CHECK (ham >= 0),
+    PRIMARY KEY (account_id, token)
+) WITHOUT ROWID;
+
+CREATE TABLE junk_training (
+    account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- Message-ID header, or `local:<message id>` when there is none.
+    message_key TEXT NOT NULL,
+    junk        INTEGER NOT NULL CHECK (junk IN (0, 1)),
+    -- The hashed tokens it was trained with (JSON array), to untrain it.
+    tokens      TEXT NOT NULL DEFAULT '[]',
+    trained_at  INTEGER NOT NULL,
+    PRIMARY KEY (account_id, message_key)
+) WITHOUT ROWID;
+
+CREATE TABLE junk_verdicts (
+    message_id TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    junk       INTEGER NOT NULL CHECK (junk IN (0, 1)),
+    score      INTEGER CHECK (score IS NULL OR (score >= 0 AND score <= 100)),
+    source     TEXT NOT NULL CHECK (source IN ('server', 'classifier', 'user')),
+    decided_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE notify_overrides (
+    scope     TEXT NOT NULL CHECK (scope IN ('account', 'folder')),
+    target_id TEXT NOT NULL,
+    notify    INTEGER NOT NULL CHECK (notify IN (0, 1)),
+    position  INTEGER NOT NULL,
+    PRIMARY KEY (scope, target_id)
+) WITHOUT ROWID;
+CREATE TRIGGER notify_overrides_account AFTER DELETE ON accounts BEGIN
+    DELETE FROM notify_overrides WHERE scope = 'account' AND target_id = OLD.id;
+END;
+CREATE TRIGGER notify_overrides_folder AFTER DELETE ON folders BEGIN
+    DELETE FROM notify_overrides WHERE scope = 'folder' AND target_id = OLD.id;
+END;
+
+CREATE TABLE sieve_state (
+    account_id    TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- SHA-256 (hex) of the uploaded script; NULL = never uploaded.
+    script_hash   TEXT CHECK (script_hash IS NULL OR length(script_hash) = 64),
+    -- Unix seconds (UTC).
+    uploaded_at   INTEGER,
+    -- JSON arrays of the server's Sieve extensions and other scripts.
+    extensions    TEXT NOT NULL DEFAULT '[]',
+    other_scripts TEXT NOT NULL DEFAULT '[]',
+    -- JSON (nail_api::sieve::VacationSettings); NULL = the defaults.
+    vacation      TEXT,
+    -- JSON (nail_api::ApiError) of the last failure; NULL = none.
+    last_error    TEXT
+) WITHOUT ROWID;
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -625,6 +728,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     },
     Migration::sql(V5),
     Migration::sql(V6),
+    Migration::sql(V7),
 ];
 
 /// The schema version this build creates and understands.
@@ -721,12 +825,17 @@ mod tests {
                 "draft_attachments",
                 "drafts",
                 "folders",
+                "junk_settings",
+                "junk_tokens",
+                "junk_training",
+                "junk_verdicts",
                 "mcp_audit",
                 "mcp_clients",
                 "mcp_grants",
                 "message_security",
                 "message_tags",
                 "messages",
+                "notify_overrides",
                 "op_queue",
                 "outbox",
                 "pop3_uids",
@@ -744,6 +853,8 @@ mod tests {
                 "rule_state",
                 "saved_searches",
                 "schema_version",
+                "sieve_state",
+                "snoozed_messages",
                 "thread_refs",
                 "vault_state"
             ]
@@ -878,6 +989,36 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM outbox", [], |r| r.get(0))
             .unwrap();
         assert_eq!(outbox, 1);
+    }
+
+    #[test]
+    fn v7_keeps_existing_messages_synced() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate_to_version(&mut conn, 6).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (id, name, email, kind) VALUES ('a', 'A', 'a@x', 'imap');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('f', 'a', 'INBOX', 'INBOX');
+             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'a', 'f', 'x');",
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        let state: String = conn
+            .query_row("SELECT body_state FROM messages WHERE id = 'm'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(state, "synced");
+        assert!(
+            conn.execute("UPDATE messages SET body_state = 'bogus'", [])
+                .is_err()
+        );
+        assert!(
+            conn.execute(
+                "INSERT INTO junk_tokens (account_id, token) VALUES ('a', 'plain-word')",
+                []
+            )
+            .is_err()
+        );
     }
 
     #[test]

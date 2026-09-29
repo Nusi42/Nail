@@ -18,7 +18,9 @@ use ts_rs::TS;
 use crate::domain::FolderRole;
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, IdentityId, OAuthFlowId};
+use crate::localized::LocalizedMessage;
 use crate::security::IdentityCrypto;
+use crate::sieve::ManageSieveConfig;
 
 /// The whole `accounts.kdl` file: every configured account, virtual account
 /// and OAuth2 provider, in file order (which is the display order).
@@ -110,6 +112,12 @@ pub struct AccountConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub authserv_ids: Vec<String>,
+    /// ManageSieve (M2c): server-side rules and vacation replies, IMAP
+    /// accounts only (the `sieve` node). Absent = off; rules run on the
+    /// client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sieve: Option<ManageSieveConfig>,
 }
 
 fn default_true() -> bool {
@@ -933,6 +941,11 @@ pub struct EndpointTestResult {
     pub error: Option<ErrorCode>,
     /// Diagnostic detail (English), `null` on success.
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
     /// Capabilities / extensions the server announced (e.g. `IDLE`,
     /// `CONDSTORE`, `SIZE 35882577`), for display.
     pub capabilities: Vec<String>,
@@ -961,6 +974,11 @@ pub struct AccountStatus {
     pub error: Option<ErrorCode>,
     /// Diagnostic detail (English), `null` when there is no error.
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 /// The states of [`AccountStatus`].
@@ -1049,6 +1067,7 @@ mod tests {
             sync: SyncPolicy::default(),
             save_sent_copy: None,
             authserv_ids: Vec::new(),
+            sieve: None,
         }
     }
 

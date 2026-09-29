@@ -155,6 +155,7 @@ impl Service {
                 offset,
                 total: results.total,
                 hits: results.hits,
+                server: None,
             },
             Err(error) => Response::InvalidQuery { error },
         })

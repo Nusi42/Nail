@@ -11,6 +11,7 @@ import type {
   McpClient,
   McpGrant,
   McpServerInfo,
+  McpSettings,
   Request,
   Response,
 } from "../../api/generated";
@@ -24,6 +25,8 @@ export const MCP_REQUESTS = [
   "RevokeMcpClient",
   "ListMcpAudit",
   "GetMcpServerInfo",
+  "GetMcpSettings",
+  "UpdateMcpSettings",
 ] as const satisfies readonly Request["type"][];
 
 export type McpRequest = Extract<Request, { type: (typeof MCP_REQUESTS)[number] }>;
@@ -37,6 +40,8 @@ export interface McpMockState {
   clients: McpClient[];
   audit: McpAuditEntry[];
   server: McpServerInfo;
+  /** MCP settings (M2c: a fixed port). */
+  settings: McpSettings;
   nextClient: number;
   nextAudit: number;
 }
@@ -78,6 +83,7 @@ export function createMcpMockState(): McpMockState {
       entry(3, "nail://accounts/acc-personal/folders", "denied"),
     ],
     server: { running: true, url: "http://127.0.0.1:4781/mcp" },
+    settings: { port: null },
     nextClient: 2,
     nextAudit: 4,
   };
@@ -198,5 +204,29 @@ export function answerMcp(core: MockCore, request: McpRequest): Response {
     }
     case "GetMcpServerInfo":
       return { type: "McpServer", info: structuredClone(s.server) };
+    case "GetMcpSettings":
+      return {
+        type: "McpSettings",
+        settings: structuredClone(s.settings),
+        info: structuredClone(s.server),
+      };
+    case "UpdateMcpSettings": {
+      const port = request.settings.port;
+      if (port !== null && port < 1024) {
+        return {
+          type: "Error",
+          code: "invalid_request",
+          message: "invalid MCP settings (mcp-settings-issue-port)",
+          localized: { id: "mcp-settings-issue-port" },
+        };
+      }
+      s.settings = structuredClone(request.settings);
+      core.emit({ type: "McpSettingsChanged" });
+      return {
+        type: "McpSettings",
+        settings: structuredClone(s.settings),
+        info: structuredClone(s.server),
+      };
+    }
   }
 }

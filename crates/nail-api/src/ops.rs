@@ -12,6 +12,7 @@ use ts_rs::TS;
 use crate::domain::{Flags, FolderRole};
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, FolderId, OpId};
+use crate::localized::LocalizedMessage;
 
 /// A change to system flags and tags; `null` / empty leaves a value as it is.
 /// Changes are absolute ("set \Seen"), never toggles, so replaying one twice
@@ -99,6 +100,11 @@ pub struct OpStatus {
     pub error: Option<ErrorCode>,
     /// Diagnostic detail (English), else `null`.
     pub message: Option<String>,
+    /// The user-facing text (Fluent id + arguments) when the core has a more
+    /// specific one than the error class; else `null` (ADR 0043).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub localized: Option<LocalizedMessage>,
 }
 
 #[cfg(test)]

@@ -66,6 +66,7 @@ impl From<AuthError> for EngineError {
                 code: other.code(),
                 message: other.to_string(),
                 retryable: other.is_retryable(),
+                localized: None,
             },
         }
     }
