@@ -163,6 +163,10 @@ aes = "0.8.4"
 cbc = "0.1.2"
 aes-gcm = "0.10.3"
 p12-keystore = "0.2.1"
+# RFC 3394 AES key wrap (S/MIME ECDH recipients) and PBKDF2 (passphrase-
+# protected S/MIME keys); both already in the lock through rPGP / p12-keystore.
+aes-kw = { version = "0.2.1", features = ["alloc"] }
+pbkdf2 = "0.12.2"
 # Windows certificate store (CryptoAPI / CNG); only on Windows targets.
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 # Encryption at rest: XChaCha20-Poly1305 for blobs and index files.

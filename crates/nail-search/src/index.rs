@@ -16,13 +16,23 @@
 //! * Text is tokenized on non-alphanumerics, lowercased and ASCII-folded
 //!   (`Müller` matches `muller`), so addresses match by their parts
 //!   (`from:ada` finds `ada@example.org`).
+//! * Encryption at rest (M2a WP33): [`SearchIndex::open_with`] takes a
+//!   [`DirectoryWrapper`] (from `nail-vault`) that wraps the on-disk
+//!   directory, e.g. in an encrypting one. An index that cannot be read
+//!   through the wrapper (another key, plain files after encryption) is
+//!   rebuilt like a corrupt one — it is derived data.
+//! * Documents built from decrypted content are marked
+//!   ([`IndexDocument::decrypted`]) so they can be dropped per account when
+//!   the opt-in is withdrawn ([`SearchIndex::remove_decrypted`]; policy in
+//!   [`crate::IndexPolicy`]).
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use nail_api::{AccountId, MessageId};
 use tantivy::collector::TopDocs;
+use tantivy::directory::Directory;
 use tantivy::query::{
     AllQuery, BooleanQuery, BoostQuery, EmptyQuery, Occur, PhraseQuery, Query, TermQuery,
 };
@@ -43,8 +53,16 @@ use crate::query::TextField;
 pub const INDEX_DIR_NAME: &str = "search";
 
 /// Bump when the schema or tokenization changes; older indexes are rebuilt.
-const SCHEMA_VERSION: u32 = 1;
-const VERSION_FILE: &str = "nail-search-version";
+/// v2 (M2a): the `decrypted_in` marker field.
+const SCHEMA_VERSION: u32 = 2;
+/// The schema version file in the index directory (plain; `nail-vault`
+/// leaves it unencrypted).
+pub const VERSION_FILE_NAME: &str = "nail-search-version";
+const VERSION_FILE: &str = VERSION_FILE_NAME;
+
+/// Wraps the on-disk index directory, e.g. in `nail-vault`'s encrypting
+/// directory.
+pub type DirectoryWrapper = Arc<dyn Fn(Box<dyn Directory>) -> Box<dyn Directory> + Send + Sync>;
 const TOKENIZER: &str = "nail";
 const WRITER_MEMORY: usize = 50_000_000;
 
@@ -76,6 +94,8 @@ struct Fields {
     subject: Field,
     body: Field,
     filename: Field,
+    /// The account id, only on documents built from decrypted content.
+    decrypted_in: Field,
 }
 
 impl Fields {
@@ -115,6 +135,7 @@ fn schema() -> (Schema, Fields) {
         subject: b.add_text_field("subject", text.clone()),
         body: b.add_text_field("body", text.clone()),
         filename: b.add_text_field("filename", text),
+        decrypted_in: b.add_text_field("decrypted_in", STRING),
     };
     (b.build(), fields)
 }
@@ -165,6 +186,16 @@ impl SearchIndex {
     /// version, or one that cannot be opened, is deleted and recreated
     /// empty ([`SearchIndex::was_rebuilt`]).
     pub fn open(dir: impl AsRef<Path>, policy: CommitPolicy) -> Result<Self> {
+        Self::open_with(dir, policy, None)
+    }
+
+    /// Like [`SearchIndex::open`], with the directory wrapped by `wrapper`
+    /// (encryption at rest). An index the wrapper cannot read is rebuilt.
+    pub fn open_with(
+        dir: impl AsRef<Path>,
+        policy: CommitPolicy,
+        wrapper: Option<DirectoryWrapper>,
+    ) -> Result<Self> {
         let dir = dir.as_ref();
         let version_file = dir.join(VERSION_FILE);
         let current = std::fs::read_to_string(&version_file)
@@ -182,23 +213,29 @@ impl SearchIndex {
         }
         std::fs::create_dir_all(dir)?;
         let (schema, fields) = schema();
-        let index = match Self::open_dir(dir, &schema) {
+        let index = match Self::open_dir(dir, &schema, wrapper.as_ref()) {
             Ok(index) => index,
             Err(err) => {
                 tracing::warn!(?dir, %err, "search index unreadable; rebuilding");
                 std::fs::remove_dir_all(dir)?;
                 std::fs::create_dir_all(dir)?;
                 rebuilt = true;
-                Self::open_dir(dir, &schema)?
+                Self::open_dir(dir, &schema, wrapper.as_ref())?
             }
         };
         std::fs::write(&version_file, SCHEMA_VERSION.to_string())?;
         Self::init(index, fields, policy, rebuilt, Some(dir.to_owned()))
     }
 
-    fn open_dir(dir: &Path, schema: &Schema) -> Result<Index> {
-        let directory = tantivy::directory::MmapDirectory::open(dir)
-            .map_err(|e| Error::Index(e.to_string()))?;
+    fn open_dir(dir: &Path, schema: &Schema, wrapper: Option<&DirectoryWrapper>) -> Result<Index> {
+        let directory: Box<dyn Directory> = Box::new(
+            tantivy::directory::MmapDirectory::open(dir)
+                .map_err(|e| Error::Index(e.to_string()))?,
+        );
+        let directory = match wrapper {
+            Some(wrap) => wrap(directory),
+            None => directory,
+        };
         Ok(Index::open_or_create(directory, schema.clone())?)
     }
 
@@ -295,6 +332,26 @@ impl SearchIndex {
         self.staged(1)
     }
 
+    /// Removes the documents of an account that were built from decrypted
+    /// content (the opt-in was withdrawn); the caller re-adds those
+    /// messages without their decrypted content.
+    pub fn remove_decrypted(&self, account: &AccountId) -> Result<()> {
+        self.writer().delete_term(Term::from_field_text(
+            self.fields.decrypted_in,
+            account.as_str(),
+        ));
+        self.staged(1)
+    }
+
+    /// Ids of an account's documents built from decrypted content.
+    pub fn decrypted_ids(&self, account: &AccountId) -> Result<Vec<MessageId>> {
+        let query = TermQuery::new(
+            Term::from_field_text(self.fields.decrypted_in, account.as_str()),
+            IndexRecordOption::Basic,
+        );
+        Ok(self.run(&query)?.into_iter().map(|(id, _)| id).collect())
+    }
+
     /// Removes every document (before a full reindex).
     pub fn clear(&self) -> Result<()> {
         self.writer().delete_all_documents()?;
@@ -356,6 +413,9 @@ impl SearchIndex {
         out.add_text(f.body, &doc.body);
         for name in &doc.attachment_names {
             out.add_text(f.filename, name);
+        }
+        if doc.decrypted {
+            out.add_text(f.decrypted_in, doc.account_id.as_str());
         }
         out
     }
@@ -479,6 +539,7 @@ mod tests {
             subject: subject.into(),
             body: body.into(),
             attachment_names: vec!["Rechnung-März.pdf".into()],
+            decrypted: false,
         }
     }
 
@@ -568,6 +629,50 @@ mod tests {
         assert_eq!(index.doc_count().unwrap(), 1);
         index.remove_account(&"a1".into()).unwrap();
         assert_eq!(index.doc_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn decrypted_documents_are_marked_and_removed_per_account() {
+        let index = SearchIndex::open_in_ram(CommitPolicy::default()).unwrap();
+        let mut secret = doc("m1", "Protected", "decrypted launch plan");
+        secret.decrypted = true;
+        let mut other = doc("m2", "Protected too", "decrypted elsewhere");
+        other.decrypted = true;
+        other.account_id = "a2".into();
+        index
+            .add(&[secret, other, doc("m3", "Plain", "launch plan")])
+            .unwrap();
+        assert_eq!(
+            index.decrypted_ids(&"a1".into()).unwrap(),
+            vec![MessageId::from("m1")]
+        );
+        assert_eq!(
+            index.decrypted_ids(&"a2".into()).unwrap(),
+            vec![MessageId::from("m2")]
+        );
+        index.remove_decrypted(&"a1".into()).unwrap();
+        assert_eq!(
+            ids(index.search_text(TextField::Body, "launch").unwrap()),
+            ["m3"]
+        );
+        assert_eq!(index.doc_count().unwrap(), 2);
+    }
+
+    #[test]
+    fn wrapper_is_used_for_the_on_disk_directory() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&calls);
+        let wrapper: DirectoryWrapper = Arc::new(move |inner| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            inner
+        });
+        let index =
+            SearchIndex::open_with(dir.path(), CommitPolicy::default(), Some(wrapper)).unwrap();
+        index.add(&[doc("m1", "hello", "world")]).unwrap();
+        assert_eq!(index.doc_count().unwrap(), 1);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]

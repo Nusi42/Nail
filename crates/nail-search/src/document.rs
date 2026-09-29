@@ -22,6 +22,9 @@ pub struct IndexDocument {
     pub body: String,
     /// Attachment file names.
     pub attachment_names: Vec<String>,
+    /// Built from decrypted content (an encrypted message, indexed because
+    /// the account opted in; see [`crate::IndexPolicy`]).
+    pub decrypted: bool,
 }
 
 fn addresses(list: &[Address]) -> String {
@@ -54,6 +57,7 @@ impl IndexDocument {
                 .iter()
                 .filter_map(|a| a.filename.clone())
                 .collect(),
+            decrypted: false,
         }
     }
 

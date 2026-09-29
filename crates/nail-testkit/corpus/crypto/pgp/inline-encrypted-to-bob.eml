@@ -1,0 +1,21 @@
+From: Alice Example <alice@example.org>
+To: Bob Example <bob@example.net>
+Subject: Inline encrypted
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <inline-encrypted@example.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP MESSAGE-----
+
+hF4DFhcB36Pw1kgSAQdAX5x4dJFkTX3ma9GoK4nW6+T7BR+CiCkyfLo+rNbuny4w
+CZ+IUcC0H4eRGojw1ZVURZcVQvIoytHC2mv6WlR/ftNghqrgL8Xdqhm+dfBFf2Jt
+0sBDAREEiK9WV81KND059fVUKVXQUt8gp3drGgjvE2nAlNmOxq8X7gz3vNwCpfjf
+SYBKu0ADqOQAmcwjxBonemsg7IadQaI+O3pekpn7W2EVLM1jOqJsuj1wbGGQEumV
+mw4uK7mbil20qB33IWax2kzmRec2XL9YW/meVvmqFuvzonNvHsSkMq08/dxivybp
+oUxc400wJaqCJnRNpksbL4q9Sjk+AGyxhyJbRNxd/j95X1qY93xOG9m9jnhXwUjs
+KvVHdHk6+U8aYpWdsbhHw5JnpA7LmZJEYydFSpi6A1/Zm95BuALatEE6PMSwbH+1
+61nCiC3kkh+JTOErUE2Wcp94Aha8Dw==
+=xJsu
+-----END PGP MESSAGE-----

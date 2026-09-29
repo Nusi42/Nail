@@ -1,0 +1,18 @@
+From: Alice Example <alice@example.org>
+To: Bob Example <bob@example.net>
+Subject: Hi with Autocrypt
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <autocrypt-alice@example.org>
+MIME-Version: 1.0
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=
+ mDMEaVZhwBYJKwYBBAHaRw8BAQdACGIYj1gfRuUoI9iDl5xHWeitP0n7CKpE8hnN1Auffte0
+ IUFsaWNlIEV4YW1wbGUgPGFsaWNlQGV4YW1wbGUub3JnPoiQBBMWCgA4FiEEytiKro4WtAg0
+ 7oVy9cImkFubOiUFAmlWYcACGwMFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AACgkQ9cImkFub
+ OiWQXQEA4T4EWpiRl2k3XfRlclOHN3T6ckdmG3BVV5PA9vPH4iMBAJWQz+Y+SoHgcz4IERtI
+ WIW3DEIunQiv2z0S2h9fAl8PuDgEaVZhwBIKKwYBBAGXVQEFAQEHQAuxm8DcKApVLb6BEksl
+ V9XaQC5u6sxZTu+Z185xOa5jAwEIB4h4BBgWCgAgFiEEytiKro4WtAg07oVy9cImkFubOiUF
+ AmlWYcACGwwACgkQ9cImkFubOiWNPAD6AuOamv1ItN2IkQF59ehQ17ISvJhvFmT0sLgqOhDy
+ 5FIA/1qz7E6QrXfVugl5CW109etYW0udQqD+yRVXlYsny1AF
+Content-Type: text/plain; charset=UTF-8
+
+Hi Bob, my key is in the header.

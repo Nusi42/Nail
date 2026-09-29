@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
-# The vault state row (schema v5) and the blob store it encrypts.
+# The vault state row (schema v5), sealed columns and the blob store.
 nail-store.workspace = true
 chacha20poly1305.workspace = true
 rand.workspace = true
@@ -18,10 +18,15 @@ zeroize.workspace = true
 tantivy.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+# The data key in the keychain (hex) and atomic file rewrites.
+hex.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
-tempfile.workspace = true
 pretty_assertions.workspace = true
+# End-to-end: a real search index over the encrypted directory.
+nail-search.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

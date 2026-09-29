@@ -1,29 +1,37 @@
-//! OpenPGP for Nail (M2a WP31; stub after WP30, ADR 0029).
+//! OpenPGP and Autocrypt for Nail (M2a WP31, ADR 0030), built
+//! on [`pgp`] (rPGP, MIT / Apache-2.0; not Sequoia, which is LGPL).
 //!
-//! Expected shape: [`pgp`] (rPGP, MIT / Apache-2.0) for
+//! A library over bytes and the store's keyring; it never talks to the
+//! network or the OS by itself (HTTP and the keychain are injected). The
+//! core (WP35) wires it into requests, reading and sending.
 //!
-//! * the keyring: public keys and own secret keys, stored through
-//!   `nail_store`'s keyring (`Store::upsert_key`, `technology = openpgp`,
-//!   fingerprint = primary key fingerprint). Secret keys are stored
-//!   encrypted: OpenPGP S2K with the user's passphrase, or with a random
-//!   key kept in the OS keychain (`nail_api::engine::SecretStore`);
-//! * generation (Ed25519 + X25519 by default, RSA 4096 on request),
-//!   import (armored / binary, merging) and export of public keys;
-//! * PGP/MIME (RFC 3156) sign, encrypt, sign + encrypt, decrypt and
-//!   verify; inline PGP read-only; header protection for encrypted mail
-//!   (the subject shown as `...` on the wire);
-//! * Autocrypt Level 1: `Autocrypt` / `Autocrypt-Gossip` headers, peer
-//!   state (`Store::put_autocrypt_peer`), the encryption recommendation,
-//!   setup messages;
-//! * key discovery via WKD and keys.openpgp.org behind an injectable HTTP
-//!   client (tests use `nail-testkit-net`'s mock HTTP server);
-//! * the trust model of [`nail_api::security::TrustLevel`].
+//! | Module | What |
+//! | --- | --- |
+//! | [`keyring`] | Keys in `nail_store`'s keyring: import (armored / binary, merging, third-party certifications dropped), generation (Ed25519 + X25519, RSA 4096), export, trust, unlock. Secret keys stay OpenPGP-S2K-protected with the user's passphrase or with a random secret in the OS keychain ([`nail_api::engine::SecretStore`]). |
+//! | [`key`] | Parsing and the validity policy: verified self-signatures, expiry, revocation, usable signing / encryption (sub)keys. |
+//! | [`compose`] | Outgoing PGP/MIME (RFC 3156): sign, encrypt, sign + encrypt, header protection (`...` subject on the wire). |
+//! | [`read`] | Incoming: decrypt / verify PGP/MIME, inline PGP (read-only), header protection; returns [`nail_api::security::SecurityStatus`] and a display message. |
+//! | [`autocrypt`] | Autocrypt Level 1: headers, peer state, gossip, recommendation, setup messages. |
+//! | [`discovery`] | WKD and keys.openpgp.org lookups through an injected [`discovery::HttpClient`]. |
 //!
-//! Results use the contract types of [`nail_api::security`]. Test vectors
-//! (keys and messages produced by GnuPG and Thunderbird) go into
-//! `crates/nail-testkit/corpus/crypto/pgp/` (`nail_testkit::crypto_fixture`).
+//! Results use the contract types of [`nail_api::security`]. Interop
+//! vectors made with GnuPG 2.4 in Thunderbird's MIME layout are in
+//! `crates/nail-testkit/corpus/crypto/pgp/` (see its README).
 
 #![warn(missing_docs)]
+
+pub mod autocrypt;
+pub mod compose;
+pub mod discovery;
+pub mod error;
+pub mod key;
+pub mod keyring;
+mod mime;
+pub mod read;
+#[cfg(test)]
+mod testutil;
+
+pub use error::{Error, Result};
 
 use nail_api::security::CryptoTechnology;
 

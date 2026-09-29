@@ -1,0 +1,34 @@
+From: Alice Example <alice@example.org>
+To: Bob Example <bob@example.net>
+Subject: Encrypted
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <encrypted-bob-ocb@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/encrypted;
+ protocol="application/pgp-encrypted";
+ boundary="------------enc0Bnd4ry"
+
+This is an OpenPGP/MIME encrypted message (RFC 4880 and 3156)
+--------------enc0Bnd4ry
+Content-Type: application/pgp-encrypted
+Content-Description: PGP/MIME version identification
+
+Version: 1
+
+--------------enc0Bnd4ry
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hF4DFhcB36Pw1kgSAQdAy3C0xtu0VeAjl0puD2IAwyo9pfCAbZGcOM5+0VwseBAw
+ekpSwrJkHPzcXLw+0lJDvS8fbnq0GNx/werD0oIWSmCY2gnSbJCdyHkyn1mxsaKa
+1LgBCQIQbiFBfSa01k+ubVFskR8ehi9uGPVJIemgCBc1xQL3j9CJN1tWvQ9g3mN9
+1avPTqAe2TnbHp7eUoyO7iABIXXwIaua38nE7uTOIG9IKzTr/KqZTX1JVuTQcc7U
+f6U7FZqbhVDmV7A8ClCNj1VtEiuT7v+hzWIwZTkYZsH0tTsfVc9T3NCr3SdFu8ci
+DHl6MKMgA/r+t35p9mVFmn1z/sPLG3vbWY96BAtlMCX0bYYbkPbe20x3
+=s6ex
+-----END PGP MESSAGE-----
+
+--------------enc0Bnd4ry--

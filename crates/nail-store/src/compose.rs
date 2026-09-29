@@ -258,9 +258,11 @@ pub struct DraftServerCopy {
 
 fn draft_in_tx(tx: &Transaction<'_>, n: i64) -> Result<Draft> {
     let payload: String = tx
-        .query_row("SELECT payload FROM drafts WHERE id = ?1", [n], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT nail_open('drafts.payload', payload) FROM drafts WHERE id = ?1",
+            [n],
+            |r| r.get(0),
+        )
         .optional()?
         .ok_or_else(|| Error::not_found("draft", draft_id(n)))?;
     let mut draft: Draft = serde_json::from_str(&payload)?;
@@ -280,7 +282,8 @@ impl Store {
         self.with_tx(|tx| match &draft.id {
             None => {
                 tx.execute(
-                    "INSERT INTO drafts (identity_id, payload) VALUES (?1, ?2)",
+                    "INSERT INTO drafts (identity_id, payload)
+                     VALUES (?1, nail_seal('drafts.payload', ?2))",
                     params![draft.identity_id.as_str(), payload],
                 )?;
                 let n = tx.last_insert_rowid();
@@ -294,7 +297,8 @@ impl Store {
                 }
                 let changed = tx.execute(
                     &format!(
-                        "UPDATE drafts SET identity_id = ?2, payload = ?3, updated_at = {NOW}
+                        "UPDATE drafts SET identity_id = ?2,
+                             payload = nail_seal('drafts.payload', ?3), updated_at = {NOW}
                          WHERE id = ?1"
                     ),
                     params![n, draft.identity_id.as_str(), payload],

@@ -16,6 +16,7 @@
 //! ```
 
 pub mod auth_results;
+mod domain;
 pub mod links;
 mod sanitize;
 mod text;

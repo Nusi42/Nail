@@ -196,7 +196,7 @@ fn folder_from_row(row: &Row<'_>) -> rusqlite::Result<Folder> {
 
 pub(crate) const MESSAGE_COLS: &str = "m.id, m.folder_id, m.account_id, m.subject, m.from_name,
     m.from_email, m.to_json, m.date, m.seen, m.flagged, m.answered, m.draft, m.has_attachments,
-    m.preview, m.uid, m.blob_hash, m.thread_key, m.thread_id";
+    nail_open('messages.preview', m.preview), m.uid, m.blob_hash, m.thread_key, m.thread_id";
 
 /// Number of columns in [`MESSAGE_COLS`]; extra columns selected after it
 /// start at this index.
@@ -445,7 +445,7 @@ fn upsert_message_in_tx(
              to_json, date, date_sort, seen, flagged, answered, draft, has_attachments, preview,
              blob_hash, thread_key)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, COALESCE(unixepoch(?9), 0), ?10, ?11, ?12,
-             ?13, ?14, ?15, ?16, ?17)
+             ?13, ?14, nail_seal('messages.preview', ?15), ?16, ?17)
          ON CONFLICT (id) DO UPDATE SET
              folder_id = excluded.folder_id, uid = excluded.uid, subject = excluded.subject,
              from_name = excluded.from_name, from_email = excluded.from_email,

@@ -1,0 +1,47 @@
+From: Carol Example <carol@example.com>
+To: Bob Example <bob@example.net>
+Subject: RSA signed
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <signed-carol@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha256;
+ protocol="application/pgp-signature";
+ boundary="------------sig0Bnd4ry"
+
+This is an OpenPGP/MIME signed message (RFC 4880 and 3156)
+--------------sig0Bnd4ry
+Content-Type: multipart/mixed; boundary="------------inner0Bnd4ry";
+ protected-headers="v1"
+From: Carol Example <carol@example.com>
+To: Bob Example <bob@example.net>
+Message-ID: <signed-carol@example.org>
+Subject: RSA signed
+
+--------------inner0Bnd4ry
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Hello Bob, this message is signed with an RSA key.
+
+--------------inner0Bnd4ry--
+--------------sig0Bnd4ry
+Content-Type: application/pgp-signature; name="OpenPGP_signature.asc"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="OpenPGP_signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iQHGBAABCAAwFiEEVyAxpAmReqPr/AmXJaHDDdXRursFAmq73XkSHGNhcm9sQGV4
+YW1wbGUuY29tAAoJECWhww3V0bq7PJIL/0Sc583Dvv0LR5gVp2xfk+tOtlvYFXaR
+4CEBSLbbDc0mKaLaWxSCGekvbyn37y3/zgdy1qWy/1Kd/0inzSeg1OZUG4QHw5fV
+SNwfO/DpipsX+ai4vejeaAn4esoTmkvRIf1FxwMZPCv8sJYrC51f1K+rAABLH0aA
+ftHbttQ+TQ+T8po4cAbdRPs1AvKZ8TTCKWNaVIU2Z1TQlSCm1vYepwQNtyEqatUn
+tDOAW6VN8nK6Q4xuisY+baBoE41mL5JXxrw76QwtlR552g99I4nRX7SlrO28McKM
+6vMqULoEjBL9+0+kfOWRf3gIcQ8PafQBBJAbUNfNl4mEhaOwGq4apz7cUA8lBe74
+nOuJZHD1933DazU2UoRig4W9DZ2oxfmAnx0SirbQ1nVYImT9I9jelxPDbZITUY6d
+B2slqkM4FKV8c7f26oC56Ck2jYK3iN+YShKusxwRU0MGlo55VdqBarRGjbPsdaH8
+uDNKT/IsbPiT7/o7olkOeS2t1X8K0hxUjw==
+=7Q0u
+-----END PGP SIGNATURE-----
+
+--------------sig0Bnd4ry--

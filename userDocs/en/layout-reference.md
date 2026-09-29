@@ -165,6 +165,13 @@ A widget is a node named after its kind. Its properties are its options.
 | `rule-manager` | — (the filter rules: list, editor, test and run history; see [Filter rules](rules.md)) |
 | `mcp-clients` | — (MCP clients, their access and the activity log; see [Connecting AI agents](mcp.md)) |
 | `mcp-context-indicator` | — (the notice shown while an agent reads what is on screen) |
+| `security-keys` | — (keys and certificates: import, create, export, trust, find online; see [Signing and encryption](security.md)) |
+| `security-identities` | — (signing and encryption defaults per sender address) |
+| `security-settings` | — (encryption at rest, online key lookup, searching encrypted mail) |
+| `security-autocrypt` | — (Autocrypt setup message: send to your other devices, import) |
+| `security-message` | — (the signature / encryption badge and the sender check badge of the shown message, each with details) |
+| `security-warnings` | — (warnings about deceptive links and risky attachments of the shown message) |
+| `security-composer` | — (Sign and Encrypt switches with the key status of every recipient) |
 | `config-errors` | `hide-when-valid` (`#true`/`#false`): show nothing while every config file is valid (see [Customizing](customization.md#all-configuration-errors-at-once)) |
 | `smart-folders` | `editable` (`#true`/`#false`): offer "Save current search" and remove buttons (see [Customizing](customization.md#smart-folders-saved-searches)) |
 | `toolbar` | `toolbar`: the name of a `toolbar` definition (required) |

@@ -15,10 +15,12 @@ thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
 tempfile.workspace = true
-rusqlite.workspace = true
+# `functions`: the nail_seal / nail_open SQL functions (encryption at rest).
+rusqlite = { workspace = true, features = ["functions"] }
 zstd = "0.14.0"
 sha2.workspace = true
 hex.workspace = true
+base64.workspace = true
 futures-util.workspace = true
 
 [dev-dependencies]

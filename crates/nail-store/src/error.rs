@@ -13,7 +13,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub enum Error {
     /// An SQLite error.
     #[error("sqlite: {0}")]
-    Sqlite(#[from] rusqlite::Error),
+    Sqlite(rusqlite::Error),
     /// A file-system error.
     #[error("i/o: {0}")]
     Io(#[from] std::io::Error),
@@ -50,9 +50,24 @@ pub enum Error {
     /// message that is already being sent).
     #[error("conflict: {0}")]
     Conflict(String),
+    /// Sealed data (encryption at rest) cannot be read or written because
+    /// the data key is not available.
+    #[error("locked: {0}")]
+    Locked(String),
+    /// Sealed data could not be opened (damaged, another key) or sealing
+    /// failed.
+    #[error("crypto: {0}")]
+    Crypto(String),
     /// A blocking store task panicked or was cancelled.
     #[error("store task failed: {0}")]
     Task(#[from] tokio::task::JoinError),
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Self {
+        // Errors of the sealing SQL functions arrive as SQLite errors.
+        crate::seal::map_sqlite_error(err)
+    }
 }
 
 impl Error {
@@ -75,6 +90,8 @@ impl From<Error> for ApiError {
             Error::NotFound { .. } => ErrorCode::NotFound,
             Error::InvalidData(_) | Error::InvalidHash(_) => ErrorCode::InvalidRequest,
             Error::Conflict(_) => ErrorCode::Conflict,
+            Error::Locked(_) => ErrorCode::Locked,
+            Error::Crypto(_) => ErrorCode::Crypto,
             _ => ErrorCode::Internal,
         };
         ApiError::new(code, err.to_string())
@@ -96,6 +113,11 @@ mod tests {
 
         let api: ApiError = Error::Conflict("sending".into()).into();
         assert_eq!(api.code, ErrorCode::Conflict);
+
+        let api: ApiError = Error::Locked("vault".into()).into();
+        assert_eq!(api.code, ErrorCode::Locked);
+        let api: ApiError = Error::Crypto("tag".into()).into();
+        assert_eq!(api.code, ErrorCode::Crypto);
 
         let api: ApiError = Error::Io(std::io::Error::other("disk")).into();
         assert_eq!(api.code, ErrorCode::Internal);

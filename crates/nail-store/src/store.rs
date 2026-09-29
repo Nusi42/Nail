@@ -49,6 +49,8 @@ struct Inner {
     conn: Mutex<Connection>,
     /// Serializes replay passes per account so queue order holds.
     replay_locks: crate::queue::ReplayLocks,
+    /// Encryption at rest (sealed columns), shared with the SQL functions.
+    cipher: crate::seal::CipherSlot,
     path: Option<PathBuf>,
 }
 
@@ -95,11 +97,14 @@ impl Store {
     fn init(mut conn: Connection, path: Option<PathBuf>) -> Result<Self> {
         conn.busy_timeout(BUSY_TIMEOUT)?;
         conn.pragma_update(None, "foreign_keys", true)?;
+        let cipher = crate::seal::CipherSlot::default();
+        crate::seal::register_functions(&conn, &cipher)?;
         let version = schema::migrate(&mut conn)?;
         let store = Self {
             inner: Arc::new(Inner {
                 conn: Mutex::new(conn),
                 replay_locks: crate::queue::ReplayLocks::default(),
+                cipher,
                 path,
             }),
         };
@@ -162,6 +167,10 @@ impl Store {
             tx.commit()?;
             Ok(out)
         })
+    }
+
+    pub(crate) fn cipher_slot(&self) -> &crate::seal::CipherSlot {
+        &self.inner.cipher
     }
 
     pub(crate) fn replay_locks(&self) -> &crate::queue::ReplayLocks {

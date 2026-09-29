@@ -1,0 +1,22 @@
+To: bob@example.net
+From: alice@example.org
+Subject: S/MIME test alice-enc-gcm.eml
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Type: application/pkcs7-mime; smime-type=authEnveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+
+MIICPQYLKoZIhvcNAQkQARegggIsMIICKAIBADGCAVMwggFPAgEAMDcwMTESMBAG
+A1UECgwJTmFpbCBUZXN0MRswGQYDVQQDDBJOYWlsIFRlc3QgRW1haWwgQ0ECAgPp
+MA0GCSqGSIb3DQEBAQUABIIBADwr+OwLUd8SFgec4dHIngfv1mgT+wzJSx4GqP1W
+s9r5knKwDNghtfhrAgWO23w077a3U17DbkNqN95n+jsgI1e/tAytzDJ/8GZSEsrx
+bMRRvwI2HB9z1+mkAeKsvxEvEvQC+n+5O2NvhgFdO25UkjYvTI2EnNuYBMkotZNY
+JzKenq2RX7bliotVjoP/vBegq7Wsn+sUADXAormxNN8nQkSaCBsr/oQbB5Si7u8C
+fjWozEUbqCLVdgP1GnGvrkutWP66sB3PPnff/x3cIbpp5ONcU3l7KaTbMA2hoJpY
+Y4d6FVLpnHU3FQGL93f/4gB+8aXzli/1h8E9maA+j/OWp8YwgbkGCSqGSIb3DQEH
+ATAeBglghkgBZQMEAS4wEQQM+/KM+ushObJBR0bEAgEQgIGLk/NxXwPjh1YZxcbg
+9MRKtmWqSliaX1QOYaNrrXBsOu4ruaWRPASKNlI4cs7pzYAEX2JPf0B1haeOejxT
+1nTTEct2yLHeZU/xW951S6/2gXNXAKEsbnop9ok0jdiL4UCx30EXzfjlKa6/Lld6
+RpZDnz3h9yifWPNJoVDwMAoR3s4mwRfmanzbkB8YcgQQoniH8HF2GKP2d3Ktn2SC
+mg==
+

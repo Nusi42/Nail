@@ -19,7 +19,7 @@ import { answerComposer, isComposerRequest } from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
-import { answerSecurity, isSecurityRequest } from "../features/security/mock";
+import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
 
 export interface MockTransportOptions {
   data?: MockData;
@@ -118,7 +118,9 @@ export class MockTransport implements Transport, MockCore {
       }
       case "GetMessage": {
         const body = d.bodies.get(request.id);
-        return body ? { type: "Message", message: body } : notFound(`message ${request.id}`);
+        return body
+          ? { type: "Message", message: decorateMessageBody(this, body) }
+          : notFound(`message ${request.id}`);
       }
       case "SyncNow": {
         const account = request.account_id ?? d.accounts[0]?.id ?? "";

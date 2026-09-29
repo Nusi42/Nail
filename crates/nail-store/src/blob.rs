@@ -14,6 +14,14 @@
 //!   or tampering is reported as [`Error::BlobCorrupt`] instead of returning
 //!   wrong data.
 //!
+//! * Encryption at rest (M2a WP33): with a [`DataCipher`] installed
+//!   ([`BlobStore::set_cipher`], [`SealMode::Seal`]) the compressed bytes
+//!   are sealed before they are written (the file then starts with
+//!   [`SEALED_MAGIC`] instead of the zstd magic), bound to the blob's hash.
+//!   Reading accepts both forms, so a migration can convert file by file
+//!   ([`BlobStore::convert`], atomic per file) while the store is in use.
+//!   File names stay the plaintext hash (the database holds it anyway).
+//!
 //! The API is synchronous (file I/O); async callers run it on
 //! `tokio::task::spawn_blocking`.
 
@@ -26,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
+use crate::seal::{CipherSlot, DataCipher, SEALED_MAGIC, SealMode};
 
 /// SHA-256 of a blob's uncompressed content, as 64 lowercase hex characters.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -87,6 +96,17 @@ impl From<BlobHash> for String {
 pub struct BlobStore {
     root: PathBuf,
     level: i32,
+    /// Encryption at rest, shared by every clone.
+    cipher: CipherSlot,
+}
+
+fn blob_context(hash: &BlobHash) -> Vec<u8> {
+    format!("nail/blob/{hash}").into_bytes()
+}
+
+/// Whether a blob file's bytes are sealed.
+fn is_sealed(bytes: &[u8]) -> bool {
+    bytes.starts_with(&SEALED_MAGIC)
 }
 
 impl BlobStore {
@@ -97,7 +117,15 @@ impl BlobStore {
         Ok(Self {
             root,
             level: zstd::DEFAULT_COMPRESSION_LEVEL,
+            cipher: CipherSlot::default(),
         })
+    }
+
+    /// Installs (or removes, with `None`) the data cipher. Every clone of
+    /// this blob store sees the change. With [`SealMode::Seal`] new blobs
+    /// are sealed; sealed blobs are readable whenever a cipher is installed.
+    pub fn set_cipher(&self, cipher: Option<std::sync::Arc<dyn DataCipher>>, mode: SealMode) {
+        self.cipher.set(cipher, mode);
     }
 
     /// The root directory.
@@ -129,6 +157,13 @@ impl BlobStore {
         std::fs::create_dir_all(dir)?;
 
         let compressed = zstd::encode_all(bytes, self.level)?;
+        let compressed = match self
+            .cipher
+            .seal_if_active(&blob_context(&hash), &compressed)?
+        {
+            Some(sealed) => sealed,
+            None => compressed,
+        };
         let mut tmp = tempfile::Builder::new().prefix(".tmp").tempfile_in(dir)?;
         tmp.write_all(&compressed)?;
         tmp.as_file().sync_all()?;
@@ -149,13 +184,15 @@ impl BlobStore {
     /// Returns [`Error::NotFound`] when the blob does not exist and
     /// [`Error::BlobCorrupt`] when it cannot be decompressed or its content
     /// does not match `hash`.
+    ///
+    /// Returns [`Error::Locked`] for a sealed blob without an installed
+    /// cipher and [`Error::Crypto`] when it cannot be opened.
     pub fn get(&self, hash: &BlobHash) -> Result<Vec<u8>> {
-        let compressed = match std::fs::read(self.path_of(hash)) {
-            Ok(bytes) => bytes,
-            Err(err) if err.kind() == ErrorKind::NotFound => {
-                return Err(Error::not_found("blob", hash));
-            }
-            Err(err) => return Err(err.into()),
+        let stored = self.read_file(hash)?;
+        let compressed = if is_sealed(&stored) {
+            self.cipher.open(&blob_context(hash), &stored)?
+        } else {
+            stored
         };
         let bytes = zstd::decode_all(compressed.as_slice())
             .map_err(|_| Error::BlobCorrupt(hash.clone()))?;
@@ -163,6 +200,124 @@ impl BlobStore {
             return Err(Error::BlobCorrupt(hash.clone()));
         }
         Ok(bytes)
+    }
+
+    fn read_file(&self, hash: &BlobHash) -> Result<Vec<u8>> {
+        match std::fs::read(self.path_of(hash)) {
+            Ok(bytes) => Ok(bytes),
+            Err(err) if err.kind() == ErrorKind::NotFound => Err(Error::not_found("blob", hash)),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Whether a stored blob is sealed.
+    pub fn is_sealed(&self, hash: &BlobHash) -> Result<bool> {
+        use std::io::Read as _;
+        let mut file = match std::fs::File::open(self.path_of(hash)) {
+            Ok(file) => file,
+            Err(err) if err.kind() == ErrorKind::NotFound => {
+                return Err(Error::not_found("blob", hash));
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let mut head = [0u8; SEALED_MAGIC.len()];
+        let mut read = 0;
+        while read < head.len() {
+            match file.read(&mut head[read..])? {
+                0 => break,
+                n => read += n,
+            }
+        }
+        Ok(is_sealed(&head[..read]))
+    }
+
+    /// Every stored blob, in no particular order (temporary files and
+    /// foreign names are skipped).
+    pub fn hashes(&self) -> Result<Vec<BlobHash>> {
+        let mut out = Vec::new();
+        for dir in std::fs::read_dir(&self.root)? {
+            let dir = dir?;
+            let prefix = dir.file_name().to_string_lossy().into_owned();
+            if prefix.len() != 2 || !dir.file_type()?.is_dir() {
+                continue;
+            }
+            for file in std::fs::read_dir(dir.path())? {
+                let file = file?;
+                let rest = file.file_name().to_string_lossy().into_owned();
+                if let Ok(hash) = BlobHash::parse(&format!("{prefix}{rest}"))
+                    && file.file_type()?.is_file()
+                {
+                    out.push(hash);
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Rewrites one blob sealed (`seal = true`) or plain. Returns whether
+    /// the file changed (`false` when it already had that form). The new
+    /// content is written to a temporary file, synced and renamed over the
+    /// old one, so a crash leaves either form, never a torn file; the
+    /// content is verified against its hash before the old file is
+    /// replaced. Needs an installed cipher.
+    pub fn convert(&self, hash: &BlobHash, seal: bool) -> Result<bool> {
+        let stored = self.read_file(hash)?;
+        if is_sealed(&stored) == seal {
+            return Ok(false);
+        }
+        let context = blob_context(hash);
+        let compressed = if seal {
+            stored
+        } else {
+            self.cipher.open(&context, &stored)?
+        };
+        let bytes = zstd::decode_all(compressed.as_slice())
+            .map_err(|_| Error::BlobCorrupt(hash.clone()))?;
+        if BlobHash::of(&bytes) != *hash {
+            return Err(Error::BlobCorrupt(hash.clone()));
+        }
+        let new = if seal {
+            self.cipher.seal(&context, &compressed)?
+        } else {
+            compressed
+        };
+        let path = self.path_of(hash);
+        let dir = path.parent().unwrap_or(&self.root);
+        let mut tmp = tempfile::Builder::new().prefix(".tmp").tempfile_in(dir)?;
+        tmp.write_all(&new)?;
+        tmp.as_file().sync_all()?;
+        tmp.persist(&path).map_err(|err| err.error)?;
+        Ok(true)
+    }
+
+    /// Deletes leftover temporary files (`.tmp*`) of interrupted writes
+    /// that are at least `min_age` old (by modification time). A running
+    /// write's temporary file is young, so a minimum age of a few minutes
+    /// keeps concurrent writes safe; `Duration::ZERO` removes all (only
+    /// when nothing else writes). Returns how many were removed.
+    pub fn remove_temp_files(&self, min_age: std::time::Duration) -> Result<usize> {
+        let mut removed = 0;
+        for dir in std::fs::read_dir(&self.root)? {
+            let dir = dir?;
+            if !dir.file_type()?.is_dir() {
+                continue;
+            }
+            for file in std::fs::read_dir(dir.path())? {
+                let file = file?;
+                let old_enough = || -> std::io::Result<bool> {
+                    let modified = file.metadata()?.modified()?;
+                    Ok(modified.elapsed().unwrap_or_default() >= min_age)
+                };
+                if file.file_name().to_string_lossy().starts_with(".tmp") && old_enough()? {
+                    match std::fs::remove_file(file.path()) {
+                        Ok(()) => removed += 1,
+                        Err(err) if err.kind() == ErrorKind::NotFound => {}
+                        Err(err) => return Err(err.into()),
+                    }
+                }
+            }
+        }
+        Ok(removed)
     }
 
     /// Deletes a blob. Returns whether it existed. The caller is responsible
@@ -298,6 +453,98 @@ mod tests {
         assert!(blobs.remove(&hash).unwrap());
         assert!(!blobs.contains(&hash));
         assert!(blobs.get(&hash).unwrap_err().is_not_found());
+    }
+
+    fn xor() -> std::sync::Arc<dyn DataCipher> {
+        std::sync::Arc::new(crate::seal::tests::XorCipher)
+    }
+
+    #[test]
+    fn sealed_blobs_round_trip_and_convert_both_ways() {
+        let (_dir, blobs) = store();
+        let plain_hash = blobs.put(b"written before encryption").unwrap();
+        assert!(!blobs.is_sealed(&plain_hash).unwrap());
+
+        // A clone made before installing sees the cipher too.
+        let clone = blobs.clone();
+        blobs.set_cipher(Some(xor()), SealMode::Seal);
+        let content = b"Subject: secret\r\n\r\nThe launch code is 1234".repeat(20);
+        let sealed_hash = clone.put(&content).unwrap();
+        assert!(blobs.is_sealed(&sealed_hash).unwrap());
+        let on_disk = std::fs::read(blobs.path_of(&sealed_hash)).unwrap();
+        assert!(on_disk.starts_with(&SEALED_MAGIC));
+        assert_eq!(blobs.get(&sealed_hash).unwrap(), content);
+        // Plain blobs stay readable.
+        assert_eq!(
+            blobs.get(&plain_hash).unwrap(),
+            b"written before encryption"
+        );
+
+        let mut all = blobs.hashes().unwrap();
+        all.sort();
+        let mut expected = vec![plain_hash.clone(), sealed_hash.clone()];
+        expected.sort();
+        assert_eq!(all, expected);
+
+        assert!(blobs.convert(&plain_hash, true).unwrap());
+        assert!(!blobs.convert(&plain_hash, true).unwrap(), "idempotent");
+        assert!(blobs.is_sealed(&plain_hash).unwrap());
+        assert_eq!(
+            blobs.get(&plain_hash).unwrap(),
+            b"written before encryption"
+        );
+
+        assert!(blobs.convert(&sealed_hash, false).unwrap());
+        assert!(!blobs.is_sealed(&sealed_hash).unwrap());
+        assert_eq!(blobs.get(&sealed_hash).unwrap(), content);
+
+        // Without a cipher, sealed blobs are locked, plain ones readable.
+        blobs.set_cipher(None, SealMode::Plain);
+        assert!(matches!(blobs.get(&plain_hash), Err(Error::Locked(_))));
+        assert!(matches!(
+            blobs.convert(&plain_hash, false),
+            Err(Error::Locked(_))
+        ));
+        assert_eq!(blobs.get(&sealed_hash).unwrap(), content);
+    }
+
+    #[test]
+    fn sealed_blob_is_bound_to_its_hash() {
+        let (_dir, blobs) = store();
+        blobs.set_cipher(Some(xor()), SealMode::Seal);
+        let a = blobs.put(b"first").unwrap();
+        let b = blobs.put(b"second").unwrap();
+        // Swap the files: the context (hash) no longer matches.
+        std::fs::copy(blobs.path_of(&a), blobs.path_of(&b)).unwrap();
+        assert!(matches!(blobs.get(&b), Err(Error::Crypto(_))));
+        assert!(matches!(blobs.convert(&b, false), Err(Error::Crypto(_))));
+    }
+
+    #[test]
+    fn plain_mode_with_cipher_writes_plain_and_temp_files_are_cleaned() {
+        let (_dir, blobs) = store();
+        blobs.set_cipher(Some(xor()), SealMode::Plain);
+        let hash = blobs.put(b"decrypting: new writes are plain").unwrap();
+        assert!(!blobs.is_sealed(&hash).unwrap());
+        let dir = blobs.path_of(&hash).parent().unwrap().to_owned();
+        std::fs::write(dir.join(".tmpABC"), b"torn").unwrap();
+        assert_eq!(blobs.hashes().unwrap(), vec![hash.clone()]);
+        let hour = std::time::Duration::from_secs(3600);
+        assert_eq!(blobs.remove_temp_files(hour).unwrap(), 0, "too young");
+        assert_eq!(
+            blobs.remove_temp_files(std::time::Duration::ZERO).unwrap(),
+            1
+        );
+        assert_eq!(
+            blobs.remove_temp_files(std::time::Duration::ZERO).unwrap(),
+            0
+        );
+        assert!(
+            blobs
+                .is_sealed(&BlobHash::of(b"none"))
+                .unwrap_err()
+                .is_not_found()
+        );
     }
 
     #[test]

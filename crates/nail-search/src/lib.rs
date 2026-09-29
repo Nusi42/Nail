@@ -13,6 +13,10 @@
 //! * [`search`] / [`run_request`] — run a query: full-text terms against
 //!   the index, flags / tags / account / folder / dates / size as
 //!   store-side filters ([`nail_store::MessageFilter`]), paged and sorted.
+//! * [`IndexPolicy`] — the decrypted-content indexing policy (M2a WP33):
+//!   decrypted mail is indexed only for accounts that opted in; the index
+//!   then counts as sensitive. [`SearchIndex::open_with`] takes the
+//!   encryption-at-rest directory wrapper.
 
 #![warn(missing_docs)]
 
@@ -21,6 +25,7 @@ mod document;
 mod error;
 mod exec;
 mod index;
+mod policy;
 pub mod query;
 
 pub use document::IndexDocument;
@@ -29,7 +34,8 @@ pub use exec::{
     Compiled, SearchContext, SearchResults, SearchScope, VirtualAccountScope, compile,
     matching_ids, run_request, search,
 };
-pub use index::{CommitPolicy, INDEX_DIR_NAME, SearchIndex};
+pub use index::{CommitPolicy, DirectoryWrapper, INDEX_DIR_NAME, SearchIndex, VERSION_FILE_NAME};
+pub use policy::IndexPolicy;
 pub use query::{Query, parse_query};
 
 /// Name of the crate, for diagnostics.

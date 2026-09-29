@@ -1,0 +1,21 @@
+To: bob@example.net
+From: alice@example.org
+Subject: S/MIME test alice-enc-cbc.eml
+MIME-Version: 1.0
+Content-Disposition: attachment; filename="smime.p7m"
+Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"
+Content-Transfer-Encoding: base64
+
+MIICLQYJKoZIhvcNAQcDoIICHjCCAhoCAQAxggFTMIIBTwIBADA3MDExEjAQBgNV
+BAoMCU5haWwgVGVzdDEbMBkGA1UEAwwSTmFpbCBUZXN0IEVtYWlsIENBAgID6TAN
+BgkqhkiG9w0BAQEFAASCAQAQTtootSl0dR9N6+kI6cUxdIJyGw7o2n9gvIb30Yei
+c9AjRkczIg86JqMIHck2kPjrltRPfKGLO9rG0MqaESXm/k5N4rlnbSDyOiTPC/Ku
+h5y744NQQG8+ent87RWvPMazrdvwCLbQT9/PfX7emppRmviT/+jUWGNAYJoVExn1
+YNbaPxNxWaRekMmwdC8VykRIJ2b3fc9jGjZS30FjrMIw/qpdWYs/8g+doRLgKm+M
+uSgotjDX7LTxe3jAAyXkcdrKekBLB4XfFLewFIJLjTVhbMDTverTVYcy6Fw6YiBj
+59pJ9b7VUcMCVoZ1/J6OWzxXMSFo/7Q9uUGvyHh5tOYgMIG9BgkqhkiG9w0BBwEw
+HQYJYIZIAWUDBAEqBBCvKUW5nSRSpM+vzVOGolX2gIGQg1zmVt2SXMhWdKkKMwAL
+R8qotD45g50i8P+qkOiRet7qsid0NL3ofEhYB2XoznISu80MVYhSTCdClfwDfmit
+La63VKvF1om9mHp/vb+jueJWbK4D6VRjaFB2XeDIH5HPBmth8w7bnjq1vatbjCny
+hWbtjvILz1u8D/XAifwX903SgkA7Rle3c+u0mNhW6BzQ
+

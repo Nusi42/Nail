@@ -317,3 +317,74 @@ fn mutated_corpus_never_panics() {
         }
     }
 }
+
+/// Link and attachment safety over the whole demo corpus: no panics, and
+/// ordinary mail (newsletters with tracking links, invoices, inline
+/// images) raises no warning.
+#[test]
+fn demo_corpus_raises_no_false_warnings() {
+    let mut found = Vec::new();
+    for folder in demo_corpus() {
+        for message in &folder.messages {
+            let body = body(parse_message(&message.raw));
+            for warning in nail_mime::links::message_warnings(&body) {
+                found.push(format!(
+                    "{}/{}: {warning:?}",
+                    folder.name, message.file_name
+                ));
+            }
+            // The corpus has no trusted Authentication-Results.
+            assert_eq!(
+                nail_mime::auth_results::auth_results_of_raw(
+                    &message.raw,
+                    &["mx.nail.example".to_owned()]
+                ),
+                None
+            );
+        }
+    }
+    assert!(found.is_empty(), "{found:#?}");
+}
+
+/// A phishing mail end to end: the warnings refer to the links of the
+/// sanitized HTML (links the sanitizer removed are not counted).
+#[test]
+fn phishing_mail_warnings_follow_the_sanitized_html() {
+    let raw = "From: Bank <security@bank.example>\r\n\
+Subject: Verify your account\r\n\
+MIME-Version: 1.0\r\n\
+Content-Type: multipart/mixed; boundary=b\r\n\r\n\
+--b\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
+<p><a href=\"javascript:alert(1)\">https://bank.example</a>\
+<a href=\"https://bank.example.evil.example/login\">https://bank.example/login</a>\
+<a href=\"https://xn--pple-43d.example/\">Sign in</a>\
+<a href=\"https://www.bank.example/help\">Help</a></p>\r\n\
+--b\r\nContent-Type: application/octet-stream\r\n\
+Content-Disposition: attachment; filename=\"statement.pdf.exe\"\r\n\r\nMZ\r\n--b--\r\n";
+    let body = body(parse_message(raw.as_bytes()));
+    let html = body.sanitized_html.as_deref().unwrap();
+    let links = nail_mime::links::html_links(html);
+    assert!(
+        links.iter().all(|l| !l.href.starts_with("javascript")),
+        "{html}"
+    );
+    let warnings = nail_mime::links::message_warnings(&body);
+    let kinds: Vec<String> = warnings
+        .iter()
+        .map(|w| {
+            serde_json::to_value(w).unwrap()["kind"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        ["link-mismatch", "lookalike-domain", "dangerous-attachment"],
+        "{warnings:#?}"
+    );
+    // Link numbers index the `<a href>` elements of the sanitized HTML.
+    let mismatch = serde_json::to_value(&warnings[0]).unwrap();
+    let n = mismatch["link"].as_u64().unwrap() as usize;
+    assert_eq!(links[n].href, "https://bank.example.evil.example/login");
+}

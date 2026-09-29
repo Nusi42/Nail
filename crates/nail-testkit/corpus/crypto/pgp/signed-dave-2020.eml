@@ -1,0 +1,30 @@
+From: Dave Example <dave@example.org>
+To: Bob Example <bob@example.net>
+Subject: Old signature
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <signed-dave@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha256;
+ protocol="application/pgp-signature";
+ boundary="------------sig0Bnd4ry"
+
+This is an OpenPGP/MIME signed message (RFC 4880 and 3156)
+--------------sig0Bnd4ry
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Signed before my key expired.
+--------------sig0Bnd4ry
+Content-Type: application/pgp-signature; name="OpenPGP_signature.asc"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="OpenPGP_signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iIcEABYIAC8WIQTkBHD2lz0inIwhyaIhDU0ibCbBzAUCXtTtwBEcZGF2ZUBleGFt
+cGxlLm9yZwAKCRAhDU0ibCbBzJhlAPsE5o8Np9aWt+fVJazoAs8hBZfesHMnwNna
+bI7DtWJ61gEA2FOMT63SPKIbDr06xJ2WVTOGN6NJCe+h/X9Q6Gvrvgo=
+=K+E5
+-----END PGP SIGNATURE-----
+
+--------------sig0Bnd4ry--

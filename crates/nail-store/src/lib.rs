@@ -30,6 +30,10 @@
 //!   Autocrypt peer state ([`AutocryptPeerRecord`]), encryption-at-rest
 //!   state ([`VaultRecord`]), cached message security
 //!   ([`MessageSecurityRecord`]) and JSON settings ([`Store::setting`]).
+//! * Encryption-at-rest hooks (M2a WP33, [`seal`]): a [`DataCipher`]
+//!   installed with [`Store::set_cipher`] / [`BlobStore::set_cipher`] seals
+//!   sensitive columns and blob files; [`Store::convert_fields`],
+//!   [`BlobStore::convert`] and [`Store::compact`] serve the migration.
 //!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
@@ -47,6 +51,7 @@ mod queue;
 mod rules;
 mod saved_search;
 mod schema;
+pub mod seal;
 pub mod store;
 pub mod thread;
 
@@ -72,6 +77,10 @@ pub use queue::{
 };
 pub use rules::{RuleRunAction, RuleRunRecord, RuleRunUndo, RuleState};
 pub use schema::SCHEMA_VERSION;
+pub use seal::{
+    CipherError, DataCipher, FieldCounts, SEALED_COLUMNS, SEALED_FIELD_PREFIX, SEALED_MAGIC,
+    SealMode, SealedColumn,
+};
 pub use store::{BLOB_DIR_NAME, DB_FILE_NAME, Store};
 pub use thread::{ThreadPage, ThreadTreeEntry};
 

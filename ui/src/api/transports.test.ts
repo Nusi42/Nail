@@ -48,6 +48,19 @@ describe("MockTransport", () => {
     expect(message.headers.subject).toBe(page.messages[0]?.subject);
   });
 
+  it("adds the security findings of the feature mock to message bodies", async () => {
+    const transport = new MockTransport({ data: createMockData(5) });
+    const c = new TransportClient(transport);
+    const first = [...transport.data.bodies.keys()][0] ?? "";
+    const plain = await c.request({ type: "GetMessage", id: first }, "Message");
+    expect(plain.message.security).toBeUndefined();
+    transport.data.features.security.messages[first] = {
+      warnings: [{ kind: "suspicious-link", link: 0, href: "file:///c:/x" }],
+    };
+    const { message } = await c.request({ type: "GetMessage", id: first }, "Message");
+    expect(message.warnings).toHaveLength(1);
+  });
+
   it("answers the reference config", async () => {
     const config = await client().request({ type: "GetConfig" }, "Config");
     expect(config.layout.windows.main).toHaveLength(2);

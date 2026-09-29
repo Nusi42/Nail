@@ -1,0 +1,30 @@
+From: Alice Example <alice@example.org>
+To: Bob Example <bob@example.net>
+Subject: Signed by Alice
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <signed-alice@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/signed; micalg=pgp-sha256;
+ protocol="application/pgp-signature";
+ boundary="------------sig0Bnd4ry"
+
+This is an OpenPGP/MIME signed message (RFC 4880 and 3156)
+--------------sig0Bnd4ry
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Hello Bob, this message is signed by Alice.
+--------------sig0Bnd4ry
+Content-Type: application/pgp-signature; name="OpenPGP_signature.asc"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="OpenPGP_signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+
+iIgEABYIADAWIQTK2Iqujha0CDTuhXL1wiaQW5s6JQUCarvdeRIcYWxpY2VAZXhh
+bXBsZS5vcmcACgkQ9cImkFubOiUX+wD8CvDoE+9dBxsME0NYwxCImqUlkQQU6usx
+lz9RWtWTshEBAN9hRleCC9nK/cWDOimiomn85zfsGkvO/35rdPZUTaYH
+=pojy
+-----END PGP SIGNATURE-----
+
+--------------sig0Bnd4ry--

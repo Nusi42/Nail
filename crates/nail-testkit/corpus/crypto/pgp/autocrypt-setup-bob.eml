@@ -1,0 +1,45 @@
+From: Bob Example <bob@example.net>
+To: Bob Example <bob@example.net>
+Subject: Autocrypt Setup Message
+Date: Thu, 01 Jan 2026 12:00:00 +0000
+Message-ID: <setup-bob@example.net>
+MIME-Version: 1.0
+Autocrypt-Setup-Message: v1
+Content-Type: multipart/mixed; boundary="setup0Bnd4ry"
+
+--setup0Bnd4ry
+Content-Type: text/plain; charset=UTF-8
+
+This message contains all information to transfer your Autocrypt
+settings along with your secret key securely from your original
+device.
+
+--setup0Bnd4ry
+Content-Type: application/autocrypt-setup
+Content-Disposition: attachment; filename="autocrypt-setup-message.html"
+
+<html><body><p>This is the Autocrypt setup file.</p><pre>
+-----BEGIN PGP MESSAGE-----
+Passphrase-Format: numeric9x4
+Passphrase-Begin: 17
+
+jA0EBwMIUN7rHI4NT/r10ukBBZoB1RSlMGCgvSzDyJRbFNgHzWhwQl3duxWktcpd
+295+8LcimGjjWlZeMMhIyn47X962auku8TfJCARu3IumvmkPexhI1PgMV7MTnwlE
++KbRis3YbFFcQT7X2dAd3FXZtojaq80cg3qrsCIDElij8qkDAwiLIQeUGBrDWM4c
+xcsvBB7it1mekFYaHhtpkvBW+GXTT38z0V5nZJwX4dLDu9VdzCCmZURj8kNJHv21
+jiDGkXGlDfVKyLlu218bjPuLRub272fa/yOOd1rfch2WkgNIW8mnlbON5NFPxLY+
+HvFZsskX5DrGsk+ueqVN8/t+H/CSUj89oijvUaJDypSAUqpYYeanSSrwgeAK5jRO
+vtIQaEA4MNSCtd48/mZXPZVt4dBah1q4Y7rBY7Tzf4IKsp0B+mATCCKFYDaQxnzR
+Aic1GFRVUQaNx/bbh5w7NNd4hV+yinnUgj0PDlUMyI7RhJk/Y9mqT9gISDmRh9Cv
+DTpSiQpRy6tIFEzIh+ulAmDGPyAunFbDfY7YOBTx4HvO4v0/Q3+buqtn4Vc+Xo+u
+J4Osh3lzmzEPOSGNFOvu38/1lOaCUBd2fABGR3pOvzl0PjEvDvIrtNm0zwyRheBB
+wBEXTce6J+W5CJzPnmlqV9Mal02I2fSpyZ7PMIoexNbystAxOhxYaUH58PFiu1A5
+xJOTL/QG/fGzvtuqeKoqpB7Tq+jw0m2KQUJRxn9o2lkxSnramV+IiYA+1w+irOt6
+Q22idqANQXQRHdh3SMZURHZruos2NCRFQ3/JQ+ZFRvulNhuLf5f/axeuX93Czi07
+e8DizUl9SsjaTB3MF09e26Ta61P7hY9ibDWXv62CEZ5twVMURWsrsgdFjaQCoNx2
+scGWNlE=
+=N6ep
+-----END PGP MESSAGE-----
+</pre></body></html>
+
+--setup0Bnd4ry--

@@ -180,6 +180,7 @@ fn fixture() -> Fixture {
             subject: m.subject.into(),
             body: m.body.into(),
             attachment_names: m.attachments.iter().map(|a| (*a).to_owned()).collect(),
+            decrypted: false,
         });
     }
     store.merge_messages(&synced).unwrap();
@@ -426,6 +427,7 @@ fn index_updates_are_visible_to_searches() {
             subject: "Budget 2025 (revised)".into(),
             body: "revised".into(),
             attachment_names: vec![],
+            decrypted: false,
         }])
         .unwrap();
     assert_eq!(f.ids("revised"), ["old"]);
