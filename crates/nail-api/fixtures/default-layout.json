@@ -1,0 +1,199 @@
+{
+  "name": "default",
+  "windows": {
+    "main": [
+      {
+        "min_width": 900,
+        "max_width": null,
+        "root": {
+          "type": "stack",
+          "id": "root",
+          "sizes": ["1fr", "auto"],
+          "children": [
+            {
+              "type": "split",
+              "id": "panes",
+              "orientation": "horizontal",
+              "sizes": ["240px", "1fr", "1.4fr"],
+              "min_sizes": ["160px", "280px", "320px"],
+              "max_sizes": ["480px", null, null],
+              "collapsible": [true, false, true],
+              "resizable": true,
+              "children": [
+                {
+                  "type": "stack",
+                  "id": "sidebar",
+                  "label": "@layout.pane.folders",
+                  "sizes": ["auto", "1fr"],
+                  "children": [
+                    {
+                      "type": "widget",
+                      "kind": "account-switcher",
+                      "id": "accounts",
+                      "options": {}
+                    },
+                    {
+                      "type": "widget",
+                      "kind": "folder-tree",
+                      "id": "folders",
+                      "options": { "show-unread": true }
+                    }
+                  ]
+                },
+                {
+                  "type": "widget",
+                  "kind": "message-list",
+                  "id": "list",
+                  "label": "@layout.pane.messages",
+                  "options": { "page-size": 100 },
+                  "rows": ["{from.name}  {date | relative}", "{subject}", "{preview}"]
+                },
+                {
+                  "type": "stack",
+                  "id": "reader",
+                  "label": "@layout.pane.message",
+                  "sizes": ["auto", "1fr"],
+                  "children": [
+                    {
+                      "type": "widget",
+                      "kind": "toolbar",
+                      "id": "reader-toolbar",
+                      "options": { "toolbar": "reader" }
+                    },
+                    {
+                      "type": "widget",
+                      "kind": "message-view",
+                      "id": "message",
+                      "options": { "headers": "from to cc date" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "widget",
+              "kind": "status-bar",
+              "id": "status",
+              "options": { "items": "sync-progress folder-counts" }
+            }
+          ]
+        }
+      },
+      {
+        "min_width": null,
+        "max_width": 899,
+        "root": {
+          "type": "stack",
+          "id": "root",
+          "sizes": ["1fr", "auto"],
+          "children": [
+            {
+              "type": "tabs",
+              "id": "panes",
+              "active": 1,
+              "children": [
+                {
+                  "type": "widget",
+                  "kind": "folder-tree",
+                  "id": "folders",
+                  "label": "@layout.pane.folders",
+                  "options": { "show-unread": true }
+                },
+                {
+                  "type": "widget",
+                  "kind": "message-list",
+                  "id": "list",
+                  "label": "@layout.pane.messages",
+                  "options": { "page-size": 100 },
+                  "rows": ["{from.name}  {date | relative}", "{subject}"]
+                },
+                {
+                  "type": "stack",
+                  "id": "reader",
+                  "label": "@layout.pane.message",
+                  "sizes": ["auto", "1fr"],
+                  "children": [
+                    {
+                      "type": "widget",
+                      "kind": "toolbar",
+                      "id": "reader-toolbar",
+                      "options": { "toolbar": "reader" }
+                    },
+                    {
+                      "type": "widget",
+                      "kind": "message-view",
+                      "id": "message",
+                      "options": { "headers": "from date" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "widget",
+              "kind": "status-bar",
+              "id": "status",
+              "options": { "items": "sync-progress" }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "actions": {
+    "mail.next": { "label": "@mail.action.next" },
+    "mail.previous": { "label": "@mail.action.previous" },
+    "mail.reply": { "label": "@mail.action.reply", "icon": "reply" },
+    "mail.reply-all": { "label": "@mail.action.reply-all", "icon": "reply-all" },
+    "mail.forward": { "label": "@mail.action.forward", "icon": "forward" },
+    "mail.archive": { "label": "@mail.action.archive", "icon": "archive" },
+    "mail.delete": { "label": "@mail.action.delete", "icon": "delete" },
+    "mail.toggle-read": { "label": "@mail.action.toggle-read", "icon": "mark-read" },
+    "mail.toggle-flag": { "label": "@mail.action.toggle-flag", "icon": "flag" },
+    "view.toggle": { "label": "@view.action.toggle" },
+    "sync.now": { "label": "@sync.action.now", "icon": "sync" }
+  },
+  "keys": [
+    { "context": "list", "key": "j", "action": "mail.next" },
+    { "context": "list", "key": "k", "action": "mail.previous" },
+    { "context": "list", "key": "arrowdown", "action": "mail.next" },
+    { "context": "list", "key": "arrowup", "action": "mail.previous" },
+    { "context": "reader", "key": "j", "action": "mail.next" },
+    { "context": "reader", "key": "k", "action": "mail.previous" },
+    { "context": "global", "key": "r", "action": "mail.reply" },
+    { "context": "global", "key": "a", "action": "mail.reply-all" },
+    { "context": "global", "key": "f", "action": "mail.forward" },
+    { "context": "global", "key": "e", "action": "mail.archive" },
+    { "context": "global", "key": "delete", "action": "mail.delete" },
+    { "context": "global", "key": "u", "action": "mail.toggle-read" },
+    { "context": "global", "key": "s", "action": "mail.toggle-flag" },
+    { "context": "global", "key": "f5", "action": "sync.now" },
+    { "context": "global", "key": "ctrl+b", "action": "view.toggle", "args": ["sidebar"] },
+    { "context": "global", "key": "g r", "action": "view.toggle", "args": ["reader"] }
+  ],
+  "toolbars": {
+    "reader": [
+      { "type": "action", "action": "mail.reply" },
+      { "type": "action", "action": "mail.reply-all" },
+      { "type": "action", "action": "mail.forward" },
+      { "type": "spacer" },
+      { "type": "action", "action": "mail.archive" },
+      { "type": "action", "action": "mail.delete" },
+      { "type": "separator" },
+      { "type": "action", "action": "mail.toggle-flag" }
+    ]
+  },
+  "menus": {
+    "context:message-list.row": [
+      { "type": "action", "action": "mail.reply" },
+      { "type": "action", "action": "mail.reply-all" },
+      { "type": "action", "action": "mail.forward" },
+      { "type": "separator" },
+      { "type": "action", "action": "mail.toggle-read" },
+      { "type": "action", "action": "mail.toggle-flag" },
+      { "type": "separator" },
+      { "type": "action", "action": "mail.archive" },
+      { "type": "action", "action": "mail.delete" }
+    ]
+  }
+}

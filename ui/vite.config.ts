@@ -1,0 +1,31 @@
+/// <reference types="vitest/config" />
+import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+const localesDir = fileURLToPath(new URL("../locales", import.meta.url));
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      // Fluent catalogs live at the repository root (shared with the Rust core).
+      "@locales": localesDir,
+    },
+  },
+  server: {
+    port: 5173,
+    strictPort: true,
+    fs: { allow: [".", localesDir] },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+  },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
+});

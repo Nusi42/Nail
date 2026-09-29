@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build-test:
+    name: Lint and test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
+
+      - name: npm ci
+        run: npm ci
+
+      # The Tauri shell (app/src-tauri) embeds ui/dist at compile time, so the
+      # UI is built before any `--workspace` cargo command.
+      - name: Build UI
+        run: npm run build
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace
+
+      - name: npm lint
+        run: npm run lint
+
+      - name: npm test (Vitest)
+        run: npm test
+
+      # WP6: Playwright end-to-end tests against `nail serve --seed demo`.
+      # - name: Install Playwright browsers
+      #   run: npx playwright install --with-deps chromium
+      # - name: Playwright
+      #   run: npm run e2e

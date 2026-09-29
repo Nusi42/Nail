@@ -1,0 +1,91 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/nail-api",
+    "crates/nail-config",
+    "crates/nail-store",
+    "crates/nail-mime",
+    "crates/nail-proto-imap",
+    "crates/nail-testkit",
+    "crates/nail-core",
+    "crates/nail-server",
+    "crates/nail-cli",
+    "app/src-tauri",
+]
+# The Tauri shell needs the built UI (`ui/dist`) at compile time, so plain
+# `cargo build` / `cargo test` skip it. Use `--workspace` (after `npm run build`)
+# or `-p nail-app` to include it.
+default-members = [
+    "crates/nail-api",
+    "crates/nail-config",
+    "crates/nail-store",
+    "crates/nail-mime",
+    "crates/nail-proto-imap",
+    "crates/nail-testkit",
+    "crates/nail-core",
+    "crates/nail-server",
+    "crates/nail-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "LicenseRef-Proprietary"
+publish = false
+repository = "https://example.invalid/nail"
+
+[workspace.dependencies]
+# Internal crates
+nail-api = { path = "crates/nail-api" }
+nail-config = { path = "crates/nail-config" }
+nail-store = { path = "crates/nail-store" }
+nail-mime = { path = "crates/nail-mime" }
+nail-proto-imap = { path = "crates/nail-proto-imap" }
+nail-testkit = { path = "crates/nail-testkit" }
+nail-core = { path = "crates/nail-core" }
+nail-server = { path = "crates/nail-server" }
+
+# Serialization and contract
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+indexmap = { version = "2.14", features = ["serde"] }
+ts-rs = { version = "12.0.1", features = ["serde-json-impl", "indexmap-impl"] }
+
+# Errors, async, logging
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+
+# CLI
+clap = { version = "4.6", features = ["derive"] }
+
+# Desktop shell
+tauri = { version = "2.12", features = [] }
+tauri-build = { version = "2.7", features = [] }
+
+# Testing
+tempfile = "3.27"
+pretty_assertions = "1.4"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+large_futures = "warn"
+needless_pass_by_ref_mut = "warn"
+
+[profile.dev]
+# Keep debug builds reasonably fast while still debuggable.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 1

@@ -1,0 +1,17 @@
+{
+  "name": "@nail/e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "lint": "tsc --noEmit -p . && prettier --check .",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3"
+  }
+}

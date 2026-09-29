@@ -1,0 +1,37 @@
+{
+  "name": "nail",
+  "private": true,
+  "description": "Nail email & PIM client (npm workspaces root)",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "ui",
+    "e2e"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w ui",
+    "build": "npm run build -w ui",
+    "test": "npm run test -w ui",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "e2e": "npm run test -w e2e",
+    "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0",
+    "cross-env": "^10.1.0",
+    "prettier": "^3.9.9",
+    "eslint": "^10.11.0"
+  },
+  "overrides": {
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
+  }
+}

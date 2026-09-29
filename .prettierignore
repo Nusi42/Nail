@@ -1,0 +1,15 @@
+# Generated or foreign content
+ui/src/api/generated/
+ui/dist/
+node_modules/
+coverage/
+playwright-report/
+test-results/
+app/src-tauri/gen/
+app/src-tauri/icons/
+crates/
+docs/
+userDocs/
+locales/
+*.md
+package-lock.json

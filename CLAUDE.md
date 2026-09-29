@@ -48,12 +48,19 @@ locales/               Fluent catalogs (en, de)
 (Filled in as milestone M0 lands; keep in sync with `docs/dev-setup.md`.)
 
 ```
-cargo test --workspace
-cargo clippy --workspace -- -D warnings
-npm test          # Vitest (ui)
-npm run lint
-npm run e2e       # builds UI + CLI, then Playwright against `nail serve --seed demo`
+npm install / npm ci                       # npm workspaces: ui, e2e
+npm run build                              # ui/dist — required before any `cargo … --workspace` (Tauri embeds it)
+cargo test                                 # default members = all crates except app/src-tauri
+cargo test --workspace                     # incl. the Tauri shell (after npm run build)
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+npm test                                   # Vitest (ui), incl. the lint-rule self-test
+npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
+npm run gen:api                            # regenerate ui/src/api/generated from nail-api (a test fails when stale)
+npm run e2e                                # Playwright (placeholder spec skipped until WP6)
 ```
+
+- The contract lives in `crates/nail-api`; its fixtures `fixtures/default-{theme,layout}.json` describe the default UI. See ADRs 0002 (protocol) and 0003 (config models, part/DOM conventions).
 
 ## Git
 
