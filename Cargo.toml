@@ -6,7 +6,13 @@ members = [
     "crates/nail-store",
     "crates/nail-mime",
     "crates/nail-proto-imap",
+    "crates/nail-proto-smtp",
+    "crates/nail-proto-pop3",
+    "crates/nail-auth",
+    "crates/nail-discovery",
+    "crates/nail-search",
     "crates/nail-testkit",
+    "crates/nail-testkit-net",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -21,7 +27,13 @@ default-members = [
     "crates/nail-store",
     "crates/nail-mime",
     "crates/nail-proto-imap",
+    "crates/nail-proto-smtp",
+    "crates/nail-proto-pop3",
+    "crates/nail-auth",
+    "crates/nail-discovery",
+    "crates/nail-search",
     "crates/nail-testkit",
+    "crates/nail-testkit-net",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -42,7 +54,13 @@ nail-config = { path = "crates/nail-config" }
 nail-store = { path = "crates/nail-store" }
 nail-mime = { path = "crates/nail-mime" }
 nail-proto-imap = { path = "crates/nail-proto-imap" }
+nail-proto-smtp = { path = "crates/nail-proto-smtp" }
+nail-proto-pop3 = { path = "crates/nail-proto-pop3" }
+nail-auth = { path = "crates/nail-auth" }
+nail-discovery = { path = "crates/nail-discovery" }
+nail-search = { path = "crates/nail-search" }
 nail-testkit = { path = "crates/nail-testkit" }
+nail-testkit-net = { path = "crates/nail-testkit-net" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -63,6 +81,27 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 mail-parser = "0.11.9"
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "logging", "tls12"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+
+# M1a engines (ADR 0012). TLS everywhere is rustls with the `ring` provider,
+# chosen explicitly per connection (no aws-lc, no process-wide default).
+# SMTP submission: tokio + rustls, raw MIME is built elsewhere.
+lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "pool", "hostname", "tokio1", "tokio1-rustls", "ring", "rustls-platform-verifier", "tracing"] }
+# OS keychain (Windows Credential Manager, macOS Keychain, Secret Service).
+keyring = "4.2.0"
+# OAuth2 client (PKCE, token exchange/refresh); HTTP through our reqwest.
+oauth2 = { version = "5.0.0", default-features = false }
+# HTTP client for OAuth2 and autoconfig; TLS config supplied by the caller.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "json", "charset", "http2"] }
+url = "2.5.8"
+rustls-platform-verifier = "0.7.1"
+# DNS (RFC 6186 SRV lookups; mock DNS answers in tests).
+hickory-resolver = "0.26.3"
+hickory-proto = "0.26.3"
+# Autoconfig / Autodiscover XML.
+quick-xml = "0.42.0"
+# Full-text search.
+tantivy = "0.26.2"
+base64 = "0.23.1"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

@@ -15,7 +15,8 @@ is the primary platform. User-facing documentation lives in
 | Playwright Chromium | matches `@playwright/test` | `npx -w e2e playwright install chromium`, once per machine |
 
 Docker is not needed. Integration tests use the in-process mock servers from
-`crates/nail-testkit`.
+`crates/nail-testkit` (IMAP) and `crates/nail-testkit-net` (SMTP, POP3,
+OAuth2, HTTP, DNS; M1a).
 
 ### Keep build output out of OneDrive
 
@@ -150,10 +151,13 @@ For UI work with hot module reloading, run `npm run dev` (Vite on
 <data-dir>/blobs/ab/<62 hex>   raw messages, zstd-compressed, addressed by SHA-256
 <config-dir>/theme.kdl         optional; see userDocs/en/theme-reference.md
 <config-dir>/layout.kdl        optional; see userDocs/en/layout-reference.md
+<config-dir>/accounts.kdl      accounts, identities, virtual accounts (M1a); see userDocs/en/accounts-reference.md
 ```
 
-`nail config schema theme` and `nail config schema layout` print the JSON
-Schemas of the two config files.
+`nail config schema theme`, `nail config schema layout` and
+`nail config schema accounts` print the JSON Schemas of the config files.
+Secrets are never in these files: `accounts.kdl` only holds keychain
+references (ADR 0013).
 
 ### Desktop app
 
@@ -191,3 +195,9 @@ architecture are:
 - **0009:** the core, server, CLI and desktop shell
 - **0010:** the e2e harness
 - **0011:** build output locations (`ui/dist` stays in the repository)
+
+For M1a:
+
+- **0012:** the M1a contract (protocol additions, engine traits, crate shapes)
+- **0013:** `accounts.kdl` (format, validation, format-preserving writes)
+- **0014:** libraries for SMTP, POP3, OAuth2, keychain, discovery and search

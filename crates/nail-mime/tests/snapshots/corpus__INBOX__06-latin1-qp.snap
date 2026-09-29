@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-24T19:30:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Hallo Sam, viele Grüße aus München! Das Wetter ist großartig, die Wiesn ist voll und das Bier kostet 15,80 Euro... fast. Bis bald, Jürgen",
     "subject": "Grüße aus München",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

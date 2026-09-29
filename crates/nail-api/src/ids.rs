@@ -48,7 +48,9 @@ macro_rules! string_id {
 }
 
 string_id!(
-    /// Identifies an account (real or, later, virtual).
+    /// Identifies an account, real or virtual. For accounts configured in
+    /// `accounts.kdl` it is the name written there (`account "work"`); the
+    /// built-in "All accounts" virtual account is [`AccountId::ALL`].
     AccountId
 );
 string_id!(
@@ -59,6 +61,46 @@ string_id!(
     /// Identifies a message in the local store. Stable across restarts.
     MessageId
 );
+string_id!(
+    /// Identifies a sending identity. For identities from `accounts.kdl` it
+    /// is the `id=` written there, or the identity's address when there is
+    /// none. Unique across all accounts.
+    IdentityId
+);
+string_id!(
+    /// Identifies a conversation thread. Threads can span folders and, in a
+    /// virtual account, accounts.
+    ThreadId
+);
+string_id!(
+    /// Identifies a draft in the local store.
+    DraftId
+);
+string_id!(
+    /// Identifies an entry of the outbox (a message waiting to be sent).
+    OutboxId
+);
+string_id!(
+    /// Identifies an operation in the core's operation queue.
+    OpId
+);
+string_id!(
+    /// Identifies a running OAuth2 authorization (see
+    /// [`crate::Request::StartOAuth`]).
+    OAuthFlowId
+);
+
+impl AccountId {
+    /// Id of the built-in "All accounts" virtual account (the unified
+    /// inbox). It is reserved: `accounts.kdl` cannot define an account or a
+    /// virtual account with this name.
+    pub const ALL: &'static str = "all";
+
+    /// The built-in "All accounts" virtual account.
+    pub fn all() -> Self {
+        Self::new(Self::ALL)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -72,5 +114,10 @@ mod tests {
         assert_eq!(back, id);
         assert_eq!(id.to_string(), "acc-1");
         assert_eq!(MessageId::from("m").as_str(), "m");
+        assert_eq!(AccountId::all().as_str(), "all");
+        assert_eq!(
+            serde_json::to_value(OpId::new("op-7")).unwrap(),
+            serde_json::json!("op-7")
+        );
     }
 }

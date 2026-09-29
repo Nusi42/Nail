@@ -79,3 +79,19 @@ fn layout_schema_snapshot() {
     }
     check_snapshot("layout.schema.json", &schema);
 }
+
+#[test]
+fn accounts_schema_snapshot() {
+    let schema = nail_config::accounts_schema();
+    assert_eq!(schema.get("title"), Some(&Value::from("Nail accounts.kdl")));
+    assert_eq!(
+        properties(&schema),
+        [
+            "account",
+            "oauth-provider",
+            "undo-send-delay",
+            "virtual-account"
+        ]
+    );
+    check_snapshot("accounts.schema.json", &schema);
+}

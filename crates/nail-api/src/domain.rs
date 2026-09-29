@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::ids::{AccountId, FolderId, MessageId};
+use crate::ids::{AccountId, FolderId, MessageId, ThreadId};
 
 /// The protocol family behind an account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -17,7 +17,7 @@ pub enum AccountKind {
     Imap,
     /// POP3 delivering into local folders (M1).
     Pop3,
-    /// Gmail via the Gmail API (M1).
+    /// Gmail via the Gmail API (M3; in M1 Gmail is an IMAP account).
     Gmail,
     /// Microsoft Exchange via Graph or EWS (M3).
     Exchange,
@@ -27,7 +27,14 @@ pub enum AccountKind {
     Virtual,
 }
 
-/// A mail account.
+/// A mail account as listed by [`crate::Request::ListAccounts`]: every
+/// real account, every user-defined virtual account and the built-in "All
+/// accounts" virtual account ([`AccountId::ALL`]). The configuration behind
+/// it is [`crate::accounts::AccountConfig`] /
+/// [`crate::accounts::VirtualAccountConfig`].
+///
+/// The built-in "All accounts" account has an empty `name` and `email`; the
+/// UI shows the Fluent message `account-all` for it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Account {
     /// Opaque account id.
@@ -133,6 +140,56 @@ pub struct MessageSummary {
     /// A short plain-text preview of the body (at most ~200 characters,
     /// whitespace collapsed); empty when not yet available.
     pub preview: String,
+    /// The thread the message belongs to; `null` until threading ran.
+    #[serde(default)]
+    pub thread_id: Option<ThreadId>,
+    /// Tags (IMAP keywords such as `$Label1` or `work`), sorted.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// In a virtual account: the same message (same `Message-ID`) in other
+    /// member accounts, collapsed into this row. Empty elsewhere.
+    #[serde(default)]
+    pub duplicates: Vec<MessageLocation>,
+}
+
+/// Where a copy of a message lives.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+pub struct MessageLocation {
+    /// The copy's message id.
+    pub message_id: MessageId,
+    /// Its account.
+    pub account_id: AccountId,
+    /// Its folder.
+    pub folder_id: FolderId,
+}
+
+/// One row of a threaded message list ([`crate::Request::ListThreads`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThreadSummary {
+    /// The thread.
+    pub id: ThreadId,
+    /// Subject of the thread's first message (without `Re:` / `Fwd:`
+    /// prefixes); empty when missing.
+    pub subject: String,
+    /// Distinct senders, oldest first.
+    pub participants: Vec<Address>,
+    /// Messages of the thread in the listed folder (or virtual folder).
+    pub message_count: u32,
+    /// Unread messages among them.
+    pub unread_count: u32,
+    /// Whether any of them is flagged.
+    pub flagged: bool,
+    /// Whether any of them has attachments.
+    pub has_attachments: bool,
+    /// Date of the newest of them (RFC 3339).
+    pub date: String,
+    /// Preview of the newest of them.
+    pub preview: String,
+    /// The newest of them.
+    pub latest_message_id: MessageId,
+    /// Accounts the messages come from (more than one only in virtual
+    /// accounts).
+    pub account_ids: Vec<AccountId>,
 }
 
 /// The header subset shown in the message view.
@@ -243,13 +300,27 @@ mod tests {
             },
             has_attachments: false,
             preview: "Hi Bob".into(),
+            thread_id: Some("t1".into()),
+            tags: vec!["work".into()],
+            duplicates: vec![],
         };
         let json = serde_json::to_value(&summary).unwrap();
         assert_eq!(
             json["flags"],
             json!({"seen": true, "flagged": false, "answered": false, "draft": false})
         );
-        let back: MessageSummary = serde_json::from_value(json).unwrap();
+        assert_eq!(json["thread_id"], json!("t1"));
+        let back: MessageSummary = serde_json::from_value(json.clone()).unwrap();
         assert_eq!(back, summary);
+
+        // Rows written before M1a (no thread, tags or duplicates) still parse.
+        let mut old = json;
+        let obj = old.as_object_mut().unwrap();
+        obj.remove("thread_id");
+        obj.remove("tags");
+        obj.remove("duplicates");
+        let back: MessageSummary = serde_json::from_value(old).unwrap();
+        assert_eq!(back.thread_id, None);
+        assert!(back.tags.is_empty() && back.duplicates.is_empty());
     }
 }

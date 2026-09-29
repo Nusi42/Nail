@@ -318,6 +318,41 @@ impl Service {
                 self.start_sync(account_id).await?;
                 Response::SyncStarted
             }
+            // Defined by the M1a contract (WP10); wired by the integration
+            // package (WP14). Until then they fail cleanly.
+            request @ (Request::DiscoverAccount { .. }
+            | Request::TestAccount { .. }
+            | Request::StartOAuth { .. }
+            | Request::CancelOAuth { .. }
+            | Request::GetAccountsConfig
+            | Request::AddAccount { .. }
+            | Request::UpdateAccount { .. }
+            | Request::RemoveAccount { .. }
+            | Request::ListIdentities { .. }
+            | Request::ListVirtualAccounts
+            | Request::AddVirtualAccount { .. }
+            | Request::UpdateVirtualAccount { .. }
+            | Request::RemoveVirtualAccount { .. }
+            | Request::ListAccountStatuses
+            | Request::UpdateFlags { .. }
+            | Request::MoveMessages { .. }
+            | Request::DeleteMessages { .. }
+            | Request::ListThreads { .. }
+            | Request::GetThread { .. }
+            | Request::Search { .. }
+            | Request::CheckQuery { .. }
+            | Request::SaveDraft { .. }
+            | Request::GetDraft { .. }
+            | Request::DeleteDraft { .. }
+            | Request::SendDraft { .. }
+            | Request::CancelSend { .. }
+            | Request::ListOutbox) => {
+                return Err(ApiError::unsupported(format!(
+                    "{} is not implemented by this core yet",
+                    request_name(&request)
+                ))
+                .into());
+            }
         })
     }
 
@@ -337,4 +372,14 @@ impl Service {
         })
         .await?
     }
+}
+
+/// The variant name of a request (its wire `type`), for diagnostics.
+fn request_name(request: &Request) -> String {
+    let debug = format!("{request:?}");
+    debug
+        .split([' ', '{', '('])
+        .next()
+        .unwrap_or_default()
+        .to_owned()
 }

@@ -353,6 +353,17 @@ fn labels_and_error_codes_exist_in_the_english_catalog() {
             code.message_id()
         );
     }
+    let contract_ids = nail_api::AccountState::ALL
+        .iter()
+        .map(|s| s.message_id())
+        .chain(
+            nail_api::SearchErrorKind::ALL
+                .iter()
+                .map(|k| k.message_id()),
+        );
+    for id in contract_ids {
+        assert!(en.contains(&id), "locales/en is missing {id}");
+    }
 }
 
 #[test]

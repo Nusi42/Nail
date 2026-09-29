@@ -25,6 +25,19 @@ pub enum ErrorCode {
     Unavailable,
     /// An unexpected internal error.
     Internal,
+    /// The request conflicts with the current state (an account id that
+    /// already exists, cancelling a message that is already being sent).
+    Conflict,
+    /// The TLS handshake failed (untrusted or expired certificate, wrong
+    /// host name, no common protocol version).
+    Tls,
+    /// The message is larger than the server accepts.
+    TooLarge,
+    /// The server permanently refused the operation (e.g. SMTP 5xx: unknown
+    /// recipient, policy rejection).
+    Rejected,
+    /// The operation was cancelled (e.g. the user closed the OAuth2 sign-in).
+    Cancelled,
 }
 
 impl ErrorCode {
@@ -39,6 +52,11 @@ impl ErrorCode {
             Self::Config => "config",
             Self::Unavailable => "unavailable",
             Self::Internal => "internal",
+            Self::Conflict => "conflict",
+            Self::Tls => "tls",
+            Self::TooLarge => "too_large",
+            Self::Rejected => "rejected",
+            Self::Cancelled => "cancelled",
         }
     }
 
@@ -48,7 +66,7 @@ impl ErrorCode {
     }
 
     /// All codes, for exhaustive checks (e.g. catalog completeness tests).
-    pub const ALL: [ErrorCode; 8] = [
+    pub const ALL: [ErrorCode; 13] = [
         Self::InvalidRequest,
         Self::NotFound,
         Self::Unsupported,
@@ -57,6 +75,11 @@ impl ErrorCode {
         Self::Config,
         Self::Unavailable,
         Self::Internal,
+        Self::Conflict,
+        Self::Tls,
+        Self::TooLarge,
+        Self::Rejected,
+        Self::Cancelled,
     ];
 }
 
@@ -95,6 +118,11 @@ impl ApiError {
         Self::new(ErrorCode::InvalidRequest, message)
     }
 
+    /// Shorthand for [`ErrorCode::Unsupported`].
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::Unsupported, message)
+    }
+
     /// Shorthand for [`ErrorCode::Internal`].
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(ErrorCode::Internal, message)
@@ -114,6 +142,9 @@ mod tests {
             );
         }
         assert_eq!(ErrorCode::AuthFailed.message_id(), "error-auth-failed");
+        assert_eq!(ErrorCode::TooLarge.message_id(), "error-too-large");
+        let unique: std::collections::HashSet<_> = ErrorCode::ALL.iter().collect();
+        assert_eq!(unique.len(), ErrorCode::ALL.len());
     }
 
     #[test]

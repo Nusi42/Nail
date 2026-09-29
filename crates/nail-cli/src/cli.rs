@@ -32,8 +32,8 @@ pub enum Command {
 /// `nail config …`
 #[derive(Debug, Subcommand)]
 pub enum ConfigCommand {
-    /// Print the JSON Schema of theme.kdl or layout.kdl (JSON form of the
-    /// file model, for editor tooling).
+    /// Print the JSON Schema of theme.kdl, layout.kdl or accounts.kdl (JSON
+    /// form of the file model, for editor tooling).
     Schema {
         /// Which file.
         #[arg(value_enum, default_value_t = SchemaKind::Theme)]
@@ -48,6 +48,8 @@ pub enum SchemaKind {
     Theme,
     /// layout.kdl
     Layout,
+    /// accounts.kdl
+    Accounts,
 }
 
 /// Demo data for `nail serve --seed`.
@@ -186,6 +188,7 @@ mod tests {
             (&["config", "schema"][..], SchemaKind::Theme),
             (&["config", "schema", "theme"][..], SchemaKind::Theme),
             (&["config", "schema", "layout"][..], SchemaKind::Layout),
+            (&["config", "schema", "accounts"][..], SchemaKind::Accounts),
         ] {
             match parse(args).unwrap().command {
                 Command::Config {

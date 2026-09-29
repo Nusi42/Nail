@@ -42,6 +42,7 @@ fn schema_json(kind: SchemaKind) -> serde_json::Result<String> {
     match kind {
         SchemaKind::Theme => serde_json::to_string_pretty(&nail_config::theme_schema()),
         SchemaKind::Layout => serde_json::to_string_pretty(&nail_config::layout_schema()),
+        SchemaKind::Accounts => serde_json::to_string_pretty(&nail_config::accounts_schema()),
     }
 }
 
@@ -65,7 +66,7 @@ mod tests {
 
     #[test]
     fn schemas_are_json_schema_documents() {
-        for kind in [SchemaKind::Theme, SchemaKind::Layout] {
+        for kind in [SchemaKind::Theme, SchemaKind::Layout, SchemaKind::Accounts] {
             let json: serde_json::Value =
                 serde_json::from_str(&schema_json(kind).unwrap()).unwrap();
             assert_eq!(
@@ -81,6 +82,7 @@ mod tests {
         for (kind, file) in [
             (SchemaKind::Theme, "theme.schema.json"),
             (SchemaKind::Layout, "layout.schema.json"),
+            (SchemaKind::Accounts, "accounts.schema.json"),
         ] {
             let printed: serde_json::Value =
                 serde_json::from_str(&schema_json(kind).unwrap()).unwrap();

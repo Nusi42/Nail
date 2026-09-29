@@ -16,11 +16,18 @@
 //! configuration and watches the files for changes. [`theme_schema`] and
 //! [`layout_schema`] export JSON Schemas of both files.
 //!
-//! The file formats are documented for users in `userDocs/en/theme-reference.md`
-//! and `userDocs/en/layout-reference.md`.
+//! `accounts.kdl` (accounts, identities, virtual accounts) is handled by
+//! [`parse_accounts`] and [`AccountsDocument`], which also writes the file
+//! back without losing comments or formatting; [`accounts_schema`] is its
+//! JSON Schema. It is loaded by the core's account manager, not by
+//! [`ConfigManager`].
+//!
+//! The file formats are documented for users in `userDocs/en/theme-reference.md`,
+//! `userDocs/en/layout-reference.md` and `userDocs/en/accounts-reference.md`.
 
 #![warn(missing_docs)]
 
+mod accounts;
 mod css;
 mod error;
 mod kdl_util;
@@ -34,6 +41,11 @@ use std::sync::OnceLock;
 
 use nail_api::{ResolvedLayout, ResolvedTheme};
 
+pub use accounts::{
+    ACCOUNTS_FILE, AccountsDocument, MAX_ACCOUNT_ID_LEN, MAX_UNDO_SEND_SECS,
+    MIN_POLL_INTERVAL_SECS, accounts_schema, derive_account_id, is_valid_account_id,
+    is_valid_identity_pattern, load_accounts, parse_accounts,
+};
 pub use error::{ConfigError, ConfigErrorKind};
 pub use kdl_util::Located;
 pub use layout::{KeyDef, LayoutFile};

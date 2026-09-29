@@ -44,6 +44,8 @@ layout-tab-untitled = Tab { $index }
 ## Accounts and folders
 
 account-switcher-label = Accounts
+# Name of the built-in "All accounts" virtual account (id "all").
+account-all = All accounts
 folder-tree-label = Folders
 folder-tree-unread = { $count ->
     [one] One unread message
@@ -98,3 +100,25 @@ error-network = The server could not be reached.
 error-config = The configuration is invalid.
 error-unavailable = Nail is busy. Please try again.
 error-internal = Something went wrong inside Nail.
+error-conflict = This conflicts with the current state. Please reload and try again.
+error-tls = A secure connection to the server could not be established.
+error-too-large = The message is larger than the server accepts.
+error-rejected = The server refused the request.
+error-cancelled = The operation was cancelled.
+
+## Account status (from nail_api::AccountState, "account-state-" + state)
+
+account-state-online = Online
+account-state-connecting = Connecting…
+account-state-offline = Offline
+account-state-auth-error = Sign-in required
+account-state-disabled = Disabled
+
+## Search query errors (from nail_api::SearchErrorKind, "search-error-" + kind)
+
+search-error-unexpected-token = This word cannot appear here.
+search-error-unexpected-end = The search ends too early.
+search-error-unterminated-quote = A quotation mark is not closed.
+search-error-unbalanced-parenthesis = The parentheses do not match.
+search-error-unknown-field = Unknown search field.
+search-error-invalid-value = This value does not fit the search field.

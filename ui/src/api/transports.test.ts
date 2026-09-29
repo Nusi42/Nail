@@ -49,6 +49,14 @@ describe("MockTransport", () => {
     expect(config.theme.parts.length).toBeGreaterThan(10);
   });
 
+  it("answers requests it does not implement with unsupported", async () => {
+    await expect(
+      client().request({ type: "GetAccountsConfig" }, "AccountsConfig"),
+    ).rejects.toMatchObject({ code: "unsupported" });
+    const response = await client().call({ type: "ListOutbox" });
+    expect(response).toMatchObject({ type: "Error", code: "unsupported" });
+  });
+
   it("answers errors for unknown ids", async () => {
     await expect(
       client().request({ type: "GetMessage", id: "nope" }, "Message"),

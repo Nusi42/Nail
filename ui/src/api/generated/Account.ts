@@ -3,7 +3,14 @@ import type { AccountId } from "./AccountId";
 import type { AccountKind } from "./AccountKind";
 
 /**
- * A mail account.
+ * A mail account as listed by [`crate::Request::ListAccounts`]: every
+ * real account, every user-defined virtual account and the built-in "All
+ * accounts" virtual account ([`AccountId::ALL`]). The configuration behind
+ * it is [`crate::accounts::AccountConfig`] /
+ * [`crate::accounts::VirtualAccountConfig`].
+ *
+ * The built-in "All accounts" account has an empty `name` and `email`; the
+ * UI shows the Fluent message `account-all` for it.
  */
 export type Account = { 
 /**

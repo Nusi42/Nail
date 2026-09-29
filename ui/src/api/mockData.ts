@@ -110,6 +110,9 @@ export function createMockData(inboxSize = 250): MockData {
           flags: { seen, flagged: i % 7 === 0, answered: i % 11 === 0, draft: false },
           has_attachments: i % 5 === 0,
           preview: text.replace(/\s+/g, " ").slice(0, 120),
+          thread_id: null,
+          tags: [],
+          duplicates: [],
         });
         bodies.set(messageId, {
           id: messageId,

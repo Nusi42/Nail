@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-02T05:00:00Z",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Hello Rustaceans, this week: async closures everywhere, a new borrow checker blog post and 23 crates of the week. Unsubscribe: https://lists.example/rust-weekly",
     "subject": "[rust-weekly] Issue 512",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "rust-weekly@lists.example",

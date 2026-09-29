@@ -1,0 +1,875 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nail accounts.kdl",
+  "description": "An `accounts.kdl` file.",
+  "type": "object",
+  "properties": {
+    "account": {
+      "description": "`account \"<name>\" email=… { … }`: real accounts, in display order.\nNames: lowercase letters, digits, `-`, `_`, `.`; `all` is reserved.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/AccountSchema"
+      }
+    },
+    "oauth-provider": {
+      "description": "`oauth-provider \"<id>\" client-id=… { scopes … }`: OAuth2 client\nregistrations. `google` and `microsoft` are built in and need only\n`client-id`.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/OAuthProviderSchema"
+      }
+    },
+    "undo-send-delay": {
+      "description": "`undo-send-delay <seconds>`: default delay before a sent message\nreally leaves (0 to 600, default 10).",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "maximum": 600,
+      "minimum": 0
+    },
+    "virtual-account": {
+      "description": "`virtual-account \"<name>\" { members … }`: several accounts shown as\none.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/VirtualAccountSchema"
+      }
+    }
+  },
+  "$defs": {
+    "AccountSchema": {
+      "description": "`account \"<name>\" name=… email=… enabled=… save-sent-copy=… { … }`.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "description": "Primary email address.",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "`#false` stops syncing without removing the account (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "identity": {
+          "description": "`identity \"<address>\" … { bcc …; signature … }`: sending identities,\nthe first is the default (default: one for `email`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IdentitySchema"
+          }
+        },
+        "imap": {
+          "description": "`imap host=… { auth … }`: IMAP incoming server (exactly one of imap\nand pop3).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImapSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Display name (default: the account name).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pop3": {
+          "description": "`pop3 host=… { auth … }`: POP3 incoming server.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Pop3Schema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "save-sent-copy": {
+          "description": "Append sent mail to the Sent folder (default: automatic).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "smtp": {
+          "description": "`smtp host=… { auth … }`: outgoing server.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SmtpSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sync": {
+          "description": "`sync bodies=… { folder … }`: what to synchronize.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SyncSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "email"
+      ]
+    },
+    "AuthSchema": {
+      "description": "`auth \"<method>\" …`.",
+      "oneOf": [
+        {
+          "description": "`auth \"password\" username=… secret=… mechanism=…`.",
+          "type": "object",
+          "properties": {
+            "mechanism": {
+              "description": "plain, login, scram-sha-256, or apop (POP3).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "method": {
+              "type": "string",
+              "const": "password"
+            },
+            "secret": {
+              "description": "Keychain reference (default `keychain:nail/<account>/password`).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SecretRefSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "username": {
+              "description": "Login name (default: the account email).",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "method"
+          ]
+        },
+        {
+          "description": "`auth \"oauth2\" provider=… username=… secret=… mechanism=…`.",
+          "type": "object",
+          "properties": {
+            "mechanism": {
+              "description": "xoauth2 or oauthbearer.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "method": {
+              "type": "string",
+              "const": "oauth2"
+            },
+            "provider": {
+              "description": "google, microsoft or an oauth-provider id.",
+              "type": "string"
+            },
+            "secret": {
+              "description": "Keychain reference of the refresh token (default\n`keychain:nail/<account>/oauth2`).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SecretRefSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "username": {
+              "description": "Login name (default: the account email).",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "method",
+            "provider"
+          ]
+        },
+        {
+          "description": "`auth \"client-certificate\" username=… secret=…`.",
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "client-certificate"
+            },
+            "secret": {
+              "description": "Keychain reference of the PEM certificate and key (default\n`keychain:nail/<account>/client-certificate`).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SecretRefSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "username": {
+              "description": "Authorization identity, if needed.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "method"
+          ]
+        },
+        {
+          "description": "`auth \"none\"`.",
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "method"
+          ]
+        }
+      ]
+    },
+    "BodiesSchema": {
+      "description": "What to download.",
+      "oneOf": [
+        {
+          "description": "Whole messages.",
+          "type": "string",
+          "const": "full"
+        },
+        {
+          "description": "Headers; bodies on demand.",
+          "type": "string",
+          "const": "headers-only"
+        },
+        {
+          "description": "Whole messages of the last `days` days.",
+          "type": "string",
+          "const": "recent"
+        }
+      ]
+    },
+    "ComposerSchema": {
+      "description": "Composer mode.",
+      "oneOf": [
+        {
+          "description": "Plain text.",
+          "type": "string",
+          "const": "plain"
+        },
+        {
+          "description": "HTML.",
+          "type": "string",
+          "const": "html"
+        },
+        {
+          "description": "Markdown.",
+          "type": "string",
+          "const": "markdown"
+        }
+      ]
+    },
+    "FolderRuleSchema": {
+      "description": "One folder rule.",
+      "type": "object",
+      "properties": {
+        "bodies": {
+          "description": "What to download.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BodiesSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "days": {
+          "description": "Days, with bodies=\"recent\".",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 36500,
+          "minimum": 1
+        },
+        "enabled": {
+          "description": "Synchronize the folder at all (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "idle": {
+          "description": "Watch with IDLE (default: inbox only).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Full server path (or use `role`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "description": "Special-use role (or use `path`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoleSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "IdentityRuleSchema": {
+      "description": "`identity-rule \"<pattern>\" identity=…`.",
+      "type": "object",
+      "properties": {
+        "identity": {
+          "description": "The identity id to use.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity"
+      ]
+    },
+    "IdentitySchema": {
+      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… { bcc …; signature … }`.",
+      "type": "object",
+      "properties": {
+        "bcc": {
+          "description": "`bcc \"<address>\" …`: always-Bcc addresses.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "composer": {
+          "description": "Composer mode for new messages.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComposerSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "email": {
+          "description": "The sender address (the node's argument).",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable id when the same address is used twice (default: the address).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Display name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reply-to": {
+          "description": "Reply-To address.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signature": {
+          "description": "`signature \"<text>\" html=… markdown=…`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SignatureSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "email"
+      ]
+    },
+    "ImapSchema": {
+      "description": "`imap host=… port=… tls=… poll-interval=… compress=… max-connections=…`.",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "How to log in (default: password, user name = account email).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compress": {
+          "description": "Use COMPRESS=DEFLATE when offered (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "host": {
+          "description": "Host name or IP address.",
+          "type": "string"
+        },
+        "max-connections": {
+          "description": "Maximum simultaneous connections (default 4).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 16,
+          "minimum": 1
+        },
+        "poll-interval": {
+          "description": "Seconds between polls of folders without IDLE (default 300).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 30
+        },
+        "port": {
+          "description": "Port (default 993 with implicit TLS, else 143).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "tls": {
+          "description": "Transport security (default implicit).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TlsSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "host"
+      ]
+    },
+    "MappedFolderSchema": {
+      "description": "`folder account=… path=…` inside `map`.",
+      "type": "object",
+      "properties": {
+        "account": {
+          "description": "A member account.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Full server path in that account.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "account",
+        "path"
+      ]
+    },
+    "OAuthProviderSchema": {
+      "description": "`oauth-provider \"<id>\" client-id=… client-secret=… auth-url=… token-url=…`.",
+      "type": "object",
+      "properties": {
+        "auth-url": {
+          "description": "Authorization endpoint (required unless built in).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "client-id": {
+          "description": "The registered client id.",
+          "type": "string"
+        },
+        "client-secret": {
+          "description": "Keychain reference of the client secret, if the provider issued one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretRefSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scopes": {
+          "description": "`scopes \"<scope>\" …`: scopes to request instead of the mail defaults.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "token-url": {
+          "description": "Token endpoint (required unless built in).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "client-id"
+      ]
+    },
+    "Pop3Schema": {
+      "description": "`pop3 host=… port=… tls=… poll-interval=… leave-on-server=…\ndelete-after-days=… delete-when-deleted-locally=…`.",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "How to log in.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delete-after-days": {
+          "description": "Delete from the server this many days after download.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 36500,
+          "minimum": 1
+        },
+        "delete-when-deleted-locally": {
+          "description": "Delete from the server when deleted locally (default `#false`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "host": {
+          "description": "Host name or IP address.",
+          "type": "string"
+        },
+        "leave-on-server": {
+          "description": "Keep messages on the server (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "poll-interval": {
+          "description": "Seconds between downloads (default 600).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 30
+        },
+        "port": {
+          "description": "Port (default 995 with implicit TLS, else 110).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "tls": {
+          "description": "Transport security (default implicit).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TlsSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "host"
+      ]
+    },
+    "RoleSchema": {
+      "description": "A special-use role.",
+      "oneOf": [
+        {
+          "description": "Inbox.",
+          "type": "string",
+          "const": "inbox"
+        },
+        {
+          "description": "Sent.",
+          "type": "string",
+          "const": "sent"
+        },
+        {
+          "description": "Drafts.",
+          "type": "string",
+          "const": "drafts"
+        },
+        {
+          "description": "Archive.",
+          "type": "string",
+          "const": "archive"
+        },
+        {
+          "description": "Junk.",
+          "type": "string",
+          "const": "junk"
+        },
+        {
+          "description": "Trash.",
+          "type": "string",
+          "const": "trash"
+        }
+      ]
+    },
+    "SecretRefSchema": {
+      "description": "A keychain reference: `keychain:<service>/<name>`.",
+      "type": "string",
+      "pattern": "^keychain:[^/\\s]+/\\S+$"
+    },
+    "SignatureSchema": {
+      "description": "A signature.",
+      "type": "object",
+      "properties": {
+        "html": {
+          "description": "HTML variant.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "markdown": {
+          "description": "Markdown variant.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "description": "Plain text (the node's argument).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "SmtpSchema": {
+      "description": "`smtp host=… port=… tls=… dsn=…`.",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "How to log in.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dsn": {
+          "description": "Request delivery status notifications for failures.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "host": {
+          "description": "Host name or IP address.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port (default 465 with implicit TLS, else 587).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "tls": {
+          "description": "Transport security (default implicit).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TlsSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "host"
+      ]
+    },
+    "SyncSchema": {
+      "description": "`sync bodies=… days=… { folder … }`.",
+      "type": "object",
+      "properties": {
+        "bodies": {
+          "description": "Default for all folders (default full).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BodiesSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "days": {
+          "description": "Days, with bodies=\"recent\".",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 36500,
+          "minimum": 1
+        },
+        "folder": {
+          "description": "`folder path=…|role=… bodies=… days=… enabled=… idle=…` rules, later\nones override earlier ones.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FolderRuleSchema"
+          }
+        }
+      }
+    },
+    "TlsSchema": {
+      "description": "Transport security.",
+      "oneOf": [
+        {
+          "description": "TLS from the start (default).",
+          "type": "string",
+          "const": "implicit"
+        },
+        {
+          "description": "STARTTLS / STLS upgrade.",
+          "type": "string",
+          "const": "starttls"
+        },
+        {
+          "description": "No TLS (local test servers only).",
+          "type": "string",
+          "const": "plaintext"
+        }
+      ]
+    },
+    "VirtualAccountSchema": {
+      "description": "`virtual-account \"<name>\" name=… default-identity=… merge-roles=… { … }`.",
+      "type": "object",
+      "properties": {
+        "default-identity": {
+          "description": "Identity id for new messages (default: the first member's default).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identity-rule": {
+          "description": "`identity-rule \"<pattern>\" identity=…`: identity by recipient domain.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/IdentityRuleSchema"
+          }
+        },
+        "map": {
+          "description": "`map \"<folder name>\" { folder account=… path=… }`: merged folders.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/MappedFolderSchema"
+            }
+          }
+        },
+        "members": {
+          "description": "`members \"<account>\" …`: the real accounts shown together.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "merge-roles": {
+          "description": "Merge folders with the same role (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Display name (default: the name).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "members"
+      ]
+    }
+  }
+}

@@ -181,6 +181,11 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MessageSummary> {
         },
         has_attachments: row.get(12)?,
         preview: row.get(13)?,
+        // Thread ids, tags and virtual-account duplicates arrive with the
+        // M1a store schema v2 (WP13).
+        thread_id: None,
+        tags: Vec::new(),
+        duplicates: Vec::new(),
     })
 }
 

@@ -1,0 +1,25 @@
+[package]
+name = "nail-discovery"
+description = "Account autoconfiguration: ISPDB, autoconfig, RFC 6186 SRV, Autodiscover, host guessing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+url.workspace = true
+hickory-resolver.workspace = true
+quick-xml.workspace = true
+
+[dev-dependencies]
+nail-testkit-net.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

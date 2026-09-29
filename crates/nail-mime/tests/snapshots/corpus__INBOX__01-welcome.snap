@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-28T08:15:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Hi Sam, welcome aboard! This inbox is filled with demo messages so you can try things out: plain text, HTML newsletters, attachments, a long thread and a few deliberately broken or hostile messages.",
     "subject": "Welcome to Nail",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

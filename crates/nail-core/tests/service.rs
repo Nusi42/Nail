@@ -363,3 +363,33 @@ async fn config_changes_are_broadcast() {
         other => panic!("unexpected {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn m1a_requests_are_unsupported_until_wired() {
+    let fx = open(false, None);
+    for request in [
+        Request::GetAccountsConfig,
+        Request::ListOutbox,
+        Request::DiscoverAccount {
+            email: "ada@example.org".into(),
+        },
+    ] {
+        match fx.service.handle(request).await {
+            Response::Error { code, message } => {
+                assert_eq!(code, ErrorCode::Unsupported);
+                assert!(message.contains("not implemented"), "{message}");
+            }
+            other => panic!("expected unsupported, got {other:?}"),
+        }
+    }
+    let response = fx
+        .service
+        .handle(Request::DiscoverAccount {
+            email: "ada@example.org".into(),
+        })
+        .await;
+    let Response::Error { message, .. } = response else {
+        panic!("expected an error");
+    };
+    assert!(message.starts_with("DiscoverAccount "), "{message}");
+}

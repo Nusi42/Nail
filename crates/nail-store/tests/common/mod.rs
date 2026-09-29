@@ -56,6 +56,9 @@ pub fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessa
         flags: Flags::default(),
         has_attachments: false,
         preview: format!("Preview of {id}"),
+        thread_id: None,
+        tags: Vec::new(),
+        duplicates: Vec::new(),
     })
 }
 

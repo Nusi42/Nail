@@ -88,6 +88,9 @@ impl ParsedMessage {
             flags,
             has_attachments: self.has_attachments(),
             preview: self.preview.clone(),
+            thread_id: None,
+            tags: Vec::new(),
+            duplicates: Vec::new(),
         }
     }
 

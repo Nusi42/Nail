@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-29T02:14:00Z",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Your mailbox is almost full Please verify your account or click here. Old school and the real login page. StyledBad background Overlay Regards, IT Support",
     "subject": "Action required: verify your mailbox",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

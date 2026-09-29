@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-30T07:00:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Nightingale review Thursday, October 1, 2026, 10:00-11:00 Room: Babbage Agenda: prototype results, next steps.",
     "subject": "Reminder: Nightingale review, Thursday 10:00",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

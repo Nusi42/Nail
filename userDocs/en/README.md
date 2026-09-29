@@ -8,6 +8,7 @@ Guides and references for people using Nail.
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
+| [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities, what to synchronize, virtual accounts, OAuth2 providers, undo send |
 
 These pages describe the current preview (milestone M0).
 

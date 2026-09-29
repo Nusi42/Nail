@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-19T09:20:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Great, go for it. I'll set up the benchmark harness so we can compare. Sam",
     "subject": "Re: Project Nightingale kickoff",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "ada@lovelace.example",

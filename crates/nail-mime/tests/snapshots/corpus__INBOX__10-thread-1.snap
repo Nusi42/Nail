@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-14T09:00:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": true,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Hi Sam, we are starting Project Nightingale next week. The goal is a faster sync engine for the mobile client. Can you join the kickoff on Monday at 10:00? Grace",
     "subject": "Project Nightingale kickoff",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

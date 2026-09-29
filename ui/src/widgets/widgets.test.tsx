@@ -198,6 +198,9 @@ describe("message-list", () => {
       flags,
       has_attachments: false,
       preview: "",
+      thread_id: null,
+      tags: [],
+      duplicates: [],
     };
     expect(rowStates(base, false)).toBeUndefined();
     expect(rowStates({ ...base, flags: { ...flags, seen: false } }, true)).toBe("selected unread");

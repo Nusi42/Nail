@@ -93,3 +93,14 @@ fn getting_started_examples_are_valid() {
         }
     }
 }
+
+#[test]
+fn accounts_reference_examples_are_valid() {
+    let blocks = kdl_blocks("accounts-reference.md");
+    assert!(blocks.len() >= 8, "found only {} examples", blocks.len());
+    for block in blocks {
+        if let Err(e) = nail_config::parse_accounts(&block, "accounts.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}

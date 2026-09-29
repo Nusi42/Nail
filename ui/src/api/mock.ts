@@ -101,6 +101,14 @@ export class MockTransport implements Transport {
         });
         return { type: "SyncStarted" };
       }
+      default:
+        // M1a requests (WP10 contract) are answered like a core that does
+        // not implement them yet; WP14 fills them in.
+        return {
+          type: "Error",
+          code: "unsupported",
+          message: `${request.type} is not implemented by the mock core`,
+        };
     }
   }
 }

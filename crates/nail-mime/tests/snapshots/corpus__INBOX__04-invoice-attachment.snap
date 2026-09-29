@@ -47,6 +47,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-30T03:00:00Z",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -62,6 +63,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Hello Sam, your invoice INV-2026-09-5521 is attached. The amount of 12.00 EUR will be charged to your card ending in 4242. Thank you for using CloudHost.",
     "subject": "Your invoice for September 2026",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

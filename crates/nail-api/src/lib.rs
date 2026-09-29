@@ -3,10 +3,19 @@
 //! Everything a client (the React UI over Tauri or WebSocket, and later MCP
 //! and plug-ins) exchanges with the core is defined here, once, in Rust:
 //!
-//! * [`ids`] and [`domain`]: accounts, folders, message summaries and bodies.
+//! * [`ids`] and [`domain`]: accounts, folders, message summaries and bodies,
+//!   thread summaries.
+//! * [`accounts`]: account configuration (`accounts.kdl`), identities,
+//!   virtual accounts, account setup and status.
+//! * [`ops`]: message writes and operation-queue status.
+//! * [`search`]: search queries, hits and query errors.
+//! * [`compose`]: drafts and the outbox.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
+//! * [`engine`]: Rust-only traits between the core and the protocol /
+//!   platform crates ([`engine::SecretStore`], [`engine::OutgoingTransport`],
+//!   [`engine::AccessTokenProvider`]); not part of the wire protocol.
 //!
 //! TypeScript definitions are generated from these types with `ts-rs` into
 //! `ui/src/api/generated/` by [`export_typescript`]. The generated files are
@@ -16,14 +25,24 @@
 
 #![warn(missing_docs)]
 
+pub mod accounts;
+pub mod compose;
 pub mod config;
 pub mod domain;
+pub mod engine;
 pub mod error;
 pub mod ids;
+pub mod ops;
 pub mod protocol;
+pub mod search;
 
 use std::path::{Path, PathBuf};
 
+pub use accounts::{
+    AccountConfig, AccountState, AccountStatus, AccountsConfig, AuthConfig, Identity,
+    IncomingServer, OutgoingServer, SecretRef, ServerEndpoint, TlsMode, VirtualAccountConfig,
+};
+pub use compose::{Draft, OutboxEntry, OutboxState};
 pub use config::SourceLocation;
 pub use config::layout::{
     ActionDef, Breakpoint, KeyBinding, LayoutNode, MenuItem, Orientation, ResolvedLayout,
@@ -35,13 +54,17 @@ pub use config::theme::{
 };
 pub use domain::{
     Account, AccountKind, Address, AttachmentInfo, Flags, Folder, FolderRole, MessageBody,
-    MessageHeaders, MessageSummary,
+    MessageHeaders, MessageLocation, MessageSummary, ThreadSummary,
 };
 pub use error::{ApiError, ErrorCode};
-pub use ids::{AccountId, FolderId, MessageId};
+pub use ids::{
+    AccountId, DraftId, FolderId, IdentityId, MessageId, OAuthFlowId, OpId, OutboxId, ThreadId,
+};
+pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
 };
+pub use search::{SearchError, SearchErrorKind, SearchHit, SearchQuery};
 
 /// Name of the barrel file written by [`export_typescript`].
 pub const TS_INDEX_FILE: &str = "index.ts";
@@ -69,6 +92,8 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     Event::export_all(&cfg)?;
     ApiError::export_all(&cfg)?;
     SourceLocation::export_all(&cfg)?;
+    accounts::MailProtocol::export_all(&cfg)?;
+    accounts::SecretKind::export_all(&cfg)?;
 
     let mut files = Vec::new();
     collect_ts_files(out_dir, out_dir, &mut files)?;

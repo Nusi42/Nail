@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-18T16:45:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Numbers are in: p50 41 s, p95 97 s on a mid-range phone. Most of the time goes into fetching full bodies up front. Sam",
     "subject": "Re: Project Nightingale kickoff",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "grace@navy.example",

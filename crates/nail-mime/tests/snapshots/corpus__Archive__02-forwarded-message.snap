@@ -40,6 +40,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-07-10T15:00:00+01:00",
+    "duplicates": [],
     "flags": {
       "answered": false,
       "draft": false,
@@ -55,6 +56,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Forwarding the original notes, see attached.",
     "subject": "Fwd: Analytical Engine notes",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

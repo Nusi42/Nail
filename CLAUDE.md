@@ -27,12 +27,20 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 ## Layout
 
 ```
-crates/nail-api        shared types + Request/Response/Event protocol (ts-rs → ui/src/api/generated)
-crates/nail-config     theme.kdl / layout.kdl parsing, defaults, schema, watcher
+crates/nail-api        shared types + Request/Response/Event protocol (ts-rs → ui/src/api/generated);
+                       engine traits (SecretStore, OutgoingTransport, AccessTokenProvider; Rust only)
+crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
+                       format-preserving accounts.kdl writer (AccountsDocument)
 crates/nail-store      SQLite metadata, blob store, operation queue
 crates/nail-mime       MIME parsing, HTML sanitizing
 crates/nail-proto-imap IMAP client
-crates/nail-testkit    mock servers, .eml corpus, demo seed
+crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport          [M1a stub → WP12]
+crates/nail-proto-pop3 POP3 client (in-house)                                [M1a stub → WP12]
+crates/nail-auth       OAuth2 (PKCE, loopback), keychain SecretStore          [M1a stub → WP12]
+crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover               [M1a stub → WP12]
+crates/nail-search     Tantivy index + query language parser                 [M1a stub → WP13]
+crates/nail-testkit    mock IMAP server, .eml corpus, demo seed
+crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers        [M1a stub → WP12]
 crates/nail-core       Service: routes requests, owns store/config/sync
 crates/nail-server     axum: UI bundle, WebSocket API, blobs
 crates/nail-cli        `nail` binary
@@ -59,7 +67,7 @@ npm run lint                               # ESLint + tsc + Prettier (ui), tsc +
 npm run e2e                                # builds ui + nail-cli, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
 npm run gen:api                            # regenerate ui/src/api/generated from nail-api (a test fails when stale)
-NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas (theme, layout, accounts)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist
@@ -68,7 +76,9 @@ npm run tauri dev                          # desktop app with Vite hot reload
 
 - The contract lives in `crates/nail-api`; its fixtures `fixtures/default-{theme,layout}.json` describe the default UI. See ADRs 0002 (protocol) and 0003 (config models, part/DOM conventions).
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
-- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`.
+- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`.
+- M1a contract: ADR 0012 (requests, events, engine traits in `nail_api::engine`, expected crate shapes); `accounts.kdl`: ADR 0013 (secrets only as `keychain:` references); libraries: ADR 0014 (TLS = rustls + `ring` only, no aws-lc).
+- Requests the core does not implement yet answer `unsupported` (explicit match arms in `Service::dispatch`; the UI `MockTransport` does the same).
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
 ## Git

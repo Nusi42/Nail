@@ -32,6 +32,7 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
   "summary": {
     "account_id": "a1",
     "date": "2026-09-19T08:05:00+02:00",
+    "duplicates": [],
     "flags": {
       "answered": true,
       "draft": false,
@@ -47,6 +48,8 @@ expression: "serde_json::json!({ \"summary\": summary, \"body\": body(parsed) })
     "id": "m1",
     "preview": "Then headers first and bodies on demand should cut p50 in half. I can prototype that. Ada",
     "subject": "Re: Project Nightingale kickoff",
+    "tags": [],
+    "thread_id": null,
     "to": [
       {
         "email": "sam@nail.example",

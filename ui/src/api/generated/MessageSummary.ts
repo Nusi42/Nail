@@ -4,6 +4,8 @@ import type { Address } from "./Address";
 import type { Flags } from "./Flags";
 import type { FolderId } from "./FolderId";
 import type { MessageId } from "./MessageId";
+import type { MessageLocation } from "./MessageLocation";
+import type { ThreadId } from "./ThreadId";
 
 /**
  * One row of a message list.
@@ -50,4 +52,17 @@ has_attachments: boolean,
  * A short plain-text preview of the body (at most ~200 characters,
  * whitespace collapsed); empty when not yet available.
  */
-preview: string, };
+preview: string, 
+/**
+ * The thread the message belongs to; `null` until threading ran.
+ */
+thread_id: ThreadId | null, 
+/**
+ * Tags (IMAP keywords such as `$Label1` or `work`), sorted.
+ */
+tags: Array<string>, 
+/**
+ * In a virtual account: the same message (same `Message-ID`) in other
+ * member accounts, collapsed into this row. Empty elsewhere.
+ */
+duplicates: Array<MessageLocation>, };
