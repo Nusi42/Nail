@@ -12,6 +12,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  # Playwright traces/report location (see e2e/support/nail.ts buildOutputDir)
+  NAIL_BUILD_DIR: ${{ github.workspace }}/.nail-build
 
 jobs:
   build-test:
@@ -73,5 +75,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: e2e/playwright-report/
+          path: .nail-build/e2e/
           retention-days: 14
