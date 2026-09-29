@@ -9,7 +9,18 @@ publish.workspace = true
 
 [dependencies]
 nail-api.workspace = true
+# Planned operations and their inverses are the store's queue operations.
+nail-store.workspace = true
+# The `query` condition uses the search language's parser.
+nail-search.workspace = true
 regex.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+# Rules written as rules.kdl in tests.
+nail-config.workspace = true
+serde_json.workspace = true
+pretty_assertions.workspace = true
 
 [lints]
 workspace = true

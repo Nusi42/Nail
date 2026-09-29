@@ -1,0 +1,6 @@
+// Changes made in Nail. See the theme reference in the user documentation.
+theme "custom" extends="default" {
+    tokens {
+        color "accent" "#88c0d0"
+    }
+}

@@ -1,0 +1,19 @@
+// My colours.
+theme "Mine" extends="default" {
+    tokens {
+        // The accent everybody asks about.
+        color "accent" "#88c0d0"
+        space "row" 6 // roomy
+        color "frost" "#8fbcbb"
+    }
+
+    part "message-list.row:unread .subject" {
+        font-weight 700
+    }
+    part "message-list.row[tag=\"work\"]" {
+        border-left "3px solid $color.frost"
+    }
+    sounds {
+        mail.new "chime"
+    }
+}

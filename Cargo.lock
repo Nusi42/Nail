@@ -3438,7 +3438,9 @@ dependencies = [
  "nail-api",
  "nail-config",
  "nail-core",
+ "nail-mcp",
  "nail-server",
+ "nail-store",
  "open",
  "pretty_assertions",
  "serde_json",
@@ -3455,8 +3457,14 @@ dependencies = [
  "ammonia",
  "comrak",
  "css-inline",
+ "dom_query",
+ "hex",
  "mail-builder",
  "nail-api",
+ "nail-mime",
+ "pretty_assertions",
+ "sha2 0.11.0",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3530,12 +3538,20 @@ name = "nail-mcp"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.23.1",
+ "getrandom 0.3.4",
  "nail-api",
  "nail-auth",
+ "nail-mime",
+ "nail-store",
+ "reqwest",
  "rmcp",
  "serde",
  "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3604,7 +3620,13 @@ name = "nail-rules"
 version = "0.1.0"
 dependencies = [
  "nail-api",
+ "nail-config",
+ "nail-search",
+ "nail-store",
+ "pretty_assertions",
  "regex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -3,3 +3,5 @@
 *.png binary
 *.ico binary
 *.icns binary
+# Golden MIME files are compared byte for byte (CRLF line endings).
+crates/nail-compose/tests/golden/*.eml -text

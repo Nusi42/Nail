@@ -1,0 +1,12 @@
+layout "Mine" extends="default" {
+    keys context="list" {
+        bind "e" "mail.delete" // muscle memory
+    }
+    toolbar "reader" {
+        item "mail.reply"
+        item "mail.forward"
+    }
+    keys {
+        unbind "c"
+    }
+}

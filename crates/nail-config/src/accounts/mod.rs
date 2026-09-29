@@ -17,7 +17,7 @@
 
 mod read;
 mod schema;
-mod write;
+pub(crate) mod write;
 
 use std::path::Path;
 
@@ -47,6 +47,13 @@ pub const MAX_ACCOUNT_ID_LEN: usize = 64;
 pub fn parse_accounts(text: &str, file: &str) -> Result<AccountsConfig, ConfigError> {
     let src = Source::new(file, text);
     read::read(&src)
+}
+
+/// Like [`parse_accounts`], but reports every error of the file (never an
+/// empty list), in file order.
+pub fn parse_accounts_all(text: &str, file: &str) -> Result<AccountsConfig, Vec<ConfigError>> {
+    let src = Source::new(file, text);
+    read::read_all(&src)
 }
 
 /// Loads `<dir>/accounts.kdl`; a missing file is an empty configuration.

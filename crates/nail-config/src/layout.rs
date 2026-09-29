@@ -14,8 +14,9 @@ use serde_json::{Map, Value};
 
 use crate::error::ConfigError;
 use crate::kdl_util::{
-    self as k, Located, Source, arg_str, args, check_max_args, check_no_children, check_props,
-    children, describe, is_dotted_kebab, is_kebab, prop_str, prop_u32, to_json,
+    self as k, Errors, Located, Source, arg_str, args, check_max_args, check_no_children,
+    check_props, children, describe, is_dotted_kebab, is_kebab, prop_str, prop_u32, sort_errors,
+    to_json,
 };
 use crate::schema::{ActionSchema, BreakpointSchema, MenuItemSchema, ToolbarItemSchema};
 use crate::theme::{read_extends, single_root};
@@ -81,12 +82,26 @@ pub struct KeyDef {
 // Reading KDL
 
 impl LayoutFile {
-    /// Reads a layout file without merging or resolving it.
+    /// Reads a layout file without merging or resolving it. Returns the
+    /// first error; [`Self::parse_all`] returns all of them.
     pub fn parse(text: &str, file: &str) -> Result<Self, ConfigError> {
+        Self::parse_all(text, file).map_err(|mut errors| errors.swap_remove(0))
+    }
+
+    /// Reads a layout file without merging or resolving it, reporting every
+    /// error of the file in file order: a bad item is recorded and skipped,
+    /// and reading goes on with the next one.
+    pub fn parse_all(text: &str, file: &str) -> Result<Self, Vec<ConfigError>> {
         let src = Source::new(file, text);
-        let doc = src.parse()?;
-        let root = single_root(&src, &doc, "layout")?;
-        LayoutReader { src: &src }.layout(root)
+        let doc = src.parse_all()?;
+        let root = single_root(&src, &doc, "layout").map_err(|e| vec![e])?;
+        let errors = Errors::default();
+        let layout = LayoutReader {
+            src: &src,
+            errors: &errors,
+        }
+        .layout(root);
+        errors.finish(layout)
     }
 
     /// Merges `overlay` (a sparse file extending this one) onto `self`.
@@ -112,17 +127,22 @@ impl LayoutFile {
 
 struct LayoutReader<'s, 'a> {
     src: &'s Source<'a>,
+    errors: &'s Errors,
 }
 
 impl LayoutReader<'_, '_> {
-    fn layout(&self, node: &KdlNode) -> Result<LayoutFile, ConfigError> {
+    fn layout(&self, node: &KdlNode) -> LayoutFile {
         let src = self.src;
-        check_props(src, node, &["extends"])?;
-        check_max_args(src, node, 1)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the layout name")?;
+        let e = self.errors;
+        e.ok(check_props(src, node, &["extends"]));
+        e.ok(check_max_args(src, node, 1));
+        let name = match e.ok(arg_str(src, node, 0, "the layout name")) {
+            Some((name, entry)) => src.located(entry, name.to_owned()),
+            None => Located::new(String::new(), src.node_loc(node)),
+        };
         let mut file = LayoutFile {
-            name: src.located(name_entry, name.to_owned()),
-            extends: read_extends(src, node)?,
+            name,
+            extends: e.ok(read_extends(src, node)).flatten(),
             windows: IndexMap::new(),
             actions: IndexMap::new(),
             keys: Vec::new(),
@@ -130,45 +150,57 @@ impl LayoutReader<'_, '_> {
             menus: IndexMap::new(),
         };
         for child in children(node) {
-            match k::name(child) {
-                "window" => self.window(&mut file, child, None, None)?,
-                "breakpoint" => self.breakpoint(&mut file, child)?,
-                "action" => self.action(&mut file, child)?,
-                "actions" => {
-                    self.block(child)?;
-                    for action in children(child) {
-                        self.expect(action, "action", "actions")?;
-                        self.action(&mut file, action)?;
-                    }
-                }
-                "keys" => self.keys(&mut file, child)?,
-                "toolbar" => self.toolbar(&mut file, child)?,
-                "toolbars" => {
-                    self.block(child)?;
-                    for toolbar in children(child) {
-                        self.expect(toolbar, "toolbar", "toolbars")?;
-                        self.toolbar(&mut file, toolbar)?;
-                    }
-                }
-                "menu" => self.menu(&mut file, child)?,
-                "menus" => {
-                    self.block(child)?;
-                    for menu in children(child) {
-                        self.expect(menu, "menu", "menus")?;
-                        self.menu(&mut file, menu)?;
-                    }
-                }
-                other => {
-                    return Err(src.node_err(
-                        child,
-                        format!(
-                            "unknown layout section `{other}` (expected window, breakpoint, action(s), keys, toolbar(s) or menu(s))"
-                        ),
-                    ));
+            e.ok(self.section(&mut file, child));
+        }
+        file
+    }
+
+    /// One top-level section; items inside a section are recovered one by
+    /// one, so every bad item is reported.
+    fn section(&self, file: &mut LayoutFile, child: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        let e = self.errors;
+        match k::name(child) {
+            "window" => self.window(file, child, None, None)?,
+            "breakpoint" => self.breakpoint(file, child)?,
+            "action" => self.action(file, child)?,
+            "actions" => {
+                self.block(child)?;
+                for action in children(child) {
+                    e.ok(self
+                        .expect(action, "action", "actions")
+                        .and_then(|()| self.action(file, action)));
                 }
             }
+            "keys" => self.keys(file, child)?,
+            "toolbar" => self.toolbar(file, child)?,
+            "toolbars" => {
+                self.block(child)?;
+                for toolbar in children(child) {
+                    e.ok(self
+                        .expect(toolbar, "toolbar", "toolbars")
+                        .and_then(|()| self.toolbar(file, toolbar)));
+                }
+            }
+            "menu" => self.menu(file, child)?,
+            "menus" => {
+                self.block(child)?;
+                for menu in children(child) {
+                    e.ok(self
+                        .expect(menu, "menu", "menus")
+                        .and_then(|()| self.menu(file, menu)));
+                }
+            }
+            other => {
+                return Err(src.node_err(
+                    child,
+                    format!(
+                        "unknown layout section `{other}` (expected window, breakpoint, action(s), keys, toolbar(s) or menu(s))"
+                    ),
+                ));
+            }
         }
-        Ok(file)
+        Ok(())
     }
 
     /// A plain section block: no arguments or properties.
@@ -210,8 +242,9 @@ impl LayoutReader<'_, '_> {
             return Err(src.node_err(node, "`breakpoint` needs at least one `window`"));
         }
         for window in windows {
-            self.expect(window, "window", "breakpoint")?;
-            self.window(file, window, min, max)?;
+            self.errors.ok(self
+                .expect(window, "window", "breakpoint")
+                .and_then(|()| self.window(file, window, min, max)));
         }
         Ok(())
     }
@@ -455,7 +488,18 @@ impl LayoutReader<'_, '_> {
                 format!("`{}` needs at least one child", k::name(node)),
             ));
         }
-        nodes.iter().map(|n| self.node(n)).collect()
+        // Every child is read, so that errors deeper in the tree are all
+        // reported: the first error is returned, later ones are recorded.
+        let mut result = Ok(Vec::with_capacity(nodes.len()));
+        for n in nodes {
+            match (self.node(n), &mut result) {
+                (Ok(child), Ok(list)) => list.push(child),
+                (Ok(_), Err(_)) => {}
+                (Err(err), Ok(_)) => result = Err(err),
+                (Err(err), Err(_)) => self.errors.push(err),
+            }
+        }
+        result
     }
 
     /// A whitespace-separated list property with one entry per child.
@@ -633,38 +677,44 @@ impl LayoutReader<'_, '_> {
             }
         };
         for bind in children(node) {
-            check_props(src, bind, &[])?;
-            check_no_children(src, bind)?;
-            let (key, key_entry) = arg_str(src, bind, 0, "the key")?;
-            let key = normalize_key(key).map_err(|msg| src.entry_err(key_entry, msg))?;
-            match k::name(bind) {
-                "bind" => {
-                    let (action, args) = self.action_ref(bind, 1)?;
-                    file.keys.push(KeyDef {
-                        context: context.clone(),
-                        key,
-                        action: Some(action),
-                        args,
-                    });
-                }
-                "unbind" => {
-                    check_max_args(src, bind, 1)?;
-                    file.keys.push(KeyDef {
-                        context: context.clone(),
-                        key,
-                        action: None,
-                        args: Vec::new(),
-                    });
-                }
-                other => {
-                    return Err(src.node_err(
-                        bind,
-                        format!("unexpected `{other}` in `keys` (use bind or unbind)"),
-                    ));
-                }
+            if let Some(def) = self.errors.ok(self.binding(&context, bind)) {
+                file.keys.push(def);
             }
         }
         Ok(())
+    }
+
+    /// A `bind` or `unbind` node inside `keys`.
+    fn binding(&self, context: &str, bind: &KdlNode) -> Result<KeyDef, ConfigError> {
+        let src = self.src;
+        check_props(src, bind, &[])?;
+        check_no_children(src, bind)?;
+        let (key, key_entry) = arg_str(src, bind, 0, "the key")?;
+        let key = normalize_key(key).map_err(|msg| src.entry_err(key_entry, msg))?;
+        match k::name(bind) {
+            "bind" => {
+                let (action, args) = self.action_ref(bind, 1)?;
+                Ok(KeyDef {
+                    context: context.to_owned(),
+                    key,
+                    action: Some(action),
+                    args,
+                })
+            }
+            "unbind" => {
+                check_max_args(src, bind, 1)?;
+                Ok(KeyDef {
+                    context: context.to_owned(),
+                    key,
+                    action: None,
+                    args: Vec::new(),
+                })
+            }
+            other => Err(src.node_err(
+                bind,
+                format!("unexpected `{other}` in `keys` (use bind or unbind)"),
+            )),
+        }
     }
 
     /// Reads `"<action> <args>…"` at argument `index`, plus any further
@@ -695,38 +745,41 @@ impl LayoutReader<'_, '_> {
         }
         let mut items = Vec::new();
         for item in children(node) {
-            match k::name(item) {
-                "item" => {
-                    check_props(src, item, &["label", "icon"])?;
-                    check_no_children(src, item)?;
-                    let (action, args) = self.action_ref(item, 0)?;
-                    let (label, icon) = self.item_overrides(item)?;
-                    items.push(ToolbarItem::Action {
-                        action,
-                        args,
-                        label,
-                        icon,
-                    });
-                }
-                "spacer" | "separator" => {
-                    self.block(item)?;
-                    check_no_children(src, item)?;
-                    items.push(if k::name(item) == "spacer" {
-                        ToolbarItem::Spacer
-                    } else {
-                        ToolbarItem::Separator
-                    });
-                }
-                other => {
-                    return Err(src.node_err(
-                        item,
-                        format!("unexpected `{other}` in toolbar (use item, spacer or separator)"),
-                    ));
-                }
-            }
+            items.extend(self.errors.ok(self.toolbar_item(item)));
         }
         file.toolbars.insert(name.to_owned(), items);
         Ok(())
+    }
+
+    fn toolbar_item(&self, item: &KdlNode) -> Result<ToolbarItem, ConfigError> {
+        let src = self.src;
+        match k::name(item) {
+            "item" => {
+                check_props(src, item, &["label", "icon"])?;
+                check_no_children(src, item)?;
+                let (action, args) = self.action_ref(item, 0)?;
+                let (label, icon) = self.item_overrides(item)?;
+                Ok(ToolbarItem::Action {
+                    action,
+                    args,
+                    label,
+                    icon,
+                })
+            }
+            "spacer" | "separator" => {
+                self.block(item)?;
+                check_no_children(src, item)?;
+                Ok(if k::name(item) == "spacer" {
+                    ToolbarItem::Spacer
+                } else {
+                    ToolbarItem::Separator
+                })
+            }
+            other => Err(src.node_err(
+                item,
+                format!("unexpected `{other}` in toolbar (use item, spacer or separator)"),
+            )),
+        }
     }
 
     fn item_overrides(
@@ -903,7 +956,7 @@ fn parse_action_spec(spec: &str) -> Result<(String, Vec<Value>), String> {
 }
 
 /// Lowercases a key sequence and checks its shape (`ctrl+shift+m`, `g i`).
-fn normalize_key(key: &str) -> Result<String, String> {
+pub(crate) fn normalize_key(key: &str) -> Result<String, String> {
     let steps: Vec<String> = key.split_whitespace().map(str::to_lowercase).collect();
     if steps.is_empty() {
         return Err("the key must not be empty".to_owned());
@@ -945,10 +998,28 @@ fn check_template(template: &str) -> Result<(), String> {
 // Resolution
 
 impl LayoutFile {
-    /// Resolves a complete (already merged) layout file.
+    /// Resolves a complete (already merged) layout file. Returns the first
+    /// error; [`Self::resolve_all`] returns all of them.
     pub fn resolve(&self) -> Result<ResolvedLayout, ConfigError> {
+        self.resolve_unsorted()
+            .map_err(|mut errors| errors.swap_remove(0))
+    }
+
+    /// Resolves a complete (already merged) layout file, reporting every
+    /// error (missing `main` window, unknown toolbars) in file order.
+    pub fn resolve_all(&self) -> Result<ResolvedLayout, Vec<ConfigError>> {
+        self.resolve_unsorted().map_err(|mut errors| {
+            sort_errors(&mut errors);
+            errors
+        })
+    }
+
+    /// All resolution errors in the order they are found; the first one is
+    /// what [`Self::resolve`] reports.
+    fn resolve_unsorted(&self) -> Result<ResolvedLayout, Vec<ConfigError>> {
+        let mut errors = Vec::new();
         if !self.windows.contains_key("main") {
-            return Err(ConfigError::invalid(
+            errors.push(ConfigError::invalid(
                 &self.name.loc,
                 "the layout defines no `main` window",
             ));
@@ -984,8 +1055,11 @@ impl LayoutFile {
         // Every toolbar widget must name an existing toolbar.
         for breakpoints in self.windows.values() {
             for bp in breakpoints {
-                check_toolbar_refs(&bp.root, &self.toolbars)?;
+                check_toolbar_refs(&bp.root, &self.toolbars, &mut errors);
             }
+        }
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
         // Every used action gets an entry in `actions`.
@@ -1029,7 +1103,8 @@ impl LayoutFile {
 fn check_toolbar_refs(
     node: &LayoutNode,
     toolbars: &IndexMap<String, Vec<ToolbarItem>>,
-) -> Result<(), ConfigError> {
+    errors: &mut Vec<ConfigError>,
+) {
     if let LayoutNode::Widget {
         kind,
         options,
@@ -1045,14 +1120,14 @@ fn check_toolbar_refs(
             line: 1,
             column: 1,
         });
-        return Err(ConfigError::invalid(
+        errors.push(ConfigError::invalid(
             &loc,
             format!("unknown toolbar `{name}` (define it with `toolbar \"{name}\" {{ … }}`)"),
         ));
     }
-    node.children()
-        .iter()
-        .try_for_each(|child| check_toolbar_refs(child, toolbars))
+    for child in node.children() {
+        check_toolbar_refs(child, toolbars, errors);
+    }
 }
 
 #[cfg(test)]

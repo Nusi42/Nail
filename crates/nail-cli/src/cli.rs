@@ -21,6 +21,9 @@ pub struct Cli {
 pub enum Command {
     /// Run the core headless and serve the web UI on localhost.
     Serve(ServeArgs),
+    /// Connect a stdio MCP client to the running app (forwards to its MCP
+    /// server on 127.0.0.1). The client's token is read from $NAIL_MCP_TOKEN.
+    Mcp(McpArgs),
     /// Configuration tools.
     Config {
         /// The config tool.
@@ -101,6 +104,22 @@ pub struct ServeArgs {
     /// More log output (-v debug, -vv trace). NAIL_LOG overrides.
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
+}
+
+/// `nail mcp …`
+#[derive(Debug, Clone, PartialEq, Eq, Args)]
+pub struct McpArgs {
+    /// Name of the MCP client as created in Settings → MCP clients; checked
+    /// against the token.
+    #[arg(long, value_name = "NAME")]
+    pub client: String,
+    /// MCP endpoint URL. Default: read from the running app's data
+    /// directory (mcp-endpoint.json).
+    #[arg(long, value_name = "URL")]
+    pub url: Option<String>,
+    /// Data directory of the running app. Default: %LOCALAPPDATA%\Nail.
+    #[arg(long, value_name = "DIR")]
+    pub data_dir: Option<PathBuf>,
 }
 
 #[cfg(test)]
@@ -192,6 +211,40 @@ mod tests {
         assert!(parse(&["serve", "--seed", "lots"]).is_err());
         assert!(parse(&["serve", "--bogus"]).is_err());
         assert!(parse(&[]).is_err());
+    }
+
+    #[test]
+    fn mcp_arguments() {
+        match parse(&["mcp", "--client", "claude"]).unwrap().command {
+            Command::Mcp(args) => assert_eq!(
+                args,
+                McpArgs {
+                    client: "claude".into(),
+                    url: None,
+                    data_dir: None,
+                }
+            ),
+            other => panic!("unexpected {other:?}"),
+        }
+        match parse(&[
+            "mcp",
+            "--client",
+            "c",
+            "--url",
+            "http://127.0.0.1:1/mcp",
+            "--data-dir",
+            "d",
+        ])
+        .unwrap()
+        .command
+        {
+            Command::Mcp(args) => {
+                assert_eq!(args.url.as_deref(), Some("http://127.0.0.1:1/mcp"));
+                assert_eq!(args.data_dir, Some("d".into()));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(parse(&["mcp"]).is_err(), "--client is required");
     }
 
     #[test]

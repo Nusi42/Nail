@@ -1,4 +1,4 @@
-# Nail — deutsche UI-Texte:  inspector, layout write-back, merge dialog, config errors, saved searches (M1b WP24):Anpassung (M1b WP24).
+# Nail — deutsche UI-Texte: Anpassung (M1b WP24).
 #
-# Intentionally empty for now: every key falls back to English
+# Absichtlich leer: jeder Schlüssel fällt auf Englisch zurück
 # (locales/en/customization.ftl).

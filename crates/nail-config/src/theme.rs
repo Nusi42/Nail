@@ -14,8 +14,8 @@ use schemars::JsonSchema;
 use crate::css::{self, TokenRef};
 use crate::error::ConfigError;
 use crate::kdl_util::{
-    self as k, Located, Source, arg_str, args, check_max_args, check_no_children, check_props,
-    children, is_dotted_kebab, is_kebab, prop_str, scalar_to_string,
+    self as k, Errors, Located, Source, arg_str, args, check_max_args, check_no_children,
+    check_props, children, is_dotted_kebab, is_kebab, prop_str, scalar_to_string, sort_errors,
 };
 use crate::selector::{Selector, parse_selector};
 
@@ -185,13 +185,26 @@ pub struct RawCssDef {
 // Reading KDL
 
 impl ThemeFile {
-    /// Reads a theme file without merging or resolving it.
+    /// Reads a theme file without merging or resolving it. Returns the
+    /// first error; [`Self::parse_all`] returns all of them.
     pub fn parse(text: &str, file: &str) -> Result<Self, ConfigError> {
+        Self::parse_all(text, file).map_err(|mut errors| errors.swap_remove(0))
+    }
+
+    /// Reads a theme file without merging or resolving it, reporting every
+    /// error of the file in file order: a bad item is recorded and skipped,
+    /// and reading goes on with the next one.
+    pub fn parse_all(text: &str, file: &str) -> Result<Self, Vec<ConfigError>> {
         let src = Source::new(file, text);
-        let doc = src.parse()?;
-        let root = single_root(&src, &doc, "theme")?;
-        let reader = ThemeReader { src: &src };
-        reader.theme(root)
+        let doc = src.parse_all()?;
+        let root = single_root(&src, &doc, "theme").map_err(|e| vec![e])?;
+        let errors = Errors::default();
+        let theme = ThemeReader {
+            src: &src,
+            errors: &errors,
+        }
+        .theme(root);
+        errors.finish(theme)
     }
 
     /// Merges `overlay` (a sparse file extending this one) onto `self`.
@@ -273,26 +286,33 @@ pub(crate) fn read_extends(
 
 struct ThemeReader<'s, 'a> {
     src: &'s Source<'a>,
+    errors: &'s Errors,
 }
 
 impl ThemeReader<'_, '_> {
-    fn theme(&self, node: &KdlNode) -> Result<ThemeFile, ConfigError> {
+    fn theme(&self, node: &KdlNode) -> ThemeFile {
         let src = self.src;
-        check_props(src, node, &["extends", "mode"])?;
-        check_max_args(src, node, 1)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the theme name")?;
-        let mode = match prop_str(src, node, "mode")? {
-            None => None,
-            Some((m, entry)) => Some(ModeSetting::parse(m).ok_or_else(|| {
-                src.entry_err(
-                    entry,
-                    format!("unknown mode `{m}` (use system, light, dark or high-contrast)"),
-                )
-            })?),
+        let e = self.errors;
+        e.ok(check_props(src, node, &["extends", "mode"]));
+        e.ok(check_max_args(src, node, 1));
+        let name = match e.ok(arg_str(src, node, 0, "the theme name")) {
+            Some((name, entry)) => src.located(entry, name.to_owned()),
+            None => Located::new(String::new(), src.node_loc(node)),
         };
+        let mode = e
+            .ok(prop_str(src, node, "mode"))
+            .flatten()
+            .and_then(|(m, entry)| {
+                e.ok(ModeSetting::parse(m).ok_or_else(|| {
+                    src.entry_err(
+                        entry,
+                        format!("unknown mode `{m}` (use system, light, dark or high-contrast)"),
+                    )
+                }))
+            });
         let mut file = ThemeFile {
-            name: src.located(name_entry, name.to_owned()),
-            extends: read_extends(src, node)?,
+            name,
+            extends: e.ok(read_extends(src, node)).flatten(),
             mode,
             tokens: IndexMap::new(),
             parts: Vec::new(),
@@ -302,9 +322,9 @@ impl ThemeReader<'_, '_> {
             raw_css: Vec::new(),
         };
         for child in children(node) {
-            self.section(&mut file, child)?;
+            e.ok(self.section(&mut file, child));
         }
-        Ok(file)
+        file
     }
 
     fn section(&self, file: &mut ThemeFile, node: &KdlNode) -> Result<(), ConfigError> {
@@ -314,23 +334,24 @@ impl ThemeReader<'_, '_> {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 0)?;
                 for token in children(node) {
-                    self.token(file, token)?;
+                    self.errors.ok(self.token(file, token));
                 }
             }
             "modes" => {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 0)?;
                 for mode in children(node) {
-                    self.mode_block(file, mode)?;
+                    self.errors.ok(self.mode_block(file, mode));
                 }
             }
-            "part" => file.parts.push(self.part(node)?),
+            "part" => file.parts.extend(self.part(node)?),
             "parts" => {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 0)?;
                 for part in children(node) {
-                    expect_name(src, part, "part", "parts")?;
-                    file.parts.push(self.part(part)?);
+                    let part =
+                        expect_name(src, part, "part", "parts").and_then(|()| self.part(part));
+                    file.parts.extend(self.errors.ok(part).flatten());
                 }
             }
             "icon" => self.icon(file, node)?,
@@ -338,8 +359,9 @@ impl ThemeReader<'_, '_> {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 0)?;
                 for icon in children(node) {
-                    expect_name(src, icon, "icon", "icons")?;
-                    self.icon(file, icon)?;
+                    let icon = expect_name(src, icon, "icon", "icons")
+                        .and_then(|()| self.icon(file, icon));
+                    self.errors.ok(icon);
                 }
             }
             "message" => self.message(&mut file.message, node)?,
@@ -427,24 +449,36 @@ impl ThemeReader<'_, '_> {
         check_props(src, node, &[])?;
         check_max_args(src, node, 0)?;
         for token in children(node) {
-            let category = token_category(src, token)?;
-            check_props(src, token, &[])?;
-            check_max_args(src, token, 2)?;
-            check_no_children(src, token)?;
-            let (name, name_entry) = arg_str(src, token, 0, "the token name")?;
-            check_token_name(src, name_entry, name)?;
-            let entry = *args(token).get(1).ok_or_else(|| {
-                src.node_err(token, format!("token `{category}.{name}` needs a value"))
-            })?;
-            let value = self.token_value(category, entry)?;
-            file.tokens
-                .entry(category.to_owned())
-                .or_default()
-                .entry(name.to_owned())
-                .or_default()
-                .modes
-                .insert(mode.to_owned(), value);
+            self.errors.ok(self.mode_token(file, mode, token));
         }
+        Ok(())
+    }
+
+    /// `color "bg" "#000"` inside a mode block of `modes`.
+    fn mode_token(
+        &self,
+        file: &mut ThemeFile,
+        mode: &str,
+        token: &KdlNode,
+    ) -> Result<(), ConfigError> {
+        let src = self.src;
+        let category = token_category(src, token)?;
+        check_props(src, token, &[])?;
+        check_max_args(src, token, 2)?;
+        check_no_children(src, token)?;
+        let (name, name_entry) = arg_str(src, token, 0, "the token name")?;
+        check_token_name(src, name_entry, name)?;
+        let entry = *args(token).get(1).ok_or_else(|| {
+            src.node_err(token, format!("token `{category}.{name}` needs a value"))
+        })?;
+        let value = self.token_value(category, entry)?;
+        file.tokens
+            .entry(category.to_owned())
+            .or_default()
+            .entry(name.to_owned())
+            .or_default()
+            .modes
+            .insert(mode.to_owned(), value);
         Ok(())
     }
 
@@ -462,47 +496,67 @@ impl ThemeReader<'_, '_> {
         Ok(src.located(entry, value))
     }
 
-    fn part(&self, node: &KdlNode) -> Result<PartDef, ConfigError> {
+    /// A `part` rule. `Ok(None)` when a declaration was invalid: its error
+    /// is recorded (every bad declaration is reported) and the rule skipped.
+    fn part(&self, node: &KdlNode) -> Result<Option<PartDef>, ConfigError> {
         let src = self.src;
         check_props(src, node, &[])?;
         check_max_args(src, node, 1)?;
         let (selector, sel_entry) = arg_str(src, node, 0, "the part selector")?;
         parse_selector(selector).map_err(|msg| src.entry_err(sel_entry, msg))?;
         let mut declarations = IndexMap::new();
+        let mut failed = false;
         for decl in children(node) {
-            let property = k::name(decl);
-            if !css::PROPERTIES.contains(&property) {
-                return Err(src.node_err(
-                    decl,
-                    format!(
-                        "unsupported CSS property `{property}` (see the theme reference for the supported subset; `raw-css` covers the rest)"
-                    ),
-                ));
-            }
-            check_props(src, decl, &[])?;
-            check_no_children(src, decl)?;
-            let values = args(decl);
-            if values.is_empty() {
-                return Err(src.node_err(decl, format!("`{property}` needs a value")));
-            }
-            let mut parts = Vec::with_capacity(values.len());
-            for entry in &values {
-                let mut v = scalar_to_string(src, entry, "a CSS value")?;
-                if !entry.value().is_string() && css::is_length_property(property) {
-                    v = css::px(&v);
+            match self.declaration(decl) {
+                Ok((property, value)) => {
+                    declarations.insert(property, value);
                 }
-                css::check_value_safety(&v).map_err(|msg| src.entry_err(entry, msg))?;
-                parts.push(v);
+                Err(err) => {
+                    self.errors.push(err);
+                    failed = true;
+                }
             }
-            declarations.insert(property.to_owned(), src.located(values[0], parts.join(" ")));
+        }
+        if failed {
+            return Ok(None);
         }
         if declarations.is_empty() {
             return Err(src.node_err(node, format!("part `{selector}` has no declarations")));
         }
-        Ok(PartDef {
+        Ok(Some(PartDef {
             selector: src.located(sel_entry, selector.to_owned()),
             declarations,
-        })
+        }))
+    }
+
+    /// One CSS declaration of a part rule.
+    fn declaration(&self, decl: &KdlNode) -> Result<(String, Located<String>), ConfigError> {
+        let src = self.src;
+        let property = k::name(decl);
+        if !css::PROPERTIES.contains(&property) {
+            return Err(src.node_err(
+                decl,
+                format!(
+                    "unsupported CSS property `{property}` (see the theme reference for the supported subset; `raw-css` covers the rest)"
+                ),
+            ));
+        }
+        check_props(src, decl, &[])?;
+        check_no_children(src, decl)?;
+        let values = args(decl);
+        if values.is_empty() {
+            return Err(src.node_err(decl, format!("`{property}` needs a value")));
+        }
+        let mut parts = Vec::with_capacity(values.len());
+        for entry in &values {
+            let mut v = scalar_to_string(src, entry, "a CSS value")?;
+            if !entry.value().is_string() && css::is_length_property(property) {
+                v = css::px(&v);
+            }
+            css::check_value_safety(&v).map_err(|msg| src.entry_err(entry, msg))?;
+            parts.push(v);
+        }
+        Ok((property.to_owned(), src.located(values[0], parts.join(" "))))
     }
 
     fn icon(&self, file: &mut ThemeFile, node: &KdlNode) -> Result<(), ConfigError> {
@@ -547,66 +601,74 @@ impl ThemeReader<'_, '_> {
         check_props(src, node, &[])?;
         check_max_args(src, node, 0)?;
         for field in children(node) {
-            check_props(src, field, &[])?;
-            check_no_children(src, field)?;
-            let key = k::name(field);
-            let values = args(field);
-            let Some(first) = values.first() else {
-                return Err(src.node_err(field, format!("`{key}` needs a value")));
-            };
-            if key != "quote-colors" {
-                check_max_args(src, field, 1)?;
+            self.errors.ok(self.message_field(message, field));
+        }
+        Ok(())
+    }
+
+    /// One setting of the `message` section.
+    fn message_field(&self, message: &mut MessageDef, field: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        check_props(src, field, &[])?;
+        check_no_children(src, field)?;
+        let key = k::name(field);
+        let values = args(field);
+        let Some(first) = values.first() else {
+            return Err(src.node_err(field, format!("`{key}` needs a value")));
+        };
+        if key != "quote-colors" {
+            check_max_args(src, field, 1)?;
+        }
+        let single = |what: &str| -> Result<Located<String>, ConfigError> {
+            let v = scalar_to_string(src, first, what)?;
+            css::check_value_safety(&v).map_err(|msg| src.entry_err(first, msg))?;
+            Ok(src.located(first, v))
+        };
+        match key {
+            "font-family" => message.font_family = Some(single("font-family")?),
+            "text-font-family" => message.text_font_family = Some(single("text-font-family")?),
+            "font-size" => {
+                let mut v = single("font-size")?;
+                if !first.value().is_string() {
+                    v.value = css::px(&v.value);
+                }
+                message.font_size = Some(v);
             }
-            let single = |what: &str| -> Result<Located<String>, ConfigError> {
-                let v = scalar_to_string(src, first, what)?;
-                css::check_value_safety(&v).map_err(|msg| src.entry_err(first, msg))?;
-                Ok(src.located(first, v))
-            };
-            match key {
-                "font-family" => message.font_family = Some(single("font-family")?),
-                "text-font-family" => message.text_font_family = Some(single("text-font-family")?),
-                "font-size" => {
-                    let mut v = single("font-size")?;
-                    if !first.value().is_string() {
-                        v.value = css::px(&v.value);
+            "line-height" => message.line_height = Some(single("line-height")?),
+            "max-width" => message.max_width = Some(single("max-width")?),
+            "quote-colors" => {
+                let mut colors = Vec::new();
+                for entry in &values {
+                    let v = k::entry_str(src, entry, "a quote colour")?;
+                    css::check_value_safety(v).map_err(|msg| src.entry_err(entry, msg))?;
+                    colors.push(src.located(entry, v.to_owned()));
+                }
+                message.quote_colors = Some(colors);
+            }
+            "html-dark-mode" => {
+                let v = k::entry_str(src, first, "html-dark-mode")?;
+                message.html_dark_mode = Some(match v {
+                    "off" => HtmlDarkModeSetting::Off,
+                    "invert" => HtmlDarkModeSetting::Invert,
+                    "smart" => HtmlDarkModeSetting::Smart,
+                    _ => {
+                        return Err(src.entry_err(
+                            first,
+                            format!("unknown html-dark-mode `{v}` (use off, invert or smart)"),
+                        ));
                     }
-                    message.font_size = Some(v);
-                }
-                "line-height" => message.line_height = Some(single("line-height")?),
-                "max-width" => message.max_width = Some(single("max-width")?),
-                "quote-colors" => {
-                    let mut colors = Vec::new();
-                    for entry in &values {
-                        let v = k::entry_str(src, entry, "a quote colour")?;
-                        css::check_value_safety(v).map_err(|msg| src.entry_err(entry, msg))?;
-                        colors.push(src.located(entry, v.to_owned()));
-                    }
-                    message.quote_colors = Some(colors);
-                }
-                "html-dark-mode" => {
-                    let v = k::entry_str(src, first, "html-dark-mode")?;
-                    message.html_dark_mode = Some(match v {
-                        "off" => HtmlDarkModeSetting::Off,
-                        "invert" => HtmlDarkModeSetting::Invert,
-                        "smart" => HtmlDarkModeSetting::Smart,
-                        _ => {
-                            return Err(src.entry_err(
-                                first,
-                                format!("unknown html-dark-mode `{v}` (use off, invert or smart)"),
-                            ));
-                        }
-                    });
-                }
-                other => {
-                    return Err(src.node_err(
-                        field,
-                        format!(
-                            "unknown message setting `{other}` (expected font-family, text-font-family, font-size, line-height, max-width, quote-colors or html-dark-mode)"
-                        ),
-                    ));
-                }
+                });
+            }
+            other => {
+                return Err(src.node_err(
+                    field,
+                    format!(
+                        "unknown message setting `{other}` (expected font-family, text-font-family, font-size, line-height, max-width, quote-colors or html-dark-mode)"
+                    ),
+                ));
             }
         }
+
         Ok(())
     }
 
@@ -615,29 +677,37 @@ impl ThemeReader<'_, '_> {
         check_props(src, node, &[])?;
         check_max_args(src, node, 0)?;
         for sound in children(node) {
-            let event = k::name(sound);
-            if !is_dotted_kebab(event) {
-                return Err(src.node_err(
-                    sound,
-                    format!("invalid event name `{event}`, e.g. mail.new"),
-                ));
-            }
-            check_props(src, sound, &[])?;
-            check_max_args(src, sound, 1)?;
-            check_no_children(src, sound)?;
-            let (value, entry) = arg_str(src, sound, 0, "the sound name or file")?;
-            let bad = value.is_empty()
-                || value.contains("..")
-                || value.contains(':')
-                || value.starts_with(['/', '\\']);
-            if bad {
-                return Err(src.entry_err(
-                    entry,
-                    "sounds must be a bundled sound name or a path inside the config directory",
-                ));
-            }
-            file.sounds.insert(event.to_owned(), value.to_owned());
+            self.errors.ok(self.sound(file, sound));
         }
+        Ok(())
+    }
+
+    /// One `<event> "<sound>"` entry of `sounds`.
+    fn sound(&self, file: &mut ThemeFile, sound: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        let event = k::name(sound);
+        if !is_dotted_kebab(event) {
+            return Err(src.node_err(
+                sound,
+                format!("invalid event name `{event}`, e.g. mail.new"),
+            ));
+        }
+        check_props(src, sound, &[])?;
+        check_max_args(src, sound, 1)?;
+        check_no_children(src, sound)?;
+        let (value, entry) = arg_str(src, sound, 0, "the sound name or file")?;
+        let bad = value.is_empty()
+            || value.contains("..")
+            || value.contains(':')
+            || value.starts_with(['/', '\\']);
+        if bad {
+            return Err(src.entry_err(
+                entry,
+                "sounds must be a bundled sound name or a path inside the config directory",
+            ));
+        }
+        file.sounds.insert(event.to_owned(), value.to_owned());
+
         Ok(())
     }
 }
@@ -736,8 +806,27 @@ fn is_path_char(c: char) -> bool {
 // Resolution
 
 impl ThemeFile {
-    /// Resolves a complete (already merged) theme file.
+    /// Resolves a complete (already merged) theme file. Returns the first
+    /// error; [`Self::resolve_all`] returns all of them.
     pub fn resolve(&self) -> Result<ResolvedTheme, ConfigError> {
+        self.resolve_unsorted()
+            .map_err(|mut errors| errors.swap_remove(0))
+    }
+
+    /// Resolves a complete (already merged) theme file, reporting every
+    /// error (unknown token references, cycles, missing message settings,
+    /// invalid raw CSS) in file order.
+    pub fn resolve_all(&self) -> Result<ResolvedTheme, Vec<ConfigError>> {
+        self.resolve_unsorted().map_err(|mut errors| {
+            sort_errors(&mut errors);
+            errors
+        })
+    }
+
+    /// All resolution errors in the order they are found (tokens, parts,
+    /// message, raw CSS); the first one is what [`Self::resolve`] reports.
+    fn resolve_unsorted(&self) -> Result<ResolvedTheme, Vec<ConfigError>> {
+        let mut errors: Vec<ConfigError> = Vec::new();
         let defined = |cat: &str, name: &str| {
             self.tokens
                 .get(cat)
@@ -759,17 +848,30 @@ impl ThemeFile {
                 let Some(base) = &def.value else {
                     let loc = def.modes.values().next().map(|v| v.loc.clone());
                     let loc = loc.unwrap_or_else(|| self.name.loc.clone());
-                    return Err(ConfigError::invalid(
+                    errors.push(ConfigError::invalid(
                         &loc,
                         format!("mode override for unknown token `{category}.{name}`"),
                     ));
+                    continue;
                 };
                 let key = (category.clone(), name.clone());
-                let (base_value, refs) = resolve(base)?;
+                let (base_value, refs) = match resolve(base) {
+                    Ok(resolved) => resolved,
+                    Err(err) => {
+                        errors.push(err);
+                        continue;
+                    }
+                };
                 let node_edges = edges.entry(key).or_default();
                 node_edges.extend(refs.into_iter().map(|r| (r, base.loc.clone())));
                 for (mode, value) in &def.modes {
-                    let (mode_value, refs) = resolve(value)?;
+                    let (mode_value, refs) = match resolve(value) {
+                        Ok(resolved) => resolved,
+                        Err(err) => {
+                            errors.push(err);
+                            continue;
+                        }
+                    };
                     node_edges.extend(refs.into_iter().map(|r| (r, value.loc.clone())));
                     if mode_value != base_value {
                         modes.entry(mode.clone()).or_default().insert(
@@ -782,17 +884,27 @@ impl ThemeFile {
                 tokens.insert(category.as_str(), name.as_str(), base_value);
             }
         }
-        check_token_cycles(&self.tokens, &edges)?;
+        errors.extend(check_token_cycles(&self.tokens, &edges));
 
         // Parts; rules with an identical selector are merged.
         let mut parts: Vec<PartRule> = Vec::new();
         let mut index: HashMap<SelectorKey, usize> = HashMap::new();
         for def in &self.parts {
-            let sel = parse_selector(&def.selector.value)
-                .map_err(|msg| ConfigError::invalid(&def.selector.loc, msg))?;
+            let sel = match parse_selector(&def.selector.value) {
+                Ok(sel) => sel,
+                Err(msg) => {
+                    errors.push(ConfigError::invalid(&def.selector.loc, msg));
+                    continue;
+                }
+            };
             let mut declarations = IndexMap::new();
             for (property, value) in &def.declarations {
-                declarations.insert(property.clone(), resolve_str(value)?);
+                match resolve_str(value) {
+                    Ok(v) => {
+                        declarations.insert(property.clone(), v);
+                    }
+                    Err(err) => errors.push(err),
+                }
             }
             let key = SelectorKey::from(&sel);
             if let Some(&i) = index.get(&key) {
@@ -836,50 +948,64 @@ impl ThemeFile {
                 format!("the theme's `message` section is missing `{field}`"),
             )
         };
-        let required = |value: &Option<Located<String>>, field: &str| {
-            value
+        let mut required = |value: &Option<Located<String>>, field: &str| -> String {
+            match value
                 .as_ref()
                 .ok_or_else(|| missing(field))
                 .and_then(resolve_str)
+            {
+                Ok(v) => v,
+                Err(err) => {
+                    errors.push(err);
+                    String::new()
+                }
+            }
         };
+        let font_family = required(&m.font_family, "font-family");
+        let text_font_family = required(&m.text_font_family, "text-font-family");
+        let font_size = required(&m.font_size, "font-size");
+        let line_height = required(&m.line_height, "line-height");
+        let max_width = required(&m.max_width, "max-width");
+        let mut quote_colors = Vec::new();
+        match &m.quote_colors {
+            None => errors.push(missing("quote-colors")),
+            Some(colors) => {
+                for color in colors {
+                    match resolve_str(color) {
+                        Ok(v) => quote_colors.push(v),
+                        Err(err) => errors.push(err),
+                    }
+                }
+            }
+        }
+        let html_dark_mode = m.html_dark_mode.map_or_else(
+            || {
+                errors.push(missing("html-dark-mode"));
+                HtmlDarkMode::Off
+            },
+            Into::into,
+        );
         let message = MessageDisplay {
-            font_family: required(&m.font_family, "font-family")?,
-            text_font_family: required(&m.text_font_family, "text-font-family")?,
-            font_size: required(&m.font_size, "font-size")?,
-            line_height: required(&m.line_height, "line-height")?,
-            max_width: required(&m.max_width, "max-width")?,
-            quote_colors: m
-                .quote_colors
-                .as_ref()
-                .ok_or_else(|| missing("quote-colors"))?
-                .iter()
-                .map(resolve_str)
-                .collect::<Result<_, _>>()?,
-            html_dark_mode: m
-                .html_dark_mode
-                .ok_or_else(|| missing("html-dark-mode"))?
-                .into(),
+            font_family,
+            text_font_family,
+            font_size,
+            line_height,
+            max_width,
+            quote_colors,
+            html_dark_mode,
         };
 
         let mut raw_css = Vec::new();
         for def in &self.raw_css {
-            let css_text = resolve_str(&def.css)?;
-            let err = |msg: String| ConfigError::invalid(&def.css.loc, msg);
-            css::check_no_remote(&css_text).map_err(err)?;
-            if let Some(c) = css_text
-                .chars()
-                .find(|c| matches!(c, '{' | '}' | '<' | '>' | '\\'))
-            {
-                return Err(err(format!(
-                    "the character `{c}` is not allowed in raw-css"
-                )));
+            match resolve_raw_css(def, &resolve_str) {
+                Ok(css) => raw_css.push(css),
+                Err(err) => errors.push(err),
             }
-            raw_css.push(RawCss {
-                selector: def.selector.clone(),
-                css: css_text,
-            });
         }
 
+        if !errors.is_empty() {
+            return Err(errors);
+        }
         Ok(ResolvedTheme {
             name: self.name.value.clone(),
             mode: self.mode.map_or(ThemeMode::System, Into::into),
@@ -892,6 +1018,28 @@ impl ThemeFile {
             raw_css,
         })
     }
+}
+
+/// Resolves and checks one `raw-css` block.
+fn resolve_raw_css(
+    def: &RawCssDef,
+    resolve_str: &dyn Fn(&Located<String>) -> Result<String, ConfigError>,
+) -> Result<RawCss, ConfigError> {
+    let css_text = resolve_str(&def.css)?;
+    let err = |msg: String| ConfigError::invalid(&def.css.loc, msg);
+    css::check_no_remote(&css_text).map_err(err)?;
+    if let Some(c) = css_text
+        .chars()
+        .find(|c| matches!(c, '{' | '}' | '<' | '>' | '\\'))
+    {
+        return Err(err(format!(
+            "the character `{c}` is not allowed in raw-css"
+        )));
+    }
+    Ok(RawCss {
+        selector: def.selector.clone(),
+        css: css_text,
+    })
 }
 
 /// Identity of a part rule for merging: everything but the declarations.
@@ -910,19 +1058,21 @@ impl From<&Selector> for SelectorKey {
 
 type TokenKey = (String, String);
 
-/// Rejects token definitions that (indirectly) refer to themselves.
+/// Finds token definitions that (indirectly) refer to themselves; one
+/// error per cycle.
 fn check_token_cycles(
     tokens: &IndexMap<String, IndexMap<String, TokenDef>>,
     edges: &HashMap<TokenKey, Vec<(TokenRef, SourceLocation)>>,
-) -> Result<(), ConfigError> {
+) -> Vec<ConfigError> {
     fn visit(
         key: &TokenKey,
         edges: &HashMap<TokenKey, Vec<(TokenRef, SourceLocation)>>,
         done: &mut HashSet<TokenKey>,
         path: &mut Vec<TokenKey>,
-    ) -> Result<(), ConfigError> {
+        errors: &mut Vec<ConfigError>,
+    ) {
         if done.contains(key) {
-            return Ok(());
+            return;
         }
         path.push(key.clone());
         for (r, loc) in edges.get(key).into_iter().flatten() {
@@ -933,18 +1083,19 @@ fn check_token_cycles(
                     .chain(std::iter::once(&target))
                     .map(|(c, n)| format!("${c}.{n}"))
                     .collect();
-                return Err(ConfigError::invalid(
+                errors.push(ConfigError::invalid(
                     loc,
                     format!("token reference cycle: {}", chain.join(" → ")),
                 ));
+                continue;
             }
-            visit(&target, edges, done, path)?;
+            visit(&target, edges, done, path, errors);
         }
         path.pop();
         done.insert(key.clone());
-        Ok(())
     }
 
+    let mut errors = Vec::new();
     let mut done = HashSet::new();
     for (category, defs) in tokens {
         for name in defs.keys() {
@@ -953,8 +1104,9 @@ fn check_token_cycles(
                 edges,
                 &mut done,
                 &mut Vec::new(),
-            )?;
+                &mut errors,
+            );
         }
     }
-    Ok(())
+    errors
 }

@@ -1,4 +1,4 @@
-# Nail — deutsche UI-Texte:  HTML and Markdown editing, preview, attachments):Rich-Text-Editor (M1b WP21).
+# Nail — deutsche UI-Texte: Composer mit HTML und Markdown (M1b WP21).
 #
-# Intentionally empty for now: every key falls back to English
+# Absichtlich noch leer: jeder Schlüssel fällt auf Englisch zurück
 # (locales/en/composer.ftl).

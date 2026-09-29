@@ -1,0 +1,23 @@
+Date: Tue, 29 Sep 2026 10:00:00 +0200
+From: "Ada Lovelace" <ada@work.example>
+To: "Bob, the Builder" <bob@example.org>
+Cc: =?utf-8?B?Wm/DqyDDhHJnZXI=?= <zoe@example.org>
+Reply-To: <replies@work.example>
+Subject: =?utf-8?B?R3LDvMOfZSDigJMgUGzDpG5lIGbDvHIgUTQ=?=
+Message-ID: <fixed-id@work.example>
+In-Reply-To: <parent@example.org>
+References: <root@example.org> <parent@example.org>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"; format="flowed"
+Content-Transfer-Encoding: quoted-printable
+
+Hallo Bob,
+
+This paragraph is long enough to be wrapped with soft line breaks so=20
+that receiving clients can reflow it to their window width.
+
+On Monday, Bob wrote:
+> Plans?
+
+--=20
+Ada

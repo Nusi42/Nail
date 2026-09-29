@@ -1,0 +1,103 @@
+Date: Tue, 29 Sep 2026 10:00:00 +0200
+From: "Ada Lovelace" <ada@work.example>
+To: "Bob, the Builder" <bob@example.org>
+Cc: =?utf-8?B?Wm/DqyDDhHJnZXI=?= <zoe@example.org>
+Reply-To: <replies@work.example>
+Subject: =?utf-8?B?R3LDvMOfZSDigJMgUGzDpG5lIGbDvHIgUTQ=?=
+Message-ID: <fixed-id@work.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="BOUNDARY-1"
+
+
+--BOUNDARY-1
+Content-Type: multipart/alternative;
+ boundary="BOUNDARY-2"
+
+
+--BOUNDARY-2
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+# Plan
+
+- [x] draft
+- [ ] send
+
+```rust
+fn main() {}
+```
+
+| a | b |
+|---|---|
+| 1 | 2 |
+
+--=20
+Ada
+--BOUNDARY-2
+Content-Type: text/markdown; charset="utf-8"; variant="GFM"
+Content-Transfer-Encoding: quoted-printable
+
+# Plan
+
+- [x] draft
+- [ ] send
+
+```rust
+fn main() {}
+```
+
+| a | b |
+|---|---|
+| 1 | 2 |
+
+--=20
+Ada
+--BOUNDARY-2
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html><html><head><meta charset=3D"utf-8"></head><body style=3D"fo=
+nt-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-siz=
+e: 14px;line-height: 1.5;color: #1f2328;"><h1 style=3D"margin: 16px 0 8px 0=
+;line-height: 1.25;">Plan</h1>
+<ul>
+<li><input type=3D"checkbox" checked=3D"" disabled=3D""> draft</li>
+<li><input type=3D"checkbox" disabled=3D""> send</li>
+</ul>
+<pre style=3D"margin: 0 0 10px 0;padding: 10px;border-radius: 6px;font-fami=
+ly: Consolas, 'Courier New', monospace;font-size: 13px;overflow: auto;backg=
+round-color: #ffffff"><code class=3D"language-rust" style=3D"font-family: C=
+onsolas, 'Courier New', monospace;font-size: 13px;"><span style=3D"font-wei=
+ght:bold;color:#a71d5d;">fn </span><span style=3D"font-weight:bold;color:#7=
+95da3;">main</span><span style=3D"color:#323232;">() {}
+</span></code></pre>
+<table style=3D"border-collapse: collapse;margin: 0 0 10px 0;">
+<thead>
+<tr>
+<th style=3D"border: 1px solid #d0d7de;padding: 4px 8px;background-color: #=
+f6f8fa;">a</th>
+<th style=3D"border: 1px solid #d0d7de;padding: 4px 8px;background-color: #=
+f6f8fa;">b</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style=3D"border: 1px solid #d0d7de;padding: 4px 8px;">1</td>
+<td style=3D"border: 1px solid #d0d7de;padding: 4px 8px;">2</td>
+</tr>
+</tbody>
+</table>
+<div class=3D"signature" style=3D"color: #57606a;"><p style=3D"margin: 0 0 =
+10px 0;">-- </p><p style=3D"margin: 0 0 10px 0;">Ada</p>
+</div></body></html>
+--BOUNDARY-2--
+
+--BOUNDARY-1
+Content-Type: text/plain
+Content-Disposition: attachment; filename="notes.txt"
+Content-Transfer-Encoding: base64
+
+Tm90aXplbjogw6TDtsO8Cg==
+
+--BOUNDARY-1--

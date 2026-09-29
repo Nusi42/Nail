@@ -18,8 +18,8 @@ use super::{
 };
 use crate::error::ConfigError;
 use crate::kdl_util::{
-    Source, arg_str, args, check_max_args, check_no_children, check_props, children, describe,
-    name, prop_str, props,
+    Errors, Source, arg_str, args, check_max_args, check_no_children, check_props, children,
+    describe, name, prop_str, props,
 };
 
 /// Property names that would put a secret into the file. They are refused
@@ -34,7 +34,15 @@ const SECRET_PROPS: &[&str] = &[
 ];
 
 pub(crate) fn read(src: &Source<'_>) -> Result<AccountsConfig, ConfigError> {
-    let doc = src.parse()?;
+    read_all(src).map_err(|mut errors| errors.swap_remove(0))
+}
+
+/// Reads the file, reporting every error: each top-level node (account,
+/// virtual account, OAuth provider, …) is checked on its own, so one bad
+/// node does not hide the errors of the others.
+pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigError>> {
+    let doc = src.parse_all()?;
+    let errors = Errors::default();
     let reader = Reader { src };
     let mut config = AccountsConfig::default();
     let mut ids: HashSet<String> = HashSet::new();
@@ -45,72 +53,76 @@ pub(crate) fn read(src: &Source<'_>) -> Result<AccountsConfig, ConfigError> {
     let mut oauth_refs: Vec<(String, &KdlNode)> = Vec::new();
 
     for node in doc.nodes() {
-        match name(node) {
-            "account" => {
-                let (account, provider_refs) = reader.account(node)?;
-                if !ids.insert(account.id.to_string()) {
-                    return Err(src.node_err(
-                        node,
-                        format!(
-                            "an account named {:?} is already defined",
-                            account.id.as_str()
-                        ),
-                    ));
-                }
-                let identity_nodes: Vec<&KdlNode> = children(node)
-                    .iter()
-                    .filter(|c| name(c) == "identity")
-                    .collect();
-                for (index, identity) in account.identities.iter().enumerate() {
-                    if identity_ids
-                        .insert(identity.id.clone(), account.id.clone())
-                        .is_some()
-                    {
+        let result = (|| -> Result<(), ConfigError> {
+            match name(node) {
+                "account" => {
+                    let (account, provider_refs) = reader.account(node)?;
+                    if !ids.insert(account.id.to_string()) {
                         return Err(src.node_err(
+                            node,
+                            format!(
+                                "an account named {:?} is already defined",
+                                account.id.as_str()
+                            ),
+                        ));
+                    }
+                    let identity_nodes: Vec<&KdlNode> = children(node)
+                        .iter()
+                        .filter(|c| name(c) == "identity")
+                        .collect();
+                    for (index, identity) in account.identities.iter().enumerate() {
+                        if identity_ids
+                            .insert(identity.id.clone(), account.id.clone())
+                            .is_some()
+                        {
+                            return Err(src.node_err(
                             identity_nodes.get(index).copied().unwrap_or(node),
                             format!(
                                 "identity id {:?} is used twice; give one of them a different `id=`",
                                 identity.id.as_str()
                             ),
                         ));
+                        }
                     }
+                    oauth_refs.extend(provider_refs.into_iter().map(|p| (p, node)));
+                    config.accounts.push(account);
                 }
-                oauth_refs.extend(provider_refs.into_iter().map(|p| (p, node)));
-                config.accounts.push(account);
-            }
-            "virtual-account" => virtual_nodes.push(node),
-            "oauth-provider" => {
-                let provider = reader.oauth_provider(node)?;
-                if !provider_ids.insert(provider.id.clone()) {
+                "virtual-account" => virtual_nodes.push(node),
+                "oauth-provider" => {
+                    let provider = reader.oauth_provider(node)?;
+                    if !provider_ids.insert(provider.id.clone()) {
+                        return Err(src.node_err(
+                            node,
+                            format!("OAuth provider {:?} is defined twice", provider.id),
+                        ));
+                    }
+                    config.oauth_providers.push(provider);
+                }
+                "undo-send-delay" => {
+                    if undo_seen {
+                        return Err(src.node_err(node, "`undo-send-delay` is set twice"));
+                    }
+                    undo_seen = true;
+                    config.undo_send_secs = Some(reader.undo_send_delay(node)?);
+                }
+                other => {
                     return Err(src.node_err(
-                        node,
-                        format!("OAuth provider {:?} is defined twice", provider.id),
-                    ));
-                }
-                config.oauth_providers.push(provider);
-            }
-            "undo-send-delay" => {
-                if undo_seen {
-                    return Err(src.node_err(node, "`undo-send-delay` is set twice"));
-                }
-                undo_seen = true;
-                config.undo_send_secs = Some(reader.undo_send_delay(node)?);
-            }
-            other => {
-                return Err(src.node_err(
                     node,
                     format!(
                         "unknown node `{other}` (expected account, virtual-account, oauth-provider or undo-send-delay)"
                     ),
                 ));
+                }
             }
-        }
+            Ok(())
+        })();
+        errors.ok(result);
     }
 
     for (provider, node) in oauth_refs {
         let built_in = OAuthProviderConfig::BUILT_IN.contains(&provider.as_str());
         if !built_in && !provider_ids.contains(&provider) {
-            return Err(src.node_err(
+            errors.push(src.node_err(
                 node,
                 format!(
                     "unknown OAuth provider {provider:?} (built in: google, microsoft; others need an `oauth-provider` node)"
@@ -120,9 +132,12 @@ pub(crate) fn read(src: &Source<'_>) -> Result<AccountsConfig, ConfigError> {
     }
 
     for node in virtual_nodes {
-        let virtual_account = reader.virtual_account(node, &config, &identity_ids)?;
+        let Some(virtual_account) = errors.ok(reader.virtual_account(node, &config, &identity_ids))
+        else {
+            continue;
+        };
         if !ids.insert(virtual_account.id.to_string()) {
-            return Err(src.node_err(
+            errors.push(src.node_err(
                 node,
                 format!(
                     "the name {:?} is already used by another account or virtual account",
@@ -134,7 +149,7 @@ pub(crate) fn read(src: &Source<'_>) -> Result<AccountsConfig, ConfigError> {
     }
     // Virtual accounts keep their file order relative to each other; they
     // are read after the real accounts only to resolve references.
-    Ok(config)
+    errors.finish(config)
 }
 
 struct Reader<'s, 'a> {

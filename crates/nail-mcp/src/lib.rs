@@ -1,19 +1,45 @@
-//! Nail's MCP server (M1b WP23; stub after WP20).
+//! Nail's MCP server, read-only (M1b WP23; design.md, "MCP server"; ADR
+//! 0025).
 //!
-//! Expected shape (ADR 0022): an [`rmcp`] server over Streamable HTTP on
-//! `127.0.0.1` with per-client bearer tokens (only hashes are stored), a
-//! stdio bridge for `nail mcp --client <name>`, the design's read-only
-//! resources and tools, resource subscriptions (new mail, UI context),
-//! grants checked on every call and an audit entry per call.
+//! * [`McpServer`] serves Streamable HTTP on `127.0.0.1` with per-client
+//!   bearer tokens (only their SHA-256 is stored, in `nail-store`).
+//! * Resources: `nail://accounts`, `nail://accounts/{id}/folders`,
+//!   `nail://folders/{id}/messages`, `nail://messages/{id}` (+ `/raw`,
+//!   `/attachments/{n}`), `nail://threads/{id}`, `nail://rules`,
+//!   `nail://ui/context` ([`uri`]); read tools `search_messages`,
+//!   `get_message`, `get_thread`, `list_folders`, `get_ui_context`
+//!   ([`tools`]).
+//! * Subscriptions (legacy `resources/subscribe` and
+//!   `subscriptions/listen`): new mail updates the account's folders and
+//!   the folder's messages; a new UI report updates `nail://ui/context`.
+//! * Grants ([`access`]): nothing until granted; per-account scope and
+//!   folder exclusions; separate scopes for raw source, attachments,
+//!   encrypted content and the UI context. Checked on every call, with the
+//!   grant read fresh from the store.
+//! * One audit entry per call; content from the mailbox is marked as
+//!   untrusted data ([`content`]).
+//! * [`admin`] answers the Client API requests of the settings UI;
+//!   [`bridge`] is `nail mcp --client <name>` (stdio ↔ loopback HTTP).
+//!
+//! Data comes through the [`McpData`] trait, which the core implements
+//! (usually via [`CoreData`]) and tests fake.
 
 #![warn(missing_docs)]
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn rmcp_server_types_are_available() {
-        let info = rmcp::model::ServerConfig::default();
-        let value = serde_json::to_value(&info).unwrap();
-        assert!(value.get("protocolVersion").is_some(), "{value}");
-    }
-}
+pub mod access;
+pub mod admin;
+pub mod bridge;
+pub mod content;
+pub mod core_data;
+pub mod data;
+pub mod endpoint;
+pub mod http;
+pub mod server;
+mod subscriptions;
+pub mod tools;
+pub mod uri;
+
+pub use core_data::{CoreAccess, CoreData};
+pub use data::{AttachmentData, DataResult, McpData, MessagePage, SearchOutcome, ThreadData};
+pub use http::{McpServer, ServerOptions};
+pub use server::{AuthedClient, ClientSource, NailMcp};

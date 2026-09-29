@@ -1,0 +1,276 @@
+//! [`McpData`] on top of the core's request handling: [`CoreData`].
+//!
+//! The core implements the small [`CoreAccess`] trait (its request handler,
+//! its store and blob store, its event bus) and wraps itself in
+//! [`CoreData`]; every read then goes through the same code paths the UI
+//! uses. Raw sources come from the blob store, attachments are cut out of
+//! the raw source with `nail-mime`.
+
+use std::future::Future;
+
+use nail_api::compose::Draft;
+use nail_api::{
+    Account, AccountId, ApiError, DraftId, ErrorCode, Event, Folder, FolderId, MessageBody,
+    MessageId, MessageSummary, Request, Response, SearchQuery, ThreadId, UiContext,
+    VirtualAccountConfig,
+};
+use nail_store::{BlobStore, Store};
+
+use crate::data::{AttachmentData, DataResult, McpData, MessagePage, SearchOutcome, ThreadData};
+
+/// What [`CoreData`] needs from the core.
+pub trait CoreAccess: Send + Sync + 'static {
+    /// Answers a Client API request (`Service::handle`).
+    fn handle(&self, request: Request) -> impl Future<Output = Response> + Send;
+    /// The metadata store.
+    fn store(&self) -> &Store;
+    /// The blob store (raw messages).
+    fn blobs(&self) -> &BlobStore;
+    /// Pushes an event to the connected UIs.
+    fn emit(&self, event: Event);
+}
+
+/// [`McpData`] for any [`CoreAccess`].
+pub struct CoreData<C>(pub C);
+
+fn unexpected(response: Response) -> ApiError {
+    match response {
+        Response::Error { code, message } => ApiError::new(code, message),
+        other => ApiError::internal(format!(
+            "unexpected response {}",
+            serde_json::to_value(&other)
+                .ok()
+                .and_then(|v| v.get("type").and_then(|t| t.as_str()).map(str::to_owned))
+                .unwrap_or_default()
+        )),
+    }
+}
+
+impl<C: CoreAccess> CoreData<C> {
+    async fn stored_raw(&self, id: &MessageId) -> DataResult<Option<Vec<u8>>> {
+        let id = id.clone();
+        let stored = self.0.store().call(move |s| s.get_message(&id)).await?;
+        match stored.blob_hash {
+            Some(hash) => Ok(Some(self.0.blobs().get(&hash)?)),
+            None => Ok(None),
+        }
+    }
+}
+
+impl<C: CoreAccess> McpData for CoreData<C> {
+    async fn accounts(&self) -> DataResult<Vec<Account>> {
+        match self.0.handle(Request::ListAccounts).await {
+            Response::Accounts { accounts } => Ok(accounts),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn virtual_accounts(&self) -> DataResult<Vec<VirtualAccountConfig>> {
+        match self.0.handle(Request::ListVirtualAccounts).await {
+            Response::VirtualAccounts { virtual_accounts } => Ok(virtual_accounts),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn folders(&self, account: &AccountId) -> DataResult<Vec<Folder>> {
+        let request = Request::ListFolders {
+            account_id: account.clone(),
+        };
+        match self.0.handle(request).await {
+            Response::Folders { folders } => Ok(folders),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn messages(
+        &self,
+        folder: &FolderId,
+        offset: u32,
+        limit: u32,
+    ) -> DataResult<MessagePage> {
+        let request = Request::ListMessages {
+            folder_id: folder.clone(),
+            offset,
+            limit,
+        };
+        match self.0.handle(request).await {
+            Response::Messages {
+                offset,
+                total,
+                messages,
+                ..
+            } => Ok(MessagePage {
+                offset,
+                total,
+                messages,
+            }),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn message_summary(&self, id: &MessageId) -> DataResult<MessageSummary> {
+        let id = id.clone();
+        Ok(self
+            .0
+            .store()
+            .call(move |s| s.get_message(&id))
+            .await?
+            .summary)
+    }
+
+    async fn message_body(&self, id: &MessageId) -> DataResult<MessageBody> {
+        match self.0.handle(Request::GetMessage { id: id.clone() }).await {
+            Response::Message { message } => Ok(*message),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn raw_message(&self, id: &MessageId) -> DataResult<Vec<u8>> {
+        if let Some(raw) = self.stored_raw(id).await? {
+            return Ok(raw);
+        }
+        // Only headers are known: reading the message fetches the body.
+        self.message_body(id).await?;
+        self.stored_raw(id).await?.ok_or_else(|| {
+            ApiError::new(
+                ErrorCode::Unavailable,
+                "the message source is not downloaded",
+            )
+        })
+    }
+
+    async fn attachment(&self, id: &MessageId, index: u32) -> DataResult<AttachmentData> {
+        let raw = self.raw_message(id).await?;
+        let content = nail_mime::attachment_content(&raw, index)
+            .ok_or_else(|| ApiError::not_found(format!("attachment {index} of {id}")))?;
+        Ok(AttachmentData {
+            filename: content.info.filename,
+            mime: content.info.mime,
+            data: content.data,
+        })
+    }
+
+    async fn is_encrypted(&self, id: &MessageId) -> DataResult<bool> {
+        Ok(self
+            .stored_raw(id)
+            .await?
+            .is_some_and(|raw| is_encrypted_mime(&raw)))
+    }
+
+    async fn thread(&self, id: &ThreadId) -> DataResult<ThreadData> {
+        let request = Request::GetThread {
+            thread_id: id.clone(),
+        };
+        match self.0.handle(request).await {
+            Response::Thread { thread, messages } => Ok(ThreadData {
+                thread: *thread,
+                messages,
+            }),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn search(&self, query: SearchQuery) -> DataResult<SearchOutcome> {
+        match self.0.handle(Request::Search { query }).await {
+            Response::SearchResults {
+                offset,
+                total,
+                hits,
+            } => Ok(SearchOutcome::Hits {
+                offset,
+                total,
+                hits,
+            }),
+            Response::InvalidQuery { error } => Ok(SearchOutcome::Invalid(error)),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn rules_text(&self) -> DataResult<String> {
+        let rules = match self.0.handle(Request::ListRules).await {
+            Response::Rules { rules } => rules,
+            other => return Err(unexpected(other)),
+        };
+        let mut text = String::new();
+        for rule in rules {
+            match self
+                .0
+                .handle(Request::RuleToText {
+                    rule: Box::new(rule),
+                })
+                .await
+            {
+                Response::RuleText { text: one } => {
+                    text.push_str(one.trim_end());
+                    text.push('\n');
+                }
+                other => return Err(unexpected(other)),
+            }
+        }
+        Ok(text)
+    }
+
+    async fn ui_context(&self) -> DataResult<UiContext> {
+        match self.0.handle(Request::GetUiContext).await {
+            Response::UiContext { context } => Ok(context),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    async fn draft(&self, id: &DraftId) -> DataResult<Draft> {
+        let request = Request::GetDraft {
+            draft_id: id.clone(),
+        };
+        match self.0.handle(request).await {
+            Response::Draft { draft } => Ok(*draft),
+            other => Err(unexpected(other)),
+        }
+    }
+
+    fn emit(&self, event: Event) {
+        self.0.emit(event);
+    }
+}
+
+/// Whether the top-level `Content-Type` of a raw message is an encrypted
+/// type (PGP/MIME `multipart/encrypted`, S/MIME `application/pkcs7-mime`).
+pub fn is_encrypted_mime(raw: &[u8]) -> bool {
+    let header_end = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .or_else(|| raw.windows(2).position(|w| w == b"\n\n"))
+        .unwrap_or(raw.len());
+    let headers = String::from_utf8_lossy(&raw[..header_end]).to_ascii_lowercase();
+    // Unfold continuation lines, then find the Content-Type header.
+    let unfolded = headers
+        .replace("\r\n", "\n")
+        .replace("\n ", " ")
+        .replace("\n\t", " ");
+    unfolded.lines().any(|line| {
+        line.strip_prefix("content-type:").is_some_and(|value| {
+            let value = value.trim();
+            value.starts_with("multipart/encrypted")
+                || value.starts_with("application/pkcs7-mime")
+                || value.starts_with("application/x-pkcs7-mime")
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypted_messages_are_recognized() {
+        assert!(is_encrypted_mime(
+            b"From: a@b\r\nContent-Type: multipart/encrypted;\r\n protocol=\"application/pgp-encrypted\"\r\n\r\nx"
+        ));
+        assert!(is_encrypted_mime(
+            b"Content-Type: application/pkcs7-mime; smime-type=enveloped-data\n\nx"
+        ));
+        assert!(!is_encrypted_mime(
+            b"Content-Type: text/plain\r\n\r\nContent-Type: multipart/encrypted\r\n"
+        ));
+        assert!(!is_encrypted_mime(b"Subject: hi\r\n\r\nbody"));
+    }
+}

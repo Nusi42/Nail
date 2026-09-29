@@ -241,3 +241,7 @@ For M1b:
 - **0022:** the M1b contract (rich drafts, rules, MCP, UI context, config write-back and merge,
   saved searches, `RetryOp`), store v4, the `nail-compose` / `nail-rules` / `nail-mcp` stubs
   and the per-package slots (`ui/src/features/README.md`)
+- **0023:** the composer (`nail-compose`: MIME, Markdown, CSS inlining, quoting; TipTap / CodeMirror UI)
+- **0024:** the rules engine (`rules.kdl` reader and format-preserving writer, planned actions, rules UI)
+- **0025:** the read-only MCP server (Streamable HTTP on loopback, tokens, grants, audit, `nail mcp` bridge)
+- **0026:** customization tooling (every config error, `layout.kdl` write-back, merge dialog, inspector)

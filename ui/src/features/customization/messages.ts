@@ -4,6 +4,8 @@
  * one of `prefixes` must exist in `locales/en/customization.ftl`; ids built at
  * runtime are listed by `runtimeIds`.
  */
+import type { MergeChange, MergeConflictKind, MergeSection } from "../../api/generated";
+import { DIALOGS, MERGE_FILES } from "./names";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = [
@@ -11,15 +13,55 @@ export const prefixes: readonly string[] = [
   "merge-dialog-",
   "merge-section-",
   "merge-conflict-",
+  "merge-change-",
   "config-error-",
   "saved-search-",
   "customize-",
 ];
 
-/** Literals with those prefixes that are not message ids (part names). */
-export const notMessages: readonly string[] = [];
+/**
+ * Literals with those prefixes that are not message ids: the `toolbar-order`
+ * layout patch (the global `toolbar-` prefix catches it).
+ */
+export const notMessages: readonly string[] = ["toolbar-order"];
+
+const SECTIONS: MergeSection[] = [
+  "header",
+  "tokens",
+  "modes",
+  "parts",
+  "icons",
+  "message",
+  "raw-css",
+  "windows",
+  "actions",
+  "keys",
+  "toolbars",
+  "menus",
+];
+const CONFLICTS: MergeConflictKind[] = [
+  "duplicate-key",
+  "unknown-action",
+  "unknown-widget",
+  "drops-plugin-items",
+  "invalid",
+];
+const CHANGES: MergeChange[] = ["added", "removed", "changed", "unchanged"];
 
 /** Message ids built at runtime (e.g. `window-<name>` of dialogs). */
 export function runtimeIds(): string[] {
-  return [];
+  return [
+    ...SECTIONS.map((s) => `merge-section-${s}`),
+    ...CONFLICTS.map((k) => `merge-conflict-${k}`),
+    ...CHANGES.map((c) => `merge-change-${c}`),
+    ...MERGE_FILES.map((f) => `merge-dialog-file-${f}`),
+    ...Object.values(DIALOGS).map((name) => `window-${name}`),
+    "inspector-hint",
+    "inspector-hint-pinned",
+    "customize-open-unsupported",
+    // Labels the layout refers to (`label="@customize-action-…"`).
+    "customize-action-inspector",
+    "customize-action-merge",
+    "customize-action-errors",
+  ];
 }

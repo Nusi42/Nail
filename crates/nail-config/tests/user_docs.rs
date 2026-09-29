@@ -115,3 +115,15 @@ fn accounts_guide_examples_are_valid() {
         }
     }
 }
+
+#[test]
+fn customization_guide_examples_are_valid() {
+    let blocks = kdl_blocks("customization.md");
+    assert!(blocks.len() >= 3, "found only {} examples", blocks.len());
+    for block in blocks {
+        let text = format!("layout \"example\" extends=\"default\" {{\n{block}}}\n");
+        if let Err(e) = nail_config::parse_layout(&text, "layout.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}

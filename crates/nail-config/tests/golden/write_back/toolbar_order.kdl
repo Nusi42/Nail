@@ -1,0 +1,31 @@
+// My layout: only what differs from the default.
+layout "Mine" extends="default" {
+    // Two panes are enough for me.
+    window "main" {
+        split "horizontal" id="panes" \
+            sizes="300px 1fr" /* tuned by hand */ \
+            min-sizes="200px none" {
+            folder-tree id="folders" show-unread=#true // unread counts
+            message-list id="list" page-size=50 {
+                row "{from.name}  {date | relative}"
+            }
+        }
+    }
+
+    keys context="list" {
+        // Archive like in my old client.
+        bind "E" "mail.archive"   // capital on purpose
+        bind "d" "mail.delete"
+    }
+
+    // Reader buttons.
+    toolbar "reader" {
+        item "mail.forward"
+        item "mail.reply" // most used
+        spacer
+        item "mail.archive"
+
+        // Destructive ones at the end.
+        item "mail.delete"
+    }
+}

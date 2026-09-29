@@ -1,0 +1,72 @@
+Date: Tue, 29 Sep 2026 10:00:00 +0200
+From: "Ada Lovelace" <ada@work.example>
+To: "Bob, the Builder" <bob@example.org>
+Cc: =?utf-8?B?Wm/DqyDDhHJnZXI=?= <zoe@example.org>
+Reply-To: <replies@work.example>
+Subject: =?utf-8?B?R3LDvMOfZSDigJMgUGzDpG5lIGbDvHIgUTQ=?=
+Message-ID: <fixed-id@work.example>
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="BOUNDARY-1"
+
+
+--BOUNDARY-1
+Content-Type: multipart/alternative;
+ boundary="BOUNDARY-2"
+
+
+--BOUNDARY-2
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Plan
+
+See the logo:
+
+[Logo]
+
+> quoted
+--BOUNDARY-2
+Content-Type: multipart/related;
+ boundary="BOUNDARY-3"
+
+
+--BOUNDARY-3
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html><html><head><meta charset=3D"utf-8"></head><body style=3D"fo=
+nt-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-siz=
+e: 14px;line-height: 1.5;color: #1f2328;"><h1 style=3D"margin: 16px 0 8px 0=
+;line-height: 1.25;">Plan</h1><p style=3D"margin: 0 0 10px 0;">See <b>the l=
+ogo</b>:</p><p style=3D"margin: 0 0 10px 0;"><img src=3D"cid:logo@nail" alt=
+=3D"Logo" style=3D"max-width: 100%;"></p><blockquote style=3D"margin: 0 0 1=
+0px 0;padding: 0 0 0 10px;border-left: 3px solid #d0d7de;color: #57606a;"><=
+p style=3D"margin: 0 0 10px 0;">quoted</p></blockquote></body></html>
+--BOUNDARY-3
+Content-Type: image/png
+Content-Disposition: inline; filename="logo.png"
+Content-ID: <logo@nail>
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUiBmYWtlIGltYWdl
+
+--BOUNDARY-3--
+
+--BOUNDARY-2--
+
+--BOUNDARY-1
+Content-Type: application/pdf
+Content-Disposition: attachment; filename*=UTF-8''Angebot%20M%C3%A4rz.pdf
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQgZmFrZQ==
+
+--BOUNDARY-1
+Content-Type: image/png
+Content-Disposition: attachment; filename="unused.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUiBmYWtlIGltYWdl
+
+--BOUNDARY-1--

@@ -575,15 +575,17 @@ describe("M1b requests in the mock core", () => {
     ).toMatchObject({ code: "not_found" });
   });
 
-  it("answers the feature packages' requests with unsupported until they land", async () => {
+  it("answers every feature package's requests through the feature mocks", async () => {
     const { client } = setup();
-    for (const request of [
-      { type: "RenderPreview", markdown: "# x", identity_id: null },
-      { type: "ListRules" },
-      { type: "ListMcpClients" },
-      { type: "ListConfigBackups", file: "theme" },
-    ] as const) {
-      expect(await client.call(request)).toMatchObject({ code: "unsupported" });
+    const answers = [
+      ["PreviewRendered", { type: "RenderPreview", markdown: "# x", identity_id: null }],
+      ["Rules", { type: "ListRules" }],
+      ["McpClients", { type: "ListMcpClients" }],
+      ["ConfigBackups", { type: "ListConfigBackups", file: "theme" }],
+    ] as const;
+    for (const [expected, request] of answers) {
+      const response = await client.call(request);
+      expect(response).toMatchObject({ type: expected });
     }
   });
 });

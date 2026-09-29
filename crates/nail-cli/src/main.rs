@@ -2,12 +2,15 @@
 //!
 //! * `nail serve` runs the core headless and serves the web UI and the API
 //!   on localhost (see `nail-server`).
+//! * `nail mcp --client <name>` bridges a stdio MCP client to the running
+//!   app's MCP server (see `nail-mcp`).
 //! * `nail config schema` prints the JSON Schema of `theme.kdl` / `layout.kdl`.
 //!
 //! Command-line help and log output are English developer tooling in M0;
 //! see `docs/adr/0009-core-service.md`.
 
 mod cli;
+mod mcp;
 mod serve;
 
 use std::io::Write;
@@ -25,6 +28,14 @@ fn main() -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             runtime.block_on(serve::run(args))
+        }
+        Command::Mcp(args) => {
+            // stdout is the MCP channel: logs only to stderr, and quiet.
+            init_tracing_quiet();
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            runtime.block_on(mcp::run(args))
         }
         Command::Config {
             command: ConfigCommand::Schema { kind },
@@ -44,6 +55,16 @@ fn schema_json(kind: SchemaKind) -> serde_json::Result<String> {
         SchemaKind::Layout => serde_json::to_string_pretty(&nail_config::layout_schema()),
         SchemaKind::Accounts => serde_json::to_string_pretty(&nail_config::accounts_schema()),
     }
+}
+
+/// Warnings only (NAIL_LOG overrides), on stderr.
+fn init_tracing_quiet() {
+    use tracing_subscriber::EnvFilter;
+    let filter = EnvFilter::try_from_env("NAIL_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .init();
 }
 
 fn init_tracing(verbose: u8) {

@@ -1,33 +1,54 @@
-//! Filter rules (M1b WP22; stub after WP20).
+//! Filter rules (M1b WP22; design.md "Filters & rules"; ADR 0022).
 //!
-//! Expected shape (ADR 0022): evaluation of [`nail_api::rules::Rule`]s —
-//! triggers, nested all / any / not conditions (headers, [`regex`], the
-//! search query language, attachments, size, date, flags / tags, account,
-//! authentication results, list-id) and actions turned into queued
-//! operations; dry runs ("test rule") and runs that can be undone as one
-//! unit (the store's `rule_runs` / `rule_run_actions`).
+//! The engine evaluates [`nail_api::rules::Rule`]s against messages and
+//! **plans** what they do; the core executes the plan through the
+//! operation queue and records it as a rule run, so a run can be undone as
+//! one unit.
+//!
+//! * [`MessageView`] / [`Mailbox`] / [`Env`] — what rules see: a message
+//!   (headers, addresses, subject, body, attachments, size, date, flags,
+//!   tags, account, folder), the accounts and folders around it (virtual
+//!   accounts, folder roles and paths) and the clock. [`MessageData`] and
+//!   [`StaticMailbox`] are in-memory implementations.
+//! * [`CompiledRule`] — a validated rule ([`validate`] lists every
+//!   problem: invalid regular expressions, search queries, dates, …) with
+//!   triggers ([`CompiledRule::runs_on`]: arrival, on send, schedule /
+//!   older-than, manual), scope, nested all / any / not conditions
+//!   ([`CompiledRule::matches`], [`CompiledRule::explain`]) and schedules
+//!   ([`CompiledRule::next_run_at`]).
+//! * [`RuleSet::process`] — every triggered rule in file order on one
+//!   message; later rules see what earlier ones did; `stop` and deletes end
+//!   processing. [`run_rule`] runs one rule on a set of messages.
+//! * [`plan_actions`] — actions become [`PlannedAction`]s: queue operations
+//!   ([`nail_store::Operation`]) with the operations that undo them,
+//!   copies, forwards / redirects / template replies (never to automatic or
+//!   list mail, RFC 3834), and the notify choice.
+//! * [`test_rule`] — the dry run behind "Test rule": matches, what would
+//!   happen and why each matched ([`ConditionHit`]s).
+//!
+//! The `query` condition evaluates the search language (parsed by
+//! `nail-search`) against the message itself, without the index.
 
 #![warn(missing_docs)]
 
-#[cfg(test)]
-mod tests {
-    use nail_api::rules::{Condition, TextMatch, TextOp};
+mod condition;
+mod engine;
+mod message;
+mod plan;
+mod query;
+mod text;
+mod time;
 
-    #[test]
-    fn regex_and_the_rules_model_are_available() {
-        let re = regex::RegexBuilder::new(r"^\[list\]")
-            .case_insensitive(true)
-            .build()
-            .unwrap();
-        assert!(re.is_match("[LIST] hello"));
-        let condition = Condition::Header {
-            name: "Subject".into(),
-            matches: Some(TextMatch {
-                op: TextOp::Regex,
-                value: r"^\[list\]".into(),
-                case_sensitive: false,
-            }),
-        };
-        assert!(matches!(condition, Condition::Header { .. }));
-    }
-}
+pub use condition::{CompiledCondition, ConditionError, ConditionHit, ConditionPath};
+pub use engine::{
+    AppliedRule, CompiledRule, Explanation, IssueLocation, MessageOutcome, RuleIssue, RuleSet,
+    TestMatch, TestReport, rule_from_message, run_rule, test_rule, validate,
+};
+pub use message::{
+    AccountInfo, Attachment, Env, FolderInfo, Mailbox, MessageData, MessageView, StaticMailbox,
+};
+pub use plan::{
+    Effect, Flow, MessageState, PlannedAction, SkipReason, plan_actions, refuses_automatic_reply,
+};
+pub use text::{Matcher, REGEX_SIZE_LIMIT, glob_match};
+pub use time::{days_from_civil, parse_day};

@@ -31,6 +31,10 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
                 OptionType::OneOf(&["off", "collapsed", "expanded"]),
             ),
             ("follow-search", OptionType::Bool),
+            // Column ids in display order, e.g. "from subject date"; written
+            // back by the column reorder (`LayoutPatch::ColumnOrder`, M1b
+            // WP24). The row view ignores it.
+            ("columns", OptionType::Str),
         ],
         &[],
         true,

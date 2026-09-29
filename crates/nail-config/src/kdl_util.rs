@@ -70,36 +70,51 @@ impl<'a> Source<'a> {
     /// `kdl` parser sees them: it recurses per child block (and per nested
     /// block comment), and a crafted file would overflow the stack, which
     /// aborts the process instead of returning an error.
+    #[allow(dead_code, reason = "kept for readers that stop at the first error")]
     pub(crate) fn parse(&self) -> Result<KdlDocument, ConfigError> {
+        self.parse_all().map_err(|mut errors| errors.swap_remove(0))
+    }
+
+    /// Like [`Self::parse`], but returns every syntax error the KDL parser
+    /// reports (in file order), not only the first.
+    pub(crate) fn parse_all(&self) -> Result<KdlDocument, Vec<ConfigError>> {
         if let Some(offset) = nesting_violation(self.text) {
-            return Err(ConfigError::at(
+            return Err(vec![ConfigError::at(
                 ConfigErrorKind::Syntax,
                 &self.loc_at(offset),
                 format!("syntax error: nested more than {MAX_NESTING} levels deep"),
-            ));
+            )]);
         }
         KdlDocument::parse_v2(self.text).map_err(|err| {
-            let Some(diag) = err.diagnostics.first() else {
-                return ConfigError::at(
+            let mut errors: Vec<ConfigError> = err
+                .diagnostics
+                .iter()
+                .map(|diag| {
+                    let mut message = diag
+                        .message
+                        .clone()
+                        .unwrap_or_else(|| "invalid KDL".to_owned());
+                    if let Some(help) = &diag.help {
+                        message.push_str(" (");
+                        message.push_str(help);
+                        message.push(')');
+                    }
+                    ConfigError::at(
+                        ConfigErrorKind::Syntax,
+                        &self.loc_at(diag.span.offset()),
+                        format!("syntax error: {message}"),
+                    )
+                })
+                .collect();
+            if errors.is_empty() {
+                errors.push(ConfigError::at(
                     ConfigErrorKind::Syntax,
                     &self.loc_at(0),
                     "invalid KDL document",
-                );
-            };
-            let mut message = diag
-                .message
-                .clone()
-                .unwrap_or_else(|| "invalid KDL".to_owned());
-            if let Some(help) = &diag.help {
-                message.push_str(" (");
-                message.push_str(help);
-                message.push(')');
+                ));
             }
-            ConfigError::at(
-                ConfigErrorKind::Syntax,
-                &self.loc_at(diag.span.offset()),
-                format!("syntax error: {message}"),
-            )
+            // The parser's own order: its first diagnostic is the primary one.
+            errors
         })
     }
 
@@ -143,6 +158,47 @@ impl<'a> Source<'a> {
     pub(crate) fn located<T>(&self, entry: &KdlEntry, value: T) -> Located<T> {
         Located::new(value, self.entry_loc(entry))
     }
+}
+
+/// Collects errors while reading a file, so that one bad item does not hide
+/// the errors of the others (every error of a file is reported at once).
+#[derive(Debug, Default)]
+pub(crate) struct Errors(std::cell::RefCell<Vec<ConfigError>>);
+
+impl Errors {
+    /// Records an error.
+    pub(crate) fn push(&self, error: ConfigError) {
+        self.0.borrow_mut().push(error);
+    }
+
+    /// The value of `result`, recording its error.
+    pub(crate) fn ok<T>(&self, result: Result<T, ConfigError>) -> Option<T> {
+        match result {
+            Ok(value) => Some(value),
+            Err(error) => {
+                self.push(error);
+                None
+            }
+        }
+    }
+
+    /// `value` when no error was recorded, else every error in file order.
+    pub(crate) fn finish<T>(self, value: T) -> Result<T, Vec<ConfigError>> {
+        let mut errors = self.0.into_inner();
+        if errors.is_empty() {
+            Ok(value)
+        } else {
+            sort_errors(&mut errors);
+            Err(errors)
+        }
+    }
+}
+
+/// Sorts errors into file order (file, line, column) and drops exact
+/// duplicates.
+pub(crate) fn sort_errors(errors: &mut Vec<ConfigError>) {
+    errors.sort_by(|a, b| (&a.file, a.line, a.column).cmp(&(&b.file, b.line, b.column)));
+    errors.dedup();
 }
 
 /// Short human description of a KDL value, for error messages.

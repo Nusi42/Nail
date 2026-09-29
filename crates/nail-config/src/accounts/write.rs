@@ -383,7 +383,7 @@ pub(crate) fn detect_indent(text: &str) -> String {
     "    ".to_owned()
 }
 
-fn uses_crlf(text: &str) -> bool {
+pub(crate) fn uses_crlf(text: &str) -> bool {
     text.contains("\r\n")
 }
 
@@ -512,7 +512,7 @@ fn hoist(doc: &mut KdlDocument, top_level: bool) {
 /// Splits a removed node's leading text into the part that stays in the
 /// file (everything up to the last blank line) and the part that goes with
 /// the node (the comment block directly above it).
-fn split_leading(leading: &str) -> (&str, &str) {
+pub(crate) fn split_leading(leading: &str) -> (&str, &str) {
     let bytes = leading.as_bytes();
     let mut keep_until = 0;
     let mut line_start = 0;

@@ -13,6 +13,16 @@ mail-builder.workspace = true
 comrak.workspace = true
 css-inline.workspace = true
 ammonia.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+# HTML tree walking for HTML → text / Markdown, quoting and cid checks. Already in
+# the tree (Tauri's wry / tauri-utils) with the same html5ever as ammonia.
+dom_query = { version = "0.28.0", default-features = false }
+
+[dev-dependencies]
+nail-mime.workspace = true
+pretty_assertions.workspace = true
 
 [lints]
 workspace = true

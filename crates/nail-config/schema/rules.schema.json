@@ -1,0 +1,1077 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nail rules.kdl",
+  "description": "A `rules.kdl` file: filter rules, run in file order.",
+  "type": "object",
+  "properties": {
+    "rule": {
+      "description": "`rule \"<name>\" … { trigger … scope … when … then … }`.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/RuleSchema"
+      }
+    }
+  },
+  "$defs": {
+    "ActionSchema": {
+      "description": "An action node.",
+      "oneOf": [
+        {
+          "description": "Move to a folder.",
+          "type": "object",
+          "properties": {
+            "move": {
+              "$ref": "#/$defs/FolderSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "move"
+          ]
+        },
+        {
+          "description": "Copy to a folder.",
+          "type": "object",
+          "properties": {
+            "copy": {
+              "$ref": "#/$defs/FolderSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "copy"
+          ]
+        },
+        {
+          "description": "Delete (to Trash, or for good).",
+          "type": "object",
+          "properties": {
+            "delete": {
+              "$ref": "#/$defs/DeleteSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "delete"
+          ]
+        },
+        {
+          "description": "Move to the account's Archive.",
+          "type": "string",
+          "const": "archive"
+        },
+        {
+          "description": "Add a tag.",
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tag"
+          ]
+        },
+        {
+          "description": "Remove a tag.",
+          "type": "object",
+          "properties": {
+            "untag": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "untag"
+          ]
+        },
+        {
+          "description": "`flag` / `flag #false`.",
+          "type": "object",
+          "properties": {
+            "flag": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "flag"
+          ]
+        },
+        {
+          "description": "`mark-read` / `mark-read #false`.",
+          "type": "object",
+          "properties": {
+            "mark-read": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mark-read"
+          ]
+        },
+        {
+          "description": "Forward as a new message.",
+          "type": "object",
+          "properties": {
+            "forward": {
+              "$ref": "#/$defs/ForwardSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "forward"
+          ]
+        },
+        {
+          "description": "Redirect unchanged.",
+          "type": "object",
+          "properties": {
+            "redirect": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "redirect"
+          ]
+        },
+        {
+          "description": "Reply with a template.",
+          "type": "object",
+          "properties": {
+            "reply": {
+              "$ref": "#/$defs/ReplySchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "reply"
+          ]
+        },
+        {
+          "description": "`notify` / `notify #false` (suppress the new-mail notification).",
+          "type": "object",
+          "properties": {
+            "notify": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "notify"
+          ]
+        },
+        {
+          "description": "Stop processing further rules for this message.",
+          "type": "string",
+          "const": "stop"
+        }
+      ]
+    },
+    "AgeSchema": {
+      "description": "`age older-than=<days>` or `age newer-than=<days>`.",
+      "type": "object",
+      "properties": {
+        "newer-than": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "older-than": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      }
+    },
+    "AttachmentSchema": {
+      "description": "`attachment { name …; type … }`: any attachment, or one whose name and\nMIME type match.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "File name comparison.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextMatchSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "description": "MIME type comparison (`type starts-with=\"image/\"`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextMatchSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "AuthResultName": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "softfail",
+        "neutral",
+        "none",
+        "temperror",
+        "permerror"
+      ]
+    },
+    "ConditionSchema": {
+      "description": "A condition node.",
+      "oneOf": [
+        {
+          "description": "Every child matches.",
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConditionSchema"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "all"
+          ]
+        },
+        {
+          "description": "At least one child matches.",
+          "type": "object",
+          "properties": {
+            "any": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConditionSchema"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "any"
+          ]
+        },
+        {
+          "description": "The child (or all children together) does not match.",
+          "type": "object",
+          "properties": {
+            "not": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConditionSchema"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "not"
+          ]
+        },
+        {
+          "description": "A header.",
+          "type": "object",
+          "properties": {
+            "header": {
+              "$ref": "#/$defs/HeaderSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "header"
+          ]
+        },
+        {
+          "description": "Any `From` address or name.",
+          "type": "object",
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "description": "Any `To` address or name.",
+          "type": "object",
+          "properties": {
+            "to": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "to"
+          ]
+        },
+        {
+          "description": "Any `Cc` address or name.",
+          "type": "object",
+          "properties": {
+            "cc": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "cc"
+          ]
+        },
+        {
+          "description": "Any `To` or `Cc` address or name.",
+          "type": "object",
+          "properties": {
+            "recipients": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "recipients"
+          ]
+        },
+        {
+          "description": "Any `Reply-To` address or name.",
+          "type": "object",
+          "properties": {
+            "reply-to": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "reply-to"
+          ]
+        },
+        {
+          "description": "The `Sender` address or name.",
+          "type": "object",
+          "properties": {
+            "sender": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "sender"
+          ]
+        },
+        {
+          "description": "The subject.",
+          "type": "object",
+          "properties": {
+            "subject": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "subject"
+          ]
+        },
+        {
+          "description": "The decoded body text.",
+          "type": "object",
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/TextMatchSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "body"
+          ]
+        },
+        {
+          "description": "A query in the search language.",
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "query"
+          ]
+        },
+        {
+          "description": "Attachments.",
+          "type": "object",
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/AttachmentSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "attachment"
+          ]
+        },
+        {
+          "description": "Message size.",
+          "type": "object",
+          "properties": {
+            "size": {
+              "$ref": "#/$defs/SizeSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "size"
+          ]
+        },
+        {
+          "description": "Message date.",
+          "type": "object",
+          "properties": {
+            "date": {
+              "$ref": "#/$defs/DateSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "date"
+          ]
+        },
+        {
+          "description": "Message age in days.",
+          "type": "object",
+          "properties": {
+            "age": {
+              "$ref": "#/$defs/AgeSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "age"
+          ]
+        },
+        {
+          "description": "A system flag.",
+          "type": "object",
+          "properties": {
+            "flag": {
+              "$ref": "#/$defs/FlagSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "flag"
+          ]
+        },
+        {
+          "description": "A tag.",
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tag"
+          ]
+        },
+        {
+          "description": "An account (real or virtual).",
+          "type": "object",
+          "properties": {
+            "account": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account"
+          ]
+        },
+        {
+          "description": "A folder.",
+          "type": "object",
+          "properties": {
+            "folder": {
+              "$ref": "#/$defs/FolderSchema"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "folder"
+          ]
+        },
+        {
+          "description": "DKIM result from `Authentication-Results`.",
+          "type": "object",
+          "properties": {
+            "dkim": {
+              "$ref": "#/$defs/AuthResultName"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "dkim"
+          ]
+        },
+        {
+          "description": "SPF result.",
+          "type": "object",
+          "properties": {
+            "spf": {
+              "$ref": "#/$defs/AuthResultName"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "spf"
+          ]
+        },
+        {
+          "description": "DMARC result.",
+          "type": "object",
+          "properties": {
+            "dmarc": {
+              "$ref": "#/$defs/AuthResultName"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "dmarc"
+          ]
+        },
+        {
+          "description": "The `List-Id` header: present, or matching.",
+          "type": "object",
+          "properties": {
+            "list-id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TextMatchSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "list-id"
+          ]
+        }
+      ]
+    },
+    "DateSchema": {
+      "description": "`date before=\"YYYY-MM-DD\"` or `date after=\"YYYY-MM-DD\"`.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "before": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      }
+    },
+    "DeleteSchema": {
+      "description": "`delete permanent=#true`.",
+      "type": "object",
+      "properties": {
+        "permanent": {
+          "description": "Delete for good instead of moving to Trash.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "FlagName": {
+      "type": "string",
+      "enum": [
+        "seen",
+        "flagged",
+        "answered",
+        "draft"
+      ]
+    },
+    "FlagSchema": {
+      "description": "`flag \"<flag>\" set=#false`.",
+      "type": "object",
+      "properties": {
+        "flag": {
+          "$ref": "#/$defs/FlagName"
+        },
+        "set": {
+          "description": "Wanted state (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "flag"
+      ]
+    },
+    "FolderSchema": {
+      "description": "A folder: `\"<path>\"` or `role=\"<role>\"`, with an optional `account=`\n(default: the message's account).",
+      "type": "object",
+      "properties": {
+        "account": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RoleName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ForwardSchema": {
+      "description": "`forward \"<address>\"… identity=…`.",
+      "type": "object",
+      "properties": {
+        "identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "to"
+      ]
+    },
+    "GroupMode": {
+      "type": "string",
+      "enum": [
+        "all",
+        "any"
+      ]
+    },
+    "HeaderSchema": {
+      "description": "`header \"<Name>\" exists=#true` or `header \"<Name>\" <comparison>`.",
+      "type": "object",
+      "properties": {
+        "case-sensitive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "contains": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ends-with": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "equals": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exists": {
+          "description": "`#true`: present; `#false`: absent.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "The header name.",
+          "type": "string"
+        },
+        "regex": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "starts-with": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "MinutesOrDuration": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        {
+          "type": "string",
+          "pattern": "^\\s*[0-9]+\\s*[mhd]\\s*$"
+        }
+      ]
+    },
+    "OlderThanKind": {
+      "type": "string",
+      "enum": [
+        "older-than"
+      ]
+    },
+    "ReplySchema": {
+      "description": "`reply \"<template>\" identity=…`.",
+      "type": "object",
+      "properties": {
+        "identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "description": "Markdown template text.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "template"
+      ]
+    },
+    "RoleName": {
+      "type": "string",
+      "enum": [
+        "inbox",
+        "sent",
+        "drafts",
+        "archive",
+        "junk",
+        "trash"
+      ]
+    },
+    "RuleIdSchema": {
+      "description": "A rule id: lowercase letters, digits, `-`, `_`, `.` (default: derived\nfrom the name).",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "RuleSchema": {
+      "description": "`rule \"<name>\" id=… enabled=… trigger=… scope=… { … }`.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "`#false` keeps the rule without running it automatically.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Stable id (default: derived from the name).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RuleIdSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "description": "`scope=\"account:<id>\"` on the rule, or `scope \"<spec>\" account=…`\nchildren: where the rule applies (default: everywhere).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScopeSchema"
+          }
+        },
+        "then": {
+          "description": "`then { … }`: what happens to a matching message, in order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionSchema"
+          }
+        },
+        "trigger": {
+          "description": "`trigger=\"arrival\"` on the rule, or `trigger \"<kind>\" …` children:\nwhen the rule runs. Every rule can also be run by hand.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerSchema"
+          }
+        },
+        "when": {
+          "description": "`when [all|any] { … }`: what a message must match (default: every\nmessage).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WhenSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ScheduleKind": {
+      "type": "string",
+      "enum": [
+        "schedule"
+      ]
+    },
+    "ScopeSchema": {
+      "description": "`\"account:<id>\"`, `\"virtual:<id>\"`, `\"folder:<path>\"` or\n`\"role:<inbox|sent|drafts|archive|junk|trash>\"`; folder and role scopes\ntake an optional `account=`.",
+      "type": "object",
+      "properties": {
+        "account": {
+          "description": "The account of a folder or role scope (default: every account).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spec": {
+          "description": "The scope.",
+          "type": "string",
+          "pattern": "^(account|virtual|folder|role):.+$"
+        }
+      },
+      "required": [
+        "spec"
+      ]
+    },
+    "SimpleTriggerSchema": {
+      "oneOf": [
+        {
+          "description": "When a new message arrives.",
+          "type": "string",
+          "const": "arrival"
+        },
+        {
+          "description": "When a message is sent (applies to the sent copy).",
+          "type": "string",
+          "const": "on-send"
+        },
+        {
+          "description": "Only by hand.",
+          "type": "string",
+          "const": "manual"
+        }
+      ]
+    },
+    "SizeSchema": {
+      "description": "`size larger=… ` or `size smaller=…`.",
+      "type": "object",
+      "properties": {
+        "larger": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SizeValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "smaller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SizeValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "SizeValue": {
+      "description": "Bytes, or a string with a 1024-based unit (`\"500k\"`, `\"5MB\"`).",
+      "anyOf": [
+        {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^\\s*[0-9]+\\s*[kKmMgG]?[bB]?\\s*$"
+        }
+      ]
+    },
+    "TextMatchSchema": {
+      "description": "A text comparison: exactly one of `equals`, `contains`, `starts-with`,\n`ends-with`, `regex` (Rust regex syntax), plus `case-sensitive`\n(default `#false`).",
+      "type": "object",
+      "properties": {
+        "case-sensitive": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "contains": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ends-with": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "equals": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "regex": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "starts-with": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "TriggerSchema": {
+      "description": "A trigger.",
+      "anyOf": [
+        {
+          "description": "`arrival`, `on-send` or `manual`.",
+          "$ref": "#/$defs/SimpleTriggerSchema"
+        },
+        {
+          "description": "`trigger \"schedule\" every=<minutes | \"30m\" | \"2h\" | \"1d\">`.",
+          "type": "object",
+          "properties": {
+            "every": {
+              "description": "Minutes between runs, or a duration string.",
+              "$ref": "#/$defs/MinutesOrDuration"
+            },
+            "kind": {
+              "description": "Always `schedule`.",
+              "$ref": "#/$defs/ScheduleKind"
+            }
+          },
+          "required": [
+            "kind",
+            "every"
+          ]
+        },
+        {
+          "description": "`trigger \"older-than\" days=<n>`.",
+          "type": "object",
+          "properties": {
+            "days": {
+              "description": "Age in days.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 1
+            },
+            "kind": {
+              "description": "Always `older-than`.",
+              "$ref": "#/$defs/OlderThanKind"
+            }
+          },
+          "required": [
+            "kind",
+            "days"
+          ]
+        }
+      ]
+    },
+    "WhenSchema": {
+      "description": "`when [all|any] { … }`.",
+      "type": "object",
+      "properties": {
+        "conditions": {
+          "description": "The conditions.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConditionSchema"
+          }
+        },
+        "mode": {
+          "description": "`all` (default: every condition must match) or `any` (one is\nenough).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+layout "Mine" extends="default" {
+    // nothing yet
+    breakpoint min-width=900 {
+        window "main" {
+            stack id="root" sizes="auto 1fr auto" {
+                toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
+                split "horizontal" id="panes" \
+                    sizes="200px 1fr 1fr" \
+                    min-sizes="160px 280px 320px" \
+                    max-sizes="480px none none" \
+                    collapsible="true false true" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr" {
+                        search-bar id="search" scope="account"
+                        account-switcher id="accounts"
+                        folder-tree id="folders" show-unread=#true
+                    }
+                    message-list id="list" label="@layout.pane.messages" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                        row "{preview}"
+                    }
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto 1fr" {
+                        toolbar id="reader-toolbar" toolbar="reader"
+                        thread-view id="thread" expand="none"
+                        message-view id="message" headers="from to cc date"
+                    }
+                }
+                status-bar id="status" items="sync-progress account-status ops send-status folder-counts"
+            }
+        }
+    }
+    breakpoint max-width=899 {
+        window "main" {
+            stack id="root" sizes="auto auto 1fr auto" {
+                toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
+                search-bar id="search" scope="account"
+                tabs id="panes" active=1 {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr" {
+                        account-switcher id="accounts"
+                        folder-tree id="folders" show-unread=#true
+                    }
+                    message-list id="list" label="@layout.pane.messages" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                    }
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto 1fr" {
+                        toolbar id="reader-toolbar" toolbar="reader"
+                        thread-view id="thread" expand="none"
+                        message-view id="message" headers="from date"
+                    }
+                }
+                status-bar id="status" items="sync-progress ops send-status"
+            }
+        }
+    }
+}

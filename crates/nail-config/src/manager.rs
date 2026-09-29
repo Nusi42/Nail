@@ -5,12 +5,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use nail_api::{Event, ResolvedLayout, ResolvedTheme};
+use nail_api::{ConfigFile, Event, ResolvedLayout, ResolvedTheme};
 use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{DebounceEventResult, Debouncer, new_debouncer};
 
-use crate::error::ConfigError;
-use crate::{LAYOUT_FILE, THEME_FILE, default_layout, default_theme, parse_layout, parse_theme};
+use crate::error::{ConfigError, issues_event};
+use crate::{
+    LAYOUT_FILE, THEME_FILE, default_layout, default_theme, parse_layout_all, parse_theme_all,
+};
 
 /// Default debounce interval for [`ConfigManager::watch`]: editors often
 /// write a file in several steps.
@@ -37,7 +39,25 @@ impl ConfigKind {
         }
     }
 
-    fn index(self) -> usize {
+    /// The protocol's name for the file.
+    pub fn file(self) -> ConfigFile {
+        match self {
+            Self::Theme => ConfigFile::Theme,
+            Self::Layout => ConfigFile::Layout,
+        }
+    }
+
+    /// The kind of a protocol file; `None` for files the manager does not
+    /// own (`accounts.kdl`, `rules.kdl`).
+    pub fn from_file(file: ConfigFile) -> Option<Self> {
+        match file {
+            ConfigFile::Theme => Some(Self::Theme),
+            ConfigFile::Layout => Some(Self::Layout),
+            ConfigFile::Accounts | ConfigFile::Rules => None,
+        }
+    }
+
+    pub(crate) fn index(self) -> usize {
         match self {
             Self::Theme => 0,
             Self::Layout => 1,
@@ -58,12 +78,23 @@ pub enum ConfigUpdate {
         layout: Arc<ResolvedLayout>,
     },
     /// A file changed and is invalid; the last valid configuration stays.
+    /// This is the file's first error (the M1a event); it is always followed
+    /// by [`Self::Errors`] with all of them.
     Error(ConfigError),
+    /// Every error of one file after it was read (M1b). An empty list means
+    /// the file became valid again; it is only sent for a file that had
+    /// errors before.
+    Errors {
+        /// The file.
+        kind: ConfigKind,
+        /// Its errors in file order.
+        errors: Vec<ConfigError>,
+    },
 }
 
 impl ConfigUpdate {
-    /// The client event for this update ([`Event::ConfigChanged`] or
-    /// [`Event::ConfigError`]).
+    /// The client event for this update ([`Event::ConfigChanged`],
+    /// [`Event::ConfigError`] or [`Event::ConfigErrors`]).
     pub fn to_event(&self) -> Event {
         match self {
             Self::Changed { theme, layout } => Event::ConfigChanged {
@@ -71,6 +102,7 @@ impl ConfigUpdate {
                 layout: Box::new((**layout).clone()),
             },
             Self::Error(err) => err.to_event(),
+            Self::Errors { kind, errors } => issues_event(kind.file_name(), errors),
         }
     }
 }
@@ -83,13 +115,15 @@ impl ConfigUpdate {
 /// start-up: the default) stays active. Cloning is cheap and shares state.
 #[derive(Debug, Clone)]
 pub struct ConfigManager {
-    inner: Arc<Inner>,
+    pub(crate) inner: Arc<Inner>,
 }
 
 #[derive(Debug)]
-struct Inner {
+pub(crate) struct Inner {
     dir: PathBuf,
     state: Mutex<State>,
+    /// Serializes writes to the config files (write-back, merge, revert).
+    pub(crate) writing: Mutex<()>,
 }
 
 #[derive(Debug)]
@@ -99,13 +133,18 @@ struct State {
     /// Last content seen per file (`None` = file absent), to ignore
     /// notifications that did not change anything.
     seen: [Option<Option<String>>; 2],
-    errors: [Option<ConfigError>; 2],
+    /// Every error per file (empty = valid).
+    errors: [Vec<ConfigError>; 2],
 }
 
 enum Outcome {
     Unchanged,
-    Applied,
-    Failed(ConfigError),
+    /// Valid; `was_invalid` when the file had errors before.
+    Applied {
+        was_invalid: bool,
+    },
+    /// Invalid: every error, in file order (never empty).
+    Failed(Vec<ConfigError>),
 }
 
 impl ConfigManager {
@@ -120,13 +159,16 @@ impl ConfigManager {
                     theme: Arc::new(default_theme()),
                     layout: Arc::new(default_layout()),
                     seen: [None, None],
-                    errors: [None, None],
+                    errors: [Vec::new(), Vec::new()],
                 }),
+                writing: Mutex::new(()),
             }),
         };
         for kind in ConfigKind::ALL {
-            if let Outcome::Failed(err) = manager.reload_kind(kind) {
-                tracing::warn!(%err, "invalid configuration file; using the default");
+            if let Outcome::Failed(errors) = manager.reload_kind(kind) {
+                for err in errors {
+                    tracing::warn!(%err, "invalid configuration file; using the default");
+                }
             }
         }
         manager
@@ -147,36 +189,88 @@ impl ConfigManager {
         self.state().layout.clone()
     }
 
-    /// Errors of the files as they are on disk now (empty when both are
-    /// valid).
+    /// The first error of each file as it is on disk now (empty when both
+    /// are valid). [`Self::file_errors`] has all errors of a file.
     pub fn errors(&self) -> Vec<ConfigError> {
-        self.state().errors.iter().flatten().cloned().collect()
+        self.state()
+            .errors
+            .iter()
+            .filter_map(|errors| errors.first().cloned())
+            .collect()
+    }
+
+    /// Every error of one file as it is on disk now, in file order (empty
+    /// when it is valid or absent).
+    pub fn file_errors(&self, kind: ConfigKind) -> Vec<ConfigError> {
+        self.state().errors[kind.index()].clone()
+    }
+
+    /// One [`Event::ConfigErrors`] per file (theme, layout), with every
+    /// error of the file; valid files get an empty list. Transports send
+    /// these to a client when it connects, next to the M1a
+    /// [`Event::ConfigError`]s from [`Self::errors`].
+    pub fn error_events(&self) -> Vec<Event> {
+        let state = self.state();
+        ConfigKind::ALL
+            .into_iter()
+            .map(|kind| issues_event(kind.file_name(), &state.errors[kind.index()]))
+            .collect()
     }
 
     /// Re-reads one file. Returns `None` when its content did not change
-    /// since the last read.
+    /// since the last read. For an invalid file this is its first error;
+    /// [`Self::reload_updates`] also returns all of them.
     pub fn reload(&self, kind: ConfigKind) -> Option<ConfigUpdate> {
+        self.reload_updates(kind).into_iter().next()
+    }
+
+    /// Re-reads one file and returns every resulting update:
+    /// nothing when it did not change; `Changed` (plus an empty `Errors`
+    /// when the file had errors before) when it is valid; `Error` (the first
+    /// error) and `Errors` (all of them) when it is invalid.
+    pub fn reload_updates(&self, kind: ConfigKind) -> Vec<ConfigUpdate> {
         match self.reload_kind(kind) {
-            Outcome::Unchanged => None,
-            Outcome::Applied => Some(self.changed()),
-            Outcome::Failed(err) => Some(ConfigUpdate::Error(err)),
+            Outcome::Unchanged => Vec::new(),
+            Outcome::Applied { was_invalid } => {
+                let mut updates = vec![self.changed()];
+                if was_invalid {
+                    updates.push(ConfigUpdate::Errors {
+                        kind,
+                        errors: Vec::new(),
+                    });
+                }
+                updates
+            }
+            Outcome::Failed(errors) => failed_updates(kind, errors),
         }
     }
 
     /// Re-reads both files; returns the resulting updates (errors first,
-    /// then at most one [`ConfigUpdate::Changed`]).
+    /// each file's `Error` followed by its `Errors`; then at most one
+    /// [`ConfigUpdate::Changed`], followed by an empty `Errors` for each
+    /// file that became valid).
     pub fn reload_all(&self) -> Vec<ConfigUpdate> {
         let mut updates = Vec::new();
+        let mut cleared = Vec::new();
         let mut changed = false;
         for kind in ConfigKind::ALL {
             match self.reload_kind(kind) {
                 Outcome::Unchanged => {}
-                Outcome::Applied => changed = true,
-                Outcome::Failed(err) => updates.push(ConfigUpdate::Error(err)),
+                Outcome::Applied { was_invalid } => {
+                    changed = true;
+                    if was_invalid {
+                        cleared.push(ConfigUpdate::Errors {
+                            kind,
+                            errors: Vec::new(),
+                        });
+                    }
+                }
+                Outcome::Failed(errors) => updates.extend(failed_updates(kind, errors)),
             }
         }
         if changed {
             updates.push(self.changed());
+            updates.extend(cleared);
         }
         updates
     }
@@ -208,25 +302,45 @@ impl ConfigManager {
                     }
                 }
                 let mut changed = false;
+                let mut cleared = Vec::new();
                 let mut reported = Vec::new();
                 for kind in kinds {
                     match manager.reload_kind(kind) {
                         Outcome::Unchanged => {}
-                        Outcome::Applied => changed = true,
-                        Outcome::Failed(err) => {
-                            tracing::warn!(%err, "invalid configuration file; keeping the last valid one");
-                            reported.push(err.file.clone());
-                            on_update(ConfigUpdate::Error(err));
+                        Outcome::Applied { was_invalid } => {
+                            changed = true;
+                            if was_invalid {
+                                cleared.push(kind);
+                            }
+                        }
+                        Outcome::Failed(errors) => {
+                            for err in &errors {
+                                tracing::warn!(%err, "invalid configuration file; keeping the last valid one");
+                            }
+                            reported.push(kind);
+                            for update in failed_updates(kind, errors) {
+                                on_update(update);
+                            }
                         }
                     }
                 }
                 if changed {
-                    // `Changed` clears the error display; files that are
+                    // `Changed` clears the (M1a) error display; files that
+                    // became valid get an empty error list, files that are
                     // still invalid (and were not just reported) say so again.
                     on_update(manager.changed());
-                    for err in manager.errors() {
-                        if !reported.contains(&err.file) {
-                            on_update(ConfigUpdate::Error(err));
+                    for kind in cleared {
+                        on_update(ConfigUpdate::Errors {
+                            kind,
+                            errors: Vec::new(),
+                        });
+                    }
+                    for kind in ConfigKind::ALL {
+                        let errors = manager.file_errors(kind);
+                        if !errors.is_empty() && !reported.contains(&kind) {
+                            for update in failed_updates(kind, errors) {
+                                on_update(update);
+                            }
                         }
                     }
                 }
@@ -254,7 +368,7 @@ impl ConfigManager {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    fn changed(&self) -> ConfigUpdate {
+    pub(crate) fn changed(&self) -> ConfigUpdate {
         let state = self.state();
         ConfigUpdate::Changed {
             theme: state.theme.clone(),
@@ -268,11 +382,11 @@ impl ConfigManager {
             Ok(text) => Some(text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => {
-                let err = ConfigError::io(kind.file_name(), &e);
+                let errors = vec![ConfigError::io(kind.file_name(), &e)];
                 let mut state = self.state();
                 state.seen[kind.index()] = None;
-                state.errors[kind.index()] = Some(err.clone());
-                return Outcome::Failed(err);
+                state.errors[kind.index()].clone_from(&errors);
+                return Outcome::Failed(errors);
             }
         };
 
@@ -284,25 +398,35 @@ impl ConfigManager {
         let result = match (kind, &text) {
             (ConfigKind::Theme, None) => Ok(Resolved::Theme(default_theme())),
             (ConfigKind::Layout, None) => Ok(Resolved::Layout(default_layout())),
-            (ConfigKind::Theme, Some(t)) => parse_theme(t, file).map(Resolved::Theme),
-            (ConfigKind::Layout, Some(t)) => parse_layout(t, file).map(Resolved::Layout),
+            (ConfigKind::Theme, Some(t)) => parse_theme_all(t, file).map(Resolved::Theme),
+            (ConfigKind::Layout, Some(t)) => parse_layout_all(t, file).map(Resolved::Layout),
         };
         state.seen[kind.index()] = Some(text);
         match result {
             Ok(resolved) => {
-                state.errors[kind.index()] = None;
+                let was_invalid = !std::mem::take(&mut state.errors[kind.index()]).is_empty();
                 match resolved {
                     Resolved::Theme(theme) => state.theme = Arc::new(theme),
                     Resolved::Layout(layout) => state.layout = Arc::new(layout),
                 }
-                Outcome::Applied
+                Outcome::Applied { was_invalid }
             }
-            Err(err) => {
-                state.errors[kind.index()] = Some(err.clone());
-                Outcome::Failed(err)
+            Err(errors) => {
+                state.errors[kind.index()].clone_from(&errors);
+                Outcome::Failed(errors)
             }
         }
     }
+}
+
+/// `Error` (the first error, M1a) followed by `Errors` (all of them).
+fn failed_updates(kind: ConfigKind, errors: Vec<ConfigError>) -> Vec<ConfigUpdate> {
+    let mut updates = Vec::with_capacity(2);
+    if let Some(first) = errors.first() {
+        updates.push(ConfigUpdate::Error(first.clone()));
+    }
+    updates.push(ConfigUpdate::Errors { kind, errors });
+    updates
 }
 
 enum Resolved {

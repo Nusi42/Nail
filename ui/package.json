@@ -13,11 +13,22 @@
     "lint": "eslint . && tsc -b && prettier --check ."
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
     "@fluent/bundle": "^0.19.1",
     "@fluent/langneg": "^0.7.0",
     "@tanstack/react-query": "^5.104.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@tauri-apps/api": "^2.12.0",
+    "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-image": "^3.31.3",
+    "@tiptap/extension-table": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"

@@ -1,6 +1,6 @@
 //! The configuration error type.
 
-use nail_api::{ApiError, ErrorCode, Event, SourceLocation};
+use nail_api::{ApiError, ConfigIssue, ErrorCode, Event, SourceLocation};
 
 /// What went wrong with a configuration file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,6 +80,41 @@ impl ConfigError {
             message: self.message.clone(),
         }
     }
+
+    /// The error as a protocol [`ConfigIssue`] (position and message; the
+    /// file is given by the surrounding event or response).
+    pub fn to_issue(&self) -> ConfigIssue {
+        ConfigIssue {
+            line: self.line,
+            column: self.column,
+            message: self.message.clone(),
+        }
+    }
+}
+
+/// The [`Event::ConfigErrors`] listing every error of `file` (empty =
+/// valid). Errors located in another file (e.g. in the shipped defaults a
+/// sparse file extends) keep their message but are prefixed with that
+/// file's name, since the event names only one file.
+pub fn issues_event(file: &str, errors: &[ConfigError]) -> Event {
+    Event::ConfigErrors {
+        file: file.to_owned(),
+        errors: issues(file, errors),
+    }
+}
+
+/// [`ConfigError`]s as [`ConfigIssue`]s of `file`; see [`issues_event`].
+pub fn issues(file: &str, errors: &[ConfigError]) -> Vec<ConfigIssue> {
+    errors
+        .iter()
+        .map(|err| {
+            let mut issue = err.to_issue();
+            if err.file != file {
+                issue.message = format!("{}: {}", err.file, err.message);
+            }
+            issue
+        })
+        .collect()
 }
 
 impl From<ConfigError> for ApiError {

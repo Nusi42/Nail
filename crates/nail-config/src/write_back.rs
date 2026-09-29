@@ -1,0 +1,638 @@
+//! Write-back of UI edits into `layout.kdl` ([`LayoutPatch`]es): divider
+//! positions, column order, toolbar contents and key bindings.
+//!
+//! The user's file is edited in place with [`crate::kdl_edit`], so comments,
+//! blank lines, indentation and property order of everything the patch does
+//! not touch stay as they were. A missing file becomes a sparse file that
+//! extends the defaults; a window that only exists in the defaults is copied
+//! into the file before it is changed (a window defined in a sparse file
+//! replaces all breakpoints of that window in the defaults). Removing a
+//! binding that the defaults define writes an `unbind`.
+
+use kdl::{KdlDocument, KdlNode, KdlValue};
+use nail_api::{ApiError, ErrorCode, LayoutNodeRef, LayoutPatch, ToolbarItem};
+use serde_json::Value;
+
+use crate::error::ConfigError;
+use crate::kdl_edit::{
+    Style, append_rendered, ensure_multiline, first_arg, parse_rendered, remove_node,
+    replace_rendered, same_node, set_prop, str_prop, to_text,
+};
+use crate::kdl_util::is_kebab;
+use crate::layout::normalize_key;
+use crate::render;
+use crate::{DEFAULT_LAYOUT_KDL, LayoutFile, default_layout, parse_layout_all};
+
+/// The file written when there is no `layout.kdl` yet.
+pub(crate) const NEW_LAYOUT: &str = "// Changes made in Nail. See the layout reference in the user documentation.\nlayout \"custom\" extends=\"default\" {\n}\n";
+
+/// Why a write-back or merge could not be done.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditError {
+    /// The file on disk (or the file the change would produce) is invalid.
+    Config(Vec<ConfigError>),
+    /// The request does not fit the file (unknown window, wrong number of
+    /// sizes, …).
+    Invalid(String),
+}
+
+impl std::fmt::Display for EditError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Config(errors) => {
+                let shown: Vec<String> = errors.iter().take(5).map(ToString::to_string).collect();
+                write!(f, "{}", shown.join("; "))?;
+                if errors.len() > 5 {
+                    write!(f, " (and {} more)", errors.len() - 5)?;
+                }
+                Ok(())
+            }
+            Self::Invalid(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for EditError {}
+
+impl From<EditError> for ApiError {
+    fn from(error: EditError) -> Self {
+        match &error {
+            EditError::Config(_) => ApiError::new(ErrorCode::Config, error.to_string()),
+            EditError::Invalid(_) => ApiError::invalid_request(error.to_string()),
+        }
+    }
+}
+
+fn invalid(message: impl Into<String>) -> EditError {
+    EditError::Invalid(message.into())
+}
+
+/// Applies `patches` (in order, as one edit) to the text of `layout.kdl`
+/// (`None` = no file yet) and returns the new text. Fails with
+/// [`EditError::Config`] when the current file is invalid, and with
+/// [`EditError::Invalid`] when a patch does not fit the file or the result
+/// would be invalid (e.g. an unknown action).
+pub fn apply_layout_patches(
+    current: Option<&str>,
+    patches: &[LayoutPatch],
+    file: &str,
+) -> Result<String, EditError> {
+    let text = current.unwrap_or(NEW_LAYOUT);
+    let parsed = LayoutFile::parse_all(text, file).map_err(EditError::Config)?;
+    parse_layout_all(text, file).map_err(EditError::Config)?;
+    let mut editor = LayoutEditor::new(text, parsed.extends.is_some())?;
+    for patch in patches {
+        editor.apply(patch)?;
+    }
+    let out = editor.finish();
+    if let Err(errors) = parse_layout_all(&out, file) {
+        return Err(invalid(format!(
+            "the change would make {file} invalid: {}",
+            errors[0]
+        )));
+    }
+    Ok(out)
+}
+
+/// A `layout.kdl` document being edited.
+pub(crate) struct LayoutEditor {
+    doc: KdlDocument,
+    root: usize,
+    sparse: bool,
+    pub(crate) style: Style,
+}
+
+/// Where a `window "<name>"` node is: `body[top]`, or the `inner`-th child
+/// of the breakpoint `body[top]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Site {
+    top: usize,
+    inner: Option<usize>,
+}
+
+impl LayoutEditor {
+    /// Starts editing valid layout text.
+    pub(crate) fn new(text: &str, sparse: bool) -> Result<Self, EditError> {
+        Self::open(text, "layout", sparse)
+    }
+
+    /// Starts editing valid text whose single top-level node is `root`
+    /// (`layout` or `theme`).
+    pub(crate) fn open(text: &str, root: &str, sparse: bool) -> Result<Self, EditError> {
+        let doc = KdlDocument::parse_v2(text).map_err(|e| invalid(e.to_string()))?;
+        let root = doc
+            .nodes()
+            .iter()
+            .position(|n| n.name().value() == root)
+            .ok_or_else(|| invalid(format!("the file has no `{root}` node")))?;
+        Ok(Self {
+            doc,
+            root,
+            sparse,
+            style: Style::of(text),
+        })
+    }
+
+    /// The edited text.
+    pub(crate) fn finish(self) -> String {
+        to_text(&self.doc, &self.style)
+    }
+
+    pub(crate) fn root_node(&mut self) -> &mut KdlNode {
+        &mut self.doc.nodes_mut()[self.root]
+    }
+
+    /// The children of the `layout` node (depth 1).
+    pub(crate) fn body(&mut self) -> &mut KdlDocument {
+        self.doc.nodes_mut()[self.root].ensure_children()
+    }
+
+    fn apply(&mut self, patch: &LayoutPatch) -> Result<(), EditError> {
+        match patch {
+            LayoutPatch::SplitSizes { node, sizes } => {
+                for size in sizes {
+                    if size.is_empty() || size.contains(char::is_whitespace) {
+                        return Err(invalid(format!("invalid size {size:?}")));
+                    }
+                }
+                let target = self.node_mut(node)?;
+                let name = target.name().value().to_owned();
+                if name != "split" && name != "stack" {
+                    return Err(invalid(format!(
+                        "the node at {node:?} is a `{name}`, not a split or stack"
+                    )));
+                }
+                let children = target.children().map_or(0, |c| c.nodes().len());
+                if children != sizes.len() {
+                    return Err(invalid(format!(
+                        "{} sizes for a `{name}` with {children} children",
+                        sizes.len()
+                    )));
+                }
+                set_prop(target, "sizes", KdlValue::String(sizes.join(" ")));
+                Ok(())
+            }
+            LayoutPatch::ColumnOrder { node, columns } => {
+                if columns.is_empty() || columns.iter().any(|c| !is_kebab(c)) {
+                    return Err(invalid(format!("invalid column ids {columns:?}")));
+                }
+                let target = self.node_mut(node)?;
+                let name = target.name().value();
+                if matches!(name, "split" | "stack" | "tabs") {
+                    return Err(invalid(format!(
+                        "the node at {node:?} is a `{name}` container, not a list widget"
+                    )));
+                }
+                set_prop(target, "columns", KdlValue::String(columns.join(" ")));
+                Ok(())
+            }
+            LayoutPatch::ToolbarOrder { toolbar, items } => self.set_toolbar(toolbar, items),
+            LayoutPatch::AddKeyBinding {
+                context,
+                key,
+                action,
+                args,
+            } => self.set_binding(context, key, Some((action, args))),
+            LayoutPatch::RemoveKeyBinding { context, key } => self.set_binding(context, key, None),
+        }
+    }
+
+    // --- windows -----------------------------------------------------------
+
+    fn window_sites(body: &KdlDocument, name: &str) -> Vec<Site> {
+        let mut sites = Vec::new();
+        for (top, node) in body.nodes().iter().enumerate() {
+            match node.name().value() {
+                "window" if first_arg(node) == Some(name) => sites.push(Site { top, inner: None }),
+                "breakpoint" => {
+                    for (inner, child) in node
+                        .children()
+                        .map_or(&[][..], KdlDocument::nodes)
+                        .iter()
+                        .enumerate()
+                    {
+                        if child.name().value() == "window" && first_arg(child) == Some(name) {
+                            sites.push(Site {
+                                top,
+                                inner: Some(inner),
+                            });
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        sites
+    }
+
+    /// Removes every definition of a window (a breakpoint left empty goes
+    /// too).
+    pub(crate) fn remove_window(&mut self, name: &str) {
+        let style = self.style.clone();
+        let sites = Self::window_sites(self.body(), name);
+        for site in sites.into_iter().rev() {
+            let body = self.body();
+            match site.inner {
+                None => remove_node(body, site.top, &style),
+                Some(inner) => {
+                    let bp = &mut body.nodes_mut()[site.top];
+                    let block = bp.ensure_children();
+                    remove_node(block, inner, &style);
+                    if block.nodes().is_empty() {
+                        remove_node(body, site.top, &style);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Copies the default definitions of a window into a sparse file.
+    fn copy_default_window(&mut self, name: &str) -> Result<(), EditError> {
+        if !self.sparse {
+            return Err(invalid(format!("the layout has no window `{name}`")));
+        }
+        let defaults = KdlDocument::parse_v2(DEFAULT_LAYOUT_KDL)
+            .map_err(|e| invalid(format!("the default layout does not parse: {e}")))?;
+        let default_body = defaults.nodes()[0]
+            .children()
+            .ok_or_else(|| invalid("the default layout is empty"))?;
+        let sites = Self::window_sites(default_body, name);
+        if sites.is_empty() {
+            return Err(invalid(format!("the layout has no window `{name}`")));
+        }
+        let pad = self.style.pad(1);
+        let mut text = String::new();
+        for site in sites {
+            let mut node = default_body.nodes()[site.top].clone();
+            if let Some(inner) = site.inner {
+                // Keep only this window inside the breakpoint.
+                let block = node.ensure_children();
+                let keep = block.nodes()[inner].clone();
+                let count = block.nodes().len();
+                for i in (0..count).rev() {
+                    if i != inner {
+                        remove_node(block, i, &Style::default());
+                    }
+                }
+                debug_assert!(same_node(&block.nodes()[0], &keep));
+            }
+            if let Some(fmt) = node.format_mut() {
+                fmt.leading.clone_from(&pad);
+                fmt.trailing.clear();
+                if !fmt.terminator.ends_with('\n') {
+                    fmt.terminator = "\n".to_owned();
+                }
+            }
+            text.push_str(&node.to_string());
+        }
+        if self.style.nl == "\r\n" {
+            text = text.replace("\r\n", "\n").replace('\n', "\r\n");
+        }
+        let style = self.style.clone();
+        append_rendered(self.body(), 1, &text, &style);
+        Ok(())
+    }
+
+    /// The node a [`LayoutNodeRef`] addresses, copying the window from the
+    /// defaults first when the file does not define it.
+    fn node_mut(&mut self, node: &LayoutNodeRef) -> Result<&mut KdlNode, EditError> {
+        if Self::window_sites(self.body(), &node.window).is_empty() {
+            self.copy_default_window(&node.window)?;
+        }
+        let sites = Self::window_sites(self.body(), &node.window);
+        let site = *sites.get(node.breakpoint as usize).ok_or_else(|| {
+            invalid(format!(
+                "window `{}` has no breakpoint {}",
+                node.window, node.breakpoint
+            ))
+        })?;
+        let body = self.body();
+        let window = match site.inner {
+            None => &mut body.nodes_mut()[site.top],
+            Some(inner) => &mut body.nodes_mut()[site.top].ensure_children().nodes_mut()[inner],
+        };
+        let mut current = window
+            .children_mut()
+            .as_mut()
+            .and_then(|c| c.nodes_mut().first_mut())
+            .ok_or_else(|| invalid(format!("window `{}` is empty", node.window)))?;
+        for &index in &node.path {
+            current = current
+                .children_mut()
+                .as_mut()
+                .and_then(|c| c.nodes_mut().get_mut(index as usize))
+                .ok_or_else(|| invalid(format!("no node at path {:?}", node.path)))?;
+        }
+        Ok(current)
+    }
+
+    // --- toolbars and menus ------------------------------------------------
+
+    /// `(block path, index)` of every top-level `<kind> "<name>"` node and
+    /// those inside `<kind>s { … }` blocks: `None` = the body itself.
+    fn named_sites(body: &KdlDocument, kind: &str, name: &str) -> Vec<(Option<usize>, usize)> {
+        let plural = format!("{kind}s");
+        let mut sites = Vec::new();
+        for (top, node) in body.nodes().iter().enumerate() {
+            let node_name = node.name().value();
+            if node_name == kind && first_arg(node) == Some(name) {
+                sites.push((None, top));
+            } else if node_name == plural {
+                for (inner, child) in node
+                    .children()
+                    .map_or(&[][..], KdlDocument::nodes)
+                    .iter()
+                    .enumerate()
+                {
+                    if child.name().value() == kind && first_arg(child) == Some(name) {
+                        sites.push((Some(top), inner));
+                    }
+                }
+            }
+        }
+        sites
+    }
+
+    fn set_toolbar(&mut self, name: &str, items: &[ToolbarItem]) -> Result<(), EditError> {
+        if !is_kebab(name) {
+            return Err(invalid(format!("invalid toolbar name `{name}`")));
+        }
+        let style = self.style.clone();
+        let sites = Self::named_sites(self.body(), "toolbar", name);
+        let Some(&(block, index)) = sites.last() else {
+            let text = render::toolbar(name, items, 1, &style)
+                .ok_or_else(|| invalid("toolbar item arguments must be plain values"))?;
+            append_rendered(self.body(), 1, &text, &style);
+            return Ok(());
+        };
+        let depth = if block.is_some() { 2 } else { 1 };
+        let body = self.body();
+        let (parent, index) = match block {
+            None => (body, index),
+            Some(top) => (body.nodes_mut()[top].ensure_children(), index),
+        };
+        let node = &mut parent.nodes_mut()[index];
+        let multiline = node
+            .children()
+            .and_then(|c| c.nodes().first())
+            .is_some_and(|first| first.format().is_some_and(|f| f.leading.contains('\n')));
+        if !multiline {
+            let text = render::toolbar(name, items, depth, &style)
+                .ok_or_else(|| invalid("toolbar item arguments must be plain values"))?;
+            replace_rendered(parent, index, &text);
+            return Ok(());
+        }
+        // Reuse the existing item nodes (with their comments) where the item
+        // stays; render new ones.
+        let block = node.ensure_children();
+        let mut old: Vec<Option<KdlNode>> = block.nodes_mut().drain(..).map(Some).collect();
+        let mut nodes = Vec::with_capacity(items.len());
+        for item in items {
+            let text = render::toolbar_item(item, depth + 1, &style)
+                .ok_or_else(|| invalid("toolbar item arguments must be plain values"))?;
+            let fresh = parse_rendered(&text).remove(0);
+            let reused = old
+                .iter_mut()
+                .enumerate()
+                .find(|(_, slot)| slot.as_ref().is_some_and(|n| same_node(n, &fresh)))
+                .and_then(|(i, slot)| {
+                    slot.take().map(|mut n| {
+                        // The first child's leading starts with the line break
+                        // after `{`; elsewhere a leading break is a blank line.
+                        if i == 0
+                            && let Some(fmt) = n.format_mut()
+                        {
+                            let cut = if fmt.leading.starts_with("\r\n") {
+                                2
+                            } else {
+                                1
+                            };
+                            if fmt.leading.starts_with(['\r', '\n']) {
+                                fmt.leading.drain(..cut);
+                            }
+                        }
+                        n
+                    })
+                });
+            nodes.push(reused.unwrap_or(fresh));
+        }
+        for (i, node) in nodes.iter_mut().enumerate() {
+            let fmt = node.format().cloned().unwrap_or_default();
+            let mut fmt = fmt;
+            if i == 0 {
+                fmt.leading.insert_str(0, style.nl);
+            }
+            if !fmt.terminator.contains('\n') && !fmt.trailing.contains('\n') {
+                fmt.terminator = style.nl.to_owned();
+            }
+            node.set_format(fmt);
+        }
+        *block.nodes_mut() = nodes;
+        if block.nodes().is_empty() {
+            let fmt = block.format().cloned().unwrap_or_default();
+            let mut fmt = fmt;
+            fmt.leading = style.nl.to_owned();
+            fmt.trailing = style.pad(depth);
+            block.set_format(fmt);
+        }
+        Ok(())
+    }
+
+    // --- key bindings ------------------------------------------------------
+
+    fn keys_blocks(body: &KdlDocument, context: &str) -> Vec<usize> {
+        body.nodes()
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| {
+                n.name().value() == "keys" && str_prop(n, "context").unwrap_or("global") == context
+            })
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Sets (`Some`) or removes (`None`) the binding of `key` in `context`.
+    pub(crate) fn set_binding(
+        &mut self,
+        context: &str,
+        key: &str,
+        action: Option<(&String, &Vec<Value>)>,
+    ) -> Result<(), EditError> {
+        if context != "global" && !is_kebab(context) {
+            return Err(invalid(format!("invalid key context `{context}`")));
+        }
+        let key = normalize_key(key).map_err(invalid)?;
+        let style = self.style.clone();
+        let blocks = Self::keys_blocks(self.body(), context);
+        let mut matches: Vec<(usize, usize)> = Vec::new();
+        for &b in &blocks {
+            let block = &self.body().nodes()[b];
+            for (i, child) in block
+                .children()
+                .map_or(&[][..], KdlDocument::nodes)
+                .iter()
+                .enumerate()
+            {
+                let is_binding = matches!(child.name().value(), "bind" | "unbind");
+                if is_binding
+                    && first_arg(child).and_then(|k| normalize_key(k).ok()) == Some(key.clone())
+                {
+                    matches.push((b, i));
+                }
+            }
+        }
+        match action {
+            Some((action, args)) => {
+                let text = render::bind(&key, action, args, 2, &style)
+                    .ok_or_else(|| invalid("binding arguments must be plain values"))?;
+                if let Some(&(b, i)) = matches.last() {
+                    let block = self.body().nodes_mut()[b].ensure_children();
+                    replace_rendered(block, i, &text);
+                } else {
+                    self.append_binding(&blocks, context, &text);
+                }
+            }
+            None => {
+                let defaults_bind = self.sparse
+                    && default_layout()
+                        .keys
+                        .iter()
+                        .any(|k| k.context == context && k.key == key);
+                let mut emptied = Vec::new();
+                for &(b, i) in matches.iter().rev() {
+                    let block = self.body().nodes_mut()[b].ensure_children();
+                    remove_node(block, i, &style);
+                    if block.nodes().is_empty() && !emptied.contains(&b) {
+                        emptied.push(b);
+                    }
+                }
+                if defaults_bind {
+                    let text = render::unbind(&key, 2, &style);
+                    self.append_binding(&blocks, context, &text);
+                } else {
+                    // Blocks this removal emptied go too (descending order).
+                    emptied.sort_unstable_by(|a, b| b.cmp(a));
+                    for b in emptied {
+                        remove_node(self.body(), b, &style);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn append_binding(&mut self, blocks: &[usize], context: &str, line: &str) {
+        let style = self.style.clone();
+        if let Some(&b) = blocks.last() {
+            let block = self.body().nodes_mut()[b].ensure_children();
+            append_rendered(block, 2, line, &style);
+        } else {
+            let text = render::keys_block(context, line, 1, &style);
+            append_rendered(self.body(), 1, &text, &style);
+        }
+    }
+
+    /// Appends rendered top-level nodes (depth 1).
+    pub(crate) fn append(&mut self, text: &str) {
+        let style = self.style.clone();
+        ensure_multiline(self.body(), 1, &style);
+        append_rendered(self.body(), 1, text, &style);
+    }
+
+    /// Appends a rendered line (depth 2) into the last `<section>` block,
+    /// creating the block when there is none.
+    pub(crate) fn append_in_section(&mut self, section: &str, line: &str) {
+        let style = self.style.clone();
+        let last = self
+            .body()
+            .nodes()
+            .iter()
+            .rposition(|n| n.name().value() == section && n.entries().is_empty());
+        match last {
+            Some(b) => {
+                let block = self.body().nodes_mut()[b].ensure_children();
+                append_rendered(block, 2, line, &style);
+            }
+            None => {
+                let text = render::section(section, line, 1, &style);
+                append_rendered(self.body(), 1, &text, &style);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn at(window: &str, breakpoint: u32, path: &[u32]) -> LayoutNodeRef {
+        LayoutNodeRef {
+            window: window.into(),
+            breakpoint,
+            path: path.to_vec(),
+        }
+    }
+
+    #[test]
+    fn errors_are_typed() {
+        let err = apply_layout_patches(Some("layout \"x\" {"), &[], "layout.kdl").unwrap_err();
+        assert!(matches!(&err, EditError::Config(errors) if !errors.is_empty()));
+        assert_eq!(ApiError::from(err).code, ErrorCode::Config);
+        let err = apply_layout_patches(
+            None,
+            &[LayoutPatch::SplitSizes {
+                node: at("nope", 0, &[]),
+                sizes: vec!["1fr".into()],
+            }],
+            "layout.kdl",
+        )
+        .unwrap_err();
+        assert_eq!(ApiError::from(err).code, ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn a_missing_file_becomes_a_sparse_file() {
+        let out = apply_layout_patches(
+            None,
+            &[LayoutPatch::AddKeyBinding {
+                context: "list".into(),
+                key: "E".into(),
+                action: "mail.archive".into(),
+                args: vec![],
+            }],
+            "layout.kdl",
+        )
+        .unwrap();
+        assert_eq!(
+            out,
+            format!(
+                "{}keys context=\"list\" {{\n        bind \"e\" \"mail.archive\"\n    }}\n}}\n",
+                NEW_LAYOUT.trim_end_matches("}\n").to_owned() + "    "
+            )
+        );
+        let layout = parse_layout_all(&out, "layout.kdl").unwrap();
+        assert!(
+            layout
+                .keys
+                .iter()
+                .any(|k| k.context == "list" && k.key == "e")
+        );
+    }
+
+    #[test]
+    fn non_scalar_arguments_are_refused() {
+        let err = apply_layout_patches(
+            None,
+            &[LayoutPatch::AddKeyBinding {
+                context: "list".into(),
+                key: "x".into(),
+                action: "view.toggle".into(),
+                args: vec![json!({"a": 1})],
+            }],
+            "layout.kdl",
+        )
+        .unwrap_err();
+        assert!(matches!(err, EditError::Invalid(_)));
+    }
+}
