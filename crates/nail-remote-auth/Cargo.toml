@@ -17,24 +17,34 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+# RFC 3339 times from the store (session idle / re-authentication checks).
+chrono.workspace = true
 # The login route and the session middleware.
 axum.workspace = true
 cookie.workspace = true
-# Passkeys (WebAuthn relying party; pure Rust, MIT / Apache-2.0).
-webauthn_rp.workspace = true
-# Passwords (Argon2id PHC strings) and TOTP (RFC 6238).
-argon2.workspace = true
-totp-rs.workspace = true
-# Tokens, device secrets, pairing codes.
+# Passkeys (WebAuthn relying party; pure Rust, MIT / Apache-2.0). The
+# relaxed JSON parsers accept what real browsers send (ADR 0036/0037).
+webauthn_rp = { workspace = true, features = ["serde_relaxed"] }
+# Passwords (Argon2id PHC strings) and TOTP (RFC 6238); secrets zeroized.
+argon2 = { workspace = true, features = ["zeroize"] }
+totp-rs = { workspace = true, features = ["zeroize"] }
+# Tokens, device secrets, pairing codes; CSRF tokens (HMAC-SHA-256).
 rand.workspace = true
 base64.workspace = true
 sha2.workspace = true
+hmac.workspace = true
 hex.workspace = true
 zeroize.workspace = true
+# Constant-time comparison of CSRF tokens (BSD-3-Clause; already in the
+# lock through the RustCrypto crates).
+subtle = "2.6.1"
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 tower.workspace = true
+# Software authenticator for the passkey tests (BSD-3-Clause; already in
+# the lock through webauthn_rp).
+ed25519-dalek = "2.2.0"
 
 [lints]
 workspace = true

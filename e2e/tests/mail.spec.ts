@@ -71,7 +71,7 @@ test("the reader shows the body in a sandboxed iframe with remote images blocked
   await expect(view.locator('[data-part="message-view.header.subject"]')).toContainText(
     "Your weekly garden digest",
   );
-  await expect(view.locator('[data-part="message-view.remote-content-banner"]')).toBeVisible();
+  await expect(page.getByRole("region", { name: "Remote content" })).toBeVisible();
 
   const iframe = view.locator('iframe[data-part="message-view.body"]');
   await expect(iframe).toHaveAttribute("sandbox", "");

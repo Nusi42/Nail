@@ -1,4 +1,5 @@
-//! Routes, static files, the blob endpoint and security headers.
+//! Routes, static files, the blob endpoint, the proxy route and security
+//! headers of the app origin.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,24 +12,50 @@ use axum::routing::{any, get, post};
 use axum::{Router, middleware};
 use nail_api::ErrorCode;
 use nail_core::Service;
+use nail_proxy::Proxy;
 use tower_http::services::{ServeDir, ServeFile};
-use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::TestControl;
-use crate::guard::{self, HostAllowlist};
+use crate::acme::AcmeChallenges;
+use crate::guard::{self, Guard, HostAllowlist};
+use crate::headers::{self, HeaderProfile, HeaderSet};
 use crate::ws;
-
-/// Content Security Policy of the app. Mirrors the desktop shell's
-/// (`app/src-tauri/tauri.conf.json`): scripts only from the bundle, the
-/// theme's generated `<style>` element needs inline styles, the reader
-/// iframe is `srcdoc` (it additionally carries its own stricter CSP).
-const APP_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
-     img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; \
-     frame-src 'self' blob: data:; object-src 'none'; base-uri 'none'; \
-     form-action 'none'; frame-ancestors 'none'";
 
 /// Blobs are raw mail: never rendered by the browser as a page.
 const BLOB_CSP: &str = "default-src 'none'; sandbox";
+
+/// Everything that shapes the app router.
+#[derive(Clone)]
+pub(crate) struct AppConfig {
+    pub(crate) ui_dir: Option<PathBuf>,
+    pub(crate) control: Option<Arc<dyn TestControl>>,
+    pub(crate) hosts: HostAllowlist,
+    pub(crate) profile: HeaderProfile,
+    pub(crate) tls: bool,
+    pub(crate) sandbox_origins: Vec<String>,
+    pub(crate) proxy: Option<Arc<Proxy>>,
+    pub(crate) acme: Option<AcmeChallenges>,
+}
+
+impl AppConfig {
+    /// Loopback plain HTTP on `port`, compat headers, no proxy.
+    pub(crate) fn loopback(
+        ui_dir: Option<PathBuf>,
+        port: u16,
+        control: Option<Arc<dyn TestControl>>,
+    ) -> Self {
+        Self {
+            ui_dir,
+            control,
+            hosts: HostAllowlist::new(port),
+            profile: HeaderProfile::Compat,
+            tls: false,
+            sandbox_origins: Vec::new(),
+            proxy: None,
+            acme: None,
+        }
+    }
+}
 
 /// The axum router for `service`, serving the UI from `ui_dir` (if any).
 ///
@@ -48,20 +75,40 @@ pub fn router_with_control(
     port: u16,
     control: Option<Arc<dyn TestControl>>,
 ) -> Router {
+    app_router(service, AppConfig::loopback(ui_dir, port, control))
+}
+
+/// `GET /api/proxy/{token}` answered by `proxy` (both origins).
+pub(crate) fn proxy_routes<S: Clone + Send + Sync + 'static>(proxy: Arc<Proxy>) -> Router<S> {
+    Router::new()
+        .route("/api/proxy/{token}", get(proxy_resource))
+        .with_state(proxy)
+}
+
+pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
     let mut api = Router::new()
         .route("/api/ws", get(ws::upgrade))
         .route("/api/blob/{hash}", get(blob));
-    if let Some(control) = control {
+    if let Some(control) = config.control {
         let test = Router::new()
             .route("/api/test/{command}", post(test_control))
             .with_state(control);
         api = api.merge(test);
     }
+    if let Some(proxy) = config.proxy {
+        api = api.merge(proxy_routes(proxy));
+    }
+    if let Some(challenges) = config.acme {
+        let acme = Router::new()
+            .route("/.well-known/acme-challenge/{token}", get(acme_challenge))
+            .with_state(challenges);
+        api = api.merge(acme);
+    }
     let api = api
         .route("/api/{*rest}", any(not_found))
         .with_state(service);
 
-    let app = match ui_dir {
+    let app = match config.ui_dir {
         Some(dir) => {
             let index = dir.join("index.html");
             api.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)))
@@ -69,26 +116,78 @@ pub fn router_with_control(
         None => api.fallback(not_found),
     };
 
+    let header_set = Arc::new(HeaderSet::app(
+        config.profile,
+        config.tls,
+        &config.sandbox_origins,
+    ));
     app.layer(middleware::from_fn_with_state(
-        HostAllowlist::new(port),
+        Guard {
+            hosts: config.hosts,
+            fetch_metadata: true,
+        },
         guard::check,
     ))
-    .layer(SetResponseHeaderLayer::if_not_present(
-        header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(APP_CSP),
-    ))
-    .layer(SetResponseHeaderLayer::overriding(
-        header::X_CONTENT_TYPE_OPTIONS,
-        HeaderValue::from_static("nosniff"),
-    ))
-    .layer(SetResponseHeaderLayer::overriding(
-        header::REFERRER_POLICY,
-        HeaderValue::from_static("no-referrer"),
-    ))
-    .layer(SetResponseHeaderLayer::overriding(
-        HeaderName::from_static("cross-origin-opener-policy"),
-        HeaderValue::from_static("same-origin"),
-    ))
+    .layer(middleware::from_fn_with_state(header_set, headers::apply))
+}
+
+/// `GET /api/proxy/{token}`: a remote resource through the proxy.
+async fn proxy_resource(State(proxy): State<Arc<Proxy>>, Path(token): Path<String>) -> Response {
+    match proxy.serve(&token).await {
+        Ok(resource) => {
+            let mut response = (
+                [
+                    (
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static(resource.content_type),
+                    ),
+                    (
+                        header::CACHE_CONTROL,
+                        HeaderValue::from_str(&resource.cache_control)
+                            .unwrap_or(HeaderValue::from_static("no-store")),
+                    ),
+                    // Fonts are CORS requests from opaque-origin documents;
+                    // the bytes are public and the token is the capability.
+                    (
+                        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                        HeaderValue::from_static("*"),
+                    ),
+                ],
+                resource.body,
+            )
+                .into_response();
+            for (name, value) in nail_proxy::RESPONSE_HEADERS {
+                response.headers_mut().insert(
+                    HeaderName::from_static(name),
+                    HeaderValue::from_static(value),
+                );
+            }
+            response
+        }
+        Err(err) => {
+            let status = StatusCode::from_u16(err.status()).unwrap_or(StatusCode::BAD_GATEWAY);
+            (
+                status,
+                [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+            )
+                .into_response()
+        }
+    }
+}
+
+/// `GET /.well-known/acme-challenge/{token}` (internet mode only).
+async fn acme_challenge(
+    State(challenges): State<AcmeChallenges>,
+    Path(token): Path<String>,
+) -> Response {
+    match challenges.get(&token) {
+        Some(key_authorization) => (
+            [(header::CONTENT_TYPE, "application/octet-stream")],
+            key_authorization,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn not_found() -> StatusCode {
@@ -162,4 +261,55 @@ async fn blob(State(service): State<Service>, Path(hash): Path<String>) -> Respo
         Body::from(bytes),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    fn service() -> (Service, tempfile::TempDir, tempfile::TempDir) {
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let mut options = nail_core::ServiceOptions::new(data.path(), config.path());
+        options.watch_config = false;
+        (Service::open(options).unwrap(), data, config)
+    }
+
+    async fn status(router: Router, path: &str) -> (StatusCode, Vec<u8>) {
+        use http_body_util::BodyExt;
+        let request = Request::get(path)
+            .header("Host", "127.0.0.1:4780")
+            .body(Body::empty())
+            .unwrap();
+        let response = router.oneshot(request).await.unwrap();
+        let status = response.status();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        (status, body.to_vec())
+    }
+
+    #[tokio::test]
+    async fn acme_challenges_are_served_only_while_configured() {
+        let (service, _d, _c) = service();
+        let without = app_router(service.clone(), AppConfig::loopback(None, 4780, None));
+        assert_eq!(
+            status(without, "/.well-known/acme-challenge/t1").await.0,
+            StatusCode::NOT_FOUND
+        );
+
+        let challenges = AcmeChallenges::new();
+        challenges.insert_for_tests("t1", "t1.thumbprint");
+        let mut config = AppConfig::loopback(None, 4780, None);
+        config.acme = Some(challenges);
+        let with = app_router(service, config);
+        assert_eq!(
+            status(with.clone(), "/.well-known/acme-challenge/t1").await,
+            (StatusCode::OK, b"t1.thumbprint".to_vec())
+        );
+        assert_eq!(
+            status(with, "/.well-known/acme-challenge/other").await.0,
+            StatusCode::NOT_FOUND
+        );
+    }
 }

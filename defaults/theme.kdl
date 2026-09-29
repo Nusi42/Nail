@@ -312,11 +312,6 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
         color "$color.fg-muted"
     }
-    part "message-view.remote-content-banner" {
-        padding "$space.xs" "$space.lg"
-        font-size "$font-size.sm"
-        background-color "$color.bg-raised"
-    }
     part "message-view.body" {
         flex-grow 1
         border "none"
@@ -2315,4 +2310,280 @@ theme "default" mode="system" {
     part "security-autocrypt.code.warning" { color "$color.warning"; }
     part "security-autocrypt.error" { color "$color.danger"; }
     part "form.file" { font "inherit"; }
+
+    // ---- Remote UI and privacy: login, pairing, users, devices, audit, remote content (ADR 0039) ----
+
+    part "remote-login" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        max-width 420
+        margin "$space.xl" "auto"
+        padding "$space.lg"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+        box-shadow "$shadow.raised"
+    }
+    part "remote-login.title" { margin 0; font-size "$font-size.xl"; }
+    part "remote-login.intro" { margin 0; color "$color.fg-muted"; }
+    part "remote-login.form" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "remote-login.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-login.notices" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "remote-login.notice" { margin 0; }
+    part "remote-login.notice:error" { color "$color.danger"; }
+    part "remote-login.wait" { color "$color.warning"; }
+    part "remote-login.note" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "remote-login.fingerprint" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "remote-reauth" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+    }
+    part "remote-reauth.title" { margin 0; font-size "$font-size.lg"; }
+    part "remote-fingerprint" {
+        font-family "$font.mono"
+        font-size "$font-size.sm"
+        overflow-wrap "anywhere"
+    }
+    part "remote-qr" { width 180; height 180; }
+    part "remote-qr.background" { fill "#ffffff"; }
+    part "remote-qr.modules" { fill "#000000"; }
+    part "remote-confirm" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "remote-confirm.text" { color "$color.warning"; }
+
+    part "remote-settings" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "remote-users" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "remote-devices" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "remote-audit" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "remote-allows" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "remote-pair" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+    }
+    part "remote-settings.form" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "remote-settings.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-settings.status" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "remote-settings.state" { font-weight "$font-weight.medium"; }
+    part "remote-settings.state:failed" { color "$color.danger"; }
+    part "remote-settings.state:running" { color "$color.success"; }
+    part "remote-settings.urls" { margin 0; padding-left "$space.lg"; }
+    part "remote-settings.url.text" { font-family "$font.mono"; overflow-wrap "anywhere"; }
+    part "remote-settings.certificate" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "remote-settings.issues" { margin 0; color "$color.danger"; }
+    part "remote-settings.error" { color "$color.danger"; }
+    part "remote-settings.warning" { color "$color.warning"; }
+    part "remote-settings.notice:error" { color "$color.danger"; }
+    part "remote-settings.internet" { color "$color.fg-muted"; }
+    part "form.hint:locked" { color "$color.fg-muted"; }
+
+    part "remote-users.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "remote-users.select" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "inherit"
+        background-color "transparent"
+    }
+    part "remote-users.select:hover" { background-color "$color.bg-subtle"; }
+    part "remote-users.select:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "remote-users.select:disabled" { opacity "$opacity.muted"; }
+    part "remote-users.detail" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "remote-users.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-users.meta" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "remote-users.locked" { color "$color.danger"; }
+    part "remote-users.badge" {
+        padding "$space.xxs" "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-size "$font-size.xs"
+    }
+    part "remote-users.notice:error" { color "$color.danger"; }
+    part "remote-totp" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "remote-totp.secret" { font-family "$font.mono"; overflow-wrap "anywhere"; }
+    part "remote-passkeys" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "remote-passkeys.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "remote-passkeys.meta" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+
+    part "remote-devices.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "remote-devices.item" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.xs" 0
+        border-bottom "$border.thin"
+    }
+    part "remote-devices.item:revoked" { opacity "$opacity.muted"; }
+    part "remote-devices.meta" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "remote-devices.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-devices.badge" {
+        padding "$space.xxs" "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-size "$font-size.xs"
+    }
+    part "remote-devices.error" { color "$color.danger"; }
+    part "remote-sessions.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "remote-sessions.item" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.xs" 0
+        border-bottom "$border.thin"
+    }
+    part "remote-sessions.item:ended" { opacity "$opacity.muted"; }
+    part "remote-sessions.meta" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "remote-pairing" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "remote-pairing.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+
+    part "remote-pair.form" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "remote-pair.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-pair.code-panel" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "remote-pair.code" {
+        font-family "$font.mono"
+        font-size "$font-size.xl"
+        letter-spacing "0.15em"
+        overflow-wrap "anywhere"
+    }
+    part "remote-pair.state:used" { color "$color.success"; }
+    part "remote-pair.state:expired" { color "$color.warning"; }
+    part "remote-pair.state:cancelled" { color "$color.fg-muted"; }
+    part "remote-pair.error" { color "$color.danger"; }
+
+    part "remote-audit.toolbar" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; align-items "flex-end"; }
+    part "remote-audit.table" { width "100%"; font-size "$font-size.sm"; }
+    part "remote-audit.row" { border-bottom "$border.thin"; }
+    part "remote-audit.outcome[outcome=\"failure\"]" { color "$color.danger"; }
+    part "remote-audit.outcome[outcome=\"denied\"]" { color "$color.danger"; }
+    part "remote-audit.outcome[outcome=\"success\"]" { color "$color.success"; }
+    part "remote-audit.error" { color "$color.danger"; }
+
+    part "remote-content" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.sm" "$space.md"
+        background-color "$color.bg-subtle"
+    }
+    part "remote-content:blocked" { border-left "3px solid $color.warning"; }
+    part "remote-content:allowed" { border-left "3px solid $color.success"; }
+    part "remote-content.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-content.error" { color "$color.danger"; }
+    part "remote-allows.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "remote-allows.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "remote-allows.value" { font-family "$font.mono"; overflow-wrap "anywhere"; }
+    part "remote-allows.time" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "remote-allows.error" { color "$color.danger"; }
+
+    part "remote-alerts" {
+        position "fixed"
+        right 16
+        bottom 16
+        z-index 1001
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        max-width 420
+    }
+    part "remote-alerts.toast" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "remote-alerts.toast[kind=\"lockout\"]" { border-left "3px solid $color.danger"; }
+    part "remote-alerts.toast[kind=\"new-device\"]" { border-left "3px solid $color.warning"; }
+    part "remote-alerts.title" { font-weight "$font-weight.bold"; }
+    part "remote-alerts.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
 }

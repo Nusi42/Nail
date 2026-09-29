@@ -1,0 +1,86 @@
+# Stalwart for Nail's interop tests (scripts/interop): IMAP (143, 993),
+# POP3 (110, 995), submission (587 STARTTLS, 465 TLS), ManageSieve (4190),
+# one account ada@example.org / nail-interop in an in-memory directory.
+# Certificates from gen-certs.sh are mounted at /opt/stalwart/etc/certs.
+#
+# Written for the Stalwart 0.1x configuration format; the image tag is set
+# in .github/workflows/ci.yml (STALWART_IMAGE). Not verified locally (no
+# Docker on the development machine): check the job log after a Stalwart
+# upgrade.
+
+[server]
+hostname = "localhost"
+
+[server.listener.smtp]
+bind = ["[::]:25"]
+protocol = "smtp"
+
+[server.listener.submission]
+bind = ["[::]:587"]
+protocol = "smtp"
+
+[server.listener.submissions]
+bind = ["[::]:465"]
+protocol = "smtp"
+tls.implicit = true
+
+[server.listener.imap]
+bind = ["[::]:143"]
+protocol = "imap"
+
+[server.listener.imaptls]
+bind = ["[::]:993"]
+protocol = "imap"
+tls.implicit = true
+
+[server.listener.pop3]
+bind = ["[::]:110"]
+protocol = "pop3"
+
+[server.listener.pop3s]
+bind = ["[::]:995"]
+protocol = "pop3"
+tls.implicit = true
+
+[server.listener.sieve]
+bind = ["[::]:4190"]
+protocol = "managesieve"
+
+[certificate.default]
+cert = "%{file:/opt/stalwart/etc/certs/server.pem}%"
+private-key = "%{file:/opt/stalwart/etc/certs/server.key}%"
+default = true
+
+[storage]
+data = "rocksdb"
+fts = "rocksdb"
+blob = "rocksdb"
+lookup = "rocksdb"
+directory = "memory"
+
+[store.rocksdb]
+type = "rocksdb"
+path = "/opt/stalwart/data"
+compression = "lz4"
+
+[directory.memory]
+type = "memory"
+
+# `class` (older releases) and `type` (newer) name the principal kind; the
+# unused key only produces a warning.
+[[directory.memory.principals]]
+name = "ada@example.org"
+class = "individual"
+type = "individual"
+secret = "nail-interop"
+email = ["ada@example.org"]
+
+[authentication.fallback-admin]
+user = "admin"
+secret = "nail-interop-admin"
+
+[tracer.stdout]
+type = "stdout"
+level = "info"
+ansi = false
+enable = true

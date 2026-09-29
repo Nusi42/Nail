@@ -1,17 +1,29 @@
-//! Widgets of M2b WP43 (remote UI and privacy UI, ADR 0036): remote-UI
-//! settings, pairing, sessions and devices, the security audit view and
-//! the reader's "load remote content" bar. Rendered by
-//! `ui/src/features/remote/`.
-//!
-//! Empty after WP40: WP43 adds its kinds here (and the same kinds in
-//! `ui/src/features/remote/index.ts`).
+//! Widgets of M2b WP43 (remote UI and privacy UI, ADRs 0036 and 0039):
+//! remote-UI settings, users and credentials, devices and sessions, the
+//! security audit view, the reader's "load remote content" bar and the
+//! privacy allow-lists. Rendered by `ui/src/features/remote/`.
 
 use super::WidgetSpec;
 #[allow(unused_imports)]
 use super::{OptionType, future_widget, widget};
 
-/// Widgets of this feature.
-pub(crate) const WIDGETS: &[WidgetSpec] = &[];
+/// Widgets of this feature (none takes options).
+///
+/// `remote-settings`: Settings → Remote access (enable, bind address,
+/// TLS, allowed networks, session limits, status and certificate);
+/// `remote-users`: users and their credentials (password, TOTP,
+/// passkeys); `remote-devices`: devices, sessions and pending pairing
+/// codes; `remote-audit`: the security log; `remote-content`: the
+/// reader bar for the selected message; `remote-content-allows`:
+/// Settings → Privacy (remote-content allow-lists).
+pub(crate) const WIDGETS: &[WidgetSpec] = &[
+    widget("remote-settings", &[], &[], false),
+    widget("remote-users", &[], &[], false),
+    widget("remote-devices", &[], &[], false),
+    widget("remote-audit", &[], &[], false),
+    widget("remote-content", &[], &[], false),
+    widget("remote-content-allows", &[], &[], false),
+];
 
 #[cfg(test)]
 mod tests {
@@ -22,5 +34,19 @@ mod tests {
             assert!(spec.kind.starts_with("remote-"), "{}", spec.kind);
             assert!(crate::widgets::find(spec.kind).is_some());
         }
+    }
+
+    #[test]
+    fn remote_widgets_are_registered() {
+        let kinds = super::WIDGETS
+            .iter()
+            .map(|w| format!("            {}\n", w.kind))
+            .collect::<String>();
+        let text = format!(
+            "layout \"x\" extends=\"default\" {{\n    window \"main\" {{\n        stack {{\n{kinds}        }}\n    }}\n}}\n"
+        );
+        crate::parse_layout(&text, "layout.kdl").unwrap();
+        let bad = text.replace("remote-audit", "remote-audit bogus=#true");
+        assert!(crate::parse_layout(&bad, "layout.kdl").is_err());
     }
 }

@@ -1,0 +1,83 @@
+# cargo-deny configuration (plan M2b WP44; scope decisions of M2 in
+# docs/plan.md section 7). CI runs `cargo deny --locked check` on every push
+# (.github/workflows/ci.yml, job "deny"). Locally:
+#
+#   cargo install cargo-deny --locked
+#   cargo deny check                  # advisories need the RustSec database (network)
+#   cargo deny check licenses bans sources   # offline
+#
+# Rules: Nail is closed source for now, so no GPL / LGPL / AGPL dependency
+# (MPL-2.0 is fine: file-level copyleft, used unmodified). No OpenSSL and no
+# aws-lc: TLS uses rustls with ring (ADRs 0014, 0029, 0036).
+
+[graph]
+# Every platform Nail builds for (Windows first; Linux runs the interop job
+# and the headless server later).
+targets = [
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+]
+all-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+version = 2
+# Unmaintained crates are reported for crates we depend on directly.
+unmaintained = "workspace"
+yanked = "deny"
+ignore = [
+    # rsa 0.9: Marvin attack, a timing side channel in RSA decryption
+    # (RUSTSEC-2023-0071). There is no fixed release in the RustCrypto
+    # generation rPGP (nail-pgp) and nail-smime build on; both decrypt with
+    # blinding, which the advisory names as the mitigation, and Nail never
+    # acts as a network-facing RSA decryption oracle (ADR 0034; follow-up
+    # recorded in docs/plan.md "M2a follow-ups"). Remove when rsa 0.10 is
+    # usable by both crates.
+    { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 Marvin timing channel: no fix in this RustCrypto generation; decryption is blinded (ADR 0034)" },
+]
+
+[licenses]
+version = 2
+# Permissive licences plus MPL-2.0 only. Anything GPL-family is rejected
+# because it is not listed; an `A OR B` expression passes when one side is.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "bzip2-1.0.6",
+    "MPL-2.0",
+]
+confidence-threshold = 0.93
+
+[licenses.private]
+# Nail's own crates (license = "LicenseRef-Proprietary", publish = false).
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+# Workspace path dependencies carry no version.
+allow-wildcard-paths = true
+deny = [
+    { crate = "openssl", reason = "no OpenSSL build dependency (M2 scope decisions)" },
+    { crate = "openssl-sys", reason = "no OpenSSL build dependency (M2 scope decisions)" },
+    { crate = "aws-lc-rs", reason = "TLS uses ring (ADR 0014)" },
+    { crate = "aws-lc-sys", reason = "TLS uses ring (ADR 0014)" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

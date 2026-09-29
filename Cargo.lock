@@ -214,6 +214,7 @@ dependencies = [
  "blake2 0.11.0",
  "cpufeatures 0.3.1",
  "password-hash 0.6.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -4150,6 +4151,8 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "windows",
+ "windows-registry",
 ]
 
 [[package]]
@@ -4390,19 +4393,22 @@ name = "nail-proxy"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
- "hickory-resolver",
  "hmac 0.13.0",
  "ipnet",
  "nail-api",
- "nail-testkit-net",
+ "nail-proxy",
  "pretty_assertions",
  "rand 0.8.8",
+ "rcgen",
  "reqwest",
+ "rustls",
  "sha2 0.11.0",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-rustls",
  "tracing",
  "url",
+ "zeroize",
 ]
 
 [[package]]
@@ -4412,8 +4418,11 @@ dependencies = [
  "argon2 0.6.0",
  "axum",
  "base64 0.23.1",
+ "chrono",
  "cookie",
+ "ed25519-dalek",
  "hex",
+ "hmac 0.13.0",
  "nail-api",
  "nail-store",
  "pretty_assertions",
@@ -4421,6 +4430,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "subtle",
  "thiserror 2.0.21",
  "tokio",
  "totp-rs",
@@ -4464,16 +4474,23 @@ name = "nail-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.23.1",
+ "chrono",
  "futures-util",
+ "hex",
  "http-body-util",
  "instant-acme",
+ "ipnet",
  "nail-api",
  "nail-core",
  "nail-proxy",
+ "nail-store",
  "pretty_assertions",
  "rcgen",
  "rustls",
+ "serde",
  "serde_json",
+ "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -4482,6 +4499,7 @@ dependencies = [
  "tower",
  "tower-http 0.7.1",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -8709,6 +8727,7 @@ dependencies = [
  "rand 0.9.5",
  "rsa",
  "serde",
+ "serde_json",
  "url",
 ]
 

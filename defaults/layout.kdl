@@ -28,13 +28,15 @@ layout "default" {
                         row "{subject}"
                         row "{preview}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
                         // Signature / encryption and sender check badges, then
                         // warnings about deceptive links and risky attachments.
                         security-message id="message-security"
                         security-warnings id="message-warnings"
+                        // Remote images stay blocked until you allow them.
+                        remote-content id="message-remote-content"
                         message-view id="message" headers="from to cc date"
                     }
                 }
@@ -62,11 +64,12 @@ layout "default" {
                         row "{from.name}  {date | relative}"
                         row "{subject}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
                         security-message id="message-security"
                         security-warnings id="message-warnings"
+                        remote-content id="message-remote-content"
                         message-view id="message" headers="from date"
                     }
                 }
@@ -105,6 +108,11 @@ layout "default" {
             security-identities id="security-identities" label="@security.settings.tab.identities"
             security-settings id="security-settings" label="@security.settings.tab.protection"
             security-autocrypt id="security-autocrypt" label="@security.settings.tab.autocrypt"
+            remote-settings id="remote-settings" label="@remote.settings.tab"
+            remote-users id="remote-users" label="@remote.settings.tab.users"
+            remote-devices id="remote-devices" label="@remote.settings.tab.devices"
+            remote-audit id="remote-audit" label="@remote.settings.tab.audit"
+            remote-content-allows id="remote-content-allows" label="@remote.settings.tab.privacy"
             stack id="customize" label="@settings.tab.customize" sizes="auto 1fr" {
                 toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 config-errors id="settings-config-errors"
@@ -150,6 +158,9 @@ layout "default" {
         action "customize.merge"  label="@customize.action.merge"
         action "customize.errors" label="@customize.action.errors"
         action "security.autocrypt.import" label="@security.action.autocrypt-import"
+        action "remote.pair"      label="@remote.action.pair"
+        action "remote.content.allow" label="@remote.action.load-content"
+        action "remote.logout"    label="@remote.action.logout"
     }
 
     keys context="list" {

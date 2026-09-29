@@ -146,7 +146,6 @@ message-view-label = Message
 message-view-empty = Select a message to read it.
 message-view-loading = Loading message…
 message-view-body-title = Message content: { $subject }
-message-view-remote-blocked = Remote content in this message was blocked to protect your privacy.
 message-view-attachments = Attachments
 message-view-attachment-unnamed = Unnamed attachment
 message-no-subject = (no subject)

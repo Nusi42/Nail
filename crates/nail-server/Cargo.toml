@@ -25,6 +25,16 @@ tokio-rustls.workspace = true
 rcgen.workspace = true
 instant-acme.workspace = true
 nail-proxy.workspace = true
+# The certificate record lives in the store's settings (ADR 0036:
+# `REMOTE_UI_CERTIFICATE_KEY`, owned by nail-server); its key in the keychain.
+nail-store.workspace = true
+serde.workspace = true
+base64.workspace = true
+sha2.workspace = true
+hex.workspace = true
+chrono.workspace = true
+ipnet.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 nail-core = { workspace = true, features = ["demo"] }
@@ -33,6 +43,7 @@ pretty_assertions.workspace = true
 tower.workspace = true
 tokio-tungstenite.workspace = true
 http-body-util = "0.1.5"
+nail-proxy = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

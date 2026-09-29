@@ -3,16 +3,24 @@
  * (ADR 0036), used by `MockTransport` (`../../api/mock.ts` routes exactly
  * these requests here). State lives in `data.features.remote`.
  *
- * Like the core after WP40: settings (validated, internet mode refused),
- * users, devices, sessions, pairing codes, the audit log and the
- * remote-content allow-lists work; password, TOTP, pairing-code creation
- * and certificate requests answer `unsupported` until WP41 / WP45. WP43
- * extends this mock for its UI.
+ * WP43 made it behave like the core after WP45 so the UI can be built and
+ * tested against it: settings (validated, internet mode refused; a mock
+ * status that is `running` while enabled), users, passwords, TOTP
+ * enrollment, pairing codes, devices, sessions, the audit log, the
+ * certificate and the remote-content allow-lists. The browser side of the
+ * login protocol (`POST /api/auth`) is `./mockAuth.ts`, on the same state.
+ *
+ * Secrets are kept in plain text in `secrets` — this is a test double; the
+ * real store keeps only Argon2id hashes, `keychain:` references and
+ * SHA-256 hashes.
  */
 import type {
+  MessageBody,
   PairingCode,
   RemoteAuditEntry,
+  RemoteCertificateInfo,
   RemoteContentAllow,
+  RemoteContentInfo,
   RemoteContentScope,
   RemoteDevice,
   RemoteGrant,
@@ -24,6 +32,7 @@ import type {
   Response,
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { normalizePairingCode, settingsIssues } from "./model";
 
 /** The requests this feature answers. */
 export const REMOTE_REQUESTS = [
@@ -62,6 +71,27 @@ export function isRemoteRequest(request: Request): request is RemoteRequest {
   return (REMOTE_REQUESTS as readonly string[]).includes(request.type);
 }
 
+/** The TOTP code the mock accepts (it does not run RFC 6238). */
+export const MOCK_TOTP_CODE = "123456";
+/** Failed logins before the mock locks a user or an address out. */
+export const MOCK_MAX_FAILURES = 5;
+/** Lockout length of the mock, in seconds. */
+export const MOCK_LOCKOUT_SECS = 300;
+/** Shortest password the mock accepts. */
+export const MOCK_MIN_PASSWORD = 12;
+
+/** Test-double secrets (see the module docs). */
+export interface RemoteMockSecrets {
+  /** User id → password. */
+  passwords: Record<string, string>;
+  /** User id → TOTP secret, `confirmed` once enrolled. */
+  totp: Record<string, { secret: string; confirmed: boolean }>;
+  /** Pairing id → the code. */
+  pairingCodes: Record<string, string>;
+  /** WebAuthn credential id → passkey id. */
+  credentials: Record<string, string>;
+}
+
 /** Mock-core state of this feature. */
 export interface RemoteMockState {
   settings: RemoteUiSettings;
@@ -71,6 +101,17 @@ export interface RemoteMockState {
   pairing: PairingCode[];
   audit: RemoteAuditEntry[];
   allows: RemoteContentAllow[];
+  /** The served certificate (self-signed), regenerated on request. */
+  certificate: RemoteCertificateInfo;
+  secrets: RemoteMockSecrets;
+  /** Failed login attempts per key (`ip:<addr>` / `user:<name>`). */
+  failures: Record<string, number>;
+  /** Locked-out addresses → until (RFC 3339). */
+  lockedIps: Record<string, string>;
+  /** Remote resources per message id (default: 3 for blocked messages). */
+  resources: Record<string, number>;
+  /** Behaviour switches: requests answered `unsupported` (as before WP45). */
+  unsupported: RemoteRequest["type"][];
 }
 
 /** Defaults as the core has them (`RemoteUiSettings::default`). */
@@ -95,6 +136,32 @@ export function defaultRemoteUiSettings(): RemoteUiSettings {
   };
 }
 
+const HEX = "0123456789ABCDEF";
+/** Pairing-code alphabet (`nail_remote_auth::pairing::ALPHABET`): no 0/O, 1/I/L, U/V. */
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTWXYZ23456789";
+const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function randomFrom(alphabet: string, length: number): string {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
+/** A fresh self-signed certificate record (random fingerprint). */
+export function mockCertificate(
+  names: readonly string[] = ["nail-desktop.local"],
+): RemoteCertificateInfo {
+  const from = new Date();
+  const until = new Date(from.getTime() + 365 * 24 * 3600 * 1000);
+  return {
+    source: "self-signed",
+    fingerprint_sha256: randomFrom(HEX, 64),
+    subject_names: [...names],
+    not_before: stamp(from),
+    not_after: stamp(until),
+  };
+}
+
 export function createRemoteMockState(): RemoteMockState {
   return {
     settings: defaultRemoteUiSettings(),
@@ -104,10 +171,16 @@ export function createRemoteMockState(): RemoteMockState {
     pairing: [],
     audit: [],
     allows: [],
+    certificate: mockCertificate(),
+    secrets: { passwords: {}, totp: {}, pairingCodes: {}, credentials: {} },
+    failures: {},
+    lockedIps: {},
+    resources: {},
+    unsupported: [],
   };
 }
 
-/** Not running until WP45; internet mode locked (the pentest gate). */
+/** Not running; internet mode locked (the pentest gate). */
 export function stoppedStatus(activeSessions = 0): RemoteUiStatus {
   return {
     state: "stopped",
@@ -121,37 +194,59 @@ export function stoppedStatus(activeSessions = 0): RemoteUiStatus {
   };
 }
 
-function state(core: MockCore): RemoteMockState {
+/** The mock's status: `running` while enabled, with URLs and certificate. */
+export function mockStatus(s: RemoteMockState): RemoteUiStatus {
+  const active = s.sessions.filter((x) => x.ended_at === null).length;
+  if (!s.settings.enabled) return stoppedStatus(active);
+  const scheme = s.settings.tls === "off" ? "http" : "https";
+  const port = s.settings.port;
+  const hosts =
+    s.settings.bind_address === "0.0.0.0" || s.settings.bind_address === "::"
+      ? [s.settings.host_name ?? "nail-desktop.local", "192.168.1.20"]
+      : [s.settings.host_name ?? s.settings.bind_address];
+  const urls = [...new Set(hosts)].map(
+    (h) => `${scheme}://${h.includes(":") ? `[${h}]` : h}:${port}/`,
+  );
+  return {
+    ...stoppedStatus(active),
+    state: "running",
+    urls,
+    certificate: s.settings.tls === "off" ? null : structuredClone(s.certificate),
+  };
+}
+
+export function remoteState(core: MockCore): RemoteMockState {
   return core.data.features.remote;
 }
 
-function now(): string {
-  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+/** Removes `key` from a record (the mock's maps are plain objects). */
+export function forget(record: Record<string, unknown>, key: string): void {
+  Reflect.deleteProperty(record, key);
 }
 
-function isLoopback(address: string): boolean {
-  return address === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(address);
+function stamp(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-function isIp(address: string): boolean {
-  return (
-    /^\d{1,3}(\.\d{1,3}){3}$/.test(address) || (address.includes(":") && !address.includes("."))
-  );
+export function now(): string {
+  return stamp(new Date());
+}
+
+export function later(seconds: number): string {
+  return stamp(new Date(Date.now() + seconds * 1000));
 }
 
 /** The core's checks (`RemoteUiSettings::issues`), most important first. */
 function settingsError(settings: RemoteUiSettings): Response | null {
-  if (settings.internet_mode || settings.tls === "acme") {
-    return errorResponse("forbidden", "internet mode is locked (pentest-pending)");
+  const issues = settingsIssues(settings);
+  const forbidden = issues.find(
+    (i) => i === "internet-mode-locked" || i === "acme-needs-internet-mode",
+  );
+  if (forbidden !== undefined) {
+    return errorResponse("forbidden", `${forbidden}: internet mode is locked (pentest-pending)`);
   }
-  if (!isIp(settings.bind_address)) {
-    return errorResponse("invalid_request", "invalid-bind-address");
-  }
-  if (!isLoopback(settings.bind_address) && settings.tls === "off") {
-    return errorResponse("invalid_request", "tls-required");
-  }
-  if (settings.port === 0) return errorResponse("invalid_request", "invalid-port");
-  return null;
+  const first = issues[0];
+  return first === undefined ? null : errorResponse("invalid_request", first);
 }
 
 /** Intersection of two grants (`RemoteGrant::intersect`). */
@@ -182,6 +277,11 @@ function normalizeSender(address: string): string | null {
   return address.trim().toLowerCase();
 }
 
+function senderOf(body: MessageBody): string | null {
+  const from = body.headers.from[0];
+  return from === undefined ? null : normalizeSender(from.email);
+}
+
 function allowValue(core: MockCore, messageId: string, scope: RemoteContentScope) {
   const message = core.data.messages.find((m) => m.id === messageId);
   if (message === undefined) return { error: errorResponse("not_found", `message ${messageId}`) };
@@ -196,13 +296,53 @@ function allowValue(core: MockCore, messageId: string, scope: RemoteContentScope
   };
 }
 
+/**
+ * The allow-list entry that lets `body`'s remote content load, most
+ * specific first (`Store::remote_content_allowed_by`).
+ */
+export function remoteContentAllowedBy(
+  s: RemoteMockState,
+  messageId: string,
+  sender: string | null,
+): RemoteContentScope | null {
+  const has = (scope: RemoteContentScope, value: string | null) =>
+    value !== null && s.allows.some((a) => a.scope === scope && a.value === value);
+  const domain = sender === null ? null : sender.slice(sender.lastIndexOf("@") + 1);
+  if (has("message", messageId)) return "message";
+  if (has("sender", sender)) return "sender";
+  if (has("domain", domain)) return "domain";
+  return null;
+}
+
+/**
+ * What the core puts into `MessageBody.remote_content` (WP45): mock
+ * messages that were flagged `remote_content_blocked` have remote
+ * resources; an allow-list entry unblocks them. The integrator chains this
+ * after the security decoration in `MockTransport`'s `GetMessage`.
+ */
+export function decorateRemoteContent(core: MockCore, body: MessageBody): MessageBody {
+  const s = remoteState(core);
+  const known = s.resources[body.id];
+  const resources = known ?? (body.remote_content_blocked || body.remote_content ? 3 : 0);
+  if (resources === 0) return body;
+  const sender = senderOf(body);
+  const allowedBy = remoteContentAllowedBy(s, body.id, sender);
+  const info: RemoteContentInfo = {
+    resources,
+    allowed_by: allowedBy,
+    sender,
+    domain: sender === null ? null : sender.slice(sender.lastIndexOf("@") + 1),
+  };
+  return { ...body, remote_content: info, remote_content_blocked: allowedBy === null };
+}
+
 function endSessions(
   core: MockCore,
   match: (s: RemoteSession) => boolean,
   reason: RemoteSession["end_reason"],
 ) {
   const at = now();
-  for (const session of state(core).sessions) {
+  for (const session of remoteState(core).sessions) {
     if (session.ended_at === null && match(session)) {
       session.ended_at = at;
       session.end_reason = reason;
@@ -213,23 +353,74 @@ function endSessions(
   }
 }
 
+/** Appends an audit entry (the core writes these in WP41 / WP45). */
+export function writeAudit(
+  core: MockCore,
+  entry: Partial<Omit<RemoteAuditEntry, "id" | "at">> & Pick<RemoteAuditEntry, "kind" | "outcome">,
+): RemoteAuditEntry {
+  const s = remoteState(core);
+  const full: RemoteAuditEntry = {
+    id: (s.audit.reduce((max, e) => Math.max(max, e.id), 0) || 0) + 1,
+    at: now(),
+    user_id: null,
+    user_name: null,
+    device_id: null,
+    session_id: null,
+    ip: null,
+    user_agent: null,
+    method: null,
+    name: null,
+    error: null,
+    detail: null,
+    ...entry,
+  };
+  s.audit.push(full);
+  return full;
+}
+
+/** Marks pending codes past their expiry as expired. */
+export function expirePairingCodes(s: RemoteMockState, at: number = Date.now()): void {
+  for (const code of s.pairing) {
+    if (code.state === "pending" && new Date(code.expires_at).getTime() <= at) {
+      code.state = "expired";
+    }
+  }
+}
+
+/** The pending, unexpired pairing code `typed` matches, if any. */
+export function findPairingCode(s: RemoteMockState, typed: string): PairingCode | undefined {
+  expirePairingCodes(s);
+  const code = normalizePairingCode(typed);
+  return s.pairing.find(
+    (p) => p.state === "pending" && s.secrets.pairingCodes[p.id] === code && code !== "",
+  );
+}
+
 export function answerRemote(core: MockCore, request: RemoteRequest): Response {
-  const s = state(core);
-  const active = () => s.sessions.filter((x) => x.ended_at === null).length;
+  const s = remoteState(core);
+  if (s.unsupported.includes(request.type)) {
+    return errorResponse("unsupported", `${request.type} is not available yet (remote UI, M2b)`);
+  }
   const changed = () => core.emit({ type: "RemoteAccessChanged" });
   const user = (id: string) => s.users.find((u) => u.id === id);
+  const notFoundUser = (id: string) => errorResponse("not_found", `remote user ${id}`);
   switch (request.type) {
     case "GetRemoteUiSettings":
-      return {
-        type: "RemoteUi",
-        settings: structuredClone(s.settings),
-        status: stoppedStatus(active()),
-      };
+      return { type: "RemoteUi", settings: structuredClone(s.settings), status: mockStatus(s) };
     case "UpdateRemoteUiSettings": {
       const error = settingsError(request.settings);
       if (error !== null) return error;
       s.settings = structuredClone(request.settings);
-      const status = stoppedStatus(active());
+      const status = mockStatus(s);
+      core.emit({ type: "RemoteUiStatusChanged", status });
+      return { type: "RemoteUi", settings: structuredClone(s.settings), status };
+    }
+    case "RegenerateRemoteCertificate": {
+      if (s.settings.tls !== "self-signed") {
+        return errorResponse("invalid_request", "only a self-signed certificate is regenerated");
+      }
+      s.certificate = mockCertificate(s.certificate.subject_names);
+      const status = mockStatus(s);
       core.emit({ type: "RemoteUiStatusChanged", status });
       return { type: "RemoteUi", settings: structuredClone(s.settings), status };
     }
@@ -260,7 +451,7 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
     }
     case "UpdateRemoteUser": {
       const found = user(request.user_id);
-      if (found === undefined) return errorResponse("not_found", `remote user ${request.user_id}`);
+      if (found === undefined) return notFoundUser(request.user_id);
       const { display_name, grant, disabled } = request.update;
       if (display_name !== null)
         found.display_name = display_name.trim() === "" ? null : display_name.trim();
@@ -268,6 +459,9 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
         found.grant = structuredClone(grant);
         for (const device of s.devices.filter((d) => d.user_id === found.id)) {
           device.grant = intersectGrants(device.grant, grant);
+        }
+        for (const session of s.sessions.filter((x) => x.user_id === found.id)) {
+          session.grant = intersectGrants(session.grant, grant);
         }
       }
       if (disabled !== null) {
@@ -278,21 +472,99 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       return { type: "RemoteUserSaved", user: structuredClone(found) };
     }
     case "DeleteRemoteUser": {
-      if (user(request.user_id) === undefined) {
-        return errorResponse("not_found", `remote user ${request.user_id}`);
-      }
+      if (user(request.user_id) === undefined) return notFoundUser(request.user_id);
       endSessions(core, (x) => x.user_id === request.user_id, "user-changed");
       s.users = s.users.filter((u) => u.id !== request.user_id);
       s.devices = s.devices.filter((d) => d.user_id !== request.user_id);
       s.sessions = s.sessions.filter((x) => x.user_id !== request.user_id);
       s.pairing = s.pairing.filter((p) => p.user_id !== request.user_id);
+      forget(s.secrets.passwords, request.user_id);
+      forget(s.secrets.totp, request.user_id);
       changed();
       return { type: "Done" };
     }
+    case "SetRemotePassword": {
+      const found = user(request.user_id);
+      if (found === undefined) return notFoundUser(request.user_id);
+      if (request.password === null) {
+        forget(s.secrets.passwords, found.id);
+        found.has_password = false;
+      } else {
+        if ([...request.password].length < MOCK_MIN_PASSWORD) {
+          return errorResponse("invalid_request", "password-too-short");
+        }
+        s.secrets.passwords[found.id] = request.password;
+        found.has_password = true;
+      }
+      writeAudit(core, {
+        kind: "password-changed",
+        outcome: "success",
+        user_id: found.id,
+        user_name: found.name,
+      });
+      changed();
+      return { type: "RemoteUserSaved", user: structuredClone(found) };
+    }
+    case "StartTotpEnrollment": {
+      const found = user(request.user_id);
+      if (found === undefined) return notFoundUser(request.user_id);
+      const secret = randomFrom(BASE32, 32);
+      s.secrets.totp[found.id] = {
+        secret,
+        confirmed: s.secrets.totp[found.id]?.confirmed ?? false,
+      };
+      const label = encodeURIComponent(`Nail:${found.name}`);
+      return {
+        type: "TotpEnrollment",
+        enrollment: {
+          user_id: found.id,
+          secret,
+          otpauth_uri: `otpauth://totp/${label}?secret=${secret}&issuer=Nail&algorithm=SHA1&digits=6&period=30`,
+          issuer: "Nail",
+          account_name: found.name,
+          digits: 6,
+          period_secs: 30,
+        },
+      };
+    }
+    case "ConfirmTotpEnrollment": {
+      const found = user(request.user_id);
+      if (found === undefined) return notFoundUser(request.user_id);
+      const pending = s.secrets.totp[found.id];
+      if (pending === undefined) return errorResponse("invalid_request", "no enrollment started");
+      if (request.code.replace(/\s/g, "") !== MOCK_TOTP_CODE) {
+        return errorResponse("auth_failed", "the code does not match");
+      }
+      pending.confirmed = true;
+      found.totp_enabled = true;
+      writeAudit(core, {
+        kind: "totp-changed",
+        outcome: "success",
+        user_id: found.id,
+        user_name: found.name,
+      });
+      changed();
+      return { type: "RemoteUserSaved", user: structuredClone(found) };
+    }
+    case "DisableTotp": {
+      const found = user(request.user_id);
+      if (found === undefined) return notFoundUser(request.user_id);
+      forget(s.secrets.totp, found.id);
+      found.totp_enabled = false;
+      writeAudit(core, {
+        kind: "totp-changed",
+        outcome: "success",
+        user_id: found.id,
+        user_name: found.name,
+      });
+      changed();
+      return { type: "RemoteUserSaved", user: structuredClone(found) };
+    }
     case "UnlockRemoteUser": {
       const found = user(request.user_id);
-      if (found === undefined) return errorResponse("not_found", `remote user ${request.user_id}`);
+      if (found === undefined) return notFoundUser(request.user_id);
       found.locked_until = null;
+      forget(s.failures, `user:${found.name.toLowerCase()}`);
       changed();
       return { type: "RemoteUserSaved", user: structuredClone(found) };
     }
@@ -307,6 +579,9 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
         if (key !== undefined) key.name = request.name.trim();
       } else {
         owner.passkeys = owner.passkeys.filter((p) => p.id !== request.passkey_id);
+        for (const [credential, id] of Object.entries(s.secrets.credentials)) {
+          if (id === request.passkey_id) forget(s.secrets.credentials, credential);
+        }
       }
       changed();
       return { type: "RemoteUserSaved", user: structuredClone(owner) };
@@ -326,6 +601,10 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       const owner = user(device.user_id);
       if (request.grant !== null && owner !== undefined) {
         device.grant = intersectGrants(request.grant, owner.grant);
+      }
+      for (const session of s.sessions.filter((x) => x.device_id === device.id)) {
+        session.device_name = device.name;
+        session.grant = intersectGrants(session.grant, device.grant);
       }
       changed();
       return { type: "RemoteDeviceSaved", device: structuredClone(device) };
@@ -361,7 +640,46 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       );
       changed();
       return { type: "Done" };
+    case "CreatePairingCode": {
+      const found = user(request.user_id);
+      if (found === undefined) return notFoundUser(request.user_id);
+      if (found.disabled) return errorResponse("invalid_request", "the user is disabled");
+      const ttl = Math.min(Math.max(request.ttl_minutes ?? 10, 1), 60);
+      const code = randomFrom(CODE_ALPHABET, 8);
+      const pairing: PairingCode = {
+        id: core.nextId("pair-"),
+        user_id: found.id,
+        device_name: request.device_name?.trim() || null,
+        grant:
+          request.grant === null
+            ? structuredClone(found.grant)
+            : intersectGrants(request.grant, found.grant),
+        created_at: now(),
+        expires_at: later(ttl * 60),
+        state: "pending",
+        device_id: null,
+      };
+      s.pairing.push(pairing);
+      s.secrets.pairingCodes[pairing.id] = code;
+      writeAudit(core, {
+        kind: "pairing-created",
+        outcome: "success",
+        user_id: found.id,
+        user_name: found.name,
+        name: pairing.device_name,
+      });
+      changed();
+      const status = mockStatus(s);
+      return {
+        type: "PairingCodeCreated",
+        pairing: structuredClone(pairing),
+        code: `${code.slice(0, 4)}-${code.slice(4)}`,
+        url: status.urls[0] ?? null,
+        certificate_fingerprint: status.certificate?.fingerprint_sha256 ?? null,
+      };
+    }
     case "ListPairingCodes":
+      expirePairingCodes(s);
       return { type: "PairingCodes", codes: structuredClone(s.pairing) };
     case "CancelPairingCode": {
       const code = s.pairing.find((p) => p.id === request.pairing_id);
@@ -369,6 +687,7 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
         return errorResponse("not_found", `pairing code ${request.pairing_id}`);
       if (code.state === "pending") {
         code.state = "cancelled";
+        forget(s.secrets.pairingCodes, code.id);
         changed();
       }
       return { type: "Done" };
@@ -413,12 +732,5 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       if (s.allows.length !== before) core.emit({ type: "RemoteContentPolicyChanged" });
       return { type: "Done" };
     }
-    case "RegenerateRemoteCertificate":
-    case "SetRemotePassword":
-    case "StartTotpEnrollment":
-    case "ConfirmTotpEnrollment":
-    case "DisableTotp":
-    case "CreatePairingCode":
-      return errorResponse("unsupported", `${request.type} is not available yet (remote UI, M2b)`);
   }
 }

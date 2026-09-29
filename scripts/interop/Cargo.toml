@@ -1,0 +1,27 @@
+[package]
+name = "nail-interop"
+description = "Nail's mail engines against real servers (Dovecot, Stalwart); runs with NAIL_INTEROP=1"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "LicenseRef-Proprietary"
+publish = false
+
+# Not a member of the main workspace: the CI interop job runs it on Linux
+# (servers in containers), where the Tauri shell is not built. The engine
+# crates are path dependencies; CI copies the root Cargo.lock here first so
+# the versions match (scripts/interop/README.md).
+[workspace]
+
+[dependencies]
+base64 = "0.23.1"
+
+[dev-dependencies]
+nail-api = { path = "../../crates/nail-api" }
+nail-proto-imap = { path = "../../crates/nail-proto-imap" }
+nail-proto-pop3 = { path = "../../crates/nail-proto-pop3" }
+nail-proto-smtp = { path = "../../crates/nail-proto-smtp" }
+tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "time"] }
+
+[lints.rust]
+unsafe_code = "forbid"

@@ -241,7 +241,6 @@ describe("message-view", () => {
     expect(doc).toContain("default-src 'none'");
     expect(doc).toContain("<b>Ada</b>");
     expect(iframe).toHaveAttribute("title", "Message content: Compiler notes for Monday");
-    expect(screen.getByRole("note")).toHaveTextContent(/Remote content/);
     expect(screen.getByRole("list", { name: "Attachments" })).toHaveTextContent("report.pdf");
     expect(screen.getByRole("article", { name: "Message" })).toHaveAttribute(
       "data-key-context",

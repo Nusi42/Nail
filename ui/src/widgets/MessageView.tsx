@@ -125,11 +125,6 @@ export function MessageView({ node }: WidgetProps) {
             );
           })}
         </header>
-        {message.remote_content_blocked && (
-          <div data-part="message-view.remote-content-banner" role="note">
-            {t("message-view-remote-blocked")}
-          </div>
-        )}
         <Body message={message} />
         {message.attachments.length > 0 && (
           <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>

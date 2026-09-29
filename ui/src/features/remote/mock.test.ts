@@ -62,7 +62,7 @@ describe("remote mock", () => {
     expect(again.settings).toEqual(lan);
   });
 
-  it("manages users and refuses what needs the auth crate", async () => {
+  it("manages users; the pre-WP45 switch answers unsupported", async () => {
     const { send, transport } = setup();
     const { user } = await send(
       { type: "CreateRemoteUser", name: "ada", display_name: null, grant: readOnly },
@@ -85,6 +85,7 @@ describe("remote mock", () => {
       "RemoteUserSaved",
     );
     expect(updated.user.display_name).toBe("Ada L.");
+    transport.data.features.remote.unsupported = ["CreatePairingCode"];
     const pairing = await transport.send({
       type: "CreatePairingCode",
       user_id: user.id,

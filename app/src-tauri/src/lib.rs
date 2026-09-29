@@ -10,6 +10,16 @@
 //!   on [`EVENT_CHANNEL`].
 //!
 //! The UI is the same bundle as in the browser (`ui/dist`).
+//!
+//! Windows integration (M2b WP44): [`launch`] parses the `mailto:` /
+//! `webcal:` URLs and `.eml` / `.ics` / `.vcf` files Windows starts the app
+//! with, [`portable`] keeps everything beside the executable in the portable
+//! build, and [`setup_helper`] does the installer's PATH and credential
+//! work.
+
+pub mod launch;
+pub mod portable;
+pub mod setup_helper;
 
 use clap::Parser;
 use nail_api::{Event, Request, Response};
@@ -20,8 +30,9 @@ use tokio::sync::broadcast;
 /// Name of the Tauri event channel carrying `nail_api::Event`s.
 pub const EVENT_CHANNEL: &str = "nail://event";
 
-/// Command-line options of the desktop app (development and testing aids).
-#[derive(Debug, Clone, PartialEq, Eq, Parser)]
+/// Command-line options of the desktop app (development and testing aids,
+/// plus what Windows and the installer pass).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Parser)]
 #[command(name = "nail-app", version, about = "Nail desktop app")]
 pub struct AppArgs {
     /// Data directory (store and message blobs). Default: %LOCALAPPDATA%\Nail.
@@ -36,6 +47,22 @@ pub struct AppArgs {
     /// UI language override (BCP 47, e.g. "de").
     #[arg(long, value_name = "TAG")]
     pub locale: Option<String>,
+    /// Started by the "Start with Windows" entry: open minimized.
+    #[arg(long)]
+    pub autostart: bool,
+    /// Installer helper: add a directory to the per-user PATH and exit.
+    #[arg(long, value_name = "DIR", hide = true)]
+    pub setup_path_add: Option<String>,
+    /// Installer helper: remove a directory from the per-user PATH and exit.
+    #[arg(long, value_name = "DIR", hide = true)]
+    pub setup_path_remove: Option<String>,
+    /// Installer helper: delete Nail's Credential Manager entries and exit.
+    #[arg(long, hide = true)]
+    pub setup_purge_credentials: bool,
+    /// URLs (`mailto:`, `webcal:`, `webcals:`) or files (`.eml`, `.ics`,
+    /// `.vcf`) to open, as passed by Windows.
+    #[arg(value_name = "TARGET")]
+    pub targets: Vec<String>,
 }
 
 impl AppArgs {
@@ -83,6 +110,54 @@ impl AppArgs {
         Ok(options)
     }
 
+    /// The installer-helper action these arguments ask for, if any.
+    pub fn setup_action(&self) -> Option<setup_helper::SetupAction> {
+        use setup_helper::SetupAction;
+        if let Some(dir) = &self.setup_path_add {
+            Some(SetupAction::PathAdd(dir.clone()))
+        } else if let Some(dir) = &self.setup_path_remove {
+            Some(SetupAction::PathRemove(dir.clone()))
+        } else if self.setup_purge_credentials {
+            Some(SetupAction::PurgeCredentials)
+        } else {
+            None
+        }
+    }
+
+    /// The launch requests among [`Self::targets`].
+    pub fn launch_requests(&self) -> Vec<launch::LaunchRequest> {
+        launch::LaunchRequest::from_args(&self.targets)
+    }
+
+    /// The directory that replaces the platform defaults: the temporary
+    /// directory of a seeded run, else the portable root (when the
+    /// executable has a `portable` marker; never for seeded runs).
+    pub fn base_dir(
+        &self,
+        temp: Option<&std::path::Path>,
+        portable: Option<std::path::PathBuf>,
+    ) -> Option<std::path::PathBuf> {
+        match temp {
+            Some(temp) => Some(temp.to_path_buf()),
+            None if self.seed.is_none() => portable,
+            None => None,
+        }
+    }
+
+    /// Parses the process arguments (without the program name). Arguments
+    /// clap rejects (e.g. from a launcher) fall back to the defaults,
+    /// keeping any launch targets.
+    pub fn from_process_args(raw: Vec<String>) -> Self {
+        let argv = std::iter::once("nail-app".to_owned()).chain(raw.iter().cloned());
+        Self::try_parse_from(argv).unwrap_or_else(|err| {
+            tracing::warn!(%err, "ignoring invalid command-line arguments");
+            Self {
+                targets: raw,
+                ..Self::default()
+            }
+        })
+    }
+
     /// The service options without a temporary directory.
     pub fn service_options(&self) -> Result<ServiceOptions, String> {
         self.service_options_in(None)
@@ -124,6 +199,14 @@ pub async fn call(service: &Service, request: Request) -> (Response, Vec<Event>)
         Vec::new()
     };
     (response, events)
+}
+
+/// Hands the UI the launch requests (`mailto:` links, opened files) that
+/// are still pending; each one once. The integrator (M2b WP45) maps them
+/// onto `nail_api` requests.
+#[tauri::command]
+fn nail_launch_requests(pending: State<'_, launch::PendingLaunch>) -> Vec<launch::LaunchRequest> {
+    pending.take()
 }
 
 /// The single IPC command: one `Request` in, one `Response` out.
@@ -220,11 +303,19 @@ pub fn run() {
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .try_init();
-    // Unknown arguments (e.g. from a launcher) fall back to the defaults.
-    let args = AppArgs::try_parse().unwrap_or_else(|err| {
-        tracing::warn!(%err, "ignoring invalid command-line arguments");
-        AppArgs::parse_from(["nail-app"])
-    });
+    let args = AppArgs::from_process_args(
+        std::env::args_os()
+            .skip(1)
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect(),
+    );
+    if let Some(action) = args.setup_action() {
+        std::process::exit(setup_helper::run(&action));
+    }
+    let launch_requests = args.launch_requests();
+    if !launch_requests.is_empty() {
+        tracing::info!(count = launch_requests.len(), "launch requests pending");
+    }
 
     tauri::Builder::default()
         .setup(move |app| {
@@ -232,16 +323,15 @@ pub fn run() {
             // outbox and the index upkeep start on it (and the accounts.kdl
             // watcher can apply changes).
             let temp = args.demo_dir()?;
-            let service = tauri::async_runtime::block_on(async {
-                open_service_in(&args, temp.as_ref().map(tempfile::TempDir::path))
-            })?;
-            let data_dir = args
-                .service_options_in(temp.as_ref().map(tempfile::TempDir::path))?
-                .data_dir;
+            let base = args.base_dir(temp.as_ref().map(tempfile::TempDir::path), portable::root());
+            let service =
+                tauri::async_runtime::block_on(async { open_service_in(&args, base.as_deref()) })?;
+            let data_dir = args.service_options_in(base.as_deref())?.data_dir;
             let mcp = tauri::async_runtime::block_on(start_mcp(&service, &data_dir));
             // The window is created here (not from the config) so that a
             // seeded run keeps its WebView2 profile in the temporary
-            // directory too, apart from the real one.
+            // directory too, apart from the real one (and a portable run
+            // beside the executable).
             let config = app
                 .config()
                 .app
@@ -251,11 +341,17 @@ pub fn run() {
                 .cloned()
                 .ok_or("tauri.conf.json has no main window")?;
             let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
-            if let Some(temp) = &temp {
-                window = window.data_directory(temp.path().join("webview"));
+            if let Some(base) = &base {
+                window = window.data_directory(base.join("webview"));
             }
-            window.build()?;
+            let window = window.build()?;
+            if args.autostart
+                && let Err(err) = window.minimize()
+            {
+                tracing::warn!(%err, "cannot start minimized");
+            }
             app.manage(Running { mcp, temp });
+            app.manage(launch::PendingLaunch::new(launch_requests));
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(forward_events(
                 service.clone(),
@@ -265,7 +361,7 @@ pub fn run() {
             app.manage(service);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![nail_call])
+        .invoke_handler(tauri::generate_handler![nail_call, nail_launch_requests])
         .run(tauri::generate_context!())
         .expect("failed to run the Tauri application");
 }
@@ -309,6 +405,70 @@ mod tests {
         assert!(defaults.demo_dir().unwrap().is_none());
     }
 
+    #[test]
+    fn launch_targets_and_flags_parse() {
+        let args = AppArgs::from_process_args(vec![
+            "--autostart".into(),
+            "mailto:a@example.org?subject=Hi".into(),
+            r"C:\mail\offer.eml".into(),
+        ]);
+        assert!(args.autostart);
+        assert_eq!(args.setup_action(), None);
+        let requests = args.launch_requests();
+        assert_eq!(requests.len(), 2);
+        assert!(matches!(requests[0], launch::LaunchRequest::Compose { .. }));
+
+        // Windows may add arguments clap does not know: targets survive.
+        let args = AppArgs::from_process_args(vec!["--unknown".into(), "webcal://x.org/c".into()]);
+        assert_eq!(args.seed, None);
+        assert_eq!(args.launch_requests().len(), 1);
+    }
+
+    #[test]
+    fn setup_actions_parse() {
+        use setup_helper::SetupAction;
+        let action = |raw: &[&str]| {
+            AppArgs::from_process_args(raw.iter().map(|s| (*s).to_owned()).collect()).setup_action()
+        };
+        assert_eq!(
+            action(&["--setup-path-add", r"C:\N\bin"]),
+            Some(SetupAction::PathAdd(r"C:\N\bin".into()))
+        );
+        assert_eq!(
+            action(&["--setup-path-remove", r"C:\N\bin"]),
+            Some(SetupAction::PathRemove(r"C:\N\bin".into()))
+        );
+        assert_eq!(
+            action(&["--setup-purge-credentials"]),
+            Some(SetupAction::PurgeCredentials)
+        );
+        assert_eq!(action(&[]), None);
+    }
+
+    #[test]
+    fn base_dir_prefers_the_demo_directory_then_portable_mode() {
+        let root = std::path::PathBuf::from(r"E:\Nail");
+        let plain = AppArgs::default();
+        assert_eq!(plain.base_dir(None, None), None);
+        assert_eq!(plain.base_dir(None, Some(root.clone())), Some(root.clone()));
+        let temp = std::path::Path::new("tmp");
+        assert_eq!(
+            plain.base_dir(Some(temp), Some(root.clone())).as_deref(),
+            Some(temp)
+        );
+        // Seeded runs never write into a portable installation.
+        let seeded = AppArgs {
+            seed: Some("demo".into()),
+            ..AppArgs::default()
+        };
+        assert_eq!(seeded.base_dir(None, Some(root.clone())), None);
+
+        // Portable: data and config beside the executable.
+        let options = plain.service_options_in(Some(root.as_path())).unwrap();
+        assert_eq!(options.data_dir, root.join("data"));
+        assert_eq!(options.config_dir, root.join("config"));
+    }
+
     /// M1a follow-up: `--seed demo` alone never touches the real profile.
     #[test]
     fn a_seeded_run_defaults_to_temporary_directories() {
@@ -330,7 +490,7 @@ mod tests {
             data_dir: Some(data.path().into()),
             config_dir: Some(config.path().into()),
             seed: None,
-            locale: None,
+            ..AppArgs::default()
         };
         let service = open_service(&args).unwrap();
         let running = start_mcp(&service, data.path()).await.unwrap();
@@ -355,7 +515,7 @@ mod tests {
             data_dir: Some(data.path().into()),
             config_dir: Some(config.path().into()),
             seed: Some("demo".into()),
-            locale: None,
+            ..AppArgs::default()
         };
         let service = open_service(&args).unwrap();
         let events = service.subscribe();
@@ -406,7 +566,7 @@ mod tests {
             data_dir: Some(data.path().into()),
             config_dir: Some(config.path().into()),
             seed: Some("demo".into()),
-            locale: None,
+            ..AppArgs::default()
         };
         let service = open_service(&args).unwrap();
 

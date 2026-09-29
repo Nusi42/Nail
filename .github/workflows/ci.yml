@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -12,7 +13,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  # Playwright traces/report location (see e2e/support/nail.ts buildOutputDir)
+  # Build output, Playwright traces/report (see e2e/support/nail.ts
+  # buildOutputDir and scripts/lib/build.mjs buildBase). Gitignored.
   NAIL_BUILD_DIR: ${{ github.workspace }}/.nail-build
 
 jobs:
@@ -59,23 +61,21 @@ jobs:
       - name: npm test (Vitest)
         run: npm test
 
+      # Release helpers: SBOM, installer build options (scripts/test/).
+      - name: Script tests
+        run: node --test "scripts/test/*.test.mjs"
+
       # Playwright end-to-end tests against the prebuilt `nail serve --seed demo`
       # (e2e/README.md). ui/dist was built above; build the nail binary here.
+      # The desktop smoke test runs in its own job ("desktop").
       - name: Build nail-cli
         run: cargo build -p nail-cli
-
-      # The desktop smoke test (e2e/tests/desktop.spec.ts) drives the real
-      # nail-app.exe over WebView2 (preinstalled on windows-latest).
-      - name: Build desktop app
-        run: npm run build:desktop
 
       - name: Install Playwright browsers
         run: npx -w e2e playwright install --with-deps chromium
 
       - name: Playwright
         run: npm run e2e:only
-        env:
-          NAIL_E2E_DESKTOP: "1"
 
       - name: Upload Playwright report
         if: failure()
@@ -84,3 +84,162 @@ jobs:
           name: playwright-report
           path: .nail-build/e2e/
           retention-days: 14
+
+  # The desktop smoke test (e2e/tests/desktop.spec.ts) drives the real
+  # nail-app.exe over WebView2 (preinstalled on windows-latest).
+  desktop:
+    name: Desktop smoke test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> .nail-build/desktop-target"
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Build UI
+        run: npm run build
+
+      # Playwright's config starts the shared `nail serve` for every run.
+      - name: Build nail-cli
+        run: cargo build -p nail-cli
+
+      - name: Build desktop app
+        run: npm run build:desktop
+
+      - name: Install Playwright browsers
+        run: npx -w e2e playwright install --with-deps chromium
+
+      - name: Playwright (desktop)
+        run: npm run e2e:only -- tests/desktop.spec.ts
+        env:
+          NAIL_E2E_DESKTOP: "1"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-desktop
+          path: .nail-build/e2e/
+          retention-days: 14
+
+  # Per-user NSIS installer + portable zip + CycloneDX SBOMs
+  # (scripts/build-installer.mjs), then install -> launch -> uninstall in a
+  # temporary directory (scripts/installer-smoke.ps1). Unsigned until M4.
+  installer:
+    name: Installer (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> .nail-build/installer-target"
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      # Builds the UI, the static-CRT nail CLI and Nail.exe, then bundles.
+      # The Tauri bundler downloads NSIS and the WebView2 bootstrapper.
+      - name: Build installer
+        run: node scripts/build-installer.mjs
+
+      - name: Installer smoke test
+        shell: pwsh
+        run: ./scripts/installer-smoke.ps1
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: nail-windows-x64
+          path: |
+            .nail-build/dist/*-setup.exe
+            .nail-build/dist/*-portable.zip
+            .nail-build/dist/*.cdx.json
+            .nail-build/dist/*-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  # Licences (no GPL / LGPL / AGPL), advisories (RustSec; the rsa 0.9
+  # exception is recorded in deny.toml), banned crates (OpenSSL, aws-lc),
+  # sources.
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --locked
+
+  # The IMAP / POP3 / SMTP engines against real servers: Dovecot and
+  # Stalwart in Docker (scripts/interop/). Started with `docker run` after
+  # the checkout, not as `services:`, because the containers need the
+  # config files and certificates from the repository.
+  interop:
+    name: Interop (Dovecot, Stalwart)
+    runs-on: ubuntu-latest
+    env:
+      DOVECOT_IMAGE: dovecot/dovecot:2.3.21
+      STALWART_IMAGE: stalwartlabs/stalwart:latest
+      CERTS: ${{ github.workspace }}/.nail-build/interop-certs
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Certificates
+        run: bash scripts/interop/gen-certs.sh "$CERTS"
+
+      - name: Start Dovecot and Stalwart
+        run: bash scripts/interop/start-servers.sh "$CERTS"
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # The interop crate is its own workspace; pin it to the main lock file.
+      - name: Lock file
+        run: cp Cargo.lock scripts/interop/Cargo.lock
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/interop
+
+      - name: Interop tests
+        run: cargo test --manifest-path scripts/interop/Cargo.toml -- --test-threads=1
+        env:
+          NAIL_INTEROP: "1"
+          NAIL_INTEROP_CA: ${{ env.CERTS }}/ca.pem
+          NAIL_INTEROP_SERVERS: dovecot=localhost:10000,stalwart=localhost:20000:smtp
+          NAIL_INTEROP_USER: ada@example.org
+          NAIL_INTEROP_PASSWORD: nail-interop
+
+      - name: Server logs
+        if: always()
+        run: |
+          docker logs nail-dovecot || true
+          docker logs nail-stalwart || true

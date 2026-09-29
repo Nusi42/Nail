@@ -143,6 +143,7 @@
                     "auto",
                     "auto",
                     "auto",
+                    "auto",
                     "1fr"
                   ],
                   "children": [
@@ -182,6 +183,15 @@
                       "id": "message-warnings",
                       "label": null,
                       "kind": "security-warnings",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "message-remote-content",
+                      "label": null,
+                      "kind": "remote-content",
                       "options": {},
                       "rows": [],
                       "source": null
@@ -343,6 +353,7 @@
                     "auto",
                     "auto",
                     "auto",
+                    "auto",
                     "1fr"
                   ],
                   "children": [
@@ -382,6 +393,15 @@
                       "id": "message-warnings",
                       "label": null,
                       "kind": "security-warnings",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "message-remote-content",
+                      "label": null,
+                      "kind": "remote-content",
                       "options": {},
                       "rows": [],
                       "source": null
@@ -589,6 +609,51 @@
               "id": "security-autocrypt",
               "label": "@security.settings.tab.autocrypt",
               "kind": "security-autocrypt",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "remote-settings",
+              "label": "@remote.settings.tab",
+              "kind": "remote-settings",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "remote-users",
+              "label": "@remote.settings.tab.users",
+              "kind": "remote-users",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "remote-devices",
+              "label": "@remote.settings.tab.devices",
+              "kind": "remote-devices",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "remote-audit",
+              "label": "@remote.settings.tab.audit",
+              "kind": "remote-audit",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "remote-content-allows",
+              "label": "@remote.settings.tab.privacy",
+              "kind": "remote-content-allows",
               "options": {},
               "rows": [],
               "source": null
@@ -852,6 +917,24 @@
     },
     "security.autocrypt.import": {
       "label": "@security.action.autocrypt-import",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "remote.pair": {
+      "label": "@remote.action.pair",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "remote.content.allow": {
+      "label": "@remote.action.load-content",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "remote.logout": {
+      "label": "@remote.action.logout",
       "icon": null,
       "alias_of": null,
       "args": []

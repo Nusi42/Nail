@@ -1,10 +1,11 @@
 /**
- * Feature slot of M2b WP43 (remote UI and privacy UI, ADR 0036): login
- * (passkey first, password + TOTP), pairing on both sides (the desktop
- * shows the code and the certificate fingerprint, the browser enters the
- * code), sessions and devices, remote-UI settings with internet mode shown
- * as locked with its reason, the "load remote content" bar in the reader
- * with per-sender / per-domain choices, and the security audit view.
+ * Feature slot of M2b WP43 (remote UI and privacy UI, ADR 0036; ADR 0039
+ * for WP43): login (passkey first, password + TOTP), pairing on both
+ * sides (the desktop shows the code and the certificate fingerprint, the
+ * browser enters the code), users, sessions and devices, remote-UI
+ * settings with internet mode shown as locked with its reason, the "load
+ * remote content" bar in the reader with per-message / sender / domain
+ * choices, the allow-lists, the security audit view and security alerts.
  *
  * Only WP43 edits the files in this directory (plus
  * `crates/nail-config/src/widgets/remote.rs` for widget kinds and
@@ -12,23 +13,140 @@
  * merges these exports into the app; see `../README.md`. The browser's
  * login page talks to `POST /api/auth` (`AuthRequest` / `AuthResponse`),
  * not to `NailClient`: it runs before there is a session.
+ *
+ * Components for the app shell and the reader are re-exported at the end.
  */
-import type { Feature } from "../types";
+import type { JsonValue, MessageBody, RemoteContentScope } from "../../api/generated";
+import { queryKeys } from "../../state/queries";
+import type { Feature, FeatureEventHandler } from "../types";
+import { RemoteAlerts } from "./Alerts";
+import { remoteAuth } from "./authConfig";
+import { CONTENT_SCOPES } from "./model";
+import { PAIR_DIALOG, PairDeviceDialog } from "./PairDevice";
+import { applyRemoteStatus, remoteKeys } from "./queries";
+import { RemoteAuditWidget } from "./RemoteAudit";
+import { RemoteContentAllowsWidget, RemoteContentWidget, remoteContentView } from "./RemoteContent";
+import { RemoteDevicesWidget } from "./RemoteDevices";
+import { RemoteSettingsWidget } from "./RemoteSettings";
+import { RemoteUsersWidget } from "./RemoteUsers";
+import { remoteStore } from "./state";
 
 /** Layout widget kinds → components. */
-export const widgets: Feature["widgets"] = {};
+export const widgets: Feature["widgets"] = {
+  "remote-settings": RemoteSettingsWidget,
+  "remote-users": RemoteUsersWidget,
+  "remote-devices": RemoteDevicesWidget,
+  "remote-audit": RemoteAuditWidget,
+  "remote-content": RemoteContentWidget,
+  "remote-content-allows": RemoteContentAllowsWidget,
+};
+
+function scopeArg(args: readonly JsonValue[]): RemoteContentScope {
+  const arg = args[0];
+  return typeof arg === "string" && (CONTENT_SCOPES as readonly string[]).includes(arg)
+    ? (arg as RemoteContentScope)
+    : "message";
+}
 
 /** Action ids → handlers (prefix `remote.`). */
-export const actions: Feature["actions"] = {};
+export const actions: Feature["actions"] = {
+  /** Opens the pairing dialog (desktop). */
+  "remote.pair": {
+    run: (ctx) => {
+      remoteStore.getState().setPairUser(null);
+      ctx.store.getState().openWindow(PAIR_DIALOG);
+    },
+  },
+  /**
+   * Loads the selected message's remote content: `remote.content.allow`
+   * (this message), `remote.content.allow "sender"` or `… "domain"`.
+   */
+  "remote.content.allow": {
+    run: async (ctx, args) => {
+      const id = ctx.store.getState().selectedMessageId;
+      if (id === null) return;
+      await ctx.client.request(
+        { type: "AllowRemoteContent", message_id: id, scope: scopeArg(args) },
+        "RemoteContentAllowed",
+      );
+      await ctx.queryClient.invalidateQueries({ queryKey: queryKeys.message(id) });
+      await ctx.queryClient.invalidateQueries({ queryKey: remoteKeys.allows });
+    },
+    enabled: (ctx, args) => {
+      const id = ctx.store.getState().selectedMessageId;
+      if (id === null) return false;
+      const message = ctx.queryClient.getQueryData<MessageBody>(queryKeys.message(id));
+      const view = message === undefined ? null : remoteContentView(message);
+      if (view === null || !view.blocked) return false;
+      const scope = scopeArg(args);
+      return scope === "message" || (scope === "sender" ? view.sender : view.domain) !== null;
+    },
+  },
+  /** Signs this browser out of the remote UI. */
+  "remote.logout": {
+    run: async () => {
+      await remoteAuth().transport.send({ type: "Logout" });
+      remoteStore.getState().endSession("logout");
+    },
+    enabled: () => remoteStore.getState().session !== null,
+  },
+};
 
 /** Named dialogs (opened with `window.open "<name>"`). */
-export const dialogs: Feature["dialogs"] = {};
+export const dialogs: Feature["dialogs"] = {
+  [PAIR_DIALOG]: PairDeviceDialog,
+};
 
 /**
- * Handlers for core events (`RemoteUiStatusChanged`, `RemoteAccessChanged`,
- * `RemoteSessionEnded`, `RemoteSecurityAlert`, `RemoteContentPolicyChanged`).
+ * Keeps the remote views current: status → cached settings; access
+ * changes → users, devices, sessions, codes, audit; a session ended →
+ * the lists (and, when it is this browser's, the login page); alerts →
+ * a toast; policy → allow-lists and the shown messages.
  */
-export const events: Feature["events"] = [];
+export const handleRemoteEvent: FeatureEventHandler = (event, { queryClient }) => {
+  switch (event.type) {
+    case "RemoteUiStatusChanged":
+      applyRemoteStatus(queryClient, event.status);
+      break;
+    case "RemoteAccessChanged":
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.access });
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.allAudit });
+      break;
+    case "RemoteSessionEnded": {
+      const own = remoteStore.getState().session;
+      if (own !== null && own.id === event.session_id) {
+        remoteStore.getState().endSession(event.reason);
+      }
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.access });
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.allAudit });
+      break;
+    }
+    case "RemoteSecurityAlert":
+      remoteStore.getState().pushAlert(event.alert);
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.access });
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.allAudit });
+      break;
+    case "RemoteContentPolicyChanged":
+      void queryClient.invalidateQueries({ queryKey: remoteKeys.allows });
+      void queryClient.invalidateQueries({ queryKey: ["message"] });
+      break;
+  }
+};
 
-/** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [];
+/** Handlers for core events. */
+export const events: Feature["events"] = [handleRemoteEvent];
+
+/** Background components mounted once in the app shell (the alert toasts). */
+export const effects: Feature["effects"] = [RemoteAlerts];
+
+// ---------------------------------------------------------------------------
+// Mount points for the app shell and the reader (ADR 0039).
+
+export { AUTH_PATH, CSRF_HEADER, HttpAuthTransport, type AuthTransport } from "./authClient";
+export { configureRemoteAuth, remoteAuth } from "./authConfig";
+export { RemoteLogin, RemoteReauth, reauthSecondsLeft } from "./Login";
+export { decorateRemoteContent } from "./mock";
+export { MockAuthServer } from "./mockAuth";
+export { browserPasskeys, type PasskeyApi } from "./passkeys";
+export { RemoteContentBar, remoteContentView } from "./RemoteContent";
+export { remoteStore, useRemoteState } from "./state";

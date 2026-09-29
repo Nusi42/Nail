@@ -13,8 +13,12 @@ Guides and references for people using Nail.
 | [Filter rules](rules.md) | Rules that sort, tag and answer mail: when they run, conditions, actions, testing, undoing a run, `rules.kdl` |
 | [Signing, encryption and data protection](security.md) | Keys and certificates, trust, defaults per address, composer toggles, reader badges and warnings, OpenPGP and Autocrypt, S/MIME, encryption at rest, Autocrypt setup |
 | [Data protection in detail](data-protection.md) | What encryption at rest covers, the key, switching it on and off, searching encrypted mail, the sender check, link and attachment warnings |
+| [Remote access and remote content](remote-access.md) | Turning remote access on, internet mode (locked), users, passwords, two-step verification and passkeys, pairing a device, signing in, devices and sessions, the security log, loading remote content per message / sender / domain, the privacy list |
+| [Remote sign-in security](remote-sign-in-security.md) | How passwords, verification codes, passkeys and pairing codes are protected, sessions and their limits, re-authentication, rate limits and lockouts, what the security log records |
+| [Secure connections and remote content](remote-connections.md) | HTTPS and the certificate fingerprint, allowed networks, what the browser is told, mail shown from a separate address, how remote images are fetched through Nail |
 | [Connecting AI agents (MCP)](mcp.md) | MCP clients, tokens, permissions, configuring agents (HTTP and `nail mcp`), resources and tools, the activity log, safety |
 | [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
+| [Installing Nail on Windows](installing.md) | Installer options, Default apps, silent install, uninstall and your data, the portable version |
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
