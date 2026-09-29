@@ -29,35 +29,46 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 ```
 crates/nail-api        shared types + Request/Response/Event protocol (ts-rs → ui/src/api/generated);
                        engine traits (SecretStore, OutgoingTransport, AccessTokenProvider; Rust only);
-                       M1b: rich drafts, rules, mcp, context (UI context), customize (ADR 0022)
+                       M1b: rich drafts, rules, mcp, context (UI context), customize (ADR 0022);
+                       M2a: security (message security, keys, recipient keys, SendCrypto,
+                       auth results, warnings, vault, settings; ADR 0029)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22)
-crates/nail-store      SQLite metadata (v4), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v5), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
-                       v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches
-crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules)
+                       v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
+                       v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
+                       app settings (src/crypto.rs, ADR 0029)
+crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules);
+                       M2a slots: src/auth_results.rs, src/links.rs (WP33)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
 crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
 crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
 crates/nail-search     Tantivy index + query language parser (ADR 0016)
-crates/nail-testkit    mock IMAP server, .eml corpus, demo seed
+crates/nail-testkit    mock IMAP server, .eml corpus, demo seed; corpus/crypto/{pgp,smime}: end-to-end
+                       test vectors (not demo mail; `crypto_fixture`)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
                        CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025)
+crates/nail-pgp        OpenPGP (rPGP) + Autocrypt + WKD (M2a WP31; stub after WP30)
+crates/nail-smime      S/MIME (RustCrypto cms/x509-cert, PKCS#12, Windows cert store) (M2a WP32; stub)
+crates/nail-vault      encryption at rest: XChaCha20-Poly1305 blobs/index, keychain key (M2a WP33; stub)
 crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
                        engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020);
                        M1b: composer.rs (NewDraft…, server Drafts copy), rules.rs + rule_mail.rs
                        (rules.kdl, arrival / on-send / schedule / manual runs, undo), mcp.rs
-                       (start_mcp_server, McpRunning), customize.rs (write-back, merge) (ADR 0027)
+                       (start_mcp_server, McpRunning), customize.rs (write-back, merge) (ADR 0027);
+                       M2a: security.rs (every security request; settings + vault status served)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
 crates/nail-cli        `nail` binary
 app/src-tauri          Tauri 2 desktop shell (starts the MCP server; main window created in code)
-ui/                    React renderer; M1b feature slots in ui/src/features/<name>/ (README there)
+ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
+                       M2a: security/)
 e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts)
 defaults/              shipped theme.kdl + layout.kdl
 locales/               Fluent catalogs (en, de)
@@ -103,6 +114,11 @@ npm run tauri dev                          # desktop app with Vite hot reload
   ADRs 0023 (composer), 0024 (rules), 0025 (MCP), 0026 (customization); integration ADR 0027; review
   fixes ADR 0028 (rule mail loop marks, redirects via the outbox, autosave races, MCP grant leaks, undo).
   Every M1b request is implemented by the core and the UI mock.
+- M2a contract: ADR 0029 (security protocol, identity `crypto` in `accounts.kdl`, store v5, crate
+  stubs `nail-pgp` / `nail-smime` / `nail-vault`, slots). Licences: no GPL/LGPL/AGPL; no OpenSSL
+  (`cargo tree -i openssl-sys` must stay empty). The crypto crates share rPGP's RustCrypto
+  generation (digest 0.10; workspace `sha2-legacy` = sha2 0.10, `sha2` = 0.11 for ids). Sign /
+  encrypt on send is refused (`unsupported`) until WP35 — never sent unprotected.
 - `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
   endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
   (`open_editor`).

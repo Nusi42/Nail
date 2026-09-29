@@ -306,6 +306,136 @@ CREATE TABLE saved_searches (
 );
 "#;
 
+/// Schema v5 (M2a WP30, ADR 0029): the keyring, Autocrypt peer state,
+/// trust decisions, encryption-at-rest state, cached message security and
+/// a key/value settings table.
+///
+/// * `crypto_keys` holds OpenPGP keys and S/MIME certificates: metadata
+///   the UI lists, the public part (binary OpenPGP packets / DER) and, for
+///   own keys, the **encrypted** secret part (OpenPGP S2K-protected or
+///   wrapped with a keychain key; PKCS#8 for S/MIME) or a reference to
+///   where it lives (keychain entry, Windows store thumbprint). Nothing in
+///   this database is ever a plain secret key.
+/// * `crypto_key_emails` indexes keys by address for recipient lookup.
+/// * `crypto_trust` keeps the user's decisions apart from the key rows, so
+///   deleting and re-importing a key keeps them.
+/// * `autocrypt_peers` is Autocrypt Level 1 peer state, per own account.
+/// * `vault_state` is a single row describing encryption at rest and a
+///   running migration (for crash-safe resume).
+/// * `message_security` caches what reading a message found (security
+///   status and trusted `Authentication-Results`, never decrypted
+///   content), for list badges and rule conditions.
+/// * `app_settings` holds small JSON settings such as
+///   [`nail_api::security::SecuritySettings`].
+const V5: &str = r#"
+CREATE TABLE crypto_keys (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    technology        TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
+    -- OpenPGP: primary key fingerprint; S/MIME: SHA-256 of the DER
+    -- certificate. Uppercase hex.
+    fingerprint       TEXT NOT NULL,
+    -- JSON array of user ids (OpenPGP) or the subject (S/MIME), primary first.
+    user_ids          TEXT NOT NULL DEFAULT '[]',
+    algorithm         TEXT NOT NULL,
+    -- Unix seconds (UTC).
+    created_at        INTEGER NOT NULL,
+    expires_at        INTEGER,
+    revoked           INTEGER NOT NULL DEFAULT 0,
+    can_sign          INTEGER NOT NULL DEFAULT 0,
+    can_encrypt       INTEGER NOT NULL DEFAULT 0,
+    source            TEXT NOT NULL CHECK (source IN ('generated', 'imported', 'pkcs12',
+                          'windows-store', 'autocrypt', 'autocrypt-gossip', 'setup-message',
+                          'wkd', 'keyserver', 'message')),
+    -- Transferable public key (binary packets) or DER certificate.
+    public_data       BLOB NOT NULL,
+    -- NULL = no secret part (a correspondent's key).
+    secret_storage    TEXT CHECK (secret_storage IN ('keychain', 'passphrase', 'windows-store')),
+    -- Encrypted secret material; NULL for 'windows-store'.
+    secret_data       BLOB,
+    -- Keychain reference (`keychain:…`) of the wrapping key, or the
+    -- Windows store thumbprint.
+    secret_ref        TEXT,
+    -- S/MIME only.
+    issuer            TEXT,
+    serial            TEXT,
+    imported_at       INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL,
+    UNIQUE (technology, fingerprint),
+    CHECK (secret_storage IS NOT NULL OR (secret_data IS NULL AND secret_ref IS NULL))
+);
+
+CREATE TABLE crypto_key_emails (
+    key_id INTEGER NOT NULL REFERENCES crypto_keys(id) ON DELETE CASCADE,
+    email  TEXT NOT NULL COLLATE NOCASE,
+    PRIMARY KEY (key_id, email)
+) WITHOUT ROWID;
+CREATE INDEX crypto_key_emails_email ON crypto_key_emails(email);
+
+CREATE TABLE crypto_trust (
+    technology  TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
+    fingerprint TEXT NOT NULL,
+    decision    TEXT NOT NULL CHECK (decision IN ('verified', 'rejected')),
+    -- Unix seconds (UTC).
+    decided_at  INTEGER NOT NULL,
+    PRIMARY KEY (technology, fingerprint)
+) WITHOUT ROWID;
+
+-- Autocrypt Level 1 peer state. No foreign key on account_id: peers of a
+-- removed account are removed by the core with the account.
+CREATE TABLE autocrypt_peers (
+    account_id          TEXT NOT NULL,
+    email               TEXT NOT NULL COLLATE NOCASE,
+    -- Unix seconds (UTC) of the newest message seen from the peer.
+    last_seen           INTEGER NOT NULL,
+    -- Date of the newest message with an Autocrypt header.
+    autocrypt_timestamp INTEGER,
+    -- Fingerprint of the key from that header (a crypto_keys row).
+    key_fingerprint     TEXT,
+    prefer_encrypt      TEXT NOT NULL DEFAULT 'nopreference'
+                        CHECK (prefer_encrypt IN ('mutual', 'nopreference')),
+    gossip_timestamp    INTEGER,
+    gossip_fingerprint  TEXT,
+    PRIMARY KEY (account_id, email)
+) WITHOUT ROWID;
+
+CREATE TABLE vault_state (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    state       TEXT NOT NULL DEFAULT 'plain'
+                CHECK (state IN ('plain', 'encrypting', 'encrypted', 'decrypting')),
+    phase       TEXT CHECK (phase IN ('database', 'blobs', 'index')),
+    done        INTEGER NOT NULL DEFAULT 0,
+    total       INTEGER NOT NULL DEFAULT 0,
+    -- Keychain reference of the data key.
+    key_ref     TEXT,
+    -- A value encrypted with the data key, to detect a wrong key.
+    key_check   BLOB,
+    -- Unix seconds (UTC).
+    started_at  INTEGER,
+    finished_at INTEGER,
+    -- Last migration error (English diagnostic), NULL when none.
+    error       TEXT
+);
+INSERT INTO vault_state (id) VALUES (1);
+
+CREATE TABLE message_security (
+    message_id   TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    signed       INTEGER NOT NULL DEFAULT 0,
+    encrypted    INTEGER NOT NULL DEFAULT 0,
+    -- nail_api::security::SecurityStatus JSON; NULL = neither.
+    status       TEXT,
+    -- nail_api::security::AuthResults JSON; NULL = none trusted.
+    auth_results TEXT,
+    -- Unix seconds (UTC).
+    checked_at   INTEGER NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE app_settings (
+    key   TEXT PRIMARY KEY NOT NULL,
+    -- JSON.
+    value TEXT NOT NULL
+) WITHOUT ROWID;
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -335,6 +465,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
         sql: V4,
         backfill: Some(crate::compose::backfill_v4),
     },
+    Migration::sql(V5),
 ];
 
 /// The schema version this build creates and understands.
@@ -422,13 +553,19 @@ mod tests {
             tables(&conn),
             [
                 "accounts",
+                "app_settings",
+                "autocrypt_peers",
                 "collected_addresses",
+                "crypto_key_emails",
+                "crypto_keys",
+                "crypto_trust",
                 "draft_attachments",
                 "drafts",
                 "folders",
                 "mcp_audit",
                 "mcp_clients",
                 "mcp_grants",
+                "message_security",
                 "message_tags",
                 "messages",
                 "op_queue",
@@ -440,7 +577,8 @@ mod tests {
                 "rule_state",
                 "saved_searches",
                 "schema_version",
-                "thread_refs"
+                "thread_refs",
+                "vault_state"
             ]
         );
     }

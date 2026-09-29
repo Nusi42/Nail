@@ -34,6 +34,7 @@ fn identity() -> Identity {
         composer_mode: None,
         posting: None,
         mail_style: None,
+        crypto: None,
     }
 }
 

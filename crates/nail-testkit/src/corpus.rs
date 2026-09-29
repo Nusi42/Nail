@@ -7,6 +7,12 @@
 //! shipped binary (`nail serve --seed demo`).
 //!
 //! Message bytes are normalized to CRLF line endings, like on an IMAP server.
+//!
+//! `corpus/crypto/{pgp,smime}/` holds end-to-end test vectors (keys,
+//! certificates, signed and encrypted messages made by GnuPG, Thunderbird
+//! and OpenSSL; M2a, ADR 0029). They are not demo mail: [`demo_corpus`]
+//! and [`load_mail_dir`] skip the directory; tests read the files with
+//! [`crypto_fixture`].
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -104,13 +110,49 @@ pub fn corpus_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("corpus")
 }
 
+/// Name of the directory of end-to-end test vectors inside the corpus.
+pub const CRYPTO_FIXTURE_DIR: &str = "crypto";
+
+/// The kinds of end-to-end test vectors (sub-directories of
+/// [`CRYPTO_FIXTURE_DIR`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CryptoFixtures {
+    /// `corpus/crypto/pgp/` (M2a WP31): OpenPGP keys and messages.
+    Pgp,
+    /// `corpus/crypto/smime/` (M2a WP32): certificates, PKCS#12 files and
+    /// S/MIME messages.
+    Smime,
+}
+
+impl CryptoFixtures {
+    fn dir_name(self) -> &'static str {
+        match self {
+            Self::Pgp => "pgp",
+            Self::Smime => "smime",
+        }
+    }
+}
+
+/// Directory of one kind of end-to-end test vectors in the source tree.
+pub fn crypto_fixture_dir(kind: CryptoFixtures) -> PathBuf {
+    corpus_dir().join(CRYPTO_FIXTURE_DIR).join(kind.dir_name())
+}
+
+/// The bytes of an end-to-end test vector, e.g.
+/// `crypto_fixture(CryptoFixtures::Pgp, "alice.pub.asc")`. `None` when the
+/// file does not exist. Line endings are kept as checked in.
+pub fn crypto_fixture(kind: CryptoFixtures, file_name: &str) -> Option<Vec<u8>> {
+    std::fs::read(crypto_fixture_dir(kind).join(file_name)).ok()
+}
+
 /// Loads a directory laid out like the corpus: one sub-directory per folder,
-/// `.eml` files inside (sorted by file name), optional `flags.txt`.
+/// `.eml` files inside (sorted by file name), optional `flags.txt`. A
+/// sub-directory named [`CRYPTO_FIXTURE_DIR`] is skipped.
 pub fn load_mail_dir(dir: &Path) -> io::Result<Vec<CorpusFolder>> {
     let mut folders = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
-        if !path.is_dir() {
+        if !path.is_dir() || path.ends_with(CRYPTO_FIXTURE_DIR) {
             continue;
         }
         let name = path
@@ -243,6 +285,20 @@ mod tests {
         );
         let total: usize = corpus.iter().map(|f| f.messages.len()).sum();
         assert!((15..=25).contains(&total), "corpus has {total} messages");
+    }
+
+    #[test]
+    fn crypto_fixtures_are_not_demo_mail() {
+        assert!(crypto_fixture_dir(CryptoFixtures::Pgp).is_dir());
+        assert!(crypto_fixture_dir(CryptoFixtures::Smime).is_dir());
+        assert!(crypto_fixture(CryptoFixtures::Pgp, "README.md").is_some());
+        assert!(crypto_fixture(CryptoFixtures::Smime, "missing.p12").is_none());
+        let names: Vec<_> = load_mail_dir(&corpus_dir())
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        assert!(!names.iter().any(|n| n == CRYPTO_FIXTURE_DIR), "{names:?}");
     }
 
     #[test]

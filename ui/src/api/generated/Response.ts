@@ -8,6 +8,7 @@ import type { Address } from "./Address";
 import type { ConfigBackup } from "./ConfigBackup";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ConfigMergePreview } from "./ConfigMergePreview";
+import type { CryptoKey } from "./CryptoKey";
 import type { DiscoveredAccount } from "./DiscoveredAccount";
 import type { Draft } from "./Draft";
 import type { DraftAttachment } from "./DraftAttachment";
@@ -17,6 +18,10 @@ import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
+import type { KeyEncoding } from "./KeyEncoding";
+import type { KeyImportResult } from "./KeyImportResult";
+import type { KeyLookupCandidate } from "./KeyLookupCandidate";
+import type { KeyLookupFailure } from "./KeyLookupFailure";
 import type { McpAuditEntry } from "./McpAuditEntry";
 import type { McpClient } from "./McpClient";
 import type { McpServerInfo } from "./McpServerInfo";
@@ -25,6 +30,8 @@ import type { MessageSummary } from "./MessageSummary";
 import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
+import type { OutboxId } from "./OutboxId";
+import type { RecipientKeysReport } from "./RecipientKeysReport";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
 import type { Rule } from "./Rule";
@@ -33,9 +40,12 @@ import type { RuleRun } from "./RuleRun";
 import type { SavedSearch } from "./SavedSearch";
 import type { SearchError } from "./SearchError";
 import type { SearchHit } from "./SearchHit";
+import type { SecuritySettings } from "./SecuritySettings";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { UiContext } from "./UiContext";
+import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
+import type { WindowsCertificate } from "./WindowsCertificate";
 
 /**
  * The core's answer to one [`Request`].
@@ -327,7 +337,79 @@ searches: Array<SavedSearch>, } | { "type": "SavedSearchSaved",
 /**
  * The saved search (with its id).
  */
-search: SavedSearch, } | { "type": "Error", 
+search: SavedSearch, } | { "type": "Keys", 
+/**
+ * Own keys first, then by primary address.
+ */
+keys: Array<CryptoKey>, } | { "type": "Key", 
+/**
+ * The key.
+ */
+key: CryptoKey, } | { "type": "KeysImported", 
+/**
+ * What was imported.
+ */
+result: KeyImportResult, } | { "type": "KeyExported", 
+/**
+ * Suggested file name, e.g. `ada@example.org.asc`.
+ */
+filename: string, 
+/**
+ * MIME type (`application/pgp-keys`, `application/pkix-cert`).
+ */
+mime: string, 
+/**
+ * How `data` is encoded.
+ */
+encoding: KeyEncoding, 
+/**
+ * The key.
+ */
+data: string, } | { "type": "KeyGenerated", 
+/**
+ * The new key.
+ */
+key: CryptoKey, } | { "type": "KeySaved", 
+/**
+ * The key with its new trust.
+ */
+key: CryptoKey, } | { "type": "KeyLookup", 
+/**
+ * The address looked up.
+ */
+email: string, 
+/**
+ * Keys found, best first (none = not found).
+ */
+candidates: Array<KeyLookupCandidate>, 
+/**
+ * Sources that failed.
+ */
+failures: Array<KeyLookupFailure>, } | { "type": "WindowsCertificates", 
+/**
+ * The certificates.
+ */
+certificates: Array<WindowsCertificate>, } | { "type": "RecipientKeys", 
+/**
+ * The report.
+ */
+report: RecipientKeysReport, } | { "type": "AutocryptSetupSent", 
+/**
+ * The outbox entry of the setup message.
+ */
+outbox_id: OutboxId, 
+/**
+ * The passcode to enter on the other device. Shown once.
+ */
+passcode: string, } | { "type": "SecuritySettings", 
+/**
+ * The settings.
+ */
+settings: SecuritySettings, } | { "type": "VaultStatus", 
+/**
+ * The state.
+ */
+status: VaultStatus, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

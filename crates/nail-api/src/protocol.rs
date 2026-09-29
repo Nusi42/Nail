@@ -32,13 +32,18 @@ use crate::customize::{
 use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
 use crate::ids::{
-    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, McpClientId, MessageId, OAuthFlowId,
-    OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
+    OAuthFlowId, OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
 use crate::rules::{Rule, RuleMatch, RuleRun};
 use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery};
+use crate::security::{
+    CryptoKey, KeyAlgorithm, KeyEncoding, KeyFilter, KeyImportResult, KeyLookupCandidate,
+    KeyLookupFailure, KeyLookupSource, RecipientKeysReport, SecretProtection, SecuritySettings,
+    SendCrypto, TrustDecision, VaultStatus, WindowsCertStore, WindowsCertificate,
+};
 
 /// Version of this protocol. Bumped on incompatible changes; returned by
 /// [`Response::Pong`] so clients can detect a mismatched core.
@@ -286,6 +291,14 @@ pub enum Request {
         /// Send later: when to send (RFC 3339); overrides `delay_secs`.
         /// `null` = now plus the delay.
         send_at: Option<String>,
+        /// Sign / encrypt (M2a); absent = the draft's `crypto`, else the
+        /// identity's defaults. The message is signed / encrypted when it
+        /// is sent, so the choice is checked here: `no_key` when a needed
+        /// key is missing, `locked` when the signing key needs its
+        /// passphrase. It never falls back to sending unprotected.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        crypto: Option<SendCrypto>,
     },
     /// Stop a scheduled message and turn it back into a draft. Answered with
     /// [`Response::SendCancelled`]; `conflict` when it is already being sent.
@@ -577,6 +590,173 @@ pub enum Request {
     DeleteSavedSearch {
         /// The saved search.
         search_id: SavedSearchId,
+    },
+
+    // --- Keys and certificates (M2a WP30, ADR 0029) ---
+    /// OpenPGP keys and S/MIME certificates in the keyring, own keys first,
+    /// then by primary address. Answered with [`Response::Keys`].
+    ListKeys {
+        /// Filters; the default lists everything.
+        #[serde(default)]
+        filter: KeyFilter,
+    },
+    /// One key. Answered with [`Response::Key`].
+    GetKey {
+        /// The key.
+        key_id: KeyId,
+    },
+    /// Import OpenPGP keys (armored or binary; public or secret, several
+    /// at once) or certificates (PEM or DER). Existing keys are merged.
+    /// Unprotected secret keys are protected with the keychain; protected
+    /// ones keep their passphrase. Answered with [`Response::KeysImported`];
+    /// `crypto` when nothing in `data` is key material.
+    ImportKeys {
+        /// The key data.
+        data: String,
+        /// How `data` is encoded.
+        #[serde(default)]
+        encoding: KeyEncoding,
+    },
+    /// Import an S/MIME certificate with its private key from a PKCS#12
+    /// file (`.p12` / `.pfx`). Answered with [`Response::KeysImported`];
+    /// `auth_failed` for a wrong passphrase.
+    ImportPkcs12 {
+        /// The file, base64.
+        data: String,
+        /// The file's passphrase (never stored).
+        passphrase: String,
+        /// How to protect the private key in Nail.
+        #[serde(default)]
+        protection: SecretProtection,
+    },
+    /// The public part of a key (OpenPGP transferable public key, or the
+    /// certificate). Answered with [`Response::KeyExported`].
+    ExportPublicKey {
+        /// The key.
+        key_id: KeyId,
+        /// `text` (armored / PEM) or `base64` (binary / DER).
+        #[serde(default)]
+        encoding: KeyEncoding,
+    },
+    /// Generate an OpenPGP key for an identity (user id = its name and
+    /// address). Answered with [`Response::KeyGenerated`].
+    GenerateKey {
+        /// The identity.
+        identity_id: IdentityId,
+        /// Algorithm (default Ed25519 + X25519).
+        #[serde(default)]
+        algorithm: KeyAlgorithm,
+        /// Expiry in days from now; `null` = does not expire.
+        #[serde(default)]
+        expires_days: Option<u32>,
+        /// How to protect the secret key.
+        #[serde(default)]
+        protection: SecretProtection,
+    },
+    /// Remove a key. Answered with [`Response::Done`]; `conflict` when it
+    /// has a secret part and `delete_secret` is `false`.
+    DeleteKey {
+        /// The key.
+        key_id: KeyId,
+        /// Also delete the secret part (cannot be undone).
+        #[serde(default)]
+        delete_secret: bool,
+    },
+    /// Store or clear the user's trust decision. Answered with
+    /// [`Response::KeySaved`].
+    SetKeyTrust {
+        /// The key.
+        key_id: KeyId,
+        /// The decision.
+        decision: TrustDecision,
+    },
+    /// Enter the passphrase of a secret key. Answered with
+    /// [`Response::Done`]; `auth_failed` for a wrong passphrase.
+    UnlockKey {
+        /// The key.
+        key_id: KeyId,
+        /// The passphrase.
+        passphrase: String,
+        /// Keep it unlocked for this many minutes; `null` = until Nail
+        /// quits.
+        #[serde(default)]
+        remember_minutes: Option<u32>,
+    },
+    /// Look up an address's OpenPGP keys online (Web Key Directory,
+    /// keys.openpgp.org). Nothing is imported. Answered with
+    /// [`Response::KeyLookup`]; `unsupported` when online lookup is off
+    /// ([`SecuritySettings::key_lookup`]).
+    LookupKeys {
+        /// The address.
+        email: String,
+        /// Where to look; empty = [`SecuritySettings::lookup_sources`].
+        #[serde(default)]
+        sources: Vec<KeyLookupSource>,
+    },
+    /// Certificates in a Windows certificate store. Answered with
+    /// [`Response::WindowsCertificates`]; `unsupported` on other systems.
+    ListWindowsCertificates {
+        /// The store.
+        store: WindowsCertStore,
+    },
+    /// Use a certificate from the Windows store (its private key stays in
+    /// the store). Answered with [`Response::KeysImported`].
+    ImportWindowsCertificate {
+        /// The store.
+        store: WindowsCertStore,
+        /// SHA-1 thumbprint.
+        thumbprint: String,
+    },
+
+    // --- Composing and Autocrypt (M2a) ---
+    /// Key status of each recipient while composing, and what to suggest
+    /// for the sign / encrypt toggles. Answered with
+    /// [`Response::RecipientKeys`].
+    CheckRecipientKeys {
+        /// The sending identity.
+        identity_id: IdentityId,
+        /// Recipient addresses (To, Cc, Bcc).
+        recipients: Vec<String>,
+        /// Also look up recipients without a key online (subject to
+        /// [`SecuritySettings::key_lookup`]); found keys are imported.
+        #[serde(default)]
+        lookup: bool,
+    },
+    /// Send an Autocrypt setup message (the identity's secret key,
+    /// encrypted with a new passcode) to the identity's own address.
+    /// Answered with [`Response::AutocryptSetupSent`].
+    SendAutocryptSetup {
+        /// The identity.
+        identity_id: IdentityId,
+    },
+    /// Import the key from an Autocrypt setup message. Answered with
+    /// [`Response::KeysImported`]; `auth_failed` for a wrong passcode.
+    ImportAutocryptSetup {
+        /// The setup message.
+        message_id: MessageId,
+        /// The passcode shown on the other device.
+        passcode: String,
+    },
+
+    // --- Security settings and encryption at rest (M2a) ---
+    /// Global security settings. Answered with
+    /// [`Response::SecuritySettings`].
+    GetSecuritySettings,
+    /// Replace the global security settings. Answered with
+    /// [`Response::SecuritySettings`] (as saved).
+    UpdateSecuritySettings {
+        /// The new settings.
+        settings: SecuritySettings,
+    },
+    /// State of encryption at rest. Answered with [`Response::VaultStatus`].
+    GetVaultStatus,
+    /// Turn encryption at rest on or off. The migration runs in the
+    /// background (crash-safe, resumed on start); progress arrives as
+    /// [`Event::VaultProgress`]. Answered with [`Response::VaultStatus`];
+    /// `conflict` while another migration runs.
+    SetVaultEncryption {
+        /// `true` = encrypt, `false` = decrypt.
+        enabled: bool,
     },
 }
 
@@ -888,6 +1068,82 @@ pub enum Response {
         /// The saved search (with its id).
         search: SavedSearch,
     },
+    /// Answer to [`Request::ListKeys`].
+    Keys {
+        /// Own keys first, then by primary address.
+        keys: Vec<CryptoKey>,
+    },
+    /// Answer to [`Request::GetKey`].
+    Key {
+        /// The key.
+        key: Box<CryptoKey>,
+    },
+    /// Answer to [`Request::ImportKeys`], [`Request::ImportPkcs12`],
+    /// [`Request::ImportWindowsCertificate`] and
+    /// [`Request::ImportAutocryptSetup`].
+    KeysImported {
+        /// What was imported.
+        result: Box<KeyImportResult>,
+    },
+    /// Answer to [`Request::ExportPublicKey`].
+    KeyExported {
+        /// Suggested file name, e.g. `ada@example.org.asc`.
+        filename: String,
+        /// MIME type (`application/pgp-keys`, `application/pkix-cert`).
+        mime: String,
+        /// How `data` is encoded.
+        encoding: KeyEncoding,
+        /// The key.
+        data: String,
+    },
+    /// Answer to [`Request::GenerateKey`].
+    KeyGenerated {
+        /// The new key.
+        key: Box<CryptoKey>,
+    },
+    /// Answer to [`Request::SetKeyTrust`].
+    KeySaved {
+        /// The key with its new trust.
+        key: Box<CryptoKey>,
+    },
+    /// Answer to [`Request::LookupKeys`].
+    KeyLookup {
+        /// The address looked up.
+        email: String,
+        /// Keys found, best first (none = not found).
+        candidates: Vec<KeyLookupCandidate>,
+        /// Sources that failed.
+        failures: Vec<KeyLookupFailure>,
+    },
+    /// Answer to [`Request::ListWindowsCertificates`].
+    WindowsCertificates {
+        /// The certificates.
+        certificates: Vec<WindowsCertificate>,
+    },
+    /// Answer to [`Request::CheckRecipientKeys`].
+    RecipientKeys {
+        /// The report.
+        report: Box<RecipientKeysReport>,
+    },
+    /// Answer to [`Request::SendAutocryptSetup`].
+    AutocryptSetupSent {
+        /// The outbox entry of the setup message.
+        outbox_id: OutboxId,
+        /// The passcode to enter on the other device. Shown once.
+        passcode: String,
+    },
+    /// Answer to [`Request::GetSecuritySettings`] and
+    /// [`Request::UpdateSecuritySettings`].
+    SecuritySettings {
+        /// The settings.
+        settings: SecuritySettings,
+    },
+    /// Answer to [`Request::GetVaultStatus`] and
+    /// [`Request::SetVaultEncryption`].
+    VaultStatus {
+        /// The state.
+        status: VaultStatus,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -1049,6 +1305,18 @@ pub enum Event {
     /// Saved searches changed; clients refetch
     /// [`Request::ListSavedSearches`].
     SavedSearchesChanged,
+    /// The keyring changed (import, generation, deletion, trust, a key
+    /// learned from Autocrypt or a lookup); clients refetch keys and
+    /// recipient key status, and messages whose security they show.
+    KeysChanged,
+    /// Encryption at rest changed state or made progress.
+    VaultProgress {
+        /// The new state.
+        status: VaultStatus,
+    },
+    /// The global security settings changed; clients refetch
+    /// [`Request::GetSecuritySettings`].
+    SecuritySettingsChanged,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).
@@ -1195,6 +1463,7 @@ mod tests {
                 draft_id: "d1".into(),
                 delay_secs: None,
                 send_at: None,
+                crypto: None,
             })
             .unwrap(),
             json!({"type": "SendDraft", "draft_id": "d1", "delay_secs": null, "send_at": null})
@@ -1376,6 +1645,120 @@ mod tests {
             .unwrap(),
             json!({"type": "ConfigMergeResolved", "theme": null, "layout": null})
         );
+    }
+
+    #[test]
+    fn m2a_requests_serialize() {
+        // M1 clients (no `crypto`) still parse; absent crypto is not sent.
+        let send: Request = serde_json::from_value(json!({
+            "type": "SendDraft", "draft_id": "d1", "delay_secs": 5, "send_at": null
+        }))
+        .unwrap();
+        assert!(matches!(send, Request::SendDraft { crypto: None, .. }));
+        let value = serde_json::to_value(&send).unwrap();
+        assert!(value.get("crypto").is_none());
+        let send: Request = serde_json::from_value(json!({
+            "type": "SendDraft", "draft_id": "d1", "delay_secs": null, "send_at": null,
+            "crypto": {"sign": true, "encrypt": true, "technology": "openpgp"}
+        }))
+        .unwrap();
+        let Request::SendDraft {
+            crypto: Some(crypto),
+            ..
+        } = send
+        else {
+            panic!("wrong variant");
+        };
+        assert!(crypto.sign && crypto.encrypt);
+        assert_eq!(
+            crypto.technology,
+            Some(crate::security::CryptoTechnology::OpenPgp)
+        );
+
+        let list: Request = serde_json::from_value(json!({"type": "ListKeys"})).unwrap();
+        assert_eq!(
+            list,
+            Request::ListKeys {
+                filter: KeyFilter::default()
+            }
+        );
+        let generate: Request = serde_json::from_value(json!({
+            "type": "GenerateKey", "identity_id": "ada@example.org"
+        }))
+        .unwrap();
+        assert_eq!(
+            generate,
+            Request::GenerateKey {
+                identity_id: "ada@example.org".into(),
+                algorithm: KeyAlgorithm::Curve25519,
+                expires_days: None,
+                protection: SecretProtection::Keychain,
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(Request::SetKeyTrust {
+                key_id: "key-1".into(),
+                decision: TrustDecision::Verified,
+            })
+            .unwrap(),
+            json!({"type": "SetKeyTrust", "key_id": "key-1", "decision": "verified"})
+        );
+        assert_eq!(
+            serde_json::to_value(Request::ListWindowsCertificates {
+                store: WindowsCertStore::OtherPeople
+            })
+            .unwrap(),
+            json!({"type": "ListWindowsCertificates", "store": "other-people"})
+        );
+        let check: Request = serde_json::from_value(json!({
+            "type": "CheckRecipientKeys", "identity_id": "ada@example.org",
+            "recipients": ["bob@example.org"]
+        }))
+        .unwrap();
+        assert!(matches!(
+            check,
+            Request::CheckRecipientKeys { lookup: false, .. }
+        ));
+        assert_eq!(
+            serde_json::to_value(Request::SetVaultEncryption { enabled: true }).unwrap(),
+            json!({"type": "SetVaultEncryption", "enabled": true})
+        );
+    }
+
+    #[test]
+    fn m2a_responses_and_events_serialize() {
+        let status = Response::VaultStatus {
+            status: VaultStatus::plain(),
+        };
+        let value = serde_json::to_value(&status).unwrap();
+        assert_eq!(value["type"], json!("VaultStatus"));
+        assert_eq!(value["status"]["state"], json!("plain"));
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), status);
+        assert_eq!(
+            serde_json::to_value(Event::KeysChanged).unwrap(),
+            json!({"type": "KeysChanged"})
+        );
+        let settings = Response::SecuritySettings {
+            settings: SecuritySettings::default(),
+        };
+        let value = serde_json::to_value(&settings).unwrap();
+        assert_eq!(value["settings"]["key_lookup"], json!("on-demand"));
+        assert_eq!(
+            value["settings"]["lookup_sources"],
+            json!(["wkd", "keys-openpgp-org"])
+        );
+        let lookup = Response::KeyLookup {
+            email: "bob@example.org".into(),
+            candidates: vec![],
+            failures: vec![KeyLookupFailure {
+                source: KeyLookupSource::Wkd,
+                code: ErrorCode::Network,
+                message: "offline".into(),
+            }],
+        };
+        let value = serde_json::to_value(&lookup).unwrap();
+        assert_eq!(value["failures"][0]["source"], json!("wkd"));
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), lookup);
     }
 
     #[test]

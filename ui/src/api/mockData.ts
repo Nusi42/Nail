@@ -35,6 +35,7 @@ import {
 } from "../features/customization/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
 import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
+import { createSecurityMockState, type SecurityMockState } from "../features/security/mock";
 
 export interface MockData {
   /** Real accounts, in display order. */
@@ -60,7 +61,7 @@ export interface MockData {
   failedOps: Map<string, string>;
   /** The last reported UI context. */
   uiContext: UiContext;
-  /** State of the M1b feature mocks (`src/features/<name>/mock.ts`). */
+  /** State of the feature mocks (`src/features/<name>/mock.ts`). */
   features: MockFeatures;
   /** Behaviour switches for tests. */
   behaviour: MockBehaviour;
@@ -72,6 +73,7 @@ export interface MockFeatures {
   rules: RulesMockState;
   mcp: McpMockState;
   customization: CustomizationMockState;
+  security: SecurityMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -437,6 +439,7 @@ export function createMockData(inboxSize = 250): MockData {
       rules: createRulesMockState(),
       mcp: createMcpMockState(),
       customization: createCustomizationMockState(),
+      security: createSecurityMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

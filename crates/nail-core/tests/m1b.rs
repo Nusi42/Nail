@@ -184,6 +184,7 @@ async fn send_now(f: &Fixture, draft: Draft) {
                 draft_id,
                 delay_secs: Some(0),
                 send_at: None,
+                crypto: None,
             },
         )
         .await,
@@ -458,6 +459,7 @@ async fn drafts_are_autosaved_to_the_server_and_removed_after_sending() {
             draft_id: id,
             delay_secs: Some(0),
             send_at: None,
+            crypto: None,
         },
     )
     .await;
@@ -1323,6 +1325,7 @@ async fn autosaves_racing_uploads_leave_no_stale_server_drafts() {
                         draft_id: id,
                         delay_secs: Some(0),
                         send_at: None,
+                        crypto: None,
                     },
                 )
                 .await,

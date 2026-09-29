@@ -21,10 +21,17 @@ import * as composerMessages from "../features/composer/messages";
 import * as customizationMessages from "../features/customization/messages";
 import * as mcpMessages from "../features/mcp/messages";
 import * as rulesMessages from "../features/rules/messages";
+import * as securityMessages from "../features/security/messages";
 import { shippedCatalogs } from "./catalogs";
 
 /** Each feature slot lists its own message prefixes and runtime ids. */
-const FEATURE_MESSAGES = [composerMessages, rulesMessages, mcpMessages, customizationMessages];
+const FEATURE_MESSAGES = [
+  composerMessages,
+  rulesMessages,
+  mcpMessages,
+  customizationMessages,
+  securityMessages,
+];
 
 const srcDir = resolve(process.cwd(), "src");
 const localesDir = resolve(process.cwd(), "../locales");
@@ -115,6 +122,9 @@ const ERROR_CODES: ErrorCode[] = [
   "too_large",
   "rejected",
   "cancelled",
+  "locked",
+  "no_key",
+  "crypto",
 ];
 const STATES: AccountState[] = ["online", "connecting", "offline", "auth-error", "disabled"];
 const OUTBOX: OutboxState[] = ["scheduled", "sending", "sent", "failed", "cancelled"];
@@ -173,7 +183,7 @@ describe("English catalog coverage", () => {
 
   it("keeps the German catalogs as the same (empty) files", () => {
     expect(files("de")).toEqual(files("en"));
-    for (const feature of ["composer", "rules", "mcp", "customization"]) {
+    for (const feature of ["composer", "rules", "mcp", "customization", "security"]) {
       expect(files("en")).toContain(`${feature}.ftl`);
     }
   });

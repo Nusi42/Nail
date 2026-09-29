@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::{AccountId, FolderId, MessageId, ThreadId};
+use crate::security::{AuthResults, MessageWarning, SecurityStatus};
 
 /// The protocol family behind an account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
@@ -248,6 +249,23 @@ pub struct MessageBody {
     /// `true` when the sanitizer removed or neutralized remote content
     /// (images, fonts, CSS) that the user could choose to load.
     pub remote_content_blocked: bool,
+    /// End-to-end security (M2a): signatures, encryption, header
+    /// protection. Absent for mail that is neither signed nor encrypted. For encrypted mail that was decrypted, `text`,
+    /// `sanitized_html` and `attachments` are the decrypted content, which
+    /// the core never stores unless decrypted indexing is enabled
+    /// ([`crate::security::SecuritySettings::index_decrypted`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub security: Option<SecurityStatus>,
+    /// Sender authentication from a trusted `Authentication-Results`
+    /// header (M2a); absent when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub auth_results: Option<AuthResults>,
+    /// Link and attachment warnings for the reader (M2a); absent = none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<MessageWarning>>", optional)]
+    pub warnings: Vec<MessageWarning>,
 }
 
 #[cfg(test)]

@@ -231,6 +231,7 @@ M2 runs as four waves (four workflows), each shaped like the M1 waves: contract 
 ### Wave M2a — End-to-end encryption and data protection
 
 #### WP30 — Contract (sequential)
+*Done (ADR 0029):* protocol module `nail_api::security` (+ optional fields on `MessageBody`, `Identity`, `Draft`, `SendDraft`; error codes `locked`, `no_key`, `crypto`), identity `crypto` node in `accounts.kdl`, store v5 with tested accessors (keyring, trust, Autocrypt peers, vault state, message security, settings), stub crates with library smoke tests, slots for WP31–WP34 (incl. `nail-mime` modules and `corpus/crypto/{pgp,smime}`). The core serves the security settings and vault status; other security requests answer `unsupported`, and sign / encrypt on send is refused until WP35.
 Per-message `SecurityStatus` (signed / encrypted / verified, signer identity, key or certificate id, trust level, chain summary, header-protection state); `AuthResults` (DKIM / SPF / DMARC / ARC from `Authentication-Results`); key and certificate management requests (list, import, export public, generate OpenPGP key, delete, set trust, look up by address via WKD / keys.openpgp.org, import PKCS#12, list Windows-store certificates); per-identity crypto settings (default sign / encrypt, preferred technology, Autocrypt prefer-encrypt); compose-time recipient key status; `SendDraft` sign/encrypt options; encryption-at-rest settings and status; stub crates `nail-pgp`, `nail-smime`, `nail-vault` (at-rest encryption).
 
 #### WP31 — OpenPGP and Autocrypt (parallel)

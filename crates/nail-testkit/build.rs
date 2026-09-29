@@ -1,5 +1,7 @@
 //! Embeds the mail corpus (`corpus/<folder>/*.eml` plus optional `flags.txt`)
 //! into the crate, so `demo_corpus()` works without access to the source tree.
+//! `corpus/crypto/` holds OpenPGP / S/MIME test vectors, not demo mail; it
+//! is not embedded (tests read it from the source tree).
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -13,7 +15,7 @@ fn main() {
     let mut folders: Vec<_> = fs::read_dir(&corpus)
         .expect("corpus directory exists")
         .map(|entry| entry.expect("readable corpus entry").path())
-        .filter(|path| path.is_dir())
+        .filter(|path| path.is_dir() && !path.ends_with("crypto"))
         .collect();
     folders.sort();
 

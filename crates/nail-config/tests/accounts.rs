@@ -84,6 +84,7 @@ fn identity(account: &str, email: &str) -> Identity {
         composer_mode: None,
         posting: None,
         mail_style: None,
+        crypto: None,
     }
 }
 
@@ -1022,4 +1023,107 @@ fn adding_to_a_comment_only_file_or_one_without_final_newline() {
         let first_line = text.lines().next().unwrap();
         assert!(d.text().starts_with(first_line), "{text:?}:\n{}", d.text());
     }
+}
+
+/// M2a (ADR 0029): an identity's `crypto` node is read, validated and
+/// written back with only the values that differ from the defaults.
+#[test]
+fn identity_crypto_settings() {
+    use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
+
+    let fpr = "0123 4567 89ab cdef 0123 4567 89AB CDEF 0123 4567";
+    let text = account_with(&format!(
+        "    imap host=\"h\"\n    identity \"a@example.org\" {{\n        crypto technology=\"openpgp\" sign=#true encrypt=#true openpgp-key=\"{fpr}\" prefer-encrypt=\"mutual\" protect-headers=#false\n    }}"
+    ));
+    let config = parse_accounts(&text, "accounts.kdl").unwrap();
+    let crypto = config.accounts[0].identities[0].crypto.clone().unwrap();
+    assert_eq!(
+        crypto,
+        IdentityCrypto {
+            technology: CryptoPreference::OpenPgp,
+            sign: true,
+            encrypt: true,
+            openpgp_key: Some("0123456789ABCDEF0123456789ABCDEF01234567".into()),
+            smime_certificate: None,
+            autocrypt: true,
+            prefer_encrypt: AutocryptPreference::Mutual,
+            protect_headers: false,
+        }
+    );
+
+    // Identities without the node have none; an empty node means defaults.
+    let plain = parse_accounts(&account_with("    imap host=\"h\""), "accounts.kdl").unwrap();
+    assert_eq!(plain.accounts[0].identities[0].crypto, None);
+    let empty = parse_accounts(
+        &account_with(
+            "    imap host=\"h\"\n    identity \"a@example.org\" {\n        crypto\n    }",
+        ),
+        "accounts.kdl",
+    )
+    .unwrap();
+    assert_eq!(
+        empty.accounts[0].identities[0].crypto,
+        Some(IdentityCrypto::default())
+    );
+
+    // Canonical rendering writes only non-defaults and round-trips.
+    let mut d = AccountsDocument::empty("accounts.kdl");
+    d.set_config(config.clone()).unwrap();
+    assert!(
+        d.text().contains("crypto technology=\"openpgp\" sign=#true encrypt=#true openpgp-key=\"0123456789ABCDEF0123456789ABCDEF01234567\" prefer-encrypt=\"mutual\" protect-headers=#false"),
+        "{}",
+        d.text()
+    );
+    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+
+    // Editing one setting in place keeps the rest of the line.
+    let mut d = doc(&text);
+    let mut account = d.config().accounts[0].clone();
+    account.identities[0].crypto.as_mut().unwrap().sign = false;
+    d.upsert_account(account.clone()).unwrap();
+    assert!(!d.text().contains("sign=#true"), "{}", d.text());
+    assert!(d.text().contains("encrypt=#true"), "{}", d.text());
+    assert_eq!(d.config().accounts[0], account);
+
+    // All defaults leave a bare node; `None` removes it.
+    account.identities[0].crypto = Some(IdentityCrypto::default());
+    d.upsert_account(account.clone()).unwrap();
+    assert!(
+        d.text().contains(
+            "        crypto
+"
+        ),
+        "{}",
+        d.text()
+    );
+    assert_eq!(d.config().accounts[0], account);
+    account.identities[0].crypto = None;
+    d.upsert_account(account).unwrap();
+    assert!(!d.text().contains("crypto"), "{}", d.text());
+
+    // Validation.
+    for (body, needle) in [
+        ("crypto technology=\"gpg\"", "`technology` must be"),
+        ("crypto prefer-encrypt=\"yes\"", "`prefer-encrypt` must be"),
+        (
+            "crypto openpgp-key=\"XYZ\"",
+            "`openpgp-key` must be a fingerprint",
+        ),
+        (
+            "crypto smime-cert=\"0123456789ABCDEF0123456789ABCDEF01234567\"",
+            "64 hexadecimal",
+        ),
+        ("crypto bogus=#true", "bogus"),
+        ("crypto\n        crypto", "`crypto` is set twice"),
+        ("crypto \"x\"", ""),
+    ] {
+        let text = account_with(&format!(
+            "    imap host=\"h\"\n    identity \"a@example.org\" {{\n        {body}\n    }}"
+        ));
+        let (line, _, message) = error(&text);
+        assert!(line >= 4, "{body}: line {line}");
+        assert!(message.contains(needle), "{body}: {message}");
+    }
+    let schema = serde_json::to_string(&nail_config::accounts_schema()).unwrap();
+    assert!(schema.contains("\"prefer-encrypt\""), "{schema}");
 }

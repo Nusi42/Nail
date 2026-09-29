@@ -11,6 +11,7 @@ import { COMPOSER_REQUESTS, isComposerRequest } from "./composer/mock";
 import { CUSTOMIZATION_REQUESTS } from "./customization/mock";
 import { MCP_REQUESTS } from "./mcp/mock";
 import { RULES_REQUESTS } from "./rules/mock";
+import { SECURITY_REQUESTS } from "./security/mock";
 import { builtinWidgets } from "../widgets";
 import { appRegistry, features, mergeFeatures } from "./registry";
 import type { Feature } from "./types";
@@ -20,8 +21,14 @@ import type { DialogProps } from "../layout/dialogRegistry";
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the four M1b slots and contains every built-in", () => {
-    expect(Object.keys(features)).toEqual(["composer", "rules", "mcp", "customization"]);
+  it("has the M1b and M2a slots and contains every built-in", () => {
+    expect(Object.keys(features)).toEqual([
+      "composer",
+      "rules",
+      "mcp",
+      "customization",
+      "security",
+    ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);
     }
@@ -63,8 +70,14 @@ describe("feature registry", () => {
     ).toThrow(/dialog "x"/);
   });
 
-  it("routes each M1b request to exactly one feature mock", () => {
-    const lists = [COMPOSER_REQUESTS, RULES_REQUESTS, MCP_REQUESTS, CUSTOMIZATION_REQUESTS];
+  it("routes each feature request to exactly one feature mock", () => {
+    const lists = [
+      COMPOSER_REQUESTS,
+      RULES_REQUESTS,
+      MCP_REQUESTS,
+      CUSTOMIZATION_REQUESTS,
+      SECURITY_REQUESTS,
+    ];
     const all: string[] = lists.flat();
     expect(new Set(all).size).toBe(all.length);
     expect(isComposerRequest({ type: "ListRules" } as Request)).toBe(false);

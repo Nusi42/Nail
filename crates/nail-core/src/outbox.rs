@@ -26,7 +26,7 @@ use std::time::Duration;
 use nail_api::engine::{EngineError, OutgoingTransport};
 use nail_api::{
     AccountConfig, ApiError, AutomaticMail, Draft, DraftId, Event, Flags, FolderRole, Identity,
-    IncomingServer, OutboxEntry, OutboxId, OutboxState, OutgoingServer,
+    IncomingServer, OutboxEntry, OutboxId, OutboxState, OutgoingServer, SendCrypto,
 };
 use nail_proto_smtp::{SendOptions, SmtpAuth, SmtpConfig, SmtpTransport};
 use nail_store::{Operation, SendOutcome};
@@ -166,12 +166,32 @@ impl Service {
         draft_id: DraftId,
         delay_secs: Option<u32>,
         send_at: Option<String>,
+        crypto: Option<SendCrypto>,
     ) -> Result<OutboxEntry> {
         let draft = {
             let id = draft_id.clone();
             self.inner.store.call(move |s| s.get_draft(&id)).await?
         };
-        let (account, _) = self.identity(&draft.identity_id)?;
+        let (account, identity) = self.identity(&draft.identity_id)?;
+        // Sign / encrypt: the request's choice, else the draft's, else the
+        // identity's defaults (ADR 0029). Signing and encryption are wired
+        // in M2a WP35; until then such a message is refused rather than
+        // sent unprotected.
+        let identity_crypto = identity.crypto.clone().unwrap_or_default();
+        let crypto = crypto
+            .or_else(|| draft.crypto.clone())
+            .unwrap_or(SendCrypto {
+                sign: identity_crypto.sign,
+                encrypt: identity_crypto.encrypt,
+                technology: None,
+                protect_headers: None,
+            });
+        if crypto.is_active() {
+            return Err(ApiError::unsupported(
+                "signing and encrypting outgoing mail is not available yet",
+            )
+            .into());
+        }
         if account.outgoing.is_none() {
             return Err(ApiError::invalid_request(format!(
                 "account {} has no outgoing server",

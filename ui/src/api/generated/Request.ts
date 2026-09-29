@@ -10,6 +10,11 @@ import type { DraftId } from "./DraftId";
 import type { FlagChange } from "./FlagChange";
 import type { FolderId } from "./FolderId";
 import type { IdentityId } from "./IdentityId";
+import type { KeyAlgorithm } from "./KeyAlgorithm";
+import type { KeyEncoding } from "./KeyEncoding";
+import type { KeyFilter } from "./KeyFilter";
+import type { KeyId } from "./KeyId";
+import type { KeyLookupSource } from "./KeyLookupSource";
 import type { LayoutPatch } from "./LayoutPatch";
 import type { McpClientId } from "./McpClientId";
 import type { McpGrant } from "./McpGrant";
@@ -27,9 +32,14 @@ import type { SavedSearch } from "./SavedSearch";
 import type { SavedSearchId } from "./SavedSearchId";
 import type { SearchQuery } from "./SearchQuery";
 import type { SecretInput } from "./SecretInput";
+import type { SecretProtection } from "./SecretProtection";
+import type { SecuritySettings } from "./SecuritySettings";
+import type { SendCrypto } from "./SendCrypto";
 import type { ThreadId } from "./ThreadId";
+import type { TrustDecision } from "./TrustDecision";
 import type { UiContext } from "./UiContext";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
+import type { WindowsCertStore } from "./WindowsCertStore";
 
 /**
  * A request from a client to the core.
@@ -210,7 +220,15 @@ delay_secs: number | null,
  * Send later: when to send (RFC 3339); overrides `delay_secs`.
  * `null` = now plus the delay.
  */
-send_at: string | null, } | { "type": "CancelSend", 
+send_at: string | null, 
+/**
+ * Sign / encrypt (M2a); absent = the draft's `crypto`, else the
+ * identity's defaults. The message is signed / encrypted when it
+ * is sent, so the choice is checked here: `no_key` when a needed
+ * key is missing, `locked` when the signing key needs its
+ * passphrase. It never falls back to sending unprotected.
+ */
+crypto?: SendCrypto, } | { "type": "CancelSend", 
 /**
  * The outbox entry.
  */
@@ -447,4 +465,138 @@ search: SavedSearch, } | { "type": "DeleteSavedSearch",
 /**
  * The saved search.
  */
-search_id: SavedSearchId, };
+search_id: SavedSearchId, } | { "type": "ListKeys", 
+/**
+ * Filters; the default lists everything.
+ */
+filter: KeyFilter, } | { "type": "GetKey", 
+/**
+ * The key.
+ */
+key_id: KeyId, } | { "type": "ImportKeys", 
+/**
+ * The key data.
+ */
+data: string, 
+/**
+ * How `data` is encoded.
+ */
+encoding: KeyEncoding, } | { "type": "ImportPkcs12", 
+/**
+ * The file, base64.
+ */
+data: string, 
+/**
+ * The file's passphrase (never stored).
+ */
+passphrase: string, 
+/**
+ * How to protect the private key in Nail.
+ */
+protection: SecretProtection, } | { "type": "ExportPublicKey", 
+/**
+ * The key.
+ */
+key_id: KeyId, 
+/**
+ * `text` (armored / PEM) or `base64` (binary / DER).
+ */
+encoding: KeyEncoding, } | { "type": "GenerateKey", 
+/**
+ * The identity.
+ */
+identity_id: IdentityId, 
+/**
+ * Algorithm (default Ed25519 + X25519).
+ */
+algorithm: KeyAlgorithm, 
+/**
+ * Expiry in days from now; `null` = does not expire.
+ */
+expires_days: number | null, 
+/**
+ * How to protect the secret key.
+ */
+protection: SecretProtection, } | { "type": "DeleteKey", 
+/**
+ * The key.
+ */
+key_id: KeyId, 
+/**
+ * Also delete the secret part (cannot be undone).
+ */
+delete_secret: boolean, } | { "type": "SetKeyTrust", 
+/**
+ * The key.
+ */
+key_id: KeyId, 
+/**
+ * The decision.
+ */
+decision: TrustDecision, } | { "type": "UnlockKey", 
+/**
+ * The key.
+ */
+key_id: KeyId, 
+/**
+ * The passphrase.
+ */
+passphrase: string, 
+/**
+ * Keep it unlocked for this many minutes; `null` = until Nail
+ * quits.
+ */
+remember_minutes: number | null, } | { "type": "LookupKeys", 
+/**
+ * The address.
+ */
+email: string, 
+/**
+ * Where to look; empty = [`SecuritySettings::lookup_sources`].
+ */
+sources: Array<KeyLookupSource>, } | { "type": "ListWindowsCertificates", 
+/**
+ * The store.
+ */
+store: WindowsCertStore, } | { "type": "ImportWindowsCertificate", 
+/**
+ * The store.
+ */
+store: WindowsCertStore, 
+/**
+ * SHA-1 thumbprint.
+ */
+thumbprint: string, } | { "type": "CheckRecipientKeys", 
+/**
+ * The sending identity.
+ */
+identity_id: IdentityId, 
+/**
+ * Recipient addresses (To, Cc, Bcc).
+ */
+recipients: Array<string>, 
+/**
+ * Also look up recipients without a key online (subject to
+ * [`SecuritySettings::key_lookup`]); found keys are imported.
+ */
+lookup: boolean, } | { "type": "SendAutocryptSetup", 
+/**
+ * The identity.
+ */
+identity_id: IdentityId, } | { "type": "ImportAutocryptSetup", 
+/**
+ * The setup message.
+ */
+message_id: MessageId, 
+/**
+ * The passcode shown on the other device.
+ */
+passcode: string, } | { "type": "GetSecuritySettings" } | { "type": "UpdateSecuritySettings", 
+/**
+ * The new settings.
+ */
+settings: SecuritySettings, } | { "type": "GetVaultStatus" } | { "type": "SetVaultEncryption", 
+/**
+ * `true` = encrypt, `false` = decrypt.
+ */
+enabled: boolean, };

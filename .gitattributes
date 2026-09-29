@@ -5,3 +5,10 @@
 *.icns binary
 # Golden MIME files are compared byte for byte (CRLF line endings).
 crates/nail-compose/tests/golden/*.eml -text
+# End-to-end test vectors (M2a): signed MIME must stay byte-exact.
+crates/nail-testkit/corpus/crypto/**/*.eml -text
+*.p12 binary
+*.pfx binary
+*.der binary
+*.gpg binary
+*.pgp binary

@@ -15,6 +15,8 @@
 //! assert_eq!(parsed.preview, "Hello Sam");
 //! ```
 
+pub mod auth_results;
+pub mod links;
 mod sanitize;
 mod text;
 
@@ -103,6 +105,11 @@ impl ParsedMessage {
             sanitized_html: self.sanitized_html,
             attachments: self.attachments,
             remote_content_blocked: self.remote_content_blocked,
+            // Filled by the core (M2a): decryption / verification, trusted
+            // Authentication-Results, link and attachment warnings.
+            security: None,
+            auth_results: None,
+            warnings: Vec::new(),
         }
     }
 }

@@ -13,6 +13,7 @@ import type { OutboxState } from "./OutboxState";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
 import type { RuleRun } from "./RuleRun";
+import type { VaultStatus } from "./VaultStatus";
 
 /**
  * A notification pushed by the core, not tied to a request.
@@ -142,4 +143,8 @@ client_name: string,
 /**
  * `true` when it edited the open draft, `false` for a read.
  */
-edit: boolean, } | { "type": "McpClientsChanged" } | { "type": "SavedSearchesChanged" };
+edit: boolean, } | { "type": "McpClientsChanged" } | { "type": "SavedSearchesChanged" } | { "type": "KeysChanged" } | { "type": "VaultProgress", 
+/**
+ * The new state.
+ */
+status: VaultStatus, } | { "type": "SecuritySettingsChanged" };

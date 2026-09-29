@@ -6,6 +6,7 @@ import type { DraftAttachment } from "./DraftAttachment";
 import type { DraftContext } from "./DraftContext";
 import type { DraftId } from "./DraftId";
 import type { IdentityId } from "./IdentityId";
+import type { SendCrypto } from "./SendCrypto";
 import type { SignatureChoice } from "./SignatureChoice";
 
 /**
@@ -83,4 +84,10 @@ markdown_part: boolean,
  * cannot start mail loops. Clients leave it as they got it; absent
  * for mail the user writes.
  */
-automatic?: AutomaticMail, };
+automatic?: AutomaticMail, 
+/**
+ * The composer's sign / encrypt toggles (M2a), kept with the draft so
+ * they survive autosave; absent = the identity's defaults. A
+ * [`crate::Request::SendDraft`] `crypto` overrides it.
+ */
+crypto?: SendCrypto, };

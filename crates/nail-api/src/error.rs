@@ -38,6 +38,16 @@ pub enum ErrorCode {
     Rejected,
     /// The operation was cancelled (e.g. the user closed the OAuth2 sign-in).
     Cancelled,
+    /// A secret key is protected by a passphrase that was not entered
+    /// ([`crate::Request::UnlockKey`]), or the data vault's key is not
+    /// available (M2a).
+    Locked,
+    /// A needed key or certificate is missing or unusable: a recipient
+    /// without a key for encryption, no own key for signing (M2a).
+    NoKey,
+    /// Signing, encryption, decryption or verification failed, or key data
+    /// is malformed (M2a).
+    Crypto,
 }
 
 impl ErrorCode {
@@ -57,6 +67,9 @@ impl ErrorCode {
             Self::TooLarge => "too_large",
             Self::Rejected => "rejected",
             Self::Cancelled => "cancelled",
+            Self::Locked => "locked",
+            Self::NoKey => "no_key",
+            Self::Crypto => "crypto",
         }
     }
 
@@ -66,7 +79,7 @@ impl ErrorCode {
     }
 
     /// All codes, for exhaustive checks (e.g. catalog completeness tests).
-    pub const ALL: [ErrorCode; 13] = [
+    pub const ALL: [ErrorCode; 16] = [
         Self::InvalidRequest,
         Self::NotFound,
         Self::Unsupported,
@@ -80,6 +93,9 @@ impl ErrorCode {
         Self::TooLarge,
         Self::Rejected,
         Self::Cancelled,
+        Self::Locked,
+        Self::NoKey,
+        Self::Crypto,
     ];
 }
 

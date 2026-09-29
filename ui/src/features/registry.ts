@@ -12,6 +12,7 @@ import * as composer from "./composer";
 import * as customization from "./customization";
 import * as mcp from "./mcp";
 import * as rules from "./rules";
+import * as security from "./security";
 import type { Feature } from "./types";
 
 /** The feature slots, by name. */
@@ -20,6 +21,7 @@ export const features: Readonly<Record<string, Feature>> = {
   rules,
   mcp,
   customization,
+  security,
 };
 
 /** The merged registries. */

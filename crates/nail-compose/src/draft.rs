@@ -302,6 +302,7 @@ mod tests {
             composer_mode: mode,
             posting: None,
             mail_style: None,
+            crypto: None,
         }
     }
 

@@ -19,6 +19,7 @@ import { answerComposer, isComposerRequest } from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
+import { answerSecurity, isSecurityRequest } from "../features/security/mock";
 
 export interface MockTransportOptions {
   data?: MockData;
@@ -87,11 +88,12 @@ export class MockTransport implements Transport, MockCore {
     if (this.closed) {
       return errorResponse("unavailable", "mock transport closed");
     }
-    // M1b feature packages answer their own requests (src/features/*/mock.ts).
+    // Feature packages answer their own requests (src/features/*/mock.ts).
     if (isComposerRequest(request)) return answerComposer(this, request);
     if (isRulesRequest(request)) return answerRules(this, request);
     if (isMcpRequest(request)) return answerMcp(this, request);
     if (isCustomizationRequest(request)) return answerCustomization(this, request);
+    if (isSecurityRequest(request)) return answerSecurity(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };
@@ -191,7 +193,13 @@ export class MockTransport implements Transport, MockCore {
       case "ListDrafts":
         return outbox.listDrafts(this);
       case "SendDraft":
-        return outbox.sendDraft(this, request.draft_id, request.delay_secs, request.send_at);
+        return outbox.sendDraft(
+          this,
+          request.draft_id,
+          request.delay_secs,
+          request.send_at,
+          request.crypto,
+        );
       case "CancelSend":
         return outbox.cancelSend(this, request.outbox_id);
       case "ListOutbox":

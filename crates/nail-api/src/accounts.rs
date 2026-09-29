@@ -18,6 +18,7 @@ use ts_rs::TS;
 use crate::domain::FolderRole;
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, IdentityId, OAuthFlowId};
+use crate::security::IdentityCrypto;
 
 /// The whole `accounts.kdl` file: every configured account, virtual account
 /// and OAuth2 provider, in file order (which is the display order).
@@ -638,6 +639,13 @@ pub struct Identity {
     /// this identity; `null` = the built-in defaults.
     #[serde(default)]
     pub mail_style: Option<MailStyleConfig>,
+    /// End-to-end settings (M2a: default sign / encrypt, preferred
+    /// technology, own key, Autocrypt); absent = all defaults
+    /// ([`IdentityCrypto::default`]). Saved with
+    /// [`crate::Request::UpdateAccount`] like every identity setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub crypto: Option<IdentityCrypto>,
 }
 
 /// Top or bottom posting in replies (`posting=` of an identity).
@@ -1219,6 +1227,7 @@ mod tests {
             composer_mode: None,
             posting: None,
             mail_style: None,
+            crypto: None,
         });
         let config = AccountsConfig {
             accounts: vec![account],

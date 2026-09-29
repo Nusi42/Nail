@@ -540,6 +540,7 @@ fn draft(identity: &str, to: &str, subject: &str) -> Draft {
         signature: nail_api::SignatureChoice::Identity,
         markdown_part: false,
         automatic: None,
+        crypto: None,
     }
 }
 
@@ -557,6 +558,146 @@ fn smtp_subjects(f: &Fixture) -> Vec<String> {
         .iter()
         .map(|m| m["data"].as_str().unwrap().to_owned())
         .collect()
+}
+
+/// M2a (ADR 0029): a message that should be signed or encrypted is refused
+/// until signing and encryption are wired in, never sent unprotected;
+/// the choice comes from the request, the draft or the identity.
+#[tokio::test]
+async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
+    use nail_api::security::{IdentityCrypto, SendCrypto};
+
+    let f = setup().await;
+    synced(&f).await;
+    let sign = SendCrypto {
+        sign: true,
+        ..SendCrypto::none()
+    };
+    // Asked for in the request.
+    let id = save(
+        &f.service,
+        draft(MULTI_WORK_EMAIL, "bob@example.org", "Signed"),
+    )
+    .await;
+    let refused = request(
+        &f.service,
+        Request::SendDraft {
+            draft_id: id.clone(),
+            delay_secs: Some(0),
+            send_at: None,
+            crypto: Some(sign.clone()),
+        },
+    )
+    .await;
+    assert!(
+        matches!(
+            &refused,
+            Response::Error {
+                code: ErrorCode::Unsupported,
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+    // Kept with the draft.
+    let encrypted = Draft {
+        id: Some(id.clone()),
+        crypto: Some(SendCrypto {
+            encrypt: true,
+            ..SendCrypto::none()
+        }),
+        ..draft(MULTI_WORK_EMAIL, "bob@example.org", "Signed")
+    };
+    save(&f.service, encrypted).await;
+    let refused = request(
+        &f.service,
+        Request::SendDraft {
+            draft_id: id.clone(),
+            delay_secs: Some(0),
+            send_at: None,
+            crypto: None,
+        },
+    )
+    .await;
+    assert!(
+        matches!(
+            &refused,
+            Response::Error {
+                code: ErrorCode::Unsupported,
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+    // An explicit "neither" in the request wins over the draft.
+    let Response::SendQueued { .. } = request(
+        &f.service,
+        Request::SendDraft {
+            draft_id: id,
+            delay_secs: Some(0),
+            send_at: None,
+            crypto: Some(SendCrypto::none()),
+        },
+    )
+    .await
+    else {
+        panic!("expected the plain message to be queued")
+    };
+
+    // The identity's default (accounts.kdl `crypto sign=#true`).
+    let Response::AccountsConfig { config } = request(&f.service, Request::GetAccountsConfig).await
+    else {
+        panic!()
+    };
+    let mut account = config
+        .accounts
+        .iter()
+        .find(|a| a.id.as_str() == MULTI_WORK_ID)
+        .unwrap()
+        .clone();
+    account.identities[0].crypto = Some(IdentityCrypto {
+        sign: true,
+        ..IdentityCrypto::default()
+    });
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::UpdateAccount {
+                config: Box::new(account),
+                secrets: vec![],
+            }
+        )
+        .await,
+        Response::AccountSaved { .. }
+    ));
+    let text = std::fs::read_to_string(f.config_dir.path().join("accounts.kdl")).unwrap();
+    assert!(text.contains("crypto sign=#true"), "{text}");
+    let id = save(
+        &f.service,
+        draft(MULTI_WORK_EMAIL, "bob@example.org", "Default"),
+    )
+    .await;
+    let refused = request(
+        &f.service,
+        Request::SendDraft {
+            draft_id: id,
+            delay_secs: Some(0),
+            send_at: None,
+            crypto: None,
+        },
+    )
+    .await;
+    assert!(
+        matches!(
+            &refused,
+            Response::Error {
+                code: ErrorCode::Unsupported,
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+    assert!(!smtp_subjects(&f).iter().any(|d| d.contains("Default")));
 }
 
 #[tokio::test]
@@ -577,6 +718,7 @@ async fn sending_with_undo_and_for_real() {
             draft_id: undone.clone(),
             delay_secs: Some(30),
             send_at: None,
+            crypto: None,
         },
     )
     .await
@@ -614,6 +756,7 @@ async fn sending_with_undo_and_for_real() {
             draft_id: sent,
             delay_secs: Some(0),
             send_at: None,
+            crypto: None,
         },
     )
     .await
@@ -686,6 +829,7 @@ async fn sending_with_undo_and_for_real() {
             draft_id: home,
             delay_secs: Some(0),
             send_at: None,
+            crypto: None,
         },
     )
     .await;
@@ -1171,6 +1315,7 @@ async fn failed_sends_are_retried_or_reported() {
             draft_id: rejected,
             delay_secs: Some(0),
             send_at: None,
+            crypto: None,
         },
     )
     .await;
@@ -1198,6 +1343,7 @@ async fn failed_sends_are_retried_or_reported() {
             draft_id: flaky,
             delay_secs: Some(0),
             send_at: None,
+            crypto: None,
         },
     )
     .await;
@@ -1362,6 +1508,7 @@ async fn send_later_waits_for_its_time() {
             draft_id: later.clone(),
             delay_secs: None,
             send_at: Some(at.into()),
+            crypto: None,
         },
     )
     .await
@@ -1407,6 +1554,7 @@ async fn send_later_waits_for_its_time() {
                 draft_id: later.clone(),
                 delay_secs: None,
                 send_at: Some("tomorrow".into()),
+                crypto: None,
             },
         )
         .await,
@@ -1815,6 +1963,7 @@ async fn the_sent_copy_waits_for_the_imap_server() {
             draft_id: sent,
             delay_secs: Some(0),
             send_at: None,
+            crypto: None,
         },
     )
     .await;

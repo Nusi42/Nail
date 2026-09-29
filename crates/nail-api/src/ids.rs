@@ -113,6 +113,13 @@ string_id!(
     ConfigBackupId
 );
 
+string_id!(
+    /// Identifies an OpenPGP key or S/MIME certificate in the keyring
+    /// (M2a, [`crate::security::CryptoKey`]). Fingerprints are separate
+    /// fields; never derive one from the other.
+    KeyId
+);
+
 impl AccountId {
     /// Id of the built-in "All accounts" virtual account (the unified
     /// inbox). It is reserved: `accounts.kdl` cannot define an account or a

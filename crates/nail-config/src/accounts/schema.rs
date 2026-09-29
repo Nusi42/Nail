@@ -224,7 +224,7 @@ enum ComposerSchema {
     Markdown,
 }
 
-/// `identity "<address>" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style … }`.
+/// `identity "<address>" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style …; crypto … }`.
 #[derive(JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 struct IdentitySchema {
@@ -248,6 +248,55 @@ struct IdentitySchema {
     /// `mail-style css=… code-theme=…`: stylesheet and code theme of HTML /
     /// Markdown mail.
     mail_style: Option<MailStyleSchema>,
+    /// `crypto …`: end-to-end encryption and signing defaults.
+    crypto: Option<CryptoSchema>,
+}
+
+/// `crypto technology=… sign=… encrypt=… openpgp-key=… smime-cert=…
+/// autocrypt=… prefer-encrypt=… protect-headers=…`.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct CryptoSchema {
+    /// Preferred technology (default auto: what every recipient supports,
+    /// OpenPGP when both work).
+    technology: Option<TechnologySchema>,
+    /// Sign new messages by default (default false).
+    sign: Option<bool>,
+    /// Encrypt new messages by default when every recipient has a key
+    /// (default false).
+    encrypt: Option<bool>,
+    /// Own OpenPGP key: primary key fingerprint (40 or 64 hex digits).
+    openpgp_key: Option<String>,
+    /// Own S/MIME certificate: SHA-256 fingerprint (64 hex digits).
+    smime_cert: Option<String>,
+    /// Send Autocrypt headers and learn from received ones (default true).
+    autocrypt: Option<bool>,
+    /// Autocrypt prefer-encrypt (default nopreference).
+    prefer_encrypt: Option<PreferEncryptSchema>,
+    /// Hide the subject of encrypted mail on the wire (default true).
+    protect_headers: Option<bool>,
+}
+
+/// End-to-end technology.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum TechnologySchema {
+    /// Whatever every recipient supports.
+    Auto,
+    /// OpenPGP.
+    Openpgp,
+    /// S/MIME.
+    Smime,
+}
+
+/// Autocrypt prefer-encrypt.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum PreferEncryptSchema {
+    /// Encrypt by default when both sides say so.
+    Mutual,
+    /// No preference.
+    Nopreference,
 }
 
 /// Quote placement in replies.

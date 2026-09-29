@@ -300,3 +300,10 @@ For M1b:
   copy, `ListDrafts`; default layout / theme; desktop smoke test over WebView2 CDP)
 - **0028:** M1b review fixes (rule mail marked against loops, redirects through the outbox,
   escaped reply templates, autosave upload races, restricted MCP search / context, partial undo)
+
+For M2a:
+
+- **0029:** the M2a contract (message security, keys and certificates, recipient key status,
+  sign / encrypt options, auth results, reader warnings, encryption at rest, security settings),
+  identity `crypto` in `accounts.kdl`, store v5, the `nail-pgp` / `nail-smime` / `nail-vault`
+  stubs, the crypto test-vector folders and the `security` UI slot

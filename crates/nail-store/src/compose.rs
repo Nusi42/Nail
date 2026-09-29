@@ -698,6 +698,7 @@ mod tests {
             signature: nail_api::SignatureChoice::Identity,
             markdown_part: false,
             automatic: None,
+            crypto: None,
         }
     }
 

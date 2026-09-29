@@ -25,6 +25,11 @@
 //!   ([`RuleRunRecord`], [`RuleRunAction`]), MCP clients with hashed tokens,
 //!   grants and the audit log ([`hash_mcp_token`], [`McpAuditRecord`]) and
 //!   saved searches ([`Store::list_saved_searches`]).
+//! * M2a (schema v5, ADR 0029): the keyring ([`Store::upsert_key`],
+//!   [`KeyData`] with already-encrypted secret parts), trust decisions,
+//!   Autocrypt peer state ([`AutocryptPeerRecord`]), encryption-at-rest
+//!   state ([`VaultRecord`]), cached message security
+//!   ([`MessageSecurityRecord`]) and JSON settings ([`Store::setting`]).
 //!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
@@ -32,6 +37,7 @@
 mod addresses;
 pub mod blob;
 mod compose;
+mod crypto;
 mod error;
 mod filter;
 mod mail;
@@ -48,6 +54,10 @@ use std::path::Path;
 
 pub use blob::{BlobHash, BlobStore};
 pub use compose::{DraftServerCopy, SendOutcome};
+pub use crypto::{
+    AutocryptPeerRecord, KeyData, MessageSecurityRecord, SECURITY_SETTINGS_KEY, SecretKeyData,
+    StoredKey, VaultRecord,
+};
 pub use error::{Error, Result};
 pub use filter::{MessageFilter, SizeCmp};
 pub use mail::{

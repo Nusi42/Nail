@@ -40,6 +40,7 @@ mod replay;
 mod rule_mail;
 mod rules;
 mod search;
+mod security;
 mod service;
 mod setup;
 mod strings;

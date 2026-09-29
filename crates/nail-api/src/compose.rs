@@ -30,6 +30,7 @@ pub use crate::accounts::ComposerMode;
 use crate::domain::Address;
 use crate::error::ErrorCode;
 use crate::ids::{AccountId, DraftId, IdentityId, MessageId, OutboxId};
+use crate::security::SendCrypto;
 
 /// A message being written.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -91,6 +92,12 @@ pub struct Draft {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub automatic: Option<AutomaticMail>,
+    /// The composer's sign / encrypt toggles (M2a), kept with the draft so
+    /// they survive autosave; absent = the identity's defaults. A
+    /// [`crate::Request::SendDraft`] `crypto` overrides it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub crypto: Option<SendCrypto>,
 }
 
 /// The header that marks mail sent by a Nail filter rule. Its value is the
@@ -134,6 +141,7 @@ impl Draft {
             signature: SignatureChoice::default(),
             markdown_part: false,
             automatic: None,
+            crypto: None,
         }
     }
 

@@ -292,6 +292,76 @@
         }
       ]
     },
+    "CryptoSchema": {
+      "description": "`crypto technology=… sign=… encrypt=… openpgp-key=… smime-cert=…\nautocrypt=… prefer-encrypt=… protect-headers=…`.",
+      "type": "object",
+      "properties": {
+        "autocrypt": {
+          "description": "Send Autocrypt headers and learn from received ones (default true).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "encrypt": {
+          "description": "Encrypt new messages by default when every recipient has a key\n(default false).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "openpgp-key": {
+          "description": "Own OpenPGP key: primary key fingerprint (40 or 64 hex digits).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefer-encrypt": {
+          "description": "Autocrypt prefer-encrypt (default nopreference).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreferEncryptSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protect-headers": {
+          "description": "Hide the subject of encrypted mail on the wire (default true).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sign": {
+          "description": "Sign new messages by default (default false).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "smime-cert": {
+          "description": "Own S/MIME certificate: SHA-256 fingerprint (64 hex digits).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "technology": {
+          "description": "Preferred technology (default auto: what every recipient supports,\nOpenPGP when both work).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TechnologySchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "FolderRuleSchema": {
       "description": "One folder rule.",
       "type": "object",
@@ -365,7 +435,7 @@
       ]
     },
     "IdentitySchema": {
-      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style … }`.",
+      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style …; crypto … }`.",
       "type": "object",
       "properties": {
         "bcc": {
@@ -381,6 +451,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ComposerSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "crypto": {
+          "description": "`crypto …`: end-to-end encryption and signing defaults.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CryptoSchema"
             },
             {
               "type": "null"
@@ -700,6 +781,21 @@
         }
       ]
     },
+    "PreferEncryptSchema": {
+      "description": "Autocrypt prefer-encrypt.",
+      "oneOf": [
+        {
+          "description": "Encrypt by default when both sides say so.",
+          "type": "string",
+          "const": "mutual"
+        },
+        {
+          "description": "No preference.",
+          "type": "string",
+          "const": "nopreference"
+        }
+      ]
+    },
     "RoleSchema": {
       "description": "A special-use role.",
       "oneOf": [
@@ -852,6 +948,26 @@
           }
         }
       }
+    },
+    "TechnologySchema": {
+      "description": "End-to-end technology.",
+      "oneOf": [
+        {
+          "description": "Whatever every recipient supports.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "OpenPGP.",
+          "type": "string",
+          "const": "openpgp"
+        },
+        {
+          "description": "S/MIME.",
+          "type": "string",
+          "const": "smime"
+        }
+      ]
     },
     "TlsSchema": {
       "description": "Transport security.",

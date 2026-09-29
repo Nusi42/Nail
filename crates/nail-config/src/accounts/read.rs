@@ -11,6 +11,7 @@ use nail_api::accounts::{
     SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode,
     VirtualAccountConfig, default_port,
 };
+use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
 use nail_api::{AccountId, FolderRole, IdentityId};
 
 use super::{
@@ -400,6 +401,7 @@ impl Reader<'_, '_> {
                 composer_mode: None,
                 posting: None,
                 mail_style: None,
+                crypto: None,
             });
         }
         let mut seen = HashSet::new();
@@ -736,6 +738,7 @@ impl Reader<'_, '_> {
         let mut bcc = Vec::new();
         let mut signature: Option<Signature> = None;
         let mut mail_style: Option<MailStyleConfig> = None;
+        let mut crypto: Option<IdentityCrypto> = None;
         for child in children(node) {
             match name(child) {
                 "bcc" => {
@@ -784,11 +787,17 @@ impl Reader<'_, '_> {
                         code_theme: self.prop_nonempty(child, "code-theme")?,
                     });
                 }
+                "crypto" => {
+                    if crypto.is_some() {
+                        return Err(self.src.node_err(child, "`crypto` is set twice"));
+                    }
+                    crypto = Some(self.identity_crypto(child)?);
+                }
                 other => {
                     return Err(self.src.node_err(
                         child,
                         format!(
-                            "unknown node `{other}` in `identity` (expected bcc, signature or mail-style)"
+                            "unknown node `{other}` in `identity` (expected bcc, signature, mail-style or crypto)"
                         ),
                     ));
                 }
@@ -805,7 +814,99 @@ impl Reader<'_, '_> {
             composer_mode,
             posting,
             mail_style,
+            crypto,
         })
+    }
+
+    /// `crypto technology=… sign=… encrypt=… openpgp-key=… smime-cert=…
+    /// autocrypt=… prefer-encrypt=… protect-headers=…` (M2a, ADR 0029).
+    fn identity_crypto(&self, node: &KdlNode) -> Result<IdentityCrypto, ConfigError> {
+        self.check_props(
+            node,
+            &[
+                "technology",
+                "sign",
+                "encrypt",
+                "openpgp-key",
+                "smime-cert",
+                "autocrypt",
+                "prefer-encrypt",
+                "protect-headers",
+            ],
+        )?;
+        self.check_unique_props(node)?;
+        check_max_args(self.src, node, 0)?;
+        check_no_children(self.src, node)?;
+        let defaults = IdentityCrypto::default();
+        let technology = match prop_str(self.src, node, "technology")? {
+            None => defaults.technology,
+            Some(("auto", _)) => CryptoPreference::Auto,
+            Some(("openpgp", _)) => CryptoPreference::OpenPgp,
+            Some(("smime", _)) => CryptoPreference::Smime,
+            Some((text, entry)) => {
+                return Err(self.src.entry_err(
+                    entry,
+                    format!(
+                        "`technology` must be \"auto\", \"openpgp\" or \"smime\", found {text:?}"
+                    ),
+                ));
+            }
+        };
+        let prefer_encrypt = match prop_str(self.src, node, "prefer-encrypt")? {
+            None => defaults.prefer_encrypt,
+            Some(("mutual", _)) => AutocryptPreference::Mutual,
+            Some(("nopreference", _)) => AutocryptPreference::NoPreference,
+            Some((text, entry)) => {
+                return Err(self.src.entry_err(
+                    entry,
+                    format!(
+                        "`prefer-encrypt` must be \"mutual\" or \"nopreference\", found {text:?}"
+                    ),
+                ));
+            }
+        };
+        Ok(IdentityCrypto {
+            technology,
+            sign: self.prop_bool(node, "sign")?.unwrap_or(defaults.sign),
+            encrypt: self.prop_bool(node, "encrypt")?.unwrap_or(defaults.encrypt),
+            openpgp_key: self.fingerprint(node, "openpgp-key", &[40, 64])?,
+            smime_certificate: self.fingerprint(node, "smime-cert", &[64])?,
+            autocrypt: self
+                .prop_bool(node, "autocrypt")?
+                .unwrap_or(defaults.autocrypt),
+            prefer_encrypt,
+            protect_headers: self
+                .prop_bool(node, "protect-headers")?
+                .unwrap_or(defaults.protect_headers),
+        })
+    }
+
+    /// A hexadecimal fingerprint property (spaces allowed, stored
+    /// uppercase without them) of one of the given lengths.
+    fn fingerprint(
+        &self,
+        node: &KdlNode,
+        key: &str,
+        lengths: &[usize],
+    ) -> Result<Option<String>, ConfigError> {
+        let Some((text, entry)) = prop_str(self.src, node, key)? else {
+            return Ok(None);
+        };
+        let hex: String = text.chars().filter(|c| *c != ' ').collect();
+        if !hex.chars().all(|c| c.is_ascii_hexdigit()) || !lengths.contains(&hex.len()) {
+            let lengths = lengths
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" or ");
+            return Err(self.src.entry_err(
+                entry,
+                format!(
+                    "`{key}` must be a fingerprint of {lengths} hexadecimal digits, found {text:?}"
+                ),
+            ));
+        }
+        Ok(Some(hex.to_ascii_uppercase()))
     }
 
     fn body_policy(&self, node: &KdlNode) -> Result<Option<BodyPolicy>, ConfigError> {

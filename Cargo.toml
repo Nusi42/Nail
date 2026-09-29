@@ -16,6 +16,9 @@ members = [
     "crates/nail-compose",
     "crates/nail-rules",
     "crates/nail-mcp",
+    "crates/nail-pgp",
+    "crates/nail-smime",
+    "crates/nail-vault",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -40,6 +43,9 @@ default-members = [
     "crates/nail-compose",
     "crates/nail-rules",
     "crates/nail-mcp",
+    "crates/nail-pgp",
+    "crates/nail-smime",
+    "crates/nail-vault",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -70,6 +76,9 @@ nail-testkit-net = { path = "crates/nail-testkit-net" }
 nail-compose = { path = "crates/nail-compose" }
 nail-rules = { path = "crates/nail-rules" }
 nail-mcp = { path = "crates/nail-mcp" }
+nail-pgp = { path = "crates/nail-pgp" }
+nail-smime = { path = "crates/nail-smime" }
+nail-vault = { path = "crates/nail-vault" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -126,6 +135,41 @@ regex = "1.13.1"
 # Server side here; tests add `client` + `transport-streamable-http-client-reqwest`
 # (reqwest stays on the workspace's `rustls-no-provider` build, no aws-lc).
 rmcp = { version = "3.5.0", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
+
+# M2a (ADR 0029). Licences: MIT / Apache-2.0 / BSD only (no GPL family;
+# Sequoia-PGP is LGPL, so OpenPGP uses rPGP). No OpenSSL: everything below
+# is pure Rust, plus the `windows` crate for the certificate store.
+# rPGP pins the stable RustCrypto generation (digest 0.10, rsa 0.9,
+# p256 0.13, aes-gcm 0.10, rand 0.8); S/MIME and the vault use the same one
+# so every primitive is compiled once. (`sha2` above is digest 0.11, used for
+# ids and blob hashes; `sha2-legacy` is the 0.10 generation for crypto.)
+pgp = "0.20.0"
+rand = "0.8.5"
+zeroize = "1.9.0"
+# WKD (z-base32 of SHA-1 of the local part) and legacy S/MIME digests.
+sha1 = "0.10.6"
+sha2-legacy = { package = "sha2", version = "0.10.9", features = ["oid"] }
+# S/MIME: CMS SignedData / EnvelopedData, certificates, PKCS#12.
+cms = { version = "0.2.3", features = ["builder"] }
+x509-cert = { version = "0.2.5", features = ["builder"] }
+der = { version = "0.7.10", features = ["std"] }
+spki = "0.7.3"
+const-oid = { version = "0.9.6", features = ["db"] }
+rsa = "0.9.10"
+p256 = "0.13.2"
+p384 = "0.13.1"
+ecdsa = "0.16.9"
+aes = "0.8.4"
+cbc = "0.1.2"
+aes-gcm = "0.10.3"
+p12-keystore = "0.2.1"
+# Windows certificate store (CryptoAPI / CNG); only on Windows targets.
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+# Encryption at rest: XChaCha20-Poly1305 for blobs and index files.
+chacha20poly1305 = "0.10.1"
+# Link safety in nail-mime: IDNA / punycode and UTS #39 confusables.
+idna = "1.1.0"
+unicode-security = "0.1.2"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

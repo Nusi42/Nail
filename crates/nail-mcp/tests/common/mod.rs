@@ -191,6 +191,9 @@ impl McpData for FakeData {
                 vec![]
             },
             remote_content_blocked: false,
+            security: None,
+            auth_results: None,
+            warnings: Vec::new(),
         })
     }
 

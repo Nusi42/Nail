@@ -28,6 +28,7 @@ use nail_api::accounts::{
     IncomingServer, MailProtocol, OAuthProviderConfig, OutgoingServer, QuotePosting,
     ServerEndpoint, SyncPolicy, TlsMode, VirtualAccountConfig, default_port,
 };
+use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
 
 use super::read::{mechanism_name, role_name};
 
@@ -266,6 +267,9 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
                 .prop_opt("code-theme", style.code_theme.as_deref());
             grand.push(style.finish(2, indent, &[]));
         }
+        if let Some(crypto) = &identity.crypto {
+            grand.push(render_identity_crypto(crypto).finish(2, indent, &[]));
+        }
         children.push(line.finish(1, indent, &grand));
     }
     if account.sync != SyncPolicy::default() {
@@ -278,6 +282,40 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
         .bool_opt("enabled", (!account.enabled).then_some(false))
         .bool_opt("save-sent-copy", account.save_sent_copy);
     line.finish(0, indent, &children)
+}
+
+/// The `crypto` node of an identity; only values that differ from the
+/// defaults are written (an all-default node stays as a bare `crypto`).
+fn render_identity_crypto(crypto: &IdentityCrypto) -> Line {
+    let defaults = IdentityCrypto::default();
+    let differs = |value: bool, default: bool| (value != default).then_some(value);
+    Line::new("crypto")
+        .prop_opt(
+            "technology",
+            (crypto.technology != defaults.technology).then_some(match crypto.technology {
+                CryptoPreference::Auto => "auto",
+                CryptoPreference::OpenPgp => "openpgp",
+                CryptoPreference::Smime => "smime",
+            }),
+        )
+        .bool_opt("sign", differs(crypto.sign, defaults.sign))
+        .bool_opt("encrypt", differs(crypto.encrypt, defaults.encrypt))
+        .prop_opt("openpgp-key", crypto.openpgp_key.as_deref())
+        .prop_opt("smime-cert", crypto.smime_certificate.as_deref())
+        .bool_opt("autocrypt", differs(crypto.autocrypt, defaults.autocrypt))
+        .prop_opt(
+            "prefer-encrypt",
+            (crypto.prefer_encrypt != defaults.prefer_encrypt).then_some(
+                match crypto.prefer_encrypt {
+                    AutocryptPreference::Mutual => "mutual",
+                    AutocryptPreference::NoPreference => "nopreference",
+                },
+            ),
+        )
+        .bool_opt(
+            "protect-headers",
+            differs(crypto.protect_headers, defaults.protect_headers),
+        )
 }
 
 fn body_props(line: Line, bodies: Option<BodyPolicy>) -> Line {
@@ -439,6 +477,7 @@ const SINGLETONS: &[&str] = &[
     "bcc",
     "signature",
     "mail-style",
+    "crypto",
     "scopes",
 ];
 

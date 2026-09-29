@@ -783,8 +783,12 @@ impl Service {
                 draft_id,
                 delay_secs,
                 send_at,
+                crypto,
             } => Response::SendQueued {
-                entry: Box::new(self.send_draft(draft_id, delay_secs, send_at).await?),
+                entry: Box::new(
+                    self.send_draft(draft_id, delay_secs, send_at, crypto)
+                        .await?,
+                ),
             },
             Request::CancelSend { outbox_id } => Response::SendCancelled {
                 draft_id: self.cancel_send(outbox_id).await?,
@@ -844,6 +848,27 @@ impl Service {
             | Request::ListConfigBackups { .. }
             | Request::RevertConfig { .. }
             | Request::OpenConfigFile { .. }) => crate::customize::handle(self, request).await?,
+
+            // --- M2a security (ADR 0029): one arm, wired by WP35 ---
+            request @ (Request::ListKeys { .. }
+            | Request::GetKey { .. }
+            | Request::ImportKeys { .. }
+            | Request::ImportPkcs12 { .. }
+            | Request::ExportPublicKey { .. }
+            | Request::GenerateKey { .. }
+            | Request::DeleteKey { .. }
+            | Request::SetKeyTrust { .. }
+            | Request::UnlockKey { .. }
+            | Request::LookupKeys { .. }
+            | Request::ListWindowsCertificates { .. }
+            | Request::ImportWindowsCertificate { .. }
+            | Request::CheckRecipientKeys { .. }
+            | Request::SendAutocryptSetup { .. }
+            | Request::ImportAutocryptSetup { .. }
+            | Request::GetSecuritySettings
+            | Request::UpdateSecuritySettings { .. }
+            | Request::GetVaultStatus
+            | Request::SetVaultEncryption { .. }) => crate::security::handle(self, request).await?,
         })
     }
 

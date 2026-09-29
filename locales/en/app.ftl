@@ -208,6 +208,9 @@ error-tls = A secure connection to the server could not be established.
 error-too-large = The message is larger than the server accepts.
 error-rejected = The server refused the request.
 error-cancelled = The operation was cancelled.
+error-locked = A key is locked. Enter its passphrase and try again.
+error-no-key = A needed key or certificate is missing or cannot be used.
+error-crypto = Signing, encryption or verification failed.
 
 ## Account status (from nail_api::AccountState, "account-state-" + state)
 

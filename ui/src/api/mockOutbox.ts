@@ -5,7 +5,7 @@
  * the account's Sent folder.
  */
 import { htmlToText, saveRichDraft } from "../features/composer/mock";
-import type { Draft, OutboxEntry, Response } from "./generated";
+import type { Draft, OutboxEntry, Response, SendCrypto } from "./generated";
 import { mockBody } from "./mockData";
 import { errorResponse, type MockCore } from "./mockMail";
 
@@ -125,6 +125,7 @@ export function sendDraft(
   draftId: string,
   delaySecs: number | null,
   sendAt: string | null,
+  crypto?: SendCrypto,
 ): Response {
   const d = core.data;
   const draft = d.drafts.get(draftId);
@@ -134,6 +135,19 @@ export function sendDraft(
   }
   const identity = identityOf(core, draft.identity_id);
   if (!identity) return errorResponse("invalid_request", "unknown identity");
+  // Like the core (ADR 0029): sign / encrypt from the request, the draft or
+  // the identity; refused until signing and encryption are wired in.
+  const wanted = crypto ??
+    draft.crypto ?? {
+      sign: identity.crypto?.sign ?? false,
+      encrypt: identity.crypto?.encrypt ?? false,
+    };
+  if (wanted.sign || wanted.encrypt) {
+    return errorResponse(
+      "unsupported",
+      "signing and encrypting outgoing mail is not available yet",
+    );
+  }
   const now = Date.now();
   let due: number;
   if (sendAt !== null) {

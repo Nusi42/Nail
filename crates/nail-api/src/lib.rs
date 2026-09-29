@@ -16,6 +16,10 @@
 //! * [`context`]: the UI context reported to the core (for MCP).
 //! * [`customize`]: configuration errors, layout write-back, the merge
 //!   dialog and backups.
+//! * [`security`]: end-to-end encryption (message security status, keys
+//!   and certificates, recipient key status, sign / encrypt options),
+//!   sender authentication, reader warnings, encryption at rest and the
+//!   security settings (M2a, ADR 0029).
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -45,6 +49,7 @@ pub mod ops;
 pub mod protocol;
 pub mod rules;
 pub mod search;
+pub mod security;
 
 use std::path::{Path, PathBuf};
 
@@ -73,8 +78,8 @@ pub use domain::{
 };
 pub use error::{ApiError, ErrorCode};
 pub use ids::{
-    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, McpClientId, MessageId, OAuthFlowId,
-    OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
+    OAuthFlowId, OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 pub use mcp::{McpClient, McpGrant, McpScope};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
@@ -83,6 +88,10 @@ pub use protocol::{
 };
 pub use rules::{Condition, Rule, RuleAction, RuleRun, RuleTrigger};
 pub use search::{SavedSearch, SearchError, SearchErrorKind, SearchHit, SearchQuery};
+pub use security::{
+    AuthResults, CryptoKey, CryptoTechnology, IdentityCrypto, MessageWarning, SecurityStatus,
+    SendCrypto, TrustLevel, VaultStatus,
+};
 
 /// Name of the barrel file written by [`export_typescript`].
 pub const TS_INDEX_FILE: &str = "index.ts";
@@ -114,6 +123,13 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     accounts::SecretKind::export_all(&cfg)?;
     McpScope::export_all(&cfg)?;
     ConfigFile::export_all(&cfg)?;
+    // M2a types reachable only through optional fields, or not at all.
+    security::AuthVerdict::export_all(&cfg)?;
+    SecurityStatus::export_all(&cfg)?;
+    AuthResults::export_all(&cfg)?;
+    MessageWarning::export_all(&cfg)?;
+    IdentityCrypto::export_all(&cfg)?;
+    SendCrypto::export_all(&cfg)?;
 
     let mut files = Vec::new();
     collect_ts_files(out_dir, out_dir, &mut files)?;

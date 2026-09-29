@@ -180,8 +180,37 @@ account "work" email="ada@work.example" {
 | `bcc "…" …` | Addresses that always get a blind copy |
 | `signature "…"` | Your signature as plain text; `\n` starts a new line. `html="…"` and `markdown="…"` give the HTML and Markdown variants; a missing one is converted from another |
 | `mail-style` | How HTML and Markdown mail looks: `css="…"` is a stylesheet Nail builds into every message (default: a plain, readable one), `code-theme="…"` the colours of code blocks in Markdown (see [Markdown mail](markdown-mail.md#how-it-looks)) |
+| `crypto` | Signing and encryption defaults for this identity (see below) |
 
 Identity names (`id`, or the address) must be unique across all accounts.
+
+### Signing and encryption (`crypto`)
+
+> **Not active yet:** Nail reads and saves these settings, but signing and
+> encrypting mail arrive in a later version. Until then, a message that
+> should be signed or encrypted (by these defaults or the composer's
+> toggles) is **not sent**; Nail shows an error instead of sending it
+> unprotected.
+
+```kdl
+account "work" email="ada@work.example" {
+    imap host="imap.work.example"
+    identity "ada@work.example" name="Ada Lovelace" {
+        crypto technology="openpgp" sign=#true encrypt=#true openpgp-key="0123 4567 89AB CDEF 0123 4567 89AB CDEF 0123 4567" prefer-encrypt="mutual"
+    }
+}
+```
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `technology` | `"openpgp"`, `"smime"` or `"auto"` (whatever every recipient supports; OpenPGP when both work) | `"auto"` |
+| `sign` | Sign new messages | `#false` |
+| `encrypt` | Encrypt new messages when every recipient has a key | `#false` |
+| `openpgp-key` | Your OpenPGP key: its fingerprint (40 or 64 hexadecimal digits; spaces allowed) | your newest usable key for the address |
+| `smime-cert` | Your S/MIME certificate: its SHA-256 fingerprint (64 hexadecimal digits) | your newest usable certificate for the address |
+| `autocrypt` | Send Autocrypt headers so others can encrypt to you, and learn keys from theirs | `#true` |
+| `prefer-encrypt` | Autocrypt preference: `"mutual"` (encrypt automatically when your correspondent says so too) or `"nopreference"` | `"nopreference"` |
+| `protect-headers` | Hide the subject of encrypted mail from servers (it shows as `...` there) | `#true` |
 
 ## What to synchronize (`sync`)
 

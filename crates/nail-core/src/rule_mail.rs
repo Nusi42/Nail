@@ -137,7 +137,7 @@ impl Service {
     async fn send_now(&self, mut draft: Draft, automatic: AutomaticMail) -> Result<()> {
         draft.automatic = Some(automatic);
         let id = self.store_draft(draft, false).await?;
-        self.send_draft(id, Some(0), None).await?;
+        self.send_draft(id, Some(0), None, None).await?;
         Ok(())
     }
 

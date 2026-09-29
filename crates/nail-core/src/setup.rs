@@ -67,6 +67,7 @@ pub(crate) fn normalize_account(config: &mut AccountConfig) {
             composer_mode: None,
             posting: None,
             mail_style: None,
+            crypto: None,
         });
     }
     for identity in &mut config.identities {

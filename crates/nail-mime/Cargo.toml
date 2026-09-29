@@ -12,6 +12,9 @@ nail-api.workspace = true
 tracing.workspace = true
 mail-parser = { workspace = true, features = ["full_encoding"] }
 ammonia = "4.2.0"
+# M2a WP33 (ADR 0029): link safety (punycode, confusables).
+idna.workspace = true
+unicode-security.workspace = true
 
 [dev-dependencies]
 nail-testkit.workspace = true

@@ -30,8 +30,8 @@ pub mod mailstore;
 pub mod tls;
 
 pub use corpus::{
-    CorpusFolder, CorpusMessage, corpus_dir, corpus_message, demo_corpus, demo_corpus_raw,
-    load_mail_dir,
+    CRYPTO_FIXTURE_DIR, CorpusFolder, CorpusMessage, CryptoFixtures, corpus_dir, corpus_message,
+    crypto_fixture, crypto_fixture_dir, demo_corpus, demo_corpus_raw, load_mail_dir,
 };
 pub use imap::{
     ClientId, MockCapabilities, MockImapConfig, MockImapServer, MockServerError, MockTls,

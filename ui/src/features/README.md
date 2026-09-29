@@ -1,7 +1,7 @@
 # Feature slots
 
-Wave M1b builds four features in parallel. Each owns one directory here, so
-no two packages edit the same UI file (ADR 0022):
+Parallel work packages each own one directory here, so no two packages edit
+the same UI file (M1b: ADR 0022; M2a: ADR 0029):
 
 | Directory        | Work package | Owns                                                                      |
 | ---------------- | ------------ | ------------------------------------------------------------------------- |
@@ -9,6 +9,7 @@ no two packages edit the same UI file (ADR 0022):
 | `rules/`         | WP22         | rule list and editor, test preview, run history and undo                  |
 | `mcp/`           | WP23         | MCP client settings, audit log, UI-context indicator and reporting        |
 | `customization/` | WP24         | inspector, layout write-back, merge dialog, config errors, saved searches |
+| `security/`      | M2a WP34     | key manager, crypto settings, composer toggles, badges, warnings, vault   |
 
 ## Files of a slot
 
@@ -39,7 +40,7 @@ no two packages edit the same UI file (ADR 0022):
 
 ## Wiring (already done, do not edit)
 
-`registry.ts` merges the built-in widgets and actions with the four slots
+`registry.ts` merges the built-in widgets and actions with the slots
 (`appRegistry`) and throws on a duplicate widget kind, action id or dialog
 name. `App.tsx` and the test harness use `appRegistry` for the widget and
 dialog registries, the action handlers, the event handlers and the effects.

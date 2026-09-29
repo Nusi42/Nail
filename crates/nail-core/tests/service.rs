@@ -672,3 +672,91 @@ async fn old_mcp_audit_entries_and_rule_runs_are_purged() {
     assert_eq!(service.purge_history(now).await.unwrap(), (0, 0));
     assert_eq!(store.list_rule_runs(None, 10).unwrap().len(), 1);
 }
+
+/// M2a (ADR 0029): the security settings and vault status are served by
+/// the core; every other security request answers `unsupported` until the
+/// integration wires the crypto crates in.
+#[tokio::test]
+async fn m2a_security_requests() {
+    use nail_api::security::{KeyLookupPolicy, KeyLookupSource, SecuritySettings, VaultStatus};
+
+    let fx = open(false, None);
+    assert_eq!(
+        fx.service.handle(Request::GetSecuritySettings).await,
+        Response::SecuritySettings {
+            settings: SecuritySettings::default()
+        }
+    );
+    let mut events = fx.service.subscribe();
+    let wanted = SecuritySettings {
+        key_lookup: KeyLookupPolicy::Off,
+        lookup_sources: vec![
+            KeyLookupSource::KeysOpenpgpOrg,
+            KeyLookupSource::Wkd,
+            KeyLookupSource::KeysOpenpgpOrg,
+        ],
+        ..SecuritySettings::default()
+    };
+    let Response::SecuritySettings { settings } = fx
+        .service
+        .handle(Request::UpdateSecuritySettings { settings: wanted })
+        .await
+    else {
+        panic!("expected settings");
+    };
+    // Duplicates are dropped, the order is kept.
+    assert_eq!(
+        settings.lookup_sources,
+        [KeyLookupSource::KeysOpenpgpOrg, KeyLookupSource::Wkd]
+    );
+    assert_eq!(
+        next_event(&mut events).await,
+        Event::SecuritySettingsChanged
+    );
+    assert_eq!(
+        fx.service.handle(Request::GetSecuritySettings).await,
+        Response::SecuritySettings {
+            settings: settings.clone()
+        }
+    );
+    // Decrypted indexing only for configured accounts.
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::UpdateSecuritySettings {
+                    settings: SecuritySettings {
+                        index_decrypted: vec!["nope".into()],
+                        ..settings
+                    }
+                })
+                .await
+        ),
+        ErrorCode::InvalidRequest
+    );
+
+    assert_eq!(
+        fx.service.handle(Request::GetVaultStatus).await,
+        Response::VaultStatus {
+            status: VaultStatus::plain()
+        }
+    );
+    for request in [
+        Request::ListKeys {
+            filter: Default::default(),
+        },
+        Request::SetVaultEncryption { enabled: true },
+        Request::CheckRecipientKeys {
+            identity_id: "ada@example.org".into(),
+            recipients: vec!["bob@example.org".into()],
+            lookup: false,
+        },
+        Request::ListWindowsCertificates {
+            store: nail_api::security::WindowsCertStore::Personal,
+        },
+    ] {
+        assert_eq!(
+            error_code(fx.service.handle(request).await),
+            ErrorCode::Unsupported
+        );
+    }
+}
