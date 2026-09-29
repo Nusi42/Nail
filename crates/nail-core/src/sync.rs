@@ -44,7 +44,6 @@ use nail_proto_imap::{
     CredentialProvider, Credentials, FetchedMessage, ImapClient, ImapConfig, ImapError,
     MessageFlags, RemoteFolder, ResyncState, Secret, SyncState,
 };
-use nail_search::SearchIndex;
 use nail_store::{BlobStore, FolderSyncState, Store};
 use tokio::sync::broadcast;
 
@@ -151,7 +150,7 @@ pub(crate) struct SyncCtx {
     pub store: Store,
     pub blobs: BlobStore,
     pub events: broadcast::Sender<Event>,
-    pub index: Arc<SearchIndex>,
+    pub index: Arc<crate::search::SearchSlot>,
 }
 
 impl SyncCtx {
@@ -375,7 +374,7 @@ async fn mirror_folders(
     let account = account.clone();
     let remote = remote.to_vec();
     let blobs = ctx.blobs.clone();
-    let index = Arc::clone(&ctx.index);
+    let index = ctx.index.get();
     let result = ctx
         .store
         .call(move |s| {
@@ -490,7 +489,7 @@ pub(crate) async fn sync_folder(
         };
         let target = folder.clone();
         let blobs = ctx.blobs.clone();
-        let search = Arc::clone(&ctx.index);
+        let search = ctx.index.get();
         let stored = store
             .call(move |s| {
                 let report = ingest(s, &blobs, Some(&search), &target, uid_validity, &messages)?;
@@ -566,7 +565,7 @@ pub(crate) async fn sync_folder(
 async fn reset_folder(ctx: &SyncCtx, folder: &Folder, uid_validity: u32) -> Result<()> {
     let target = folder.clone();
     let blobs = ctx.blobs.clone();
-    let index = Arc::clone(&ctx.index);
+    let index = ctx.index.get();
     let restart = FolderSyncState {
         uidvalidity: (uid_validity != 0).then_some(uid_validity),
         uidnext: (uid_validity != 0).then_some(1),
@@ -692,7 +691,7 @@ async fn resync_folder(
     if !updates.is_empty() || !gone.is_empty() {
         let folder_id = folder.id.clone();
         let blobs = ctx.blobs.clone();
-        let index = Arc::clone(&ctx.index);
+        let index = ctx.index.get();
         let gone_ids: Vec<_> = gone.iter().filter_map(|u| by_uid.get(u).cloned()).collect();
         ctx.store
             .call(move |s| {

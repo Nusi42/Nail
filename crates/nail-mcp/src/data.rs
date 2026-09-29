@@ -123,6 +123,14 @@ pub trait McpData: Send + Sync + 'static {
     /// Runs a query ([`nail_api::Request::Search`]).
     fn search(&self, query: SearchQuery) -> impl Future<Output = DataResult<SearchOutcome>> + Send;
 
+    /// Whether the search index may hold decrypted content of encrypted
+    /// mail (an account opted in to decrypted indexing, M2a). Searches of a
+    /// client without the `encrypted` scope then leave encrypted messages
+    /// out, so a match cannot reveal what they say.
+    fn index_holds_decrypted(&self) -> impl Future<Output = DataResult<bool>> + Send {
+        async { Ok(false) }
+    }
+
     /// All filter rules in their `rules.kdl` text form.
     fn rules_text(&self) -> impl Future<Output = DataResult<String>> + Send;
 

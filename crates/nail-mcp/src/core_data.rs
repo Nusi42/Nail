@@ -150,6 +150,17 @@ impl<C: CoreAccess> McpData for CoreData<C> {
         })
     }
 
+    async fn index_holds_decrypted(&self) -> DataResult<bool> {
+        let settings = self
+            .0
+            .store()
+            .call(|s| {
+                s.setting::<nail_api::security::SecuritySettings>(nail_store::SECURITY_SETTINGS_KEY)
+            })
+            .await?;
+        Ok(settings.is_some_and(|s| !s.index_decrypted.is_empty()))
+    }
+
     async fn is_encrypted(&self, id: &MessageId) -> DataResult<bool> {
         Ok(self
             .stored_raw(id)
@@ -243,9 +254,26 @@ impl<C: CoreAccess> McpData for CoreData<C> {
     }
 }
 
-/// Whether the top-level `Content-Type` of a raw message is an encrypted
-/// type (PGP/MIME `multipart/encrypted`, S/MIME `application/pkcs7-mime`).
+/// Whether a raw message is end-to-end encrypted: its top-level
+/// `Content-Type` is an encrypted type (PGP/MIME `multipart/encrypted`,
+/// S/MIME `application/pkcs7-mime`), or it carries an inline PGP message
+/// (`-----BEGIN PGP MESSAGE-----` at the start of a line), which the core
+/// decrypts for the reader too.
 pub fn is_encrypted_mime(raw: &[u8]) -> bool {
+    encrypted_content_type(raw) || has_inline_pgp_message(raw)
+}
+
+/// An armored OpenPGP message at the start of a line anywhere in the raw
+/// message (also inside base64 / quoted-printable parts it may be encoded,
+/// but inline PGP is sent as 7-bit text in practice).
+fn has_inline_pgp_message(raw: &[u8]) -> bool {
+    const ARMOR: &[u8] = b"-----BEGIN PGP MESSAGE-----";
+    raw.windows(ARMOR.len())
+        .enumerate()
+        .any(|(i, w)| w == ARMOR && (i == 0 || raw[i - 1] == b'\n'))
+}
+
+fn encrypted_content_type(raw: &[u8]) -> bool {
     let header_end = raw
         .windows(4)
         .position(|w| w == b"\r\n\r\n")
@@ -283,5 +311,11 @@ mod tests {
             b"Content-Type: text/plain\r\n\r\nContent-Type: multipart/encrypted\r\n"
         ));
         assert!(!is_encrypted_mime(b"Subject: hi\r\n\r\nbody"));
+        assert!(is_encrypted_mime(
+            b"Content-Type: text/plain\r\n\r\nhi\r\n-----BEGIN PGP MESSAGE-----\r\n\r\nhQ==\r\n"
+        ));
+        assert!(!is_encrypted_mime(
+            b"Content-Type: text/plain\r\n\r\nquote: -----BEGIN PGP MESSAGE-----\r\n"
+        ));
     }
 }

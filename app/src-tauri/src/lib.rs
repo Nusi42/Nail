@@ -76,6 +76,10 @@ impl AppArgs {
         options.open_browser = true;
         // "Open file at line" starts the user's editor, except in demo runs.
         options.open_editor = self.seed.is_none();
+        if self.seed.is_some() {
+            // Demo runs: secrets in memory, no online key lookups.
+            options = nail_core::demo::demo_options(options);
+        }
         Ok(options)
     }
 

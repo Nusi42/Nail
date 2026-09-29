@@ -38,6 +38,15 @@ pub enum CoreError {
     /// A file-system error outside the store (e.g. creating directories).
     #[error("i/o: {0}")]
     Io(#[from] std::io::Error),
+    /// OpenPGP (M2a, `nail-pgp`).
+    #[error(transparent)]
+    Pgp(#[from] nail_pgp::Error),
+    /// S/MIME (M2a, `nail-smime`).
+    #[error(transparent)]
+    Smime(#[from] nail_smime::Error),
+    /// Encryption at rest (M2a, `nail-vault`).
+    #[error(transparent)]
+    Vault(#[from] nail_vault::VaultError),
 }
 
 impl From<nail_auth::AuthError> for CoreError {
@@ -57,6 +66,9 @@ impl CoreError {
             Self::Config(_) => ErrorCode::Config,
             Self::Engine(err) => err.code,
             Self::Api(err) => err.code,
+            Self::Pgp(err) => err.code(),
+            Self::Smime(err) => err.code(),
+            Self::Vault(err) => err.code(),
         }
     }
 
@@ -83,6 +95,10 @@ fn store_error_code(err: &nail_store::Error) -> ErrorCode {
         nail_store::Error::InvalidData(_) | nail_store::Error::InvalidHash(_)
     ) {
         ErrorCode::InvalidRequest
+    } else if matches!(err, nail_store::Error::Locked(_)) {
+        ErrorCode::Locked
+    } else if matches!(err, nail_store::Error::Crypto(_)) {
+        ErrorCode::Crypto
     } else {
         ErrorCode::Internal
     }
@@ -139,6 +155,35 @@ mod tests {
         let err: ApiError =
             CoreError::from(EngineError::temporary(ErrorCode::Network, "down")).into();
         assert_eq!(err.code, ErrorCode::Network);
+    }
+
+    #[test]
+    fn maps_m2a_errors() {
+        let code = |err: CoreError| ApiError::from(err).code;
+        assert_eq!(
+            code(nail_store::Error::Locked("vault".into()).into()),
+            ErrorCode::Locked
+        );
+        assert_eq!(
+            code(nail_store::Error::Crypto("tag".into()).into()),
+            ErrorCode::Crypto
+        );
+        assert_eq!(
+            code(nail_pgp::Error::NoKey("bob".into()).into()),
+            ErrorCode::NoKey
+        );
+        assert_eq!(
+            code(nail_pgp::Error::BadPassphrase.into()),
+            ErrorCode::AuthFailed
+        );
+        assert_eq!(
+            code(nail_smime::Error::Locked("fp".into()).into()),
+            ErrorCode::Locked
+        );
+        assert_eq!(
+            code(nail_vault::VaultError::Crypto("check".into()).into()),
+            ErrorCode::Crypto
+        );
     }
 
     #[test]

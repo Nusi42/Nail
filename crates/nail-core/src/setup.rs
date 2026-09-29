@@ -436,7 +436,7 @@ impl Service {
                 Ok(folders.into_iter().map(|f| f.id).collect::<Vec<_>>())
             })
             .await?;
-        let index = Arc::clone(&self.inner.search);
+        let index = self.inner.search.get();
         let account = id.clone();
         tokio::task::spawn_blocking(move || index.remove_account(&account)).await??;
         self.accounts_changed().await?;

@@ -102,6 +102,12 @@ pub struct AccountConfig {
     /// mail themselves, such as Gmail).
     #[serde(default)]
     pub save_sent_copy: Option<bool>,
+    /// `authserv-id` values of the account's own receiving servers (M2a):
+    /// only `Authentication-Results` headers from these produce the sender
+    /// check badge (RFC 8601 §5). Empty = learned from recent mail.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub authserv_ids: Vec<String>,
 }
 
 fn default_true() -> bool {
@@ -1040,6 +1046,7 @@ mod tests {
             identities: vec![],
             sync: SyncPolicy::default(),
             save_sent_copy: None,
+            authserv_ids: Vec::new(),
         }
     }
 

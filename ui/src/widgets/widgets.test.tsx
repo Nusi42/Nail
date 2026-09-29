@@ -286,6 +286,7 @@ describe("toolbar", () => {
       "Mark as read/unread",
       "Flag",
       "Create rule from message",
+      "Import Autocrypt setup message",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");
     expect(buttons[0]).toBeDisabled(); // no message selected

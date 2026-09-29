@@ -28,6 +28,10 @@ nail-proto-pop3.workspace = true
 nail-compose.workspace = true
 nail-rules.workspace = true
 nail-mcp.workspace = true
+# M2a: OpenPGP / Autocrypt, S/MIME, encryption at rest (ADRs 0030-0032).
+nail-pgp.workspace = true
+nail-smime.workspace = true
+nail-vault.workspace = true
 nail-testkit = { workspace = true, optional = true }
 nail-testkit-net = { workspace = true, optional = true }
 thiserror.workspace = true

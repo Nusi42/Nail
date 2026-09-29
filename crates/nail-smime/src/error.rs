@@ -52,6 +52,8 @@ impl Error {
             Self::WrongPassphrase => ErrorCode::AuthFailed,
             Self::Store(nail_store::Error::NotFound { .. }) => ErrorCode::NotFound,
             Self::Store(nail_store::Error::Conflict(_)) => ErrorCode::Conflict,
+            Self::Store(nail_store::Error::Locked(_)) => ErrorCode::Locked,
+            Self::Store(nail_store::Error::Crypto(_)) => ErrorCode::Crypto,
             Self::Store(_) | Self::Keychain(_) | Self::Windows(_) => ErrorCode::Internal,
         }
     }

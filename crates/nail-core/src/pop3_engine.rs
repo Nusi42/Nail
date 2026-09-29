@@ -109,7 +109,7 @@ pub(crate) async fn fetch(
         };
         let folder = inbox.clone();
         let blobs = service.blobs().clone();
-        let index = Arc::clone(&service.inner.search);
+        let index = service.inner.search.get();
         let (account_id, uid) = (account.clone(), message.uid.clone());
         let stored = service
             .store()

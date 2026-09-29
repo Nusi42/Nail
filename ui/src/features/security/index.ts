@@ -88,6 +88,7 @@ export {
   composerCrypto,
   composerCryptoStore,
   composerSendBlock,
+  composerSendCrypto,
   loadComposerCrypto,
 } from "./composerStore";
 export { IdentityCryptoFields } from "./IdentityCrypto";

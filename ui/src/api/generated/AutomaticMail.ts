@@ -8,4 +8,4 @@ export type AutomaticMail = { "kind": "forward" } | { "kind": "reply" } | { "kin
 /**
  * The redirected message.
  */
-message_id: MessageId, };
+message_id: MessageId, } | { "kind": "autocrypt-setup" };

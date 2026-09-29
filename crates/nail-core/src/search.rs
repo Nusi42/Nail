@@ -10,12 +10,64 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nail_api::{ApiError, Event, Response, SavedSearch, SavedSearchId, SearchQuery};
-use nail_search::{SearchContext, SearchScope, VirtualAccountScope, run_request};
+use nail_search::{SearchContext, SearchIndex, SearchScope, VirtualAccountScope, run_request};
 use nail_store::MessageFilter;
 
 use crate::engine::unix_now;
 use crate::error::Result;
 use crate::service::{MAX_PAGE_SIZE, Service};
+
+/// The search index, replaceable at run time: encryption at rest (M2a)
+/// closes the on-disk index while it converts the index files and opens it
+/// again with the new directory wrapper. Users take a short-lived
+/// [`Arc`] with [`SearchSlot::get`] for each use and never keep it across
+/// awaits of long work, so the old index is released soon after
+/// [`SearchSlot::replace`].
+pub(crate) struct SearchSlot {
+    index: std::sync::RwLock<Arc<SearchIndex>>,
+    closed: std::sync::atomic::AtomicBool,
+}
+
+impl SearchSlot {
+    pub(crate) fn new(index: SearchIndex) -> Self {
+        Self {
+            index: std::sync::RwLock::new(Arc::new(index)),
+            closed: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    /// The current index.
+    pub(crate) fn get(&self) -> Arc<SearchIndex> {
+        Arc::clone(
+            &self
+                .index
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+
+    /// Puts `index` in place and returns the previous one.
+    pub(crate) fn replace(&self, index: SearchIndex) -> Arc<SearchIndex> {
+        std::mem::replace(
+            &mut *self
+                .index
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            Arc::new(index),
+        )
+    }
+
+    /// Whether the real index is closed (a stand-in answers meanwhile;
+    /// searches report `unavailable`).
+    pub(crate) fn is_closed(&self) -> bool {
+        self.closed.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    pub(crate) fn set_closed(&self, closed: bool) {
+        self.closed
+            .store(closed, std::sync::atomic::Ordering::Release);
+    }
+}
 
 /// The local time zone's offset from UTC in seconds (east positive).
 pub(crate) fn local_utc_offset() -> i32 {
@@ -59,6 +111,13 @@ impl Service {
     /// `Search`: parse, scope (a virtual account or folder means its
     /// members), run.
     pub(crate) async fn search(&self, mut query: SearchQuery) -> Result<Response> {
+        if self.inner.search.is_closed() {
+            return Err(ApiError::new(
+                nail_api::ErrorCode::Unavailable,
+                "the search index is being converted (encryption at rest); try again shortly",
+            )
+            .into());
+        }
         let mut scope = SearchScope::default();
         if let Some(folder) = &query.folder_id {
             scope.folders = Some(self.resolve_folder(folder).await?.sources);
@@ -85,7 +144,7 @@ impl Service {
                 .collect(),
         };
         query.limit = query.limit.min(MAX_PAGE_SIZE);
-        let index = Arc::clone(&self.inner.search);
+        let index = self.inner.search.get();
         let store = self.inner.store.clone();
         let offset = query.offset;
         let outcome =
@@ -107,7 +166,7 @@ pub(crate) async fn run_committer(service: Service) {
     let mut timer = tokio::time::interval(Duration::from_secs(1));
     loop {
         timer.tick().await;
-        let index = Arc::clone(&service.inner.search);
+        let index = service.inner.search.get();
         let result = tokio::task::spawn_blocking(move || index.commit_if_due()).await;
         match result {
             Ok(Err(err)) => tracing::warn!(%err, "committing the search index failed"),
@@ -126,7 +185,7 @@ impl Service {
         Ok(crate::ingest::reindex_all(
             &self.inner.store,
             &self.inner.blobs,
-            &self.inner.search,
+            &self.inner.search.get(),
         )?)
     }
 }
@@ -134,7 +193,11 @@ impl Service {
 pub(crate) async fn run_maintenance(service: Service) {
     let store = service.inner.store.clone();
     let blobs = service.inner.blobs.clone();
-    let index = Arc::clone(&service.inner.search);
+    let index = service.inner.search.get();
+    let settings = crate::security::security_settings(&service)
+        .await
+        .unwrap_or_default();
+    let owner = service.clone();
     let result = tokio::task::spawn_blocking(move || -> Result<()> {
         let backfilled = crate::ingest::backfill_meta(&store, &blobs)?;
         if backfilled > 0 {
@@ -146,6 +209,9 @@ pub(crate) async fn run_maintenance(service: Service) {
             tracing::info!(stored, indexed, "rebuilding the search index");
             let count = crate::ingest::reindex_all(&store, &blobs, &index)?;
             tracing::info!(count, "search index rebuilt");
+            // Accounts that opted in get their decrypted content back (M2a).
+            let policy = nail_search::IndexPolicy::from_settings(&settings);
+            owner.reindex_encrypted(&settings.index_decrypted, &policy)?;
         }
         Ok(())
     })

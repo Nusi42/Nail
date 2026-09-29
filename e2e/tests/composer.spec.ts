@@ -77,7 +77,8 @@ async function closeComposer(page: Page) {
 function setComposerMode(mode: "html" | "markdown") {
   const file = path.join(server.configDir, "accounts.kdl");
   const text = readFileSync(file, "utf8").replace(
-    /identity "ada@work\.example" name="Ada Lovelace"[^\n]*/,
+    // Only the identity's properties change; its child block (crypto) stays.
+    /identity "ada@work\.example" name="Ada Lovelace"( composer="[a-z]+")?/,
     `identity "ada@work.example" name="Ada Lovelace" composer="${mode}"`,
   );
   writeFileSync(file, text);

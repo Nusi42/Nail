@@ -11,6 +11,11 @@
 //!   Playwright suite uses (deliver mail, change flags, go offline, read
 //!   what SMTP received).
 //!
+//! Every seeded run keeps its secrets in memory, trusts only the S/MIME
+//! test root of the corpus and looks up no keys online
+//! ([`demo_options`]); `demo-multi` also gives both accounts an OpenPGP
+//! key and an S/MIME certificate ([`DemoMulti::seed_security`]).
+//!
 //! No network access beyond `127.0.0.1` is involved in any of them.
 
 use std::collections::HashMap;
@@ -20,12 +25,17 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use nail_api::accounts::SecretKind;
+use nail_api::engine::BoxFuture;
 use nail_api::engine::{MemorySecretStore, SecretStore};
+use nail_api::security::{KeyAlgorithm, SecretProtection};
 use nail_api::{Account, AccountId, AccountKind, Folder, FolderRole, SecretRef};
 use nail_discovery::{Discoverer, HickoryDns, ReqwestFetch, TcpProbe};
+use nail_pgp::discovery::{HttpClient, HttpResponse};
 use nail_proto_imap::{Credentials, ImapConfig, Security};
 use nail_store::{BlobStore, Store};
-use nail_testkit::{MailStore, MockImapConfig, MockImapServer, demo_corpus};
+use nail_testkit::{
+    CryptoFixtures, MailStore, MockImapConfig, MockImapServer, crypto_fixture, demo_corpus,
+};
 use nail_testkit_net::{
     DnsZone, MockDnsServer, MockHttpServer, MockPop3Config, MockPop3Server, MockResponse,
     MockSmtpConfig, MockSmtpServer, Pop3Message,
@@ -49,6 +59,52 @@ pub const MULTI_CONFIG_MARKER: &str =
 
 /// The address the demo corpus is written to.
 const DEMO_EMAIL: &str = "sam@nail.example";
+
+/// Password of the corpus' PKCS#12 files.
+pub const DEMO_PKCS12_PASSWORD: &str = "nail-test";
+
+/// The `authserv-id` of the demo-multi "work" account's receiving server:
+/// `Authentication-Results` headers from it are trusted.
+pub const MULTI_AUTHSERV_ID: &str = "mx.nail.example";
+
+/// Online key lookups of seeded runs: nothing leaves the machine, every
+/// address is simply not found.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OfflineKeyLookup;
+
+impl HttpClient for OfflineKeyLookup {
+    fn get<'a>(
+        &'a self,
+        _url: &'a str,
+    ) -> BoxFuture<'a, std::result::Result<HttpResponse, nail_api::engine::EngineError>> {
+        Box::pin(async {
+            Ok(HttpResponse {
+                status: 404,
+                body: Vec::new(),
+            })
+        })
+    }
+}
+
+/// The S/MIME test root of the corpus as the only trust anchor.
+pub fn test_trust_anchors() -> Arc<dyn nail_smime::TrustAnchors> {
+    let roots = crypto_fixture(CryptoFixtures::Smime, "root-ca.crt")
+        .and_then(|der| nail_smime::Cert::parse_many(&der).ok())
+        .unwrap_or_default();
+    Arc::new(nail_smime::FixedTrustAnchors::new(roots))
+}
+
+/// Options for a seeded (demo or test) run: secrets in memory (never the
+/// OS keychain), the corpus' S/MIME test root as the only trust anchor,
+/// no online key lookups.
+pub fn demo_options(mut options: crate::ServiceOptions) -> crate::ServiceOptions {
+    if options.secrets.is_none() {
+        options.secrets = Some(Arc::new(MemorySecretStore::new()) as Arc<dyn SecretStore>);
+    }
+    options.trust_anchors = Some(test_trust_anchors());
+    options.key_lookup = Some(Arc::new(OfflineKeyLookup));
+    options
+}
 
 /// What [`seed_demo`] wrote.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -389,13 +445,19 @@ undo-send-delay 5
 account "{MULTI_WORK_ID}" email="{MULTI_WORK_EMAIL}" name="Work" {{
     imap host="127.0.0.1" port={imap} tls="plaintext"
     smtp host="127.0.0.1" port={smtp} tls="plaintext"
-    identity "{MULTI_WORK_EMAIL}" name="Ada Lovelace"
+    identity "{MULTI_WORK_EMAIL}" name="Ada Lovelace" {{
+        crypto prefer-encrypt="mutual"
+    }}
+    authserv-id "{MULTI_AUTHSERV_ID}"
 }}
 
 account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     pop3 host="127.0.0.1" port={pop3} tls="plaintext" leave-on-server=#true delete-when-deleted-locally=#true
     smtp host="127.0.0.1" port={smtp} tls="plaintext"
-    identity "{MULTI_HOME_EMAIL}" name="Ada Lovelace"
+    identity "{MULTI_HOME_EMAIL}" name="Ada Lovelace" {{
+        crypto prefer-encrypt="mutual"
+    }}
+    authserv-id "{MULTI_AUTHSERV_ID}"
 }}
 "#
         )
@@ -412,13 +474,52 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     }
 
     /// `options` pointed at the mocks: in-memory secrets, mock discovery,
-    /// short reconnect delays.
+    /// short reconnect delays, the test trust anchor, offline key lookups.
     pub fn service_options(&self, mut options: crate::ServiceOptions) -> crate::ServiceOptions {
         options.secrets = Some(Arc::clone(&self.secrets) as Arc<dyn SecretStore>);
         options.discoverer = Some(Arc::clone(&self.discoverer));
         options.timing = crate::EngineTiming::fast();
         options.open_browser = false;
-        options
+        demo_options(options)
+    }
+
+    /// Gives both demo accounts an own OpenPGP key (Ed25519 + X25519,
+    /// generated, protected by the in-memory keychain) and an own S/MIME
+    /// certificate (`ada-work.p12` / `ada-home.p12` of the corpus, issued
+    /// by the test CA). Keys that exist already are kept.
+    pub async fn seed_security(&self, service: &crate::Service) -> Result<()> {
+        service
+            .blocking(|s| {
+                for (email, p12) in [
+                    (MULTI_WORK_EMAIL, "ada-work.p12"),
+                    (MULTI_HOME_EMAIL, "ada-home.p12"),
+                ] {
+                    let pgp = s.pgp();
+                    if pgp.own_key_for(email, None).is_err() {
+                        pgp.generate(
+                            "Ada Lovelace",
+                            email,
+                            KeyAlgorithm::Curve25519,
+                            None,
+                            &SecretProtection::Keychain,
+                        )?;
+                    }
+                    let smime = s.smime();
+                    if smime.signer(email, None).is_err()
+                        && let Some(data) = crypto_fixture(CryptoFixtures::Smime, p12)
+                    {
+                        smime.import_pkcs12(
+                            &data,
+                            DEMO_PKCS12_PASSWORD,
+                            &SecretProtection::Keychain,
+                        )?;
+                    }
+                }
+                Ok(())
+            })
+            .await?;
+        tracing::info!("demo keys and certificates ready");
+        Ok(())
     }
 
     fn imap(&self, account: &str) -> std::result::Result<&MockImapServer, String> {

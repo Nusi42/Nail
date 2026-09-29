@@ -173,6 +173,7 @@ fn work() -> AccountConfig {
             ],
         },
         save_sent_copy: None,
+        authserv_ids: Vec::new(),
     }
 }
 
@@ -212,6 +213,7 @@ fn home() -> AccountConfig {
         identities: vec![identity("home", "ada@home.example")],
         sync: SyncPolicy::default(),
         save_sent_copy: Some(false),
+        authserv_ids: Vec::new(),
     }
 }
 
@@ -1126,4 +1128,53 @@ fn identity_crypto_settings() {
     }
     let schema = serde_json::to_string(&nail_config::accounts_schema()).unwrap();
     assert!(schema.contains("\"prefer-encrypt\""), "{schema}");
+}
+
+/// M2a WP35: `authserv-id` names the receiving servers whose
+/// `Authentication-Results` are trusted; read, validated, written back.
+#[test]
+fn authserv_ids_are_read_and_written() {
+    let text =
+        account_with("    imap host=\"h\"\n    authserv-id \"MX.Example.net\" \"mx2.example.net\"");
+    let config = parse_accounts(&text, "accounts.kdl").unwrap();
+    assert_eq!(
+        config.accounts[0].authserv_ids,
+        ["mx.example.net", "mx2.example.net"]
+    );
+    let plain = parse_accounts(&account_with("    imap host=\"h\""), "accounts.kdl").unwrap();
+    assert!(plain.accounts[0].authserv_ids.is_empty());
+
+    let mut d = AccountsDocument::empty("accounts.kdl");
+    d.set_config(config.clone()).unwrap();
+    assert!(
+        d.text()
+            .contains("authserv-id \"mx.example.net\" \"mx2.example.net\""),
+        "{}",
+        d.text()
+    );
+    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+
+    let mut d = doc(&text);
+    let mut account = d.config().accounts[0].clone();
+    account.authserv_ids = vec!["mx3.example.net".into()];
+    d.upsert_account(account.clone()).unwrap();
+    assert!(
+        d.text().contains("authserv-id \"mx3.example.net\""),
+        "{}",
+        d.text()
+    );
+    assert_eq!(d.config().accounts[0], account);
+    account.authserv_ids.clear();
+    d.upsert_account(account).unwrap();
+    assert!(!d.text().contains("authserv-id"), "{}", d.text());
+
+    for (body, needle) in [
+        ("authserv-id", "needs at least one"),
+        ("authserv-id \"a b\"", "not a server id"),
+        ("authserv-id \"a\"\n    authserv-id \"b\"", "set twice"),
+        ("authserv-id x=\"a\"", "x"),
+    ] {
+        let (_, _, message) = error(&account_with(&format!("    imap host=\"h\"\n    {body}")));
+        assert!(message.contains(needle), "{body}: {message}");
+    }
 }

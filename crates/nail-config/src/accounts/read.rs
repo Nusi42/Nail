@@ -324,9 +324,16 @@ impl Reader<'_, '_> {
         let mut outgoing: Option<OutgoingServer> = None;
         let mut identities = Vec::new();
         let mut sync: Option<SyncPolicy> = None;
+        let mut authserv_ids: Option<Vec<String>> = None;
         let mut providers = Vec::new();
         for child in children(node) {
             match name(child) {
+                "authserv-id" => {
+                    if authserv_ids.is_some() {
+                        return Err(self.src.node_err(child, "`authserv-id` is set twice"));
+                    }
+                    authserv_ids = Some(self.authserv_ids(child)?);
+                }
                 protocol @ ("imap" | "pop3") => {
                     if incoming.is_some() {
                         return Err(self.src.node_err(
@@ -374,7 +381,7 @@ impl Reader<'_, '_> {
                     return Err(self.src.node_err(
                         child,
                         format!(
-                            "unknown node `{other}` in `account` (expected imap, pop3, smtp, identity or sync)"
+                            "unknown node `{other}` in `account` (expected imap, pop3, smtp, identity, sync or authserv-id)"
                         ),
                     ));
                 }
@@ -430,9 +437,38 @@ impl Reader<'_, '_> {
                 identities,
                 sync: sync.unwrap_or_default(),
                 save_sent_copy,
+                authserv_ids: authserv_ids.unwrap_or_default(),
             },
             providers,
         ))
+    }
+
+    /// Reads `authserv-id "mx.example.net" …`: the `Authentication-Results`
+    /// server ids to trust (lowercased, no duplicates).
+    fn authserv_ids(&self, node: &KdlNode) -> Result<Vec<String>, ConfigError> {
+        self.check_props(node, &[])?;
+        check_no_children(self.src, node)?;
+        let list = args(node);
+        if list.is_empty() {
+            return Err(self
+                .src
+                .node_err(node, "`authserv-id` needs at least one server id"));
+        }
+        let mut ids = Vec::new();
+        for entry in list {
+            let text = crate::kdl_util::entry_str(self.src, entry, "a server id")?.trim();
+            if text.is_empty() || text.chars().any(|c| c.is_whitespace() || c == ';') {
+                return Err(self.src.entry_err(
+                    entry,
+                    format!("{text:?} is not a server id like \"mx.example.net\""),
+                ));
+            }
+            let id = text.to_ascii_lowercase();
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        Ok(ids)
     }
 
     /// Reads `imap` / `pop3` / `smtp`: the endpoint (and the OAuth provider

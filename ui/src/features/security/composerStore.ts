@@ -54,6 +54,15 @@ export function composerCrypto(): SendCrypto | undefined {
   return composerCryptoStore.getState().choice ?? undefined;
 }
 
+/**
+ * What the composer sends with `SendDraft.crypto`: what the toggles show
+ * (the explicit choice, else the core's suggestion), so the message is
+ * protected exactly as displayed; `undefined` before the first report.
+ */
+export function composerSendCrypto(): SendCrypto | undefined {
+  return effectiveChoice(composerCryptoStore.getState()) ?? undefined;
+}
+
 /** Restores the choice saved with a draft (`Draft.crypto`). */
 export function loadComposerCrypto(crypto: SendCrypto | null | undefined): void {
   composerCryptoStore.setState({ choice: crypto ?? null });

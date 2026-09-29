@@ -5,9 +5,9 @@ trustworthy a received message is, warns you about deceptive links and
 dangerous attachments, and can encrypt everything it stores on your
 computer.
 
-> Preview note: sending signed or encrypted mail is switched on during
-> milestone M2. Until then Nail refuses to send a message you asked to
-> sign or encrypt — it never sends it unprotected instead.
+Whatever you choose, Nail **never sends a message unprotected** because
+something is missing: when a key is missing or locked it tells you and
+waits.
 
 ## Keys and certificates
 
@@ -114,7 +114,18 @@ online** (or does it by itself, depending on the setting below) and
 
 When encryption is on but a recipient has no usable key, Nail tells you
 who, and **does not send the message unencrypted**. Turn encryption off or
-get the key first.
+get the key first. When your own key is protected by a passphrase and
+locked, unlock it under **Keys and certificates** and send again.
+
+Recipients in **Bcc** get their own encrypted copy, so the other
+recipients cannot see from the message who else could read it.
+
+Replying to or forwarding an encrypted message starts with encryption
+switched on. Filter rules never forward or answer encrypted messages
+automatically.
+
+While encryption is on, the draft is not copied to your mail server's
+Drafts folder (it would be stored there unencrypted); it stays in Nail.
 
 ## Reading: the badges
 
@@ -162,9 +173,11 @@ Each link warning shows the link's **real target**.
 
 **Settings → Data protection**:
 
-- **Encryption at rest** encrypts Nail's database, stored messages and
-  search index on your computer with a key kept in the Windows Credential
-  Manager. It protects your mail if the disk is copied or a laptop is
+- **Encryption at rest** encrypts the mail Nail stores on your computer —
+  messages, drafts, message previews and the search index — with a key
+  kept in the Windows Credential Manager (subjects, addresses and dates
+  stay readable in the database so that lists and searches stay fast;
+  see [Data protection in detail](data-protection.md)). It protects your mail if the disk is copied or a laptop is
   stolen, even without BitLocker. It is **off by default for now; we
   recommend turning it on.** Turning it on (or off) converts your existing
   data; the progress is shown, you can keep working, and if Nail closes it
@@ -176,6 +189,77 @@ Each link warning shows the link's **real target**.
 - **Searching encrypted mail** — off by default. Turn it on per account to
   add decrypted text to the search index; the index then contains
   sensitive text, so turn on encryption at rest as well.
+
+## OpenPGP in detail
+
+**How your secret key is protected.** Nail keeps OpenPGP secret keys in
+its keyring, always encrypted:
+
+- with **Windows Credential Manager** protection (the default) the key is
+  encrypted with a random secret that Windows keeps for your account; you
+  are never asked for anything;
+- with a **passphrase** the key stays locked until you enter it
+  (**Unlock**); Nail remembers it only in memory, for the time you choose
+  (0, 15 or 60 minutes, or until Nail closes).
+
+**Autocrypt.** Every message you send from an address with an OpenPGP key
+carries your public key in an `Autocrypt` header, and Nail learns the keys
+of the people who write to you the same way — no key servers involved.
+After one message from someone whose program also *prefers encrypted
+mail*, and with **Tell others I prefer encrypted mail** on for your
+address, the composer switches encryption on by itself. Keys learned this
+way are marked *Learned from the sender's mail*; keys other people pass
+on in encrypted group mail (*gossip*) are marked *Seen in other people's
+mail*. Autocrypt protects against someone reading your mail on the way,
+not against someone who can change your mail on the way: compare
+fingerprints and mark the key as verified for that.
+
+**Finding keys online.** The Web Key Directory of the recipient's domain
+and keys.openpgp.org are asked only when you ask (or, if you choose
+*Automatically while writing*, for every recipient without a key). Such a
+lookup tells those servers which address you are looking for.
+
+**Header protection.** With **Protect the subject of encrypted mail** on
+(the default), the subject and other headers travel inside the encrypted
+part. Mail servers — and the message lists of programs that cannot
+decrypt — show the subject as `...`; Nail shows the real subject when you
+open the message. The message list keeps showing `...`, because Nail does
+not store decrypted text.
+
+**Inline PGP.** Older programs put the encrypted or signed text directly
+into the message body (`-----BEGIN PGP MESSAGE-----`). Nail reads such
+messages but always sends PGP/MIME.
+
+## S/MIME in detail
+
+**Your certificate.** Import a `.p12` / `.pfx` file under **Keys and
+certificates → Import**: enter the file's password and choose the
+protection of the private key — the **Windows Credential Manager**
+(recommended, no prompts) or a **passphrase** that Nail asks for when it
+signs or decrypts. You can also use a certificate from the **Windows
+certificate store** (*Windows certificates*); its private key then stays
+in Windows, which may ask for confirmation or a smart-card PIN itself.
+
+**Certificate chains.** Nail checks that a certificate was issued, step
+by step, by a certificate authority Windows trusts:
+
+| Chain | Meaning |
+| --- | --- |
+| Valid | Issued by a trusted authority, currently valid, meant for e-mail. |
+| Untrusted root | The issuing authority is not trusted on this computer. Mark the certificate as verified if you know it is right. |
+| Incomplete | An intermediate certificate is missing; Nail does not download it. |
+| Expired | The certificate (or one above it) was not valid at the time of signing. |
+| Wrong usage | The certificate is not meant for e-mail signing or encryption. |
+| Invalid | The chain is broken or forged. Do not trust it. |
+
+**Revocation is not checked** in this version: a certificate its owner
+has withdrawn still shows as valid. Signatures made with the outdated
+SHA-1 algorithm are shown as *unsupported*, never as valid.
+
+**Encryption.** Nail encrypts S/MIME mail with **AES-256-GCM** and always
+adds your own certificate as a recipient, so you can read what you sent.
+When you get a validly signed message, Nail keeps the sender's
+certificate, so you can answer encrypted.
 
 ## Using your key on another device (Autocrypt)
 

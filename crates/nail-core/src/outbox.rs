@@ -174,23 +174,27 @@ impl Service {
         };
         let (account, identity) = self.identity(&draft.identity_id)?;
         // Sign / encrypt: the request's choice, else the draft's, else the
-        // identity's defaults (ADR 0029). Signing and encryption are wired
-        // in M2a WP35; until then such a message is refused rather than
-        // sent unprotected.
-        let identity_crypto = identity.crypto.clone().unwrap_or_default();
-        let crypto = crypto
-            .or_else(|| draft.crypto.clone())
-            .unwrap_or(SendCrypto {
-                sign: identity_crypto.sign,
-                encrypt: identity_crypto.encrypt,
-                technology: None,
-                protect_headers: None,
-            });
+        // identity's defaults (ADR 0029). Checked now (`no_key`, `locked`)
+        // and applied when the message is sent; never sent plain instead.
+        let mut crypto = crate::crypto::effective_crypto(crypto, draft.crypto.as_ref(), &identity);
         if crypto.is_active() {
-            return Err(ApiError::unsupported(
-                "signing and encrypting outgoing mail is not available yet",
-            )
-            .into());
+            let (checked_identity, checked_draft, checked_crypto) =
+                (identity.clone(), draft.clone(), crypto.clone());
+            crypto.technology = Some(
+                self.blocking(move |s| {
+                    crate::crypto::check_send(s, &checked_identity, &checked_draft, &checked_crypto)
+                })
+                .await?,
+            );
+        }
+        if draft.crypto.as_ref() != Some(&crypto) {
+            // The sender applies what was checked here.
+            let mut updated = draft.clone();
+            updated.crypto = Some(crypto.clone());
+            self.inner
+                .store
+                .call(move |s| s.save_draft(&updated))
+                .await?;
         }
         if account.outgoing.is_none() {
             return Err(ApiError::invalid_request(format!(
@@ -320,9 +324,28 @@ impl Service {
                 self.redirect_message(&draft, &identity, message_id, seed)
                     .await
             }
+            Some(AutomaticMail::AutocryptSetup) => self.prepared_message(&draft, &identity).await,
             _ => self.build_draft_message(&draft, &identity, seed).await,
         }
         .map_err(EngineError::from)?;
+        // The Autocrypt header, signing and encryption (M2a). Redirects and
+        // setup messages go out unchanged.
+        let messages = if draft.automatic.as_ref().is_some_and(|a| {
+            matches!(
+                a,
+                AutomaticMail::Redirect { .. } | AutomaticMail::AutocryptSetup
+            )
+        }) {
+            vec![message]
+        } else {
+            let crypto = draft.crypto.clone().unwrap_or_else(SendCrypto::none);
+            let (secure_identity, secure_draft) = (identity.clone(), draft.clone());
+            self.blocking(move |s| {
+                crate::crypto::secure_outgoing(s, &secure_identity, &secure_draft, message, &crypto)
+            })
+            .await
+            .map_err(EngineError::from)?
+        };
         let server_copy = {
             let id = entry.draft_id.clone();
             self.inner
@@ -333,10 +356,19 @@ impl Service {
                 .flatten()
         };
         let transport = self.transport(&account).map_err(EngineError::from)?;
-        transport.send(&message.envelope, &message.raw).await?;
+        for message in &messages {
+            transport.send(&message.envelope, &message.raw).await?;
+        }
+        // The first message is the one to the visible recipients (for an
+        // encrypted message also encrypted to the sender): the Sent copy.
+        let raw = messages
+            .into_iter()
+            .next()
+            .map(|m| m.raw)
+            .unwrap_or_default();
         Ok(Sent {
             account,
-            raw: message.raw,
+            raw,
             in_reply_to: draft.replied_message().cloned(),
             server_copy,
             draft,
@@ -416,7 +448,7 @@ impl Service {
             ..IncomingMessage::default()
         };
         let blobs = self.inner.blobs.clone();
-        let index = Arc::clone(&self.inner.search);
+        let index = self.inner.search.get();
         let target = folder.clone();
         self.inner
             .store

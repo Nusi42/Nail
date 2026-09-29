@@ -280,6 +280,7 @@ fn auto_submitted(draft: &Draft) -> Option<&'static str> {
     match draft.automatic.as_ref()? {
         AutomaticMail::Reply => Some("auto-replied"),
         AutomaticMail::Forward | AutomaticMail::Redirect { .. } => Some("auto-generated"),
+        AutomaticMail::AutocryptSetup => None,
     }
 }
 

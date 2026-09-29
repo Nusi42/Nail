@@ -275,6 +275,13 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
     if account.sync != SyncPolicy::default() {
         children.push(render_sync(&account.sync, indent));
     }
+    if !account.authserv_ids.is_empty() {
+        let mut ids = Line::new("authserv-id");
+        for id in &account.authserv_ids {
+            ids = ids.arg(id);
+        }
+        children.push(ids.finish(1, indent, &[]));
+    }
     let line = Line::new("account")
         .arg(account.id.as_str())
         .prop("name", &account.name)
@@ -479,6 +486,7 @@ const SINGLETONS: &[&str] = &[
     "mail-style",
     "crypto",
     "scopes",
+    "authserv-id",
 ];
 
 /// Properties that identify a child among siblings of the same name.

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
+import { AttachmentWarningMark } from "../features/security";
 import type { Address, MessageBody } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
 import { optionBool, optionList, type WidgetProps } from "../layout/widgetRegistry";
@@ -143,6 +144,7 @@ export function MessageView({ node }: WidgetProps) {
                   {a.filename ?? t("message-view-attachment-unnamed")}
                 </span>
                 <span data-part="message-view.attachment.size">{formatSize(a.size, locale)}</span>
+                <AttachmentWarningMark warnings={message.warnings} index={a.index} />
               </li>
             ))}
           </ul>

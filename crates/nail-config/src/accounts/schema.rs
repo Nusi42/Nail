@@ -94,6 +94,10 @@ struct AccountSchema {
     identity: Vec<IdentitySchema>,
     /// `sync bodies=… { folder … }`: what to synchronize.
     sync: Option<SyncSchema>,
+    /// `authserv-id "mx.example.net" …`: the ids your receiving servers
+    /// write into `Authentication-Results`; only their results are shown
+    /// (default: learned from recent mail).
+    authserv_id: Option<Vec<String>>,
 }
 
 /// Transport security.

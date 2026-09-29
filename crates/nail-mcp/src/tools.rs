@@ -256,7 +256,9 @@ async fn search<D: McpData>(
         limit,
         sort: SearchSort::Date,
     };
-    if access.all_accounts() && !access.excludes_folders() {
+    let hide_encrypted =
+        !access.has(McpScope::Encrypted) && shared.data.index_holds_decrypted().await?;
+    if access.all_accounts() && !access.excludes_folders() && !hide_encrypted {
         return match shared.data.search(query).await? {
             SearchOutcome::Invalid(error) => Ok(invalid_query(&error)),
             SearchOutcome::Hits {
@@ -275,7 +277,7 @@ async fn search<D: McpData>(
             }
         };
     }
-    restricted_search(shared, access, query).await
+    restricted_search(shared, access, query, hide_encrypted).await
 }
 
 /// Hits a restricted search looks at, at most. Past this the result is
@@ -298,11 +300,14 @@ fn invalid_query(error: &nail_api::SearchError) -> CallToolResult {
 /// `next_offset` count only messages the client may read, and nothing in
 /// the answer (no count of dropped hits, no unfiltered total) tells whether
 /// hidden accounts or excluded folders hold matching mail (ADR 0025,
-/// "Excluded folders are hidden everywhere").
+/// "Excluded folders are hidden everywhere"). With `hide_encrypted`
+/// (decrypted indexing on, no `encrypted` scope) encrypted messages are
+/// left out the same way.
 async fn restricted_search<D: McpData>(
     shared: &Shared<D>,
     access: &crate::access::Access,
     query: SearchQuery,
+    hide_encrypted: bool,
 ) -> Result<CallToolResult, Failure> {
     let offset = query.offset as usize;
     let limit = query.limit as usize;
@@ -319,11 +324,15 @@ async fn restricted_search<D: McpData>(
             SearchOutcome::Invalid(error) => return Ok(invalid_query(&error)),
             SearchOutcome::Hits { total, hits, .. } => {
                 let returned = u32::try_from(hits.len()).unwrap_or(u32::MAX);
-                visible.extend(
-                    hits.into_iter()
-                        .map(|h| h.message)
-                        .filter(|m| access.allows_message(m)),
-                );
+                for message in hits.into_iter().map(|h| h.message) {
+                    if !access.allows_message(&message) {
+                        continue;
+                    }
+                    if hide_encrypted && shared.data.is_encrypted(&message.id).await? {
+                        continue;
+                    }
+                    visible.push(message);
+                }
                 scanned = scanned.saturating_add(returned);
                 if returned == 0 || scanned >= total {
                     break;

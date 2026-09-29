@@ -5,6 +5,7 @@ import type { Draft } from "../../api/generated";
 import { formatAddressList, parseAddressList } from "../../state/addresses";
 import { emptyComposer } from "../../state/compose";
 import type { ComposerState } from "../../state/uiStore";
+import { composerCrypto } from "../security";
 import type { RichState } from "./store";
 
 /** Content ids in `cid:` references of an HTML body. */
@@ -33,6 +34,9 @@ export function richDraftOf(c: ComposerState, r: RichState): { draft: Draft; inv
   const to = parseAddressList(c.to);
   const cc = parseAddressList(c.cc);
   const bcc = parseAddressList(c.bcc);
+  // The sign / encrypt toggles (M2a): only an explicit choice is saved; an
+  // untouched composer follows the identity defaults and Autocrypt.
+  const crypto = composerCrypto();
   return {
     draft: {
       id: c.draftId,
@@ -49,6 +53,7 @@ export function richDraftOf(c: ComposerState, r: RichState): { draft: Draft; inv
       context: c.context,
       signature: r.signature,
       markdown_part: r.mode === "markdown" && r.markdownPart,
+      ...(crypto ? { crypto } : {}),
     },
     invalid: [...to.invalid, ...cc.invalid, ...bcc.invalid],
   };

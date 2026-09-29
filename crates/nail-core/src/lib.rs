@@ -22,6 +22,7 @@ mod accounts;
 mod composer;
 mod context;
 mod creds;
+mod crypto;
 mod customize;
 #[cfg(feature = "demo")]
 pub mod demo;
@@ -45,6 +46,7 @@ mod service;
 mod setup;
 mod strings;
 mod sync;
+mod vault;
 mod virtuals;
 mod watch;
 

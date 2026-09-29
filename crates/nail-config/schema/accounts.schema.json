@@ -41,6 +41,16 @@
       "description": "`account \"<name>\" name=… email=… enabled=… save-sent-copy=… { … }`.",
       "type": "object",
       "properties": {
+        "authserv-id": {
+          "description": "`authserv-id \"mx.example.net\" …`: the ids your receiving servers\nwrite into `Authentication-Results`; only their results are shown\n(default: learned from recent mail).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "email": {
           "description": "Primary email address.",
           "type": "string"

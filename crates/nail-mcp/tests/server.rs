@@ -726,6 +726,44 @@ fn without_hidden_mail() -> FakeData {
     data
 }
 
+/// M2a: with decrypted indexing on, a search can match the decrypted text
+/// of encrypted mail; a client without the `encrypted` scope never sees
+/// those hits.
+#[tokio::test]
+async fn searches_leave_out_encrypted_mail_without_the_encrypted_grant() {
+    let data = FakeData {
+        decrypted_index: true,
+        ..FakeData::default()
+    };
+    let env = start_with(data).await;
+    let (id, token) = create_client(&env.store, "search").await;
+    grant(&env.store, &id, &[McpScope::Read], &["work", "home"]).await;
+    let (client, _) = connect(env.server.url(), &token).await;
+    let ids = |value: &Value| -> Vec<String> {
+        value["data"]["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["id"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let result = tool(&client, "search_messages", json!({"query": "plan"})).await;
+    assert_eq!(ids(&result.structured_content.unwrap()), ["m1", "m2"]);
+    let _ = client.cancel().await;
+
+    grant(
+        &env.store,
+        &id,
+        &[McpScope::Read, McpScope::Encrypted],
+        &["work", "home"],
+    )
+    .await;
+    let (client, _) = connect(env.server.url(), &token).await;
+    let result = tool(&client, "search_messages", json!({"query": "plan"})).await;
+    assert_eq!(ids(&result.structured_content.unwrap()), ["m1", "m2", "m3"]);
+    let _ = client.cancel().await;
+}
+
 #[tokio::test]
 async fn restricted_searches_reveal_nothing_about_hidden_mail() {
     let mut answers = Vec::new();

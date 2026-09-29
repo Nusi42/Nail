@@ -26,7 +26,9 @@ struct Fixture {
 fn open(watch_config: bool, locale: Option<&str>) -> Fixture {
     let data_dir = tempfile::tempdir().unwrap();
     let config_dir = tempfile::tempdir().unwrap();
-    let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
+    // Seeded like `nail serve --seed demo`: secrets in memory, no lookups.
+    let mut options =
+        nail_core::demo::demo_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
     options.watch_config = watch_config;
     options.locale = locale.map(str::to_owned);
     let service = Service::open(options).unwrap();
@@ -740,23 +742,37 @@ async fn m2a_security_requests() {
             status: VaultStatus::plain()
         }
     );
-    for request in [
-        Request::ListKeys {
-            filter: Default::default(),
-        },
-        Request::SetVaultEncryption { enabled: true },
-        Request::CheckRecipientKeys {
-            identity_id: "ada@example.org".into(),
-            recipients: vec!["bob@example.org".into()],
-            lookup: false,
-        },
-        Request::ListWindowsCertificates {
-            store: nail_api::security::WindowsCertStore::Personal,
-        },
-    ] {
-        assert_eq!(
-            error_code(fx.service.handle(request).await),
-            ErrorCode::Unsupported
-        );
-    }
+    // M2a is wired (ADR 0034): an empty keyring, an unknown identity, and
+    // online lookups refused while the setting is off.
+    assert_eq!(
+        fx.service
+            .handle(Request::ListKeys {
+                filter: Default::default(),
+            })
+            .await,
+        Response::Keys { keys: vec![] }
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::CheckRecipientKeys {
+                    identity_id: "ada@example.org".into(),
+                    recipients: vec!["bob@example.org".into()],
+                    lookup: false,
+                })
+                .await
+        ),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::LookupKeys {
+                    email: "bob@example.org".into(),
+                    sources: vec![],
+                })
+                .await
+        ),
+        ErrorCode::Unsupported
+    );
 }

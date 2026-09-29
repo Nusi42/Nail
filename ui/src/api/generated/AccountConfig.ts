@@ -54,4 +54,10 @@ sync: SyncPolicy,
  * `null` = decide automatically (skipped for servers that store sent
  * mail themselves, such as Gmail).
  */
-save_sent_copy: boolean | null, };
+save_sent_copy: boolean | null, 
+/**
+ * `authserv-id` values of the account's own receiving servers (M2a):
+ * only `Authentication-Results` headers from these produce the sender
+ * check badge (RFC 8601 §5). Empty = learned from recent mail.
+ */
+authserv_ids?: Array<string>, };

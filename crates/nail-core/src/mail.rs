@@ -257,7 +257,7 @@ impl Service {
             })
             .collect();
         if !gone.is_empty() {
-            let index = std::sync::Arc::clone(&self.inner.search);
+            let index = self.inner.search.get();
             tokio::task::spawn_blocking(move || {
                 if let Err(err) = index.remove(&gone) {
                     tracing::warn!(%err, "cannot remove deleted messages from the index");

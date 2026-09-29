@@ -107,6 +107,11 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     options.watch_config = !args.no_watch;
     browser_mode(&mut options, args.seed);
 
+    // Seeded runs keep secrets in memory, trust only the test CA and look
+    // up no keys online.
+    if args.seed.is_some() {
+        options = nail_core::demo::demo_options(options);
+    }
     // demo-multi: mock servers first, the service is pointed at them.
     let mut demo_multi = None;
     if args.seed == Some(Seed::DemoMulti) {
@@ -123,6 +128,10 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     }
     let service = Service::open(options)
         .with_context(|| format!("cannot open the data directory {}", data_dir.display()))?;
+
+    if let Some(demo) = &demo_multi {
+        demo.seed_security(&service).await?;
+    }
 
     // Keeps the mock IMAP server alive for the lifetime of `serve`.
     let mut _demo_imap = None;

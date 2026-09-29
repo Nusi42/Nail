@@ -27,6 +27,7 @@ import {
   type ReplyMode,
 } from "../../state/compose";
 import { queryKeys } from "../../state/queries";
+import { composerSendBlock, composerSendCrypto, loadComposerCrypto } from "../security";
 import { bodyOf, draftKey, fromDraft, richDraftOf } from "./draft";
 import { needsReminder, parseKeywords } from "./reminder";
 import { primeRich, richStoreFor, type RichState } from "./store";
@@ -49,6 +50,9 @@ function fail(ctx: ComposeContext, id: string, args?: Record<string, string | nu
 function open(ctx: ComposeContext, draft: Draft, saved: boolean, picked: boolean): void {
   const { composer, rich } = fromDraft(draft, { identityPicked: picked });
   const ui = ctx.store.getState();
+  // The saved sign / encrypt choice (a reply to encrypted mail starts
+  // encrypted).
+  loadComposerCrypto(draft.crypto);
   primeRich(ctx.store, rich);
   if (saved) {
     const state = richStoreFor(ctx.store).getState();
@@ -219,12 +223,30 @@ export async function sendRich(
     rich.setState({ reminder: "confirm" });
     return false;
   }
+  // A chosen protection that cannot work is explained, never dropped. While
+  // the key check is still running (or no key panel is shown) the core
+  // decides: it refuses with `no_key` / `locked` rather than send plain.
+  const block = composerSendBlock();
+  if (block && block.id !== "security-compose-block-checking") {
+    fail(ctx, block.id, {
+      count: block.recipients.length,
+      recipients: block.recipients.join(", "),
+    });
+    return false;
+  }
   const draftId = await saveRich(ctx);
   if (draftId === null) return false;
   ctx.store.getState().updateComposer({ busy: "sending" });
+  const crypto = composerSendCrypto();
   try {
     const { entry } = await ctx.client.request(
-      { type: "SendDraft", draft_id: draftId, delay_secs: null, send_at: sendAt },
+      {
+        type: "SendDraft",
+        draft_id: draftId,
+        delay_secs: null,
+        send_at: sendAt,
+        ...(crypto ? { crypto } : {}),
+      },
       "SendQueued",
     );
     const ui = ctx.store.getState();

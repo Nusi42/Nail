@@ -31,6 +31,7 @@ import type {
   Response,
   SecretProtection,
   SecuritySettings,
+  SendCrypto,
   TrustDecision,
   TrustLevel,
   VaultPhase,
@@ -400,6 +401,51 @@ function ownKey(
     )
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   return own[0] ?? null;
+}
+
+/**
+ * `SendDraft` with signing / encryption, as the core checks it (ADR 0034):
+ * `no_key` when the own key or a recipient's key is missing, `locked` when
+ * the signing key needs its passphrase; `null` = it can be sent. Never
+ * falls back to plain text.
+ */
+export function checkSendCrypto(
+  core: MockCore,
+  identity: Identity,
+  recipients: readonly string[],
+  crypto: SendCrypto,
+): Response | null {
+  const s = state(core);
+  const emails = [...new Set(recipients.map((r) => r.trim().toLowerCase()).filter(Boolean))];
+  const missing = (tech: CryptoTechnology) =>
+    emails.filter((e) => bestKey(s, tech, e)?.state !== "usable");
+  const preference = (identity.crypto ?? defaultIdentityCrypto()).technology;
+  const works = (tech: CryptoTechnology) =>
+    ownKey(s, identity, tech) !== null && (!crypto.encrypt || missing(tech).length === 0);
+  const technology: CryptoTechnology =
+    crypto.technology ??
+    (preference !== "auto"
+      ? preference
+      : works("openpgp")
+        ? "openpgp"
+        : works("smime")
+          ? "smime"
+          : ownKey(s, identity, "openpgp") === null && ownKey(s, identity, "smime") !== null
+            ? "smime"
+            : "openpgp");
+  const own = ownKey(s, identity, technology);
+  if (!own) return errorResponse("no_key", `no own ${technology} key for ${identity.email}`);
+  if (crypto.sign && own.secret_storage === "passphrase") {
+    const until = s.unlocked[own.id];
+    if (until === undefined || until < Date.now()) {
+      return errorResponse("locked", `the key ${own.id} is locked`);
+    }
+  }
+  const without = crypto.encrypt ? missing(technology) : [];
+  if (without.length > 0) {
+    return errorResponse("no_key", `no usable ${technology} key for ${without.join(", ")}`);
+  }
+  return null;
 }
 
 function lookupDomainFails(email: string): boolean {

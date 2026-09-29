@@ -396,7 +396,7 @@ security-identity-protect-headers-hint = The real subject travels inside the enc
 
 security-settings-label = Data protection
 security-vault-title = Encryption at rest
-security-vault-intro = Encrypts Nail’s database, stored messages and search index on this computer, with a key kept in the Windows Credential Manager. It protects your mail if the disk is copied or the laptop is stolen, even without BitLocker.
+security-vault-intro = Encrypts the mail Nail stores on this computer (messages, drafts, message previews and the search index) with a key kept in the Windows Credential Manager. It protects your mail if the disk is copied or the laptop is stolen, even without BitLocker. Subjects, addresses and dates stay readable in the database so that lists and searches stay fast.
 security-vault-recommended = Recommended: turn this on. It is off by default for now.
 security-vault-state-plain = Off: your mail is stored unencrypted on this computer.
 security-vault-state-encrypting = Encrypting your data…
@@ -455,3 +455,9 @@ security-autocrypt-code-hint = 36 digits; the dashes are added for you.
 security-autocrypt-import = Import key
 security-autocrypt-wrong-code = The setup code is wrong.
 security-autocrypt-not-setup = This message is not an Autocrypt setup message.
+
+## The Autocrypt setup message itself (written by the core; the subject
+## stays the specification's fixed "Autocrypt Setup Message")
+
+autocrypt-setup-message-body = This message contains your OpenPGP secret key for Autocrypt, encrypted with a setup code. To use the key on another device, open this message there in an Autocrypt-capable mail program and enter the setup code that was shown on the device that sent it.
+autocrypt-setup-message-html-intro = This is your Autocrypt setup message. The key below is encrypted with the setup code shown on the sending device; enter that code in your mail program to import it.

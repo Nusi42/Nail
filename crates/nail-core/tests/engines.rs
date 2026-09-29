@@ -560,8 +560,8 @@ fn smtp_subjects(f: &Fixture) -> Vec<String> {
         .collect()
 }
 
-/// M2a (ADR 0029): a message that should be signed or encrypted is refused
-/// until signing and encryption are wired in, never sent unprotected;
+/// M2a (ADRs 0029, 0034): a message that should be signed or encrypted is
+/// refused with `no_key` when the keys are missing, never sent unprotected;
 /// the choice comes from the request, the draft or the identity.
 #[tokio::test]
 async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
@@ -593,7 +593,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
         matches!(
             &refused,
             Response::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::NoKey,
                 ..
             }
         ),
@@ -623,7 +623,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
         matches!(
             &refused,
             Response::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::NoKey,
                 ..
             }
         ),
@@ -691,7 +691,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
         matches!(
             &refused,
             Response::Error {
-                code: ErrorCode::Unsupported,
+                code: ErrorCode::NoKey,
                 ..
             }
         ),
@@ -949,6 +949,7 @@ async fn accounts_are_discovered_tested_added_and_removed() {
         identities: vec![],
         sync: Default::default(),
         save_sent_copy: None,
+        authserv_ids: Vec::new(),
     };
     let password = |p: &str| {
         vec![SecretInput {

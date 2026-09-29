@@ -83,6 +83,28 @@ Inside the account:
 | `smtp` | The outgoing server (optional; without it the account only receives) |
 | `identity` | A sending identity (any number; the first is the default) |
 | `sync` | Which folders to synchronize and how much to download |
+| `authserv-id` | Which receiving servers' sender checks to trust (see below) |
+
+### Trusted sender checks (`authserv-id`)
+
+Your provider's receiving server records whether a message passed the
+DKIM, SPF and DMARC checks in an `Authentication-Results` header, starting
+with the server's name (its *authserv-id*). Anyone can put such a header
+into a message, so Nail shows the **sender badge** only for headers from
+your own receiving server:
+
+```kdl
+account "work" email="ada@work.example" {
+    imap host="imap.work.example"
+    authserv-id "mx.work.example" "mx2.work.example"
+}
+```
+
+Without `authserv-id` Nail learns the id from your recent inbox mail (when
+most of it carries the same topmost header) and remembers it. Set it when
+the badge does not appear, or to be sure a wrongly learned id is never
+used. Find the id in the source of a received message: it is the first
+word after `Authentication-Results:` in the topmost such header.
 
 ## Servers
 

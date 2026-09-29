@@ -6,8 +6,7 @@ use std::time::Duration;
 
 use nail_api::engine::{MemorySecretStore, SecretStore};
 use nail_api::{
-    Account, AccountId, ApiError, ErrorCode, Event, MessageBody, MessageId, PROTOCOL_VERSION,
-    Request, Response,
+    Account, AccountId, ApiError, ErrorCode, Event, PROTOCOL_VERSION, Request, Response,
 };
 use nail_config::{ConfigManager, ConfigWatcher, DEFAULT_DEBOUNCE};
 use nail_discovery::Discoverer;
@@ -18,7 +17,7 @@ use tokio::task::JoinHandle;
 
 use crate::accounts::AccountManager;
 use crate::engine::Engines;
-use crate::error::{CoreError, Result};
+use crate::error::Result;
 use crate::oauth::{OAuthFlows, Tokens};
 use crate::sync::{
     ImapAccount, ImapSettings, RunningPasses, SyncCtx, SyncEngine, SyncReport, sync_with_connection,
@@ -117,6 +116,12 @@ pub struct ServiceOptions {
     pub open_editor: bool,
     /// Engine timing.
     pub timing: EngineTiming,
+    /// S/MIME trust anchors; `None` = the Windows certificate stores
+    /// (current user's Root / CA / Disallowed) on Windows, none elsewhere.
+    pub trust_anchors: Option<Arc<dyn nail_smime::TrustAnchors>>,
+    /// HTTPS for online key lookups (WKD, keys.openpgp.org); `None` = the
+    /// real network (rustls, HTTPS only).
+    pub key_lookup: Option<Arc<dyn nail_pgp::discovery::HttpClient>>,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -131,6 +136,8 @@ impl std::fmt::Debug for ServiceOptions {
             .field("open_browser", &self.open_browser)
             .field("open_editor", &self.open_editor)
             .field("timing", &self.timing)
+            .field("fixed_trust_anchors", &self.trust_anchors.is_some())
+            .field("key_lookup_mock", &self.key_lookup.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -150,6 +157,8 @@ impl ServiceOptions {
             open_browser: false,
             open_editor: false,
             timing: EngineTiming::default(),
+            trust_anchors: None,
+            key_lookup: None,
         }
     }
 }
@@ -167,7 +176,7 @@ pub(crate) struct Inner {
     pub(crate) config: ConfigManager,
     pub(crate) locale: Option<String>,
     pub(crate) events: broadcast::Sender<Event>,
-    pub(crate) search: Arc<SearchIndex>,
+    pub(crate) search: Arc<crate::search::SearchSlot>,
     pub(crate) manual: SyncEngine,
     pub(crate) running: RunningPasses,
     pub(crate) accounts: AccountManager,
@@ -194,6 +203,11 @@ pub(crate) struct Inner {
     pub(crate) draft_uploads: crate::composer::DraftUploads,
     /// The running MCP server's address, once started (ADR 0025).
     pub(crate) mcp_info: Mutex<Option<nail_api::mcp::McpServerInfo>>,
+    /// End-to-end encryption state (M2a): unlock caches, trust anchors,
+    /// the key lookup client.
+    pub(crate) crypto: crate::crypto::CryptoState,
+    /// Encryption at rest (M2a).
+    pub(crate) vault: crate::vault::VaultCtl,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -234,18 +248,19 @@ impl Service {
     pub fn open(options: ServiceOptions) -> Result<Self> {
         std::fs::create_dir_all(&options.data_dir)?;
         let (store, blobs) = nail_store::open_data_dir(&options.data_dir)?;
-        let search = match SearchIndex::open(
-            options.data_dir.join(nail_search::INDEX_DIR_NAME),
-            CommitPolicy::default(),
-        ) {
-            Ok(index) => index,
-            Err(err) => {
-                tracing::error!(%err, "cannot open the search index; searching in memory only");
-                SearchIndex::open_in_ram(CommitPolicy::default())?
-            }
-        };
+        let secrets = resolve_secrets(&options);
+        let index_dir = options.data_dir.join(nail_search::INDEX_DIR_NAME);
+        // Encryption at rest first: the store and blob store get their
+        // cipher before anything reads messages or drafts (ADR 0032).
+        let vault = crate::vault::VaultCtl::open(
+            store.clone(),
+            blobs.clone(),
+            Some(index_dir.clone()),
+            Arc::clone(&secrets),
+        );
+        let search = vault.open_index(&index_dir)?;
         let config = ConfigManager::load(&options.config_dir);
-        let service = Self::build(store, blobs, config, search, &options)?;
+        let service = Self::build(store, blobs, config, search, vault, secrets, &options)?;
         if options.watch_config {
             service.watch_config()?;
         }
@@ -267,10 +282,14 @@ impl Service {
     ) -> Self {
         let mut options = ServiceOptions::new(PathBuf::new(), config.dir().to_owned());
         options.locale = locale;
-        options.secrets = Some(Arc::new(MemorySecretStore::new()));
+        let secrets: Arc<dyn SecretStore> = Arc::new(MemorySecretStore::new());
+        options.secrets = Some(Arc::clone(&secrets));
+        options.trust_anchors = Some(Arc::new(nail_smime::FixedTrustAnchors::new(Vec::new())));
         let search = SearchIndex::open_in_ram(CommitPolicy::default())
             .expect("an in-memory search index always opens");
-        Self::build(store, blobs, config, search, &options)
+        let vault =
+            crate::vault::VaultCtl::open(store.clone(), blobs.clone(), None, Arc::clone(&secrets));
+        Self::build(store, blobs, config, search, vault, secrets, &options)
             .expect("building a service from parts does not fail")
     }
 
@@ -279,6 +298,8 @@ impl Service {
         blobs: BlobStore,
         config: ConfigManager,
         search: SearchIndex,
+        vault: crate::vault::VaultCtl,
+        secrets: Arc<dyn SecretStore>,
         options: &ServiceOptions,
     ) -> Result<Self> {
         let (events, _) = broadcast::channel(EVENT_CAPACITY);
@@ -287,10 +308,7 @@ impl Service {
         }
         let accounts = AccountManager::load(config.dir());
         let rules = crate::rules::RulesManager::load(config.dir());
-        let secrets: Arc<dyn SecretStore> = match &options.secrets {
-            Some(secrets) => Arc::clone(secrets),
-            None => Arc::new(nail_auth::KeychainSecretStore::new()),
-        };
+        let crypto = crate::crypto::CryptoState::new(options)?;
         let http = nail_auth::http_client()
             .map_err(|err| ApiError::internal(format!("cannot build the HTTP client: {err}")))?;
         let tokens = Arc::new(Tokens::new(
@@ -305,7 +323,7 @@ impl Service {
                 config,
                 locale: options.locale.clone(),
                 events,
-                search: Arc::new(search),
+                search: Arc::new(crate::search::SearchSlot::new(search)),
                 manual: SyncEngine::default(),
                 running: RunningPasses::default(),
                 accounts,
@@ -325,6 +343,8 @@ impl Service {
                 rules_wake: Notify::new(),
                 draft_uploads: crate::composer::DraftUploads::default(),
                 mcp_info: Mutex::new(None),
+                crypto,
+                vault,
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -349,6 +369,8 @@ impl Service {
         background.push(tokio::spawn(crate::search::run_committer(self.clone())));
         background.push(tokio::spawn(crate::search::run_maintenance(self.clone())));
         background.push(tokio::spawn(crate::rules::run_rules(self.clone())));
+        // An interrupted switch of encryption at rest resumes (ADR 0032).
+        background.push(tokio::spawn(crate::vault::resume_migration(self.clone())));
         let service = self.clone();
         background.push(tokio::spawn(async move {
             if let Err(err) = service.purge_history(crate::engine::unix_now()).await {
@@ -489,9 +511,9 @@ impl Service {
         &self.inner.config
     }
 
-    /// The search index.
-    pub fn search_index(&self) -> &SearchIndex {
-        &self.inner.search
+    /// The search index (replaced while encryption at rest converts it).
+    pub fn search_index(&self) -> Arc<SearchIndex> {
+        self.inner.search.get()
     }
 
     /// The secret storage (keychain, or the store given in the options).
@@ -871,22 +893,13 @@ impl Service {
             | Request::SetVaultEncryption { .. }) => crate::security::handle(self, request).await?,
         })
     }
+}
 
-    pub(crate) async fn message_body(&self, id: MessageId) -> Result<MessageBody> {
-        let store = self.inner.store.clone();
-        let blobs = self.inner.blobs.clone();
-        tokio::task::spawn_blocking(move || -> Result<MessageBody> {
-            let stored = store.get_message(&id)?;
-            let hash = stored.blob_hash.ok_or_else(|| {
-                CoreError::from(ApiError::new(
-                    ErrorCode::Unavailable,
-                    format!("the body of message {id} is not downloaded yet"),
-                ))
-            })?;
-            let raw = blobs.get(&hash)?;
-            Ok(nail_mime::parse_message(&raw).into_body(id))
-        })
-        .await?
+/// The secret store of the options: the given one, else the OS keychain.
+fn resolve_secrets(options: &ServiceOptions) -> Arc<dyn SecretStore> {
+    match &options.secrets {
+        Some(secrets) => Arc::clone(secrets),
+        None => Arc::new(nail_auth::KeychainSecretStore::new()),
     }
 }
 

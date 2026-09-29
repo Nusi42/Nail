@@ -11,6 +11,8 @@ Guides and references for people using Nail.
 | [Writing mail](composer.md) | The composer: plain text, HTML and Markdown, attachments and the reminder, replies and signatures, drafts saved to the server, undo send, send later, the outbox |
 | [Markdown mail](markdown-mail.md) | What Markdown can do, what recipients get, the mail stylesheet and code colours per identity |
 | [Filter rules](rules.md) | Rules that sort, tag and answer mail: when they run, conditions, actions, testing, undoing a run, `rules.kdl` |
+| [Signing, encryption and data protection](security.md) | Keys and certificates, trust, defaults per address, composer toggles, reader badges and warnings, OpenPGP and Autocrypt, S/MIME, encryption at rest, Autocrypt setup |
+| [Data protection in detail](data-protection.md) | What encryption at rest covers, the key, switching it on and off, searching encrypted mail, the sender check, link and attachment warnings |
 | [Connecting AI agents (MCP)](mcp.md) | MCP clients, tokens, permissions, configuring agents (HTTP and `nail mcp`), resources and tools, the activity log, safety |
 | [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
@@ -18,7 +20,7 @@ Guides and references for people using Nail.
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
 | [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities (formats, signatures, mail style), what to synchronize, virtual accounts, OAuth2 providers, undo send |
 
-These pages describe the current preview (milestone M1).
+These pages describe the current preview (milestone M2).
 
 Internal material (design, plan, decisions) lives in [`docs/`](../../docs/)
 instead. Translations go to `userDocs/<language>/`; a page without a

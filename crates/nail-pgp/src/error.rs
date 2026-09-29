@@ -63,6 +63,8 @@ fn store_code(e: &nail_store::Error) -> ErrorCode {
         nail_store::Error::NotFound { .. } => ErrorCode::NotFound,
         nail_store::Error::InvalidData(_) => ErrorCode::InvalidRequest,
         nail_store::Error::Conflict(_) => ErrorCode::Conflict,
+        nail_store::Error::Locked(_) => ErrorCode::Locked,
+        nail_store::Error::Crypto(_) => ErrorCode::Crypto,
         _ => ErrorCode::Internal,
     }
 }

@@ -328,6 +328,18 @@ impl Service {
             ),
             None => None,
         };
+        // Answering or forwarding encrypted mail starts encrypted (M2a).
+        let reply_crypto = original
+            .as_ref()
+            .and_then(|(_, _, security)| security.as_ref())
+            .filter(|s| s.is_encrypted())
+            .map(|security| nail_api::security::SendCrypto {
+                sign: identity.crypto.as_ref().is_some_and(|c| c.sign),
+                encrypt: true,
+                technology: Some(security.technology),
+                protect_headers: None,
+            });
+        let original = original.map(|(message, date, _)| (message, date));
         let locale = self.inner.locale.clone();
         let draft = tokio::task::spawn_blocking(move || {
             let with_context = match (&context, &original) {
@@ -347,27 +359,36 @@ impl Service {
             )
         })
         .await?;
+        let mut draft = draft;
+        if reply_crypto.is_some() {
+            draft.crypto = reply_crypto;
+        }
         Ok(draft)
     }
 
-    /// The message a reply or forward refers to, with its date; a forward
-    /// gets the original's attachments copied into the blob store.
+    /// The message a reply or forward refers to, with its date and its
+    /// end-to-end status; a forward gets the original's attachments
+    /// (decrypted ones for encrypted mail) copied into the blob store.
     async fn original_message(
         &self,
         id: &MessageId,
         mode: DraftContextMode,
-    ) -> Result<(OriginalMessage, Option<String>)> {
+    ) -> Result<(
+        OriginalMessage,
+        Option<String>,
+        Option<nail_api::security::SecurityStatus>,
+    )> {
         let body = self.message_body(id.clone()).await?;
         let attachments = if mode == DraftContextMode::Forward && !body.attachments.is_empty() {
-            let store = self.inner.store.clone();
-            let blobs = self.inner.blobs.clone();
+            let service = self.clone();
             let id = id.clone();
             tokio::task::spawn_blocking(move || -> Result<Vec<DraftAttachment>> {
-                let stored = store.get_message(&id)?;
+                let blobs = service.blobs().clone();
+                let stored = service.store().get_message(&id)?;
                 let Some(hash) = stored.blob_hash else {
                     return Ok(Vec::new());
                 };
-                let raw = blobs.get(&hash)?;
+                let (raw, _) = service.readable_raw(blobs.get(&hash)?);
                 let mut out = Vec::new();
                 for index in 0.. {
                     let Some(content) = nail_mime::attachment_content(&raw, index) else {
@@ -393,6 +414,7 @@ impl Service {
             Vec::new()
         };
         let headers = body.headers;
+        let security = body.security;
         Ok((
             OriginalMessage {
                 id: id.clone(),
@@ -406,6 +428,7 @@ impl Service {
                 attachments,
             },
             headers.date,
+            security,
         ))
     }
 
@@ -561,6 +584,11 @@ impl Service {
         if !matches!(account.incoming, IncomingServer::Imap { .. }) {
             return Ok(());
         }
+        // An encrypted message's draft never goes to the server in plain
+        // text (M2a).
+        if draft.crypto.as_ref().is_some_and(|c| c.encrypt) {
+            return Ok(());
+        }
         let folder = {
             let account_id = account.id.clone();
             self.inner
@@ -592,7 +620,7 @@ impl Service {
             ..IncomingMessage::default()
         };
         let blobs = self.inner.blobs.clone();
-        let index = Arc::clone(&self.inner.search);
+        let index = self.inner.search.get();
         let target = folder.clone();
         let draft_id = id.clone();
         let copy = DraftServerCopy {

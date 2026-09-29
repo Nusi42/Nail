@@ -87,7 +87,7 @@ impl Service {
             ..IncomingMessage::default()
         };
         let blobs = self.inner.blobs.clone();
-        let index = std::sync::Arc::clone(&self.inner.search);
+        let index = self.inner.search.get();
         let target_folder = folder.clone();
         self.inner
             .store
@@ -148,7 +148,8 @@ impl Service {
         to: &[String],
         identity: Option<IdentityId>,
     ) -> Result<()> {
-        let (stored, _) = self.raw_message(message).await?;
+        let (stored, raw) = self.raw_message(message).await?;
+        self.refuse_encrypted(&raw, "forward").await?;
         let identity = self
             .rule_identity(message, &stored.summary.account_id, identity)
             .await?;
@@ -175,7 +176,8 @@ impl Service {
         template: &str,
         identity: Option<IdentityId>,
     ) -> Result<()> {
-        let (stored, _) = self.raw_message(message).await?;
+        let (stored, raw) = self.raw_message(message).await?;
+        self.refuse_encrypted(&raw, "reply to").await?;
         let identity_id = self
             .rule_identity(message, &stored.summary.account_id, identity)
             .await?;
@@ -202,6 +204,45 @@ impl Service {
         let quoted = draft.html.take().unwrap_or_default();
         draft.html = Some(format!("{text}{quoted}"));
         self.send_now(draft, AutomaticMail::Reply).await
+    }
+
+    /// A message prepared by the core (an Autocrypt setup message) in the
+    /// draft's first attachment, sent unchanged to the draft's recipients.
+    pub(crate) async fn prepared_message(
+        &self,
+        draft: &Draft,
+        identity: &Identity,
+    ) -> Result<OutgoingMessage> {
+        let prepared = draft.attachments.first().ok_or_else(|| {
+            ApiError::internal("the prepared message of an automatic mail is missing")
+        })?;
+        let hash = nail_store::BlobHash::parse(&prepared.blob)?;
+        let blobs = self.inner.blobs.clone();
+        let raw = tokio::task::spawn_blocking(move || blobs.get(&hash)).await??;
+        let message_id = nail_mime::parse_message(&raw)
+            .headers
+            .message_id
+            .unwrap_or_default();
+        Ok(OutgoingMessage {
+            envelope: Envelope {
+                from: identity.email.trim().to_owned(),
+                to: draft.to.iter().map(|a| a.email.trim().to_owned()).collect(),
+            },
+            raw,
+            message_id,
+        })
+    }
+
+    /// Refuses automatic forwards and replies of encrypted mail: they would
+    /// send its decrypted content without encryption (ADR 0034).
+    async fn refuse_encrypted(&self, raw: &[u8], action: &str) -> Result<()> {
+        if crate::crypto::is_encrypted_raw(raw) {
+            return Err(ApiError::unsupported(format!(
+                "a rule cannot {action} an encrypted message"
+            ))
+            .into());
+        }
+        Ok(())
     }
 
     /// Rule action `redirect`: the message unchanged, with `Resent-*`

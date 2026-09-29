@@ -586,39 +586,47 @@ describe("security mock", () => {
     expect(s.messages["m-1"]?.security?.encryption?.state).toBe("decrypted");
   });
 
-  it("still refuses to send signed mail instead of sending it plain (until WP35)", async () => {
+  it("sends signed or encrypted mail only when the keys allow it, never plain", async () => {
     const { transport } = setup();
     const identity = transport.data.accountsConfig.accounts[0]?.identities[0];
     if (!identity) throw new Error("the mock has no identity");
-    const saved = await transport.send({
-      type: "SaveDraft",
-      draft: {
-        id: null,
-        identity_id: identity.id,
-        to: [{ name: null, email: "bob@example.org" }],
-        cc: [],
-        bcc: [],
-        subject: "Signed",
-        mode: "plain",
-        text: "hi",
-        html: null,
-        markdown: null,
-        attachments: [],
-        context: null,
-        signature: "none",
-        markdown_part: false,
-      },
+    const draft = (to: string) => ({
+      id: null,
+      identity_id: identity.id,
+      to: [{ name: null, email: to }],
+      cc: [],
+      bcc: [],
+      subject: "Protected",
+      mode: "plain" as const,
+      text: "hi",
+      html: null,
+      markdown: null,
+      attachments: [],
+      context: null,
+      signature: "none" as const,
+      markdown_part: false,
     });
-    if (saved.type !== "DraftSaved") throw new Error(JSON.stringify(saved));
+    const send = async (to: string, sign: boolean, encrypt: boolean) => {
+      const saved = await transport.send({ type: "SaveDraft", draft: draft(to) });
+      if (saved.type !== "DraftSaved") throw new Error(JSON.stringify(saved));
+      return transport.send({
+        type: "SendDraft",
+        draft_id: saved.draft_id,
+        delay_secs: 60,
+        send_at: null,
+        crypto: { sign, encrypt, technology: null, protect_headers: null },
+      });
+    };
     const outboxBefore = transport.data.outbox.length;
-    const refused = await transport.send({
-      type: "SendDraft",
-      draft_id: saved.draft_id,
-      delay_secs: 0,
-      send_at: null,
-      crypto: { sign: true, encrypt: false, technology: null, protect_headers: null },
+    // Nobody has a key for bob@example.org.
+    expect(await send("bob@example.org", false, true)).toMatchObject({
+      type: "Error",
+      code: "no_key",
     });
-    expect(refused).toMatchObject({ type: "Error", code: "unsupported" });
     expect(transport.data.outbox).toHaveLength(outboxBefore);
+    // Grace has a verified key; Ada signs with her own key.
+    expect(await send("grace@navy.example", true, true)).toMatchObject({ type: "SendQueued" });
+    expect(await send("bob@example.org", true, false)).toMatchObject({ type: "SendQueued" });
+    expect(transport.data.outbox).toHaveLength(outboxBefore + 2);
   });
 });

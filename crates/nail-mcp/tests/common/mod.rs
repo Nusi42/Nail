@@ -60,6 +60,8 @@ pub struct FakeData {
     pub messages: Vec<MessageSummary>,
     pub context: Mutex<UiContext>,
     pub events: Mutex<Vec<Event>>,
+    /// The index holds decrypted content (decrypted indexing opted in).
+    pub decrypted_index: bool,
 }
 
 impl Default for FakeData {
@@ -72,6 +74,7 @@ impl Default for FakeData {
             ],
             context: Mutex::new(UiContext::default()),
             events: Mutex::new(Vec::new()),
+            decrypted_index: false,
         }
     }
 }
@@ -216,6 +219,10 @@ impl McpData for FakeData {
 
     async fn is_encrypted(&self, id: &MessageId) -> DataResult<bool> {
         Ok(id.as_str() == "m3")
+    }
+
+    async fn index_holds_decrypted(&self) -> DataResult<bool> {
+        Ok(self.decrypted_index)
     }
 
     async fn thread(&self, id: &ThreadId) -> DataResult<ThreadData> {

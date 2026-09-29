@@ -4,6 +4,7 @@ import { emptyComposer } from "../../state/compose";
 import { createEnv, renderNode, widget, type Env } from "../../test/harness";
 import { htmlEditorIn } from "./HtmlEditor";
 import { markdownViewIn } from "./MarkdownEditor";
+import { composerCryptoStore } from "../security";
 import { acceptRichDrafts } from "./mock";
 import { AUTOSAVE_MS, richStoreFor, type RichState } from "./store";
 
@@ -183,6 +184,68 @@ describe("rich composer", () => {
     await user.click(within(alert).getByRole("button", { name: "Send anyway" }));
     await waitFor(() => expect(env.store.getState().composer).toBeNull());
     expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(true);
+  });
+
+  it("sends with the sign / encrypt choice and refuses what cannot work", async () => {
+    const user = userEvent.setup();
+    const env = composerEnv({ to: "grace@navy.example", subject: "Protected", text: "hi" });
+    renderNode(widget("composer"), env);
+    const choice = { sign: true, encrypt: true, technology: null, protect_headers: null };
+    // A report that leaves bob without a key blocks sending; nothing is sent.
+    composerCryptoStore.setState({
+      choice,
+      preference: "auto",
+      report: {
+        recipients: [
+          {
+            email: "bob@example.org",
+            openpgp: null,
+            smime: null,
+            autocrypt: null,
+            lookup: "not-attempted",
+          },
+        ],
+        openpgp: { own_key: true, all_recipients: false },
+        smime: { own_key: false, all_recipients: false },
+        autocrypt: "disable",
+        suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
+      },
+    });
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText(/bob@example\.org/)).toBeInTheDocument();
+    expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(false);
+
+    // Grace has a usable key: the choice goes with the draft and the send.
+    composerCryptoStore.setState({
+      report: {
+        recipients: [
+          {
+            email: "grace@navy.example",
+            openpgp: {
+              key_id: "key-3",
+              fingerprint: "F",
+              state: "usable",
+              trust: "verified",
+              source: "imported",
+            },
+            smime: null,
+            autocrypt: null,
+            lookup: "not-attempted",
+          },
+        ],
+        openpgp: { own_key: true, all_recipients: true },
+        smime: { own_key: false, all_recipients: false },
+        autocrypt: "disable",
+        suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
+      },
+    });
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(env.store.getState().composer).toBeNull());
+    const saved = env.transport.requests.filter((r) => r.type === "SaveDraft").pop();
+    expect(saved).toMatchObject({ draft: { crypto: choice } });
+    const sent = env.transport.requests.find((r) => r.type === "SendDraft");
+    expect(sent).toMatchObject({ crypto: choice });
+    composerCryptoStore.getState().reset();
   });
 
   it("lets the reminder be dismissed", async () => {

@@ -1,6 +1,7 @@
 //! The few user-visible strings the core renders itself: the pages a
-//! browser shows after an OAuth2 sign-in, and the quote header / forward
-//! texts the composer puts into replies and forwards. They come from the
+//! browser shows after an OAuth2 sign-in, the quote header / forward
+//! texts the composer puts into replies and forwards, and the text of an
+//! Autocrypt setup message (M2a). They come from the
 //! same Fluent catalogs as the UI's (`locales/<lang>/*.ftl`), embedded at
 //! build time, with the per-key English fallback.
 //!
@@ -13,11 +14,13 @@ const EN: &[&str] = &[
     include_str!("../../../locales/en/app.ftl"),
     include_str!("../../../locales/en/compose.ftl"),
     include_str!("../../../locales/en/composer.ftl"),
+    include_str!("../../../locales/en/security.ftl"),
 ];
 const DE: &[&str] = &[
     include_str!("../../../locales/de/app.ftl"),
     include_str!("../../../locales/de/compose.ftl"),
     include_str!("../../../locales/de/composer.ftl"),
+    include_str!("../../../locales/de/security.ftl"),
 ];
 
 fn lookup(catalogs: &[&str], key: &str) -> Option<String> {
@@ -144,6 +147,18 @@ mod tests {
         );
         assert!(!message(None, "composer-forward-header").is_empty());
         assert_eq!(message(None, "message-header-from"), "From");
+    }
+
+    #[test]
+    fn autocrypt_setup_texts_exist() {
+        for key in [
+            "autocrypt-setup-message-body",
+            "autocrypt-setup-message-html-intro",
+        ] {
+            let text = message(Some("de"), key);
+            assert_ne!(text, key);
+            assert!(text.contains("setup code"), "{text}");
+        }
     }
 
     #[test]

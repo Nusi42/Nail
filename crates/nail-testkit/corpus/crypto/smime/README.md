@@ -44,6 +44,8 @@ GeneralizedTime, so both time encodings are exercised).
 | `not-ca.crt/.key` | Not A CA | EC P-256 | intermediate | end-entity (CA:false) that issues |
 | `heidi.crt/.key` | Heidi Bad Issuer | RSA 2048 | not-ca | issued by a **non-CA** |
 | `ivan.crt/.key` | Ivan Critical | RSA 2048 | intermediate | unknown **critical extension** |
+| `ada-work.crt/.key` | Ada Lovelace (Work), `ada@work.example` | RSA 2048 | intermediate | the `demo-multi` "work" account (M2a WP35 e2e: S/MIME round trip) |
+| `ada-home.crt/.key` | Ada Lovelace (Home), `ada@home.example` | EC P-256 | intermediate | the `demo-multi` "home" account (ECDH recipient) |
 
 ## Bundles
 
@@ -52,6 +54,7 @@ GeneralizedTime, so both time encodings are exercised).
 | `alice.p12` | alice's key and certificate + intermediate; OpenSSL 3 default (PBES2, AES-256-CBC, HMAC-SHA256) |
 | `alice-legacy.p12` | the same with `-legacy` (3DES / RC2, SHA-1 MAC), like older Windows exports |
 | `bob.p12` | bob's key and certificate + intermediate (PBES2) |
+| `ada-work.p12`, `ada-home.p12` | the demo-multi accounts' keys and certificates + intermediate (PBES2), imported by `nail serve --seed demo-multi` |
 | `alice-chain-p7c.der` | certs-only PKCS#7 (`.p7c`) with intermediate + alice, DER (named `.der` so `.gitattributes` keeps it binary) |
 
 ## Messages (CRLF, byte-exact; `.eml` is `-text` in `.gitattributes`)

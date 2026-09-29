@@ -39,31 +39,42 @@ crates/nail-store      SQLite metadata (v5), blob store, per-account operation q
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
-                       app settings (src/crypto.rs, ADR 0029)
-crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules);
-                       M2a slots: src/auth_results.rs, src/links.rs (WP33)
+                       app settings (src/crypto.rs, ADR 0029); seal.rs: DataCipher, nail_seal /
+                       nail_open SQL functions, SEALED_COLUMNS, convert_fields, compact; BlobStore
+                       set_cipher / convert / hashes / remove_temp_files (ADR 0032)
+crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); domain.rs,
+                       auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
+                       warnings) (ADR 0032)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
 crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
 crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
-crates/nail-search     Tantivy index + query language parser (ADR 0016)
+crates/nail-search     Tantivy index + query language parser (ADR 0016); open_with(DirectoryWrapper)
+                       for the sealed index, IndexPolicy (decrypted indexing opt-in) (ADR 0032)
 crates/nail-testkit    mock IMAP server, .eml corpus, demo seed; corpus/crypto/{pgp,smime}: end-to-end
-                       test vectors (not demo mail; `crypto_fixture`)
+                       test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
+                       smime/ada-{work,home}.p12 are the demo-multi certificates)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
                        CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025)
-crates/nail-pgp        OpenPGP (rPGP) + Autocrypt + WKD (M2a WP31; stub after WP30)
-crates/nail-smime      S/MIME (RustCrypto cms/x509-cert, PKCS#12, Windows cert store) (M2a WP32; stub)
-crates/nail-vault      encryption at rest: XChaCha20-Poly1305 blobs/index, keychain key (M2a WP33; stub)
+crates/nail-pgp        OpenPGP (rPGP): keyring (S2K secrets: passphrase or keychain:nail/openpgp/<FPR>),
+                       PGP/MIME sign/encrypt/decrypt/verify, inline read, header protection, Autocrypt
+                       L1, WKD + keys.openpgp.org via injected HttpClient (ADR 0030)
+crates/nail-smime      S/MIME (RustCrypto cms/x509-cert): sign/encrypt/verify/decrypt, chain validation
+                       (TrustAnchors), PKCS#12, keyring, Windows cert store + CNG keys (ADR 0031)
+crates/nail-vault      encryption at rest: sealed format (XChaCha20-Poly1305), data key in the keychain,
+                       SealedDirectory (tantivy), Vault migration plain <-> encrypted (ADR 0032)
 crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
                        engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020);
                        M1b: composer.rs (NewDraft…, server Drafts copy), rules.rs + rule_mail.rs
                        (rules.kdl, arrival / on-send / schedule / manual runs, undo), mcp.rs
                        (start_mcp_server, McpRunning), customize.rs (write-back, merge) (ADR 0027);
-                       M2a: security.rs (every security request; settings + vault status served)
+                       M2a: security.rs (every security request), crypto.rs (keyrings, decrypt/verify
+                       on read, sign/encrypt + Autocrypt on send, arrivals, authserv-ids), vault.rs
+                       (VaultCtl, migration with the swappable SearchSlot) (ADR 0034)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
 crates/nail-cli        `nail` binary
 app/src-tauri          Tauri 2 desktop shell (starts the MCP server; main window created in code)
@@ -94,6 +105,8 @@ npm run gen:api                            # regenerate ui/src/api/generated fro
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas (theme, layout, accounts)
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema   # rules.kdl JSON Schema
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults  # nail-api fixtures after editing defaults/*.kdl (then prettier)
+bash crates/nail-testkit/corpus/crypto/pgp/generate.sh     # OpenPGP interop vectors (GnuPG 2.4 = Git for Windows /usr/bin/gpg)
+bash crates/nail-testkit/corpus/crypto/smime/generate.sh   # S/MIME test CA + vectors (OpenSSL 3.4+ = /mingw64/bin/openssl)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
 cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts (test controls at /api/test/…)
@@ -117,8 +130,14 @@ npm run tauri dev                          # desktop app with Vite hot reload
 - M2a contract: ADR 0029 (security protocol, identity `crypto` in `accounts.kdl`, store v5, crate
   stubs `nail-pgp` / `nail-smime` / `nail-vault`, slots). Licences: no GPL/LGPL/AGPL; no OpenSSL
   (`cargo tree -i openssl-sys` must stay empty). The crypto crates share rPGP's RustCrypto
-  generation (digest 0.10; workspace `sha2-legacy` = sha2 0.10, `sha2` = 0.11 for ids). Sign /
-  encrypt on send is refused (`unsupported`) until WP35 — never sent unprotected.
+  generation (digest 0.10; workspace `sha2-legacy` = sha2 0.10, `sha2` = 0.11 for ids).
+  Packages: ADRs 0030 (OpenPGP), 0031 (S/MIME), 0032 (data protection), 0033 (security UI);
+  integration ADR 0034. Sending never falls back to plain text (`no_key` / `locked`); decrypted
+  content is never persisted (only `message_security` status; search index only with the
+  per-account opt-in); MCP needs the `encrypted` scope for it. Seeded runs use
+  `nail_core::demo::demo_options` (memory secrets, test CA anchor, offline key lookup);
+  demo-multi accounts get keys via `DemoMulti::seed_security`. `Service::search_index()`
+  returns an `Arc` (the vault migration swaps the index; never hold it across long work).
 - `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
   endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
   (`open_editor`).

@@ -230,24 +230,40 @@ M2 runs as four waves (four workflows), each shaped like the M1 waves: contract 
 
 ### Wave M2a — End-to-end encryption and data protection
 
+**Status:** WP30–WP35 done (ADRs 0029–0034); automated suites green (cargo, Vitest, Playwright incl. `e2e/tests/security.spec.ts`). Next: the two reviews (one security), fixes, independent verify; the M2 human security review gate stays open.
+
 #### WP30 — Contract (sequential)
 *Done (ADR 0029):* protocol module `nail_api::security` (+ optional fields on `MessageBody`, `Identity`, `Draft`, `SendDraft`; error codes `locked`, `no_key`, `crypto`), identity `crypto` node in `accounts.kdl`, store v5 with tested accessors (keyring, trust, Autocrypt peers, vault state, message security, settings), stub crates with library smoke tests, slots for WP31–WP34 (incl. `nail-mime` modules and `corpus/crypto/{pgp,smime}`). The core serves the security settings and vault status; other security requests answer `unsupported`, and sign / encrypt on send is refused until WP35.
 Per-message `SecurityStatus` (signed / encrypted / verified, signer identity, key or certificate id, trust level, chain summary, header-protection state); `AuthResults` (DKIM / SPF / DMARC / ARC from `Authentication-Results`); key and certificate management requests (list, import, export public, generate OpenPGP key, delete, set trust, look up by address via WKD / keys.openpgp.org, import PKCS#12, list Windows-store certificates); per-identity crypto settings (default sign / encrypt, preferred technology, Autocrypt prefer-encrypt); compose-time recipient key status; `SendDraft` sign/encrypt options; encryption-at-rest settings and status; stub crates `nail-pgp`, `nail-smime`, `nail-vault` (at-rest encryption).
 
 #### WP31 — OpenPGP and Autocrypt (parallel)
 rPGP-based `nail-pgp`: keyring (public keys + secret keys encrypted with a passphrase or a random key kept in the OS keychain), generate (Ed25519/X25519 default, RSA import), import / export, PGP/MIME sign, encrypt, sign+encrypt, decrypt, verify (RFC 3156); inline PGP read-only; header protection for encrypted mail (encrypted subject shown as "..." on the wire); Autocrypt Level 1 (parse headers, peer state, prefer-encrypt, setup message); key discovery via WKD and keys.openpgp.org behind injectable HTTP; trust model (unknown / verified / autocrypt-gossip). Tests with interoperability vectors (messages produced by GnuPG and Thunderbird checked into the corpus).
+*Done (ADR 0030):* rPGP 0.20; GnuPG 2.4 vectors in Thunderbird's MIME layout (`corpus/crypto/pgp/generate.sh`); GnuPG verifies and decrypts Nail's output. Not done: OpenPGP v6 keys / SEIPD v2 output, designated revokers, removing the RFC 9788 legacy-display part.
 
 #### WP32 — S/MIME (parallel)
 `nail-smime`: CMS SignedData / EnvelopedData via RustCrypto (`cms`, `x509-cert`, `rsa`, `p256` …); S/MIME 4.0 (RFC 8551) sign (detached `multipart/signed` and opaque), encrypt (AES-GCM / AES-CBC for compatibility), decrypt, verify; certificate import from PKCS#12 and from the Windows certificate store (`windows` crate: CryptoAPI / CNG), chain building and validation against the Windows trust store, expiry and key-usage checks, revocation marked as "not checked" in M2; smartcards (PKCS#11) deferred to M4. Test vectors from OpenSSL-generated fixtures (generated once, checked in).
+*Done (ADR 0031):* RustCrypto `cms` / `x509-cert` 0.2, own chain validation, `p12-keystore`, CNG keys that stay in Windows; OpenSSL 3.5 vectors both ways. Not done: RSA-OAEP output, name / policy constraints (such chains are `invalid`), AIA fetching, S/MIME header protection.
 
 #### WP33 — Data protection (parallel)
 `nail-vault` + store/search integration hooks: encryption at rest for the database, blob store and search index (evaluate SQLCipher-compatible options without an OpenSSL build dependency, application-level encryption of blobs with XChaCha20-Poly1305, an encrypted Tantivy `Directory`), key held in the OS keychain, migration between plain and encrypted data with crash safety; decrypted-content indexing policy (off by default, opt-in per account, index then counts as sensitive); `Authentication-Results` parsing in `nail-mime` (DKIM / SPF / DMARC / ARC, trusted-authserv-id per account); link safety analysis (display vs target mismatch, punycode look-alikes, dangerous attachment types) exposed as message warnings.
+*Done (ADR 0032):* SQLCipher rejected (OpenSSL on Windows); sealed columns (`messages.preview`, `drafts.payload`), sealed blobs and an encrypting tantivy `Directory` with XChaCha20-Poly1305, a crash-safe three-phase migration. Subjects, addresses, dates and flags stay plain in SQLite (documented). Follow-up: full-file encryption via SQLite3MultipleCiphers (needs a `libsqlite3-sys` patch), a recovery key for the data key.
 
 #### WP34 — Security UI (parallel)
 Key and certificate manager (OpenPGP keys, S/MIME certificates, trust editing, import/export, key lookup), per-identity crypto settings, composer sign/encrypt toggles with live recipient key status, message header security badge with a details popover (signer, key id, trust, chain), auth-results badge, link and attachment warnings in the reader, encryption-at-rest settings with progress, Autocrypt setup message flow.
+*Done (ADR 0033):* seven widgets and a dialog in `ui/src/features/security/`, a full UI mock.
 
 #### WP35 — Integration (sequential)
 Core wiring: decrypt/verify on read (never persist decrypted bodies unless the indexing opt-in is on), sign/encrypt on send, Autocrypt headers on outgoing mail and peer-state updates on incoming mail, key lookup when composing, auth results and link warnings in `MessageBody`, at-rest encryption switch with migration, MCP: encrypted content only with the separate grant. **Playwright:** send a signed + encrypted OpenPGP mail between two demo accounts and read it with a valid-signature badge; tampered signature shows as invalid; S/MIME sign and encrypt round trip with a test certificate; Autocrypt enables encryption after one exchange; header protection hides the subject on the wire (assert on the mock SMTP); DKIM/DMARC badge from a seeded `Authentication-Results`; a look-alike link shows a warning; encryption at rest on/off with data intact; MCP cannot read encrypted content without the grant.
+*Done (ADR 0034):* all of the above in `e2e/tests/security.spec.ts` (demo-multi accounts seeded with an OpenPGP key and a test-CA S/MIME certificate each), plus core integration tests (`nail-core/tests/security.rs`). Contract additions: `AccountConfig.authserv_ids` (`authserv-id` in `accounts.kdl`), `AutomaticMail::AutocryptSetup`. Replies to encrypted mail start encrypted; rules never forward or answer encrypted mail; encrypted drafts stay off the server's Drafts folder; Bcc recipients get their own encrypted copy.
+
+#### M2a follow-ups (deviations and deferrals)
+- **cargo-deny exception** for RUSTSEC-2023-0071 (`rsa` 0.9, Marvin timing side channel; no fixed release in rPGP's RustCrypto generation; decryption is blinded) — record it when WP44 adds `cargo-deny`.
+- **S/MIME inside `multipart/mixed`** (a list footer after a signed entity) is not unwrapped; S/MIME header protection is neither produced nor read.
+- **Attachments of encrypted mail over MCP** are served from the raw (encrypted) message even with the `encrypted` grant.
+- **Header-protected subjects** stay `...` in the message list (decrypted text is never stored); showing them needs an opt-in cache like decrypted indexing.
+- **Autocrypt learns only from mail that arrives after a folder's first sync** (the rule inbox); an initial import of old mail does not build peer state.
+- **Partial sends**: when a Bcc copy fails after the visible copy went out, a retry sends the visible copy again.
+- Encryption-at-rest default (on / off) is still the owner's decision; it ships off.
 
 ### Wave M2b — Remote UI hardening, installer and CI
 

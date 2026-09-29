@@ -28,9 +28,13 @@ layout "default" {
                         row "{subject}"
                         row "{preview}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
+                        // Signature / encryption and sender check badges, then
+                        // warnings about deceptive links and risky attachments.
+                        security-message id="message-security"
+                        security-warnings id="message-warnings"
                         message-view id="message" headers="from to cc date"
                     }
                 }
@@ -58,9 +62,11 @@ layout "default" {
                         row "{from.name}  {date | relative}"
                         row "{subject}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
+                        security-message id="message-security"
+                        security-warnings id="message-warnings"
                         message-view id="message" headers="from date"
                     }
                 }
@@ -72,7 +78,11 @@ layout "default" {
 
     // Secondary windows, opened over the main window.
     window "composer" {
-        composer id="composer"
+        stack id="composer-stack" sizes="1fr auto" {
+            composer id="composer"
+            // Sign and Encrypt with the key status of every recipient.
+            security-composer id="composer-security"
+        }
     }
     window "outbox" {
         outbox id="outbox"
@@ -91,6 +101,10 @@ layout "default" {
             account-settings id="account-settings" label="@settings.tab.accounts"
             virtual-account-editor id="virtual-accounts" label="@settings.tab.virtual-accounts"
             mcp-clients id="mcp-clients" label="@mcp.settings.tab"
+            security-keys id="security-keys" label="@security.settings.tab.keys"
+            security-identities id="security-identities" label="@security.settings.tab.identities"
+            security-settings id="security-settings" label="@security.settings.tab.protection"
+            security-autocrypt id="security-autocrypt" label="@security.settings.tab.autocrypt"
             stack id="customize" label="@settings.tab.customize" sizes="auto 1fr" {
                 toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 config-errors id="settings-config-errors"
@@ -135,6 +149,7 @@ layout "default" {
         action "inspector.toggle" label="@customize.action.inspector"
         action "customize.merge"  label="@customize.action.merge"
         action "customize.errors" label="@customize.action.errors"
+        action "security.autocrypt.import" label="@security.action.autocrypt-import"
     }
 
     keys context="list" {
@@ -206,6 +221,7 @@ layout "default" {
         item "mail.toggle-read"
         item "mail.toggle-flag"
         item "rules.create-from-message"
+        item "security.autocrypt.import"
     }
 
     toolbar "customize" {

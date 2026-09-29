@@ -120,6 +120,10 @@ pub enum AutomaticMail {
         /// The redirected message.
         message_id: MessageId,
     },
+    /// An Autocrypt setup message (M2a, [`crate::Request::SendAutocryptSetup`]):
+    /// the prepared message in the draft's first attachment is sent
+    /// unchanged to the identity itself; the draft's body is not used.
+    AutocryptSetup,
 }
 
 impl Draft {

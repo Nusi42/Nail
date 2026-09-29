@@ -62,6 +62,9 @@ leaf_ext carol carol@example.org "digitalSignature,keyEncipherment" emailProtect
 leaf_ext dave dave@example.org "digitalSignature,keyEncipherment" serverAuth
 leaf_ext erin erin@example.org "keyEncipherment" emailProtection
 leaf_ext mallory mallory@example.org "digitalSignature,keyEncipherment" emailProtection
+# The demo-multi accounts of `nail serve --seed demo-multi` (M2a WP35, e2e).
+leaf_ext ada-work ada@work.example "digitalSignature,nonRepudiation,keyEncipherment" emailProtection
+leaf_ext ada-home ada@home.example "digitalSignature,keyAgreement" emailProtection
 
 rsa_key() { openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$1.key" 2>/dev/null; }
 ec_key() { openssl genpkey -algorithm EC -pkeyopt "ec_paramgen_curve:$2" -out "$1.key"; }
@@ -104,6 +107,10 @@ rsa_key erin # may encrypt, may not sign
 issue erin "/O=Nail Test/CN=Erin Encrypt Only" intermediate-ca 1005 "$NB" "$NA" sha384
 rsa_key mallory # chains to the untrusted root
 issue mallory "/O=Evil Test/CN=Mallory Untrusted" evil-root-ca 1006 "$NB" "$NA" sha256
+rsa_key ada-work # demo-multi "work" account
+issue ada-work "/O=Nail Test/CN=Ada Lovelace (Work)" intermediate-ca 1201 "$NB" "$NA" sha384
+ec_key ada-home prime256v1 # demo-multi "home" account
+issue ada-home "/O=Nail Test/CN=Ada Lovelace (Home)" intermediate-ca 1202 "$NB" "$NA" sha384
 
 # --- Broken chains (chain validation tests) -----------------------------------
 # A CA certificate below the intermediate, which has pathlen:0.
@@ -141,6 +148,8 @@ openssl pkcs12 -export -legacy -in alice.crt -inkey alice.key -certfile intermed
   -name "Alice Example" -passout "pass:$PASS" -out alice-legacy.p12
 openssl pkcs12 -export -in bob.crt -inkey bob.key -certfile intermediate-ca.crt \
   -name "Bob Example" -passout "pass:$PASS" -out bob.p12
+openssl pkcs12 -export -in ada-work.crt -inkey ada-work.key -certfile intermediate-ca.crt   -name "Ada Lovelace (Work)" -passout "pass:$PASS" -out ada-work.p12
+openssl pkcs12 -export -in ada-home.crt -inkey ada-home.key -certfile intermediate-ca.crt   -name "Ada Lovelace (Home)" -passout "pass:$PASS" -out ada-home.p12
 # A certs-only PKCS#7 bundle (.p7c) for certificate import (.der so .gitattributes keeps it binary).
 openssl crl2pkcs7 -nocrl -certfile intermediate-ca.crt -certfile alice.crt -outform DER -out alice-chain-p7c.der
 
@@ -197,6 +206,6 @@ openssl cms -encrypt -in "$WORK/signed-entity.txt" -binary -aes-256-gcm \
 for f in *.eml; do fix_eol "$f"; done
 
 echo "SHA-256 fingerprints (DER):"
-for c in root-ca intermediate-ca alice bob carol dave erin mallory evil-root-ca sub-ca grace not-ca heidi ivan; do
+for c in root-ca intermediate-ca alice bob carol dave erin mallory evil-root-ca sub-ca grace not-ca heidi ivan ada-work ada-home; do
   printf '%-16s %s\n' "$c" "$(openssl x509 -in "$c.crt" -noout -fingerprint -sha256 | sed 's/.*=//; s/://g')"
 done

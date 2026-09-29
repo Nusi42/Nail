@@ -853,6 +853,8 @@ impl Service {
         if ids.is_empty() {
             return Ok(0);
         }
+        // Autocrypt and decrypted indexing of new mail (M2a) come first.
+        self.secure_arrivals(ids.clone()).await;
         let set = self.inner.rules.set();
         let has_arrival = set.rules().iter().any(|r| r.runs_on(RuleRunCause::Arrival));
         if has_arrival {

@@ -75,12 +75,12 @@ laid out like any other window:
 
 | Window | Opened by | Default content |
 | --- | --- | --- |
-| `composer` | `mail.compose`, `mail.reply`, `mail.reply-all`, `mail.forward` | `composer` |
+| `composer` | `mail.compose`, `mail.reply`, `mail.reply-all`, `mail.forward` | `composer` with `security-composer` below it |
 | `outbox` | `outbox.open` | `outbox` |
 | `move` | `mail.move` | `folder-picker` |
 | `account-setup` | `account.add` | `account-setup` |
 | `rules` | `rules.open`, `rules.create-from-message` | `rule-manager` |
-| `settings` | `settings.open` | `tabs` with `account-settings`, `virtual-account-editor`, `mcp-clients` and a "Customize" tab (a `toolbar` and `config-errors`) |
+| `settings` | `settings.open` | `tabs` with `account-settings`, `virtual-account-editor`, `mcp-clients`, `security-keys`, `security-identities`, `security-settings`, `security-autocrypt` and a "Customize" tab (a `toolbar` and `config-errors`) |
 
 ```kdl
 window "settings" {
@@ -251,6 +251,7 @@ Actions in the default layout:
 | `rules.open`, `rules.create-from-message` | Open the filter rules; start a rule from the selected message |
 | `inspector.toggle`, `customize.merge`, `customize.errors` | Inspector on or off; the merge dialog; the list of configuration errors (see [Customizing](customization.md)) |
 | `mcp.indicator.dismiss` | Hide the "agent is reading" notice |
+| `security.autocrypt.import` | Import the selected Autocrypt setup message (asks for its setup code; see [Signing and encryption](security.md)) |
 | `outbox.open`, `outbox.undo` | Show the outbox; take back the message being sent |
 | `search.focus`, `search.clear` | Jump to the search bar; end the search |
 | `account.add`, `settings.open` | Add an account; open the settings |

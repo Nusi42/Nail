@@ -2100,4 +2100,219 @@ theme "default" mode="system" {
     // Notification sounds per event, e.g. `mail.new "chime"`. Silent by default.
     sounds {
     }
+
+    // ---- Security: badges, warnings, composer toggles, settings (ADRs 0033, 0034) ----
+
+    part "security-message" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
+        padding "$space.xs" "$space.md"
+    }
+    part "security-message.slot" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+    part "security-badge.anchor" { position "relative"; display "inline-block"; }
+    part "auth-badge.anchor" { position "relative"; display "inline-block"; }
+    part "security-badge" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xxs"
+        padding "$space.xxs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-size "$font-size.sm"
+        color "inherit"
+        background-color "$color.bg-subtle"
+        cursor "pointer"
+    }
+    part "auth-badge" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xxs"
+        padding "$space.xxs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-size "$font-size.sm"
+        color "inherit"
+        background-color "$color.bg-subtle"
+        cursor "pointer"
+    }
+    part "security-badge[tone=\"good\"]" { color "$color.success"; }
+    part "security-badge[tone=\"warning\"]" { color "$color.warning"; }
+    part "security-badge[tone=\"danger\"]" { color "$color.danger"; }
+    part "auth-badge[tone=\"good\"]" { color "$color.success"; }
+    part "auth-badge[tone=\"warning\"]" { color "$color.warning"; }
+    part "auth-badge[tone=\"danger\"]" { color "$color.danger"; }
+    part "security-badge.popover" {
+        position "absolute"
+        z-index 20
+        min-width 320
+        max-width 480
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "auth-badge.popover" {
+        position "absolute"
+        z-index 20
+        min-width 320
+        max-width 480
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "security-details.row" {
+        display "grid"
+        grid-template-columns "10em 1fr"
+        gap "$space.sm"
+    }
+    part "security-details.warning" { color "$color.warning"; }
+    part "security-details.error" { color "$color.danger"; }
+    part "auth-details.method" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+    }
+    part "security-fingerprint" { font-family "$font.mono"; }
+    part "security-trust[trust=\"rejected\"]" { color "$color.danger"; }
+    part "security-trust[trust=\"verified\"]" { color "$color.success"; }
+    part "security-trust[trust=\"own\"]" { color "$color.success"; }
+    part "security-chain.revocation" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+
+    part "security-warnings" {
+        padding "$space.sm" "$space.md"
+        border-left "3px solid $color.warning"
+        background-color "$color.bg-subtle"
+    }
+    part "security-warnings.target" {
+        display "block"
+        font-family "$font.mono"
+        font-size "$font-size.sm"
+        word-break "break-all"
+    }
+    part "security-attachment-warning" { color "$color.danger"; font-size "$font-size.sm"; }
+
+    part "security-compose.slot" {
+        padding "$space.sm" "$space.md"
+        border-top "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "security-compose" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "security-compose.toggles" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "flex-end"
+        gap "$space.sm"
+    }
+    part "security-compose.recipients" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "security-compose.recipient" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+        font-size "$font-size.sm"
+    }
+    part "security-compose.recipient[state=\"usable\"]" { color "$color.success"; }
+    part "security-compose.recipient.state" { color "$color.fg-muted"; }
+    part "security-compose.block" { color "$color.danger"; }
+    part "security-compose.error" { color "$color.danger"; }
+
+    part "security-keys" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "security-identities" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "security-settings" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "security-autocrypt" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "security-keys.tools" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+        align-items "flex-end"
+    }
+    part "security-keys.filters" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+        align-items "flex-end"
+    }
+    part "security-keys.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "security-keys.key" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "inherit"
+        background-color "transparent"
+    }
+    part "security-keys.key:hover" { background-color "$color.bg-subtle"; }
+    part "security-keys.key:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "security-keys.key[key-state=\"revoked\"]" { opacity "$opacity.muted"; }
+    part "security-keys.key[key-state=\"expired\"]" { opacity "$opacity.muted"; }
+    part "security-keys.key.fingerprint" { font-family "$font.mono"; font-size "$font-size.sm"; }
+    part "security-key.state" { color "$color.warning"; }
+    part "security-key.error" { color "$color.danger"; }
+    part "security-key.exported.text" { font-family "$font.mono"; min-height 160; }
+    part "security-vault.recommendation" {
+        color "$color.accent"
+        font-weight "$font-weight.medium"
+    }
+    part "security-vault.bar" { width "100%"; }
+    part "security-vault.failed" { color "$color.warning"; }
+    part "security-vault.error" { color "$color.danger"; }
+    part "security-settings.warning" { color "$color.warning"; }
+    part "security-settings.error" { color "$color.danger"; }
+    part "security-autocrypt.code.value" {
+        font-family "$font.mono"
+        font-size "$font-size.lg"
+    }
+    part "security-autocrypt.code.warning" { color "$color.warning"; }
+    part "security-autocrypt.error" { color "$color.danger"; }
+    part "form.file" { font "inherit"; }
 }
