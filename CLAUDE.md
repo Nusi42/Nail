@@ -36,7 +36,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
 crates/nail-store      SQLite metadata (v4), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches
-crates/nail-mime       MIME parsing, HTML sanitizing
+crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
@@ -45,17 +45,20 @@ crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
 crates/nail-search     Tantivy index + query language parser (ADR 0016)
 crates/nail-testkit    mock IMAP server, .eml corpus, demo seed
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers
-crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (WP21)
-crates/nail-rules      rules engine: conditions, actions → queued ops, dry runs, undo (WP22)
-crates/nail-mcp        MCP server (rmcp): Streamable HTTP + stdio, grants, audit (WP23)
+crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
+crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
+crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
+                       CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025)
 crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
                        engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020);
-                       M1b requests per package in src/{composer,rules,mcp,customize}.rs
+                       M1b: composer.rs (NewDraft…, server Drafts copy), rules.rs + rule_mail.rs
+                       (rules.kdl, arrival / on-send / schedule / manual runs, undo), mcp.rs
+                       (start_mcp_server, McpRunning), customize.rs (write-back, merge) (ADR 0027)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
 crates/nail-cli        `nail` binary
-app/src-tauri          Tauri 2 desktop shell
+app/src-tauri          Tauri 2 desktop shell (starts the MCP server; main window created in code)
 ui/                    React renderer; M1b feature slots in ui/src/features/<name>/ (README there)
-e2e/                   Playwright tests
+e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts)
 defaults/              shipped theme.kdl + layout.kdl
 locales/               Fluent catalogs (en, de)
 ```
@@ -73,14 +76,18 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 npm test                                   # Vitest (ui), incl. the lint-rule self-test
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
-npm run e2e                                # builds ui + nail-cli, then Playwright (docs/dev-setup.md)
+npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
+npm run build:desktop                      # nail-app (custom-protocol) for the desktop smoke test, own target dir
 npm run gen:api                            # regenerate ui/src/api/generated from nail-api (a test fails when stale)
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas (theme, layout, accounts)
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema   # rules.kdl JSON Schema
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults  # nail-api fixtures after editing defaults/*.kdl (then prettier)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
 cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts (test controls at /api/test/…)
-cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist
+cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist (temp dirs)
+NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]   # stdio bridge to the running app's MCP server
 npm run tauri dev                          # desktop app with Vite hot reload
 ```
 
@@ -88,14 +95,17 @@ npm run tauri dev                          # desktop app with Vite hot reload
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
 - `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`. With `--seed` and no `--data-dir` / `--config-dir` it uses a temporary directory, never the real profile.
 - M1a contract: ADR 0012 (requests, events, engine traits in `nail_api::engine`, expected crate shapes); `accounts.kdl`: ADR 0013 (secrets only as `keychain:` references); libraries: ADR 0014 (TLS = rustls + `ring` only, no aws-lc).
-- Every M1a request is implemented by the core (ADR 0020); `unsupported` remains for rich drafts (M1b) and client certificates. The UI `MockTransport` implements the same contract (ADR 0019).
+- Every M1a request is implemented by the core (ADR 0020); `unsupported` remains for client certificates. The UI `MockTransport` implements the same contract (ADR 0019).
 - Tests and demos never touch the OS keychain: pass `ServiceOptions::secrets` (a `MemorySecretStore`); `Service::from_parts` does so itself. Engine timing for tests: `EngineTiming::fast()`.
 - M1a decisions: ADRs 0015 (store v2), 0016 (search), 0017 (SMTP/POP3/auth/discovery), 0018 (IMAP), 0019 (UI), 0020 (core integration), 0021 (review fixes: UIDVALIDITY-safe replay, Sent copies via the queue, discovery warnings, query limits, `ChooseIdentity`).
-- M1b contract: ADR 0022 (requests, store v4, crate stubs, collision-free slots). Each package edits
-  only its slot: `nail-core/src/<pkg>.rs`, `nail-config/src/widgets/<pkg>.rs`, `ui/src/features/<pkg>/`,
-  `locales/{en,de}/<pkg>.ftl`. Shared files (`service.rs`, `App.tsx`, `src/api/mock.ts`, `uiStore.ts`,
-  `defaults/*.kdl`, store migrations, `nail-api`) are integrator-owned. Until a package lands its requests
-  answer `unsupported`; `RetryOp`, UI context and saved searches are implemented already.
+- M1b contract: ADR 0022 (requests, store v4, crate stubs, feature slots: `nail-core/src/<pkg>.rs`,
+  `nail-config/src/widgets/<pkg>.rs`, `ui/src/features/<pkg>/`, `locales/{en,de}/<pkg>.ftl`). Packages:
+  ADRs 0023 (composer), 0024 (rules), 0025 (MCP), 0026 (customization); integration ADR 0027. Every M1b
+  request is implemented by the core and the UI mock.
+- `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
+  endpoint is in `<data-dir>/mcp-endpoint.json`. Seeded runs never open an editor (`open_editor`).
+- Python on Windows writes CRLF in text mode: when scripting file edits, write with `newline=''`
+  (the repo is LF, `.gitattributes`); the `nail-compose` golden `.eml` files are CRLF on purpose.
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
 ## Git

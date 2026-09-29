@@ -365,7 +365,7 @@
       ]
     },
     "IdentitySchema": {
-      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… { bcc …; signature … }`.",
+      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style … }`.",
       "type": "object",
       "properties": {
         "bcc": {
@@ -398,11 +398,33 @@
             "null"
           ]
         },
+        "mail-style": {
+          "description": "`mail-style css=… code-theme=…`: stylesheet and code theme of HTML /\nMarkdown mail.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MailStyleSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "name": {
           "description": "Display name.",
           "type": [
             "string",
             "null"
+          ]
+        },
+        "posting": {
+          "description": "Quote placement in replies (default bottom).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PostingSchema"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "reply-to": {
@@ -499,6 +521,26 @@
       "required": [
         "host"
       ]
+    },
+    "MailStyleSchema": {
+      "description": "`mail-style css=… code-theme=…`.",
+      "type": "object",
+      "properties": {
+        "code-theme": {
+          "description": "Code-highlighting theme of Markdown code blocks, e.g. `InspiredGitHub`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "css": {
+          "description": "CSS inlined into outgoing HTML (default: the built-in stylesheet).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     },
     "MappedFolderSchema": {
       "description": "`folder account=… path=…` inside `map`.",
@@ -641,6 +683,21 @@
       },
       "required": [
         "host"
+      ]
+    },
+    "PostingSchema": {
+      "description": "Quote placement in replies.",
+      "oneOf": [
+        {
+          "description": "New text above the quote.",
+          "type": "string",
+          "const": "top"
+        },
+        {
+          "description": "New text below the quote.",
+          "type": "string",
+          "const": "bottom"
+        }
       ]
     },
     "RoleSchema": {

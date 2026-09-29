@@ -1,28 +1,45 @@
-//! The few user-visible strings the core renders itself (the pages a
-//! browser shows after an OAuth2 sign-in). They come from the same Fluent
-//! catalogs as the UI's (`locales/<lang>/app.ftl`), embedded at build time,
-//! with the per-key English fallback.
+//! The few user-visible strings the core renders itself: the pages a
+//! browser shows after an OAuth2 sign-in, and the quote header / forward
+//! texts the composer puts into replies and forwards. They come from the
+//! same Fluent catalogs as the UI's (`locales/<lang>/*.ftl`), embedded at
+//! build time, with the per-key English fallback.
 //!
-//! Only simple messages (`key = text` on one line, no placeables) are
-//! supported, which is all the core needs.
+//! Only single-line messages are supported, with variable placeables
+//! (`{ $name }`), which is all the core needs.
 
-/// The English catalog (complete).
-const EN: &str = include_str!("../../../locales/en/app.ftl");
-/// The German catalog (may be empty; falls back to English per key).
-const DE: &str = include_str!("../../../locales/de/app.ftl");
+/// The catalogs the core reads, English (complete) and German (may be
+/// empty; falls back to English per key).
+const EN: &[&str] = &[
+    include_str!("../../../locales/en/app.ftl"),
+    include_str!("../../../locales/en/compose.ftl"),
+    include_str!("../../../locales/en/composer.ftl"),
+];
+const DE: &[&str] = &[
+    include_str!("../../../locales/de/app.ftl"),
+    include_str!("../../../locales/de/compose.ftl"),
+    include_str!("../../../locales/de/composer.ftl"),
+];
 
-fn lookup(catalog: &str, key: &str) -> Option<String> {
-    catalog.lines().find_map(|line| {
-        let (k, v) = line.split_once('=')?;
-        (!line.starts_with([' ', '\t', '#', '-']) && k.trim() == key)
-            .then(|| v.trim().to_owned())
-            .filter(|v| !v.is_empty())
+fn lookup(catalogs: &[&str], key: &str) -> Option<String> {
+    catalogs.iter().find_map(|catalog| {
+        catalog.lines().find_map(|line| {
+            let (k, v) = line.split_once('=')?;
+            (!line.starts_with([' ', '\t', '#', '-']) && k.trim() == key)
+                .then(|| v.trim().to_owned())
+                .filter(|v| !v.is_empty())
+        })
     })
 }
 
 /// The text of `key` in `locale` (a BCP 47 tag such as `de-AT`), falling
 /// back to English, and to the key itself when even English lacks it.
 pub fn message(locale: Option<&str>, key: &str) -> String {
+    message_with(locale, key, &[])
+}
+
+/// Like [`message`], with `{ $name }` placeables replaced by `args`
+/// (unknown variables stay as written).
+pub fn message_with(locale: Option<&str>, key: &str, args: &[(&str, &str)]) -> String {
     let language = locale
         .and_then(|l| l.split(['-', '_']).next())
         .map(str::to_ascii_lowercase);
@@ -30,9 +47,35 @@ pub fn message(locale: Option<&str>, key: &str) -> String {
         Some("de") => lookup(DE, key),
         _ => None,
     };
-    localized
+    let text = localized
         .or_else(|| lookup(EN, key))
-        .unwrap_or_else(|| key.to_owned())
+        .unwrap_or_else(|| key.to_owned());
+    substitute(&text, args)
+}
+
+fn substitute(text: &str, args: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('{') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('}') else {
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let inner = after[..end].trim();
+        let value = inner
+            .strip_prefix('$')
+            .and_then(|name| args.iter().find(|(n, _)| *n == name.trim()))
+            .map(|(_, v)| *v);
+        match value {
+            Some(v) => out.push_str(v),
+            None => out.push_str(&rest[start..start + end + 2]),
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Escapes text for HTML element content.
@@ -83,6 +126,24 @@ mod tests {
             message(None, "oauth-callback-success")
         );
         assert_eq!(message(None, "no-such-key"), "no-such-key");
+    }
+
+    #[test]
+    fn placeables_are_filled_in() {
+        assert_eq!(
+            message_with(
+                None,
+                "composer-quote-header",
+                &[("date", "1 May 2026"), ("name", "Bob")]
+            ),
+            "On 1 May 2026, Bob wrote:"
+        );
+        assert_eq!(
+            substitute("a { $x } { $y } {", &[("x", "1")]),
+            "a 1 { $y } {"
+        );
+        assert!(!message(None, "composer-forward-header").is_empty());
+        assert_eq!(message(None, "message-header-from"), "From");
     }
 
     #[test]

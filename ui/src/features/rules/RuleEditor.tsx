@@ -227,7 +227,7 @@ function TestResults({
                   </li>
                 ))}
               </ul>
-              {m.explanation && <Explanation rule={rule} hits={m.explanation} />}
+              {m.explanation.length > 0 && <Explanation rule={rule} hits={m.explanation} />}
             </li>
           ))}
         </ul>

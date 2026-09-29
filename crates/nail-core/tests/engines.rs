@@ -632,9 +632,11 @@ async fn sending_with_undo_and_for_real() {
     );
     let data = smtp_subjects(&f).remove(0);
     assert!(
-        data.contains("From: Ada Lovelace <ada@work.example>"),
+        data.contains("From: \"Ada Lovelace\" <ada@work.example>"),
         "{data}"
     );
+    // Plain text goes out as format=flowed (nail-compose, ADR 0023).
+    assert!(data.contains("format=\"flowed\""), "{data}");
     let mut saw_sent = false;
     let deadline = tokio::time::Instant::now() + TIMEOUT;
     while !saw_sent {
@@ -1204,7 +1206,7 @@ async fn failed_sends_are_retried_or_reported() {
     assert_eq!(sent, (OutboxState::Sent, None));
     assert!(smtp_subjects(&f).iter().any(|d| d.contains("Second try")));
 
-    // Drafts need a known identity; rich content waits for M1b.
+    // Drafts need a known identity; attachments must be uploaded blobs.
     let mut bad = draft("nobody@nowhere.example", "bob@example.org", "x");
     assert!(matches!(
         request(&f.service, Request::SaveDraft { draft: bad.clone() }).await,
@@ -1214,14 +1216,39 @@ async fn failed_sends_are_retried_or_reported() {
         }
     ));
     bad.identity_id = MULTI_WORK_EMAIL.into();
-    bad.html = Some("<p>x</p>".into());
+    bad.attachments = vec![nail_api::DraftAttachment {
+        filename: "a.pdf".into(),
+        mime: "application/pdf".into(),
+        size: 1,
+        blob: "00".repeat(32),
+        content_id: None,
+    }];
     assert!(matches!(
-        request(&f.service, Request::SaveDraft { draft: bad }).await,
+        request(&f.service, Request::SaveDraft { draft: bad.clone() }).await,
         Response::Error {
-            code: ErrorCode::Unsupported,
+            code: ErrorCode::NotFound,
             ..
         }
     ));
+    // Rich drafts are stored, with the HTML sanitized.
+    bad.attachments.clear();
+    bad.mode = ComposerMode::Html;
+    bad.html = Some("<p onclick=\"x()\">x</p><script>bad()</script>".into());
+    let Response::DraftSaved { draft_id } =
+        request(&f.service, Request::SaveDraft { draft: bad }).await
+    else {
+        panic!("rich draft refused")
+    };
+    let Response::Draft { draft } = request(&f.service, Request::GetDraft { draft_id }).await
+    else {
+        panic!()
+    };
+    let html = draft.html.unwrap();
+    assert!(html.contains("<p>x</p>"), "{html}");
+    assert!(
+        !html.contains("script") && !html.contains("onclick"),
+        "{html}"
+    );
     f.service.shutdown().await;
 }
 

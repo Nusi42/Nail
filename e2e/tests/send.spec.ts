@@ -38,7 +38,7 @@ async function compose(page: Page, subject: string) {
 test("a plain-text mail is sent, once cancelled by undo and once for real", async ({ page }) => {
   await page.goto(server.url);
   await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
-  const status = page.getByRole("status");
+  const status = page.getByRole("status", { name: "Status" });
 
   // Send, then undo within the delay: nothing reaches the server and the
   // message is back in the composer.
@@ -85,7 +85,7 @@ test("the Sent copy of a mail sent while IMAP is down is filed later", async ({ 
   // SMTP still works: the mail goes out and its copy shows in Sent at once.
   const { body } = await compose(page, "Written offline");
   await body.press("Control+Enter");
-  const status = page.getByRole("status");
+  const status = page.getByRole("status", { name: "Status" });
   await expect(status.getByText("Message sent.")).toBeVisible({ timeout: 15_000 });
   await page.locator('[data-part="folder-tree.item"][data-role="sent"]').click();
   const copy = page

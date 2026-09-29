@@ -139,6 +139,51 @@ pub fn parse_message(raw: &[u8]) -> ParsedMessage {
     .unwrap_or_default()
 }
 
+/// The top-level header fields in message order as `(name, value)`:
+/// unstructured values decoded (encoded words, charsets), structured ones
+/// (addresses, `List-Id`, `Authentication-Results`, …) as written, with
+/// folding removed. For filter rules, which match on arbitrary headers.
+pub fn header_fields(raw: &[u8]) -> Vec<(String, String)> {
+    guarded(|| {
+        let Some(message) = parse(raw) else {
+            return Vec::new();
+        };
+        let bytes = message.raw_message();
+        message
+            .headers()
+            .iter()
+            .map(|h| {
+                let value = match h.value.as_text() {
+                    Some(text) => text.to_owned(),
+                    None => {
+                        let start = usize::try_from(h.offset_start).unwrap_or(0);
+                        let end = usize::try_from(h.offset_end).unwrap_or(0);
+                        let raw = bytes.get(start..end.max(start)).unwrap_or_default();
+                        unfold(&String::from_utf8_lossy(raw))
+                    }
+                };
+                (h.name.as_str().to_owned(), value)
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// Joins folded header lines and trims the value.
+fn unfold(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for (i, line) in value.split('\n').enumerate() {
+        let line = line.trim_end_matches('\r');
+        if i > 0 {
+            out.push(' ');
+            out.push_str(line.trim_start());
+        } else {
+            out.push_str(line);
+        }
+    }
+    out.trim().to_owned()
+}
+
 /// Returns the decoded content of attachment `index` (as numbered in
 /// [`ParsedMessage::attachments`]).
 pub fn attachment_content(raw: &[u8], index: u32) -> Option<AttachmentContent> {
@@ -374,6 +419,24 @@ fn attachment_info(index: u32, part: &MessagePart<'_>) -> AttachmentInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn header_fields_decode_text_and_keep_structured_values() {
+        let raw = b"From: Ada <ada@example.org>\r\nSubject: =?utf-8?q?Gr=C3=BC=C3=9Fe?=\r\nList-Id: Rust users\r\n <rust.lists.example>\r\nAuthentication-Results: mx.example; dkim=pass\r\nX-Custom: one\r\nX-Custom: two\r\n\r\nbody";
+        let fields = header_fields(raw);
+        let get = |name: &str| -> Vec<&str> {
+            fields
+                .iter()
+                .filter(|(n, _)| n.eq_ignore_ascii_case(name))
+                .map(|(_, v)| v.as_str())
+                .collect()
+        };
+        assert_eq!(get("Subject"), ["Grüße"]);
+        assert_eq!(get("List-Id"), ["Rust users <rust.lists.example>"]);
+        assert_eq!(get("Authentication-Results"), ["mx.example; dkim=pass"]);
+        assert_eq!(get("X-Custom"), ["one", "two"]);
+        assert!(header_fields(b"").is_empty());
+    }
 
     #[test]
     fn empty_and_garbage_input_do_not_panic() {

@@ -1,6 +1,7 @@
 //! Every KDL example in the user docs (`userDocs/en/*-reference.md`, the
-//! getting-started guide and the accounts guide) must be valid. Complete files are parsed
-//! as they are; fragments are wrapped in a file that extends the default.
+//! getting-started guide, the accounts, customization and Markdown mail
+//! guides) must be valid. Complete files are parsed as they are; fragments
+//! are wrapped in a file that extends the default.
 //! Examples containing `…` are outlines and are skipped.
 
 use std::path::PathBuf;
@@ -125,5 +126,18 @@ fn customization_guide_examples_are_valid() {
         if let Err(e) = nail_config::parse_layout(&text, "layout.kdl") {
             panic!("{e}\nin example:\n{block}");
         }
+    }
+}
+
+#[test]
+fn markdown_mail_examples_are_valid() {
+    let blocks = kdl_blocks("markdown-mail.md");
+    assert!(!blocks.is_empty());
+    for block in blocks {
+        let config = nail_config::parse_accounts(&block, "accounts.kdl")
+            .unwrap_or_else(|e| panic!("{e}\nin example:\n{block}"));
+        // The style is read as written.
+        let identity = &config.accounts[0].identities[0];
+        assert!(identity.mail_style.is_some(), "{block}");
     }
 }

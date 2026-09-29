@@ -25,8 +25,8 @@ use std::fmt::Write as _;
 use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
 use nail_api::accounts::{
     AccountConfig, AccountsConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMatch, FolderPolicy,
-    IncomingServer, MailProtocol, OAuthProviderConfig, OutgoingServer, ServerEndpoint, SyncPolicy,
-    TlsMode, VirtualAccountConfig, default_port,
+    IncomingServer, MailProtocol, OAuthProviderConfig, OutgoingServer, QuotePosting,
+    ServerEndpoint, SyncPolicy, TlsMode, VirtualAccountConfig, default_port,
 };
 
 use super::read::{mechanism_name, role_name};
@@ -234,6 +234,13 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
                     ComposerMode::Html => "html",
                     ComposerMode::Markdown => "markdown",
                 }),
+            )
+            .prop_opt(
+                "posting",
+                identity.posting.map(|p| match p {
+                    QuotePosting::Top => "top",
+                    QuotePosting::Bottom => "bottom",
+                }),
             );
         let mut grand = Vec::new();
         if !identity.bcc.is_empty() {
@@ -252,6 +259,12 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
                 .prop_opt("html", signature.html.as_deref())
                 .prop_opt("markdown", signature.markdown.as_deref());
             grand.push(sig.finish(2, indent, &[]));
+        }
+        if let Some(style) = &identity.mail_style {
+            let style = Line::new("mail-style")
+                .prop_opt("css", style.css.as_deref())
+                .prop_opt("code-theme", style.code_theme.as_deref());
+            grand.push(style.finish(2, indent, &[]));
         }
         children.push(line.finish(1, indent, &grand));
     }
@@ -425,6 +438,7 @@ const SINGLETONS: &[&str] = &[
     "members",
     "bcc",
     "signature",
+    "mail-style",
     "scopes",
 ];
 

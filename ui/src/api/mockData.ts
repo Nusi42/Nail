@@ -192,6 +192,8 @@ function identity(accountId: string, email: string, name: string | null, sig: st
     bcc: [],
     signature: sig === null ? null : { text: sig, html: null, markdown: null },
     composer_mode: null,
+    posting: null,
+    mail_style: null,
   };
   return id;
 }

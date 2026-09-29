@@ -513,6 +513,15 @@ pub(crate) async fn sync_folder(
         && !new_ids.is_empty()
         && matches!(folder.role, FolderRole::Inbox | FolderRole::Other)
     {
+        // Arrival rules run on new mail (the rules task wakes on NewMail;
+        // the inbox survives a restart).
+        let queued = new_ids.clone();
+        if let Err(err) = store
+            .call(move |s| crate::rules::queue_for_rules(s, &queued))
+            .await
+        {
+            tracing::warn!(%err, "cannot queue new mail for the rules");
+        }
         ctx.emit(Event::NewMail {
             account_id: folder.account_id.clone(),
             folder_id: folder.id.clone(),

@@ -18,6 +18,7 @@ import type {
   MessageId,
 } from "../../api/generated";
 import {
+  cancelSend,
   COMPOSER_WINDOW,
   discardComposer,
   startCompose,
@@ -30,8 +31,15 @@ import { bodyOf, draftKey, fromDraft, richDraftOf } from "./draft";
 import { needsReminder, parseKeywords } from "./reminder";
 import { primeRich, richStoreFor, type RichState } from "./store";
 
-function isUnsupported(error: unknown): boolean {
-  return error instanceof NailError && error.code === "unsupported";
+/**
+ * Whether `NewDraft` failed in a way the plain-text (M1a) flow handles: the
+ * core has no composer, or it cannot pick an identity (e.g. a demo account
+ * without one; the plain composer then asks for one before sending).
+ */
+function fallsBackToPlain(error: unknown): boolean {
+  return (
+    error instanceof NailError && (error.code === "unsupported" || error.code === "invalid_request")
+  );
 }
 
 function fail(ctx: ComposeContext, id: string, args?: Record<string, string | number>): void {
@@ -75,7 +83,7 @@ export async function startRichCompose(
     );
     open(ctx, draft, false, false);
   } catch (error) {
-    if (!isUnsupported(error)) throw error;
+    if (!fallsBackToPlain(error)) throw error;
     await startCompose(ctx);
   }
 }
@@ -99,7 +107,7 @@ export async function startRichReply(
     );
     open(ctx, draft, false, false);
   } catch (error) {
-    if (!isUnsupported(error)) throw error;
+    if (!fallsBackToPlain(error)) throw error;
     await startReply(ctx, messageId, mode);
   }
 }
@@ -156,6 +164,7 @@ async function saveNow(ctx: ComposeContext, quiet: boolean): Promise<DraftId | n
         .updateComposer(quiet ? { draftId: draft_id } : { draftId: draft_id, busy: null });
       rich.setState({ savedKey: key, autosave: "saved" });
     }
+    void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
     return draft_id;
   } catch (error) {
     if (quiet) rich.setState({ autosave: "failed" });
@@ -223,6 +232,7 @@ export async function sendRich(
     ui.setComposer(null);
     ui.closeWindow(COMPOSER_WINDOW);
     void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.outbox });
+    void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
     return true;
   } catch (error) {
     fail(ctx, errorMessageIdOf(error));
@@ -394,4 +404,9 @@ export function swapSignature(
   const swapped = body.slice(0, at) + (next ?? "") + body.slice(at + previous.length);
   if (state.mode === "plain") ctx.store.getState().updateComposer({ text: swapped });
   else rich.setState({ markdown: swapped });
+}
+
+/** Undo send: the entry goes back to being a draft, reopened in the rich composer. */
+export async function cancelRichSend(ctx: ComposeContext, outboxId: string): Promise<void> {
+  await cancelSend(ctx, outboxId, openRichDraft);
 }

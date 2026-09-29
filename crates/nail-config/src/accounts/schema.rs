@@ -224,7 +224,7 @@ enum ComposerSchema {
     Markdown,
 }
 
-/// `identity "<address>" id=… name=… reply-to=… composer=… { bcc …; signature … }`.
+/// `identity "<address>" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style … }`.
 #[derive(JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 struct IdentitySchema {
@@ -243,6 +243,31 @@ struct IdentitySchema {
     bcc: Vec<String>,
     /// `signature "<text>" html=… markdown=…`.
     signature: Option<SignatureSchema>,
+    /// Quote placement in replies (default bottom).
+    posting: Option<PostingSchema>,
+    /// `mail-style css=… code-theme=…`: stylesheet and code theme of HTML /
+    /// Markdown mail.
+    mail_style: Option<MailStyleSchema>,
+}
+
+/// Quote placement in replies.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum PostingSchema {
+    /// New text above the quote.
+    Top,
+    /// New text below the quote.
+    Bottom,
+}
+
+/// `mail-style css=… code-theme=…`.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct MailStyleSchema {
+    /// CSS inlined into outgoing HTML (default: the built-in stylesheet).
+    css: Option<String>,
+    /// Code-highlighting theme of Markdown code blocks, e.g. `InspiredGitHub`.
+    code_theme: Option<String>,
 }
 
 /// A signature.

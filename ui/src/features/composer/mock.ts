@@ -172,7 +172,7 @@ function decodeEntities(text: string): string {
     .replaceAll("&amp;", "&");
 }
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return decodeEntities(
     html
       .replace(/<br\s*\/?>/gi, "\n")
@@ -400,9 +400,9 @@ export function suggest(core: MockCore, prefix: string, limit: number): Address[
 // ---- Rich drafts (until the shared mock stores them) ----
 
 /**
- * `SaveDraft` for rich drafts. The shared mock (`api/mockOutbox.ts`) still
- * refuses HTML / Markdown / attachments as M1a did; WP25 routes rich drafts
- * here. Tests install it with [`acceptRichDrafts`].
+ * `SaveDraft` for rich drafts; the shared mock (`api/mockOutbox.ts`) routes
+ * HTML / Markdown / attachment drafts here. [`acceptRichDrafts`] installs
+ * the same routing on a transport directly (kept for the feature's tests).
  */
 export function saveRichDraft(core: MockCore, draft: Draft): Response {
   if (!identities(core).some((i) => i.id === draft.identity_id)) {

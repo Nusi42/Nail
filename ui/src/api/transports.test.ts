@@ -158,6 +158,30 @@ describe("normalize", () => {
     expect(layout.keys[0]).toEqual({ context: "list", key: "j", action: "mail.next", args: [] });
   });
 
+  it("keeps the file positions of widgets (inspector)", () => {
+    const layout = normalizeLayout({
+      windows: {
+        main: [
+          {
+            root: {
+              type: "widget",
+              kind: "folder-tree",
+              source: { file: "layout.kdl", line: 4, column: 9 },
+            },
+          },
+        ],
+      },
+    });
+    expect(layout.windows.main?.[0]?.root).toMatchObject({
+      type: "widget",
+      source: { file: "layout.kdl", line: 4, column: 9 },
+    });
+    const bare = normalizeLayout({
+      windows: { main: [{ root: { type: "widget", kind: "x", source: { line: 1 } } }] },
+    });
+    expect(bare.windows.main?.[0]?.root).toMatchObject({ source: null });
+  });
+
   it("completes a theme", () => {
     const theme = normalizeTheme({ parts: [{ selector: "app" }], icons: { x: { path: "M0 0" } } });
     expect(theme.mode).toBe("system");

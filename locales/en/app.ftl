@@ -13,8 +13,10 @@ layout-pane-folders = Folders
 layout-pane-messages = Messages
 layout-pane-message = Message
 toolbar-main = Main toolbar
+toolbar-customize = Customization
 settings-tab-accounts = Accounts
 settings-tab-virtual-accounts = Virtual accounts
+settings-tab-customize = Customize
 
 ## Mail actions
 
@@ -160,6 +162,8 @@ toolbar-label = Message actions
 
 ## Status bar
 
+# Accessible name of the status bar (there are other status regions).
+status-bar-label = Status
 status-ready = Up to date
 status-offline = Offline – reconnecting…
 status-syncing = Syncing… { $done } of { $total }
@@ -173,6 +177,8 @@ status-ops-pending = { $count ->
 }
 status-op-failed = A change could not be saved: { $reason }
 status-dismiss = Dismiss
+# Queues a failed change again.
+status-retry = Retry
 status-send-countdown = { $seconds ->
     [one] Sending in one second
    *[other] Sending in { $seconds } seconds

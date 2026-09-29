@@ -341,7 +341,7 @@ describe("account-switcher and status-bar", () => {
       error: "auth_failed",
     };
     renderNode(widget("status-bar", { options: { items: "account-status ops" } }), env);
-    const status = screen.getByRole("status");
+    const status = screen.getByRole("status", { name: "Status" });
     expect(await within(status).findByText("Work: Sign-in required")).toHaveAttribute(
       "data-state",
       "auth-error",

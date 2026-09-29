@@ -447,6 +447,21 @@ pub struct RuleMatch {
     pub message: MessageSummary,
     /// The actions that would run, in order (up to a `stop`).
     pub actions: Vec<RuleAction>,
+    /// Why it matched: every evaluated condition ("why it matched").
+    #[serde(default)]
+    pub explanation: Vec<ConditionHit>,
+}
+
+/// One evaluated condition of a dry run ([`RuleMatch::explanation`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ConditionHit {
+    /// Child indexes from the rule's root condition (empty = the root).
+    pub path: Vec<u32>,
+    /// Whether it matched.
+    pub matched: bool,
+    /// The message value that decided it (header value, address, …), if
+    /// any.
+    pub value: Option<String>,
 }
 
 /// State of a rule run.

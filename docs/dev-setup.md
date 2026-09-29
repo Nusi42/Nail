@@ -55,10 +55,12 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Rust formatting | `cargo fmt --all --check` |
 | UI unit tests (Vitest), incl. the lint-rule self-test | `npm test` |
 | ESLint, TypeScript, Prettier (ui and e2e) | `npm run lint` |
-| Playwright end to end (builds UI and `nail` first) | `npm run e2e` |
+| Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
 | Playwright only (already built) | `npm run e2e:only` |
+| The desktop app for the WebView2 smoke test | `npm run build:desktop` |
 
-CI (`.github/workflows/ci.yml`, `windows-latest`) runs all of these.
+CI (`.github/workflows/ci.yml`, `windows-latest`) runs all of these, except
+the desktop smoke test (see below).
 
 ### End-to-end tests (Playwright)
 
@@ -70,6 +72,7 @@ first:
 ```sh
 npm run build -w ui                      # ui/dist, served by nail serve
 cargo build -p nail-cli                  # the nail binary (debug profile)
+npm run build:desktop                    # nail-app for the desktop smoke test
 npx -w e2e playwright install chromium   # once per machine
 ```
 
@@ -89,6 +92,19 @@ How it works:
 - The binary is found through `cargo metadata` (the target directory lives
   outside the repository). `NAIL_BIN` selects another binary, `NAIL_LOG`
   (e.g. `info`) shows server logs.
+- The desktop smoke test (`e2e/tests/desktop.spec.ts`) starts the real
+  `nail-app.exe --seed demo` with
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<free port>`
+  set only in that child's environment, and attaches with
+  `chromium.connectOverCDP` (`e2e/support/desktop.ts`). The app is built by
+  `npm run build:desktop` (`e2e/scripts/build-desktop.mjs`: `nail-app` with
+  `tauri/custom-protocol`, so it serves the embedded `ui/dist`) into its own
+  target directory, `%LOCALAPPDATA%\nail-build\desktop-target`, so the
+  feature does not force rebuilds of the shared target directory.
+  `NAIL_APP_BIN` selects another binary. A seeded app keeps its data,
+  config and WebView2 profile in a temporary directory. The test always
+  runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`
+  (the hosted runners' WebView2 setup is not verified yet).
 - Traces, screenshots and the CI HTML report go to
   `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
   `NAIL_BUILD_DIR` overrides the base), not into the repository.
@@ -102,7 +118,12 @@ How it works:
 | `e2e/tests/mailops.spec.ts` | `--seed demo-multi`: flag / archive / delete reach the mock IMAP server, a server-side flag change arrives through IDLE, writes made offline replay after reconnecting |
 | `e2e/tests/search-threads.spec.ts` | `--seed demo-multi`: the query language (fields, quotes, OR / NOT, error position), the thread view across folders |
 | `e2e/tests/send.spec.ts` | `--seed demo-multi`: a plain-text mail cancelled by undo send, then sent to the mock SMTP server, with the Sent copy on the IMAP server; a Sent copy queued while IMAP is offline and filed once it is back |
-| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode; any violation, whatever its impact, fails |
+| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, every settings tab and the merge dialog; any violation, whatever its impact, fails |
+| `e2e/tests/composer.spec.ts` | `--seed demo-multi`: HTML and Markdown mails (bold text, Markdown source part, attachment, core-rendered preview) with their MIME parts as the mock SMTP server received them; reply quoting in HTML (blockquote) and Markdown (`>`); drafts autosaved to the server's Drafts folder, continued from the outbox after a reload, removed after sending |
+| `e2e/tests/rules.spec.ts` | `--seed demo-multi`: an arrival rule (entered in the text view) moves and flags new mail on the IMAP server and its run is undone as one unit; the test-rule preview with "why it matches"; a rule created from a message and written to `rules.kdl` |
+| `e2e/tests/mcp.spec.ts` | an MCP client created in the settings is denied until "Read mail" is granted, then reads `nail://accounts` and finds messages with `search_messages` over Streamable HTTP (`e2e/support/mcp.ts`); the activity log shows both |
+| `e2e/tests/customization.spec.ts` | the inspector (part path, theme rules, layout node with file positions), dragging a divider writes `layout.kdl`, the merge dialog applies a shared theme and reverts it (backup), the error list shows every error of two broken files and clears one when it is fixed |
+| `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server |
 
 ### Generated files and snapshots
 
@@ -114,6 +135,10 @@ regenerate it with the matching command:
 | `ui/src/api/generated/` (TypeScript types from `nail-api`) | `npm run gen:api` |
 | `crates/nail-config/schema/*.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema` |
 | `crates/nail-mime/tests/snapshots/` (insta) | `INSTA_UPDATE=always cargo test -p nail-mime --test corpus`, or `cargo insta review` |
+| `crates/nail-api/fixtures/default-{theme,layout}.json` (after changing `defaults/*.kdl`) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults`, then `npx prettier --write crates/nail-api/fixtures` |
+| `crates/nail-config/schema/rules.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema` |
+| `crates/nail-config/tests/golden/` (layout write-back, merge) | `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-config --test write_back` (or `--test merge`) |
+| `crates/nail-compose/tests/golden/*.eml` (built MIME, CRLF, kept byte for byte by `.gitattributes`) | `NAIL_UPDATE_GOLDEN=1 cargo test -p nail-compose --test mime` |
 
 ## Run
 
@@ -137,6 +162,8 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 | `--ui-dir DIR` | UI bundle (default `$NAIL_UI_DIR`, `ui/` next to the binary, or the repository's `ui/dist`) |
 | `--locale de` | UI language override |
 | `--no-watch` | Do not watch the config files |
+| `--mcp-port PORT` | Port of the MCP server on 127.0.0.1 (default 0: a free one, written to `<data-dir>/mcp-endpoint.json`) |
+| `--no-mcp` | Do not start the MCP server |
 | `-v`, `-vv` | More logging; `NAIL_LOG=nail_core=debug` sets the filter precisely |
 
 A seeded run never uses your real profile: without `--data-dir` /
@@ -148,7 +175,24 @@ cargo run -p nail-cli -- serve --seed demo --data-dir "$TEMP/nail-data" --config
 ```
 
 The server binds to 127.0.0.1 only and has no authentication in M0
-(ADR 0009).
+(ADR 0009). A seeded run never opens programs on the machine: "open file
+at line" (`OpenConfigFile`) answers `unsupported` there
+(`ServiceOptions::open_editor`).
+
+#### MCP server and `nail mcp`
+
+`nail serve` and the desktop app start the read-only MCP server (ADR 0025)
+on `127.0.0.1` with the core as its data provider
+(`Service::start_mcp_server`); `GetMcpServerInfo` reports its URL. Agents
+with a stdio transport use the bridge:
+
+```sh
+NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]
+```
+
+It finds the server through `<data-dir>/mcp-endpoint.json` (or `--url`),
+checks that the token belongs to `--client`, and forwards stdio to the
+loopback HTTP endpoint. Tokens come from Settings → MCP clients.
 
 #### Test controls (`--seed demo-multi` only)
 
@@ -179,6 +223,9 @@ For UI work with hot module reloading, run `npm run dev` (Vite on
 <config-dir>/theme.kdl         optional; see userDocs/en/theme-reference.md
 <config-dir>/layout.kdl        optional; see userDocs/en/layout-reference.md
 <config-dir>/accounts.kdl      accounts, identities, virtual accounts (M1a); see userDocs/en/accounts-reference.md
+<config-dir>/rules.kdl         filter rules (M1b); see userDocs/en/rules.md
+<config-dir>/backups/          earlier theme.kdl / layout.kdl versions from the merge dialog (newest 20)
+<data-dir>/mcp-endpoint.json   URL of the running MCP server (no secret), for `nail mcp`
 ```
 
 `nail config schema theme`, `nail config schema layout` and
@@ -202,6 +249,9 @@ cargo run -p nail-app --features tauri/custom-protocol -- --seed demo --data-dir
 ```
 
 The app accepts `--data-dir`, `--config-dir`, `--seed demo` and `--locale`.
+With `--seed demo` and no directories it runs in a temporary directory
+(data, config and the WebView2 profile), like `nail serve --seed`. It
+starts the MCP server like `nail serve`.
 
 To inspect the WebView2 window with Chrome DevTools or Playwright, start it
 with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`
@@ -245,3 +295,5 @@ For M1b:
 - **0024:** the rules engine (`rules.kdl` reader and format-preserving writer, planned actions, rules UI)
 - **0025:** the read-only MCP server (Streamable HTTP on loopback, tokens, grants, audit, `nail mcp` bridge)
 - **0026:** customization tooling (every config error, `layout.kdl` write-back, merge dialog, inspector)
+- **0027:** M1b integration (composer, rules, MCP and customization in the core; server Drafts
+  copy, `ListDrafts`; default layout / theme; desktop smoke test over WebView2 CDP)

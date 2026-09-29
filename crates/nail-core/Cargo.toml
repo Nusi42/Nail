@@ -25,6 +25,9 @@ nail-discovery.workspace = true
 nail-proto-imap.workspace = true
 nail-proto-smtp.workspace = true
 nail-proto-pop3.workspace = true
+nail-compose.workspace = true
+nail-rules.workspace = true
+nail-mcp.workspace = true
 nail-testkit = { workspace = true, optional = true }
 nail-testkit-net = { workspace = true, optional = true }
 thiserror.workspace = true

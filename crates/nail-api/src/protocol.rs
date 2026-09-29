@@ -266,6 +266,10 @@ pub enum Request {
         /// The draft.
         draft_id: DraftId,
     },
+    /// Saved drafts that are not in the outbox, most recently changed
+    /// first (to continue one after a restart). Answered with
+    /// [`Response::Drafts`].
+    ListDrafts,
     /// Discard a draft. Answered with [`Response::Done`].
     DeleteDraft {
         /// The draft.
@@ -738,6 +742,11 @@ pub enum Response {
     Draft {
         /// The draft.
         draft: Box<Draft>,
+    },
+    /// Answer to [`Request::ListDrafts`].
+    Drafts {
+        /// The drafts, each with its id.
+        drafts: Vec<Draft>,
     },
     /// Answer to [`Request::SendDraft`].
     SendQueued {

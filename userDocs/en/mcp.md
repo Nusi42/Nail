@@ -52,13 +52,17 @@ folders the agent must never see, for example a folder with HR mail.
 **What is on screen** is separate on purpose: it lets an agent follow what
 you are doing ("summarize the message I have open"). While an agent reads
 it, Nail shows a notice such as *"Claude Desktop is reading what is on your
-screen"*. If the open message is in an account the agent may not read, the
+screen"* at the bottom of the main window for a few seconds (the × hides
+it; the layout widget is `mcp-context-indicator`). If the open message is in an account the agent may not read, the
 agent only learns that a message is open, not what it says.
 
 ## Configuring your agent
 
 Settings → MCP clients shows the server's address, usually
-`http://127.0.0.1:<port>/mcp`.
+`http://127.0.0.1:<port>/mcp`. Nail picks a free port each time it starts,
+so the address can change; `nail mcp` (below) always finds the current
+one. When Nail runs as `nail serve`, `--mcp-port <port>` keeps the port
+fixed and `--no-mcp` turns the server off.
 
 **Agents that connect over HTTP** ("Streamable HTTP" transport) use that
 address and send the token as a bearer token:

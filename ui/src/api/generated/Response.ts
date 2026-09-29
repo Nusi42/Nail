@@ -199,7 +199,11 @@ draft_id: DraftId, } | { "type": "Draft",
 /**
  * The draft.
  */
-draft: Draft, } | { "type": "SendQueued", 
+draft: Draft, } | { "type": "Drafts", 
+/**
+ * The drafts, each with its id.
+ */
+drafts: Array<Draft>, } | { "type": "SendQueued", 
 /**
  * The new outbox entry.
  */

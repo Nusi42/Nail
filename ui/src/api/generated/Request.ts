@@ -192,7 +192,7 @@ draft: Draft, } | { "type": "GetDraft",
 /**
  * The draft.
  */
-draft_id: DraftId, } | { "type": "DeleteDraft", 
+draft_id: DraftId, } | { "type": "ListDrafts" } | { "type": "DeleteDraft", 
 /**
  * The draft.
  */

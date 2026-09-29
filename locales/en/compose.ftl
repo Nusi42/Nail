@@ -37,6 +37,10 @@ outbox-recipients = To: { $recipients }
 outbox-send-at = Due { $time }
 outbox-edit = Edit
 outbox-send-now = Send now
+# Saved drafts, listed in the outbox window so they can be continued.
+outbox-drafts-label = Drafts
+outbox-draft-continue = Continue writing
+outbox-draft-discard = Discard
 outbox-state-scheduled = Waiting
 outbox-state-sending = Sending
 outbox-state-sent = Sent

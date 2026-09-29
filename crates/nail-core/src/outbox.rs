@@ -3,8 +3,9 @@
 //!
 //! `SendDraft` schedules the draft (`now + delay`, or `send_at`); until the
 //! sender claims it, `CancelSend` turns it back into a draft (undo send).
-//! The sender task wakes for the next due entry, builds the message
-//! (plain text in M1a, `mime.rs`), submits it and records the outcome:
+//! The sender task wakes for the next due entry, builds the message with
+//! `nail-compose` (plain, HTML or Markdown, attachments; ADR 0023), submits
+//! it and records the outcome:
 //!
 //! * accepted: `sent`; the draft is deleted; a copy goes to the local Sent
 //!   folder at once and, for IMAP accounts, to the server's Sent folder
@@ -12,7 +13,9 @@
 //!   other write, so it survives being offline) — unless
 //!   `save-sent-copy=#false` or the provider files sent mail itself, like
 //!   Gmail and Outlook.com; a reply marks the original answered through
-//!   the operation queue;
+//!   the operation queue; the draft's autosave copy in the server's Drafts
+//!   folder is deleted, the recipients are recorded for autocomplete and
+//!   the on-send rules run on the Sent copy;
 //! * a temporary failure: back to `scheduled` with a growing delay (at
 //!   most five attempts);
 //! * a permanent failure: `failed` until the user retries or edits it.
@@ -32,7 +35,6 @@ use crate::engine::unix_now;
 use crate::error::Result;
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest};
-use crate::mime::{ReplyContext, build_plain_text, new_message_id};
 use crate::service::Service;
 
 /// Attempts before a temporarily failing send is given up.
@@ -75,7 +77,7 @@ fn send_status(service: &Service, entry: &OutboxEntry) {
 }
 
 impl Service {
-    fn identity(&self, id: &nail_api::IdentityId) -> Result<(AccountConfig, Identity)> {
+    pub(crate) fn identity(&self, id: &nail_api::IdentityId) -> Result<(AccountConfig, Identity)> {
         let config = self.inner.accounts.config();
         let identity = config
             .identity(id)
@@ -90,16 +92,63 @@ impl Service {
         Ok((account, identity))
     }
 
-    /// `SaveDraft`.
-    pub(crate) async fn save_draft(&self, draft: Draft) -> Result<DraftId> {
-        if draft.uses_rich_content() {
-            return Err(ApiError::unsupported(
-                "HTML, Markdown and attachments arrive with the M1b composer",
-            )
-            .into());
-        }
+    /// `SaveDraft`: HTML is sanitized before it is stored; attachments must
+    /// be uploaded blobs. Schedules the autosave copy in the server's Drafts
+    /// folder.
+    pub(crate) async fn save_draft(&self, mut draft: Draft) -> Result<DraftId> {
         self.identity(&draft.identity_id)?;
-        Ok(self.inner.store.call(move |s| s.save_draft(&draft)).await?)
+        if let Some(html) = &draft.html {
+            draft.html = Some(nail_compose::sanitize_outgoing(html));
+        }
+        for attachment in &draft.attachments {
+            let known = nail_store::BlobHash::parse(&attachment.blob)
+                .is_ok_and(|hash| self.inner.blobs.contains(&hash));
+            if !known {
+                return Err(ApiError::not_found(format!(
+                    "attachment {:?}: upload it first (unknown blob {})",
+                    attachment.filename, attachment.blob
+                ))
+                .into());
+            }
+        }
+        let id = self.inner.store.call(move |s| s.save_draft(&draft)).await?;
+        self.schedule_draft_upload(&id);
+        Ok(id)
+    }
+
+    /// `ListDrafts`: saved drafts that are not waiting in the outbox.
+    pub(crate) async fn list_drafts(&self) -> Result<Vec<Draft>> {
+        Ok(self
+            .inner
+            .store
+            .call(|s| {
+                let queued: Vec<DraftId> =
+                    s.list_outbox()?.into_iter().map(|e| e.draft_id).collect();
+                Ok(s.list_drafts()?
+                    .into_iter()
+                    .filter(|d| d.id.as_ref().is_none_or(|id| !queued.contains(id)))
+                    .collect())
+            })
+            .await?)
+    }
+
+    /// `DeleteDraft`: the draft and its server copy.
+    pub(crate) async fn delete_draft(&self, draft_id: &DraftId) -> Result<()> {
+        self.cancel_draft_upload(draft_id);
+        let id = draft_id.clone();
+        let copy = self
+            .inner
+            .store
+            .call(move |s| s.draft_server_copy(&id))
+            .await
+            .ok()
+            .flatten();
+        let id = draft_id.clone();
+        if !self.inner.store.call(move |s| s.delete_draft(&id)).await? {
+            return Err(ApiError::not_found(format!("draft {draft_id}")).into());
+        }
+        self.remove_draft_copy(copy).await;
+        Ok(())
     }
 
     /// `SendDraft`.
@@ -136,6 +185,9 @@ impl Service {
             }
         };
         let account_id = account.id.clone();
+        // The draft is about to go; an upload now would only leave a copy
+        // behind.
+        self.cancel_draft_upload(&draft_id);
         let entry = self
             .inner
             .store
@@ -160,7 +212,7 @@ impl Service {
     }
 
     /// The transport of an account's outgoing server.
-    fn transport(&self, account: &AccountConfig) -> Result<SmtpTransport> {
+    pub(crate) fn transport(&self, account: &AccountConfig) -> Result<SmtpTransport> {
         let Some(OutgoingServer::Smtp { server, options }) = &account.outgoing else {
             return Err(ApiError::invalid_request(format!(
                 "account {} has no outgoing server",
@@ -232,35 +284,35 @@ impl Service {
         let (account, identity) = self
             .identity(&draft.identity_id)
             .map_err(EngineError::from)?;
-        let reply = match draft.replied_message() {
-            Some(parent) => {
-                let parent = parent.clone();
-                self.inner
-                    .store
-                    .call(move |s| s.message_meta(&parent))
-                    .await
-                    .ok()
-                    .map(|meta| ReplyContext {
-                        message_id: meta.message_id,
-                        references: meta.references,
-                    })
-            }
-            None => None,
+        let message = self
+            .build_draft_message(&draft, &identity, entry.id.as_str().as_bytes())
+            .await
+            .map_err(EngineError::from)?;
+        let server_copy = {
+            let id = entry.draft_id.clone();
+            self.inner
+                .store
+                .call(move |s| s.draft_server_copy(&id))
+                .await
+                .ok()
+                .flatten()
         };
-        let date = chrono::Local::now().to_rfc2822();
-        let message_id = new_message_id(&identity.email, entry.id.as_str().as_bytes());
-        let message = build_plain_text(&draft, &identity, reply.as_ref(), &date, &message_id);
         let transport = self.transport(&account).map_err(EngineError::from)?;
         transport.send(&message.envelope, &message.raw).await?;
         Ok(Sent {
             account,
             raw: message.raw,
             in_reply_to: draft.replied_message().cloned(),
+            server_copy,
+            draft,
         })
     }
 
-    /// The Sent copy and the answered flag of a sent message.
+    /// The Sent copy, the answered flag, the draft's server copy, collected
+    /// addresses and on-send rules of a sent message.
     async fn after_send(&self, entry: &OutboxEntry, sent: Sent) {
+        self.remove_draft_copy(sent.server_copy.clone()).await;
+        self.record_recipients(&sent.draft).await;
         if let Some(parent) = sent.in_reply_to {
             let op = Operation::UpdateFlags {
                 message_id: parent,
@@ -276,11 +328,15 @@ impl Service {
         if !wants_sent_copy(&sent.account) {
             return;
         }
-        if let Err(err) = self
+        match self
             .file_sent_copy(&sent.account, &entry.id, &sent.raw)
             .await
         {
-            tracing::warn!(account = %sent.account.id, %err, "cannot file the Sent copy");
+            Ok(Some(copy)) => self.run_on_send_rules(&copy).await,
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(account = %sent.account.id, %err, "cannot file the Sent copy");
+            }
         }
     }
 
@@ -289,7 +345,7 @@ impl Service {
         account: &AccountConfig,
         outbox: &OutboxId,
         raw: &[u8],
-    ) -> Result<()> {
+    ) -> Result<Option<nail_api::MessageId>> {
         let account_id = account.id.clone();
         let sent_folder = {
             let id = account_id.clone();
@@ -305,7 +361,7 @@ impl Service {
         };
         let Some(folder) = sent_folder else {
             tracing::info!(account = %account_id, "no Sent folder; not keeping a copy");
-            return Ok(());
+            return Ok(None);
         };
         // The copy is stored locally at once (so it survives being
         // offline); an IMAP account files it on the server through the
@@ -330,7 +386,7 @@ impl Service {
         match &account.incoming {
             IncomingServer::Imap { .. } => {
                 let op = Operation::AppendMessage {
-                    message_id: id,
+                    message_id: id.clone(),
                     folder_id: folder.id.clone(),
                 };
                 // Broadcasts the change and wakes the account's replay.
@@ -342,7 +398,7 @@ impl Service {
                 });
             }
         }
-        Ok(())
+        Ok(Some(id))
     }
 }
 
@@ -351,6 +407,10 @@ struct Sent {
     account: AccountConfig,
     raw: Vec<u8>,
     in_reply_to: Option<nail_api::MessageId>,
+    /// The draft's autosave copy on the server, to delete.
+    server_copy: Option<nail_store::DraftServerCopy>,
+    /// The draft as sent.
+    draft: Draft,
 }
 
 /// The sender: sends due entries, sleeps until the next one (or a wake-up).

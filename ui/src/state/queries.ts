@@ -57,6 +57,7 @@ export const queryKeys = {
   allSearches: ["search"] as const,
   checkQuery: (text: string) => ["check-query", text] as const,
   outbox: ["outbox"] as const,
+  drafts: ["drafts"] as const,
 };
 
 /** Whether an error means "the core does not implement this yet". */
@@ -300,6 +301,16 @@ export function useCheckQuery(text: string) {
     },
     enabled: text.trim() !== "",
     staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** Saved drafts (not in the outbox), fetched afresh whenever shown. */
+export function useDrafts() {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.drafts,
+    queryFn: async () => (await client.request({ type: "ListDrafts" }, "Drafts")).drafts,
+    staleTime: 0,
   });
 }
 

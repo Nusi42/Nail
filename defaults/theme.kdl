@@ -59,6 +59,7 @@ theme "default" mode="system" {
         size "touch-target" 48
         size "toolbar"      40
         size "divider"      1
+        size "divider-grab" 5
 
         radius "sm" 4
         radius "md" 6
@@ -87,12 +88,19 @@ theme "default" mode="system" {
         background-color "$color.bg"
     }
 
+    // A 5px grab area with a 1px line (at the edge of the pane before it).
     part "split.divider" {
-        background-color "$color.border"
-        flex-basis "$size.divider"
+        flex-basis "$size.divider-grab"
+        border-top "$size.divider solid $color.border"
+        background-color "transparent"
         transition "background-color $motion.fast $motion.ease"
     }
+    part "split[orientation=\"horizontal\"] split.divider" {
+        border-top "none"
+        border-left "$size.divider solid $color.border"
+    }
     part "split.divider:hover" { background-color "$color.accent"; }
+    part "split.divider:focus-visible" { background-color "$color.focus-ring"; }
 
     part "tabs.tab-list" {
         display "flex"
@@ -983,6 +991,229 @@ theme "default" mode="system" {
         color "$color.fg-muted"
     }
 
+    // Rich composer (ADR 0023): modes, formatting toolbar, HTML / Markdown
+    // editors, preview, attachments, address suggestions.
+    part "composer.toolbar" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "composer.modes" {
+        display "inline-flex"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        overflow "hidden"
+    }
+    part "composer.mode" {
+        padding "$space.xs" "$space.sm"
+        border "none"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "composer.mode:hover" { background-color "$color.bg-subtle"; }
+    part "composer.mode:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+        font-weight "$font-weight.bold"
+    }
+    part "composer.mode:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "composer.option" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xs"
+        font-size "$font-size.sm"
+    }
+    part "composer.address" { position "relative"; }
+    part "composer.suggestions" {
+        position "absolute"
+        z-index 10
+        min-width 240
+        margin 0
+        padding "$space.xs" 0
+        border "$border.thin"
+        border-radius "$radius.sm"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "composer.suggestion" {
+        display "flex"
+        gap "$space.sm"
+        padding "$space.xs" "$space.sm"
+        cursor "pointer"
+    }
+    part "composer.suggestion:active" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "composer.suggestion.email" { color "$color.fg-muted"; }
+    part "composer.format" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
+    }
+    part "composer.format.button" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "composer.format.button:hover" { background-color "$color.bg-subtle"; }
+    part "composer.format.button:active" { background-color "$color.bg-raised"; }
+    part "composer.format.button:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "composer.format.label" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.html" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        flex-grow 1
+        min-height 0
+    }
+    part "composer.html.editor" {
+        display "flex"
+        flex-direction "column"
+        flex-grow 1
+        min-height 0
+        overflow-y "auto"
+    }
+    part "composer.html.content" {
+        min-height 200
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.reader"
+        line-height "$line-height.normal"
+        white-space "pre-wrap"
+        overflow-wrap "break-word"
+        outline "none"
+    }
+    part "composer.html.content:focus-within" { outline "2px solid $color.focus-ring"; }
+    part "composer.html.source" {
+        min-height 200
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "composer.link" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "composer.link.input" {
+        flex-grow 1
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "composer.markdown" {
+        display "grid"
+        grid-template-columns "minmax(0, 1fr)"
+        gap "$space.sm"
+        flex-grow 1
+        min-height 0
+    }
+    part "composer.markdown:split" { grid-template-columns "minmax(0, 1fr) minmax(0, 1fr)"; }
+    part "composer.markdown.source" {
+        display "flex"
+        flex-direction "column"
+        min-height 0
+    }
+    part "composer.markdown.editor" {
+        flex-grow 1
+        min-height 200
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        overflow "auto"
+    }
+    part "composer.markdown.content" {
+        padding "$space.sm"
+        font-family "$font.mono"
+        line-height "$line-height.normal"
+    }
+    part "composer.preview" {
+        display "flex"
+        min-height 200
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "composer.preview.frame" {
+        flex-grow 1
+        border "none"
+        background-color "#ffffff"
+    }
+    part "composer.preview.error" {
+        padding "$space.sm"
+        color "$color.danger"
+    }
+    part "composer.lossy" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.sm"
+        border-radius "$radius.sm"
+        background-color "$color.bg-raised"
+    }
+    part "composer.reminder" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.reminder:confirm" {
+        padding "$space.sm"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg-raised"
+    }
+    part "composer.attachments" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "composer.attachments.list" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "composer.attachment" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xs"
+        padding "$space.xxs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "composer.attachment.size" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.attachment.inline" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.file-input" { display "none"; }
+    part "composer.uploading" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "composer.saved:failed" { color "$color.danger"; }
+
     // ---- Outbox and move picker ----
 
     part "outbox" {
@@ -1015,6 +1246,17 @@ theme "default" mode="system" {
     part "outbox.item.actions" {
         display "flex"
         gap "$space.sm"
+    }
+    part "outbox.drafts" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        margin-top "$space.md"
+    }
+    part "outbox.drafts.title" {
+        margin 0
+        font-size "$font-size.md"
+        font-weight "$font-weight.bold"
     }
     part "outbox.empty" {
         margin "auto"
@@ -1050,6 +1292,771 @@ theme "default" mode="system" {
         color "$color.fg-muted"
     }
 
+    // ---- Filter rules (ADR 0024) ----
+
+    part "window[window=\"rules\"]" { width "min(1100px, 100%)"; }
+    part "rules" {
+        display "grid"
+        grid-template-columns "minmax(200px, 280px) minmax(0, 1fr)"
+        gap "$space.md"
+        height "100%"
+        min-height 0
+        padding "$space.md"
+    }
+    part "rules.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        min-height 0
+        overflow-y "auto"
+    }
+    part "rules.list.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "rules.list.item" {
+        display "flex"
+        align-items "center"
+        gap "$space.xs"
+        padding "$space.xxs" "$space.xs"
+        border-radius "$radius.sm"
+    }
+    part "rules.list.item[selected=\"true\"]" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "rules.list.item[enabled=\"false\"]" { opacity "$opacity.muted"; }
+    part "rules.list.select" {
+        flex-grow 1
+        padding "$space.xs"
+        border "none"
+        text-align "left"
+        color "inherit"
+        background-color "transparent"
+    }
+    part "rules.list.select:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "rules.list.triggers" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "rules.editor" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        min-height 0
+        overflow-y "auto"
+    }
+    part "rules.views" {
+        display "inline-flex"
+        gap "$space.xs"
+    }
+    part "rules.view" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "rules.conditions" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "rules.group" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "rules.group[mode=\"not\"]" { border-left "3px solid $color.warning"; }
+    part "rules.group.title" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.group.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "rules.group.item" {
+        display "flex"
+        align-items "flex-start"
+        gap "$space.xs"
+    }
+    part "rules.condition" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
+        flex-grow 1
+    }
+    part "rules.add" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xs"
+    }
+    part "rules.actions" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "rules.actions.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "rules.action" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.xs"
+    }
+    part "rules.text" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "rules.text.source" {
+        min-height 240
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        white-space "pre"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "rules.text.errors" {
+        margin 0
+        padding-left "$space.lg"
+        color "$color.danger"
+    }
+    part "rules.problems" {
+        padding "$space.sm"
+        border-radius "$radius.sm"
+        background-color "$color.bg-raised"
+    }
+    part "rules.problems.title" { font-weight "$font-weight.bold"; }
+    part "rules.problems.items" {
+        margin 0
+        padding-left "$space.lg"
+    }
+    part "rules.problem" { color "$color.danger"; }
+    part "rules.notice" {
+        padding "$space.xs" "$space.sm"
+        border-radius "$radius.sm"
+        background-color "$color.bg-subtle"
+    }
+    part "rules.notice[kind=\"error\"]" { color "$color.danger"; }
+    part "rules.notice[kind=\"ok\"]" { color "$color.success"; }
+    part "rules.buttons" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+    }
+    part "rules.hint" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.test" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "rules.test.summary" { font-weight "$font-weight.bold"; }
+    part "rules.test.matches" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "rules.test.match" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "rules.test.subject" { font-weight "$font-weight.medium"; }
+    part "rules.test.from" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.test.actions" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xs"
+        margin 0
+        padding 0
+        font-size "$font-size.sm"
+    }
+    part "rules.test.why" {
+        margin 0
+        padding-left "$space.lg"
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "rules.runs" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "rules.runs.title" { font-weight "$font-weight.bold"; }
+    part "rules.runs.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "rules.run" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        font-size "$font-size.sm"
+    }
+    part "rules.run:failed" { color "$color.danger"; }
+    part "rules.run:undone" { color "$color.fg-muted"; }
+
+    // ---- MCP clients and the agent indicator (ADR 0025) ----
+
+    part "mcp-clients" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "mcp-clients.intro" { color "$color.fg-muted"; }
+    part "mcp-clients.server" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "mcp-clients.server:running" { color "$color.success"; }
+    part "mcp-clients.create" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "flex-end"
+        gap "$space.sm"
+    }
+    part "mcp-clients.create.error" { color "$color.danger"; }
+    part "mcp-clients.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "mcp-clients.client" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        width "100%"
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "inherit"
+        background-color "transparent"
+    }
+    part "mcp-clients.client:hover" { background-color "$color.bg-subtle"; }
+    part "mcp-clients.client:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "mcp-clients.client[access=\"revoked\"]" { opacity "$opacity.muted"; }
+    part "mcp-clients.client.name" { font-weight "$font-weight.medium"; }
+    part "mcp-clients.client.status" { font-size "$font-size.sm"; }
+    part "mcp-clients.client.status[access=\"no-access\"]" { color "$color.warning"; }
+    part "mcp-clients.client.hint" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "mcp-clients.client.used" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "mcp-clients.detail" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+    }
+    part "mcp-clients.confirm" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.sm"
+        border-radius "$radius.sm"
+        background-color "$color.bg-raised"
+    }
+    part "mcp-clients.error" { color "$color.danger"; }
+    part "mcp-clients.empty" { color "$color.fg-muted"; }
+    part "mcp-token" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+        border "2px solid $color.accent"
+        border-radius "$radius.md"
+    }
+    part "mcp-token.title" { font-weight "$font-weight.bold"; }
+    part "mcp-token.warning" { color "$color.warning"; }
+    part "mcp-token.value" {
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        overflow-wrap "anywhere"
+        user-select "all"
+        background-color "$color.bg-subtle"
+    }
+    part "mcp-token.actions" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "mcp-token.usage" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "mcp-token.copy-failed" { color "$color.danger"; }
+    part "mcp-grants" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "mcp-grants.fields" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "mcp-grants.empty" { color "$color.warning"; }
+    part "mcp-grants.scope" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "mcp-grants.scope.hint" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "mcp-grants.folders.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding-left "$space.lg"
+    }
+    part "mcp-grants.actions" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "mcp-grants.message" { font-size "$font-size.sm"; }
+    part "mcp-grants.message:ok" { color "$color.success"; }
+    part "mcp-grants.message:error" { color "$color.danger"; }
+    part "mcp-audit" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "mcp-audit.toolbar" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "mcp-audit.table" {
+        width "100%"
+        font-size "$font-size.sm"
+    }
+    part "mcp-audit.head" {
+        text-align "left"
+        color "$color.fg-muted"
+    }
+    part "mcp-audit.row" { border-bottom "$border.thin"; }
+    part "mcp-audit.outcome[outcome=\"denied\"]" { color "$color.danger"; }
+    part "mcp-audit.outcome[outcome=\"error\"]" { color "$color.danger"; }
+    part "mcp-audit.outcome[outcome=\"declined\"]" { color "$color.warning"; }
+    part "mcp-audit.detail" { color "$color.fg-muted"; }
+    part "mcp-audit.error" { color "$color.danger"; }
+    part "mcp-audit.empty" { color "$color.fg-muted"; }
+    part "mcp-context-indicator" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        font-weight "$font-weight.bold"
+    }
+    part "mcp-context-indicator:reading" {
+        padding "$space.xs" "$space.md"
+        color "$color.accent-fg"
+        background-color "$color.accent"
+    }
+    part "mcp-context-indicator:editing" {
+        padding "$space.xs" "$space.md"
+        color "$color.accent-fg"
+        background-color "$color.danger"
+    }
+    part "mcp-context-indicator.dot" {
+        width 10
+        height 10
+        border-radius "50%"
+        background-color "currentColor"
+    }
+    part "mcp-context-indicator.dismiss" {
+        display "inline-flex"
+        margin-left "auto"
+        padding "$space.xxs" "$space.sm"
+        border "1px solid currentColor"
+        border-radius "$radius.sm"
+        color "inherit"
+        background-color "transparent"
+    }
+
+    // ---- Customization: inspector, merge dialog, config errors, smart folders (ADR 0026) ----
+
+    part "inspector" {
+        position "fixed"
+        right 16
+        bottom 16
+        z-index 1000
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        max-width "min(480px, calc(100vw - 32px))"
+        max-height "70vh"
+        overflow "auto"
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+        font-size "$font-size.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "inspector.highlight" {
+        position "fixed"
+        z-index 999
+        outline "2px solid $color.accent"
+        background-color "rgb(46 94 170 / 0.12)"
+        pointer-events "none"
+    }
+    part "inspector.header" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "inspector.title" { font-weight "$font-weight.bold"; }
+    part "inspector.hint" { color "$color.fg-muted"; }
+    part "inspector.section" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+    }
+    part "inspector.heading" {
+        margin 0
+        font-size "$font-size.sm"
+        font-weight "$font-weight.bold"
+    }
+    part "inspector.path" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+        font-family "$font.mono"
+    }
+    part "inspector.path.item:current" { font-weight "$font-weight.bold"; }
+    part "inspector.states" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "inspector.state" {
+        padding 0 "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "inspector.condition" { font-family "$font.mono"; }
+    part "inspector.rules" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "inspector.rule" {
+        padding "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "inspector.rule.selector" { font-family "$font.mono"; }
+    part "inspector.rule.declarations" {
+        margin 0
+        padding-left "$space.lg"
+        font-family "$font.mono"
+    }
+    part "inspector.node" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+    }
+    part "inspector.node.kind" { font-family "$font.mono"; }
+    part "inspector.none" { color "$color.fg-muted"; }
+    part "window[window=\"config-merge\"]" { width "min(1100px, 100%)"; }
+    part "merge-dialog" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.md"
+        overflow-y "auto"
+    }
+    part "merge-dialog.intro" { color "$color.fg-muted"; }
+    part "merge-dialog.files" {
+        display "flex"
+        gap "$space.md"
+        margin 0
+        padding 0
+        border "none"
+    }
+    part "merge-dialog.input" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "merge-dialog.text" {
+        min-height 160
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "merge-dialog.toolbar" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "merge-dialog.section" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "merge-dialog.section.header" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        font-weight "$font-weight.bold"
+    }
+    part "merge-dialog.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "merge-dialog.item" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "merge-dialog.item.header" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "merge-dialog.item.key" { font-family "$font.mono"; }
+    part "merge-dialog.diff" {
+        display "grid"
+        grid-template-columns "minmax(0, 1fr) minmax(0, 1fr)"
+        gap "$space.sm"
+    }
+    part "merge-dialog.side" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        min-width 0
+    }
+    part "merge-dialog.side:mine" { border-left "3px solid $color.accent"; }
+    part "merge-dialog.side:theirs" { border-left "3px solid $color.success"; }
+    part "merge-dialog.side.label" {
+        font-size "$font-size.xs"
+        color "$color.fg-muted"
+    }
+    part "merge-dialog.side.text" {
+        margin 0
+        padding "$space.xs"
+        font-family "$font.mono"
+        white-space "pre"
+        overflow-x "auto"
+        background-color "$color.bg-subtle"
+    }
+    part "merge-dialog.side.absent" { color "$color.fg-muted"; }
+    part "merge-dialog.choice" {
+        display "flex"
+        gap "$space.sm"
+        margin 0
+        padding 0
+        border "none"
+    }
+    part "merge-dialog.conflicts" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "merge-dialog.conflict" {
+        padding 0 "$space.xs"
+        border-radius "$radius.sm"
+        font-size "$font-size.xs"
+        color "$color.accent-fg"
+        background-color "$color.warning"
+    }
+    part "merge-dialog.error" { color "$color.danger"; }
+    part "merge-dialog.error-list" { color "$color.danger"; }
+    part "merge-dialog.status" { color "$color.fg-muted"; }
+    part "merge-dialog.actions" {
+        display "flex"
+        flex-wrap "wrap"
+        gap "$space.sm"
+    }
+    part "merge-dialog.backups" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "merge-dialog.backup-list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "merge-dialog.backup" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "merge-dialog.upload.input" { display "none"; }
+    part "config-errors" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "config-errors:invalid" {
+        padding "$space.sm" "$space.md"
+        border-bottom "$border.thin"
+        color "$color.fg"
+        background-color "$color.bg-raised"
+    }
+    part "config-errors.summary" {
+        font-weight "$font-weight.bold"
+        color "$color.danger"
+    }
+    part "config-errors.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "config-errors.file" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+    }
+    part "config-errors.file.name" {
+        font-family "$font.mono"
+        font-weight "$font-weight.bold"
+    }
+    part "config-errors.item" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        font-size "$font-size.sm"
+    }
+    part "config-errors.item.message" { font-family "$font.mono"; }
+    part "config-errors.note" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "smart-folders" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        padding "$space.xs" "$space.sm"
+        border-top "$border.thin"
+    }
+    part "smart-folders.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xxs"
+        margin 0
+        padding 0
+    }
+    part "smart-folders.entry" {
+        display "flex"
+        align-items "center"
+        gap "$space.xxs"
+    }
+    part "smart-folders.item" {
+        flex-grow 1
+        padding "$space.xs" "$space.sm"
+        border "none"
+        border-radius "$radius.sm"
+        text-align "left"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "smart-folders.item:hover" { background-color "$color.bg-raised"; }
+    part "smart-folders.item:selected" {
+        color "$color.selection-fg"
+        background-color "$color.selection"
+    }
+    part "smart-folders.remove" {
+        padding "$space.xxs" "$space.xs"
+        border "none"
+        color "$color.fg-muted"
+        background-color "transparent"
+    }
+    part "smart-folders.form" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+    }
+    part "smart-folders.empty" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "smart-folders.error" { color "$color.danger"; }
+
     // ---- Icons (SVG path data on a 24x24 grid) ----
 
     icons {
@@ -1074,6 +2081,8 @@ theme "default" mode="system" {
         icon "settings"  svg="M10 2h4l.5 2.6 2 1.2 2.5-.9 2 3.4-2 1.7v2.4l2 1.7-2 3.4-2.5-.9-2 1.2L14 22h-4l-.5-2.6-2-1.2-2.5.9-2-3.4 2-1.7V10.6l-2-1.7 2-3.4 2.5.9 2-1.2z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
         icon "account-add" svg="M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8z M1 20c0-3.3 3.6-6 8-6s8 2.7 8 6z M19 7h2v3h3v2h-3v3h-2v-3h-3v-2h3z"
         icon "close"     svg="M5.6 4.2 12 10.6l6.4-6.4 1.4 1.4-6.4 6.4 6.4 6.4-1.4 1.4-6.4-6.4-6.4 6.4-1.4-1.4 6.4-6.4-6.4-6.4z"
+        icon "filter"    svg="M3 4h18l-7 9v6l-4 2v-8z"
+        icon "attachment" svg="M16.5 6v11.5a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6H9v9.5a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v12.5a6 6 0 0 0 12 0V6z"
     }
 
     // ---- Reading mail ----

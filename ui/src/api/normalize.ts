@@ -18,6 +18,7 @@ import type {
   PartRule,
   ResolvedLayout,
   ResolvedTheme,
+  SourceLocation,
   ToolbarItem,
 } from "./generated";
 
@@ -77,19 +78,23 @@ function ancestor(value: unknown): AncestorSelector {
   };
 }
 
+/** A source location, or `null` when absent or malformed. */
+function sourceLocation(value: unknown): SourceLocation | null {
+  const source = obj(value);
+  return value && typeof source.file === "string"
+    ? { file: source.file, line: Number(source.line) || 0, column: Number(source.column) || 0 }
+    : null;
+}
+
 function partRule(value: unknown): PartRule {
   const p = obj(value);
-  const source = obj(p.source);
   return {
     selector: str(p.selector, ""),
     states: arr(p.states).filter((s): s is string => typeof s === "string"),
     conditions: arr(p.conditions).map(condition),
     ancestors: arr(p.ancestors).map(ancestor),
     declarations: stringMap(p.declarations),
-    source:
-      p.source && typeof source.file === "string"
-        ? { file: source.file, line: Number(source.line) || 0, column: Number(source.column) || 0 }
-        : null,
+    source: sourceLocation(p.source),
   };
 }
 
@@ -170,7 +175,7 @@ export function normalizeNode(raw: unknown): LayoutNode {
         kind: str(n.kind, ""),
         options: obj(n.options) as Extract<LayoutNode, { type: "widget" }>["options"],
         rows: arr(n.rows).filter((r): r is string => typeof r === "string"),
-        source: null,
+        source: sourceLocation(n.source),
       };
   }
 }

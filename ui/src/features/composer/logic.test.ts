@@ -328,6 +328,19 @@ describe("composer flows", () => {
     expect(ctx.store.getState().composer?.context).toEqual({ mode: "reply", message_id: id });
   });
 
+  it("opens the plain composer when the core cannot choose an identity", async () => {
+    const ctx = context();
+    const send = ctx.transport.send.bind(ctx.transport);
+    ctx.transport.send = async (request) =>
+      request.type === "NewDraft"
+        ? { type: "Error", code: "invalid_request", message: "there is no identity to send from" }
+        : send(request);
+    await startRichCompose(ctx);
+    expect(ctx.store.getState().composer).not.toBeNull();
+    expect(ctx.store.getState().windows).toContain("composer");
+    expect(richStoreFor(ctx.store).getState().mode).toBe("plain");
+  });
+
   it("replies in HTML and sends the rich draft", async () => {
     const ctx = context();
     const id = firstMessage(ctx.transport).id;

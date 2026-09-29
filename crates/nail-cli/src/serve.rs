@@ -97,6 +97,8 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     options.locale = args.locale;
     options.watch_config = !args.no_watch;
     options.open_browser = args.seed.is_none();
+    // Seeded (demo, test) runs never open windows on this machine.
+    options.open_editor = args.seed.is_none();
 
     // demo-multi: mock servers first, the service is pointed at them.
     let mut demo_multi = None;
@@ -121,8 +123,11 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         Some(Seed::Demo) => {
             let seed = {
                 let service = service.clone();
-                tokio::task::spawn_blocking(move || {
-                    nail_core::demo::seed_demo(service.store(), service.blobs())
+                tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+                    let seed = nail_core::demo::seed_demo(service.store(), service.blobs())?;
+                    // The seed goes straight into the store: index it too.
+                    service.rebuild_search_index()?;
+                    Ok(seed)
                 })
                 .await??
             };
@@ -140,6 +145,20 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         }
         Some(Seed::DemoMulti) | None => {}
     }
+
+    // The MCP server (ADR 0025), with the core as its data provider; agents
+    // find it through the endpoint file in the data directory.
+    let mcp = if args.no_mcp {
+        None
+    } else {
+        let endpoint = nail_mcp::endpoint::endpoint_path(&data_dir);
+        let running = service
+            .start_mcp_server(args.mcp_port, Some(endpoint))
+            .await
+            .context("cannot start the MCP server")?;
+        tracing::info!(url = %running.url(), "MCP server running");
+        Some(running)
+    };
 
     let test_control = demo_multi
         .clone()
@@ -175,6 +194,9 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
             }
         })
         .await?;
+    if let Some(mcp) = mcp {
+        mcp.shutdown().await;
+    }
     service.shutdown().await;
     drop(demo_multi);
     drop(dirs);

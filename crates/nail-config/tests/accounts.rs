@@ -3,9 +3,9 @@
 
 use nail_api::accounts::{
     AccountConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMapping, FolderMatch, FolderPolicy,
-    FolderSource, Identity, IdentityRule, ImapOptions, IncomingServer, OAuthProviderConfig,
-    OutgoingServer, Pop3Options, SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions,
-    SyncPolicy, TlsMode, VirtualAccountConfig,
+    FolderSource, Identity, IdentityRule, ImapOptions, IncomingServer, MailStyleConfig,
+    OAuthProviderConfig, OutgoingServer, Pop3Options, QuotePosting, SaslMechanism, SecretRef,
+    ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode, VirtualAccountConfig,
 };
 use nail_api::{AccountId, FolderRole};
 use nail_config::{AccountsDocument, ConfigErrorKind, parse_accounts};
@@ -27,9 +27,10 @@ account "work" name="Work" email="ada@work.example" {
     smtp host="smtp.work.example" tls="starttls" dsn=#true {
         auth "oauth2" provider="corp" username="ada@work.example"
     }
-    identity "ada@work.example" name="Ada Lovelace" reply-to="team@work.example" composer="plain" {
+    identity "ada@work.example" name="Ada Lovelace" reply-to="team@work.example" composer="plain" posting="top" {
         bcc "archive@work.example"
         signature "Ada\nWork" html="<p>Ada</p>"
+        mail-style css="p { margin: 0; }" code-theme="base16-ocean.dark"
     }
     identity "ada@work.example" id="work-alt" name="A. Lovelace"
     sync bodies="headers-only" {
@@ -81,6 +82,8 @@ fn identity(account: &str, email: &str) -> Identity {
         bcc: vec![],
         signature: None,
         composer_mode: None,
+        posting: None,
+        mail_style: None,
     }
 }
 
@@ -132,6 +135,11 @@ fn work() -> AccountConfig {
                     markdown: None,
                 }),
                 composer_mode: Some(ComposerMode::Plain),
+                posting: Some(QuotePosting::Top),
+                mail_style: Some(MailStyleConfig {
+                    css: Some("p { margin: 0; }".into()),
+                    code_theme: Some("base16-ocean.dark".into()),
+                }),
                 ..identity("work", "ada@work.example")
             },
             Identity {

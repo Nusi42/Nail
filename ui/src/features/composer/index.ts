@@ -17,6 +17,7 @@ import { MODES } from "./Composer";
 import { richStoreFor } from "./store";
 
 export {
+  cancelRichSend,
   openRichDraft,
   saveRich,
   sendRich,

@@ -321,7 +321,11 @@ export async function openDraft(ctx: ComposeContext, draftId: DraftId): Promise<
  * Takes a message back out of the outbox (undo send, or cancelling a
  * scheduled message) and reopens it in the composer.
  */
-export async function cancelSend(ctx: ComposeContext, outboxId: string): Promise<void> {
+export async function cancelSend(
+  ctx: ComposeContext,
+  outboxId: string,
+  reopen: (ctx: ComposeContext, draftId: DraftId) => Promise<void> = openDraft,
+): Promise<void> {
   const { draft_id } = await ctx.client.request(
     { type: "CancelSend", outbox_id: outboxId },
     "SendCancelled",
@@ -329,5 +333,6 @@ export async function cancelSend(ctx: ComposeContext, outboxId: string): Promise
   const ui = ctx.store.getState();
   if (ui.lastSend?.id === outboxId) ui.setLastSend(null);
   void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.outbox });
-  await openDraft(ctx, draft_id);
+  void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
+  await reopen(ctx, draft_id);
 }

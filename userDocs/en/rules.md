@@ -144,9 +144,14 @@ added (the topmost one only, because senders can forge lower ones).
 | `mark-read`, `mark-read #false` | Mark as read or unread. |
 | `forward "a@example.com" identity="…"` | Forward as a new message. |
 | `redirect "a@example.com"` | Pass the message on unchanged. |
-| `reply "Thanks, I am away until Monday."` | Reply with a template (Markdown). Nail never replies automatically to mailing lists, bulk mail, automatic mail or bounces. |
-| `notify`, `notify #false` | Show or suppress the new-mail notification. |
+| `reply "Thanks, I am away until Monday."` | Reply with a template (Markdown, above the quoted message; placeholders below). Nail never replies automatically to mailing lists, bulk mail, automatic mail or bounces. |
+| `notify`, `notify #false` | Show or suppress the new-mail notification. This version shows no notifications yet; the choice is kept for when it does. |
 | `stop` | Run no further actions or rules for this message. |
+
+A `reply` template may contain placeholders that are filled in from the
+message: `{sender.name}`, `{sender.email}`, `{subject}`, `{date}`,
+`{identity.name}` and `{identity.email}` (for example
+`reply "Hello {sender.name}, I am away until Monday."`).
 
 ```kdl
 rule "Old newsletters" {
@@ -167,4 +172,24 @@ rule "Away" trigger="arrival" enabled=#false {
 ```
 
 If `rules.kdl` has mistakes, Nail lists every one of them with its line
-and column and keeps running the rules it had before.
+and column (see [the error list](customization.md#all-configuration-errors-at-once))
+and keeps running the rules it had before.
+
+## When rules run
+
+- **New mail** (`arrival`): mail that arrives in the Inbox or another
+  ordinary folder after the folder's first synchronization. Mail waiting
+  for the rules is remembered, so it is still sorted after Nail was closed
+  in between.
+- **Sent mail** (`on-send`): the copy of a message you sent, in the Sent
+  folder.
+- **Schedules** (`schedule`, `older-than`): checked every minute while Nail
+  runs; a scheduled rule looks at the Inboxes, or at the folders its
+  `scope` names.
+- **By hand** (`manual`, or **Run now**): on the Inboxes (or the folders
+  in the rule's scope).
+
+Every change a rule makes goes through the same queue as your own changes,
+so it reaches the mail server when the account is online, and one run can
+be undone as a whole. Forwards, redirects and replies are sent through the
+outbox right away (without the undo-send delay), with a copy in Sent.

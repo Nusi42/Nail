@@ -188,6 +188,8 @@ export class MockTransport implements Transport, MockCore {
         return outbox.getDraft(this, request.draft_id);
       case "DeleteDraft":
         return outbox.deleteDraft(this, request.draft_id);
+      case "ListDrafts":
+        return outbox.listDrafts(this);
       case "SendDraft":
         return outbox.sendDraft(this, request.draft_id, request.delay_secs, request.send_at);
       case "CancelSend":

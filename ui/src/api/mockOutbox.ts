@@ -4,6 +4,7 @@
  * with fake timers; sending emits `SendStatus` events and files a copy in
  * the account's Sent folder.
  */
+import { htmlToText, saveRichDraft } from "../features/composer/mock";
 import type { Draft, OutboxEntry, Response } from "./generated";
 import { mockBody } from "./mockData";
 import { errorResponse, type MockCore } from "./mockMail";
@@ -37,7 +38,7 @@ function identityOf(core: MockCore, id: string) {
 
 export function saveDraft(core: MockCore, draft: Draft): Response {
   if (draft.html !== null || draft.markdown !== null || draft.attachments.length > 0) {
-    return errorResponse("unsupported", "rich drafts arrive with M1b");
+    return saveRichDraft(core, draft);
   }
   if (!identityOf(core, draft.identity_id)) {
     return errorResponse("invalid_request", `unknown identity ${draft.identity_id}`);
@@ -87,6 +88,7 @@ function deliver(core: MockCore, entry: OutboxEntry, draft: Draft): void {
     const sent = d.folders.find((f) => f.account_id === entry.account_id && f.role === "sent");
     const identity = identityOf(core, draft.identity_id);
     if (sent && identity) {
+      const body = draft.markdown ?? (draft.html !== null ? htmlToText(draft.html) : draft.text);
       const summary = {
         id: `${sent.id}#${entry.id}`,
         folder_id: sent.id,
@@ -96,14 +98,14 @@ function deliver(core: MockCore, entry: OutboxEntry, draft: Draft): void {
         to: draft.to,
         date: new Date().toISOString(),
         flags: { seen: true, flagged: false, answered: false, draft: false },
-        has_attachments: false,
-        preview: draft.text.replace(/\s+/g, " ").slice(0, 120),
+        has_attachments: draft.attachments.length > 0,
+        preview: body.replace(/\s+/g, " ").slice(0, 120),
         thread_id: null,
         tags: [],
         duplicates: [],
       };
       d.messages.unshift(summary);
-      d.bodies.set(summary.id, mockBody(summary, { text: draft.text }));
+      d.bodies.set(summary.id, mockBody(summary, { text: body }));
       core.emit({ type: "MailChanged", folder_ids: [sent.id] });
     }
     const replied =
@@ -171,6 +173,16 @@ export function cancelSend(core: MockCore, outboxId: string): Response {
   d.outbox = d.outbox.filter((e) => e !== entry);
   setState(core, entry, "cancelled");
   return { type: "SendCancelled", draft_id: entry.draft_id };
+}
+
+/** `ListDrafts`: saved drafts not waiting in the outbox, newest first. */
+export function listDrafts(core: MockCore): Response {
+  const queued = new Set(core.data.outbox.map((e) => e.draft_id));
+  const drafts = [...core.data.drafts.values()]
+    .filter((d) => d.id === null || !queued.has(d.id))
+    .reverse()
+    .map((d) => structuredClone(d));
+  return { type: "Drafts", drafts };
 }
 
 export function listOutbox(core: MockCore): Response {

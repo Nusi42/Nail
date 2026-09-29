@@ -10,6 +10,10 @@ impl Service {
     /// `ReportUiContext`: replaces the stored context.
     pub(crate) fn report_ui_context(&self, context: UiContext) {
         *lock(&self.inner.ui_context) = context;
+        // Wakes the MCP server's `nail://ui/context` subscribers.
+        self.inner
+            .ui_context_changed
+            .send_modify(|n| *n = n.wrapping_add(1));
     }
 
     /// The last reported UI context (empty before the first report).

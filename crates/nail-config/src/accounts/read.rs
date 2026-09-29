@@ -7,9 +7,9 @@ use kdl::{KdlEntry, KdlNode, KdlValue};
 use nail_api::accounts::{
     AccountConfig, AccountsConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMapping,
     FolderMatch, FolderPolicy, FolderSource, Identity, IdentityRule, ImapOptions, IncomingServer,
-    MailProtocol, OAuthProviderConfig, OutgoingServer, Pop3Options, SaslMechanism, SecretRef,
-    ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode, VirtualAccountConfig,
-    default_port,
+    MailProtocol, MailStyleConfig, OAuthProviderConfig, OutgoingServer, Pop3Options, QuotePosting,
+    SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode,
+    VirtualAccountConfig, default_port,
 };
 use nail_api::{AccountId, FolderRole, IdentityId};
 
@@ -398,6 +398,8 @@ impl Reader<'_, '_> {
                 bcc: Vec::new(),
                 signature: None,
                 composer_mode: None,
+                posting: None,
+                mail_style: None,
             });
         }
         let mut seen = HashSet::new();
@@ -684,7 +686,7 @@ impl Reader<'_, '_> {
     }
 
     fn identity(&self, node: &KdlNode, account: &AccountId) -> Result<Identity, ConfigError> {
-        self.check_props(node, &["id", "name", "reply-to", "composer"])?;
+        self.check_props(node, &["id", "name", "reply-to", "composer", "posting"])?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 1)?;
         let (email, entry) = arg_str(self.src, node, 0, "the sender address")?;
@@ -720,8 +722,20 @@ impl Reader<'_, '_> {
                 })
             }
         };
+        let posting = match prop_str(self.src, node, "posting")? {
+            None => None,
+            Some(("top", _)) => Some(QuotePosting::Top),
+            Some(("bottom", _)) => Some(QuotePosting::Bottom),
+            Some((text, entry)) => {
+                return Err(self.src.entry_err(
+                    entry,
+                    format!("`posting` must be \"top\" or \"bottom\", found {text:?}"),
+                ));
+            }
+        };
         let mut bcc = Vec::new();
         let mut signature: Option<Signature> = None;
+        let mut mail_style: Option<MailStyleConfig> = None;
         for child in children(node) {
             match name(child) {
                 "bcc" => {
@@ -757,10 +771,25 @@ impl Reader<'_, '_> {
                         markdown: self.prop_string(child, "markdown")?,
                     });
                 }
+                "mail-style" => {
+                    if mail_style.is_some() {
+                        return Err(self.src.node_err(child, "`mail-style` is set twice"));
+                    }
+                    self.check_props(child, &["css", "code-theme"])?;
+                    self.check_unique_props(child)?;
+                    check_max_args(self.src, child, 0)?;
+                    check_no_children(self.src, child)?;
+                    mail_style = Some(MailStyleConfig {
+                        css: self.prop_string(child, "css")?,
+                        code_theme: self.prop_nonempty(child, "code-theme")?,
+                    });
+                }
                 other => {
                     return Err(self.src.node_err(
                         child,
-                        format!("unknown node `{other}` in `identity` (expected bcc or signature)"),
+                        format!(
+                            "unknown node `{other}` in `identity` (expected bcc, signature or mail-style)"
+                        ),
                     ));
                 }
             }
@@ -774,6 +803,8 @@ impl Reader<'_, '_> {
             bcc,
             signature,
             composer_mode,
+            posting,
+            mail_style,
         })
     }
 

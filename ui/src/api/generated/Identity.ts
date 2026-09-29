@@ -2,6 +2,8 @@
 import type { AccountId } from "./AccountId";
 import type { ComposerMode } from "./ComposerMode";
 import type { IdentityId } from "./IdentityId";
+import type { MailStyleConfig } from "./MailStyleConfig";
+import type { QuotePosting } from "./QuotePosting";
 import type { Signature } from "./Signature";
 
 /**
@@ -40,4 +42,14 @@ signature: Signature | null,
  * Composer mode new messages from this identity start in; `null` =
  * plain text (M1a) / the app default.
  */
-composer_mode: ComposerMode | null, };
+composer_mode: ComposerMode | null, 
+/**
+ * Where replies put the quoted original relative to the new text;
+ * `null` = below it (bottom posting).
+ */
+posting: QuotePosting | null, 
+/**
+ * Stylesheet and code-highlighting theme of HTML / Markdown mail from
+ * this identity; `null` = the built-in defaults.
+ */
+mail_style: MailStyleConfig | null, };

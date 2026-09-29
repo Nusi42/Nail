@@ -40,24 +40,72 @@ pub struct AppArgs {
 
 impl AppArgs {
     /// The service options these arguments describe, with the platform
-    /// defaults for missing directories.
-    pub fn service_options(&self) -> Result<ServiceOptions, String> {
-        let data_dir = self
-            .data_dir
-            .clone()
-            .or_else(paths::default_data_dir)
-            .ok_or("no default data directory; pass --data-dir")?;
-        let config_dir = self
-            .config_dir
-            .clone()
-            .or_else(paths::default_config_dir)
-            .ok_or("no default config directory; pass --config-dir")?;
+    /// defaults for missing directories (a seeded run: `temp`, see
+    /// [`Self::demo_dir`]).
+    pub fn service_options_in(
+        &self,
+        temp: Option<&std::path::Path>,
+    ) -> Result<ServiceOptions, String> {
+        let pick = |given: &Option<std::path::PathBuf>,
+                    sub: &str,
+                    default: fn() -> Option<std::path::PathBuf>,
+                    flag: &str| {
+            match (given, temp) {
+                (Some(dir), _) => Ok(dir.clone()),
+                (None, Some(temp)) => Ok(temp.join(sub)),
+                (None, None) => {
+                    default().ok_or_else(|| format!("no default {sub} directory; pass {flag}"))
+                }
+            }
+        };
+        let data_dir = pick(
+            &self.data_dir,
+            "data",
+            paths::default_data_dir,
+            "--data-dir",
+        )?;
+        let config_dir = pick(
+            &self.config_dir,
+            "config",
+            paths::default_config_dir,
+            "--config-dir",
+        )?;
         let mut options = ServiceOptions::new(data_dir, config_dir);
         options.locale = self.locale.clone();
         // OAuth2 sign-ins open the system browser.
         options.open_browser = true;
+        // "Open file at line" starts the user's editor, except in demo runs.
+        options.open_editor = self.seed.is_none();
         Ok(options)
     }
+
+    /// The service options without a temporary directory.
+    pub fn service_options(&self) -> Result<ServiceOptions, String> {
+        self.service_options_in(None)
+    }
+
+    /// A seeded run without `--data-dir` / `--config-dir` runs in a
+    /// temporary directory (removed on exit), never on the real profile,
+    /// like `nail serve --seed` (ADR 0021).
+    pub fn demo_dir(&self) -> Result<Option<tempfile::TempDir>, String> {
+        if self.seed.is_none() || (self.data_dir.is_some() && self.config_dir.is_some()) {
+            return Ok(None);
+        }
+        tempfile::Builder::new()
+            .prefix("nail-app-demo-")
+            .tempdir()
+            .map(Some)
+            .map_err(|e| format!("cannot create a temporary directory for the demo: {e}"))
+    }
+}
+
+/// Things the app keeps alive for its lifetime: the MCP server and the
+/// temporary directory of a demo run.
+pub struct Running {
+    /// The MCP server, if it started.
+    pub mcp: Option<nail_core::McpRunning>,
+    /// The temporary directory of a seeded run.
+    pub temp: Option<tempfile::TempDir>,
 }
 
 /// Answers one request. Config errors found before the UI asked for its
@@ -116,13 +164,44 @@ async fn forward_events(
     }
 }
 
-/// Opens the service described by `args` (seeding demo data if asked).
-pub fn open_service(args: &AppArgs) -> Result<Service, Box<dyn std::error::Error>> {
-    let service = Service::open(args.service_options()?)?;
+/// Opens the service described by `args` (seeding demo data if asked),
+/// with the data and config directories under `temp` when given.
+pub fn open_service_in(
+    args: &AppArgs,
+    temp: Option<&std::path::Path>,
+) -> Result<Service, Box<dyn std::error::Error>> {
+    let service = Service::open(args.service_options_in(temp)?)?;
     if args.seed.as_deref() == Some("demo") {
         nail_core::demo::seed_demo(service.store(), service.blobs())?;
+        service.rebuild_search_index()?;
     }
     Ok(service)
+}
+
+/// Opens the service described by `args` (seeding demo data if asked).
+pub fn open_service(args: &AppArgs) -> Result<Service, Box<dyn std::error::Error>> {
+    open_service_in(args, None)
+}
+
+/// Starts the MCP server (ADR 0025) for the service; agents find it through
+/// `<data-dir>/mcp-endpoint.json`. A failure is logged, not fatal.
+pub async fn start_mcp(
+    service: &Service,
+    data_dir: &std::path::Path,
+) -> Option<nail_core::McpRunning> {
+    match service
+        .start_mcp_server(0, Some(nail_core::mcp_endpoint_path(data_dir)))
+        .await
+    {
+        Ok(running) => {
+            tracing::info!(url = %running.url(), "MCP server running");
+            Some(running)
+        }
+        Err(err) => {
+            tracing::warn!(%err, "cannot start the MCP server");
+            None
+        }
+    }
 }
 
 /// Builds and runs the Tauri application.
@@ -148,7 +227,31 @@ pub fn run() {
             // Opened within Tauri's runtime, so the account engines, the
             // outbox and the index upkeep start on it (and the accounts.kdl
             // watcher can apply changes).
-            let service = tauri::async_runtime::block_on(async { open_service(&args) })?;
+            let temp = args.demo_dir()?;
+            let service = tauri::async_runtime::block_on(async {
+                open_service_in(&args, temp.as_ref().map(tempfile::TempDir::path))
+            })?;
+            let data_dir = args
+                .service_options_in(temp.as_ref().map(tempfile::TempDir::path))?
+                .data_dir;
+            let mcp = tauri::async_runtime::block_on(start_mcp(&service, &data_dir));
+            // The window is created here (not from the config) so that a
+            // seeded run keeps its WebView2 profile in the temporary
+            // directory too, apart from the real one.
+            let config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .ok_or("tauri.conf.json has no main window")?;
+            let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+            if let Some(temp) = &temp {
+                window = window.data_directory(temp.path().join("webview"));
+            }
+            window.build()?;
+            app.manage(Running { mcp, temp });
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(forward_events(
                 service.clone(),
@@ -192,10 +295,50 @@ mod tests {
         assert_eq!(options.config_dir, std::path::PathBuf::from("c"));
         assert_eq!(options.locale.as_deref(), Some("de"));
         assert!(options.watch_config);
+        assert!(!options.open_editor, "demo runs never open an editor");
         assert!(AppArgs::try_parse_from(["nail-app", "--seed", "x"]).is_err());
+        // Both directories given: no temporary directory.
+        assert!(args.demo_dir().unwrap().is_none());
 
         let defaults = AppArgs::try_parse_from(["nail-app"]).unwrap();
         assert_eq!(defaults.seed, None);
+        assert!(defaults.demo_dir().unwrap().is_none());
+    }
+
+    /// M1a follow-up: `--seed demo` alone never touches the real profile.
+    #[test]
+    fn a_seeded_run_defaults_to_temporary_directories() {
+        let args = AppArgs::try_parse_from(["nail-app", "--seed", "demo"]).unwrap();
+        let temp = args.demo_dir().unwrap().expect("a temporary directory");
+        let options = args.service_options_in(Some(temp.path())).unwrap();
+        assert!(options.data_dir.starts_with(temp.path()));
+        assert!(options.config_dir.starts_with(temp.path()));
+        let path = temp.path().to_owned();
+        drop(temp);
+        assert!(!path.exists(), "removed on exit");
+    }
+
+    #[tokio::test]
+    async fn the_mcp_server_starts_with_the_app() {
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let args = AppArgs {
+            data_dir: Some(data.path().into()),
+            config_dir: Some(config.path().into()),
+            seed: None,
+            locale: None,
+        };
+        let service = open_service(&args).unwrap();
+        let running = start_mcp(&service, data.path()).await.unwrap();
+        assert!(nail_core::mcp_endpoint_path(data.path()).exists());
+        let (response, _) = call(&service, Request::GetMcpServerInfo).await;
+        let Response::McpServer { info } = response else {
+            panic!("expected server info")
+        };
+        assert!(info.running);
+        assert_eq!(info.url.as_deref(), Some(running.url().as_str()));
+        running.shutdown().await;
+        service.shutdown().await;
     }
 
     /// Regression: a lagging forwarder only logged the loss, so the UI
@@ -237,9 +380,14 @@ mod tests {
             "{:?}",
             seen[0]
         );
-        assert_eq!(seen[1], Event::AccountsChanged);
+        // Then every file's error list (empty: all valid).
+        let seen: Vec<&Event> = seen
+            .iter()
+            .filter(|e| !matches!(e, Event::ConfigErrors { errors, .. } if errors.is_empty()))
+            .collect();
+        assert_eq!(*seen[1], Event::AccountsChanged);
         assert!(
-            matches!(&seen[2], Event::MailChanged { folder_ids } if !folder_ids.is_empty()),
+            matches!(seen[2], Event::MailChanged { folder_ids } if !folder_ids.is_empty()),
             "{:?}",
             seen[2]
         );
@@ -268,9 +416,14 @@ mod tests {
 
         let (response, events) = call(&service, Request::GetConfig).await;
         assert!(matches!(response, Response::Config { .. }));
+        // The M1a first error, then every error per file (M1b).
         assert!(
-            matches!(events.as_slice(), [Event::ConfigError { file, .. }] if file == "theme.kdl")
+            matches!(events.first(), Some(Event::ConfigError { file, .. }) if file == "theme.kdl"),
+            "{events:?}"
         );
+        assert!(events.iter().any(
+            |e| matches!(e, Event::ConfigErrors { file, errors } if file == "theme.kdl" && !errors.is_empty())
+        ));
 
         // Errors are responses, not rejected promises.
         let (response, _) = call(

@@ -32,6 +32,10 @@ pub const EVENT_CAPACITY: usize = 256;
 /// Largest page [`Request::ListMessages`] returns; larger limits are capped.
 pub const MAX_PAGE_SIZE: u32 = 1000;
 
+/// Days the MCP activity log and the rule-run history are kept; older
+/// entries are removed when the engines start.
+pub const HISTORY_RETENTION_DAYS: i64 = 90;
+
 /// Timing of the background engines (reconnects, send retries). The
 /// defaults suit real servers; tests and demos shorten them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +54,11 @@ pub struct EngineTiming {
     /// resets the reconnect backoff when it fails; one that fails sooner
     /// keeps the backoff growing.
     pub healthy_after: Duration,
+    /// Delay between saving a draft and uploading its copy to the server's
+    /// Drafts folder; a later save within it replaces the upload.
+    pub draft_upload: Duration,
+    /// How often scheduled rules (`schedule`, `older-than`) are checked.
+    pub rule_tick: Duration,
 }
 
 impl Default for EngineTiming {
@@ -60,6 +69,8 @@ impl Default for EngineTiming {
             send_retry: Duration::from_secs(60),
             poll_override: None,
             healthy_after: Duration::from_secs(60),
+            draft_upload: Duration::from_secs(5),
+            rule_tick: Duration::from_secs(60),
         }
     }
 }
@@ -73,6 +84,8 @@ impl EngineTiming {
             send_retry: Duration::from_secs(1),
             poll_override: None,
             healthy_after: Duration::from_secs(5),
+            draft_upload: Duration::from_millis(300),
+            rule_tick: Duration::from_secs(1),
         }
     }
 }
@@ -99,6 +112,9 @@ pub struct ServiceOptions {
     pub discoverer: Option<Arc<Discoverer>>,
     /// Open the system browser for OAuth2 sign-ins.
     pub open_browser: bool,
+    /// Allow `OpenConfigFile` to start a text editor on this machine (off
+    /// for seeded demo and test runs, which must never open windows).
+    pub open_editor: bool,
     /// Engine timing.
     pub timing: EngineTiming,
 }
@@ -113,6 +129,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("start_engines", &self.start_engines)
             .field("keychain", &self.secrets.is_none())
             .field("open_browser", &self.open_browser)
+            .field("open_editor", &self.open_editor)
             .field("timing", &self.timing)
             .finish_non_exhaustive()
     }
@@ -131,6 +148,7 @@ impl ServiceOptions {
             secrets: None,
             discoverer: None,
             open_browser: false,
+            open_editor: false,
             timing: EngineTiming::default(),
         }
     }
@@ -160,11 +178,22 @@ pub(crate) struct Inner {
     pub(crate) outbox_wake: Notify,
     pub(crate) discoverer: Mutex<Option<Arc<Discoverer>>>,
     pub(crate) open_browser: bool,
+    pub(crate) open_editor: bool,
     pub(crate) timing: EngineTiming,
     /// Whether [`Service::start`] ran (engines follow account changes).
     pub(crate) started: std::sync::atomic::AtomicBool,
     /// The last UI context a client reported (M1b, for MCP).
     pub(crate) ui_context: Mutex<nail_api::UiContext>,
+    /// Wakes MCP subscribers of `nail://ui/context` after a report.
+    pub(crate) ui_context_changed: tokio::sync::watch::Sender<u64>,
+    /// `rules.kdl` (ADR 0024).
+    pub(crate) rules: crate::rules::RulesManager,
+    /// Wakes the rules task (new mail waiting in the rule inbox).
+    pub(crate) rules_wake: Notify,
+    /// Pending uploads of drafts to the server's Drafts folder.
+    pub(crate) draft_uploads: crate::composer::DraftUploads,
+    /// The running MCP server's address, once started (ADR 0025).
+    pub(crate) mcp_info: Mutex<Option<nail_api::mcp::McpServerInfo>>,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -257,6 +286,7 @@ impl Service {
             tracing::warn!(%err, "invalid configuration file; using the default");
         }
         let accounts = AccountManager::load(config.dir());
+        let rules = crate::rules::RulesManager::load(config.dir());
         let secrets: Arc<dyn SecretStore> = match &options.secrets {
             Some(secrets) => Arc::clone(secrets),
             None => Arc::new(nail_auth::KeychainSecretStore::new()),
@@ -286,9 +316,15 @@ impl Service {
                 outbox_wake: Notify::new(),
                 discoverer: Mutex::new(options.discoverer.clone()),
                 open_browser: options.open_browser,
+                open_editor: options.open_editor,
                 timing: options.timing,
                 started: std::sync::atomic::AtomicBool::new(false),
                 ui_context: Mutex::new(nail_api::UiContext::default()),
+                ui_context_changed: tokio::sync::watch::channel(0).0,
+                rules,
+                rules_wake: Notify::new(),
+                draft_uploads: crate::composer::DraftUploads::default(),
+                mcp_info: Mutex::new(None),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -312,6 +348,25 @@ impl Service {
         background.push(tokio::spawn(crate::outbox::run_sender(self.clone())));
         background.push(tokio::spawn(crate::search::run_committer(self.clone())));
         background.push(tokio::spawn(crate::search::run_maintenance(self.clone())));
+        background.push(tokio::spawn(crate::rules::run_rules(self.clone())));
+        let service = self.clone();
+        background.push(tokio::spawn(async move {
+            if let Err(err) = service.purge_history(crate::engine::unix_now()).await {
+                tracing::warn!(%err, "cannot purge old history");
+            }
+        }));
+    }
+
+    /// Removes MCP audit entries and finished rule runs older than
+    /// [`HISTORY_RETENTION_DAYS`] before `now` (Unix seconds). Returns how
+    /// many of each were removed.
+    pub async fn purge_history(&self, now: i64) -> Result<(usize, usize)> {
+        let before = now - HISTORY_RETENTION_DAYS * 86_400;
+        Ok(self
+            .inner
+            .store
+            .call(move |s| Ok((s.purge_mcp_audit(before)?, s.purge_rule_runs(before)?)))
+            .await?)
     }
 
     /// Stops the engines and background tasks (the service stays usable
@@ -350,9 +405,11 @@ impl Service {
         let _ = self.inner.events.send(event);
     }
 
-    /// [`Event::ConfigError`]s for configuration files that are currently
-    /// invalid (`accounts.kdl` included). Transports send these to a client
-    /// when it connects, so errors found at start-up are not lost.
+    /// Error events for the configuration files: the M1a
+    /// [`Event::ConfigError`] (first error) of every invalid file, then one
+    /// [`Event::ConfigErrors`] per file (theme, layout, accounts, rules)
+    /// with all of its errors (empty when valid). Transports send these to
+    /// a client when it connects, so errors found at start-up are not lost.
     pub fn config_error_events(&self) -> Vec<Event> {
         let mut events: Vec<Event> = self
             .inner
@@ -364,6 +421,18 @@ impl Service {
         if let Some(err) = self.inner.accounts.error() {
             events.push(err.to_event());
         }
+        if let Some(err) = self.inner.rules.errors().first() {
+            events.push(err.to_event());
+        }
+        events.extend(self.inner.config.error_events());
+        events.push(nail_config::issues_event(
+            crate::accounts::ACCOUNTS_FILE,
+            &self.inner.accounts.all_errors(),
+        ));
+        events.push(nail_config::issues_event(
+            nail_config::rules::RULES_FILE,
+            &self.inner.rules.errors(),
+        ));
         events
     }
 
@@ -703,11 +772,11 @@ impl Service {
                     draft: Box::new(draft),
                 }
             }
+            Request::ListDrafts => Response::Drafts {
+                drafts: self.list_drafts().await?,
+            },
             Request::DeleteDraft { draft_id } => {
-                let id = draft_id.clone();
-                if !self.inner.store.call(move |s| s.delete_draft(&id)).await? {
-                    return Err(ApiError::not_found(format!("draft {draft_id}")).into());
-                }
+                self.delete_draft(&draft_id).await?;
                 Response::Done
             }
             Request::SendDraft {

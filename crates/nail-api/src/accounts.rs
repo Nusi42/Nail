@@ -630,6 +630,36 @@ pub struct Identity {
     /// plain text (M1a) / the app default.
     #[serde(default)]
     pub composer_mode: Option<ComposerMode>,
+    /// Where replies put the quoted original relative to the new text;
+    /// `null` = below it (bottom posting).
+    #[serde(default)]
+    pub posting: Option<QuotePosting>,
+    /// Stylesheet and code-highlighting theme of HTML / Markdown mail from
+    /// this identity; `null` = the built-in defaults.
+    #[serde(default)]
+    pub mail_style: Option<MailStyleConfig>,
+}
+
+/// Top or bottom posting in replies (`posting=` of an identity).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum QuotePosting {
+    /// New text above the quote.
+    Top,
+    /// New text below the quote (the default).
+    #[default]
+    Bottom,
+}
+
+/// An identity's mail style (`mail-style` in `accounts.kdl`).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct MailStyleConfig {
+    /// CSS inlined into outgoing HTML; `null` = the built-in stylesheet.
+    pub css: Option<String>,
+    /// Code-highlighting theme for Markdown code blocks (a syntect theme
+    /// name, e.g. `InspiredGitHub`); `null` = the default.
+    pub code_theme: Option<String>,
 }
 
 /// A signature. M1a uses only `text`; the HTML and Markdown variants are
@@ -1187,6 +1217,8 @@ mod tests {
             bcc: vec![],
             signature: None,
             composer_mode: None,
+            posting: None,
+            mail_style: None,
         });
         let config = AccountsConfig {
             accounts: vec![account],

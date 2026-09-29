@@ -32,6 +32,8 @@ fn identity() -> Identity {
             markdown: None,
         }),
         composer_mode: None,
+        posting: None,
+        mail_style: None,
     }
 }
 

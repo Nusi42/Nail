@@ -29,6 +29,8 @@ export function newIdentity(accountId: string): Identity {
     bcc: [],
     signature: null,
     composer_mode: null,
+    posting: null,
+    mail_style: null,
   };
 }
 

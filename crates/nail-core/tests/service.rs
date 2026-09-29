@@ -112,7 +112,15 @@ async fn get_config_returns_defaults_and_locale() {
         }
         other => panic!("unexpected {other:?}"),
     }
-    assert!(f.service.config_error_events().is_empty());
+    // Every file valid: no M1a error, and an empty list per file (M1b).
+    let events = f.service.config_error_events();
+    assert_eq!(events.len(), 4, "{events:?}");
+    for event in events {
+        assert!(
+            matches!(&event, Event::ConfigErrors { errors, .. } if errors.is_empty()),
+            "{event:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -331,8 +339,16 @@ async fn invalid_config_at_start_falls_back_and_is_reported() {
     let service = Service::open(options).unwrap();
 
     let errors = service.config_error_events();
-    assert_eq!(errors.len(), 1);
-    assert!(matches!(&errors[0], Event::ConfigError { file, .. } if file == "theme.kdl"));
+    let first: Vec<_> = errors
+        .iter()
+        .filter(|e| matches!(e, Event::ConfigError { .. }))
+        .collect();
+    assert_eq!(first.len(), 1);
+    assert!(matches!(first[0], Event::ConfigError { file, .. } if file == "theme.kdl"));
+    assert!(errors.iter().any(|e| matches!(
+        e,
+        Event::ConfigErrors { file, errors } if file == "theme.kdl" && !errors.is_empty()
+    )));
     let Response::Config { theme, .. } = service.handle(Request::GetConfig).await else {
         panic!("expected config");
     };
@@ -565,20 +581,94 @@ async fn ui_context_and_saved_searches() {
 }
 
 #[tokio::test]
-async fn m1b_package_requests_are_unsupported_until_they_land() {
+async fn m1b_package_requests_are_answered_by_the_core() {
     let fx = open(false, None);
-    for request in [
-        Request::RenderPreview {
-            markdown: "# x".into(),
-            identity_id: None,
-        },
-        Request::ListRules,
-        Request::ListMcpClients,
-        Request::ListConfigBackups {
-            file: nail_api::ConfigFile::Theme,
-        },
+    for (request, expected) in [
+        (
+            Request::RenderPreview {
+                markdown: "# x".into(),
+                identity_id: None,
+            },
+            "PreviewRendered",
+        ),
+        (Request::ListRules, "Rules"),
+        (Request::ListMcpClients, "McpClients"),
+        (
+            Request::ListConfigBackups {
+                file: nail_api::ConfigFile::Theme,
+            },
+            "ConfigBackups",
+        ),
     ] {
-        let response = fx.service.handle(request).await;
-        assert_eq!(error_code(response), ErrorCode::Unsupported);
+        let response = serde_json::to_value(fx.service.handle(request).await).unwrap();
+        assert_eq!(response["type"], expected, "{response}");
     }
+}
+
+/// Regression (M1b): the demo seed goes straight into the store, so `nail
+/// serve --seed demo` found nothing until the index was rebuilt.
+#[tokio::test]
+async fn a_seeded_store_is_searchable_after_a_rebuild() {
+    let fx = open(false, None);
+    let search = |text: &str| Request::Search {
+        query: nail_api::SearchQuery {
+            text: text.into(),
+            account_id: None,
+            folder_id: None,
+            offset: 0,
+            limit: 10,
+            sort: nail_api::search::SearchSort::Date,
+        },
+    };
+    let total = |response: Response| match response {
+        Response::SearchResults { total, .. } => total,
+        other => panic!("unexpected {other:?}"),
+    };
+    assert_eq!(total(fx.service.handle(search("welcome")).await), 0);
+    assert!(fx.service.rebuild_search_index().unwrap() > 0);
+    assert!(total(fx.service.handle(search("welcome")).await) >= 1);
+}
+
+#[tokio::test]
+async fn old_mcp_audit_entries_and_rule_runs_are_purged() {
+    use nail_api::mcp::{McpCallKind, McpOutcome};
+    // Without engines: the purge at start must not race the test.
+    let data_dir = tempfile::tempdir().unwrap();
+    let config_dir = tempfile::tempdir().unwrap();
+    let mut options = ServiceOptions::new(data_dir.path(), config_dir.path());
+    options.watch_config = false;
+    options.start_engines = false;
+    let service = Service::open(options).unwrap();
+    let day = 86_400;
+    // Real time: the service purges at start as well.
+    let now = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    )
+    .unwrap();
+    let store = service.store();
+    for at in [now - 100 * day, now - day] {
+        store
+            .append_mcp_audit(&nail_store::McpAuditRecord {
+                client_id: None,
+                client_name: "agent".into(),
+                at,
+                kind: McpCallKind::Connect,
+                name: "/mcp".into(),
+                outcome: McpOutcome::Denied,
+                detail: None,
+            })
+            .unwrap();
+        let run = store
+            .start_rule_run(&"r".into(), "R", nail_api::rules::RuleRunCause::Manual, at)
+            .unwrap();
+        store
+            .finish_rule_run(&run, nail_api::rules::RuleRunState::Done, 0, None, at)
+            .unwrap();
+    }
+    assert_eq!(service.purge_history(now).await.unwrap(), (1, 1));
+    assert_eq!(service.purge_history(now).await.unwrap(), (0, 0));
+    assert_eq!(store.list_rule_runs(None, 10).unwrap().len(), 1);
 }

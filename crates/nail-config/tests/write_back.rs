@@ -93,7 +93,7 @@ fn a_window_from_the_defaults_is_copied_before_it_changes() {
     let out = apply(
         Some("layout \"Mine\" extends=\"default\" {\n    // nothing yet\n}\n"),
         &[LayoutPatch::SplitSizes {
-            node: at("main", 0, &[1]),
+            node: at("main", 0, &[2]),
             sizes: vec!["200px".into(), "1fr".into(), "1fr".into()],
         }],
     );
@@ -105,10 +105,10 @@ fn a_window_from_the_defaults_is_copied_before_it_changes() {
     let json = |l: &nail_api::ResolvedLayout| serde_json::to_value(&l.windows["main"]).unwrap();
     let (mut ours, theirs) = (json(&layout), json(&defaults));
     assert_eq!(
-        ours[0]["root"]["children"][1]["sizes"],
+        ours[0]["root"]["children"][2]["sizes"],
         json!(["200px", "1fr", "1fr"])
     );
-    ours[0]["root"]["children"][1]["sizes"] = theirs[0]["root"]["children"][1]["sizes"].clone();
+    ours[0]["root"]["children"][2]["sizes"] = theirs[0]["root"]["children"][2]["sizes"].clone();
     strip_sources(&mut ours);
     let mut theirs = theirs;
     strip_sources(&mut theirs);
@@ -132,12 +132,22 @@ fn the_narrow_breakpoint_is_addressed_by_index() {
         None,
         &[LayoutPatch::SplitSizes {
             node: at("main", 1, &[]),
-            sizes: vec!["auto".into(), "auto".into(), "2fr".into(), "auto".into()],
+            sizes: vec![
+                "auto".into(),
+                "auto".into(),
+                "auto".into(),
+                "2fr".into(),
+                "auto".into(),
+                "auto".into(),
+            ],
         }],
     );
     let layout = parse_layout_all(&out, "layout.kdl").unwrap();
     let root = serde_json::to_value(&layout.windows["main"][1].root).unwrap();
-    assert_eq!(root["sizes"], json!(["auto", "auto", "2fr", "auto"]));
+    assert_eq!(
+        root["sizes"],
+        json!(["auto", "auto", "auto", "2fr", "auto", "auto"])
+    );
     golden("new_file_narrow_stack", &out);
 }
 

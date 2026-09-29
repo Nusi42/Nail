@@ -77,6 +77,23 @@ impl AccountManager {
         self.state().error.clone()
     }
 
+    /// Every error of the file on disk (empty when it is valid), for the
+    /// `ConfigErrors` event: the reader collects all of them, not only the
+    /// first.
+    pub(crate) fn all_errors(&self) -> Vec<ConfigError> {
+        let Some(first) = self.error() else {
+            return Vec::new();
+        };
+        match std::fs::read_to_string(self.dir.join(ACCOUNTS_FILE)) {
+            Ok(text) => match nail_config::parse_accounts_all(&text, ACCOUNTS_FILE) {
+                Err(errors) if !errors.is_empty() => errors,
+                // Valid again since the last reload; the watcher reports it.
+                _ => vec![first],
+            },
+            Err(_) => vec![first],
+        }
+    }
+
     /// Applies `edit` to a copy of the document, saves it and makes it
     /// current. Nothing changes when the edit or the save fails; an edit
     /// that makes the file invalid fails with `invalid_request`.
@@ -183,6 +200,7 @@ mod tests {
         let manager = AccountManager::load(dir.path());
         assert_eq!(manager.config().accounts.len(), 1);
         assert!(manager.error().is_none());
+        assert!(manager.all_errors().is_empty());
 
         let (_, config) = manager
             .edit(|doc| {
@@ -219,6 +237,7 @@ mod tests {
 
         std::fs::write(&path, "account").unwrap();
         assert!(matches!(manager.reload(), Reload::Invalid(_)));
+        assert!(!manager.all_errors().is_empty());
         assert_eq!(manager.reload(), Reload::Unchanged, "reported once");
         assert_eq!(manager.config().accounts.len(), 1, "last valid kept");
     }

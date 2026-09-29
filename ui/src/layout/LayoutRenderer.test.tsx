@@ -45,7 +45,9 @@ describe("layout engine", () => {
     expect(geometryOf(panes[0] as Element)).toContain("min-width: 160px");
     expect(geometryOf(panes[0] as Element)).toContain("max-width: 480px");
     expect(geometryOf(panes[2] as Element)).toContain("flex: 1.4 1 0px");
-    expect(geometryOf(root as Element)).toContain("grid-template-rows: auto minmax(0, 1fr) auto");
+    expect(geometryOf(root as Element)).toContain(
+      "grid-template-rows: auto auto minmax(0, 1fr) auto auto",
+    );
     // Widgets from the registry.
     for (const kind of [
       "account-switcher",

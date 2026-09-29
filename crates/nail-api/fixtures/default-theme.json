@@ -58,7 +58,8 @@
       "icon": "16px",
       "touch-target": "48px",
       "toolbar": "40px",
-      "divider": "1px"
+      "divider": "1px",
+      "divider-grab": "5px"
     },
     "radius": {
       "sm": "4px",
@@ -136,58 +137,122 @@
   "parts": [
     {
       "selector": "app",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-family": "var(--nail-font-ui)",
         "font-size": "var(--nail-font-size-md)",
         "line-height": "var(--nail-line-height-tight)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "split.divider",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
-        "background-color": "var(--nail-color-border)",
-        "flex-basis": "var(--nail-size-divider)",
+        "flex-basis": "var(--nail-size-divider-grab)",
+        "border-top": "var(--nail-size-divider) solid var(--nail-color-border)",
+        "background-color": "transparent",
         "transition": "background-color var(--nail-motion-fast) var(--nail-motion-ease)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "split.divider",
-      "states": ["hover"],
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "split",
+          "states": [],
+          "conditions": [
+            {
+              "key": "orientation",
+              "value": "horizontal"
+            }
+          ]
+        }
+      ],
+      "declarations": {
+        "border-top": "none",
+        "border-left": "var(--nail-size-divider) solid var(--nail-color-border)"
+      },
+      "source": null
+    },
+    {
+      "selector": "split.divider",
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-accent)"
-      }
+      },
+      "source": null
+    },
+    {
+      "selector": "split.divider",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-focus-ring)"
+      },
+      "source": null
     },
     {
       "selector": "tabs.tab-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-xs)",
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "tabs.tab",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-md)",
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg-muted)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "tabs.tab",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
@@ -197,10 +262,14 @@
         "padding": "0 var(--nail-space-sm)",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "inline-flex",
         "align-items": "center",
@@ -211,54 +280,85 @@
         "white-space": "nowrap",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.button",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.button",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)",
         "outline-offset": "1px"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.button",
-      "states": ["disabled"],
+      "states": [
+        "disabled"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "opacity": "var(--nail-opacity-disabled)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.button.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.spacer",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1"
-      }
+      },
+      "source": null
     },
     {
       "selector": "toolbar.separator",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "align-self": "stretch",
         "width": "var(--nail-size-divider)",
         "margin": "var(--nail-space-sm) var(--nail-space-xs)",
         "background-color": "var(--nail-color-border)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "status-bar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-md)",
@@ -267,18 +367,26 @@
         "color": "var(--nail-color-fg-muted)",
         "border-top": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-sm)",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
@@ -290,26 +398,39 @@
         "text-align": "left",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-weight": "var(--nail-font-weight-medium)",
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs)",
         "background-color": "var(--nail-color-bg-subtle)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
@@ -317,89 +438,133 @@
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
         "border-radius": "var(--nail-radius-sm)",
         "cursor": "default"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item",
+      "states": [],
       "conditions": [
         {
           "key": "role",
           "value": "inbox"
         }
       ],
+      "ancestors": [],
       "declarations": {
         "font-weight": "var(--nail-font-weight-medium)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)",
         "outline-offset": "-2px"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1",
         "overflow": "hidden",
         "text-overflow": "ellipsis",
         "white-space": "nowrap"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item.unread-count",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "font-weight": "var(--nail-font-weight-bold)",
         "color": "var(--nail-color-unread)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-tree.item.unread-count",
+      "states": [],
+      "conditions": [],
       "ancestors": [
         {
           "selector": "folder-tree.item",
-          "states": ["selected"]
+          "states": [
+            "selected"
+          ],
+          "conditions": []
         }
       ],
       "declarations": {
         "color": "inherit"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "overflow-y": "auto",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -408,215 +573,328 @@
         "border-bottom": "var(--nail-border-thin)",
         "border-left": "3px solid transparent",
         "cursor": "default"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)",
         "outline-offset": "-2px"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row",
-      "states": ["unread"],
+      "states": [
+        "unread"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "border-left-color": "var(--nail-color-unread)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row",
-      "states": ["flagged"],
+      "states": [
+        "flagged"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "border-left-color": "var(--nail-color-flagged)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.line",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)",
         "overflow": "hidden",
         "white-space": "nowrap",
         "text-overflow": "ellipsis"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.subject",
+      "states": [],
+      "conditions": [],
       "ancestors": [
         {
           "selector": "message-list.row",
-          "states": ["unread"]
+          "states": [
+            "unread"
+          ],
+          "conditions": []
         }
       ],
       "declarations": {
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.from",
+      "states": [],
+      "conditions": [],
       "ancestors": [
         {
           "selector": "message-list.row",
-          "states": ["unread"]
+          "states": [
+            "unread"
+          ],
+          "conditions": []
         }
       ],
       "declarations": {
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "margin-left": "auto",
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.preview",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.date",
+      "states": [],
+      "conditions": [],
       "ancestors": [
         {
           "selector": "message-list.row",
-          "states": ["selected"]
+          "states": [
+            "selected"
+          ],
+          "conditions": []
         }
       ],
       "declarations": {
         "color": "inherit"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.row.preview",
+      "states": [],
+      "conditions": [],
       "ancestors": [
         {
           "selector": "message-list.row",
-          "states": ["selected"]
+          "states": [
+            "selected"
+          ],
+          "conditions": []
         }
       ],
       "declarations": {
         "color": "inherit"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xl)",
         "text-align": "center",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "overflow": "hidden",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-xxs)",
         "padding": "var(--nail-space-md) var(--nail-space-lg)",
         "border-bottom": "var(--nail-border-thin)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.header.subject",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-xl)",
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.header.field",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.remote-content-banner",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-lg)",
         "font-size": "var(--nail-font-size-sm)",
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.body",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1",
         "border": "none",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.attachments",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
         "gap": "var(--nail-space-sm)",
         "padding": "var(--nail-space-sm) var(--nail-space-lg)",
         "border-top": "var(--nail-border-thin)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.attachment",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)",
         "font-size": "var(--nail-font-size-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-view.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "margin": "auto",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "spacer",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -624,10 +902,14 @@
         "padding": "var(--nail-space-sm)",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.field",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
@@ -636,25 +918,38 @@
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.field",
-      "states": ["focus-within"],
+      "states": [
+        "focus-within"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1",
         "min-width": "0",
@@ -663,10 +958,14 @@
         "outline": "none",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.clear",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "inline-flex",
         "padding": "var(--nail-space-xxs)",
@@ -674,50 +973,75 @@
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg-muted)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.clear",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.clear.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-xxs)",
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.error.query",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-family": "var(--nail-font-mono)",
         "color": "var(--nail-color-fg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.error.mark",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "0 1px",
         "border-bottom": "2px solid var(--nail-color-danger)",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.hints",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -726,10 +1050,14 @@
         "background-color": "var(--nail-color-bg)",
         "box-shadow": "var(--nail-shadow-raised)",
         "overflow": "hidden"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.hint.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)",
@@ -739,105 +1067,169 @@
         "text-align": "left",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.hint.button",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.hint.syntax",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-family": "var(--nail-font-mono)",
         "color": "var(--nail-color-accent)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.hint.description",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "search-bar.hint",
-      "states": ["info"],
+      "states": [
+        "info"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "message-list.search-summary",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-md)",
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "8px",
         "height": "8px",
         "border-radius": "50%",
         "background-color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item.status",
-      "states": ["online"],
+      "states": [
+        "online"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-success)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item.status",
-      "states": ["connecting"],
+      "states": [
+        "connecting"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-warning)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-switcher.item.status",
-      "states": ["auth-error"],
+      "states": [
+        "auth-error"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "status-bar.item",
-      "states": ["auth-error"],
+      "states": [
+        "auth-error"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "status-bar.item",
-      "states": ["error"],
+      "states": [
+        "error"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "status-bar.item",
-      "states": ["failed"],
+      "states": [
+        "failed"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "status-bar.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "margin-left": "var(--nail-space-sm)",
         "padding": "0 var(--nail-space-sm)",
@@ -845,26 +1237,39 @@
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "status-bar.button",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "max-height": "40vh",
         "overflow-y": "auto",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)",
@@ -872,41 +1277,62 @@
         "padding": "var(--nail-space-xs) var(--nail-space-lg)",
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.subject",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1",
         "font-weight": "var(--nail-font-weight-medium)",
         "color": "var(--nail-color-fg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "border-top": "var(--nail-border-thin)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
         "gap": "var(--nail-space-sm)",
         "padding-right": "var(--nail-space-lg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.toggle",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-grow": "1",
@@ -919,44 +1345,67 @@
         "background-color": "transparent",
         "white-space": "nowrap",
         "overflow": "hidden"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.toggle",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)",
         "outline-offset": "-2px"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.from",
+      "states": [],
+      "conditions": [],
       "ancestors": [
         {
           "selector": "thread-view.item",
-          "states": ["unread"]
+          "states": [
+            "unread"
+          ],
+          "conditions": []
         }
       ],
       "declarations": {
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.preview",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "overflow": "hidden",
         "text-overflow": "ellipsis",
         "font-size": "var(--nail-font-size-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.open",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "0 var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
@@ -964,53 +1413,82 @@
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.item.open",
-      "states": ["disabled"],
+      "states": [
+        "disabled"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "opacity": "var(--nail-opacity-disabled)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-lg) var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.body",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-family": "var(--nail-font-reader)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.quote",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding-left": "var(--nail-space-sm)",
         "border-left": "3px solid var(--nail-color-quote-1)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "thread-view.quote-toggle",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-accent)",
         "cursor": "pointer"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window-layer",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xl)",
         "background-color": "var(--nail-color-scrim)",
         "z-index": "100"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "min(960px, 100%)",
         "height": "min(760px, 100%)",
@@ -1019,63 +1497,84 @@
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)",
         "box-shadow": "var(--nail-shadow-overlay)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window",
+      "states": [],
       "conditions": [
         {
           "key": "window",
           "value": "move"
         }
       ],
+      "ancestors": [],
       "declarations": {
         "width": "min(420px, 100%)",
         "height": "min(560px, 100%)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window",
+      "states": [],
       "conditions": [
         {
           "key": "window",
           "value": "account-setup"
         }
       ],
+      "ancestors": [],
       "declarations": {
         "width": "min(640px, 100%)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window",
+      "states": [],
       "conditions": [
         {
           "key": "window",
           "value": "outbox"
         }
       ],
+      "ancestors": [],
       "declarations": {
         "width": "min(720px, 100%)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "gap": "var(--nail-space-sm)",
         "padding": "var(--nail-space-sm) var(--nail-space-lg)",
         "border-bottom": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-lg)",
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window.close",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "inline-flex",
         "padding": "var(--nail-space-xs)",
@@ -1083,31 +1582,49 @@
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window.close",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window.close",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "window.close.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.section",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1116,59 +1633,88 @@
         "padding": "var(--nail-space-md)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.section.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "0 var(--nail-space-xs)",
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.field",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-xxs)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.input",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.select",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.textarea",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "min-height": "96px",
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
@@ -1177,25 +1723,37 @@
         "font-family": "var(--nail-font-mono)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-xs)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.check",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "inline-flex",
         "align-items": "center",
@@ -1206,84 +1764,122 @@
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg-subtle)",
         "cursor": "default"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)",
         "outline-offset": "1px"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
-      "states": ["disabled"],
+      "states": [
+        "disabled"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "opacity": "var(--nail-opacity-disabled)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
+      "states": [],
       "conditions": [
         {
           "key": "variant",
           "value": "primary"
         }
       ],
+      "ancestors": [],
       "declarations": {
         "border-color": "var(--nail-color-accent)",
         "color": "var(--nail-color-accent-fg)",
         "background-color": "var(--nail-color-accent)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
+      "states": [],
       "conditions": [
         {
           "key": "variant",
           "value": "danger"
         }
       ],
+      "ancestors": [],
       "declarations": {
         "border-color": "var(--nail-color-danger)",
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "form.button.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-md)",
         "padding": "var(--nail-space-lg)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.steps",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-md)",
@@ -1291,26 +1887,39 @@
         "padding": "0",
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.step",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-weight": "var(--nail-font-weight-bold)",
         "color": "var(--nail-color-fg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.form",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-md)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.candidates",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1319,65 +1928,97 @@
         "padding": "var(--nail-space-md)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.candidate",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
         "align-items": "center",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.candidate.servers",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.candidate.warning",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.warning",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-sm) var(--nail-space-md)",
         "border-left": "4px solid var(--nail-color-danger)",
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "justify-content": "flex-end",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.results",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-sm)",
         "margin": "0",
         "padding": "0"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.result",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1385,61 +2026,95 @@
         "padding": "var(--nail-space-sm) var(--nail-space-md)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.result",
-      "states": ["ok"],
+      "states": [
+        "ok"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "border-left": "4px solid var(--nail-color-success)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.result",
-      "states": ["error"],
+      "states": [
+        "error"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "border-left": "4px solid var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.result.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.result.capabilities",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-xs)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.oauth",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
         "align-items": "center",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-setup.oauth.link",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-accent)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "grid",
         "grid-template-columns": "220px minmax(0, 1fr)",
         "min-height": "0",
         "overflow": "hidden"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.sidebar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1448,20 +2123,28 @@
         "border-right": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-xxs)",
         "margin": "0",
         "padding": "0"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.account",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1472,50 +2155,75 @@
         "text-align": "left",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.account",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.account.email",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.account.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-xs)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.form",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-md)",
         "padding": "var(--nail-space-lg)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.identities",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-md)",
         "margin": "0",
         "padding": "0"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.identity",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1523,41 +2231,62 @@
         "padding": "var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
         "align-items": "center",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.problem",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "account-settings.message",
-      "states": ["error"],
+      "states": [
+        "error"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "grid",
         "grid-template-columns": "220px minmax(0, 1fr)",
         "min-height": "0",
         "overflow": "hidden"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.sidebar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1566,20 +2295,28 @@
         "border-right": "var(--nail-border-thin)",
         "background-color": "var(--nail-color-bg-subtle)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-xxs)",
         "margin": "0",
         "padding": "0"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.account",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "100%",
         "padding": "var(--nail-space-xs) var(--nail-space-sm)",
@@ -1588,28 +2325,41 @@
         "text-align": "left",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.account",
-      "states": ["selected"],
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-selection-fg)",
         "background-color": "var(--nail-color-selection)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.form",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-md)",
         "padding": "var(--nail-space-lg)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.mapping",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1617,58 +2367,87 @@
         "padding": "var(--nail-space-sm)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.source",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
         "align-items": "flex-end",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.rule",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
         "align-items": "flex-end",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.problem",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "virtual-editor.message",
-      "states": ["error"],
+      "states": [
+        "error"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-sm)",
         "padding": "var(--nail-space-md) var(--nail-space-lg)",
         "min-height": "0"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.field",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "grid",
         "grid-template-columns": "80px minmax(0, 1fr)",
@@ -1676,57 +2455,86 @@
         "gap": "var(--nail-space-sm)",
         "padding-bottom": "var(--nail-space-xs)",
         "border-bottom": "var(--nail-border-thin)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.field.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.field.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs) 0",
         "border": "none",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.field.input",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.identity",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xs)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.extra-fields",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.body.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.body",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1",
         "min-height": "200px",
@@ -1737,69 +2545,678 @@
         "line-height": "var(--nail-line-height-normal)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.body",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.send-later",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.spacer",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "flex-grow": "1"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.saved",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "composer.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "margin": "auto",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.modes",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "overflow": "hidden"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.mode",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "none",
+        "color": "var(--nail-color-fg)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.mode",
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.mode",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.mode",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.option",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.address",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "relative"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.suggestions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "z-index": "10",
+        "min-width": "240px",
+        "margin": "0",
+        "padding": "var(--nail-space-xs) 0",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.suggestion",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "cursor": "pointer"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.suggestion",
+      "states": [
+        "active"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.suggestion.email",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.format",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.format.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.format.button",
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.format.button",
+      "states": [
+        "active"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.format.button",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.format.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.html",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "flex-grow": "1",
+        "min-height": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.html.editor",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "flex-grow": "1",
+        "min-height": "0",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.html.content",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "min-height": "200px",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-reader)",
+        "line-height": "var(--nail-line-height-normal)",
+        "white-space": "pre-wrap",
+        "overflow-wrap": "break-word",
+        "outline": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.html.content",
+      "states": [
+        "focus-within"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.html.source",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "min-height": "200px",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.link",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.link.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex-grow": "1",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.markdown",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "minmax(0, 1fr)",
+        "gap": "var(--nail-space-sm)",
+        "flex-grow": "1",
+        "min-height": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.markdown",
+      "states": [
+        "split"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "grid-template-columns": "minmax(0, 1fr) minmax(0, 1fr)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.markdown.source",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "min-height": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.markdown.editor",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex-grow": "1",
+        "min-height": "200px",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "overflow": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.markdown.content",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "line-height": "var(--nail-line-height-normal)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.preview",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "min-height": "200px",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.preview.frame",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex-grow": "1",
+        "border": "none",
+        "background-color": "#ffffff"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.preview.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.lossy",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.reminder",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.reminder",
+      "states": [
+        "confirm"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.attachments",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.attachments.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.attachment",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-xxs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.attachment.size",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.attachment.inline",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.file-input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.uploading",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "composer.saved",
+      "states": [
+        "failed"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
     },
     {
       "selector": "outbox",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-sm)",
         "padding": "var(--nail-space-md) var(--nail-space-lg)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
@@ -1807,68 +3224,130 @@
         "padding": "var(--nail-space-sm) var(--nail-space-md)",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-md)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item",
-      "states": ["failed"],
+      "states": [
+        "failed"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "border-left": "4px solid var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item.subject",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-weight": "var(--nail-font-weight-bold)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item.recipients",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "font-size": "var(--nail-font-size-sm)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)",
         "font-size": "var(--nail-font-size-sm)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "color": "var(--nail-color-danger)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "outbox.item.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-sm)"
-      }
+      },
+      "source": null
+    },
+    {
+      "selector": "outbox.drafts",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "margin-top": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "outbox.drafts.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-md)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
     },
     {
       "selector": "outbox.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "margin": "auto",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-picker",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "flex-direction": "column",
         "gap": "var(--nail-space-sm)",
         "padding": "var(--nail-space-md)",
         "overflow-y": "auto"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-picker.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "display": "flex",
         "align-items": "center",
@@ -1880,30 +3359,2211 @@
         "text-align": "left",
         "color": "var(--nail-color-fg)",
         "background-color": "transparent"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-picker.button",
-      "states": ["hover"],
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "background-color": "var(--nail-color-bg-raised)"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-picker.button",
-      "states": ["focus-visible"],
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "outline": "2px solid var(--nail-color-focus-ring)",
         "outline-offset": "-2px"
-      }
+      },
+      "source": null
     },
     {
       "selector": "folder-picker.button.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
       "declarations": {
         "width": "var(--nail-size-icon)",
         "height": "var(--nail-size-icon)",
         "color": "var(--nail-color-fg-muted)"
-      }
+      },
+      "source": null
+    },
+    {
+      "selector": "window",
+      "states": [],
+      "conditions": [
+        {
+          "key": "window",
+          "value": "rules"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "width": "min(1100px, 100%)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "minmax(200px, 280px) minmax(0, 1fr)",
+        "gap": "var(--nail-space-md)",
+        "height": "100%",
+        "min-height": "0",
+        "padding": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "min-height": "0",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.item",
+      "states": [],
+      "conditions": [
+        {
+          "key": "selected",
+          "value": "true"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.item",
+      "states": [],
+      "conditions": [
+        {
+          "key": "enabled",
+          "value": "false"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "opacity": "var(--nail-opacity-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.select",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex-grow": "1",
+        "padding": "var(--nail-space-xs)",
+        "border": "none",
+        "text-align": "left",
+        "color": "inherit",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.select",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.list.triggers",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.editor",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "min-height": "0",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.views",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.view",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.conditions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.group",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.group",
+      "states": [],
+      "conditions": [
+        {
+          "key": "mode",
+          "value": "not"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-left": "3px solid var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.group.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.group.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.group.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "flex-start",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.condition",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "flex-grow": "1"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.add",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.actions.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.action",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.text.source",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "min-height": "240px",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "white-space": "pre",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.text.errors",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding-left": "var(--nail-space-lg)",
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.problems",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.problems.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.problems.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding-left": "var(--nail-space-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.problem",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.notice",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.notice",
+      "states": [],
+      "conditions": [
+        {
+          "key": "kind",
+          "value": "error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.notice",
+      "states": [],
+      "conditions": [
+        {
+          "key": "kind",
+          "value": "ok"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.buttons",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.summary",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.matches",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.match",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.subject",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.from",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.test.why",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding-left": "var(--nail-space-lg)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.runs",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.runs.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.runs.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.run",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.run",
+      "states": [
+        "failed"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "rules.run",
+      "states": [
+        "undone"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.intro",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.server",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.server",
+      "states": [
+        "running"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.create",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "flex-end",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.create.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "width": "100%",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "none",
+        "border-radius": "var(--nail-radius-sm)",
+        "text-align": "left",
+        "color": "inherit",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client",
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client",
+      "states": [],
+      "conditions": [
+        {
+          "key": "access",
+          "value": "revoked"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "opacity": "var(--nail-opacity-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client.status",
+      "states": [],
+      "conditions": [
+        {
+          "key": "access",
+          "value": "no-access"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.client.used",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.detail",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.confirm",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-clients.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-md)",
+        "border": "2px solid var(--nail-color-accent)",
+        "border-radius": "var(--nail-radius-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token.warning",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token.value",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "overflow-wrap": "anywhere",
+        "user-select": "all",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token.usage",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-token.copy-failed",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.fields",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.scope",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.scope.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.folders.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "padding-left": "var(--nail-space-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.message",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.message",
+      "states": [
+        "ok"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-grants.message",
+      "states": [
+        "error"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.table",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "100%",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.head",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "text-align": "left",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.row",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border-bottom": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.outcome",
+      "states": [],
+      "conditions": [
+        {
+          "key": "outcome",
+          "value": "denied"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.outcome",
+      "states": [],
+      "conditions": [
+        {
+          "key": "outcome",
+          "value": "error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.outcome",
+      "states": [],
+      "conditions": [
+        {
+          "key": "outcome",
+          "value": "declined"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.detail",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-audit.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-context-indicator",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-context-indicator",
+      "states": [
+        "reading"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-context-indicator",
+      "states": [
+        "editing"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-context-indicator.dot",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "10px",
+        "height": "10px",
+        "border-radius": "50%",
+        "background-color": "currentColor"
+      },
+      "source": null
+    },
+    {
+      "selector": "mcp-context-indicator.dismiss",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "margin-left": "auto",
+        "padding": "var(--nail-space-xxs) var(--nail-space-sm)",
+        "border": "1px solid currentColor",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "inherit",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "fixed",
+        "right": "16px",
+        "bottom": "16px",
+        "z-index": "1000",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "max-width": "min(480px, calc(100vw - 32px))",
+        "max-height": "70vh",
+        "overflow": "auto",
+        "padding": "var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.highlight",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "fixed",
+        "z-index": "999",
+        "outline": "2px solid var(--nail-color-accent)",
+        "background-color": "rgb(46 94 170 / 0.12)",
+        "pointer-events": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.section",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.heading",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.path",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0",
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.path.item",
+      "states": [
+        "current"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.states",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "0 var(--nail-space-xs)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.condition",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.rules",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.rule",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.rule.selector",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.rule.declarations",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding-left": "var(--nail-space-lg)",
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.node",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.node.kind",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "inspector.none",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "window",
+      "states": [],
+      "conditions": [
+        {
+          "key": "window",
+          "value": "config-merge"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "width": "min(1100px, 100%)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.intro",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.files",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-md)",
+        "margin": "0",
+        "padding": "0",
+        "border": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "min-height": "160px",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.section",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.section.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.item.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.item.key",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.diff",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "minmax(0, 1fr) minmax(0, 1fr)",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.side",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "min-width": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.side",
+      "states": [
+        "mine"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border-left": "3px solid var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.side",
+      "states": [
+        "theirs"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border-left": "3px solid var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.side.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.side.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding": "var(--nail-space-xs)",
+        "font-family": "var(--nail-font-mono)",
+        "white-space": "pre",
+        "overflow-x": "auto",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.side.absent",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.choice",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)",
+        "margin": "0",
+        "padding": "0",
+        "border": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.conflicts",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.conflict",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "0 var(--nail-space-xs)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.error-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.backups",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.backup-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.backup",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "merge-dialog.upload.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors",
+      "states": [
+        "invalid"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm) var(--nail-space-md)",
+        "border-bottom": "var(--nail-border-thin)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.summary",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)",
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.file",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.file.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.item.message",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)"
+      },
+      "source": null
+    },
+    {
+      "selector": "config-errors.note",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border-top": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.entry",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex-grow": "1",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "none",
+        "border-radius": "var(--nail-radius-sm)",
+        "text-align": "left",
+        "color": "var(--nail-color-fg)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.item",
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.item",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.remove",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
+        "border": "none",
+        "color": "var(--nail-color-fg-muted)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.form",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "smart-folders.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
     }
   ],
   "icons": {
@@ -1990,6 +5650,14 @@
     "close": {
       "path": "M5.6 4.2 12 10.6l6.4-6.4 1.4 1.4-6.4 6.4 6.4 6.4-1.4 1.4-6.4-6.4-6.4 6.4-1.4-1.4 6.4-6.4-6.4-6.4z",
       "view_box": "0 0 24 24"
+    },
+    "filter": {
+      "path": "M3 4h18l-7 9v6l-4 2v-8z",
+      "view_box": "0 0 24 24"
+    },
+    "attachment": {
+      "path": "M16.5 6v11.5a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6H9v9.5a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v12.5a6 6 0 0 0 12 0V6z",
+      "view_box": "0 0 24 24"
     }
   },
   "message": {
@@ -2005,5 +5673,6 @@
     ],
     "html_dark_mode": "smart"
   },
-  "sounds": {}
+  "sounds": {},
+  "raw_css": []
 }

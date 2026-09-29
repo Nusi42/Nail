@@ -58,5 +58,6 @@ No literal user-visible strings, no inline styles or class names (only
 `data-part` attributes, styled from `theme.kdl`), structure from
 `layout.kdl`, data only through `NailClient`, every write through the core.
 Shared files (`App.tsx`, `src/api/mock.ts`, `src/state/uiStore.ts`,
-`defaults/*.kdl`) are integrator-owned in M1b: if a feature needs a change
-there, report it instead of editing.
+`defaults/*.kdl`) were integrator-owned while the M1b packages were built
+in parallel; WP25 wired the features into them (ADR 0027). Parallel work
+in later waves follows the same rule.

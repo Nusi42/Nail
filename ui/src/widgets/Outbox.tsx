@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { errorMessageId, errorMessageIdOf } from "../api/client";
-import type { OutboxEntry } from "../api/generated";
+import type { Draft, OutboxEntry } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
 import { displayName } from "../state/addresses";
-import { cancelSend } from "../state/compose";
+import { cancelRichSend, openRichDraft } from "../features/composer/flows";
 import { useComposeContext } from "../state/hooks";
-import { queryKeys, useOutbox } from "../state/queries";
+import { queryKeys, useDrafts, useOutbox } from "../state/queries";
 
 /** Entries the user can still take back (edit) or send at once. */
 export function canTakeBack(entry: OutboxEntry): boolean {
@@ -20,6 +20,7 @@ export function Outbox({ node }: WidgetProps) {
   const locale = useLocale();
   const ctx = useComposeContext();
   const outbox = useOutbox();
+  const drafts = useDrafts();
   const [error, setError] = useState<string | null>(null);
 
   const run = async (work: () => Promise<void>) => {
@@ -32,7 +33,18 @@ export function Outbox({ node }: WidgetProps) {
     }
   };
 
-  const edit = (entry: OutboxEntry) => run(() => cancelSend(ctx, entry.id));
+  const edit = (entry: OutboxEntry) => run(() => cancelRichSend(ctx, entry.id));
+  const continueDraft = (draft: Draft) =>
+    run(async () => {
+      if (draft.id === null) return;
+      await openRichDraft(ctx, draft.id);
+    });
+  const discardDraft = (draft: Draft) =>
+    run(async () => {
+      if (draft.id === null) return;
+      await ctx.client.request({ type: "DeleteDraft", draft_id: draft.id }, "Done");
+      await ctx.queryClient.invalidateQueries({ queryKey: queryKeys.drafts });
+    });
   const sendNow = (entry: OutboxEntry) =>
     run(async () => {
       const { draft_id } = await ctx.client.request(
@@ -121,6 +133,43 @@ export function Outbox({ node }: WidgetProps) {
           </li>
         ))}
       </ul>
+      {(drafts.data?.length ?? 0) > 0 && (
+        <section data-part="outbox.drafts" aria-label={t("outbox-drafts-label")}>
+          <h3 data-part="outbox.drafts.title">{t("outbox-drafts-label")}</h3>
+          <ul data-part="outbox.list">
+            {(drafts.data ?? []).map((draft) => (
+              <li key={draft.id ?? ""} data-part="outbox.item" data-state="draft">
+                <div data-part="outbox.item.subject">
+                  {draft.subject || t("message-no-subject")}
+                </div>
+                <div data-part="outbox.item.recipients">
+                  {t("outbox-recipients", {
+                    recipients: [...draft.to, ...draft.cc].map((a) => displayName(a)).join(", "),
+                  })}
+                </div>
+                <div data-part="outbox.item.actions">
+                  <button
+                    type="button"
+                    data-part="form.button"
+                    data-action="continue-draft"
+                    onClick={() => void continueDraft(draft)}
+                  >
+                    {t("outbox-draft-continue")}
+                  </button>
+                  <button
+                    type="button"
+                    data-part="form.button"
+                    data-action="discard-draft"
+                    onClick={() => void discardDraft(draft)}
+                  >
+                    {t("outbox-draft-discard")}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </section>
   );
 }

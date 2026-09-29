@@ -132,6 +132,8 @@ describe("composer", () => {
         bcc: [],
         signature: null,
         composer_mode: null,
+        posting: null,
+        mail_style: null,
       }),
     ).toBe("x@y.z");
     expect(localToIso("")).toBeNull();
@@ -191,7 +193,53 @@ describe("outbox", () => {
     await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Later"));
     expect(env.store.getState().windows).toContain("composer");
     expect(await screen.findByText("Nothing is waiting to be sent.")).toBeInTheDocument();
-    expect(container.querySelectorAll('[data-part="outbox.item"]')).toHaveLength(0);
+    // It is a saved draft again.
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-part="outbox.item"]')).toHaveLength(1),
+    );
+    expect(container.querySelector('[data-part="outbox.item"]')).toHaveAttribute(
+      "data-state",
+      "draft",
+    );
+  });
+
+  it("lists saved drafts to continue or discard", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    const save = (subject: string) =>
+      env.client.request(
+        {
+          type: "SaveDraft",
+          draft: {
+            id: null,
+            identity_id: "ada@example.org",
+            to: [{ name: "Grace", email: "grace@navy.example" }],
+            cc: [],
+            bcc: [],
+            subject,
+            mode: "markdown",
+            text: "",
+            html: null,
+            markdown: "**draft**",
+            attachments: [],
+            context: null,
+            signature: "identity",
+            markdown_part: false,
+          },
+        },
+        "DraftSaved",
+      );
+    await save("Unfinished");
+    await save("Abandoned");
+    renderNode(widget("outbox"), env);
+    const drafts = await screen.findByRole("region", { name: "Drafts" });
+    const abandoned = within(drafts).getByText("Abandoned").closest("li") as HTMLElement;
+    await user.click(within(abandoned).getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(within(drafts).queryByText("Abandoned")).toBeNull());
+    const unfinished = within(drafts).getByText("Unfinished").closest("li") as HTMLElement;
+    await user.click(within(unfinished).getByRole("button", { name: "Continue writing" }));
+    await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Unfinished"));
+    expect(env.store.getState().windows).toContain("composer");
   });
 
   it("sends a waiting message at once", async () => {
@@ -228,7 +276,7 @@ describe("status-bar send status", () => {
     const user = userEvent.setup();
     const env = createEnv();
     renderNode(widget("status-bar", { options: { items: "send-status" } }), env);
-    const status = screen.getByRole("status");
+    const status = screen.getByRole("status", { name: "Status" });
     const { draft_id } = await env.client.request(
       {
         type: "SaveDraft",

@@ -115,6 +115,8 @@ export interface UiState {
   pendingOps: OpId[];
   /** The last failed write, until the next one succeeds or it is dismissed. */
   opError: ErrorCode | null;
+  /** The operation behind `opError` (for "Retry", `RetryOp`). */
+  failedOp: OpId | null;
   /** The last message handed to the outbox (undo-send countdown). */
   lastSend: OutboxEntry | null;
   /** Results of OAuth sign-ins by flow id (`null` = success). */
@@ -176,6 +178,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     focusRequest: null,
     pendingOps: [],
     opError: null,
+    failedOp: null,
     lastSend: null,
     oauthResults: {},
 
@@ -248,11 +251,15 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
       set((s) => ({ focusRequest: { target, seq: (s.focusRequest?.seq ?? 0) + 1 } })),
     opQueued: (ids) => set((s) => ({ pendingOps: [...s.pendingOps, ...ids] })),
     opFinished: (id, error) =>
-      set((s) => ({
-        pendingOps: s.pendingOps.filter((p) => p !== id),
-        opError: error ?? (s.pendingOps.includes(id) ? null : s.opError),
-      })),
-    dismissOpError: () => set({ opError: null }),
+      set((s) => {
+        const cleared = s.pendingOps.includes(id);
+        return {
+          pendingOps: s.pendingOps.filter((p) => p !== id),
+          opError: error ?? (cleared ? null : s.opError),
+          failedOp: error !== null ? id : cleared ? null : s.failedOp,
+        };
+      }),
+    dismissOpError: () => set({ opError: null, failedOp: null }),
     setLastSend: (lastSend) => set({ lastSend }),
     setOAuthResult: (flowId, error) =>
       set((s) => ({ oauthResults: { ...s.oauthResults, [flowId]: error } })),

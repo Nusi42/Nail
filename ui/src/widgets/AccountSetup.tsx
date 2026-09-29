@@ -84,6 +84,8 @@ export function configFrom(
         bcc: [],
         signature: null,
         composer_mode: null,
+        posting: null,
+        mail_style: null,
       },
     ],
     sync: { bodies: null, folders: [] },

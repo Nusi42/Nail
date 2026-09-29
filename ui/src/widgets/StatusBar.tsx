@@ -2,9 +2,9 @@ import { useEffect, useState, type JSX } from "react";
 import { errorMessageId, errorMessageIdOf } from "../api/client";
 import { useLocale, useT } from "../i18n/I18nProvider";
 import { optionList, type WidgetProps } from "../layout/widgetRegistry";
-import { cancelSend } from "../state/compose";
+import { cancelRichSend } from "../features/composer/flows";
 import { useComposeContext } from "../state/hooks";
-import { useAccounts, useAccountStatuses, useFolders } from "../state/queries";
+import { useAccounts, useAccountStatuses, useClient, useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
 
 /** How long "Message sent" stays in the status bar. */
@@ -92,13 +92,32 @@ function OpsItem() {
   const t = useT();
   const pending = useUi((s) => s.pendingOps.length);
   const error = useUi((s) => s.opError);
+  const failedOp = useUi((s) => s.failedOp);
   const dismiss = useUi((s) => s.dismissOpError);
+  const queued = useUi((s) => s.opQueued);
+  const client = useClient();
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const retry = (op: string) => {
+    setRetryError(null);
+    client
+      .request({ type: "RetryOp", op_id: op }, "Queued")
+      .then(({ op_ids }) => {
+        dismiss();
+        queued(op_ids);
+      })
+      .catch((e: unknown) => setRetryError(errorMessageIdOf(e)));
+  };
   if (error) {
     return (
       <span data-part="status-bar.item" data-item="ops" data-state="error">
         <span data-part="status-bar.text">
-          {t("status-op-failed", { reason: t(errorMessageId(error)) })}
+          {t("status-op-failed", { reason: t(retryError ?? errorMessageId(error)) })}
         </span>
+        {failedOp !== null && (
+          <button type="button" data-part="status-bar.button" onClick={() => retry(failedOp)}>
+            {t("status-retry")}
+          </button>
+        )}
         <button type="button" data-part="status-bar.button" onClick={dismiss}>
           {t("status-dismiss")}
         </button>
@@ -186,7 +205,7 @@ function SendStatusItem() {
           data-action="outbox.undo"
           onClick={() => {
             setFailure(null);
-            cancelSend(ctx, entry.id).catch((error: unknown) => {
+            cancelRichSend(ctx, entry.id).catch((error: unknown) => {
               setFailure(errorMessageIdOf(error));
             });
           }}
@@ -211,6 +230,7 @@ export const STATUS_ITEMS = Object.keys(ITEMS);
 
 /** Status line; items come from the `items` option. */
 export function StatusBar({ node }: WidgetProps) {
+  const t = useT();
   const items = optionList(node, "items", ["sync-progress"]).filter((item) =>
     Object.hasOwn(ITEMS, item),
   );
@@ -220,6 +240,7 @@ export function StatusBar({ node }: WidgetProps) {
       data-node-id={node.id ?? undefined}
       role="status"
       aria-live="polite"
+      aria-label={t("status-bar-label")}
     >
       {items.map((item) => {
         const Item = ITEMS[item];

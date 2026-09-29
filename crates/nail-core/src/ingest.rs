@@ -2,7 +2,7 @@
 //! metadata rows (with threading headers) + the search index. Shared by the
 //! IMAP and POP3 engines, the outbox (local Sent copies) and the demo seed.
 
-use nail_api::{Flags, Folder, MessageId};
+use nail_api::{Address, Flags, Folder, FolderRole, MessageId};
 use nail_mime::{ParsedMessage, SummaryIds};
 use nail_search::{IndexDocument, SearchIndex};
 use nail_store::{BlobStore, MessageFilter, MessageMeta, Store, StoredMessage, SyncedMessage};
@@ -95,6 +95,7 @@ pub(crate) fn ingest(
         return Ok(report);
     }
     let mut rows = Vec::with_capacity(messages.len());
+    let mut addresses: Vec<(MessageId, Vec<Address>)> = Vec::new();
     let mut docs = Vec::with_capacity(messages.len());
     for message in messages {
         let blob_hash = blobs.put(&message.raw)?;
@@ -113,6 +114,20 @@ pub(crate) fn ingest(
             message.internal_date.as_deref(),
         );
         summary.tags.clone_from(&message.keywords);
+        // Address autocomplete learns who writes to the user, and whom the
+        // user writes to (Sent), never from junk.
+        let learned: Vec<Address> = match folder.role {
+            FolderRole::Sent => parsed
+                .headers
+                .to
+                .iter()
+                .chain(&parsed.headers.cc)
+                .cloned()
+                .collect(),
+            FolderRole::Junk | FolderRole::Trash | FolderRole::Drafts => Vec::new(),
+            _ => parsed.headers.from.clone(),
+        };
+        addresses.push((id.clone(), learned));
         docs.push(IndexDocument::from_parsed(
             id.clone(),
             folder.account_id.clone(),
@@ -143,6 +158,16 @@ pub(crate) fn ingest(
         if !merged.skipped.contains(&row.message.summary.id) {
             report.stored.push(row.message.summary.id.clone());
         }
+    }
+    let learned: Vec<Address> = addresses
+        .into_iter()
+        .filter(|(id, _)| report.new.contains(id))
+        .flat_map(|(_, a)| a)
+        .collect();
+    if !learned.is_empty()
+        && let Err(err) = store.record_addresses(&learned, crate::engine::unix_now())
+    {
+        tracing::debug!(%err, "cannot record addresses");
     }
     if let Some(index) = index {
         docs.retain(|d| report.stored.contains(&d.message_id));

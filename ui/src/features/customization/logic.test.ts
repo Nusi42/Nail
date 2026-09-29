@@ -193,10 +193,10 @@ describe("inspector queries", () => {
       <p data-part="x" id="none"></p>`);
     const wide = layoutNodeOf(must(root.querySelector("#f")), layout, 1200);
     expect(wide).toMatchObject({ window: "main", breakpoint: 0, kind: "folder-tree" });
-    expect(wide?.path).toEqual([1, 0, 2]);
+    expect(wide?.path).toEqual([2, 0, 2]);
     expect(wide?.source).toEqual({ file: "layout.kdl", line: 21, column: 25 });
     const narrow = layoutNodeOf(must(root.querySelector("#f")), layout, 600);
-    expect(narrow).toMatchObject({ breakpoint: 1, path: [2, 0, 1] });
+    expect(narrow).toMatchObject({ breakpoint: 1, path: [3, 0, 1] });
     expect(layoutNodeOf(must(root.querySelector("#o")), layout, 1200)).toMatchObject({
       window: "outbox",
       kind: "outbox",
@@ -273,19 +273,19 @@ describe("split write-back addressing", () => {
   const layout = createMockData(5).layout;
 
   it("maps tree paths and node ids to layout node refs", () => {
-    expect(splitRefOf("main/0/1", layout, 1200)).toEqual({
+    expect(splitRefOf("main/0/2", layout, 1200)).toEqual({
       window: "main",
       breakpoint: 0,
-      path: [1],
+      path: [2],
     });
-    expect(splitRefOf("main/0/1/0", layout, 1200)).toEqual({
+    expect(splitRefOf("main/0/2/0", layout, 1200)).toEqual({
       window: "main",
       breakpoint: 0,
-      path: [1, 0],
+      path: [2, 0],
     });
     // `panes` is a split when wide and tabs when narrow: only the split fits.
-    expect(splitRefOf("panes", layout, 1200)).toEqual({ window: "main", breakpoint: 0, path: [1] });
-    expect(splitRefOf("panes", layout, 600)).toEqual({ window: "main", breakpoint: 0, path: [1] });
+    expect(splitRefOf("panes", layout, 1200)).toEqual({ window: "main", breakpoint: 0, path: [2] });
+    expect(splitRefOf("panes", layout, 600)).toEqual({ window: "main", breakpoint: 0, path: [2] });
     expect(splitRefOf("root", layout, 600)).toEqual({ window: "main", breakpoint: 1, path: [] });
     expect(splitRefOf("main/0/0", layout, 1200)).toBeNull(); // a toolbar
     expect(splitRefOf("nope", layout, 1200)).toBeNull();
@@ -298,7 +298,7 @@ describe("split write-back addressing", () => {
     expect(splitPatches(sizes, written, layout, 1200)).toEqual([
       {
         op: "split-sizes",
-        node: { window: "main", breakpoint: 0, path: [1] },
+        node: { window: "main", breakpoint: 0, path: [2] },
         sizes: ["200px", "1fr", "1fr"],
       },
     ]);

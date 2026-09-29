@@ -19,7 +19,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "e2e": "npm run build -w ui && cargo build -p nail-cli && npm run test -w e2e",
+    "e2e": "npm run build -w ui && cargo build -p nail-cli && npm run build:desktop && npm run test -w e2e",
+    "build:desktop": "node e2e/scripts/build-desktop.mjs",
     "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
     "tauri": "tauri",
     "e2e:only": "npm run test -w e2e"

@@ -79,7 +79,8 @@ laid out like any other window:
 | `outbox` | `outbox.open` | `outbox` |
 | `move` | `mail.move` | `folder-picker` |
 | `account-setup` | `account.add` | `account-setup` |
-| `settings` | `settings.open` | `tabs` with `account-settings` and `virtual-account-editor` |
+| `rules` | `rules.open`, `rules.create-from-message` | `rule-manager` |
+| `settings` | `settings.open` | `tabs` with `account-settings`, `virtual-account-editor`, `mcp-clients` and a "Customize" tab (a `toolbar` and `config-errors`) |
 
 ```kdl
 window "settings" {
@@ -151,7 +152,7 @@ A widget is a node named after its kind. Its properties are its options.
 | --- | --- |
 | `account-switcher` | `show-status` (`#true`/`#false`): a dot per account showing its connection state |
 | `folder-tree` | `show-unread` (`#true`/`#false`), `show-account-badges` (`#true`/`#false`) |
-| `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`, `collapsed`: one row per conversation, `expanded`: one row per message), `follow-search` (`#true`/`#false`: show search results while a search is active); `row` templates |
+| `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`, `collapsed`: one row per conversation, `expanded`: one row per message), `follow-search` (`#true`/`#false`: show search results while a search is active), `columns` (column order, written back by Nail); `row` templates |
 | `message-view` | `headers` (e.g. `"from to cc date"`), `mark-read` (`#true`/`#false`: mark a message read when it is shown); `row` templates |
 | `thread-view` | `expand` (`latest`, `unread`, `all`, `none`: which messages of the conversation start opened), `hide-single` (`#true`/`#false`: hide for messages without replies) |
 | `search-bar` | `scope` (`account`, `folder`, `all`), `hints` (`#true`/`#false`: suggest search fields while typing), `live-check` (`#true`/`#false`: point out mistakes while typing) |
@@ -161,6 +162,11 @@ A widget is a node named after its kind. Its properties are its options.
 | `account-setup` | — (the "Add account" assistant) |
 | `account-settings` | — |
 | `virtual-account-editor` | — |
+| `rule-manager` | — (the filter rules: list, editor, test and run history; see [Filter rules](rules.md)) |
+| `mcp-clients` | — (MCP clients, their access and the activity log; see [Connecting AI agents](mcp.md)) |
+| `mcp-context-indicator` | — (the notice shown while an agent reads what is on screen) |
+| `config-errors` | `hide-when-valid` (`#true`/`#false`): show nothing while every config file is valid (see [Customizing](customization.md#all-configuration-errors-at-once)) |
+| `smart-folders` | `editable` (`#true`/`#false`): offer "Save current search" and remove buttons (see [Customizing](customization.md#smart-folders-saved-searches)) |
 | `toolbar` | `toolbar`: the name of a `toolbar` definition (required) |
 | `status-bar` | `items`: any of `sync-progress`, `account-status`, `ops` (changes being saved), `send-status` (undo send), `folder-counts` |
 | `text` | `text`: literal text or `@message.id` |
@@ -233,6 +239,11 @@ Actions in the default layout:
 | `mail.delete`, `mail.delete-permanently` | Move to Trash / delete for good |
 | `mail.toggle-read`, `mail.toggle-flag` | Mark read or unread, flag or unflag |
 | `composer.send`, `composer.save`, `composer.discard` | In the composer: send, save the draft, throw the message away |
+| `composer.set-mode` | Switch the composer's format; argument `"plain"`, `"html"` or `"markdown"` |
+| `composer.toggle-preview`, `composer.toggle-source`, `composer.attach` | Show or hide the Markdown preview, show or hide the HTML source, attach a file |
+| `rules.open`, `rules.create-from-message` | Open the filter rules; start a rule from the selected message |
+| `inspector.toggle`, `customize.merge`, `customize.errors` | Inspector on or off; the merge dialog; the list of configuration errors (see [Customizing](customization.md)) |
+| `mcp.indicator.dismiss` | Hide the "agent is reading" notice |
 | `outbox.open`, `outbox.undo` | Show the outbox; take back the message being sent |
 | `search.focus`, `search.clear` | Jump to the search bar; end the search |
 | `account.add`, `settings.open` | Add an account; open the settings |
@@ -308,7 +319,9 @@ menu "context:message-list.row" {
 
 `"app"` is the application menu; `"context:<part>"` is the right-click menu
 of a part (see the part names in the [theme reference](theme-reference.md)).
-Defining a menu with an existing name replaces it.
+Defining a menu with an existing name replaces it. This version reads and
+checks menus but does not show them yet; the same actions are on the
+toolbars.
 
 ## Error messages
 

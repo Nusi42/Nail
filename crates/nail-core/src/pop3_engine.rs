@@ -161,6 +161,14 @@ pub(crate) async fn fetch(
         });
     }
     if !new_ids.is_empty() && !state.known.is_empty() {
+        let queued = new_ids.clone();
+        if let Err(err) = service
+            .store()
+            .call(move |s| crate::rules::queue_for_rules(s, &queued))
+            .await
+        {
+            tracing::warn!(%err, "cannot queue new mail for the rules");
+        }
         service.broadcast(Event::NewMail {
             account_id: account.clone(),
             folder_id: inbox.id.clone(),

@@ -16,8 +16,8 @@ help you change them:
 
 ## The inspector
 
-Turn the inspector on with the action `inspector.toggle` (bind it to a key,
-see below). While it is on:
+Turn the inspector on with `Ctrl+Shift+I`, or with **Inspector** in
+**Settings → Customize** (the action `inspector.toggle`). While it is on:
 
 - point at anything in the window: it is outlined and the inspector panel
   shows it;
@@ -74,14 +74,15 @@ are kept exactly as they were, and only the `sizes="…"` value changes.
   it. Everything else keeps coming from the default.
 - If your `layout.kdl` has an error, nothing is written until you fix it.
 
-The same write-back handles toolbar contents and order, key bindings
-(removing a default binding writes `unbind "<key>"`) and the column order of
-a list (`columns="…"` on `message-list`).
+Nail writes toolbar contents and order, key bindings (removing a default
+binding writes `unbind "<key>"`) and the column order of a list
+(`columns="…"` on `message-list`) the same careful way. This version has no
+editor for those in the window yet; until then, change them in the file.
 
 ## Applying someone else's theme or layout: the merge dialog
 
-Open the dialog with the action `customize.merge` (for example from a
-toolbar: `item "customize.merge"`), then:
+Open the dialog with **Apply a theme or layout…** in **Settings →
+Customize** (the action `customize.merge`), then:
 
 1. Choose whether it is a theme or a layout, and load the file or paste its
    text.
@@ -122,8 +123,10 @@ Nail keeps using the last version that worked and reports **every** error of
 each file with its line and column — you can fix them all in one go. Each
 entry has **Open in editor**.
 
-The list is the `config-errors` widget; the action `customize.errors` opens
-it as a dialog. To keep it in a pane that only appears when something is
+The default layout shows the list above the panes of the main window as
+soon as a file has a mistake, and always in **Settings → Customize**. It is
+the `config-errors` widget; the action `customize.errors` opens it as a
+dialog. To place it yourself, in a pane that only appears when something is
 wrong:
 
 ```kdl
@@ -141,7 +144,8 @@ window "main" {
 
 ## Smart folders (saved searches)
 
-A smart folder is a saved search. Search as usual (see
+The default layout lists smart folders under the folder tree. A smart
+folder is a saved search. Search as usual (see
 [search](search.md)), then choose **Save current search** in the smart
 folders list and give it a name. Choosing a smart folder runs its search
 again — always up to date, over all accounts or over the account or folder
@@ -171,6 +175,6 @@ window "main" {
 
 | Action | What it does |
 | --- | --- |
-| `inspector.toggle` | Turns the inspector on or off. |
+| `inspector.toggle` | Turns the inspector on or off (`Ctrl+Shift+I`). |
 | `customize.merge` | Opens the merge dialog. |
 | `customize.errors` | Opens the list of configuration errors. |

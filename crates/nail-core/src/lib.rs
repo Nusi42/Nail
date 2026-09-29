@@ -32,12 +32,12 @@ mod imap_engine;
 mod ingest;
 mod mail;
 mod mcp;
-mod mime;
 mod oauth;
 mod outbox;
 pub mod paths;
 mod pop3_engine;
 mod replay;
+mod rule_mail;
 mod rules;
 mod search;
 mod service;
@@ -48,5 +48,8 @@ mod virtuals;
 mod watch;
 
 pub use error::{CoreError, Result};
-pub use service::{EVENT_CAPACITY, EngineTiming, MAX_PAGE_SIZE, Service, ServiceOptions};
+pub use mcp::{McpCore, McpRunning, mcp_endpoint_path};
+pub use service::{
+    EVENT_CAPACITY, EngineTiming, HISTORY_RETENTION_DAYS, MAX_PAGE_SIZE, Service, ServiceOptions,
+};
 pub use sync::{FolderSyncFailure, ImapAccount, SyncReport};

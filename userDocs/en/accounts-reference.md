@@ -160,9 +160,10 @@ you list none, Nail uses the account's `email`.
 account "work" email="ada@work.example" {
     imap host="imap.work.example"
     smtp host="smtp.work.example"
-    identity "ada@work.example" name="Ada Lovelace" reply-to="team@work.example" {
+    identity "ada@work.example" name="Ada Lovelace" reply-to="team@work.example" composer="markdown" posting="top" {
         bcc "archive@work.example"
-        signature "Ada Lovelace\nAnalytical Engines Ltd."
+        signature "Ada Lovelace\nAnalytical Engines Ltd." markdown="**Ada Lovelace**  \nAnalytical Engines Ltd."
+        mail-style css="body { font-family: Georgia, serif; }" code-theme="base16-ocean.light"
     }
     identity "support@work.example" name="Support" composer="plain"
 }
@@ -174,9 +175,11 @@ account "work" email="ada@work.example" {
 | `name` | Your name as recipients see it |
 | `reply-to` | Where replies should go, if not to the sender address |
 | `id` | A unique name for the identity, needed only if two identities use the same address (default: the address) |
-| `composer` | How new messages start: `"plain"`, `"html"` or `"markdown"` (HTML and Markdown arrive in a later version) |
+| `composer` | How new messages start: `"plain"` (default), `"html"` or `"markdown"` (see [Writing mail](composer.md)) |
+| `posting` | Where replies put the quoted original: `"bottom"` (default: your text below the quote) or `"top"` |
 | `bcc "…" …` | Addresses that always get a blind copy |
-| `signature "…"` | Your signature as plain text; `\n` starts a new line. `html=` and `markdown=` variants are reserved for the rich composer |
+| `signature "…"` | Your signature as plain text; `\n` starts a new line. `html="…"` and `markdown="…"` give the HTML and Markdown variants; a missing one is converted from another |
+| `mail-style` | How HTML and Markdown mail looks: `css="…"` is a stylesheet Nail builds into every message (default: a plain, readable one), `code-theme="…"` the colours of code blocks in Markdown (see [Markdown mail](markdown-mail.md#how-it-looks)) |
 
 Identity names (`id`, or the address) must be unique across all accounts.
 

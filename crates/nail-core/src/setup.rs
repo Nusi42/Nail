@@ -65,6 +65,8 @@ pub(crate) fn normalize_account(config: &mut AccountConfig) {
             bcc: Vec::new(),
             signature: None,
             composer_mode: None,
+            posting: None,
+            mail_style: None,
         });
     }
     for identity in &mut config.identities {

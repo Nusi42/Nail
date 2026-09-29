@@ -12,13 +12,13 @@ import type { NailClient } from "../api/client";
 import type { FolderRole, JsonValue, MoveTarget, ResolvedLayout } from "../api/generated";
 import type { MessageArgs } from "../i18n/localizer";
 import {
-  cancelSend,
-  discardComposer,
-  saveComposer,
-  sendComposer,
-  startCompose,
-  startReply,
-} from "../state/compose";
+  cancelRichSend,
+  discardRich,
+  saveRich,
+  sendRich,
+  startRichCompose,
+  startRichReply,
+} from "../features/composer/flows";
 import { deleteMessages, findSummary, moveMessages, setFlags } from "../state/mailOps";
 import type { UiStore } from "../state/uiStore";
 
@@ -149,36 +149,38 @@ export const builtinActions: Record<string, ActionHandler> = {
   },
 
   // ---- Composer ----
-  "mail.compose": { run: (ctx) => startCompose(ctx) },
+  // The rich composer (features/composer, ADR 0023): HTML / Markdown /
+  // attachments; plain-text drafts behave as in M1a.
+  "mail.compose": { run: (ctx) => startRichCompose(ctx) },
   "mail.reply": {
-    run: (ctx) => startReply(ctx, selected(ctx)[0] ?? "", "reply"),
+    run: (ctx) => startRichReply(ctx, selected(ctx)[0] ?? "", "reply"),
     enabled: hasSelection,
   },
   "mail.reply-all": {
-    run: (ctx) => startReply(ctx, selected(ctx)[0] ?? "", "reply-all"),
+    run: (ctx) => startRichReply(ctx, selected(ctx)[0] ?? "", "reply-all"),
     enabled: hasSelection,
   },
   "mail.forward": {
-    run: (ctx) => startReply(ctx, selected(ctx)[0] ?? "", "forward"),
+    run: (ctx) => startRichReply(ctx, selected(ctx)[0] ?? "", "forward"),
     enabled: hasSelection,
   },
   "composer.send": {
     run: async (ctx) => {
-      await sendComposer(ctx, null);
+      await sendRich(ctx, null);
     },
     enabled: hasComposer,
   },
   "composer.save": {
     run: async (ctx) => {
-      await saveComposer(ctx);
+      await saveRich(ctx);
     },
     enabled: hasComposer,
   },
-  "composer.discard": { run: (ctx) => discardComposer(ctx), enabled: hasComposer },
+  "composer.discard": { run: (ctx) => discardRich(ctx), enabled: hasComposer },
   "outbox.undo": {
     run: (ctx) => {
       const entry = ctx.store.getState().lastSend;
-      if (entry) return cancelSend(ctx, entry.id);
+      if (entry) return cancelRichSend(ctx, entry.id);
     },
     enabled: (ctx) => ctx.store.getState().lastSend?.state === "scheduled",
   },

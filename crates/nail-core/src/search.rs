@@ -118,6 +118,19 @@ pub(crate) async fn run_committer(service: Service) {
 }
 
 /// Backfills threading headers and rebuilds the index when needed.
+impl Service {
+    /// Rebuilds the search index from the store (blocking). For data put
+    /// into the store directly, such as the demo seed. Returns the number
+    /// of indexed messages.
+    pub fn rebuild_search_index(&self) -> Result<usize> {
+        Ok(crate::ingest::reindex_all(
+            &self.inner.store,
+            &self.inner.blobs,
+            &self.inner.search,
+        )?)
+    }
+}
+
 pub(crate) async fn run_maintenance(service: Service) {
     let store = service.inner.store.clone();
     let blobs = service.inner.blobs.clone();

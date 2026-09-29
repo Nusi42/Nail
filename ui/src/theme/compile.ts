@@ -175,6 +175,28 @@ html, body { margin: 0; height: 100%; }
 button, input, select, textarea { font: inherit; }
 [data-part="thread-view.body"], [data-part="thread-view.quote"] { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
 [data-part="search-bar.hints"], [data-part="thread-view.list"], [data-part="outbox.list"], [data-part="folder-picker.list"] { list-style: none; margin: 0; padding: 0; }
+${[
+  "composer.suggestions",
+  "composer.attachments.list",
+  "rules.list.items",
+  "rules.group.items",
+  "rules.actions.items",
+  "rules.test.matches",
+  "rules.test.actions",
+  "rules.runs.items",
+  "mcp-clients.list",
+  "inspector.path",
+  "inspector.states",
+  "inspector.rules",
+  "merge-dialog.items",
+  "merge-dialog.conflicts",
+  "merge-dialog.backup-list",
+  "config-errors.list",
+  "smart-folders.list",
+]
+  .map((part) => `[data-part="${part}"]`)
+  .join(", ")} { list-style: none; }
+[data-part="mcp-audit.table"] { border-collapse: collapse; }
 [data-part="search-bar.error.query"] { white-space: pre; }
 [data-part="search-bar.input"]::-webkit-search-cancel-button { display: none; }
 ${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${d}"], [data-part="folder-picker.item"][data-depth="${d}"] { margin-inline-start: ${d * 16}px; }`).join("\n")}`;

@@ -285,6 +285,7 @@ describe("toolbar", () => {
       "Delete",
       "Mark as read/unread",
       "Flag",
+      "Create rule from message",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");
     expect(buttons[0]).toBeDisabled(); // no message selected
@@ -319,10 +320,28 @@ describe("toolbar", () => {
 });
 
 describe("status-bar", () => {
+  it("retries a failed write with RetryOp", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal" } });
+    env.transport.data.failedOps.set("op-9", "acc-personal");
+    renderNode(widget("status-bar", { options: { items: "ops" } }), env);
+    act(() => {
+      env.store.getState().opQueued(["op-9"]);
+      env.store.getState().opFinished("op-9", "unavailable");
+    });
+    const status = screen.getByRole("status", { name: "Status" });
+    expect(within(status).getByText(/A change could not be saved/)).toBeInTheDocument();
+    fireEvent.click(within(status).getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(env.transport.requests).toContainEqual({ type: "RetryOp", op_id: "op-9" }),
+    );
+    await waitFor(() => expect(env.store.getState().opError).toBeNull());
+    expect(within(status).queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
   it("shows sync progress, folder counts and connection problems", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
     renderNode(widget("status-bar", { options: { items: "sync-progress folder-counts" } }), env);
-    const status = screen.getByRole("status");
+    const status = screen.getByRole("status", { name: "Status" });
     expect(status).toHaveAttribute("data-part", "status-bar");
     expect(within(status).getByText("Up to date")).toHaveAttribute("data-state", "idle");
     expect(await within(status).findByText("30 messages, 10 unread")).toHaveAttribute(

@@ -209,6 +209,8 @@ function defaultIdentity(config: AccountConfig): Identity[] {
       bcc: [],
       signature: null,
       composer_mode: null,
+      posting: null,
+      mail_style: null,
     },
   ];
 }

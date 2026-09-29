@@ -300,6 +300,8 @@ mod tests {
                 markdown: Some("**Ada**".into()),
             }),
             composer_mode: mode,
+            posting: None,
+            mail_style: None,
         }
     }
 

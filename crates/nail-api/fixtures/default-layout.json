@@ -4,10 +4,18 @@
     "main": [
       {
         "min_width": 900,
+        "max_width": null,
         "root": {
           "type": "stack",
           "id": "root",
-          "sizes": ["auto", "1fr", "auto"],
+          "label": null,
+          "sizes": [
+            "auto",
+            "auto",
+            "1fr",
+            "auto",
+            "auto"
+          ],
           "children": [
             {
               "type": "widget",
@@ -16,45 +24,98 @@
               "kind": "toolbar",
               "options": {
                 "toolbar": "main"
-              }
+              },
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "config-errors",
+              "label": null,
+              "kind": "config-errors",
+              "options": {
+                "hide-when-valid": true
+              },
+              "rows": [],
+              "source": null
             },
             {
               "type": "split",
               "id": "panes",
+              "label": null,
               "orientation": "horizontal",
-              "sizes": ["240px", "1fr", "1.4fr"],
-              "min_sizes": ["160px", "280px", "320px"],
-              "max_sizes": ["480px", null, null],
-              "collapsible": [true, false, true],
+              "sizes": [
+                "240px",
+                "1fr",
+                "1.4fr"
+              ],
+              "min_sizes": [
+                "160px",
+                "280px",
+                "320px"
+              ],
+              "max_sizes": [
+                "480px",
+                null,
+                null
+              ],
+              "collapsible": [
+                true,
+                false,
+                true
+              ],
               "resizable": true,
               "children": [
                 {
                   "type": "stack",
                   "id": "sidebar",
                   "label": "@layout.pane.folders",
-                  "sizes": ["auto", "auto", "1fr"],
+                  "sizes": [
+                    "auto",
+                    "auto",
+                    "1fr",
+                    "auto"
+                  ],
                   "children": [
                     {
                       "type": "widget",
                       "id": "search",
+                      "label": null,
                       "kind": "search-bar",
                       "options": {
                         "scope": "account"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "accounts",
+                      "label": null,
                       "kind": "account-switcher",
-                      "options": {}
+                      "options": {},
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "folders",
+                      "label": null,
                       "kind": "folder-tree",
                       "options": {
                         "show-unread": true
-                      }
+                      },
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "smart-folders",
+                      "label": "@saved-search-label",
+                      "kind": "smart-folders",
+                      "options": {},
+                      "rows": [],
+                      "source": null
                     }
                   ]
                 },
@@ -66,37 +127,55 @@
                   "options": {
                     "page-size": 100
                   },
-                  "rows": ["{from.name}  {date | relative}", "{subject}", "{preview}"]
+                  "rows": [
+                    "{from.name}  {date | relative}",
+                    "{subject}",
+                    "{preview}"
+                  ],
+                  "source": null
                 },
                 {
                   "type": "stack",
                   "id": "reader",
                   "label": "@layout.pane.message",
-                  "sizes": ["auto", "auto", "1fr"],
+                  "sizes": [
+                    "auto",
+                    "auto",
+                    "1fr"
+                  ],
                   "children": [
                     {
                       "type": "widget",
                       "id": "reader-toolbar",
+                      "label": null,
                       "kind": "toolbar",
                       "options": {
                         "toolbar": "reader"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "thread",
+                      "label": null,
                       "kind": "thread-view",
                       "options": {
                         "expand": "none"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "message",
+                      "label": null,
                       "kind": "message-view",
                       "options": {
                         "headers": "from to cc date"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     }
                   ]
                 }
@@ -105,20 +184,41 @@
             {
               "type": "widget",
               "id": "status",
+              "label": null,
               "kind": "status-bar",
               "options": {
                 "items": "sync-progress account-status ops send-status folder-counts"
-              }
+              },
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "agent-indicator",
+              "label": null,
+              "kind": "mcp-context-indicator",
+              "options": {},
+              "rows": [],
+              "source": null
             }
           ]
         }
       },
       {
+        "min_width": null,
         "max_width": 899,
         "root": {
           "type": "stack",
           "id": "root",
-          "sizes": ["auto", "auto", "1fr", "auto"],
+          "label": null,
+          "sizes": [
+            "auto",
+            "auto",
+            "auto",
+            "1fr",
+            "auto",
+            "auto"
+          ],
           "children": [
             {
               "type": "widget",
@@ -127,40 +227,76 @@
               "kind": "toolbar",
               "options": {
                 "toolbar": "main"
-              }
+              },
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "config-errors",
+              "label": null,
+              "kind": "config-errors",
+              "options": {
+                "hide-when-valid": true
+              },
+              "rows": [],
+              "source": null
             },
             {
               "type": "widget",
               "id": "search",
+              "label": null,
               "kind": "search-bar",
               "options": {
                 "scope": "account"
-              }
+              },
+              "rows": [],
+              "source": null
             },
             {
               "type": "tabs",
               "id": "panes",
+              "label": null,
               "active": 1,
               "children": [
                 {
                   "type": "stack",
                   "id": "sidebar",
                   "label": "@layout.pane.folders",
-                  "sizes": ["auto", "1fr"],
+                  "sizes": [
+                    "auto",
+                    "1fr",
+                    "auto"
+                  ],
                   "children": [
                     {
                       "type": "widget",
                       "id": "accounts",
+                      "label": null,
                       "kind": "account-switcher",
-                      "options": {}
+                      "options": {},
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "folders",
+                      "label": null,
                       "kind": "folder-tree",
                       "options": {
                         "show-unread": true
-                      }
+                      },
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "smart-folders",
+                      "label": "@saved-search-label",
+                      "kind": "smart-folders",
+                      "options": {},
+                      "rows": [],
+                      "source": null
                     }
                   ]
                 },
@@ -172,37 +308,54 @@
                   "options": {
                     "page-size": 100
                   },
-                  "rows": ["{from.name}  {date | relative}", "{subject}"]
+                  "rows": [
+                    "{from.name}  {date | relative}",
+                    "{subject}"
+                  ],
+                  "source": null
                 },
                 {
                   "type": "stack",
                   "id": "reader",
                   "label": "@layout.pane.message",
-                  "sizes": ["auto", "auto", "1fr"],
+                  "sizes": [
+                    "auto",
+                    "auto",
+                    "1fr"
+                  ],
                   "children": [
                     {
                       "type": "widget",
                       "id": "reader-toolbar",
+                      "label": null,
                       "kind": "toolbar",
                       "options": {
                         "toolbar": "reader"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "thread",
+                      "label": null,
                       "kind": "thread-view",
                       "options": {
                         "expand": "none"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     },
                     {
                       "type": "widget",
                       "id": "message",
+                      "label": null,
                       "kind": "message-view",
                       "options": {
                         "headers": "from date"
-                      }
+                      },
+                      "rows": [],
+                      "source": null
                     }
                   ]
                 }
@@ -211,10 +364,22 @@
             {
               "type": "widget",
               "id": "status",
+              "label": null,
               "kind": "status-bar",
               "options": {
                 "items": "sync-progress ops send-status"
-              }
+              },
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "agent-indicator",
+              "label": null,
+              "kind": "mcp-context-indicator",
+              "options": {},
+              "rows": [],
+              "source": null
             }
           ]
         }
@@ -222,49 +387,87 @@
     ],
     "composer": [
       {
+        "min_width": null,
+        "max_width": null,
         "root": {
           "type": "widget",
           "id": "composer",
+          "label": null,
           "kind": "composer",
-          "options": {}
+          "options": {},
+          "rows": [],
+          "source": null
         }
       }
     ],
     "outbox": [
       {
+        "min_width": null,
+        "max_width": null,
         "root": {
           "type": "widget",
           "id": "outbox",
+          "label": null,
           "kind": "outbox",
-          "options": {}
+          "options": {},
+          "rows": [],
+          "source": null
         }
       }
     ],
     "move": [
       {
+        "min_width": null,
+        "max_width": null,
         "root": {
           "type": "widget",
           "id": "move-picker",
+          "label": null,
           "kind": "folder-picker",
-          "options": {}
+          "options": {},
+          "rows": [],
+          "source": null
         }
       }
     ],
     "account-setup": [
       {
+        "min_width": null,
+        "max_width": null,
         "root": {
           "type": "widget",
           "id": "account-setup",
+          "label": null,
           "kind": "account-setup",
-          "options": {}
+          "options": {},
+          "rows": [],
+          "source": null
+        }
+      }
+    ],
+    "rules": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "widget",
+          "id": "rules",
+          "label": null,
+          "kind": "rule-manager",
+          "options": {},
+          "rows": [],
+          "source": null
         }
       }
     ],
     "settings": [
       {
+        "min_width": null,
+        "max_width": null,
         "root": {
           "type": "tabs",
           "id": "settings-tabs",
+          "label": null,
           "active": 0,
           "children": [
             {
@@ -272,14 +475,58 @@
               "id": "account-settings",
               "label": "@settings.tab.accounts",
               "kind": "account-settings",
-              "options": {}
+              "options": {},
+              "rows": [],
+              "source": null
             },
             {
               "type": "widget",
               "id": "virtual-accounts",
               "label": "@settings.tab.virtual-accounts",
               "kind": "virtual-account-editor",
-              "options": {}
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "mcp-clients",
+              "label": "@mcp.settings.tab",
+              "kind": "mcp-clients",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "stack",
+              "id": "customize",
+              "label": "@settings.tab.customize",
+              "sizes": [
+                "auto",
+                "1fr"
+              ],
+              "children": [
+                {
+                  "type": "widget",
+                  "id": "customize-toolbar",
+                  "label": "@toolbar.customize",
+                  "kind": "toolbar",
+                  "options": {
+                    "toolbar": "customize"
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "settings-config-errors",
+                  "label": null,
+                  "kind": "config-errors",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                }
+              ]
             }
           ]
         }
@@ -288,308 +535,543 @@
   },
   "actions": {
     "mail.next": {
-      "label": "@mail.action.next"
+      "label": "@mail.action.next",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "mail.previous": {
-      "label": "@mail.action.previous"
+      "label": "@mail.action.previous",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "mail.compose": {
       "label": "@mail.action.compose",
-      "icon": "compose"
+      "icon": "compose",
+      "alias_of": null,
+      "args": []
     },
     "mail.reply": {
       "label": "@mail.action.reply",
-      "icon": "reply"
+      "icon": "reply",
+      "alias_of": null,
+      "args": []
     },
     "mail.reply-all": {
       "label": "@mail.action.reply-all",
-      "icon": "reply-all"
+      "icon": "reply-all",
+      "alias_of": null,
+      "args": []
     },
     "mail.forward": {
       "label": "@mail.action.forward",
-      "icon": "forward"
+      "icon": "forward",
+      "alias_of": null,
+      "args": []
     },
     "mail.archive": {
       "label": "@mail.action.archive",
-      "icon": "archive"
+      "icon": "archive",
+      "alias_of": null,
+      "args": []
     },
     "mail.move": {
       "label": "@mail.action.move",
-      "icon": "move"
+      "icon": "move",
+      "alias_of": null,
+      "args": []
     },
     "mail.move-to": {
       "label": "@mail.action.move-to",
-      "icon": "move"
+      "icon": "move",
+      "alias_of": null,
+      "args": []
     },
     "mail.delete": {
       "label": "@mail.action.delete",
-      "icon": "delete"
+      "icon": "delete",
+      "alias_of": null,
+      "args": []
     },
     "mail.delete-permanently": {
       "label": "@mail.action.delete-permanently",
-      "icon": "delete"
+      "icon": "delete",
+      "alias_of": null,
+      "args": []
     },
     "mail.toggle-read": {
       "label": "@mail.action.toggle-read",
-      "icon": "mark-read"
+      "icon": "mark-read",
+      "alias_of": null,
+      "args": []
     },
     "mail.toggle-flag": {
       "label": "@mail.action.toggle-flag",
-      "icon": "flag"
+      "icon": "flag",
+      "alias_of": null,
+      "args": []
     },
     "composer.send": {
       "label": "@composer.action.send",
-      "icon": "sent"
+      "icon": "sent",
+      "alias_of": null,
+      "args": []
     },
     "composer.save": {
-      "label": "@composer.action.save"
+      "label": "@composer.action.save",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "composer.discard": {
       "label": "@composer.action.discard",
-      "icon": "delete"
+      "icon": "delete",
+      "alias_of": null,
+      "args": []
+    },
+    "composer.set-mode": {
+      "label": "@composer.action.set-mode",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "composer.toggle-preview": {
+      "label": "@composer.action.toggle-preview",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "composer.toggle-source": {
+      "label": "@composer.action.toggle-source",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "composer.attach": {
+      "label": "@composer.action.attach",
+      "icon": "attachment",
+      "alias_of": null,
+      "args": []
     },
     "outbox.undo": {
-      "label": "@outbox.action.undo"
+      "label": "@outbox.action.undo",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "outbox.open": {
       "label": "@outbox.action.open",
       "icon": "outbox",
       "alias_of": "window.open",
-      "args": ["outbox"]
+      "args": [
+        "outbox"
+      ]
     },
     "search.focus": {
       "label": "@search.action.focus",
-      "icon": "search"
+      "icon": "search",
+      "alias_of": null,
+      "args": []
     },
     "search.clear": {
-      "label": "@search.action.clear"
+      "label": "@search.action.clear",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "account.add": {
       "label": "@account.action.add",
-      "icon": "account-add"
+      "icon": "account-add",
+      "alias_of": null,
+      "args": []
     },
     "settings.open": {
       "label": "@settings.action.open",
       "icon": "settings",
       "alias_of": "window.open",
-      "args": ["settings"]
+      "args": [
+        "settings"
+      ]
     },
     "window.open": {
-      "label": "@window.action.open"
+      "label": "@window.action.open",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "window.close": {
       "label": "@window.action.close",
-      "icon": "close"
+      "icon": "close",
+      "alias_of": null,
+      "args": []
     },
     "view.toggle": {
-      "label": "@view.action.toggle"
+      "label": "@view.action.toggle",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     },
     "sync.now": {
       "label": "@sync.action.now",
-      "icon": "sync"
+      "icon": "sync",
+      "alias_of": null,
+      "args": []
+    },
+    "rules.open": {
+      "label": "@rules.action.open",
+      "icon": "filter",
+      "alias_of": null,
+      "args": []
+    },
+    "rules.create-from-message": {
+      "label": "@rules.action.create-from-message",
+      "icon": "filter",
+      "alias_of": null,
+      "args": []
+    },
+    "mcp.indicator.dismiss": {
+      "label": "@mcp.indicator.dismiss",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "inspector.toggle": {
+      "label": "@customize.action.inspector",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "customize.merge": {
+      "label": "@customize.action.merge",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "customize.errors": {
+      "label": "@customize.action.errors",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
     {
       "context": "list",
       "key": "j",
-      "action": "mail.next"
+      "action": "mail.next",
+      "args": []
     },
     {
       "context": "list",
       "key": "k",
-      "action": "mail.previous"
+      "action": "mail.previous",
+      "args": []
     },
     {
       "context": "list",
       "key": "arrowdown",
-      "action": "mail.next"
+      "action": "mail.next",
+      "args": []
     },
     {
       "context": "list",
       "key": "arrowup",
-      "action": "mail.previous"
+      "action": "mail.previous",
+      "args": []
     },
     {
       "context": "reader",
       "key": "j",
-      "action": "mail.next"
+      "action": "mail.next",
+      "args": []
     },
     {
       "context": "reader",
       "key": "k",
-      "action": "mail.previous"
+      "action": "mail.previous",
+      "args": []
     },
     {
       "context": "composer",
       "key": "ctrl+enter",
-      "action": "composer.send"
+      "action": "composer.send",
+      "args": []
     },
     {
       "context": "composer",
       "key": "ctrl+s",
-      "action": "composer.save"
+      "action": "composer.save",
+      "args": []
+    },
+    {
+      "context": "composer",
+      "key": "ctrl+shift+a",
+      "action": "composer.attach",
+      "args": []
     },
     {
       "context": "search",
       "key": "escape",
-      "action": "search.clear"
+      "action": "search.clear",
+      "args": []
     },
     {
       "context": "window",
       "key": "escape",
-      "action": "window.close"
+      "action": "window.close",
+      "args": []
     },
     {
       "context": "global",
       "key": "c",
-      "action": "mail.compose"
+      "action": "mail.compose",
+      "args": []
     },
     {
       "context": "global",
       "key": "r",
-      "action": "mail.reply"
+      "action": "mail.reply",
+      "args": []
     },
     {
       "context": "global",
       "key": "a",
-      "action": "mail.reply-all"
+      "action": "mail.reply-all",
+      "args": []
     },
     {
       "context": "global",
       "key": "f",
-      "action": "mail.forward"
+      "action": "mail.forward",
+      "args": []
     },
     {
       "context": "global",
       "key": "e",
-      "action": "mail.archive"
+      "action": "mail.archive",
+      "args": []
     },
     {
       "context": "global",
       "key": "v",
-      "action": "mail.move"
+      "action": "mail.move",
+      "args": []
     },
     {
       "context": "global",
       "key": "delete",
-      "action": "mail.delete"
+      "action": "mail.delete",
+      "args": []
     },
     {
       "context": "global",
       "key": "shift+delete",
-      "action": "mail.delete-permanently"
+      "action": "mail.delete-permanently",
+      "args": []
     },
     {
       "context": "global",
       "key": "u",
-      "action": "mail.toggle-read"
+      "action": "mail.toggle-read",
+      "args": []
     },
     {
       "context": "global",
       "key": "s",
-      "action": "mail.toggle-flag"
+      "action": "mail.toggle-flag",
+      "args": []
     },
     {
       "context": "global",
       "key": "/",
-      "action": "search.focus"
+      "action": "search.focus",
+      "args": []
     },
     {
       "context": "global",
       "key": "f5",
-      "action": "sync.now"
+      "action": "sync.now",
+      "args": []
     },
     {
       "context": "global",
       "key": "ctrl+b",
       "action": "view.toggle",
-      "args": ["sidebar"]
+      "args": [
+        "sidebar"
+      ]
     },
     {
       "context": "global",
       "key": "g r",
       "action": "view.toggle",
-      "args": ["reader"]
+      "args": [
+        "reader"
+      ]
     },
     {
       "context": "global",
       "key": "g o",
-      "action": "outbox.open"
+      "action": "outbox.open",
+      "args": []
     },
     {
       "context": "global",
       "key": "ctrl+,",
-      "action": "settings.open"
+      "action": "settings.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+shift+i",
+      "action": "inspector.toggle",
+      "args": []
     }
   ],
   "toolbars": {
     "main": [
       {
         "type": "action",
-        "action": "mail.compose"
+        "action": "mail.compose",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "sync.now"
+        "action": "sync.now",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "separator"
       },
       {
         "type": "action",
-        "action": "outbox.open"
+        "action": "outbox.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "rules.open",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "spacer"
       },
       {
         "type": "action",
-        "action": "account.add"
+        "action": "account.add",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "settings.open"
+        "action": "settings.open",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "reader": [
       {
         "type": "action",
-        "action": "mail.reply"
+        "action": "mail.reply",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.reply-all"
+        "action": "mail.reply-all",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.forward"
+        "action": "mail.forward",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "spacer"
       },
       {
         "type": "action",
-        "action": "mail.archive"
+        "action": "mail.archive",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.move"
+        "action": "mail.move",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.delete"
+        "action": "mail.delete",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "separator"
       },
       {
         "type": "action",
-        "action": "mail.toggle-read"
+        "action": "mail.toggle-read",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.toggle-flag"
+        "action": "mail.toggle-flag",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "rules.create-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "customize": [
+      {
+        "type": "action",
+        "action": "customize.merge",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "customize.errors",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "inspector.toggle",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ]
   },
@@ -597,41 +1079,75 @@
     "context:message-list.row": [
       {
         "type": "action",
-        "action": "mail.reply"
+        "action": "mail.reply",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.reply-all"
+        "action": "mail.reply-all",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.forward"
+        "action": "mail.forward",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "separator"
       },
       {
         "type": "action",
-        "action": "mail.toggle-read"
+        "action": "mail.toggle-read",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.toggle-flag"
+        "action": "mail.toggle-flag",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "separator"
       },
       {
         "type": "action",
-        "action": "mail.archive"
+        "action": "mail.archive",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.move"
+        "action": "mail.move",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
-        "action": "mail.delete"
+        "action": "mail.delete",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "rules.create-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ]
   }

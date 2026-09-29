@@ -111,7 +111,7 @@ describe("mock core", () => {
     const patches = [
       {
         op: "split-sizes" as const,
-        node: { window: "main", breakpoint: 0, path: [1] },
+        node: { window: "main", breakpoint: 0, path: [2] },
         sizes: ["300px", "1fr", "2fr"],
       },
       {
@@ -125,14 +125,14 @@ describe("mock core", () => {
       { op: "toolbar-order" as const, toolbar: "reader", items: [{ type: "spacer" as const }] },
       {
         op: "column-order" as const,
-        node: { window: "main", breakpoint: 0, path: [1, 1] },
+        node: { window: "main", breakpoint: 0, path: [2, 1] },
         columns: ["subject", "from"],
       },
     ];
     expect(await call(env, { type: "UpdateLayout", patches })).toEqual({ type: "Done" });
     const layout = env.transport.data.layout;
     const split = layout.windows.main?.[0]?.root;
-    expect(split?.type === "stack" && split.children[1]).toMatchObject({
+    expect(split?.type === "stack" && split.children[2]).toMatchObject({
       sizes: ["300px", "1fr", "2fr"],
     });
     expect(layout.keys).toContainEqual({
@@ -545,7 +545,7 @@ describe("inspector", () => {
     expect(document.querySelector('[data-part="inspector.highlight"]')).not.toBeNull();
     expect(within(panel).getByText(/Theme rules/)).toBeInTheDocument();
     expect(within(panel).getByText("message-list #list")).toBeInTheDocument();
-    expect(within(panel).getByText(/window “main”, breakpoint 0, path 1\/1/)).toBeInTheDocument();
+    expect(within(panel).getByText(/window “main”, breakpoint 0, path 2\/1/)).toBeInTheDocument();
 
     // The click picks instead of pressing the row.
     await user.click(screen.getByRole("button", { name: "Hello" }));
@@ -613,7 +613,7 @@ describe("split write-back", () => {
         patches: [
           {
             op: "split-sizes",
-            node: { window: "main", breakpoint: 0, path: [1] },
+            node: { window: "main", breakpoint: 0, path: [2] },
             sizes: ["260px", "1fr", "1fr"],
           },
         ],

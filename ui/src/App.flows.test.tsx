@@ -63,7 +63,7 @@ describe("M1a flows", () => {
     fireEvent.keyDown(body, { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-    const status = screen.getByRole("status");
+    const status = screen.getByRole("status", { name: "Status" });
     expect(within(status).getByText(/Sending in (10|9) seconds/)).toBeInTheDocument();
     await user.click(within(status).getByRole("button", { name: "Undo" }));
     const reopened = await screen.findByRole("dialog", { name: "New message" });
@@ -95,7 +95,7 @@ describe("M1a flows", () => {
       message: null,
     };
     act(() => env.store.getState().setLastSend(entry));
-    const status = screen.getByRole("status");
+    const status = screen.getByRole("status", { name: "Status" });
     expect(within(status).getByText("Sending…")).toBeInTheDocument();
     act(() =>
       env.transport.emit({
@@ -209,7 +209,7 @@ describe("M1a flows", () => {
     );
     // Query observers are notified asynchronously.
     await waitFor(() => expect(work).toHaveAttribute("data-status", "offline"));
-    expect(screen.getByRole("status")).toHaveTextContent("Work: Offline");
+    expect(screen.getByRole("status", { name: "Status" })).toHaveTextContent("Work: Offline");
 
     env.transport.data.accounts[1] = {
       ...(env.transport.data.accounts[1] as (typeof env.transport.data.accounts)[number]),

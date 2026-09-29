@@ -101,6 +101,13 @@ pub struct ServeArgs {
     /// Do not watch theme.kdl / layout.kdl for changes.
     #[arg(long)]
     pub no_watch: bool,
+    /// Port of the MCP server on 127.0.0.1 (0 picks a free port; agents
+    /// find it in <data-dir>/mcp-endpoint.json).
+    #[arg(long, value_name = "PORT", default_value_t = 0)]
+    pub mcp_port: u16,
+    /// Do not start the MCP server.
+    #[arg(long)]
+    pub no_mcp: bool,
     /// More log output (-v debug, -vv trace). NAIL_LOG overrides.
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
@@ -157,6 +164,8 @@ mod tests {
                 locale: None,
                 open: false,
                 no_watch: false,
+                mcp_port: 0,
+                no_mcp: false,
                 verbose: 0,
             }
         );
@@ -181,6 +190,9 @@ mod tests {
                 "de",
                 "--open",
                 "--no-watch",
+                "--mcp-port",
+                "4799",
+                "--no-mcp",
                 "-vv",
             ]),
             ServeArgs {
@@ -192,6 +204,8 @@ mod tests {
                 locale: Some("de".into()),
                 open: true,
                 no_watch: true,
+                mcp_port: 4799,
+                no_mcp: true,
                 verbose: 2,
             }
         );

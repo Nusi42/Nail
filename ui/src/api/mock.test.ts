@@ -482,11 +482,20 @@ describe("drafts and the outbox in the mock core", () => {
     expect(
       await client.call({ type: "SaveDraft", draft: draft({ identity_id: "nobody@x.example" }) }),
     ).toMatchObject({ code: "invalid_request" });
+    // Rich drafts are stored by the composer mock; unknown attachment blobs are refused.
     expect(
       await client.call({ type: "SaveDraft", draft: draft({ html: "<p>x</p>" }) }),
-    ).toMatchObject({
-      code: "unsupported",
-    });
+    ).toMatchObject({ type: "DraftSaved" });
+    expect(
+      await client.call({
+        type: "SaveDraft",
+        draft: draft({
+          attachments: [
+            { filename: "a.pdf", mime: "application/pdf", size: 1, blob: "nope", content_id: null },
+          ],
+        }),
+      }),
+    ).toMatchObject({ code: "invalid_request" });
     const { draft_id } = await client.request(
       { type: "SaveDraft", draft: draft({ to: [] }) },
       "DraftSaved",
