@@ -481,3 +481,47 @@ async fn usable_from_tokio_tasks() {
         .unwrap();
     assert_eq!(page.total, 16);
 }
+
+/// Regression: deleting or clearing folders removed the message rows but
+/// left their raw mail in the blob store forever.
+#[test]
+fn unreferenced_blobs_are_collected() {
+    let dir = tempfile::tempdir().unwrap();
+    let (store, blobs) = nail_store::open_data_dir(dir.path()).unwrap();
+    store.upsert_account(&account("a1")).unwrap();
+    for (id, path) in [("inbox", "INBOX"), ("archive", "Archive")] {
+        store
+            .upsert_folder(&folder(id, "a1", path, None, FolderRole::Other))
+            .unwrap();
+    }
+    let only_inbox = blobs.put(b"only in the inbox").unwrap();
+    let shared = blobs.put(b"in both folders").unwrap();
+    for (id, folder_id, hash) in [
+        ("m1", "inbox", &only_inbox),
+        ("m2", "inbox", &shared),
+        ("m3", "inbox", &shared),
+        ("m4", "archive", &shared),
+    ] {
+        let mut m = message(id, "a1", folder_id, "2026-01-01T00:00:00Z");
+        m.blob_hash = Some(hash.clone());
+        store.upsert_message(&m).unwrap();
+    }
+
+    let mut hashes = store.folder_blob_hashes(&"inbox".into()).unwrap();
+    hashes.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    let mut expected = vec![only_inbox.clone(), shared.clone()];
+    expected.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    assert_eq!(hashes, expected, "distinct hashes");
+
+    assert!(store.delete_folder(&"inbox".into()).unwrap());
+    assert_eq!(store.remove_unreferenced_blobs(&blobs, &hashes).unwrap(), 1);
+    assert!(!blobs.contains(&only_inbox));
+    assert!(blobs.contains(&shared), "still referenced by the archive");
+
+    let hashes = store.folder_blob_hashes(&"archive".into()).unwrap();
+    store.clear_folder(&"archive".into()).unwrap();
+    assert_eq!(store.remove_unreferenced_blobs(&blobs, &hashes).unwrap(), 1);
+    assert!(!blobs.contains(&shared));
+    // Removing again is a no-op.
+    assert_eq!(store.remove_unreferenced_blobs(&blobs, &hashes).unwrap(), 0);
+}

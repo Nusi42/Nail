@@ -56,7 +56,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 npm test                                   # Vitest (ui), incl. the lint-rule self-test
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
-npm run e2e                                # builds ui + nail-cli, then Playwright (e2e/README.md)
+npm run e2e                                # builds ui + nail-cli, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
 npm run gen:api                            # regenerate ui/src/api/generated from nail-api (a test fails when stale)
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas

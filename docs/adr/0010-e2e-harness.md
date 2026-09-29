@@ -20,8 +20,11 @@ Those changes must not leak into other scenarios, which run in parallel.
   build steps. Building inside Playwright's `webServer` would hide
   compilation time in a start-up timeout and duplicate the CI build.
 - **One shared server plus private servers.** Playwright's `webServer`
-  starts one `nail serve --seed demo` on port 4791 (`NAIL_E2E_PORT`), with
-  temporary data and config directories, for read-only scenarios. A
+  starts one `nail serve --seed demo` on a free port, with temporary data
+  and config directories, for read-only scenarios. The runner picks the
+  port once (a child process binds port 0, because the config is evaluated
+  synchronously) and passes it to the workers in `NAIL_E2E_PORT`, as it
+  does for the directories; setting `NAIL_E2E_PORT` pins a port. A
   scenario that edits configuration files, needs `--locale` or needs
   `--seed demo-imap` starts its own server on port 0 (`support/nail.ts`).
   It reads the URL from the server's first stdout line and deletes the
@@ -35,8 +38,11 @@ Those changes must not leak into other scenarios, which run in parallel.
   `frameLocator`: no remote `img` sources, no scripts, forms, frames or
   `on*` attributes.
 - **Accessibility:** `@axe-core/playwright` scans the main window, the
-  reader and dark mode. The scenarios fail on `serious` or `critical`
-  violations.
+  reader and dark mode. Any violation fails the scenario, whatever its
+  impact. The app root is a `main` landmark, so layout plumbing such as
+  split dividers is inside a landmark (axe rule `region`).
+- **Output outside the repository:** traces, screenshots and the HTML
+  report go to `%LOCALAPPDATA%\nail-build\e2e\` (ADR 0011).
 - **Chromium only** for now, matching the WebView2 engine of the desktop
   app. Playwright against the packaged app over CDP comes later (design,
   "Testing & quality"). A manual CDP smoke check is described in

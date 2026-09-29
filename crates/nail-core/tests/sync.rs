@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use nail_api::{Account, AccountId, AccountKind, ErrorCode, Event, FolderRole, Request, Response};
 use nail_core::{ImapAccount, Service, ServiceOptions};
-use nail_proto_imap::{Credentials, ImapConfig, Security};
+use nail_proto_imap::{Credentials, FetchBatchLimits, ImapConfig, Security};
 use nail_testkit::{MailStore, MockImapConfig, MockImapServer, corpus_message, demo_corpus};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -21,6 +21,10 @@ struct Fixture {
 }
 
 async fn setup(password: &str) -> Fixture {
+    setup_with(password, |config| config).await
+}
+
+async fn setup_with(password: &str, tweak: impl FnOnce(ImapConfig) -> ImapConfig) -> Fixture {
     let server = MockImapServer::start(MockImapConfig::default(), MailStore::demo())
         .await
         .unwrap();
@@ -36,10 +40,12 @@ async fn setup(password: &str) -> Fixture {
         kind: AccountKind::Imap,
     };
     let settings = ImapAccount {
-        config: ImapConfig::new(server.host())
-            .with_port(server.port())
-            .with_security(Security::InsecurePlaintext)
-            .with_timeout(TIMEOUT),
+        config: tweak(
+            ImapConfig::new(server.host())
+                .with_port(server.port())
+                .with_security(Security::InsecurePlaintext)
+                .with_timeout(TIMEOUT),
+        ),
         credentials: Credentials::new(&server.config().username, password),
     };
     service
@@ -325,4 +331,129 @@ async fn folders_gone_from_the_server_are_removed() {
             |e| matches!(e, Event::MailChanged { folder_ids } if folder_ids.contains(&stale.id))
         )
     );
+}
+
+/// Regression: one folder the server refuses to open used to abort the
+/// whole pass, so the folders after it were never synced.
+#[tokio::test]
+async fn a_failing_folder_does_not_stop_the_others() {
+    let f = setup("secret").await;
+    // "Sent" is synced first (shortest path); the server refuses to open it.
+    f.server.deny_mailboxes(&["Sent"]);
+    let mut events = f.service.subscribe();
+
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.failed_folders.len(), 1);
+    assert_eq!(report.failed_folders[0].path, "Sent");
+    assert_eq!(report.failed_folders[0].code, ErrorCode::NotFound);
+    let expected = corpus_totals();
+    let sent = expected.iter().find(|t| t.0 == "Sent").unwrap().2;
+    let all: u32 = expected.iter().map(|t| t.2).sum();
+    assert_eq!(report.new_messages, all - sent);
+
+    let totals = folder_totals(&f.service, &f.account).await;
+    for (path, role, count) in &expected {
+        let want = if path == "Sent" { 0 } else { *count };
+        assert!(
+            totals.contains(&(path.clone(), *role, want)),
+            "{path}: {totals:?}"
+        );
+    }
+    // The pass completes (full progress) and then reports the folder.
+    let events = drain(&mut events);
+    let total = expected.len() as u32 + 1;
+    let progress_end = events
+        .iter()
+        .position(|e| matches!(e, Event::SyncProgress { done, .. } if *done == total))
+        .expect("the pass reached the end");
+    match &events[progress_end + 1..] {
+        [Event::SyncFailed { code, message, .. }] => {
+            assert_eq!(*code, ErrorCode::NotFound);
+            assert!(message.contains("Sent"), "{message}");
+        }
+        other => panic!("unexpected events {other:?}"),
+    }
+
+    // Once the server allows it again, the folder catches up.
+    f.server.deny_mailboxes(&[]);
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert!(report.failed_folders.is_empty());
+    assert_eq!(report.new_messages, sent);
+    assert_eq!(folder_totals(&f.service, &f.account).await, expected);
+}
+
+/// Regression: a folder used to be fetched completely into memory and
+/// checkpointed only at the end, so a connection lost midway discarded
+/// everything and the next pass started the folder from UID 1 again.
+#[tokio::test]
+async fn an_interrupted_folder_resumes_after_the_last_stored_batch() {
+    let f = setup_with("secret", |config| {
+        config.with_fetch_batch(FetchBatchLimits {
+            max_messages: 1,
+            max_bytes: u64::MAX,
+        })
+    })
+    .await;
+    let expected = corpus_totals();
+    let sent = expected.iter().find(|t| t.0 == "Sent").unwrap().2;
+    assert!(sent >= 3, "the test needs at least three sent messages");
+    let all: u32 = expected.iter().map(|t| t.2).sum();
+
+    // Two body batches (one message each) of "Sent" succeed, then the
+    // connection drops.
+    f.server.disconnect_after("BODY.PEEK[]", 2);
+    let err = f.service.sync_account(&f.account).await.unwrap_err();
+    assert_eq!(err.code(), ErrorCode::Network);
+    let totals = folder_totals(&f.service, &f.account).await;
+    let stored_sent = totals.iter().find(|t| t.0 == "Sent").unwrap().2;
+    assert_eq!(stored_sent, 2, "completed batches are kept");
+
+    // The next pass fetches only what is missing.
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.new_messages, all - 2);
+    assert_eq!(folder_totals(&f.service, &f.account).await, expected);
+}
+
+/// Regression: folders deleted on the server lost their message rows, but
+/// their raw mail stayed in the blob store forever.
+#[tokio::test]
+async fn raw_mail_of_deleted_folders_is_removed() {
+    let f = setup("secret").await;
+    // A message only the "Receipts" folder has.
+    assert!(f.server.store().add_mailbox("Receipts", FolderRole::Other));
+    let raw = b"From: shop@example.org\r\nSubject: Receipt 42\r\n\r\nThanks!\r\n";
+    f.server
+        .store()
+        .append("Receipts", raw, &[] as &[&str])
+        .unwrap();
+    f.service.sync_account(&f.account).await.unwrap();
+    let hash = nail_store::BlobHash::of(raw);
+    assert!(f.service.blobs().contains(&hash));
+    let blob_count = |dir: &std::path::Path| walk(dir).into_iter().filter(|p| p.is_file()).count();
+    let before = blob_count(f.service.blobs().root());
+
+    assert!(f.server.store().delete_mailbox("Receipts"));
+    let report = f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(report.removed_folders, 1);
+    assert!(!f.service.blobs().contains(&hash), "the blob is collected");
+    assert_eq!(blob_count(f.service.blobs().root()), before - 1);
+
+    // Mail still referenced elsewhere stays readable after a UIDVALIDITY
+    // reset (its blobs are dropped and stored again).
+    f.server.store().reset_uid_validity("Sent").unwrap();
+    f.service.sync_account(&f.account).await.unwrap();
+    assert_eq!(blob_count(f.service.blobs().root()), before - 1);
+}
+
+fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            out.extend(walk(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out
 }

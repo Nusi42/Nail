@@ -92,13 +92,22 @@ fn emit(app: &AppHandle, event: &Event) {
     }
 }
 
-/// Forwards every core event to the webview until the service goes away.
-async fn forward_events(app: AppHandle, mut events: broadcast::Receiver<Event>) {
+/// Forwards every core event to `emit` (the webview) until the service goes
+/// away. When the receiver lagged and events were lost, the current state
+/// is sent instead ([`Service::resync_events`]), so the UI refetches.
+async fn forward_events(
+    service: Service,
+    mut events: broadcast::Receiver<Event>,
+    emit: impl Fn(&Event),
+) {
     loop {
         match events.recv().await {
-            Ok(event) => emit(&app, &event),
+            Ok(event) => emit(&event),
             Err(broadcast::error::RecvError::Lagged(missed)) => {
-                tracing::warn!(missed, "the webview missed events");
+                tracing::warn!(missed, "the webview missed events; resyncing it");
+                for event in service.resync_events().await {
+                    emit(&event);
+                }
             }
             Err(broadcast::error::RecvError::Closed) => break,
         }
@@ -135,7 +144,12 @@ pub fn run() {
     tauri::Builder::default()
         .setup(move |app| {
             let service = open_service(&args)?;
-            tauri::async_runtime::spawn(forward_events(app.handle().clone(), service.subscribe()));
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(forward_events(
+                service.clone(),
+                service.subscribe(),
+                move |event| emit(&handle, event),
+            ));
             app.manage(service);
             Ok(())
         })
@@ -177,6 +191,52 @@ mod tests {
 
         let defaults = AppArgs::try_parse_from(["nail-app"]).unwrap();
         assert_eq!(defaults.seed, None);
+    }
+
+    /// Regression: a lagging forwarder only logged the loss, so the UI
+    /// never learned about missed mail or config changes.
+    #[tokio::test]
+    async fn a_lagging_forwarder_resyncs_the_webview() {
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let args = AppArgs {
+            data_dir: Some(data.path().into()),
+            config_dir: Some(config.path().into()),
+            seed: Some("demo".into()),
+            locale: None,
+        };
+        let service = open_service(&args).unwrap();
+        let events = service.subscribe();
+        // Overflow the receiver before the forwarder reads anything.
+        for _ in 0..nail_core::EVENT_CAPACITY + 10 {
+            service.broadcast(Event::MailChanged {
+                folder_ids: Vec::new(),
+            });
+        }
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = std::sync::Arc::clone(&seen);
+        let task = tokio::spawn(forward_events(service.clone(), events, move |event| {
+            sink.lock().unwrap().push(event.clone());
+        }));
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while seen.lock().unwrap().is_empty() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        task.abort();
+        let seen = seen.lock().unwrap();
+        assert!(
+            matches!(seen[0], Event::ConfigChanged { .. }),
+            "{:?}",
+            seen[0]
+        );
+        assert!(
+            matches!(&seen[1], Event::MailChanged { folder_ids } if !folder_ids.is_empty()),
+            "{:?}",
+            seen[1]
+        );
     }
 
     #[tokio::test]

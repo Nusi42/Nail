@@ -17,7 +17,7 @@ use rusqlite::{OptionalExtension, Row, Transaction, params};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::blob::BlobHash;
+use crate::blob::{BlobHash, BlobStore};
 use crate::error::{Error, Result};
 use crate::store::Store;
 
@@ -660,6 +660,48 @@ impl Store {
                 [folder.as_str()],
             )?;
             Ok(deleted)
+        })
+    }
+
+    /// The distinct blobs the messages of a folder reference. Collect them
+    /// before deleting or clearing the folder, then pass them to
+    /// [`Store::remove_unreferenced_blobs`].
+    pub fn folder_blob_hashes(&self, folder: &FolderId) -> Result<Vec<BlobHash>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT DISTINCT blob_hash FROM messages \
+                 WHERE folder_id = ?1 AND blob_hash IS NOT NULL",
+            )?;
+            let hashes = stmt
+                .query_map([folder.as_str()], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            hashes.iter().map(|h| BlobHash::parse(h)).collect()
+        })
+    }
+
+    /// Deletes those `candidates` from `blobs` that no message references
+    /// any more (garbage collection after deleting messages). Returns how
+    /// many blob files were removed.
+    ///
+    /// Each check and removal happens while holding the connection, so no
+    /// message row referencing the blob can be written in between. A writer
+    /// that stored the blob *before* and writes its row *after* a removal
+    /// must re-store the blob (see `nail-core`'s ingest).
+    pub fn remove_unreferenced_blobs(
+        &self,
+        blobs: &BlobStore,
+        candidates: &[BlobHash],
+    ) -> Result<usize> {
+        self.with_conn(|conn| {
+            let mut stmt =
+                conn.prepare_cached("SELECT 1 FROM messages WHERE blob_hash = ?1 LIMIT 1")?;
+            let mut removed = 0;
+            for hash in candidates {
+                if !stmt.exists([hash.as_str()])? && blobs.remove(hash)? {
+                    removed += 1;
+                }
+            }
+            Ok(removed)
         })
     }
 

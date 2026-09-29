@@ -48,9 +48,19 @@ duplicating them, and ids survive restarts.
 
 One pass per account: connect, `LIST`, mirror the folder tree (new folders
 are added; local folders missing on the server are deleted with their
-messages), then `fetch_new` per selectable folder from the stored
-UIDVALIDITY/UIDNEXT. A changed UIDVALIDITY clears the folder and fetches it
-again. Raw messages go to the blob store. Summaries come from `nail-mime`.
+messages and their unreferenced blobs), then `plan_fetch` per selectable
+folder from the stored UIDVALIDITY/UIDNEXT. A changed UIDVALIDITY clears the
+folder and fetches it again. The plan is fetched batch by batch (batches
+sized by `RFC822.SIZE`); each batch is stored and the folder's UIDNEXT is
+checkpointed right after it, so memory stays bounded and an interrupted pass
+resumes after the last stored batch. Raw messages go to the blob store.
+Summaries come from `nail-mime`.
+
+A folder that fails cleanly (`NO`, `BAD`, a withheld message) is skipped
+and listed in `SyncReport::failed_folders`; the other folders are still
+synced and the pass ends with one `SyncFailed` naming the failed folders.
+Connection-level errors (lost connection, timeout, TLS) and store errors end
+the pass.
 The thread key is the root of `References`, else `In-Reply-To`, else the
 message's own `Message-ID`; JWZ threading comes in M1.
 
@@ -115,10 +125,14 @@ M0 security:
 
 - The server binds to loopback addresses only; `Server::bind` refuses
   anything else.
-- A WebSocket upgrade whose `Origin` differs from its `Host` is refused
-  with 403. This blocks cross-site WebSocket hijacking from other pages in
-  the user's browser. Clients that send no `Origin` (tools, tests) are
-  accepted.
+- Every route accepts only a `Host` of `127.0.0.1:<port>`,
+  `localhost:<port>` or `[::1]:<port>` (the bound port), and an `Origin`, if
+  present, of `http://` plus one of those. Anything else gets 403. Checking
+  `Origin` against the request's own `Host` is not enough: under DNS
+  rebinding an attacker's page at `http://evil.example:<port>` resolves to
+  127.0.0.1 and sends matching `Host` and `Origin` headers. The allowlist
+  also blocks cross-site WebSocket hijacking. Clients that send no `Origin`
+  (tools, tests) are accepted.
 - Every response carries a strict CSP (`script-src 'self'`,
   `frame-ancestors 'none'`, `object-src 'none'`), `nosniff`,
   `Referrer-Policy: no-referrer` and COOP `same-origin`. `style-src` allows

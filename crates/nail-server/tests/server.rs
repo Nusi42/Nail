@@ -269,6 +269,38 @@ async fn foreign_origins_are_refused() {
     assert!(tokio_tungstenite::connect_async(request).await.is_ok());
 }
 
+/// DNS rebinding: the attacker's name resolves to 127.0.0.1, so `Host` and
+/// `Origin` agree with each other but not with the server's loopback names.
+#[tokio::test]
+async fn dns_rebinding_is_refused_on_the_websocket() {
+    let f = service();
+    let server = start(&f.service).await;
+    let port = server.local_addr().port();
+    let url = format!("ws://{}/api/ws", server.local_addr());
+
+    let mut request = url.clone().into_client_request().unwrap();
+    let evil = format!("evil.example:{port}");
+    request.headers_mut().insert("Host", evil.parse().unwrap());
+    request
+        .headers_mut()
+        .insert("Origin", format!("http://{evil}").parse().unwrap());
+    match tokio_tungstenite::connect_async(request).await.unwrap_err() {
+        tokio_tungstenite::tungstenite::Error::Http(response) => {
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+
+    // `localhost` with the right port is fine.
+    let mut request = url.into_client_request().unwrap();
+    let local = format!("localhost:{port}");
+    request.headers_mut().insert("Host", local.parse().unwrap());
+    request
+        .headers_mut()
+        .insert("Origin", format!("http://{local}").parse().unwrap());
+    assert!(tokio_tungstenite::connect_async(request).await.is_ok());
+}
+
 #[tokio::test]
 async fn refuses_non_loopback_addresses() {
     let f = service();
@@ -299,9 +331,25 @@ fn ui_dir() -> TempDir {
     dir
 }
 
+/// The port the router under test believes it is bound to.
+const PORT: u16 = 4780;
+
 async fn get(service: &Service, ui: Option<&Path>, uri: &str) -> axum::response::Response {
-    router(service.clone(), ui.map(Path::to_path_buf))
-        .oneshot(HttpRequest::get(uri).body(Body::empty()).unwrap())
+    get_with(service, ui, uri, &[("Host", "127.0.0.1:4780")]).await
+}
+
+async fn get_with(
+    service: &Service,
+    ui: Option<&Path>,
+    uri: &str,
+    headers: &[(&str, &str)],
+) -> axum::response::Response {
+    let mut request = HttpRequest::get(uri);
+    for (name, value) in headers {
+        request = request.header(*name, *value);
+    }
+    router(service.clone(), ui.map(Path::to_path_buf), PORT)
+        .oneshot(request.body(Body::empty()).unwrap())
         .await
         .unwrap()
 }
@@ -346,6 +394,27 @@ async fn serves_the_ui_with_spa_fallback_and_security_headers() {
     let traversal = get(&f.service, Some(ui.path()), "/../Cargo.toml").await;
     assert_ne!(body(traversal).await, std::fs::read("Cargo.toml").unwrap());
 
+    // Static files are guarded too, and so is a request without `Host`.
+    let rebound = get_with(
+        &f.service,
+        Some(ui.path()),
+        "/",
+        &[("Host", "evil.example:4780")],
+    )
+    .await;
+    assert_eq!(rebound.status(), StatusCode::FORBIDDEN);
+    assert_eq!(rebound.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+    let no_host = get_with(&f.service, Some(ui.path()), "/", &[]).await;
+    assert_eq!(no_host.status(), StatusCode::FORBIDDEN);
+    let wrong_port = get_with(
+        &f.service,
+        Some(ui.path()),
+        "/",
+        &[("Host", "127.0.0.1:4781")],
+    )
+    .await;
+    assert_eq!(wrong_port.status(), StatusCode::FORBIDDEN);
+
     let no_ui = get(&f.service, None, "/").await;
     assert_eq!(no_ui.status(), StatusCode::NOT_FOUND);
 }
@@ -370,8 +439,54 @@ async fn serves_blobs_by_hash() {
     );
     assert_eq!(body(ok).await, b"Subject: hi\r\n\r\nbody");
 
+    // DNS rebinding: the raw mail must not be readable from the attacker's page.
+    let rebound = get_with(
+        &f.service,
+        None,
+        &format!("/api/blob/{}", hash.as_str()),
+        &[
+            ("Host", "evil.example:4780"),
+            ("Origin", "http://evil.example:4780"),
+        ],
+    )
+    .await;
+    assert_eq!(rebound.status(), StatusCode::FORBIDDEN);
+    assert!(body(rebound).await.is_empty());
+
     let bad = get(&f.service, None, "/api/blob/xyz").await;
     assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
     let missing = get(&f.service, None, &format!("/api/blob/{}", "a".repeat(64))).await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+}
+
+/// Regression: a client that fell behind the event channel only got a log
+/// line, and its lists and config stayed stale. Now it gets the current
+/// state (config first, then a change notice for every folder).
+#[tokio::test]
+async fn a_lagging_client_is_resynced() {
+    let f = service();
+    let server = start(&f.service).await;
+    let mut socket = connect(&server).await;
+    send(&mut socket, 1, Request::Ping).await;
+    response(&mut socket, 1).await;
+
+    // The test runtime is single-threaded: nothing is forwarded while this
+    // loop runs, so the connection's receiver overflows.
+    for _ in 0..nail_core::EVENT_CAPACITY * 2 {
+        f.service.broadcast(Event::MailChanged {
+            folder_ids: Vec::new(),
+        });
+    }
+    let mut saw_config = false;
+    loop {
+        match receive(&mut socket).await {
+            ServerMessage::Event {
+                event: Event::ConfigChanged { .. },
+            } => saw_config = true,
+            ServerMessage::Event {
+                event: Event::MailChanged { folder_ids },
+            } if saw_config && !folder_ids.is_empty() => break,
+            _ => {}
+        }
+    }
 }

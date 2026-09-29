@@ -180,3 +180,70 @@ fn the_watcher_reports_changes_and_errors() {
     write(&config_dir, "notes.txt", "hello");
     drop(watcher);
 }
+
+/// Regression: deeply nested blocks used to overflow the stack inside the
+/// `kdl` parser (a process abort, not an error). Loaded on a 1 MiB stack,
+/// the Windows main-thread default `nail serve` loads the config on.
+#[test]
+fn deeply_nested_files_are_errors_not_crashes() {
+    let dir = tempfile::tempdir().unwrap();
+    let deep = |root: &str| {
+        format!(
+            "{root} \"Deep\" extends=\"default\" {{\n{}{}}}\n",
+            "split {\n".repeat(20_000),
+            "}\n".repeat(20_000)
+        )
+    };
+    write(dir.path(), "theme.kdl", &deep("theme"));
+    write(dir.path(), "layout.kdl", &deep("layout"));
+    let path = dir.path().to_owned();
+    let errors = std::thread::Builder::new()
+        .stack_size(1 << 20)
+        .spawn(move || {
+            let manager = ConfigManager::load(&path);
+            assert_eq!(*manager.theme(), default_theme());
+            assert_eq!(*manager.layout(), default_layout());
+            manager.errors()
+        })
+        .unwrap()
+        .join()
+        .expect("the loader thread survived");
+    let mut files: Vec<_> = errors.iter().map(|e| e.file.as_str()).collect();
+    files.sort_unstable();
+    assert_eq!(files, ["layout.kdl", "theme.kdl"]);
+    assert!(
+        errors
+            .iter()
+            .all(|e| e.message.contains("nested more than"))
+    );
+}
+
+/// Regression: a valid change to one file cleared the error display (the UI
+/// clears it on `Changed`) although the other file was still invalid.
+#[test]
+fn a_change_re_reports_errors_of_the_other_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let manager = ConfigManager::load(dir.path());
+    let (tx, rx) = mpsc::channel();
+    let _watcher = manager
+        .watch(Duration::from_millis(50), move |update| {
+            let _ = tx.send(update);
+        })
+        .unwrap();
+
+    write(dir.path(), "layout.kdl", "layout \"x\" {\n  window\n");
+    wait_for(
+        &rx,
+        |u| matches!(u, ConfigUpdate::Error(e) if e.file == "layout.kdl"),
+    );
+
+    write(dir.path(), "theme.kdl", ACCENT_THEME);
+    wait_for(
+        &rx,
+        |u| matches!(u, ConfigUpdate::Changed { theme, .. } if theme.name == "Mine"),
+    );
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(ConfigUpdate::Error(err)) => assert_eq!(err.file, "layout.kdl"),
+        other => panic!("expected the layout error again, got {other:?}"),
+    }
+}

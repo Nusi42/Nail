@@ -169,6 +169,10 @@ impl Session {
     }
 
     async fn handle(&mut self, line: &[u8]) -> io::Result<Flow> {
+        if self.shared.control.should_disconnect_line(line) {
+            tracing::debug!("mock IMAP: injected disconnect (after N commands)");
+            return Ok(Flow::Close);
+        }
         let tokens = match command::tokenize(line) {
             Ok(tokens) => tokens,
             Err(err) => {
@@ -398,6 +402,12 @@ impl Session {
         let Some(name) = args.first().and_then(Token::as_text) else {
             return self.tagged(tag, "BAD", "mailbox name required").await;
         };
+        if self.shared.control.is_denied(&name) {
+            self.state = State::Authenticated;
+            return self
+                .tagged(tag, "NO", "[NOPERM] access to this mailbox is denied")
+                .await;
+        }
         let Some(mailbox) = self.shared.store.mailbox(&name) else {
             self.state = State::Authenticated;
             return self

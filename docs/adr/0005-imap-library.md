@@ -58,11 +58,19 @@ Supporting choices:
   batch, UIDs the server did not return are re-checked with `UID SEARCH`;
   if they still exist the fetch fails. `async-imap` is still used for
   framing, parsing and `LOGIN`/`AUTHENTICATE`.
-- **Incremental fetch:** `fetch_new(path, Option<SyncState>)` examines the
-  mailbox; a changed UIDVALIDITY (or no stored state) fetches everything and
-  sets `uid_validity_changed`; otherwise it fetches `UID <uidnext>:*` and
+- **Incremental fetch:** `plan_fetch(path, Option<SyncState>)` examines the
+  mailbox; a changed UIDVALIDITY (or no stored state) plans everything and
+  sets `uid_validity_changed`; otherwise it plans `UID <uidnext>:*` and
   filters the result, because `n:*` always matches the highest UID (RFC 3501
-  6.4.8). Fetching is done in batches of 50 UIDs.
+  6.4.8). The UIDs are grouped into batches by `RFC822.SIZE`
+  (`ImapConfig::fetch_batch`, default at most 50 messages and 8 MiB), and
+  `fetch_batch` downloads one batch; `FetchPlan::state_after(i)` is the
+  checkpoint after batch `i`. `fetch_new` does the same but collects every
+  message in memory (tests and small mailboxes).
+- **Timeouts:** commands must finish within `ImapConfig::timeout`, except
+  body downloads: the stream has an idle timeout (no data for `timeout`
+  fails the read), so a large `FETCH` over a slow link is not cut off while
+  data flows.
 
 ### Test server: in-house mock (`crates/nail-testkit`)
 
@@ -72,7 +80,8 @@ supports plaintext, implicit TLS and STARTTLS with a throw-away CA from
 **`rcgen`** 0.14 (ring), `LOGIN`/`AUTHENTICATE PLAIN` with configurable
 credentials, `LIST` with SPECIAL-USE, `SELECT`/`EXAMINE`,
 `FETCH`/`UID FETCH`, `SEARCH`/`UID SEARCH`, and failure injection
-(`disconnect_on`, `fail_on`). It is deliberately small; real-server
+(`disconnect_on`, `fail_on`, `disconnect_after`, `deny_mailboxes`). It is
+deliberately small; real-server
 integration tests (Dovecot, Stalwart) come with CI containers later.
 
 ## Consequences
@@ -84,3 +93,8 @@ integration tests (Dovecot, Stalwart) come with CI containers later.
 - `async-imap` pulls `imap-proto` and `chrono`; acceptable.
 - ENVELOPE strings are exposed raw (encoded words undecoded); display data
   comes from `nail-mime` parsing the full message.
+- `mail-parser` builds nested `message/rfc822` parts as a tree of `Message`
+  values whose compiler-generated `Drop` recurses once per level; a hostile
+  mail with thousands of levels overflowed the stack (a process abort, not
+  a panic). `nail-mime` wraps every parse result in a guard that tears the
+  tree down iteratively. Parsing itself is iterative in `mail-parser`.

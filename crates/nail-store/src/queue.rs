@@ -357,6 +357,20 @@ impl Store {
         Ok(reset)
     }
 
+    /// Puts one `in_flight` operation back to `pending`.
+    fn release_op(&self, id: OpId) -> Result<()> {
+        self.with_conn(|conn| {
+            conn.execute(
+                &format!(
+                    "UPDATE op_queue SET state = 'pending', updated_at = {NOW}
+                     WHERE id = ?1 AND state = 'in_flight'"
+                ),
+                [id.0],
+            )?;
+            Ok(())
+        })
+    }
+
     /// Marks the oldest `pending` operation `in_flight`, counting an attempt.
     fn claim_next_op(&self) -> Result<Option<QueuedOp>> {
         self.with_tx(|tx| {
@@ -407,6 +421,13 @@ impl Store {
         let _pass = self.replay_lock().lock().await;
         let mut report = ReplayReport::default();
         while let Some(op) = self.call(Store::claim_next_op).await? {
+            // Puts the op back to `pending` unless it is finished below: the
+            // pass may be cancelled while `replay` runs, or `finish_op` may
+            // fail. Otherwise it would stay `in_flight` until a restart.
+            let mut claim = ClaimGuard {
+                store: self,
+                id: Some(op.id),
+            };
             let outcome = replayer.replay(&op).await;
             let id = op.id;
             let (state, error) = match outcome {
@@ -432,10 +453,30 @@ impl Store {
             };
             self.call(move |s| s.finish_op(id, state, error.as_deref()))
                 .await?;
+            claim.id = None;
             if report.deferred.is_some() {
                 break;
             }
         }
         Ok(report)
+    }
+}
+
+/// An operation claimed by a replay pass; see [`Store::replay_pending`].
+struct ClaimGuard<'a> {
+    store: &'a Store,
+    /// `None` once the operation is finished.
+    id: Option<OpId>,
+}
+
+impl Drop for ClaimGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(id) = self.id.take() {
+            // A short, local write; fine to do synchronously here.
+            match self.store.release_op(id) {
+                Ok(()) => tracing::debug!(%id, "interrupted operation re-queued"),
+                Err(err) => tracing::warn!(%id, %err, "cannot re-queue an interrupted operation"),
+            }
+        }
     }
 }

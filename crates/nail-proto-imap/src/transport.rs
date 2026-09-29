@@ -86,6 +86,83 @@ impl AsyncWrite for ImapStream {
     }
 }
 
+/// A stream whose reads fail with [`std::io::ErrorKind::TimedOut`] when the
+/// peer sends nothing for `idle` while a read is waiting.
+///
+/// Unlike a timeout around a whole command, this never fires while data is
+/// flowing, so a `FETCH` of large bodies over a slow link can take as long as
+/// it needs, while a silent server is still detected.
+#[derive(Debug)]
+pub(crate) struct IdleTimeout<S> {
+    inner: S,
+    idle: Duration,
+    sleep: Pin<Box<tokio::time::Sleep>>,
+    /// Whether `sleep` is set for the current wait.
+    armed: bool,
+}
+
+impl<S> IdleTimeout<S> {
+    pub(crate) fn new(inner: S, idle: Duration) -> Self {
+        Self {
+            inner,
+            idle,
+            sleep: Box::pin(tokio::time::sleep(idle)),
+            armed: false,
+        }
+    }
+}
+
+impl<S: AsyncRead + Unpin> AsyncRead for IdleTimeout<S> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.inner).poll_read(cx, buf) {
+            Poll::Ready(result) => {
+                this.armed = false;
+                Poll::Ready(result)
+            }
+            Poll::Pending => {
+                if !this.armed {
+                    let deadline = tokio::time::Instant::now() + this.idle;
+                    this.sleep.as_mut().reset(deadline);
+                    this.armed = true;
+                }
+                match this.sleep.as_mut().poll(cx) {
+                    Poll::Ready(()) => {
+                        this.armed = false;
+                        Poll::Ready(Err(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            format!("no data from the server for {:?}", this.idle),
+                        )))
+                    }
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+        }
+    }
+}
+
+impl<S: AsyncWrite + Unpin> AsyncWrite for IdleTimeout<S> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
+    }
+}
+
 /// Runs `fut` with the configured timeout.
 pub(crate) async fn with_timeout<T>(
     timeout: Duration,
@@ -289,6 +366,33 @@ async fn starttls<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut BufReader<S>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn idle_timeout_fires_only_when_the_peer_is_silent() {
+        let idle = Duration::from_millis(150);
+        let (client, mut server) = tokio::io::duplex(64);
+        let mut stream = IdleTimeout::new(client, idle);
+
+        // A slow but steady sender: 12 bytes over ~600 ms, far longer than
+        // `idle` in total, but never silent for that long.
+        let sender = tokio::spawn(async move {
+            for _ in 0..12 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                server.write_all(b"x").await.unwrap();
+            }
+            server
+        });
+        let mut buf = [0u8; 12];
+        stream.read_exact(&mut buf).await.unwrap();
+        assert_eq!(&buf, b"xxxxxxxxxxxx");
+
+        // Now the peer stays connected but silent.
+        let _server = sender.await.unwrap();
+        let started = std::time::Instant::now();
+        let err = stream.read_u8().await.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() >= idle);
+    }
 
     #[test]
     fn builds_all_trust_configs() {

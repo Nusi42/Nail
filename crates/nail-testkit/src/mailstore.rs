@@ -161,6 +161,17 @@ impl MailStore {
         Some(uid_validity)
     }
 
+    /// Deletes a mailbox with its messages (like `DELETE`). Returns whether
+    /// it existed.
+    pub fn delete_mailbox(&self, name: &str) -> bool {
+        let mut state = self.lock();
+        let Some(index) = find_index(&state.mailboxes, name) else {
+            return false;
+        };
+        state.mailboxes.remove(index);
+        true
+    }
+
     /// Removes the message with `uid` (like `STORE \Deleted` + `EXPUNGE`).
     pub fn expunge(&self, mailbox: &str, uid: u32) -> bool {
         let mut state = self.lock();

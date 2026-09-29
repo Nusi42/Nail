@@ -1,6 +1,7 @@
 import { rmSync } from "node:fs";
+import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import { nailBinary, repoRoot, tempDir } from "./support/nail";
+import { buildOutputDir, freePort, nailBinary, repoRoot, tempDir } from "./support/nail";
 
 /**
  * End-to-end tests against the web UI mode: the prebuilt
@@ -26,7 +27,13 @@ if (!process.env.NAIL_E2E_DATA || !process.env.NAIL_E2E_CONFIG) {
     }
   });
 }
-const port = Number(process.env.NAIL_E2E_PORT ?? 4791);
+// A free port for the shared server, chosen once by the runner (like the
+// directories above) unless NAIL_E2E_PORT pins one.
+process.env.NAIL_E2E_PORT ??= String(freePort());
+const port = Number(process.env.NAIL_E2E_PORT);
+// Traces, screenshots and the HTML report stay out of the (OneDrive-synced)
+// repository, next to cargo's target directory.
+const outputRoot = buildOutputDir("e2e");
 const quote = (s: string) => `"${s}"`;
 
 export default defineConfig({
@@ -34,7 +41,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
+  outputDir: path.join(outputRoot, "test-results"),
+  reporter: process.env.CI
+    ? [["github"], ["html", { open: "never", outputFolder: path.join(outputRoot, "report") }]]
+    : "list",
   use: {
     baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",

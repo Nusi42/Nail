@@ -1,8 +1,7 @@
 //! The read-only IMAP client.
 
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
-
-use std::collections::BTreeSet;
 
 use async_imap::imap_proto::types::{
     Address as ImapAddress, AttributeValue, Capability, Envelope as ImapEnvelope, MailboxDatum,
@@ -13,15 +12,16 @@ use async_imap::{Authenticator, Session};
 use nail_api::{Address, Flags};
 
 use crate::capabilities::Capabilities;
-use crate::config::{AuthMechanism, Credentials, ImapConfig};
+use crate::config::{AuthMechanism, Credentials, FetchBatchLimits, ImapConfig};
 use crate::error::{ImapError, Result};
 use crate::folder::RemoteFolder;
-use crate::transport::{ImapStream, establish, with_timeout};
+use crate::transport::{IdleTimeout, ImapStream, establish, with_timeout};
 
 /// Data items fetched per message.
 const FETCH_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY.PEEK[])";
-/// Maximum number of messages per `UID FETCH` command.
-const FETCH_BATCH: usize = 50;
+/// Maximum number of UIDs per metadata command (`UID FETCH … RFC822.SIZE`),
+/// which keeps command lines short for sparse UID sets.
+const METADATA_CHUNK: usize = 1000;
 
 /// State of a mailbox after `EXAMINE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +131,48 @@ pub struct FetchedMessage {
     pub raw: Vec<u8>,
 }
 
+/// What [`ImapClient::plan_fetch`] found to fetch in a mailbox: the new
+/// UIDs, grouped into batches for [`ImapClient::fetch_batch`].
+///
+/// A sync fetches and stores one batch at a time and saves
+/// [`Self::state_after`] after each, so memory stays bounded by one batch and
+/// an interrupted sync resumes after the last stored batch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FetchPlan {
+    /// Mailbox state at the time of the plan.
+    pub status: FolderStatus,
+    /// `true` when the stored UIDVALIDITY no longer matches: all previously
+    /// stored UIDs of this mailbox are invalid and `batches` cover the
+    /// complete mailbox.
+    pub uid_validity_changed: bool,
+    /// UIDs to fetch, ascending, grouped by
+    /// [`ImapConfig::fetch_batch`](crate::ImapConfig::fetch_batch).
+    pub batches: Vec<Vec<u32>>,
+    /// The state to store once every batch is fetched and stored.
+    pub final_state: SyncState,
+}
+
+impl FetchPlan {
+    /// The state to store once batches `0..=index` are fetched and stored:
+    /// everything below the batch's last UID + 1 is done.
+    pub fn state_after(&self, index: usize) -> SyncState {
+        let uid_next = self
+            .batches
+            .get(index)
+            .and_then(|batch| batch.last())
+            .map_or(1, |uid| uid.saturating_add(1));
+        SyncState {
+            uid_validity: self.status.uid_validity,
+            uid_next,
+        }
+    }
+
+    /// Number of messages to fetch.
+    pub fn message_count(&self) -> usize {
+        self.batches.iter().map(Vec::len).sum()
+    }
+}
+
 /// Result of [`ImapClient::fetch_new`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncrementalFetch {
@@ -148,7 +190,7 @@ pub struct IncrementalFetch {
 
 /// A logged-in, read-only IMAP connection.
 pub struct ImapClient {
-    session: Session<ImapStream>,
+    session: Session<IdleTimeout<ImapStream>>,
     capabilities: Capabilities,
     config: ImapConfig,
     /// Mailbox currently opened with `EXAMINE`.
@@ -187,7 +229,7 @@ impl ImapClient {
     pub async fn connect(config: &ImapConfig, credentials: &Credentials) -> Result<Self> {
         let (stream, preauth_caps) = establish(config).await?;
         let mechanism = choose_mechanism(config.auth, &preauth_caps)?;
-        let client = async_imap::Client::new(stream);
+        let client = async_imap::Client::new(IdleTimeout::new(stream, config.timeout));
         let login = async {
             let result = match mechanism {
                 AuthMechanism::Plain => client.authenticate("PLAIN", PlainAuth(credentials)).await,
@@ -309,36 +351,118 @@ impl ImapClient {
     /// Fetches all messages of the examined mailbox whose UID lies in
     /// `range` (raw bytes, flags, envelope), in UID order, in batches.
     /// Call [`Self::examine`] first.
+    ///
+    /// Holds every message in memory; to sync a whole mailbox use
+    /// [`Self::plan_fetch`] and [`Self::fetch_batch`] instead.
     pub async fn fetch_range(&mut self, range: UidRange) -> Result<Vec<FetchedMessage>> {
         if self.examined.is_none() {
             return Err(ImapError::Protocol("no mailbox examined".to_owned()));
         }
         let uids = self.search_uids(range).await?;
         let mut messages = Vec::with_capacity(uids.len());
-        for batch in uids.chunks(FETCH_BATCH) {
-            let mut fetched = Vec::with_capacity(batch.len());
+        for batch in uids.chunks(self.config.fetch_batch.max_messages.max(1)) {
+            messages.extend(self.fetch_batch(batch).await?);
+        }
+        Ok(messages)
+    }
+
+    /// Fetches the messages with these UIDs from the examined mailbox in one
+    /// `UID FETCH`, in UID order. UIDs expunged meanwhile are skipped; a
+    /// message the server withholds is an error.
+    ///
+    /// Bodies can be large, so the command has no overall deadline: it fails
+    /// only when the server stays silent for the configured timeout.
+    pub async fn fetch_batch(&mut self, uids: &[u32]) -> Result<Vec<FetchedMessage>> {
+        if self.examined.is_none() {
+            return Err(ImapError::Protocol("no mailbox examined".to_owned()));
+        }
+        let mut wanted = uids.to_vec();
+        wanted.sort_unstable();
+        wanted.dedup();
+        if wanted.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut fetched = Vec::with_capacity(wanted.len());
+        self.run_streaming(
+            &format!("UID FETCH {} {FETCH_QUERY}", uid_set(&wanted)),
+            |response| {
+                if let Response::Fetch(_, attributes) = response {
+                    // Unsolicited FETCH responses (flag updates) for other
+                    // messages may be interleaved; keep only what was asked.
+                    if let Some(message) =
+                        convert_fetch(attributes).filter(|m| wanted.binary_search(&m.uid).is_ok())
+                    {
+                        fetched.push(message);
+                    }
+                }
+                Ok(())
+            },
+        )
+        .await?;
+        self.check_complete(&wanted, &fetched).await?;
+        fetched.sort_by_key(|m| m.uid);
+        fetched.dedup_by_key(|m| m.uid);
+        Ok(fetched)
+    }
+
+    /// Examines `path` and plans fetching what is new since `known` (a
+    /// previous [`FetchPlan::final_state`] or [`FetchPlan::state_after`]).
+    /// Without `known`, or when the server's UIDVALIDITY changed, the whole
+    /// mailbox is planned. Batches are sized by `RFC822.SIZE`.
+    pub async fn plan_fetch(&mut self, path: &str, known: Option<SyncState>) -> Result<FetchPlan> {
+        let status = self.examine(path).await?;
+        let uid_validity_changed = known.is_some_and(|k| k.uid_validity != status.uid_validity);
+        let known = known.filter(|_| !uid_validity_changed);
+        let range = known.map_or(UidRange::ALL, |k| UidRange::from(k.uid_next));
+        let nothing_new = known.is_some_and(|k| status.uid_next <= k.uid_next);
+        let uids = if nothing_new {
+            Vec::new()
+        } else {
+            self.search_uids(range).await?
+        };
+        let sizes = self.fetch_sizes(&uids).await?;
+        let batches = batch_uids(&uids, &sizes, self.config.fetch_batch);
+
+        let planned_next = uids.last().map_or(0, |uid| uid.saturating_add(1));
+        let known_next = known.map_or(1, |k| k.uid_next);
+        Ok(FetchPlan {
+            status,
+            uid_validity_changed,
+            batches,
+            final_state: SyncState {
+                uid_validity: status.uid_validity,
+                uid_next: status.uid_next.max(planned_next).max(known_next),
+            },
+        })
+    }
+
+    /// `RFC822.SIZE` of the messages with these UIDs in the examined mailbox.
+    /// Messages the server does not report are missing from the map.
+    async fn fetch_sizes(&mut self, uids: &[u32]) -> Result<HashMap<u32, u32>> {
+        let mut sizes = HashMap::with_capacity(uids.len());
+        for chunk in uids.chunks(METADATA_CHUNK) {
             self.run(
-                &format!("UID FETCH {} {FETCH_QUERY}", uid_set(batch)),
+                &format!("UID FETCH {} (UID RFC822.SIZE)", uid_set(chunk)),
                 |response| {
                     if let Response::Fetch(_, attributes) = response {
-                        // Unsolicited FETCH responses (flag updates) for other
-                        // messages may be interleaved; keep only what was asked.
-                        if let Some(message) = convert_fetch(attributes)
-                            .filter(|m| batch.binary_search(&m.uid).is_ok())
-                        {
-                            fetched.push(message);
+                        let (mut uid, mut size) = (None, None);
+                        for attribute in attributes {
+                            match attribute {
+                                AttributeValue::Uid(v) => uid = Some(*v),
+                                AttributeValue::Rfc822Size(v) => size = Some(*v),
+                                _ => {}
+                            }
+                        }
+                        if let (Some(uid), Some(size)) = (uid, size) {
+                            sizes.insert(uid, size);
                         }
                     }
                     Ok(())
                 },
             )
             .await?;
-            self.check_complete(batch, &fetched).await?;
-            messages.extend(fetched);
         }
-        messages.sort_by_key(|m| m.uid);
-        messages.dedup_by_key(|m| m.uid);
-        Ok(messages)
+        Ok(sizes)
     }
 
     /// A requested UID without a response is fine only if the message was
@@ -386,36 +510,24 @@ impl ImapClient {
     /// Examines `path` and fetches what is new since `known` (a previous
     /// [`IncrementalFetch::next_state`]). Without `known`, or when the
     /// server's UIDVALIDITY changed, the whole mailbox is fetched.
+    ///
+    /// Holds every new message in memory; a sync of possibly large mailboxes
+    /// uses [`Self::plan_fetch`] and [`Self::fetch_batch`] and stores each
+    /// batch as it arrives.
     pub async fn fetch_new(
         &mut self,
         path: &str,
         known: Option<SyncState>,
     ) -> Result<IncrementalFetch> {
-        let status = self.examine(path).await?;
-        let uid_validity_changed = known.is_some_and(|k| k.uid_validity != status.uid_validity);
-        let range = match known {
-            Some(known) if !uid_validity_changed => UidRange::from(known.uid_next),
-            _ => UidRange::ALL,
-        };
-        let nothing_new =
-            matches!(known, Some(k) if !uid_validity_changed && status.uid_next <= k.uid_next);
-        let messages = if nothing_new {
-            Vec::new()
-        } else {
-            self.fetch_range(range).await?
-        };
-
-        let fetched_next = messages.last().map_or(0, |m| m.uid.saturating_add(1));
-        let known_next = known
-            .filter(|_| !uid_validity_changed)
-            .map_or(1, |k| k.uid_next);
+        let plan = self.plan_fetch(path, known).await?;
+        let mut messages = Vec::with_capacity(plan.message_count());
+        for batch in &plan.batches {
+            messages.extend(self.fetch_batch(batch).await?);
+        }
         Ok(IncrementalFetch {
-            status,
-            uid_validity_changed,
-            next_state: SyncState {
-                uid_validity: status.uid_validity,
-                uid_next: status.uid_next.max(fetched_next).max(known_next),
-            },
+            status: plan.status,
+            uid_validity_changed: plan.uid_validity_changed,
+            next_state: plan.final_state,
             messages,
         })
     }
@@ -448,7 +560,8 @@ impl ImapClient {
     }
 
     /// Sends a command and feeds every untagged response to `on_untagged`
-    /// until the tagged completion, which must be `OK`.
+    /// until the tagged completion, which must be `OK`. The whole command
+    /// must finish within the configured timeout.
     ///
     /// `async-imap`'s streaming helpers end silently on EOF and ignore the
     /// tagged status of `FETCH`/`SEARCH`/`LIST`; this runner turns a closed
@@ -456,10 +569,22 @@ impl ImapClient {
     async fn run(
         &mut self,
         command: &str,
+        on_untagged: impl FnMut(&Response<'_>) -> Result<()>,
+    ) -> Result<()> {
+        let timeout = self.config.timeout;
+        with_timeout(timeout, self.run_streaming(command, on_untagged)).await
+    }
+
+    /// Like [`Self::run`], but without an overall deadline: only the idle
+    /// timeout of the stream applies (for commands that download bodies).
+    async fn run_streaming(
+        &mut self,
+        command: &str,
         mut on_untagged: impl FnMut(&Response<'_>) -> Result<()>,
     ) -> Result<()> {
+        let timeout = self.config.timeout;
         let session = &mut self.session;
-        with_timeout(self.config.timeout, async {
+        let result = async {
             let tag = session.run_command(command).await?;
             loop {
                 let Some(response) = session.read_response().await? else {
@@ -482,9 +607,40 @@ impl ImapClient {
                     other => on_untagged(other)?,
                 }
             }
+        }
+        .await;
+        result.map_err(|err| match err {
+            ImapError::Io(io) if io.kind() == std::io::ErrorKind::TimedOut => {
+                ImapError::Timeout(timeout)
+            }
+            other => other,
         })
-        .await
     }
+}
+
+/// Groups ascending `uids` into batches of at most `limits.max_messages`
+/// messages and `limits.max_bytes` bytes (by `sizes`; unknown sizes count as
+/// zero). A message larger than the byte limit gets a batch of its own.
+fn batch_uids(uids: &[u32], sizes: &HashMap<u32, u32>, limits: FetchBatchLimits) -> Vec<Vec<u32>> {
+    let max_messages = limits.max_messages.max(1);
+    let mut batches = Vec::new();
+    let mut current: Vec<u32> = Vec::new();
+    let mut bytes = 0u64;
+    for &uid in uids {
+        let size = u64::from(sizes.get(&uid).copied().unwrap_or(0));
+        if !current.is_empty()
+            && (current.len() >= max_messages || bytes.saturating_add(size) > limits.max_bytes)
+        {
+            batches.push(std::mem::take(&mut current));
+            bytes = 0;
+        }
+        current.push(uid);
+        bytes = bytes.saturating_add(size);
+    }
+    if !current.is_empty() {
+        batches.push(current);
+    }
+    batches
 }
 
 /// Quotes a mailbox name as an IMAP quoted string.
@@ -665,6 +821,56 @@ fn convert_addresses(addresses: Option<&[ImapAddress<'_>]>) -> Vec<Address> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn batches_respect_count_and_size_limits() {
+        let limits = FetchBatchLimits {
+            max_messages: 3,
+            max_bytes: 100,
+        };
+        let sizes: HashMap<u32, u32> = [
+            (1, 10),
+            (2, 10),
+            (3, 10),
+            (4, 10),
+            (5, 90),
+            (6, 500),
+            (7, 20),
+        ]
+        .into();
+        assert_eq!(
+            batch_uids(&[1, 2, 3, 4, 5, 6, 7, 8], &sizes, limits),
+            vec![vec![1, 2, 3], vec![4, 5], vec![6], vec![7, 8]]
+        );
+        assert!(batch_uids(&[], &sizes, limits).is_empty());
+        // Zero limits still make progress, one message per batch.
+        let zero = FetchBatchLimits {
+            max_messages: 0,
+            max_bytes: 0,
+        };
+        assert_eq!(batch_uids(&[1, 2], &sizes, zero), vec![vec![1], vec![2]]);
+    }
+
+    #[test]
+    fn plan_checkpoints() {
+        let plan = FetchPlan {
+            status: FolderStatus {
+                uid_validity: 7,
+                uid_next: 20,
+                exists: 3,
+            },
+            uid_validity_changed: false,
+            batches: vec![vec![3, 5], vec![9]],
+            final_state: SyncState {
+                uid_validity: 7,
+                uid_next: 20,
+            },
+        };
+        assert_eq!(plan.message_count(), 3);
+        assert_eq!(plan.state_after(0).uid_next, 6);
+        assert_eq!(plan.state_after(1).uid_next, 10);
+        assert_eq!(plan.state_after(0).uid_validity, 7);
+    }
 
     #[test]
     fn uid_sets() {

@@ -15,8 +15,9 @@ use crate::error::{CoreError, Result};
 use crate::sync::{ImapAccount, SyncEngine, SyncReport};
 
 /// Capacity of the event channel per subscriber. A subscriber that falls
-/// further behind misses events (and should refetch).
-const EVENT_CAPACITY: usize = 256;
+/// further behind misses events; transports then send it
+/// [`Service::resync_events`] so it refetches.
+pub const EVENT_CAPACITY: usize = 256;
 
 /// Largest page [`Request::ListMessages`] returns; larger limits are capped.
 pub const MAX_PAGE_SIZE: u32 = 1000;
@@ -149,6 +150,42 @@ impl Service {
             .iter()
             .map(nail_config::ConfigError::to_event)
             .collect()
+    }
+
+    /// Events that bring a client that missed events back in sync: the
+    /// current configuration ([`Event::ConfigChanged`] followed by any
+    /// [`Event::ConfigError`]s) and an [`Event::MailChanged`] for every
+    /// folder. Transports send them when a subscriber lagged behind the
+    /// event channel ([`broadcast::error::RecvError::Lagged`]).
+    pub async fn resync_events(&self) -> Vec<Event> {
+        let config = &self.inner.config;
+        let mut events = vec![
+            nail_config::ConfigUpdate::Changed {
+                theme: config.theme(),
+                layout: config.layout(),
+            }
+            .to_event(),
+        ];
+        events.extend(self.config_error_events());
+        let folders = self
+            .inner
+            .store
+            .call(|s| {
+                let mut ids = Vec::new();
+                for account in s.list_accounts()? {
+                    ids.extend(s.list_folders(&account.id)?.into_iter().map(|f| f.id));
+                }
+                Ok(ids)
+            })
+            .await;
+        match folders {
+            Ok(folder_ids) if !folder_ids.is_empty() => {
+                events.push(Event::MailChanged { folder_ids });
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!(%err, "cannot list folders for a resync"),
+        }
+        events
     }
 
     /// The metadata store.

@@ -32,6 +32,33 @@ export function nailBinary(): string {
   return bin;
 }
 
+/**
+ * A free TCP port on 127.0.0.1, found synchronously (the Playwright config is
+ * evaluated synchronously) by letting a child process bind port 0.
+ */
+export function freePort(): number {
+  const script =
+    "const s=require('node:net').createServer();" +
+    "s.listen(0,'127.0.0.1',()=>{process.stdout.write(String(s.address().port));s.close();});";
+  const port = Number(execFileSync(process.execPath, ["-e", script], { encoding: "utf8" }));
+  if (!Number.isInteger(port) || port <= 0) throw new Error(`no free port: ${port}`);
+  return port;
+}
+
+/**
+ * A directory for build and test output outside the repository (which may
+ * be synced by OneDrive): `%LOCALAPPDATA%/nail-build/<name>` on Windows,
+ * else `<tmp>/nail-build/<name>`. `NAIL_BUILD_DIR` overrides the base.
+ */
+export function buildOutputDir(name: string): string {
+  const base =
+    process.env.NAIL_BUILD_DIR ??
+    (process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "nail-build")
+      : path.join(tmpdir(), "nail-build"));
+  return path.join(base, name);
+}
+
 /** A fresh temporary directory. */
 export function tempDir(prefix: string): string {
   return mkdtempSync(path.join(tmpdir(), `nail-e2e-${prefix}-`));

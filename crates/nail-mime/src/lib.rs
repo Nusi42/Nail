@@ -129,8 +129,7 @@ pub struct AttachmentContent {
 /// best-effort result.
 pub fn parse_message(raw: &[u8]) -> ParsedMessage {
     guarded(|| {
-        MessageParser::default()
-            .parse(raw)
+        parse(raw)
             .map(|message| build(&message))
             .unwrap_or_default()
     })
@@ -141,7 +140,7 @@ pub fn parse_message(raw: &[u8]) -> ParsedMessage {
 /// [`ParsedMessage::attachments`]).
 pub fn attachment_content(raw: &[u8], index: u32) -> Option<AttachmentContent> {
     guarded(|| {
-        let message = MessageParser::default().parse(raw)?;
+        let message = parse(raw)?;
         let part = message.attachment(index)?;
         Some(AttachmentContent {
             info: attachment_info(index, part),
@@ -156,7 +155,7 @@ pub fn attachment_content(raw: &[u8], index: u32) -> Option<AttachmentContent> {
 pub fn inline_content_by_cid(raw: &[u8], cid: &str) -> Option<AttachmentContent> {
     let wanted = normalize_cid(cid);
     guarded(|| {
-        let message = MessageParser::default().parse(raw)?;
+        let message = parse(raw)?;
         let (index, part) = message.attachments().enumerate().find(|(_, part)| {
             part.content_id()
                 .is_some_and(|id| normalize_cid(id) == wanted)
@@ -167,6 +166,50 @@ pub fn inline_content_by_cid(raw: &[u8], cid: &str) -> Option<AttachmentContent>
         })
     })
     .flatten()
+}
+
+/// Parses `raw` with `mail-parser`. Always go through this function: the
+/// result must be dropped by [`Parsed`], never directly.
+fn parse(raw: &[u8]) -> Option<Parsed<'_>> {
+    MessageParser::default().parse(raw).map(|m| Parsed(Some(m)))
+}
+
+/// A parsed message that is torn down iteratively.
+///
+/// Nested `message/rfc822` parts form a tree of [`Message`] values, and the
+/// compiler-generated `Drop` recurses once per level. Hostile mail can nest
+/// tens of thousands of levels in well under a megabyte, and a stack overflow
+/// aborts the process (`catch_unwind` cannot catch it). This wrapper
+/// detaches nested messages onto a heap stack before dropping them, so no
+/// level is dropped recursively. mail-parser itself parses nested messages
+/// iteratively.
+struct Parsed<'x>(Option<Message<'x>>);
+
+impl<'x> std::ops::Deref for Parsed<'x> {
+    type Target = Message<'x>;
+
+    fn deref(&self) -> &Message<'x> {
+        // Only `Drop` takes the value out.
+        self.0
+            .as_ref()
+            .expect("a Parsed message is present until dropped")
+    }
+}
+
+impl Drop for Parsed<'_> {
+    fn drop(&mut self) {
+        let mut pending: Vec<Message<'_>> = self.0.take().into_iter().collect();
+        while let Some(mut message) = pending.pop() {
+            for part in &mut message.parts {
+                if matches!(part.body, PartType::Message(_))
+                    && let PartType::Message(nested) = std::mem::take(&mut part.body)
+                {
+                    pending.push(nested);
+                }
+            }
+            // `message` now has no nested messages; dropping it is shallow.
+        }
+    }
 }
 
 fn normalize_cid(cid: &str) -> String {
@@ -368,6 +411,35 @@ mod tests {
         assert_eq!(normalize_cid("cid:abc@x"), "abc@x");
         assert_eq!(normalize_cid("<abc@x>"), "abc@x");
         assert_eq!(normalize_cid(" abc@x "), "abc@x");
+    }
+
+    /// Regression: dropping a deep `message/rfc822` chain used to recurse per
+    /// level and overflow the stack (aborting the process) at a few thousand
+    /// levels. 100 000 levels are about 3.3 MB of input.
+    #[test]
+    fn deeply_nested_messages_do_not_overflow_the_stack() {
+        const LEVELS: usize = 100_000;
+        let mut raw = String::from("Subject: outer\r\n");
+        for _ in 0..LEVELS {
+            raw.push_str("Content-Type: message/rfc822\r\n\r\n");
+        }
+        raw.push_str("Subject: inner\r\n\r\nhello\r\n");
+        // A small stack (1 MiB, the Windows main-thread default) on purpose.
+        let worker = std::thread::Builder::new()
+            .stack_size(1 << 20)
+            .spawn(move || {
+                let parsed = parse_message(raw.as_bytes());
+                let attachment = attachment_content(raw.as_bytes(), 0);
+                let by_cid = inline_content_by_cid(raw.as_bytes(), "cid:none");
+                (parsed, attachment, by_cid)
+            })
+            .unwrap();
+        let (parsed, attachment, by_cid) = worker.join().expect("the parser thread survived");
+        assert_eq!(parsed.headers.subject, "outer");
+        assert_eq!(parsed.attachments.len(), 1);
+        assert_eq!(parsed.attachments[0].mime, "message/rfc822");
+        assert!(attachment.is_some());
+        assert!(by_cid.is_none());
     }
 
     fn ids() -> SummaryIds {

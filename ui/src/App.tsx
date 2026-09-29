@@ -118,11 +118,11 @@ export function App({
 function AppStatus({ state, messageId }: { state: string; messageId: string }) {
   const t = useT();
   return (
-    <div data-part="app" data-state={state}>
+    <main data-part="app" data-state={state}>
       <div data-part="app.status" role={state === "error" ? "alert" : "status"}>
         {t(messageId)}
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -225,13 +225,13 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
           <LayoutContext.Provider value={config.data.layout}>
             <ActionsProvider layout={config.data.layout}>
               <WidgetRegistryContext.Provider value={widgets}>
-                <div
+                <main
                   data-part="app"
                   data-layout={config.data.layout.name}
                   data-theme={config.data.theme.name}
                 >
                   <WindowView layout={config.data.layout} name={windowName} />
-                </div>
+                </main>
               </WidgetRegistryContext.Provider>
             </ActionsProvider>
           </LayoutContext.Provider>

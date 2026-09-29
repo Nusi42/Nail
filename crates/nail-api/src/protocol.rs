@@ -149,7 +149,8 @@ impl Response {
 #[serde(tag = "type")]
 pub enum Event {
     /// The theme or layout file changed and was valid; replaces the previous
-    /// configuration. Also clears any error shown for [`Event::ConfigError`].
+    /// configuration. Also clears any error shown for [`Event::ConfigError`];
+    /// errors of files that are still invalid follow right after it again.
     ConfigChanged {
         /// The new resolved theme.
         theme: Box<ResolvedTheme>,

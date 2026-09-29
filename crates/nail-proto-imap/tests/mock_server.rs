@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use nail_api::{ErrorCode, FolderRole};
 use nail_proto_imap::{
-    AuthMechanism, Credentials, ImapClient, ImapConfig, ImapError, Security, SyncState, TlsTrust,
-    UidRange,
+    AuthMechanism, Credentials, FetchBatchLimits, ImapClient, ImapConfig, ImapError, Security,
+    SyncState, TlsTrust, UidRange,
 };
 use nail_testkit::{MailStore, MockImapConfig, MockImapServer, MockTls, demo_corpus};
 
@@ -428,4 +428,60 @@ async fn disconnect_during_list_is_an_error() {
     server.disconnect_on(Some("LIST"));
     let err = client.list_folders().await.unwrap_err();
     assert!(matches!(err, ImapError::ConnectionLost), "{err:?}");
+}
+
+#[tokio::test]
+async fn plans_are_batched_by_size_and_fetched_batch_by_batch() {
+    let store = MailStore::new();
+    store.add_mailbox("INBOX", FolderRole::Inbox);
+    let big = format!("Subject: big\r\n\r\n{}", "x".repeat(4000));
+    for raw in [
+        "Subject: a\r\n\r\na",
+        big.as_str(),
+        "Subject: b\r\n\r\nb",
+        "Subject: c\r\n\r\nc",
+    ] {
+        store
+            .append("INBOX", raw.as_bytes(), &[] as &[&str])
+            .unwrap();
+    }
+    let server = MockImapServer::start(MockImapConfig::default(), store)
+        .await
+        .unwrap();
+    let config =
+        config_for(&server, Security::InsecurePlaintext).with_fetch_batch(FetchBatchLimits {
+            max_messages: 2,
+            max_bytes: 1000,
+        });
+    let mut client = ImapClient::connect(&config, &credentials(&server))
+        .await
+        .unwrap();
+
+    let plan = client.plan_fetch("INBOX", None).await.unwrap();
+    // The 4 kB message exceeds the byte limit and gets a batch of its own.
+    assert_eq!(plan.batches, vec![vec![1], vec![2], vec![3, 4]]);
+    assert_eq!(plan.message_count(), 4);
+    assert_eq!(plan.final_state.uid_next, 5);
+    assert_eq!(plan.state_after(1).uid_next, 3);
+
+    let second = client.fetch_batch(&plan.batches[1]).await.unwrap();
+    assert_eq!(second.len(), 1);
+    assert_eq!(second[0].raw, big.as_bytes());
+
+    // Resuming from a checkpoint only plans what is left.
+    let resumed = client
+        .plan_fetch("INBOX", Some(plan.state_after(1)))
+        .await
+        .unwrap();
+    assert_eq!(resumed.batches, vec![vec![3, 4]]);
+    let rest = client.fetch_batch(&resumed.batches[0]).await.unwrap();
+    assert_eq!(rest.iter().map(|m| m.uid).collect::<Vec<_>>(), [3, 4]);
+
+    // Nothing new after the final state.
+    let done = client
+        .plan_fetch("INBOX", Some(plan.final_state))
+        .await
+        .unwrap();
+    assert!(done.batches.is_empty());
+    assert_eq!(done.final_state, plan.final_state);
 }

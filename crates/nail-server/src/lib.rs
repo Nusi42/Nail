@@ -11,11 +11,14 @@
 //!   fallback to `index.html`.
 //!
 //! In M0 the server binds to loopback addresses only and has no
-//! authentication; [`Server::bind`] refuses anything else. Remote access
+//! authentication; [`Server::bind`] refuses anything else. Every route
+//! accepts only `Host` (and `Origin`) values naming a loopback address with
+//! the bound port, which defeats DNS rebinding. Remote access
 //! with TLS, pairing and passkeys arrives in M2.
 
 #![warn(missing_docs)]
 
+mod guard;
 mod http;
 mod ws;
 
@@ -87,7 +90,7 @@ impl Server {
             tracing::warn!(dir = %dir.display(), "no index.html in the UI directory; run `npm run build -w ui`");
         }
 
-        let app = router(service, options.ui_dir);
+        let app = router(service, options.ui_dir, local_addr.port());
         let (tx, rx) = oneshot::channel::<()>();
         let task = tokio::spawn(async move {
             axum::serve(listener, app)

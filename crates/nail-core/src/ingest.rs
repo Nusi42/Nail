@@ -55,6 +55,15 @@ pub(crate) fn ingest(
         });
     }
     store.upsert_messages(&rows)?;
+    // Blob garbage collection (after folder deletions) may have removed a
+    // blob between `put` and the row that references it; store it again.
+    for (message, row) in messages.iter().zip(&rows) {
+        if let Some(hash) = &row.blob_hash
+            && !blobs.contains(hash)
+        {
+            blobs.put(&message.raw)?;
+        }
+    }
     Ok(rows.len())
 }
 

@@ -2,8 +2,7 @@
 
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, StatusCode, header};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
 use nail_api::{ApiError, RpcRequest, ServerMessage};
 use nail_core::Service;
@@ -14,39 +13,13 @@ const MAX_FRAME: usize = 1 << 20;
 /// Frames queued for one client before request handlers wait.
 const OUTBOX: usize = 256;
 
-/// Upgrades to a WebSocket after checking that a browser's `Origin` is this
-/// server (no cross-site WebSocket hijacking). Clients without an `Origin`
-/// header (tools, tests) are allowed: the server binds to loopback only.
-pub(crate) async fn upgrade(
-    State(service): State<Service>,
-    headers: HeaderMap,
-    ws: WebSocketUpgrade,
-) -> Response {
-    if !origin_allowed(&headers) {
-        tracing::warn!(origin = ?headers.get(header::ORIGIN), "WebSocket from a foreign origin refused");
-        return StatusCode::FORBIDDEN.into_response();
-    }
+/// Upgrades to a WebSocket. `Host` and `Origin` were already checked
+/// against the loopback allowlist by [`crate::guard`] (no cross-site
+/// WebSocket hijacking, no DNS rebinding).
+pub(crate) async fn upgrade(State(service): State<Service>, ws: WebSocketUpgrade) -> Response {
     ws.max_message_size(MAX_FRAME)
         .max_frame_size(MAX_FRAME)
         .on_upgrade(move |socket| serve_socket(socket, service))
-}
-
-/// Whether the `Origin` header is absent or names the same host (and port)
-/// as the `Host` header.
-fn origin_allowed(headers: &HeaderMap) -> bool {
-    let Some(origin) = headers.get(header::ORIGIN) else {
-        return true;
-    };
-    let (Ok(origin), Some(Ok(host))) = (
-        origin.to_str(),
-        headers.get(header::HOST).map(|h| h.to_str()),
-    ) else {
-        return false;
-    };
-    let authority = origin
-        .strip_prefix("http://")
-        .or_else(|| origin.strip_prefix("https://"));
-    authority.is_some_and(|a| a.eq_ignore_ascii_case(host))
 }
 
 async fn serve_socket(socket: WebSocket, service: Service) {
@@ -78,19 +51,24 @@ async fn serve_socket(socket: WebSocket, service: Service) {
     // Events: forward everything the core broadcasts.
     let forwarder = {
         let tx = tx.clone();
+        let service = service.clone();
         let mut events = service.subscribe();
         tokio::spawn(async move {
             loop {
-                match events.recv().await {
-                    Ok(event) => {
-                        if tx.send(event.into()).await.is_err() {
-                            break;
-                        }
-                    }
+                let batch = match events.recv().await {
+                    Ok(event) => vec![event],
                     Err(broadcast::error::RecvError::Lagged(missed)) => {
-                        tracing::warn!(missed, "a WebSocket client missed events");
+                        // The client missed changes; tell it the current
+                        // state so it refetches instead of staying stale.
+                        tracing::warn!(missed, "a WebSocket client missed events; resyncing it");
+                        service.resync_events().await
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
+                };
+                for event in batch {
+                    if tx.send(event.into()).await.is_err() {
+                        return;
+                    }
                 }
             }
         })
@@ -135,50 +113,4 @@ async fn serve_socket(socket: WebSocket, service: Service) {
     drop(tx);
     // In-flight handlers hold senders; the writer ends once they are done.
     let _ = writer.await;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::http::HeaderValue;
-
-    fn headers(origin: Option<&str>, host: Option<&str>) -> HeaderMap {
-        let mut h = HeaderMap::new();
-        if let Some(o) = origin {
-            h.insert(header::ORIGIN, HeaderValue::from_str(o).unwrap());
-        }
-        if let Some(o) = host {
-            h.insert(header::HOST, HeaderValue::from_str(o).unwrap());
-        }
-        h
-    }
-
-    #[test]
-    fn origin_check() {
-        assert!(origin_allowed(&headers(None, Some("127.0.0.1:4780"))));
-        assert!(origin_allowed(&headers(
-            Some("http://127.0.0.1:4780"),
-            Some("127.0.0.1:4780")
-        )));
-        assert!(origin_allowed(&headers(
-            Some("http://LOCALHOST:4780"),
-            Some("localhost:4780")
-        )));
-        assert!(!origin_allowed(&headers(
-            Some("http://evil.example"),
-            Some("127.0.0.1:4780")
-        )));
-        assert!(!origin_allowed(&headers(
-            Some("http://127.0.0.1:9999"),
-            Some("127.0.0.1:4780")
-        )));
-        assert!(!origin_allowed(&headers(
-            Some("null"),
-            Some("127.0.0.1:4780")
-        )));
-        assert!(!origin_allowed(&headers(
-            Some("http://127.0.0.1:4780"),
-            None
-        )));
-    }
 }

@@ -91,7 +91,16 @@ invalid file at start-up means the default plus a recorded error. Later
 reloads (manual or from the watcher) replace a file's configuration only
 when the new text is valid; unchanged text is ignored. Updates are reported
 as `ConfigUpdate::{Changed, Error}`, which map to `Event::ConfigChanged` /
-`Event::ConfigError`.
+`Event::ConfigError`. After a `Changed`, the watcher reports the errors of
+files that are still invalid again, because clients clear the error
+display on `Changed`.
+
+Theme and layout files are shared between users, so they are untrusted
+input. The `kdl` parser recurses once per child block (and per nested
+block comment), and a deeply nested file overflowed the stack, which aborts
+the process instead of returning an error. A cheap lexical pre-scan (it
+skips strings and comments) therefore refuses files nested deeper than 64
+levels with a syntax error at the offending brace, before `kdl` sees them.
 
 ## Consequences
 

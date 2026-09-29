@@ -65,7 +65,19 @@ impl<'a> Source<'a> {
     }
 
     /// Parses the text as a KDL v2 document.
+    ///
+    /// Documents nested deeper than [`MAX_NESTING`] are refused before the
+    /// `kdl` parser sees them: it recurses per child block (and per nested
+    /// block comment), and a crafted file would overflow the stack, which
+    /// aborts the process instead of returning an error.
     pub(crate) fn parse(&self) -> Result<KdlDocument, ConfigError> {
+        if let Some(offset) = nesting_violation(self.text) {
+            return Err(ConfigError::at(
+                ConfigErrorKind::Syntax,
+                &self.loc_at(offset),
+                format!("syntax error: nested more than {MAX_NESTING} levels deep"),
+            ));
+        }
         KdlDocument::parse_v2(self.text).map_err(|err| {
             let Some(diag) = err.diagnostics.first() else {
                 return ConfigError::at(
@@ -339,6 +351,103 @@ pub(crate) fn is_kebab(s: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// Deepest accepted nesting of `{ … }` child blocks (and of `/* … */` block
+/// comments) in a config file. The shipped files use fewer than ten levels.
+pub(crate) const MAX_NESTING: usize = 64;
+
+/// The byte offset of the first `{` (or `/*`) that nests deeper than
+/// [`MAX_NESTING`], or `None`.
+///
+/// A cheap lexical pre-scan: it skips quoted, multi-line and raw strings and
+/// comments, so braces inside them do not count. It does not validate
+/// anything else; unbalanced input is left to the real parser.
+fn nesting_violation(text: &str) -> Option<usize> {
+    let b = text.as_bytes();
+    let at = |i: usize| b.get(i).copied();
+    let mut depth = 0usize;
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'{' => {
+                depth += 1;
+                if depth > MAX_NESTING {
+                    return Some(i);
+                }
+                i += 1;
+            }
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                i += 1;
+            }
+            b'/' if at(i + 1) == Some(b'/') => {
+                i = b[i..]
+                    .iter()
+                    .position(|&c| c == b'\n')
+                    .map_or(b.len(), |p| i + p);
+            }
+            b'/' if at(i + 1) == Some(b'*') => {
+                // Block comments nest in KDL.
+                let mut level = 0usize;
+                while i < b.len() {
+                    if b[i] == b'/' && at(i + 1) == Some(b'*') {
+                        level += 1;
+                        if level > MAX_NESTING {
+                            return Some(i);
+                        }
+                        i += 2;
+                    } else if b[i] == b'*' && at(i + 1) == Some(b'/') {
+                        level -= 1;
+                        i += 2;
+                        if level == 0 {
+                            break;
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+            b'#' => {
+                // `#"raw"#`, `##"raw"##`, `#"""multi-line raw"""#`, or a
+                // keyword like `#true`.
+                let hashes = b[i..].iter().take_while(|&&c| c == b'#').count();
+                i += hashes;
+                if at(i) == Some(b'"') {
+                    let quotes = if b[i..].starts_with(b"\"\"\"") { 3 } else { 1 };
+                    i += quotes;
+                    let mut end = vec![b'"'; quotes];
+                    end.extend(std::iter::repeat_n(b'#', hashes));
+                    i = find(b, i, &end).map_or(b.len(), |p| p + end.len());
+                }
+            }
+            b'"' => {
+                let quotes = if b[i..].starts_with(b"\"\"\"") { 3 } else { 1 };
+                i += quotes;
+                while i < b.len() {
+                    if b[i] == b'\\' {
+                        i += 2;
+                    } else if b[i..].starts_with(&b"\"\"\""[..quotes]) {
+                        i += quotes;
+                        break;
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    None
+}
+
+/// The first position at or after `from` where `needle` starts.
+fn find(haystack: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
+    haystack
+        .get(from..)?
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|p| from + p)
+}
+
 /// Whether `s` is a dotted name of kebab-case segments (`message-list.row`).
 pub(crate) fn is_dotted_kebab(s: &str) -> bool {
     !s.is_empty() && s.split('.').all(is_kebab)
@@ -368,6 +477,55 @@ mod tests {
         assert_eq!(err.kind, ConfigErrorKind::Syntax);
         assert_eq!((err.line, err.column), (2, 9));
         assert!(err.message.starts_with("syntax error:"), "{}", err.message);
+    }
+
+    #[test]
+    fn nesting_scan_counts_only_real_blocks() {
+        let deep = |n: usize| format!("{}{}", "a {\n".repeat(n), "}\n".repeat(n));
+        assert_eq!(nesting_violation(&deep(MAX_NESTING)), None);
+        let text = deep(MAX_NESTING + 1);
+        assert_eq!(nesting_violation(&text), Some(MAX_NESTING * 4 + 2));
+
+        // Braces in strings and comments do not count.
+        let braces = "{".repeat(200);
+        for text in [
+            format!("a \"{braces}\"\n"),
+            format!("a \"\\\"{braces}\"\n"),
+            format!("a \"\"\"\n{braces}\n\"\"\"\n"),
+            format!("a #\"{braces}\"#\n"),
+            format!("a ##\"\"#{braces}\"##\n"),
+            format!("a #\"\"\"\n{braces}\n\"\"\"#\n"),
+            format!("// {braces}\na\n"),
+            format!("/* {braces} /* nested */ {braces} */ a\n"),
+            format!("a #true {{ b }} // {braces}"),
+        ] {
+            assert_eq!(nesting_violation(&text), None, "{text}");
+        }
+
+        // Deeply nested block comments are refused too.
+        let comments = format!(
+            "{}{}",
+            "/*".repeat(MAX_NESTING + 1),
+            "*/".repeat(MAX_NESTING + 1)
+        );
+        assert_eq!(nesting_violation(&comments), Some(MAX_NESTING * 2));
+        // Unterminated constructs just end the scan.
+        assert_eq!(nesting_violation("a \"{{{"), None);
+        assert_eq!(nesting_violation("/* {{{"), None);
+    }
+
+    #[test]
+    fn too_deep_documents_are_a_syntax_error() {
+        let text = "a {\n".repeat(10_000);
+        let src = Source::new("t.kdl", &text);
+        let err = src.parse().unwrap_err();
+        assert_eq!(err.kind, ConfigErrorKind::Syntax);
+        assert_eq!((err.line, err.column), (MAX_NESTING as u32 + 1, 3));
+        assert!(
+            err.message.contains("nested more than 64"),
+            "{}",
+            err.message
+        );
     }
 
     #[test]

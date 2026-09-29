@@ -49,7 +49,8 @@ impl ConfigKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfigUpdate {
     /// A file changed and was valid (or was removed, falling back to the
-    /// default); this is the complete new configuration.
+    /// default); this is the complete new configuration. The watcher follows
+    /// it with an `Error` for every file that is still invalid.
     Changed {
         /// Current theme.
         theme: Arc<ResolvedTheme>,
@@ -207,18 +208,27 @@ impl ConfigManager {
                     }
                 }
                 let mut changed = false;
+                let mut reported = Vec::new();
                 for kind in kinds {
                     match manager.reload_kind(kind) {
                         Outcome::Unchanged => {}
                         Outcome::Applied => changed = true,
                         Outcome::Failed(err) => {
                             tracing::warn!(%err, "invalid configuration file; keeping the last valid one");
+                            reported.push(err.file.clone());
                             on_update(ConfigUpdate::Error(err));
                         }
                     }
                 }
                 if changed {
+                    // `Changed` clears the error display; files that are
+                    // still invalid (and were not just reported) say so again.
                     on_update(manager.changed());
+                    for err in manager.errors() {
+                        if !reported.contains(&err.file) {
+                            on_update(ConfigUpdate::Error(err));
+                        }
+                    }
                 }
             }
             Err(err) => tracing::warn!(%err, "config watcher error"),

@@ -5,14 +5,24 @@
 //! 1. connect and log in, `LIST` the folders;
 //! 2. mirror the folder tree into the store (new folders are added, folders
 //!    gone from the server are deleted with their messages);
-//! 3. for every selectable folder, fetch what is new since the stored
-//!    `UIDVALIDITY`/`UIDNEXT` ([`ImapClient::fetch_new`]); a changed
+//! 3. for every selectable folder, plan what is new since the stored
+//!    `UIDVALIDITY`/`UIDNEXT` ([`ImapClient::plan_fetch`]); a changed
 //!    `UIDVALIDITY` drops the folder's messages and fetches it again;
-//! 4. store raw messages in the blob store, parsed summaries in the store.
+//! 4. fetch the plan batch by batch ([`ImapClient::fetch_batch`], sized by
+//!    `RFC822.SIZE`); each batch goes to the blob store and the store, and
+//!    the folder's `UIDNEXT` checkpoint is saved right after it. Memory stays
+//!    bounded by one batch, and an interrupted pass resumes after the last
+//!    stored batch instead of starting the folder again.
+//!
+//! A folder that fails (the server refuses to open it, withholds a message,
+//! and so on) is logged, listed in [`SyncReport::failed_folders`] and
+//! skipped; the other folders are still synced, and the pass ends with one
+//! [`Event::SyncFailed`] naming the failed folders. Connection-level errors
+//! (connection lost, timeout, TLS) and store failures end the pass at once.
 //!
 //! Progress is broadcast as [`Event::SyncProgress`] (one unit for the folder
-//! list plus one per folder), changed folders as [`Event::MailChanged`], and
-//! a failed pass as [`Event::SyncFailed`].
+//! list plus one per folder), changed folders as [`Event::MailChanged`]
+//! (after every stored batch), and a failed pass as [`Event::SyncFailed`].
 //!
 //! Not in M0 (see `docs/adr/0009-core-service.md`): flag changes and
 //! expunges of already-synced messages, IDLE, CONDSTORE/QRESYNC.
@@ -22,12 +32,12 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use nail_api::{AccountId, ApiError, ErrorCode, Event, Folder, FolderId};
 use nail_proto_imap::{
-    Credentials, FetchedMessage, ImapClient, ImapConfig, RemoteFolder, SyncState,
+    Credentials, FetchedMessage, ImapClient, ImapConfig, ImapError, RemoteFolder, SyncState,
 };
 use nail_store::{BlobStore, FolderSyncState, Store};
 use tokio::sync::broadcast;
 
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 use crate::ids;
 use crate::ingest::{IncomingMessage, ingest};
 
@@ -41,8 +51,9 @@ pub struct ImapAccount {
     pub credentials: Credentials,
 }
 
-/// What one successful sync pass did.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// What one sync pass did. A pass that reaches the end is `Ok`, even when
+/// single folders failed (see [`Self::failed_folders`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncReport {
     /// Folders on the server (selectable or not).
     pub folders: u32,
@@ -52,6 +63,21 @@ pub struct SyncReport {
     pub removed_folders: u32,
     /// Folders whose `UIDVALIDITY` changed and that were fetched again.
     pub reset_folders: u32,
+    /// Folders that could not be synced in this pass (the others were).
+    pub failed_folders: Vec<FolderSyncFailure>,
+}
+
+/// A folder that failed during an otherwise completed pass.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FolderSyncFailure {
+    /// The folder.
+    pub folder_id: FolderId,
+    /// Its server path.
+    pub path: String,
+    /// Machine-readable error class.
+    pub code: ErrorCode,
+    /// Diagnostic detail (English).
+    pub message: String,
 }
 
 /// Runs sync passes and remembers which accounts can be synced.
@@ -146,6 +172,25 @@ impl SyncEngine {
 
         let result = self.run_pass(account, &settings).await;
         match &result {
+            Ok(report) if !report.failed_folders.is_empty() => {
+                tracing::warn!(%account, ?report, "sync finished; some folders failed");
+                let paths: Vec<&str> = report
+                    .failed_folders
+                    .iter()
+                    .map(|f| f.path.as_str())
+                    .collect();
+                let first = &report.failed_folders[0];
+                self.emit(Event::SyncFailed {
+                    account_id: account.clone(),
+                    code: first.code,
+                    message: format!(
+                        "{} folder(s) could not be synchronized ({}); first error: {}",
+                        paths.len(),
+                        paths.join(", "),
+                        first.message
+                    ),
+                });
+            }
             Ok(report) => tracing::info!(%account, ?report, "sync finished"),
             Err(err) => {
                 tracing::warn!(%account, %err, "sync failed");
@@ -198,15 +243,26 @@ impl SyncEngine {
             let folder = folders.get(&remote_folder.path).cloned().ok_or_else(|| {
                 ApiError::internal(format!("folder {} vanished", remote_folder.path))
             })?;
-            let (new_messages, reset) = self.sync_folder(&mut client, &folder).await?;
-            report.new_messages = report.new_messages.saturating_add(new_messages);
-            if reset {
-                report.reset_folders += 1;
-            }
-            if new_messages > 0 || reset {
-                self.emit(Event::MailChanged {
-                    folder_ids: vec![folder.id.clone()],
-                });
+            match self.sync_folder(&mut client, &folder).await {
+                Ok((new_messages, reset)) => {
+                    report.new_messages = report.new_messages.saturating_add(new_messages);
+                    if reset {
+                        report.reset_folders += 1;
+                    }
+                }
+                Err(err) if is_fatal_for_pass(&err) => return Err(err),
+                Err(err) => {
+                    tracing::warn!(%account, folder = %folder.path, %err, "folder sync failed; continuing");
+                    report.failed_folders.push(FolderSyncFailure {
+                        folder_id: folder.id.clone(),
+                        path: folder.path.clone(),
+                        code: err.code(),
+                        message: err.to_string(),
+                    });
+                    // The command failed cleanly; make sure the connection
+                    // is still usable before going on.
+                    client.noop().await?;
+                }
             }
             self.emit(Event::SyncProgress {
                 account_id: account.clone(),
@@ -231,6 +287,7 @@ impl SyncEngine {
     ) -> Result<(HashMap<String, Folder>, Vec<FolderId>, u32)> {
         let account = account.clone();
         let remote = remote.to_vec();
+        let blobs = self.inner.blobs.clone();
         let result = self
             .inner
             .store
@@ -266,10 +323,16 @@ impl SyncEngine {
                 // child (deletes cascade anyway; this keeps it explicit).
                 let mut removed = 0;
                 for folder in existing.iter().rev() {
-                    if !paths.contains(folder.path.as_str()) && s.delete_folder(&folder.id)? {
+                    if paths.contains(folder.path.as_str()) {
+                        continue;
+                    }
+                    let hashes = s.folder_blob_hashes(&folder.id)?;
+                    if s.delete_folder(&folder.id)? {
                         changed.push(folder.id.clone());
                         removed += 1;
                     }
+                    // The raw mail of the deleted messages goes too.
+                    s.remove_unreferenced_blobs(&blobs, &hashes)?;
                 }
                 Ok((by_path, changed, removed))
             })
@@ -277,8 +340,10 @@ impl SyncEngine {
         Ok(result)
     }
 
-    /// Fetches what is new in one folder. Returns the number of stored
-    /// messages and whether the folder was reset (UIDVALIDITY change).
+    /// Fetches what is new in one folder, storing and checkpointing batch
+    /// by batch. Returns the number of stored messages and whether the
+    /// folder was reset (UIDVALIDITY change). Emits [`Event::MailChanged`]
+    /// for every change it stores.
     async fn sync_folder(&self, client: &mut ImapClient, folder: &Folder) -> Result<(u32, bool)> {
         let store = &self.inner.store;
         let known = {
@@ -293,30 +358,88 @@ impl SyncEngine {
             }
         };
 
-        let fetch = client.fetch_new(&folder.path, known).await?;
-        let reset = fetch.uid_validity_changed;
-        let uid_validity = fetch.next_state.uid_validity;
-        let messages: Vec<IncomingMessage> = fetch.messages.into_iter().map(incoming).collect();
-        let next = FolderSyncState {
-            uidvalidity: Some(fetch.next_state.uid_validity),
-            uidnext: Some(fetch.next_state.uid_next),
-            highestmodseq: None,
-        };
+        let plan = client.plan_fetch(&folder.path, known).await?;
+        let reset = plan.uid_validity_changed;
+        let uid_validity = plan.status.uid_validity;
+        if reset {
+            // Drop the stale messages and restart the checkpoint under the
+            // new UIDVALIDITY in one step, before fetching anything.
+            let target = folder.clone();
+            let blobs = self.inner.blobs.clone();
+            let restart = checkpoint(SyncState {
+                uid_validity,
+                uid_next: 1,
+            });
+            store
+                .call(move |s| {
+                    let hashes = s.folder_blob_hashes(&target.id)?;
+                    let dropped = s.clear_folder(&target.id)?;
+                    tracing::info!(folder = %target.path, dropped, "UIDVALIDITY changed; refetching");
+                    s.set_folder_sync_state(&target.id, &restart)?;
+                    // Refetched messages store their blobs again.
+                    s.remove_unreferenced_blobs(&blobs, &hashes)?;
+                    Ok(())
+                })
+                .await?;
+            self.emit(Event::MailChanged {
+                folder_ids: vec![folder.id.clone()],
+            });
+        }
 
-        let folder = folder.clone();
-        let blobs = self.inner.blobs.clone();
-        let stored = store
-            .call(move |s| {
-                if reset {
-                    let dropped = s.clear_folder(&folder.id)?;
-                    tracing::info!(folder = %folder.path, dropped, "UIDVALIDITY changed; refetching");
-                }
-                let stored = ingest(s, &blobs, &folder, uid_validity, &messages)?;
-                s.set_folder_sync_state(&folder.id, &next)?;
-                Ok(stored)
-            })
-            .await?;
-        Ok((u32::try_from(stored).unwrap_or(u32::MAX), reset))
+        let mut stored_total = 0usize;
+        for (index, batch) in plan.batches.iter().enumerate() {
+            let messages: Vec<IncomingMessage> = client
+                .fetch_batch(batch)
+                .await?
+                .into_iter()
+                .map(incoming)
+                .collect();
+            let next = checkpoint(plan.state_after(index));
+            let target = folder.clone();
+            let blobs = self.inner.blobs.clone();
+            let stored = store
+                .call(move |s| {
+                    let stored = ingest(s, &blobs, &target, uid_validity, &messages)?;
+                    s.set_folder_sync_state(&target.id, &next)?;
+                    Ok(stored)
+                })
+                .await?;
+            stored_total += stored;
+            if stored > 0 {
+                self.emit(Event::MailChanged {
+                    folder_ids: vec![folder.id.clone()],
+                });
+            }
+        }
+
+        if known != Some(plan.final_state) {
+            let id = folder.id.clone();
+            let last = checkpoint(plan.final_state);
+            store
+                .call(move |s| s.set_folder_sync_state(&id, &last))
+                .await?;
+        }
+        Ok((u32::try_from(stored_total).unwrap_or(u32::MAX), reset))
+    }
+}
+
+/// The stored form of a sync checkpoint.
+fn checkpoint(state: SyncState) -> FolderSyncState {
+    FolderSyncState {
+        uidvalidity: Some(state.uid_validity),
+        uidnext: Some(state.uid_next),
+        highestmodseq: None,
+    }
+}
+
+/// Whether an error while syncing one folder ends the whole pass. Clean
+/// server refusals (`NO`, `BAD`, a withheld message) only affect that
+/// folder; a broken connection or a failing local store affects them all.
+fn is_fatal_for_pass(err: &CoreError) -> bool {
+    match err {
+        CoreError::Imap(err) => !matches!(err, ImapError::No(_) | ImapError::Protocol(_)),
+        CoreError::Api(_) => false,
+        _ => true,
     }
 }
 

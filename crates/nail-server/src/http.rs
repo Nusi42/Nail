@@ -2,17 +2,18 @@
 
 use std::path::PathBuf;
 
-use axum::Router;
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::{HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
+use axum::{Router, middleware};
 use nail_api::ErrorCode;
 use nail_core::Service;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
+use crate::guard::{self, HostAllowlist};
 use crate::ws;
 
 /// Content Security Policy of the app. Mirrors the desktop shell's
@@ -28,7 +29,12 @@ const APP_CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' '
 const BLOB_CSP: &str = "default-src 'none'; sandbox";
 
 /// The axum router for `service`, serving the UI from `ui_dir` (if any).
-pub fn router(service: Service, ui_dir: Option<PathBuf>) -> Router {
+///
+/// `port` is the port the server is bound to: every request must name a
+/// loopback host with that port in `Host` (and in `Origin`, if present);
+/// anything else is refused with `403` (DNS-rebinding protection, see
+/// [`crate::guard`]).
+pub fn router(service: Service, ui_dir: Option<PathBuf>, port: u16) -> Router {
     let api = Router::new()
         .route("/api/ws", get(ws::upgrade))
         .route("/api/blob/{hash}", get(blob))
@@ -43,7 +49,11 @@ pub fn router(service: Service, ui_dir: Option<PathBuf>) -> Router {
         None => api.fallback(not_found),
     };
 
-    app.layer(SetResponseHeaderLayer::if_not_present(
+    app.layer(middleware::from_fn_with_state(
+        HostAllowlist::new(port),
+        guard::check,
+    ))
+    .layer(SetResponseHeaderLayer::if_not_present(
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static(APP_CSP),
     ))

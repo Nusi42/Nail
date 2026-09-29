@@ -95,8 +95,32 @@ pub struct ImapConfig {
     pub tls_trust: TlsTrust,
     /// Authentication mechanism.
     pub auth: AuthMechanism,
-    /// Timeout for connecting, the TLS handshake and each command.
+    /// Timeout for connecting, the TLS handshake and each command. Commands
+    /// that download message bodies use it as an *idle* timeout instead: they
+    /// fail only when the server sends nothing for this long.
     pub timeout: Duration,
+    /// How [`ImapClient::fetch_batch`](crate::ImapClient::fetch_batch)
+    /// batches are sized.
+    pub fetch_batch: FetchBatchLimits,
+}
+
+/// Upper bounds of one body-fetch batch (one `UID FETCH` command). A batch
+/// always holds at least one message, however large.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FetchBatchLimits {
+    /// Maximum number of messages.
+    pub max_messages: usize,
+    /// Maximum sum of `RFC822.SIZE` in bytes.
+    pub max_bytes: u64,
+}
+
+impl Default for FetchBatchLimits {
+    fn default() -> Self {
+        Self {
+            max_messages: 50,
+            max_bytes: 8 * 1024 * 1024,
+        }
+    }
 }
 
 impl ImapConfig {
@@ -112,6 +136,7 @@ impl ImapConfig {
             tls_trust: TlsTrust::Platform,
             auth: AuthMechanism::Auto,
             timeout: Self::DEFAULT_TIMEOUT,
+            fetch_batch: FetchBatchLimits::default(),
         }
     }
 
@@ -147,6 +172,13 @@ impl ImapConfig {
     #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// Sets the body-fetch batch limits.
+    #[must_use]
+    pub fn with_fetch_batch(mut self, limits: FetchBatchLimits) -> Self {
+        self.fetch_batch = limits;
         self
     }
 }

@@ -30,6 +30,9 @@ target-dir = "C:/Users/<you>/AppData/Local/nail-build/target"
 When several cargo processes run in parallel (for example several agents),
 give each its own `CARGO_TARGET_DIR`.
 
+Playwright output also goes to `%LOCALAPPDATA%\nail-build\`. The one
+exception is `ui/dist` (gitignored, about 1 MB), see ADR 0011.
+
 ## Install and build
 
 ```sh
@@ -55,7 +58,42 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Playwright only (already built) | `npm run e2e:only` |
 
 CI (`.github/workflows/ci.yml`, `windows-latest`) runs all of these.
-[`e2e/README.md`](../e2e/README.md) describes the Playwright harness.
+
+### End-to-end tests (Playwright)
+
+The suite in `e2e/` drives the real web UI served by the real core: the
+prebuilt `nail serve --seed demo` binary with temporary data and config
+directories. It builds nothing itself (ADR 0010). `npm run e2e:only` needs,
+first:
+
+```sh
+npm run build -w ui                      # ui/dist, served by nail serve
+cargo build -p nail-cli                  # the nail binary (debug profile)
+npx -w e2e playwright install chromium   # once per machine
+```
+
+How it works:
+
+- `e2e/playwright.config.ts` starts one shared server
+  (`nail serve --seed demo --port <free port> --data-dir <tmp> --config-dir <tmp>`)
+  for the read-only scenarios. The runner picks the free port once and
+  hands it to the workers in `NAIL_E2E_PORT`; set it yourself to pin one.
+- Scenarios that edit `theme.kdl` / `layout.kdl`, use another locale or
+  another seed start a private server on port 0 (`startNail()` in
+  `e2e/support/nail.ts`), so they never disturb each other.
+- The binary is found through `cargo metadata` (the target directory lives
+  outside the repository). `NAIL_BIN` selects another binary, `NAIL_LOG`
+  (e.g. `info`) shows server logs.
+- Traces, screenshots and the CI HTML report go to
+  `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
+  `NAIL_BUILD_DIR` overrides the base), not into the repository.
+
+| File | Covers |
+| --- | --- |
+| `e2e/tests/mail.spec.ts` | Default three-pane layout from `data-part` attributes (no inline styles or classes), seeded folders and messages, sandboxed reader iframe with remote images blocked, hostile HTML neutralised, `j`/`k` navigation, German locale falling back to English |
+| `e2e/tests/config.spec.ts` | `theme.kdl` hot reload of a CSS custom property (and keep-last-valid on errors), `layout.kdl` moving and removing panes, `--locale de` fallback |
+| `e2e/tests/sync.spec.ts` | `--seed demo-imap`: an IMAP account synced from the mock server, `F5` (`sync.now`) round trip |
+| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode; any violation, whatever its impact, fails |
 
 ### Generated files and snapshots
 
@@ -152,3 +190,4 @@ architecture are:
 - **0008:** the renderer
 - **0009:** the core, server, CLI and desktop shell
 - **0010:** the e2e harness
+- **0011:** build output locations (`ui/dist` stays in the repository)

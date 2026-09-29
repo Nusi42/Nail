@@ -25,5 +25,5 @@ mod service;
 mod sync;
 
 pub use error::{CoreError, Result};
-pub use service::{MAX_PAGE_SIZE, Service, ServiceOptions};
-pub use sync::{ImapAccount, SyncReport};
+pub use service::{EVENT_CAPACITY, MAX_PAGE_SIZE, Service, ServiceOptions};
+pub use sync::{FolderSyncFailure, ImapAccount, SyncReport};

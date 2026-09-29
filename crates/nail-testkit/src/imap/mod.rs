@@ -79,6 +79,11 @@ pub(crate) struct Control {
     disconnect_on: Mutex<Option<String>>,
     /// Upper-case command name the server answers with a tagged `NO`.
     fail_on: Mutex<Option<String>>,
+    /// Upper-case substring of a command line and how many matching commands
+    /// still pass before the server drops the connection (once).
+    disconnect_after: Mutex<Option<(String, usize)>>,
+    /// Mailboxes that `SELECT`/`EXAMINE` refuse (as if forbidden by ACLs).
+    denied_mailboxes: Mutex<Vec<String>>,
     connections: AtomicUsize,
 }
 
@@ -89,6 +94,35 @@ impl Control {
 
     pub(crate) fn should_fail(&self, command: &str) -> bool {
         matches_command(&self.fail_on, command)
+    }
+
+    /// Counts `line` against [`MockImapServer::disconnect_after`].
+    pub(crate) fn should_disconnect_line(&self, line: &[u8]) -> bool {
+        let mut guard = self
+            .disconnect_after
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let Some((pattern, remaining)) = guard.as_mut() else {
+            return false;
+        };
+        let line = String::from_utf8_lossy(line).to_ascii_uppercase();
+        if !line.contains(pattern.as_str()) {
+            return false;
+        }
+        if *remaining == 0 {
+            *guard = None;
+            return true;
+        }
+        *remaining -= 1;
+        false
+    }
+
+    pub(crate) fn is_denied(&self, mailbox: &str) -> bool {
+        self.denied_mailboxes
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .any(|m| m == mailbox)
     }
 }
 
@@ -202,6 +236,29 @@ impl MockImapServer {
             .lock()
             .unwrap_or_else(|p| p.into_inner());
         *guard = command.map(str::to_ascii_uppercase);
+    }
+
+    /// Lets `passing` commands whose line contains `pattern`
+    /// (case-insensitive, e.g. `"BODY.PEEK[]"`) through, then drops the
+    /// connection without answering the next one. Fires once.
+    pub fn disconnect_after(&self, pattern: &str, passing: usize) {
+        let mut guard = self
+            .control
+            .disconnect_after
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        *guard = Some((pattern.to_ascii_uppercase(), passing));
+    }
+
+    /// Makes `SELECT`/`EXAMINE` of these mailboxes fail with `NO [NOPERM]`
+    /// (the mailboxes still appear in `LIST`, like folders an ACL forbids).
+    pub fn deny_mailboxes(&self, mailboxes: &[&str]) {
+        let mut guard = self
+            .control
+            .denied_mailboxes
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        *guard = mailboxes.iter().map(|m| (*m).to_owned()).collect();
     }
 
     /// Number of accepted connections so far.

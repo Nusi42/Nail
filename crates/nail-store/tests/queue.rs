@@ -294,13 +294,15 @@ async fn in_flight_ops_are_recovered_after_restart() {
         let first = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
         let second = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
 
-        // "Crash" while the first op is on the wire.
-        let pass = store.replay_pending(&Hanging, ReplayPolicy::default());
+        // "Crash" while the first op is on the wire: the pass never ends and
+        // no destructor runs (unlike a cancellation, see below).
+        let mut pass = Box::pin(store.replay_pending(&Hanging, ReplayPolicy::default()));
         assert!(
-            tokio::time::timeout(Duration::from_millis(200), pass)
+            tokio::time::timeout(Duration::from_millis(200), &mut pass)
                 .await
                 .is_err()
         );
+        std::mem::forget(pass);
         assert_eq!(store.get_op(first).unwrap().state, OpState::InFlight);
         (first, second)
     };
@@ -319,6 +321,33 @@ async fn in_flight_ops_are_recovered_after_restart() {
         .unwrap();
     assert_eq!(report.done, [first, second]);
     assert_eq!(store.get_op(first).unwrap().attempts, 2);
+}
+
+/// Regression: a cancelled pass (task aborted, shutdown) left the claimed op
+/// `in_flight` until the next restart, so it was never replayed.
+#[tokio::test]
+async fn a_cancelled_pass_puts_the_op_back() {
+    let store = store_with_messages(&["m1", "m2"]);
+    let first = store.enqueue(&mark_seen("m1", true)).unwrap().op.id;
+    let second = store.enqueue(&mark_seen("m2", true)).unwrap().op.id;
+
+    let pass = store.replay_pending(&Hanging, ReplayPolicy::default());
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), pass)
+            .await
+            .is_err()
+    );
+    let op = store.get_op(first).unwrap();
+    assert_eq!((op.state, op.attempts), (OpState::Pending, 1));
+    assert_eq!(store.pending_op_count().unwrap(), 2);
+
+    // The next pass (no restart) replays it, in order.
+    let replayer = ScriptedReplayer::default();
+    let report = store
+        .replay_pending(&replayer, ReplayPolicy::default())
+        .await
+        .unwrap();
+    assert_eq!(report.done, [first, second]);
 }
 
 #[tokio::test]
