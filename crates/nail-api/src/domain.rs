@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::ids::{AccountId, FolderId, MessageId, ThreadId};
+use crate::remote_content::RemoteContentInfo;
 use crate::security::{AuthResults, MessageWarning, SecurityStatus};
 
 /// The protocol family behind an account.
@@ -266,6 +267,13 @@ pub struct MessageBody {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<MessageWarning>>", optional)]
     pub warnings: Vec<MessageWarning>,
+    /// Remote content (M2b): how many remote resources the message has and
+    /// whether they are loaded through the proxy (then `sanitized_html`
+    /// references them as `nail-proxy:<token>`); absent when it has none.
+    /// `remote_content_blocked` stays `true` while they are blocked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub remote_content: Option<RemoteContentInfo>,
 }
 
 #[cfg(test)]

@@ -120,6 +120,32 @@ string_id!(
     KeyId
 );
 
+string_id!(
+    /// Identifies a remote-UI user (M2b, [`crate::remote::RemoteUser`]).
+    RemoteUserId
+);
+string_id!(
+    /// Identifies a device paired with the remote UI
+    /// ([`crate::remote::RemoteDevice`]).
+    RemoteDeviceId
+);
+string_id!(
+    /// Identifies a remote-UI session ([`crate::remote::RemoteSession`]).
+    /// Not the session token: the token is secret and lives only in the
+    /// browser's cookie; the core keeps a hash of it.
+    RemoteSessionId
+);
+string_id!(
+    /// Identifies a registered passkey (WebAuthn credential) of a remote
+    /// user ([`crate::remote::Passkey`]).
+    PasskeyId
+);
+string_id!(
+    /// Identifies a pairing code ([`crate::remote::PairingCode`]). Not the
+    /// code itself, which is shown once and stored only as a hash.
+    PairingId
+);
+
 impl AccountId {
     /// Id of the built-in "All accounts" virtual account (the unified
     /// inbox). It is reserved: `accounts.kdl` cannot define an account or a

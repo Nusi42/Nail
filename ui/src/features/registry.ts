@@ -11,6 +11,7 @@ import { builtinWidgets } from "../widgets";
 import * as composer from "./composer";
 import * as customization from "./customization";
 import * as mcp from "./mcp";
+import * as remote from "./remote";
 import * as rules from "./rules";
 import * as security from "./security";
 import type { Feature } from "./types";
@@ -22,6 +23,7 @@ export const features: Readonly<Record<string, Feature>> = {
   mcp,
   customization,
   security,
+  remote,
 };
 
 /** The merged registries. */

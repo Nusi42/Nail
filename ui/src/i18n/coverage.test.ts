@@ -21,6 +21,7 @@ import * as composerMessages from "../features/composer/messages";
 import * as customizationMessages from "../features/customization/messages";
 import * as mcpMessages from "../features/mcp/messages";
 import * as rulesMessages from "../features/rules/messages";
+import * as remoteMessages from "../features/remote/messages";
 import * as securityMessages from "../features/security/messages";
 import { shippedCatalogs } from "./catalogs";
 
@@ -31,6 +32,7 @@ const FEATURE_MESSAGES = [
   mcpMessages,
   customizationMessages,
   securityMessages,
+  remoteMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");
@@ -125,6 +127,9 @@ const ERROR_CODES: ErrorCode[] = [
   "locked",
   "no_key",
   "crypto",
+  "forbidden",
+  "reauth_required",
+  "rate_limited",
 ];
 const STATES: AccountState[] = ["online", "connecting", "offline", "auth-error", "disabled"];
 const OUTBOX: OutboxState[] = ["scheduled", "sending", "sent", "failed", "cancelled"];

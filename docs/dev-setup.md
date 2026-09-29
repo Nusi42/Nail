@@ -62,6 +62,14 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 CI (`.github/workflows/ci.yml`, `windows-latest`) runs all of these, except
 the desktop smoke test (see below).
 
+### Dependency rules
+
+No GPL / LGPL / AGPL dependency, no OpenSSL and no aws-lc (TLS uses
+`ring`; ADRs 0029 and 0036). Until WP44 adds `cargo-deny`, check by hand
+after adding a crate: `cargo tree -i openssl-sys`, `cargo tree -i aws-lc-rs`
+and `cargo tree -i aws-lc-sys` must answer "did not match any packages",
+and `cargo metadata --format-version 1` must list only permissive licences.
+
 ### End-to-end tests (Playwright)
 
 The suite in `e2e/` drives the real web UI served by the real core: the

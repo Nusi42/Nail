@@ -211,6 +211,9 @@ error-cancelled = The operation was cancelled.
 error-locked = A key is locked. Enter its passphrase and try again.
 error-no-key = A needed key or certificate is missing or cannot be used.
 error-crypto = Signing, encryption or verification failed.
+error-forbidden = You are not allowed to do this.
+error-reauth-required = Confirm it is you: sign in again to continue.
+error-rate-limited = Too many attempts. Please wait a moment and try again.
 
 ## Account status (from nail_api::AccountState, "account-state-" + state)
 

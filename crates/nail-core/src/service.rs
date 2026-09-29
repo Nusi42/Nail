@@ -892,6 +892,37 @@ impl Service {
             | Request::SuggestAuthservId { .. }
             | Request::GetVaultStatus
             | Request::SetVaultEncryption { .. }) => crate::security::handle(self, request).await?,
+
+            // --- M2b remote UI and remote content (ADR 0036): one arm, wired by WP45 ---
+            request @ (Request::GetRemoteUiSettings
+            | Request::UpdateRemoteUiSettings { .. }
+            | Request::RegenerateRemoteCertificate
+            | Request::ListRemoteUsers
+            | Request::CreateRemoteUser { .. }
+            | Request::UpdateRemoteUser { .. }
+            | Request::DeleteRemoteUser { .. }
+            | Request::SetRemotePassword { .. }
+            | Request::StartTotpEnrollment { .. }
+            | Request::ConfirmTotpEnrollment { .. }
+            | Request::DisableTotp { .. }
+            | Request::UnlockRemoteUser { .. }
+            | Request::RenamePasskey { .. }
+            | Request::DeletePasskey { .. }
+            | Request::ListRemoteDevices { .. }
+            | Request::UpdateRemoteDevice { .. }
+            | Request::RevokeRemoteDevice { .. }
+            | Request::ListRemoteSessions { .. }
+            | Request::RevokeRemoteSession { .. }
+            | Request::RevokeAllRemoteSessions { .. }
+            | Request::CreatePairingCode { .. }
+            | Request::ListPairingCodes
+            | Request::CancelPairingCode { .. }
+            | Request::ListRemoteAudit { .. }
+            | Request::AllowRemoteContent { .. }
+            | Request::ListRemoteContentAllows
+            | Request::RemoveRemoteContentAllow { .. }) => {
+                crate::remote::handle(self, request).await?
+            }
         })
     }
 }

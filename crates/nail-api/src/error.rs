@@ -48,6 +48,15 @@ pub enum ErrorCode {
     /// Signing, encryption, decryption or verification failed, or key data
     /// is malformed (M2a).
     Crypto,
+    /// The caller is not allowed to do this: a remote session's grant
+    /// lacks the scope or `admin`, or the action is locked (internet mode)
+    /// (M2b).
+    Forbidden,
+    /// A sensitive action needs a fresh re-authentication of the remote
+    /// session (M2b).
+    ReauthRequired,
+    /// Too many attempts; try again later (M2b).
+    RateLimited,
 }
 
 impl ErrorCode {
@@ -70,6 +79,9 @@ impl ErrorCode {
             Self::Locked => "locked",
             Self::NoKey => "no_key",
             Self::Crypto => "crypto",
+            Self::Forbidden => "forbidden",
+            Self::ReauthRequired => "reauth_required",
+            Self::RateLimited => "rate_limited",
         }
     }
 
@@ -79,7 +91,7 @@ impl ErrorCode {
     }
 
     /// All codes, for exhaustive checks (e.g. catalog completeness tests).
-    pub const ALL: [ErrorCode; 16] = [
+    pub const ALL: [ErrorCode; 19] = [
         Self::InvalidRequest,
         Self::NotFound,
         Self::Unsupported,
@@ -96,6 +108,9 @@ impl ErrorCode {
         Self::Locked,
         Self::NoKey,
         Self::Crypto,
+        Self::Forbidden,
+        Self::ReauthRequired,
+        Self::RateLimited,
     ];
 }
 

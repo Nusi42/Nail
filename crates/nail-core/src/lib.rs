@@ -37,6 +37,7 @@ mod oauth;
 mod outbox;
 pub mod paths;
 mod pop3_engine;
+mod remote;
 mod replay;
 mod rule_mail;
 mod rules;

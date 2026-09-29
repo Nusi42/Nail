@@ -18,6 +18,7 @@ import { parseQuery } from "./mockSearch";
 import { answerComposer, isComposerRequest } from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
+import { answerRemote, isRemoteRequest } from "../features/remote/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
 import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
 
@@ -94,6 +95,7 @@ export class MockTransport implements Transport, MockCore {
     if (isMcpRequest(request)) return answerMcp(this, request);
     if (isCustomizationRequest(request)) return answerCustomization(this, request);
     if (isSecurityRequest(request)) return answerSecurity(this, request);
+    if (isRemoteRequest(request)) return answerRemote(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };

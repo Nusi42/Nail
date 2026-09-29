@@ -197,6 +197,7 @@ impl McpData for FakeData {
             security: None,
             auth_results: None,
             warnings: Vec::new(),
+            remote_content: None,
         })
     }
 

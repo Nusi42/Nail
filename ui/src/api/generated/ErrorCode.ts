@@ -5,4 +5,4 @@
  * message `error-<code with "_" replaced by "-">`, e.g. `not_found` →
  * `error-not-found`.
  */
-export type ErrorCode = "invalid_request" | "not_found" | "unsupported" | "auth_failed" | "network" | "config" | "unavailable" | "internal" | "conflict" | "tls" | "too_large" | "rejected" | "cancelled" | "locked" | "no_key" | "crypto";
+export type ErrorCode = "invalid_request" | "not_found" | "unsupported" | "auth_failed" | "network" | "config" | "unavailable" | "internal" | "conflict" | "tls" | "too_large" | "rejected" | "cancelled" | "locked" | "no_key" | "crypto" | "forbidden" | "reauth_required" | "rate_limited";

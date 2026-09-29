@@ -32,7 +32,15 @@ import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { OutboxId } from "./OutboxId";
+import type { PairingCode } from "./PairingCode";
 import type { RecipientKeysReport } from "./RecipientKeysReport";
+import type { RemoteAuditEntry } from "./RemoteAuditEntry";
+import type { RemoteContentAllow } from "./RemoteContentAllow";
+import type { RemoteDevice } from "./RemoteDevice";
+import type { RemoteSession } from "./RemoteSession";
+import type { RemoteUiSettings } from "./RemoteUiSettings";
+import type { RemoteUiStatus } from "./RemoteUiStatus";
+import type { RemoteUser } from "./RemoteUser";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
 import type { Rule } from "./Rule";
@@ -43,6 +51,7 @@ import type { SearchError } from "./SearchError";
 import type { SearchHit } from "./SearchHit";
 import type { SecuritySettings } from "./SecuritySettings";
 import type { ThreadSummary } from "./ThreadSummary";
+import type { TotpEnrollment } from "./TotpEnrollment";
 import type { UiContext } from "./UiContext";
 import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
@@ -418,7 +427,74 @@ authserv_id: string | null, } | { "type": "VaultStatus",
 /**
  * The state.
  */
-status: VaultStatus, } | { "type": "Error", 
+status: VaultStatus, } | { "type": "RemoteUi", 
+/**
+ * The settings (as saved).
+ */
+settings: RemoteUiSettings, 
+/**
+ * The current state.
+ */
+status: RemoteUiStatus, } | { "type": "RemoteUsers", 
+/**
+ * Users by name.
+ */
+users: Array<RemoteUser>, } | { "type": "RemoteUserSaved", 
+/**
+ * The user as saved.
+ */
+user: RemoteUser, } | { "type": "TotpEnrollment", 
+/**
+ * The secret to scan. Shown once.
+ */
+enrollment: TotpEnrollment, } | { "type": "RemoteDevices", 
+/**
+ * Devices, most recently seen first.
+ */
+devices: Array<RemoteDevice>, } | { "type": "RemoteDeviceSaved", 
+/**
+ * The device as saved.
+ */
+device: RemoteDevice, } | { "type": "RemoteSessions", 
+/**
+ * Newest first.
+ */
+sessions: Array<RemoteSession>, } | { "type": "PairingCodeCreated", 
+/**
+ * The code's record.
+ */
+pairing: PairingCode, 
+/**
+ * The code to enter in the browser (e.g. `K7QM-2WXR`). Shown once;
+ * the core keeps only its hash.
+ */
+code: string, 
+/**
+ * Address to open in the browser, `null` when the remote UI is
+ * not running.
+ */
+url: string | null, 
+/**
+ * Fingerprint of the served certificate, for the browser to
+ * compare; `null` without TLS.
+ */
+certificate_fingerprint: string | null, } | { "type": "PairingCodes", 
+/**
+ * Pending first, then newest first.
+ */
+codes: Array<PairingCode>, } | { "type": "RemoteAudit", 
+/**
+ * Newest first.
+ */
+entries: Array<RemoteAuditEntry>, } | { "type": "RemoteContentAllowed", 
+/**
+ * The stored entry.
+ */
+entry: RemoteContentAllow, } | { "type": "RemoteContentAllows", 
+/**
+ * Entries by scope (message, sender, domain), newest first.
+ */
+entries: Array<RemoteContentAllow>, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

@@ -896,6 +896,12 @@ async fn search_count(f: &Fixture, text: &str) -> u32 {
     .await
     {
         Response::SearchResults { total, .. } => total,
+        // While the vault migration swaps the index, searches answer
+        // `unavailable` for a moment; callers poll with `eventually`.
+        Response::Error {
+            code: ErrorCode::Unavailable,
+            ..
+        } => 0,
         other => panic!("unexpected {other:?}"),
     }
 }

@@ -17,6 +17,14 @@ tracing.workspace = true
 axum.workspace = true
 tower-http.workspace = true
 futures-util.workspace = true
+# M2b WP42 (ADR 0036): TLS for the remote UI (rustls + ring), self-signed
+# certificates, ACME (only usable in the locked internet mode), the
+# remote-content proxy route and the auth routes (WP41, mounted by WP45).
+rustls.workspace = true
+tokio-rustls.workspace = true
+rcgen.workspace = true
+instant-acme.workspace = true
+nail-proxy.workspace = true
 
 [dev-dependencies]
 nail-core = { workspace = true, features = ["demo"] }

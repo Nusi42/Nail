@@ -10,9 +10,13 @@ import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpStatus } from "./OpStatus";
 import type { OutboxId } from "./OutboxId";
 import type { OutboxState } from "./OutboxState";
+import type { RemoteAlert } from "./RemoteAlert";
+import type { RemoteSessionId } from "./RemoteSessionId";
+import type { RemoteUiStatus } from "./RemoteUiStatus";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
 import type { RuleRun } from "./RuleRun";
+import type { SessionEndReason } from "./SessionEndReason";
 import type { VaultStatus } from "./VaultStatus";
 
 /**
@@ -147,4 +151,20 @@ edit: boolean, } | { "type": "McpClientsChanged" } | { "type": "SavedSearchesCha
 /**
  * The new state.
  */
-status: VaultStatus, } | { "type": "SecuritySettingsChanged" };
+status: VaultStatus, } | { "type": "SecuritySettingsChanged" } | { "type": "RemoteUiStatusChanged", 
+/**
+ * The new state.
+ */
+status: RemoteUiStatus, } | { "type": "RemoteAccessChanged" } | { "type": "RemoteSessionEnded", 
+/**
+ * The session.
+ */
+session_id: RemoteSessionId, 
+/**
+ * Why.
+ */
+reason: SessionEndReason, } | { "type": "RemoteSecurityAlert", 
+/**
+ * The alert.
+ */
+alert: RemoteAlert, } | { "type": "RemoteContentPolicyChanged" };

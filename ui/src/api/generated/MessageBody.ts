@@ -4,6 +4,7 @@ import type { AuthResults } from "./AuthResults";
 import type { MessageHeaders } from "./MessageHeaders";
 import type { MessageId } from "./MessageId";
 import type { MessageWarning } from "./MessageWarning";
+import type { RemoteContentInfo } from "./RemoteContentInfo";
 import type { SecurityStatus } from "./SecurityStatus";
 
 /**
@@ -54,4 +55,11 @@ auth_results?: AuthResults,
 /**
  * Link and attachment warnings for the reader (M2a); absent = none.
  */
-warnings?: Array<MessageWarning>, };
+warnings?: Array<MessageWarning>, 
+/**
+ * Remote content (M2b): how many remote resources the message has and
+ * whether they are loaded through the proxy (then `sanitized_html`
+ * references them as `nail-proxy:<token>`); absent when it has none.
+ * `remote_content_blocked` stays `true` while they are blocked.
+ */
+remote_content?: RemoteContentInfo, };

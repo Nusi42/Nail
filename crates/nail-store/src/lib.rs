@@ -30,6 +30,11 @@
 //!   Autocrypt peer state ([`AutocryptPeerRecord`]), encryption-at-rest
 //!   state ([`VaultRecord`]), cached message security
 //!   ([`MessageSecurityRecord`]) and JSON settings ([`Store::setting`]).
+//! * M2b (schema v6, ADR 0036): remote-UI users with hashed / referenced
+//!   credentials, passkeys, paired devices, sessions (token hashes with
+//!   rotation), pairing codes, login throttling, the remote audit log
+//!   ([`RemoteAuditRecord`]) and the remote-content allow-lists
+//!   ([`Store::remote_content_allowed_by`]).
 //! * Encryption-at-rest hooks (M2a WP33, [`seal`]): a [`DataCipher`]
 //!   installed with [`Store::set_cipher`] / [`BlobStore::set_cipher`] seals
 //!   sensitive columns and blob files; [`Store::convert_fields`],
@@ -48,6 +53,7 @@ mod mail;
 mod mcp;
 mod pop3;
 mod queue;
+mod remote;
 mod rules;
 mod saved_search;
 mod schema;
@@ -74,6 +80,11 @@ pub use pop3::{Pop3State, Pop3Uid};
 pub use queue::{
     Enqueued, FlagChange, MessageSource, OpId, OpState, Operation, QueuedOp, ReplayOutcome,
     ReplayPolicy, ReplayReport, Replayer,
+};
+pub use remote::{
+    NewPairingCode, NewPasskey, NewRemoteDevice, NewRemoteSession, REMOTE_UI_CERTIFICATE_KEY,
+    REMOTE_UI_SETTINGS_KEY, RemoteAuditRecord, RemoteCredentials, StoredPasskey, ThrottleRecord,
+    hash_remote_secret,
 };
 pub use rules::{RuleRunAction, RuleRunRecord, RuleRunUndo, RuleState};
 pub use schema::SCHEMA_VERSION;

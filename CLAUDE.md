@@ -32,6 +32,9 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        M1b: rich drafts, rules, mcp, context (UI context), customize (ADR 0022);
                        M2a: security (message security, keys, recipient keys, SendCrypto,
                        auth results, warnings, vault, settings; ADR 0029)
+                       M2b: remote (remote-UI settings / status, users, passkeys, devices,
+                       sessions, pairing codes, RemoteGrant, audit, the POST /api/auth login
+                       protocol), remote_content (allow-lists, nail-proxy: URLs) (ADR 0036)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22)
@@ -41,10 +44,13 @@ crates/nail-store      SQLite metadata (v5), blob store, per-account operation q
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
                        app settings (src/crypto.rs, ADR 0029); seal.rs: DataCipher, nail_seal /
                        nail_open SQL functions, SEALED_COLUMNS, convert_fields, compact; BlobStore
-                       set_cipher / convert / hashes / remove_temp_files (ADR 0032)
+                       set_cipher / convert / hashes / remove_temp_files (ADR 0032);
+                       v6: remote.rs — remote users (Argon2id hash / keychain TOTP ref only),
+                       passkeys, devices, sessions (token hashes, rotation), pairing codes,
+                       throttle, remote audit, remote-content allow-lists (ADR 0036)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
-                       warnings) (ADR 0032)
+                       warnings) (ADR 0032); remote_content.rs: proxy-URL rewriting hook (M2b WP42)
 crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
@@ -67,6 +73,10 @@ crates/nail-smime      S/MIME (RustCrypto cms/x509-cert): sign/encrypt/verify/de
                        (TrustAnchors), PKCS#12, keyring, Windows cert store + CNG keys (ADR 0031)
 crates/nail-vault      encryption at rest: sealed format (XChaCha20-Poly1305), data key in the keychain,
                        SealedDirectory (tantivy), Vault migration plain <-> encrypted (ADR 0032)
+crates/nail-remote-auth remote-UI auth: passkeys (webauthn_rp), Argon2id + TOTP, pairing codes,
+                       device-bound sessions, rate limits, axum login route / middleware (M2b WP41)
+crates/nail-proxy      SSRF-safe remote-content proxy: signed nail-proxy: tokens, private-range
+                       blocking, size / type limits (M2b WP42)
 crates/nail-core       Service: routes requests; owns store, search index, accounts.kdl, per-account
                        engines (IMAP IDLE / POP3), op replay, outbox, OAuth2, virtual accounts (ADR 0020);
                        M1b: composer.rs (NewDraft…, server Drafts copy), rules.rs + rule_mail.rs
@@ -75,15 +85,19 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M2a: security.rs (every security request), crypto.rs (keyrings, decrypt/verify
                        on read, sign/encrypt + Autocrypt on send, arrivals, configured authserv-ids +
                        suggestion, message_is_encrypted = the MCP `encrypted` gate), vault.rs
-                       (VaultCtl, migration with the swappable SearchSlot) (ADR 0034, fixes ADR 0035)
-crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
+                       (VaultCtl, migration with the swappable SearchSlot) (ADR 0034, fixes ADR 0035);
+                       M2b: remote.rs (remote-UI and remote-content requests; ADR 0036)
+crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
+                       M2b: TLS (rustls + ring, rcgen, instant-acme), hardening, proxy route
 crates/nail-cli        `nail` binary
-app/src-tauri          Tauri 2 desktop shell (starts the MCP server; main window created in code)
+app/src-tauri          Tauri 2 desktop shell (starts the MCP server; main window created in code);
+                       installer/ (NSIS resources, M2b WP44)
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
-                       M2a: security/)
+                       M2a: security/; M2b: remote/)
 e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts)
 defaults/              shipped theme.kdl + layout.kdl
 locales/               Fluent catalogs (en, de)
+scripts/               build / release helpers (SBOM, installer smoke; M2b WP44)
 ```
 
 ## Commands
@@ -139,6 +153,13 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `nail_core::demo::demo_options` (memory secrets, test CA anchor, offline key lookup);
   demo-multi accounts get keys via `DemoMulti::seed_security`. `Service::search_index()`
   returns an `Arc` (the vault migration swaps the index; never hold it across long work).
+- M2b contract: ADR 0036 (`nail_api::remote` / `remote_content`, store v6 with hashed or
+  `keychain:`-referenced secrets only, crate stubs `nail-remote-auth` / `nail-proxy`, TLS libs in
+  `nail-server`, slots incl. WP44's `tauri.conf.json` bundle section, `app/src-tauri/installer/`,
+  `.github/workflows/`, `deny.toml`, `scripts/`). Passkeys use `webauthn_rp`, not `webauthn-rs`
+  (OpenSSL). `cargo tree -i aws-lc-rs` must stay empty too (TLS = ring). Internet mode is locked
+  (`nail_api::remote::internet_mode_lock()`); the core refuses it with `forbidden`. Remote
+  sessions carry a `RemoteGrant` (MCP scopes + `admin`), always within device and user.
 - `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
   endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
   (`open_editor`).

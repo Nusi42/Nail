@@ -18,6 +18,7 @@
 pub mod auth_results;
 mod domain;
 pub mod links;
+pub mod remote_content;
 mod sanitize;
 mod text;
 
@@ -111,6 +112,8 @@ impl ParsedMessage {
             security: None,
             auth_results: None,
             warnings: Vec::new(),
+            // Filled by the core (M2b): allow-lists and proxied URLs.
+            remote_content: None,
         }
     }
 }

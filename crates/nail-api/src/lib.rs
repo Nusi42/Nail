@@ -20,6 +20,11 @@
 //!   and certificates, recipient key status, sign / encrypt options),
 //!   sender authentication, reader warnings, encryption at rest and the
 //!   security settings (M2a, ADR 0029).
+//! * [`remote`]: the remote UI — settings and status, users and
+//!   credentials, paired devices, sessions, pairing codes, grants, the
+//!   audit log and the browser login protocol (M2b, ADR 0036).
+//! * [`remote_content`]: remote content in mail — allow-lists per
+//!   message / sender / domain and the proxy URL form (M2b, ADR 0036).
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -47,6 +52,8 @@ pub mod ids;
 pub mod mcp;
 pub mod ops;
 pub mod protocol;
+pub mod remote;
+pub mod remote_content;
 pub mod rules;
 pub mod search;
 pub mod security;
@@ -79,13 +86,19 @@ pub use domain::{
 pub use error::{ApiError, ErrorCode};
 pub use ids::{
     AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId,
+    RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 pub use mcp::{McpClient, McpGrant, McpScope};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
 };
+pub use remote::{
+    RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession, RemoteUiSettings, RemoteUiStatus,
+    RemoteUser,
+};
+pub use remote_content::{RemoteContentAllow, RemoteContentInfo, RemoteContentScope};
 pub use rules::{Condition, Rule, RuleAction, RuleRun, RuleTrigger};
 pub use search::{SavedSearch, SearchError, SearchErrorKind, SearchHit, SearchQuery};
 pub use security::{
@@ -130,6 +143,12 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     MessageWarning::export_all(&cfg)?;
     IdentityCrypto::export_all(&cfg)?;
     SendCrypto::export_all(&cfg)?;
+    // M2b: the login protocol (HTTP, not the RPC) and optional fields.
+    remote::AuthRequest::export_all(&cfg)?;
+    remote::AuthResponse::export_all(&cfg)?;
+    remote::RemoteUiSettingsIssue::export_all(&cfg)?;
+    remote::RemoteAccessPreset::export_all(&cfg)?;
+    RemoteContentInfo::export_all(&cfg)?;
 
     let mut files = Vec::new();
     collect_ts_files(out_dir, out_dir, &mut files)?;

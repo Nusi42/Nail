@@ -4,7 +4,8 @@
 //! The table is split by feature so the M1b packages never edit the same
 //! file (ADR 0022): [`core`] holds the built-in widgets, [`composer`],
 //! [`rules`], [`mcp`] and [`customization`] the widgets of WP21–WP24,
-//! [`security`] those of M2a WP34 (ADR 0029). The
+//! [`security`] those of M2a WP34 (ADR 0029), [`remote`] those of M2b
+//! WP43 (ADR 0036). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -12,6 +13,7 @@ mod composer;
 mod core;
 mod customization;
 mod mcp;
+mod remote;
 mod rules;
 mod security;
 
@@ -72,6 +74,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     mcp::WIDGETS,
     customization::WIDGETS,
     security::WIDGETS,
+    remote::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

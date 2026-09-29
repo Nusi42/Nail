@@ -33,10 +33,17 @@ use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, Threa
 use crate::error::{ApiError, ErrorCode};
 use crate::ids::{
     AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId,
+    RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
+use crate::remote::{
+    PairingCode, RemoteAlert, RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession,
+    RemoteSessionFilter, RemoteUiSettings, RemoteUiStatus, RemoteUser, RemoteUserUpdate,
+    SessionEndReason, TotpEnrollment,
+};
+use crate::remote_content::{RemoteContentAllow, RemoteContentScope};
 use crate::rules::{Rule, RuleMatch, RuleRun};
 use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery};
 use crate::security::{
@@ -768,6 +775,206 @@ pub enum Request {
         /// `true` = encrypt, `false` = decrypt.
         enabled: bool,
     },
+
+    // --- Remote UI (M2b WP40, ADR 0036) ---
+    // Administration: from the desktop, or from a remote session whose
+    // grant has `admin` and that re-authenticated recently
+    // (`reauth_required` otherwise).
+    /// Remote-UI settings and status. Answered with [`Response::RemoteUi`].
+    GetRemoteUiSettings,
+    /// Replace the remote-UI settings; the remote UI restarts with them.
+    /// Answered with [`Response::RemoteUi`]; `invalid_request` for invalid
+    /// settings, `forbidden` for internet mode or ACME while internet mode
+    /// is locked ([`crate::remote::RemoteUiSettings::issues`]).
+    UpdateRemoteUiSettings {
+        /// The new settings.
+        settings: RemoteUiSettings,
+    },
+    /// Make a new self-signed certificate (paired browsers must accept the
+    /// new fingerprint). Answered with [`Response::RemoteUi`].
+    RegenerateRemoteCertificate,
+    /// Remote-UI users. Answered with [`Response::RemoteUsers`].
+    ListRemoteUsers,
+    /// Add a user (without credentials: set a password or pair a device
+    /// to register a passkey). Answered with [`Response::RemoteUserSaved`];
+    /// `conflict` when the name is taken.
+    CreateRemoteUser {
+        /// Login name (unique, case-insensitive).
+        name: String,
+        /// Display name.
+        #[serde(default)]
+        display_name: Option<String>,
+        /// The most the user's devices and sessions may be granted.
+        #[serde(default)]
+        grant: RemoteGrant,
+    },
+    /// Change a user. Answered with [`Response::RemoteUserSaved`].
+    UpdateRemoteUser {
+        /// The user.
+        user_id: RemoteUserId,
+        /// The changes.
+        update: RemoteUserUpdate,
+    },
+    /// Remove a user with their passkeys, devices and sessions (audit
+    /// entries stay). Answered with [`Response::Done`].
+    DeleteRemoteUser {
+        /// The user.
+        user_id: RemoteUserId,
+    },
+    /// Set (or, with `null`, remove) a user's password; stored as an
+    /// Argon2id hash. Ends the user's other sessions. Answered with
+    /// [`Response::RemoteUserSaved`]; `invalid_request` for a password
+    /// the policy rejects.
+    SetRemotePassword {
+        /// The user.
+        user_id: RemoteUserId,
+        /// The new password, `null` = none.
+        password: Option<String>,
+    },
+    /// Start enrolling TOTP: a new secret (kept by the core until
+    /// confirmed). Answered with [`Response::TotpEnrollment`].
+    StartTotpEnrollment {
+        /// The user.
+        user_id: RemoteUserId,
+    },
+    /// Confirm TOTP with a code from the authenticator app; from then on
+    /// password logins need a code. Answered with
+    /// [`Response::RemoteUserSaved`]; `auth_failed` for a wrong code.
+    ConfirmTotpEnrollment {
+        /// The user.
+        user_id: RemoteUserId,
+        /// A current code.
+        code: String,
+    },
+    /// Remove TOTP. Answered with [`Response::RemoteUserSaved`].
+    DisableTotp {
+        /// The user.
+        user_id: RemoteUserId,
+    },
+    /// Lift a lockout after failed logins. Answered with
+    /// [`Response::RemoteUserSaved`].
+    UnlockRemoteUser {
+        /// The user.
+        user_id: RemoteUserId,
+    },
+    /// Rename a passkey. Answered with [`Response::RemoteUserSaved`].
+    RenamePasskey {
+        /// The passkey.
+        passkey_id: PasskeyId,
+        /// New name.
+        name: String,
+    },
+    /// Remove a passkey. Answered with [`Response::RemoteUserSaved`].
+    DeletePasskey {
+        /// The passkey.
+        passkey_id: PasskeyId,
+    },
+    /// Paired devices (revoked ones included). Answered with
+    /// [`Response::RemoteDevices`].
+    ListRemoteDevices {
+        /// Only this user's; `null` = all.
+        #[serde(default)]
+        user_id: Option<RemoteUserId>,
+    },
+    /// Rename a device or change its grant (within its user's; its
+    /// sessions are narrowed at once). Answered with
+    /// [`Response::RemoteDeviceSaved`].
+    UpdateRemoteDevice {
+        /// The device.
+        device_id: RemoteDeviceId,
+        /// New name; `null` = unchanged.
+        #[serde(default)]
+        name: Option<String>,
+        /// New grant; `null` = unchanged.
+        #[serde(default)]
+        grant: Option<RemoteGrant>,
+    },
+    /// Revoke a device: its sessions end, it must pair again. Answered
+    /// with [`Response::Done`].
+    RevokeRemoteDevice {
+        /// The device.
+        device_id: RemoteDeviceId,
+    },
+    /// Remote sessions, newest first. Answered with
+    /// [`Response::RemoteSessions`].
+    ListRemoteSessions {
+        /// Which ones; the default lists valid sessions of everyone.
+        #[serde(default)]
+        filter: RemoteSessionFilter,
+    },
+    /// End a session (its browser is logged out at once). Answered with
+    /// [`Response::Done`].
+    RevokeRemoteSession {
+        /// The session.
+        session_id: RemoteSessionId,
+    },
+    /// End every session (of one user, or of everyone). Answered with
+    /// [`Response::Done`].
+    RevokeAllRemoteSessions {
+        /// Only this user's; `null` = everyone's.
+        #[serde(default)]
+        user_id: Option<RemoteUserId>,
+    },
+    /// Create a one-time pairing code (this approves the device that
+    /// enters it). Answered with [`Response::PairingCodeCreated`], the only
+    /// time the code is shown.
+    CreatePairingCode {
+        /// The user the device will belong to.
+        user_id: RemoteUserId,
+        /// Name for the device; `null` = what the browser sends.
+        #[serde(default)]
+        device_name: Option<String>,
+        /// Grant of the device; `null` = the user's grant.
+        #[serde(default)]
+        grant: Option<RemoteGrant>,
+        /// Validity in minutes; `null` = 10 (the core caps it at 60).
+        #[serde(default)]
+        ttl_minutes: Option<u32>,
+    },
+    /// Recent pairing codes (pending first). Answered with
+    /// [`Response::PairingCodes`].
+    ListPairingCodes,
+    /// Cancel a pending pairing code. Answered with [`Response::Done`].
+    CancelPairingCode {
+        /// The code.
+        pairing_id: PairingId,
+    },
+    /// A page of the remote-UI audit log, newest first. Answered with
+    /// [`Response::RemoteAudit`].
+    ListRemoteAudit {
+        /// Entries of this user; `null` = all.
+        #[serde(default)]
+        user_id: Option<RemoteUserId>,
+        /// Only entries with a smaller id (paging); `null` = the newest.
+        #[serde(default)]
+        before: Option<u64>,
+        /// Maximum number of entries.
+        limit: u32,
+    },
+
+    // --- Remote content (M2b) ---
+    /// Load a message's remote content through the proxy from now on, for
+    /// this message, its sender or its sender's domain. Answered with
+    /// [`Response::RemoteContentAllowed`]; `invalid_request` when the
+    /// message has no usable sender for `sender` / `domain`. Refetch the
+    /// message ([`Event::RemoteContentPolicyChanged`] follows).
+    AllowRemoteContent {
+        /// The message.
+        message_id: MessageId,
+        /// How far the allowance reaches.
+        scope: RemoteContentScope,
+    },
+    /// The remote-content allow-lists. Answered with
+    /// [`Response::RemoteContentAllows`].
+    ListRemoteContentAllows,
+    /// Remove an allow-list entry. Answered with [`Response::Done`]
+    /// (also when there was none).
+    RemoveRemoteContentAllow {
+        /// Its scope.
+        scope: RemoteContentScope,
+        /// Its value (as listed).
+        value: String,
+    },
 }
 
 /// The core's answer to one [`Request`].
@@ -1161,6 +1368,79 @@ pub enum Response {
         /// The state.
         status: VaultStatus,
     },
+    /// Answer to [`Request::GetRemoteUiSettings`],
+    /// [`Request::UpdateRemoteUiSettings`] and
+    /// [`Request::RegenerateRemoteCertificate`].
+    RemoteUi {
+        /// The settings (as saved).
+        settings: RemoteUiSettings,
+        /// The current state.
+        status: RemoteUiStatus,
+    },
+    /// Answer to [`Request::ListRemoteUsers`].
+    RemoteUsers {
+        /// Users by name.
+        users: Vec<RemoteUser>,
+    },
+    /// Answer to requests that change a user or their credentials.
+    RemoteUserSaved {
+        /// The user as saved.
+        user: Box<RemoteUser>,
+    },
+    /// Answer to [`Request::StartTotpEnrollment`].
+    TotpEnrollment {
+        /// The secret to scan. Shown once.
+        enrollment: TotpEnrollment,
+    },
+    /// Answer to [`Request::ListRemoteDevices`].
+    RemoteDevices {
+        /// Devices, most recently seen first.
+        devices: Vec<RemoteDevice>,
+    },
+    /// Answer to [`Request::UpdateRemoteDevice`].
+    RemoteDeviceSaved {
+        /// The device as saved.
+        device: Box<RemoteDevice>,
+    },
+    /// Answer to [`Request::ListRemoteSessions`].
+    RemoteSessions {
+        /// Newest first.
+        sessions: Vec<RemoteSession>,
+    },
+    /// Answer to [`Request::CreatePairingCode`].
+    PairingCodeCreated {
+        /// The code's record.
+        pairing: PairingCode,
+        /// The code to enter in the browser (e.g. `K7QM-2WXR`). Shown once;
+        /// the core keeps only its hash.
+        code: String,
+        /// Address to open in the browser, `null` when the remote UI is
+        /// not running.
+        url: Option<String>,
+        /// Fingerprint of the served certificate, for the browser to
+        /// compare; `null` without TLS.
+        certificate_fingerprint: Option<String>,
+    },
+    /// Answer to [`Request::ListPairingCodes`].
+    PairingCodes {
+        /// Pending first, then newest first.
+        codes: Vec<PairingCode>,
+    },
+    /// Answer to [`Request::ListRemoteAudit`].
+    RemoteAudit {
+        /// Newest first.
+        entries: Vec<RemoteAuditEntry>,
+    },
+    /// Answer to [`Request::AllowRemoteContent`].
+    RemoteContentAllowed {
+        /// The stored entry.
+        entry: RemoteContentAllow,
+    },
+    /// Answer to [`Request::ListRemoteContentAllows`].
+    RemoteContentAllows {
+        /// Entries by scope (message, sender, domain), newest first.
+        entries: Vec<RemoteContentAllow>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -1334,6 +1614,31 @@ pub enum Event {
     /// The global security settings changed; clients refetch
     /// [`Request::GetSecuritySettings`].
     SecuritySettingsChanged,
+    /// The remote UI started, stopped, failed or changed its certificate.
+    RemoteUiStatusChanged {
+        /// The new state.
+        status: RemoteUiStatus,
+    },
+    /// Remote users, devices, sessions or pairing codes changed; clients
+    /// refetch what they show of them.
+    RemoteAccessChanged,
+    /// A remote session ended. The browser holding it shows the login
+    /// page (its WebSocket is closed right after this event).
+    RemoteSessionEnded {
+        /// The session.
+        session_id: RemoteSessionId,
+        /// Why.
+        reason: SessionEndReason,
+    },
+    /// A security alert: a new device, a lockout. Shown as a
+    /// notification.
+    RemoteSecurityAlert {
+        /// The alert.
+        alert: RemoteAlert,
+    },
+    /// The remote-content allow-lists changed; clients refetch the shown
+    /// message and the lists.
+    RemoteContentPolicyChanged,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).
@@ -1791,6 +2096,105 @@ mod tests {
         let value = serde_json::to_value(&lookup).unwrap();
         assert_eq!(value["failures"][0]["source"], json!("wkd"));
         assert_eq!(serde_json::from_value::<Response>(value).unwrap(), lookup);
+    }
+
+    #[test]
+    fn m2b_requests_serialize() {
+        let create: Request = serde_json::from_value(json!({
+            "type": "CreateRemoteUser", "name": "ada"
+        }))
+        .unwrap();
+        assert_eq!(
+            create,
+            Request::CreateRemoteUser {
+                name: "ada".into(),
+                display_name: None,
+                grant: RemoteGrant::default(),
+            }
+        );
+        let pairing: Request = serde_json::from_value(json!({
+            "type": "CreatePairingCode", "user_id": "ruser-1"
+        }))
+        .unwrap();
+        assert!(matches!(
+            pairing,
+            Request::CreatePairingCode {
+                grant: None,
+                ttl_minutes: None,
+                ..
+            }
+        ));
+        let sessions: Request =
+            serde_json::from_value(json!({"type": "ListRemoteSessions"})).unwrap();
+        assert_eq!(
+            sessions,
+            Request::ListRemoteSessions {
+                filter: RemoteSessionFilter::default()
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(Request::AllowRemoteContent {
+                message_id: "m1".into(),
+                scope: RemoteContentScope::Sender,
+            })
+            .unwrap(),
+            json!({"type": "AllowRemoteContent", "message_id": "m1", "scope": "sender"})
+        );
+        let update: Request = serde_json::from_value(json!({
+            "type": "UpdateRemoteUiSettings",
+            "settings": {"enabled": true, "bind_address": "0.0.0.0"}
+        }))
+        .unwrap();
+        let Request::UpdateRemoteUiSettings { settings } = update else {
+            panic!("wrong variant");
+        };
+        assert!(settings.enabled && !settings.is_loopback());
+        assert_eq!(settings.port, crate::remote::DEFAULT_REMOTE_UI_PORT);
+        assert_eq!(
+            serde_json::to_value(Request::SetRemotePassword {
+                user_id: "ruser-1".into(),
+                password: None,
+            })
+            .unwrap(),
+            json!({"type": "SetRemotePassword", "user_id": "ruser-1", "password": null})
+        );
+    }
+
+    #[test]
+    fn m2b_responses_and_events_serialize() {
+        let ui = Response::RemoteUi {
+            settings: RemoteUiSettings::default(),
+            status: RemoteUiStatus::stopped(),
+        };
+        let value = serde_json::to_value(&ui).unwrap();
+        assert_eq!(value["status"]["internet_mode_locked"], json!(true));
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), ui);
+        let ended = Event::RemoteSessionEnded {
+            session_id: "rsess-3".into(),
+            reason: SessionEndReason::Revoked,
+        };
+        let value = serde_json::to_value(&ended).unwrap();
+        assert_eq!(
+            value,
+            json!({"type": "RemoteSessionEnded", "session_id": "rsess-3", "reason": "revoked"})
+        );
+        assert_eq!(serde_json::from_value::<Event>(value).unwrap(), ended);
+        let alert = Event::RemoteSecurityAlert {
+            alert: RemoteAlert::NewDevice {
+                device_id: "rdev-1".into(),
+                device_name: "Phone".into(),
+                user_name: "ada".into(),
+                ip: Some("192.168.1.20".into()),
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&alert).unwrap()["alert"]["kind"],
+            json!("new-device")
+        );
+        assert_eq!(
+            serde_json::to_value(Event::RemoteContentPolicyChanged).unwrap(),
+            json!({"type": "RemoteContentPolicyChanged"})
+        );
     }
 
     #[test]

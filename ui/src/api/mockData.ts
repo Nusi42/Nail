@@ -34,6 +34,7 @@ import {
   type CustomizationMockState,
 } from "../features/customization/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
+import { createRemoteMockState, type RemoteMockState } from "../features/remote/mock";
 import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
 import { createSecurityMockState, type SecurityMockState } from "../features/security/mock";
 
@@ -74,6 +75,7 @@ export interface MockFeatures {
   mcp: McpMockState;
   customization: CustomizationMockState;
   security: SecurityMockState;
+  remote: RemoteMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -440,6 +442,7 @@ export function createMockData(inboxSize = 250): MockData {
       mcp: createMcpMockState(),
       customization: createCustomizationMockState(),
       security: createSecurityMockState(),
+      remote: createRemoteMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

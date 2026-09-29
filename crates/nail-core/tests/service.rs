@@ -776,3 +776,332 @@ async fn m2a_security_requests() {
         ErrorCode::Unsupported
     );
 }
+
+/// M2b (ADR 0036): the remote-UI settings (validated; internet mode
+/// refused), users, devices, sessions, pairing codes, the audit log and the
+/// remote-content allow-lists are served from the store; hashing, TOTP,
+/// pairing-code creation and certificates answer `unsupported` until WP45.
+#[tokio::test]
+async fn m2b_remote_requests() {
+    use nail_api::remote::{
+        RemoteAccessPreset, RemoteSessionFilter, RemoteTlsMode, RemoteUiSettings, RemoteUiState,
+        RemoteUserUpdate,
+    };
+    use nail_api::remote_content::RemoteContentScope;
+
+    let fx = open(false, None);
+    let Response::RemoteUi { settings, status } =
+        fx.service.handle(Request::GetRemoteUiSettings).await
+    else {
+        panic!("expected the remote-UI settings");
+    };
+    assert_eq!(settings, RemoteUiSettings::default());
+    assert_eq!(status.state, RemoteUiState::Stopped);
+    assert!(status.internet_mode_locked);
+
+    let mut events = fx.service.subscribe();
+    let lan = RemoteUiSettings {
+        enabled: true,
+        bind_address: "0.0.0.0".into(),
+        ..RemoteUiSettings::default()
+    };
+    let Response::RemoteUi { settings, .. } = fx
+        .service
+        .handle(Request::UpdateRemoteUiSettings {
+            settings: lan.clone(),
+        })
+        .await
+    else {
+        panic!("expected the saved settings");
+    };
+    assert_eq!(settings, lan);
+    assert!(matches!(
+        next_event(&mut events).await,
+        Event::RemoteUiStatusChanged { .. }
+    ));
+    // TLS is required off loopback; internet mode stays locked.
+    let plain_lan = RemoteUiSettings {
+        tls: RemoteTlsMode::Off,
+        ..lan.clone()
+    };
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::UpdateRemoteUiSettings {
+                    settings: plain_lan
+                })
+                .await
+        ),
+        ErrorCode::InvalidRequest
+    );
+    let internet = RemoteUiSettings {
+        internet_mode: true,
+        ..lan.clone()
+    };
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::UpdateRemoteUiSettings { settings: internet })
+                .await
+        ),
+        ErrorCode::Forbidden
+    );
+    let Response::RemoteUi { settings, .. } = fx.service.handle(Request::GetRemoteUiSettings).await
+    else {
+        panic!("expected the remote-UI settings");
+    };
+    assert_eq!(settings, lan, "refused settings are not stored");
+
+    // Users.
+    let Response::RemoteUserSaved { user } = fx
+        .service
+        .handle(Request::CreateRemoteUser {
+            name: "ada".into(),
+            display_name: None,
+            grant: RemoteAccessPreset::NoSend.grant(),
+        })
+        .await
+    else {
+        panic!("expected the new user");
+    };
+    assert_eq!(next_event(&mut events).await, Event::RemoteAccessChanged);
+    assert!(!user.has_password && user.passkeys.is_empty());
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::CreateRemoteUser {
+                    name: "ADA".into(),
+                    display_name: None,
+                    grant: Default::default(),
+                })
+                .await
+        ),
+        ErrorCode::Conflict
+    );
+    let Response::RemoteUserSaved { user } = fx
+        .service
+        .handle(Request::UpdateRemoteUser {
+            user_id: user.id.clone(),
+            update: RemoteUserUpdate {
+                display_name: Some("Ada L.".into()),
+                ..RemoteUserUpdate::default()
+            },
+        })
+        .await
+    else {
+        panic!("expected the changed user");
+    };
+    assert_eq!(user.display_name.as_deref(), Some("Ada L."));
+    let Response::RemoteUsers { users } = fx.service.handle(Request::ListRemoteUsers).await else {
+        panic!("expected users");
+    };
+    assert_eq!(users.len(), 1);
+
+    // A session paired by the (future) auth crate, revoked by the desktop.
+    let store = fx.service.store();
+    let device = store
+        .create_remote_device(
+            &nail_store::NewRemoteDevice {
+                user_id: user.id.clone(),
+                name: "Phone".into(),
+                secret_hash: nail_store::hash_remote_secret("device"),
+                grant: RemoteAccessPreset::Full.grant(),
+                user_agent: None,
+                ip: None,
+            },
+            1,
+        )
+        .unwrap();
+    let now = chrono_now();
+    let session = store
+        .create_remote_session(
+            &nail_store::NewRemoteSession {
+                token_hash: nail_store::hash_remote_secret("token"),
+                user_id: user.id.clone(),
+                device_id: device.id.clone(),
+                auth_method: nail_api::remote::RemoteAuthMethod::Passkey,
+                grant: RemoteAccessPreset::Full.grant(),
+                expires_at: now + 3_600,
+                ip: None,
+                user_agent: None,
+            },
+            now,
+        )
+        .unwrap();
+    let Response::RemoteSessions { sessions } = fx
+        .service
+        .handle(Request::ListRemoteSessions {
+            filter: RemoteSessionFilter::default(),
+        })
+        .await
+    else {
+        panic!("expected sessions");
+    };
+    assert_eq!(sessions.len(), 1);
+    assert!(
+        !sessions[0].grant.mail.has(nail_api::McpScope::Send),
+        "the session is narrowed to the user's no-send grant"
+    );
+    let Response::RemoteUi { status, .. } = fx.service.handle(Request::GetRemoteUiSettings).await
+    else {
+        panic!("expected the remote-UI settings");
+    };
+    assert_eq!(status.active_sessions, 1);
+    let mut events = fx.service.subscribe();
+    assert_eq!(
+        fx.service
+            .handle(Request::RevokeRemoteSession {
+                session_id: session.id.clone()
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(
+        next_event(&mut events).await,
+        Event::RemoteSessionEnded {
+            session_id: session.id.clone(),
+            reason: nail_api::remote::SessionEndReason::Revoked,
+        }
+    );
+    assert_eq!(
+        fx.service
+            .handle(Request::RevokeRemoteDevice {
+                device_id: device.id.clone()
+            })
+            .await,
+        Response::Done
+    );
+    let Response::RemoteDevices { devices } = fx
+        .service
+        .handle(Request::ListRemoteDevices { user_id: None })
+        .await
+    else {
+        panic!("expected devices");
+    };
+    assert!(devices[0].revoked_at.is_some());
+    assert_eq!(
+        fx.service.handle(Request::ListPairingCodes).await,
+        Response::PairingCodes { codes: vec![] }
+    );
+    assert_eq!(
+        fx.service
+            .handle(Request::ListRemoteAudit {
+                user_id: None,
+                before: None,
+                limit: 10,
+            })
+            .await,
+        Response::RemoteAudit { entries: vec![] }
+    );
+
+    // Waiting for nail-remote-auth / nail-server (WP45).
+    for request in [
+        Request::SetRemotePassword {
+            user_id: user.id.clone(),
+            password: Some("correct horse battery staple".into()),
+        },
+        Request::StartTotpEnrollment {
+            user_id: user.id.clone(),
+        },
+        Request::CreatePairingCode {
+            user_id: user.id.clone(),
+            device_name: None,
+            grant: None,
+            ttl_minutes: None,
+        },
+        Request::RegenerateRemoteCertificate,
+    ] {
+        assert_eq!(
+            error_code(fx.service.handle(request).await),
+            ErrorCode::Unsupported
+        );
+    }
+    assert_eq!(
+        fx.service
+            .handle(Request::DeleteRemoteUser {
+                user_id: user.id.clone()
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::DeleteRemoteUser { user_id: user.id })
+                .await
+        ),
+        ErrorCode::NotFound
+    );
+
+    // Remote content: per message, sender and domain.
+    let Response::Messages { messages, .. } =
+        page(&fx.service, inbox(&fx.service).await, 0, 1).await
+    else {
+        panic!("expected messages");
+    };
+    let message = &messages[0];
+    let sender = message.from.as_ref().unwrap().email.to_lowercase();
+    let mut events = fx.service.subscribe();
+    let Response::RemoteContentAllowed { entry } = fx
+        .service
+        .handle(Request::AllowRemoteContent {
+            message_id: message.id.clone(),
+            scope: RemoteContentScope::Sender,
+        })
+        .await
+    else {
+        panic!("expected the allow-list entry");
+    };
+    assert_eq!(entry.value, sender);
+    assert_eq!(
+        next_event(&mut events).await,
+        Event::RemoteContentPolicyChanged
+    );
+    let Response::RemoteContentAllowed { entry } = fx
+        .service
+        .handle(Request::AllowRemoteContent {
+            message_id: message.id.clone(),
+            scope: RemoteContentScope::Message,
+        })
+        .await
+    else {
+        panic!("expected the allow-list entry");
+    };
+    assert_eq!(entry.label.as_deref(), Some(message.subject.as_str()));
+    let Response::RemoteContentAllows { entries } =
+        fx.service.handle(Request::ListRemoteContentAllows).await
+    else {
+        panic!("expected the allow-lists");
+    };
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].scope, RemoteContentScope::Message);
+    assert_eq!(
+        fx.service
+            .handle(Request::RemoveRemoteContentAllow {
+                scope: RemoteContentScope::Sender,
+                value: sender,
+            })
+            .await,
+        Response::Done
+    );
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::AllowRemoteContent {
+                    message_id: "nope".into(),
+                    scope: RemoteContentScope::Domain,
+                })
+                .await
+        ),
+        ErrorCode::NotFound
+    );
+}
+
+fn chrono_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .try_into()
+        .unwrap()
+}

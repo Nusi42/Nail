@@ -10,6 +10,7 @@ import type { Request } from "../api/generated";
 import { COMPOSER_REQUESTS, isComposerRequest } from "./composer/mock";
 import { CUSTOMIZATION_REQUESTS } from "./customization/mock";
 import { MCP_REQUESTS } from "./mcp/mock";
+import { REMOTE_REQUESTS } from "./remote/mock";
 import { RULES_REQUESTS } from "./rules/mock";
 import { SECURITY_REQUESTS } from "./security/mock";
 import { builtinWidgets } from "../widgets";
@@ -21,13 +22,14 @@ import type { DialogProps } from "../layout/dialogRegistry";
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the M1b and M2a slots and contains every built-in", () => {
+  it("has the M1b, M2a and M2b slots and contains every built-in", () => {
     expect(Object.keys(features)).toEqual([
       "composer",
       "rules",
       "mcp",
       "customization",
       "security",
+      "remote",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);
@@ -77,6 +79,7 @@ describe("feature registry", () => {
       MCP_REQUESTS,
       CUSTOMIZATION_REQUESTS,
       SECURITY_REQUESTS,
+      REMOTE_REQUESTS,
     ];
     const all: string[] = lists.flat();
     expect(new Set(all).size).toBe(all.length);

@@ -25,6 +25,16 @@ import type { MoveTarget } from "./MoveTarget";
 import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpId } from "./OpId";
 import type { OutboxId } from "./OutboxId";
+import type { PairingId } from "./PairingId";
+import type { PasskeyId } from "./PasskeyId";
+import type { RemoteContentScope } from "./RemoteContentScope";
+import type { RemoteDeviceId } from "./RemoteDeviceId";
+import type { RemoteGrant } from "./RemoteGrant";
+import type { RemoteSessionFilter } from "./RemoteSessionFilter";
+import type { RemoteSessionId } from "./RemoteSessionId";
+import type { RemoteUiSettings } from "./RemoteUiSettings";
+import type { RemoteUserId } from "./RemoteUserId";
+import type { RemoteUserUpdate } from "./RemoteUserUpdate";
 import type { Rule } from "./Rule";
 import type { RuleId } from "./RuleId";
 import type { RuleRunId } from "./RuleRunId";
@@ -603,4 +613,152 @@ account_id: AccountId, } | { "type": "GetVaultStatus" } | { "type": "SetVaultEnc
 /**
  * `true` = encrypt, `false` = decrypt.
  */
-enabled: boolean, };
+enabled: boolean, } | { "type": "GetRemoteUiSettings" } | { "type": "UpdateRemoteUiSettings", 
+/**
+ * The new settings.
+ */
+settings: RemoteUiSettings, } | { "type": "RegenerateRemoteCertificate" } | { "type": "ListRemoteUsers" } | { "type": "CreateRemoteUser", 
+/**
+ * Login name (unique, case-insensitive).
+ */
+name: string, 
+/**
+ * Display name.
+ */
+display_name: string | null, 
+/**
+ * The most the user's devices and sessions may be granted.
+ */
+grant: RemoteGrant, } | { "type": "UpdateRemoteUser", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, 
+/**
+ * The changes.
+ */
+update: RemoteUserUpdate, } | { "type": "DeleteRemoteUser", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, } | { "type": "SetRemotePassword", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, 
+/**
+ * The new password, `null` = none.
+ */
+password: string | null, } | { "type": "StartTotpEnrollment", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, } | { "type": "ConfirmTotpEnrollment", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, 
+/**
+ * A current code.
+ */
+code: string, } | { "type": "DisableTotp", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, } | { "type": "UnlockRemoteUser", 
+/**
+ * The user.
+ */
+user_id: RemoteUserId, } | { "type": "RenamePasskey", 
+/**
+ * The passkey.
+ */
+passkey_id: PasskeyId, 
+/**
+ * New name.
+ */
+name: string, } | { "type": "DeletePasskey", 
+/**
+ * The passkey.
+ */
+passkey_id: PasskeyId, } | { "type": "ListRemoteDevices", 
+/**
+ * Only this user's; `null` = all.
+ */
+user_id: RemoteUserId | null, } | { "type": "UpdateRemoteDevice", 
+/**
+ * The device.
+ */
+device_id: RemoteDeviceId, 
+/**
+ * New name; `null` = unchanged.
+ */
+name: string | null, 
+/**
+ * New grant; `null` = unchanged.
+ */
+grant: RemoteGrant | null, } | { "type": "RevokeRemoteDevice", 
+/**
+ * The device.
+ */
+device_id: RemoteDeviceId, } | { "type": "ListRemoteSessions", 
+/**
+ * Which ones; the default lists valid sessions of everyone.
+ */
+filter: RemoteSessionFilter, } | { "type": "RevokeRemoteSession", 
+/**
+ * The session.
+ */
+session_id: RemoteSessionId, } | { "type": "RevokeAllRemoteSessions", 
+/**
+ * Only this user's; `null` = everyone's.
+ */
+user_id: RemoteUserId | null, } | { "type": "CreatePairingCode", 
+/**
+ * The user the device will belong to.
+ */
+user_id: RemoteUserId, 
+/**
+ * Name for the device; `null` = what the browser sends.
+ */
+device_name: string | null, 
+/**
+ * Grant of the device; `null` = the user's grant.
+ */
+grant: RemoteGrant | null, 
+/**
+ * Validity in minutes; `null` = 10 (the core caps it at 60).
+ */
+ttl_minutes: number | null, } | { "type": "ListPairingCodes" } | { "type": "CancelPairingCode", 
+/**
+ * The code.
+ */
+pairing_id: PairingId, } | { "type": "ListRemoteAudit", 
+/**
+ * Entries of this user; `null` = all.
+ */
+user_id: RemoteUserId | null, 
+/**
+ * Only entries with a smaller id (paging); `null` = the newest.
+ */
+before: number | null, 
+/**
+ * Maximum number of entries.
+ */
+limit: number, } | { "type": "AllowRemoteContent", 
+/**
+ * The message.
+ */
+message_id: MessageId, 
+/**
+ * How far the allowance reaches.
+ */
+scope: RemoteContentScope, } | { "type": "ListRemoteContentAllows" } | { "type": "RemoveRemoteContentAllow", 
+/**
+ * Its scope.
+ */
+scope: RemoteContentScope, 
+/**
+ * Its value (as listed).
+ */
+value: string, };
