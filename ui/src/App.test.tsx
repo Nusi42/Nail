@@ -146,6 +146,30 @@ describe("App", () => {
     expect(env.store.getState().sync).toEqual({ accountId: "acc-personal", done: 1, total: 4 });
   });
 
+  it("reports a failed synchronization until the next one makes progress", async () => {
+    const { env } = renderApp();
+    const status = (await screen.findByText("Up to date")).closest(
+      '[data-part="status-bar"]',
+    ) as HTMLElement;
+    act(() =>
+      env.transport.emit({
+        type: "SyncFailed",
+        account_id: "acc-personal",
+        code: "auth_failed",
+        message: "LOGIN rejected",
+      }),
+    );
+    expect(status).toHaveTextContent("Synchronization failed: The server rejected the login.");
+    expect(status.querySelector('[data-item="sync-progress"]')?.getAttribute("data-state")).toBe(
+      "error",
+    );
+    act(() =>
+      env.transport.emit({ type: "SyncProgress", account_id: "acc-personal", done: 4, total: 4 }),
+    );
+    expect(status).toHaveTextContent("Up to date");
+    expect(env.store.getState().syncError).toBeNull();
+  });
+
   it("refetches folders and messages on MailChanged", async () => {
     const { env } = renderApp();
     await screen.findAllByRole("option");

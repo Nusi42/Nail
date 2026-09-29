@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import { errorMessageId } from "../api/client";
 import { useT } from "../i18n/I18nProvider";
 import { optionList, type WidgetProps } from "../layout/widgetRegistry";
 import { useFolders } from "../state/queries";
@@ -9,6 +10,7 @@ function SyncItem() {
   const sync = useUi((s) => s.sync);
   const connection = useUi((s) => s.connection);
   const configError = useUi((s) => s.configError);
+  const syncError = useUi((s) => s.syncError);
   let text: string;
   let state: string;
   if (connection === "reconnecting" || connection === "closed") {
@@ -20,6 +22,9 @@ function SyncItem() {
       line: configError.line,
       column: configError.column,
     });
+    state = "error";
+  } else if (syncError) {
+    text = t("status-sync-failed", { reason: t(errorMessageId(syncError.code)) });
     state = "error";
   } else if (sync && sync.done < sync.total) {
     text = t("status-syncing", { done: sync.done, total: sync.total });

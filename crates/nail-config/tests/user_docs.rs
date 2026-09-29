@@ -1,7 +1,7 @@
 //! Every KDL example in the user references (`userDocs/en/*-reference.md`)
-//! must be valid. Complete files are parsed as they are; fragments are
-//! wrapped in a file that extends the default. Examples containing `…` are
-//! outlines and are skipped.
+//! and in the getting-started guide must be valid. Complete files are parsed
+//! as they are; fragments are wrapped in a file that extends the default.
+//! Examples containing `…` are outlines and are skipped.
 
 use std::path::PathBuf;
 
@@ -71,6 +71,24 @@ fn layout_reference_examples_are_valid() {
             )
         };
         if let Err(e) = nail_config::parse_layout(&text, "layout.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}
+
+#[test]
+fn getting_started_examples_are_valid() {
+    let blocks = kdl_blocks("getting-started.md");
+    assert!(blocks.len() >= 2, "found only {} examples", blocks.len());
+    for block in blocks {
+        let result = if block.trim_start().starts_with("theme ") {
+            nail_config::parse_theme(&block, "theme.kdl").map(|_| ())
+        } else if block.trim_start().starts_with("layout ") {
+            nail_config::parse_layout(&block, "layout.kdl").map(|_| ())
+        } else {
+            panic!("getting-started examples are complete files:\n{block}");
+        };
+        if let Err(e) = result {
             panic!("{e}\nin example:\n{block}");
         }
     }

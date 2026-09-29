@@ -15,6 +15,13 @@ Status: accepted · 2026-09-29 · M0 WP0
 - **Lints** in `[workspace.lints]`: `unsafe_code = "deny"`, clippy `all` plus a
   few extras; CI runs clippy with `-D warnings`. `nail-api` additionally
   warns on missing docs, because it is the documented contract.
+- **Static VC runtime only in release builds** (added in M0 WP5).
+  `tauri-build` links the VC runtime statically by default by putting an
+  empty `msvcrt.lib` on the native link search path. In
+  `cargo test --workspace` that path leaks into the doctests of every other
+  crate, which then fail to link. `app/src-tauri/build.rs` therefore enables
+  `static_vc_runtime` only for the `release` profile (the distributed
+  binary), and debug builds and tests use the dynamic runtime.
 - **Build output outside the repo**: a gitignored `.cargo/config.toml` sets
   `target-dir` outside the master folder.
 

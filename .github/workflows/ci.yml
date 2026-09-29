@@ -57,8 +57,21 @@ jobs:
       - name: npm test (Vitest)
         run: npm test
 
-      # WP6: Playwright end-to-end tests against `nail serve --seed demo`.
-      # - name: Install Playwright browsers
-      #   run: npx playwright install --with-deps chromium
-      # - name: Playwright
-      #   run: npm run e2e
+      # Playwright end-to-end tests against the prebuilt `nail serve --seed demo`
+      # (e2e/README.md). ui/dist was built above; build the nail binary here.
+      - name: Build nail-cli
+        run: cargo build -p nail-cli
+
+      - name: Install Playwright browsers
+        run: npx -w e2e playwright install --with-deps chromium
+
+      - name: Playwright
+        run: npm run e2e:only
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14

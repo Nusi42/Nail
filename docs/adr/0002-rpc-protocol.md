@@ -25,7 +25,8 @@ All messages are defined once in the `nail-api` crate (`crates/nail-api/src/prot
   and `Error {code, message}`, which may answer any request.
 - **`Event`** — pushed by the core: `ConfigChanged {theme, layout}`,
   `ConfigError {file, line, column, message}`, `MailChanged {folder_ids}`,
-  `SyncProgress {account_id, done, total}`.
+  `SyncProgress {account_id, done, total}`, and (added in M0 WP5, see
+  ADR 0009) `SyncFailed {account_id, code, message}`.
 - **Errors** — `ErrorCode` is a closed, snake_case enum (`not_found`,
   `auth_failed`, …). `message` is an English diagnostic for logs; the UI shows
   the Fluent message `error-<code>` (underscores → hyphens), so no

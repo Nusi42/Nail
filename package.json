@@ -19,9 +19,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "e2e": "npm run test -w e2e",
+    "e2e": "npm run build -w ui && cargo build -p nail-cli && npm run test -w e2e",
     "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "e2e:only": "npm run test -w e2e"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.0",

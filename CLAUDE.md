@@ -45,10 +45,10 @@ locales/               Fluent catalogs (en, de)
 
 ## Commands
 
-(Filled in as milestone M0 lands; keep in sync with `docs/dev-setup.md`.)
+Full details in `docs/dev-setup.md`; keep both in sync.
 
 ```
-npm install / npm ci                       # npm workspaces: ui, e2e
+npm ci                                     # npm workspaces: ui, e2e
 npm run build                              # ui/dist — required before any `cargo … --workspace` (Tauri embeds it)
 cargo test                                 # default members = all crates except app/src-tauri
 cargo test --workspace                     # incl. the Tauri shell (after npm run build)
@@ -56,11 +56,20 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 npm test                                   # Vitest (ui), incl. the lint-rule self-test
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
+npm run e2e                                # builds ui + nail-cli, then Playwright (e2e/README.md)
+npm run e2e:only                           # Playwright against what is already built
 npm run gen:api                            # regenerate ui/src/api/generated from nail-api (a test fails when stale)
-npm run e2e                                # Playwright (placeholder spec skipped until WP6)
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas
+cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
+cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
+cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist
+npm run tauri dev                          # desktop app with Vite hot reload
 ```
 
 - The contract lives in `crates/nail-api`; its fixtures `fixtures/default-{theme,layout}.json` describe the default UI. See ADRs 0002 (protocol) and 0003 (config models, part/DOM conventions).
+- `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
+- `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`.
+- `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.
 
 ## Git
 

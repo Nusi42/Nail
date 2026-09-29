@@ -158,8 +158,13 @@ function useCoreEvents(): void {
         case "MailChanged":
           refreshMail();
           break;
+        case "SyncFailed":
+          ui().setSync(null);
+          ui().setSyncError({ accountId: event.account_id, code: event.code });
+          break;
         case "SyncProgress":
           ui().setSync({ accountId: event.account_id, done: event.done, total: event.total });
+          ui().setSyncError(null);
           if (event.total > 0 && event.done >= event.total) refreshMail();
           break;
       }

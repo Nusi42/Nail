@@ -1,11 +1,33 @@
+import { rmSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+import { nailBinary, repoRoot, tempDir } from "./support/nail";
 
 /**
- * End-to-end tests run against the web UI mode: `nail serve --seed demo` on a
- * free port with a temporary data directory. The `webServer` entry is wired up
- * in M0 WP6; until then every spec is skipped.
+ * End-to-end tests against the web UI mode: the prebuilt
+ * `nail serve --seed demo` with temporary data and config directories.
+ * Nothing is built here; see README.md.
+ *
+ * The config file is evaluated by the runner and again by every worker;
+ * values chosen once are handed to the workers through the environment.
  */
-const port = Number(process.env.NAIL_E2E_PORT ?? 4780);
+process.env.NAIL_BIN ??= nailBinary();
+if (!process.env.NAIL_E2E_DATA || !process.env.NAIL_E2E_CONFIG) {
+  // First evaluation (the runner): create the shared server's directories
+  // and remove them when the runner exits, after the web server is stopped.
+  const dirs = [tempDir("shared-data"), tempDir("shared-config")] as const;
+  [process.env.NAIL_E2E_DATA, process.env.NAIL_E2E_CONFIG] = dirs;
+  process.on("exit", () => {
+    for (const dir of dirs) {
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      } catch {
+        // Best effort: the OS cleans the temp directory eventually.
+      }
+    }
+  });
+}
+const port = Number(process.env.NAIL_E2E_PORT ?? 4791);
+const quote = (s: string) => `"${s}"`;
 
 export default defineConfig({
   testDir: "./tests",
@@ -18,5 +40,21 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  // WP6: webServer: { command: "cargo run -p nail-cli -- serve --seed demo --port ...", url: ..., reuseExistingServer: !process.env.CI },
+  webServer: {
+    command: [
+      quote(process.env.NAIL_BIN),
+      "serve",
+      "--seed demo",
+      `--port ${port}`,
+      `--data-dir ${quote(process.env.NAIL_E2E_DATA)}`,
+      `--config-dir ${quote(process.env.NAIL_E2E_CONFIG)}`,
+    ].join(" "),
+    cwd: repoRoot,
+    url: `http://127.0.0.1:${port}/`,
+    reuseExistingServer: false,
+    env: { NAIL_LOG: process.env.NAIL_LOG ?? "warn" },
+    stdout: "ignore",
+    stderr: "pipe",
+    timeout: 60_000,
+  },
 });

@@ -81,6 +81,7 @@ toolbar-label = Message actions
 status-ready = Up to date
 status-offline = Offline – reconnecting…
 status-syncing = Syncing… { $done } of { $total }
+status-sync-failed = Synchronization failed: { $reason }
 status-config-error = Configuration error in { $file }, line { $line }, column { $column }. Using the last valid version.
 status-folder-counts = { $total ->
     [one] One message

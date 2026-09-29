@@ -183,6 +183,16 @@ pub enum Event {
         /// Total work units (0 while unknown). `done == total` means finished.
         total: u32,
     },
+    /// Synchronizing an account failed. The account keeps the state of its
+    /// last successful synchronization; a later [`Request::SyncNow`] retries.
+    SyncFailed {
+        /// The account whose synchronization failed.
+        account_id: AccountId,
+        /// Machine-readable error class (the UI shows a localized text).
+        code: ErrorCode,
+        /// Diagnostic detail (English, for logs and developer tools).
+        message: String,
+    },
 }
 
 /// A request frame on a multiplexed transport (WebSocket).

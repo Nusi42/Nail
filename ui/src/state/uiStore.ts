@@ -8,12 +8,17 @@ import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ConnectionStatus } from "../api/client";
-import type { AccountId, FolderId, MessageId, ThemeMode } from "../api/generated";
+import type { AccountId, ErrorCode, FolderId, MessageId, ThemeMode } from "../api/generated";
 
 export interface SyncState {
   accountId: AccountId;
   done: number;
   total: number;
+}
+
+export interface SyncErrorState {
+  accountId: AccountId;
+  code: ErrorCode;
 }
 
 export interface ConfigErrorState {
@@ -39,6 +44,8 @@ export interface UiState {
   keyContext: string;
   connection: ConnectionStatus;
   sync: SyncState | null;
+  /** The last failed synchronization, cleared when a new one reports progress. */
+  syncError: SyncErrorState | null;
   configError: ConfigErrorState | null;
   /** User override of the theme mode. */
   modeOverride: ThemeMode | null;
@@ -55,6 +62,7 @@ export interface UiState {
   setKeyContext(context: string): void;
   setConnection(status: ConnectionStatus): void;
   setSync(sync: SyncState | null): void;
+  setSyncError(error: SyncErrorState | null): void;
   setConfigError(error: ConfigErrorState | null): void;
   setModeOverride(mode: ThemeMode | null): void;
   setLocaleOverride(locale: string | null): void;
@@ -74,6 +82,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     keyContext: "list",
     connection: "connecting",
     sync: null,
+    syncError: null,
     configError: null,
     modeOverride: null,
     localeOverride: null,
@@ -109,6 +118,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
       set((s) => (s.keyContext === context ? s : { keyContext: context })),
     setConnection: (connection) => set({ connection }),
     setSync: (sync) => set({ sync }),
+    setSyncError: (syncError) => set({ syncError }),
     setConfigError: (configError) => set({ configError }),
     setModeOverride: (modeOverride) => set({ modeOverride }),
     setLocaleOverride: (localeOverride) => set({ localeOverride }),
