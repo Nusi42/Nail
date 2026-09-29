@@ -124,8 +124,10 @@ Replying to or forwarding an encrypted message starts with encryption
 switched on. Filter rules never forward or answer encrypted messages
 automatically.
 
-While encryption is on, the draft is not copied to your mail server's
-Drafts folder (it would be stored there unencrypted); it stays in Nail.
+While encryption is on — switched on by you, by your defaults or by
+Autocrypt — the draft is not copied to your mail server's Drafts folder
+(it would be stored there unencrypted); it stays in Nail. A copy saved
+before you switched encryption on is removed from the server.
 
 ## Reading: the badges
 
@@ -137,7 +139,8 @@ Above a message you may see two badges. Click one for details.
 - *Signed, sender not verified* — valid, but the key is not verified yet.
   The details offer **Mark key as verified**.
 - *Signed by someone else* — the signature is valid but belongs to a
-  different address than the sender's. Be careful.
+  different address than the sender's shown above the message. Be
+  careful.
 - *Invalid signature* — the message was changed or the signature is
   forged. Do not trust it.
 - *Encrypted* — Nail decrypted the message for display. The decrypted
@@ -153,7 +156,9 @@ S/MIME certificate chain, and whether the subject was protected.
 (DKIM, SPF and DMARC, as checked by your own mail server). *Sender
 confirmed* is good; *Sender check failed* means the message probably does
 not come from the domain it claims. Only the check of your own receiving
-server counts, because anyone can write such a header.
+server counts, because anyone can write such a header; tell Nail its name
+under **Settings → Accounts → Sender checks** (see
+[data protection](data-protection.md#the-sender-check)).
 
 ## Warnings in the reader
 
@@ -210,7 +215,9 @@ mail*, and with **Tell others I prefer encrypted mail** on for your
 address, the composer switches encryption on by itself. Keys learned this
 way are marked *Learned from the sender's mail*; keys other people pass
 on in encrypted group mail (*gossip*) are marked *Seen in other people's
-mail*. Autocrypt protects against someone reading your mail on the way,
+mail*. Such a key counts only for the address it came with: other
+addresses written into the key are ignored, and the key is not trusted
+for any other address. Autocrypt protects against someone reading your mail on the way,
 not against someone who can change your mail on the way: compare
 fingerprints and mark the key as verified for that.
 

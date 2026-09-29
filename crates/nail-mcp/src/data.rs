@@ -113,8 +113,10 @@ pub trait McpData: Send + Sync + 'static {
         index: u32,
     ) -> impl Future<Output = DataResult<AttachmentData>> + Send;
 
-    /// Whether the message is encrypted (S/MIME or PGP/MIME). Reading an
-    /// encrypted message's content needs the `encrypted` scope.
+    /// Whether the message is end-to-end encrypted (S/MIME, PGP/MIME or
+    /// inline PGP): every message the reader decrypts counts, however it
+    /// is wrapped or labelled. Reading an encrypted message's content needs
+    /// the `encrypted` scope.
     fn is_encrypted(&self, id: &MessageId) -> impl Future<Output = DataResult<bool>> + Send;
 
     /// A thread and its messages ([`nail_api::Request::GetThread`]).

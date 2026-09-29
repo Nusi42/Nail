@@ -108,6 +108,80 @@ function IdentityEditor({
 /** A result message shown under the form (Fluent id). */
 export type Notice = { id: string; error: boolean } | null;
 
+/** `authserv-id` values as typed (spaces or commas between them). */
+export function parseAuthservIds(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).filter((id) => id !== ""))];
+}
+
+/**
+ * The account's trusted receiving servers (`authserv_ids`): only their
+ * `Authentication-Results` produce the sender badge. The core can suggest
+ * one from recent mail (`SuggestAuthservId`); it counts once saved.
+ */
+function SenderChecks({
+  accountId,
+  ids,
+  disabled,
+  onChange,
+  setMessage,
+}: {
+  accountId: string;
+  ids: readonly string[];
+  disabled: boolean;
+  onChange: (ids: string[]) => void;
+  setMessage: (notice: Notice) => void;
+}) {
+  const t = useT();
+  const client = useClient();
+  const [text, setText] = useState(ids.join(" "));
+  const [asking, setAsking] = useState(false);
+  const update = (next: string) => {
+    setText(next);
+    onChange(parseAuthservIds(next));
+  };
+  const suggest = async () => {
+    setAsking(true);
+    setMessage(null);
+    try {
+      const { authserv_id } = await client.request(
+        { type: "SuggestAuthservId", account_id: accountId },
+        "AuthservIdSuggestion",
+      );
+      if (authserv_id) {
+        const current = parseAuthservIds(text);
+        if (!current.includes(authserv_id)) update([...current, authserv_id].join(" "));
+        setMessage({ id: "settings-authserv-suggested", error: false });
+      } else {
+        setMessage({ id: "settings-authserv-none", error: false });
+      }
+    } catch (e) {
+      setMessage({ id: errorMessageIdOf(e), error: true });
+    } finally {
+      setAsking(false);
+    }
+  };
+  return (
+    <Section titleId="settings-sender-checks">
+      <TextField
+        labelId="settings-authserv-ids"
+        name="authserv-ids"
+        hintId="settings-authserv-ids-hint"
+        value={text}
+        onChange={update}
+      />
+      <button
+        type="button"
+        data-part="form.button"
+        data-action="suggest-authserv"
+        disabled={disabled || asking}
+        onClick={() => void suggest()}
+      >
+        {t("settings-authserv-suggest")}
+      </button>
+    </Section>
+  );
+}
+
 function NoticeView({ part, notice }: { part: string; notice: Notice }) {
   const t = useT();
   if (!notice) return null;
@@ -330,6 +404,13 @@ function AccountForm({
           {t("identity-add")}
         </button>
       </Section>
+      <SenderChecks
+        accountId={config.id}
+        ids={config.authserv_ids ?? []}
+        disabled={busy}
+        onChange={(authserv_ids) => setConfig({ ...config, authserv_ids })}
+        setMessage={setMessage}
+      />
       {problems.map((problem) => (
         <div key={problem} data-part="account-settings.problem" role="alert">
           {t(problem)}

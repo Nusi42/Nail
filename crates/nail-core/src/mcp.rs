@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use nail_api::{Event, Request, Response};
+use nail_api::{ApiError, Event, MessageId, Request, Response};
 use nail_mcp::{CoreAccess, CoreData, McpServer, ServerOptions};
 use nail_store::{BlobStore, Store};
 
@@ -58,6 +58,20 @@ impl CoreAccess for McpCore {
 
     fn emit(&self, event: Event) {
         self.0.broadcast(event);
+    }
+
+    fn is_encrypted(
+        &self,
+        id: &MessageId,
+    ) -> impl Future<Output = std::result::Result<bool, ApiError>> + Send {
+        let service = self.0.clone();
+        let id = id.clone();
+        async move {
+            service
+                .blocking(move |s| s.message_is_encrypted(&id))
+                .await
+                .map_err(ApiError::from)
+        }
     }
 }
 

@@ -28,6 +28,14 @@ pub trait CoreAccess: Send + Sync + 'static {
     fn blobs(&self) -> &BlobStore;
     /// Pushes an event to the connected UIs.
     fn emit(&self, event: Event);
+    /// Whether the reader treats the message as end-to-end encrypted:
+    /// exactly the messages whose content the core decrypts for
+    /// `GetMessage` (their [`nail_api::security::SecurityStatus`] reports
+    /// encryption). The `encrypted` grant is enforced with this, so it must
+    /// come from the reader itself, never from a separate heuristic.
+    /// Messages whose body is not downloaded are not encrypted (there is no
+    /// content to read).
+    fn is_encrypted(&self, id: &MessageId) -> impl Future<Output = Result<bool, ApiError>> + Send;
 }
 
 /// [`McpData`] for any [`CoreAccess`].
@@ -162,10 +170,7 @@ impl<C: CoreAccess> McpData for CoreData<C> {
     }
 
     async fn is_encrypted(&self, id: &MessageId) -> DataResult<bool> {
-        Ok(self
-            .stored_raw(id)
-            .await?
-            .is_some_and(|raw| is_encrypted_mime(&raw)))
+        self.0.is_encrypted(id).await
     }
 
     async fn thread(&self, id: &ThreadId) -> DataResult<ThreadData> {
@@ -251,71 +256,5 @@ impl<C: CoreAccess> McpData for CoreData<C> {
 
     fn emit(&self, event: Event) {
         self.0.emit(event);
-    }
-}
-
-/// Whether a raw message is end-to-end encrypted: its top-level
-/// `Content-Type` is an encrypted type (PGP/MIME `multipart/encrypted`,
-/// S/MIME `application/pkcs7-mime`), or it carries an inline PGP message
-/// (`-----BEGIN PGP MESSAGE-----` at the start of a line), which the core
-/// decrypts for the reader too.
-pub fn is_encrypted_mime(raw: &[u8]) -> bool {
-    encrypted_content_type(raw) || has_inline_pgp_message(raw)
-}
-
-/// An armored OpenPGP message at the start of a line anywhere in the raw
-/// message (also inside base64 / quoted-printable parts it may be encoded,
-/// but inline PGP is sent as 7-bit text in practice).
-fn has_inline_pgp_message(raw: &[u8]) -> bool {
-    const ARMOR: &[u8] = b"-----BEGIN PGP MESSAGE-----";
-    raw.windows(ARMOR.len())
-        .enumerate()
-        .any(|(i, w)| w == ARMOR && (i == 0 || raw[i - 1] == b'\n'))
-}
-
-fn encrypted_content_type(raw: &[u8]) -> bool {
-    let header_end = raw
-        .windows(4)
-        .position(|w| w == b"\r\n\r\n")
-        .or_else(|| raw.windows(2).position(|w| w == b"\n\n"))
-        .unwrap_or(raw.len());
-    let headers = String::from_utf8_lossy(&raw[..header_end]).to_ascii_lowercase();
-    // Unfold continuation lines, then find the Content-Type header.
-    let unfolded = headers
-        .replace("\r\n", "\n")
-        .replace("\n ", " ")
-        .replace("\n\t", " ");
-    unfolded.lines().any(|line| {
-        line.strip_prefix("content-type:").is_some_and(|value| {
-            let value = value.trim();
-            value.starts_with("multipart/encrypted")
-                || value.starts_with("application/pkcs7-mime")
-                || value.starts_with("application/x-pkcs7-mime")
-        })
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn encrypted_messages_are_recognized() {
-        assert!(is_encrypted_mime(
-            b"From: a@b\r\nContent-Type: multipart/encrypted;\r\n protocol=\"application/pgp-encrypted\"\r\n\r\nx"
-        ));
-        assert!(is_encrypted_mime(
-            b"Content-Type: application/pkcs7-mime; smime-type=enveloped-data\n\nx"
-        ));
-        assert!(!is_encrypted_mime(
-            b"Content-Type: text/plain\r\n\r\nContent-Type: multipart/encrypted\r\n"
-        ));
-        assert!(!is_encrypted_mime(b"Subject: hi\r\n\r\nbody"));
-        assert!(is_encrypted_mime(
-            b"Content-Type: text/plain\r\n\r\nhi\r\n-----BEGIN PGP MESSAGE-----\r\n\r\nhQ==\r\n"
-        ));
-        assert!(!is_encrypted_mime(
-            b"Content-Type: text/plain\r\n\r\nquote: -----BEGIN PGP MESSAGE-----\r\n"
-        ));
     }
 }

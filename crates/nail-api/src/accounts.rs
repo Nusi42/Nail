@@ -104,7 +104,9 @@ pub struct AccountConfig {
     pub save_sent_copy: Option<bool>,
     /// `authserv-id` values of the account's own receiving servers (M2a):
     /// only `Authentication-Results` headers from these produce the sender
-    /// check badge (RFC 8601 §5). Empty = learned from recent mail.
+    /// check badge (RFC 8601 §5). Empty = no badge; ids are never
+    /// trusted without being configured here
+    /// ([`crate::Request::SuggestAuthservId`] proposes one).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub authserv_ids: Vec<String>,

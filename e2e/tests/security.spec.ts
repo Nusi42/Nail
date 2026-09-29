@@ -264,6 +264,80 @@ test("the sender check badge and a look-alike link warning", async ({ page }) =>
   await expect(badge(page)).toHaveCount(0);
 });
 
+test("sender checks count only for a receiving server the user configured", async ({ page }) => {
+  await openApp(page);
+  const openAccountSettings = async () => {
+    await page
+      .getByRole("toolbar", { name: "Main toolbar" })
+      .getByRole("button", { name: "Settings" })
+      .click();
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await settings.getByRole("tab", { name: "Accounts", exact: true }).click();
+    await settings
+      .getByRole("list", { name: "Accounts" })
+      .getByRole("button", { name: /Work/ })
+      .click();
+    return settings;
+  };
+  // Remove the configured server: nothing is trusted any more.
+  let settings = await openAccountSettings();
+  const servers = settings.getByRole("textbox", {
+    name: "Trusted receiving servers (authserv-id)",
+  });
+  await expect(servers).toHaveValue("mx.nail.example");
+  await servers.fill("");
+  await settings.getByRole("button", { name: "Save" }).click();
+  await expect(settings.getByText("Settings saved.")).toBeVisible();
+  // One message is not enough to suggest a server.
+  await settings.getByRole("button", { name: "Suggest from recent mail" }).click();
+  await expect(
+    settings.getByText("Your recent mail names no receiving server Nail could suggest."),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(settings).toBeHidden();
+
+  const raw = [
+    "Received: from mail.example.org by mx.nail.example; Tue, 29 Sep 2026 08:00:00 +0000",
+    "Authentication-Results: mx.nail.example; dkim=pass header.d=example.org; spf=pass smtp.mailfrom=example.org; dmarc=pass header.from=example.org",
+    "From: Grace <grace@example.org>",
+    "To: ada@work.example",
+    "Subject: Checked by an unconfirmed server",
+    "Date: Tue, 29 Sep 2026 08:00:00 +0000",
+    "Message-ID: <unconfirmed@example.org>",
+    "Content-Type: text/plain",
+    "",
+    "Hello.",
+    "",
+  ].join("\r\n");
+  await control(server, "imap-deliver", { raw });
+  await page.locator('[data-part="message-list"]').focus();
+  await page.keyboard.press("F5");
+  const row = page
+    .locator('[data-part="message-list.row"]')
+    .filter({ hasText: "Checked by an unconfirmed server" });
+  await expect(row).toHaveCount(1, { timeout: 20_000 });
+  await row.click();
+  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
+    "Checked by an unconfirmed server",
+  );
+  await expect(page.locator('button[data-part="auth-badge"]')).toHaveCount(0);
+
+  // The user confirms the server: the same message now shows the badge.
+  settings = await openAccountSettings();
+  await settings
+    .getByRole("textbox", { name: "Trusted receiving servers (authserv-id)" })
+    .fill("mx.nail.example");
+  await settings.getByRole("button", { name: "Save" }).click();
+  await expect(settings.getByText("Settings saved.")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await page
+    .locator('[data-part="message-list.row"]')
+    .filter({ hasText: "Checked by an unconfirmed server" })
+    .click();
+  await expect(page.locator('button[data-part="auth-badge"]')).toHaveText("Sender confirmed");
+});
+
 test("encryption at rest can be switched on and off with the data intact", async ({ page }) => {
   await openApp(page);
   const row = page

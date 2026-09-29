@@ -62,7 +62,9 @@ crates WP30 declared (`pgp` 0.20, `rand`, `zeroize`, `sha1`, `base64`,
   bindings with a key-expiration subpacket before the key is protected.
 - Trust (`keyring::effective_trust`): a stored decision (`verified`,
   `rejected`) wins; else own keys are `own`; else the source decides
-  (`autocrypt`, `autocrypt-gossip`, otherwise `unknown`).
+  (`autocrypt`, `autocrypt-gossip`, otherwise `unknown`). *Changed by ADR
+  0035:* Autocrypt keys are bound to their header's address and the
+  Autocrypt levels apply per address (`Keyring::trust_for`).
 
 ### Validity policy (`key::KeyInfo`)
 
@@ -124,7 +126,8 @@ account opted into indexing decrypted mail (ADR 0029).
   signature was made after the key (or subkey) expired — a signature made
   before the expiry stays `valid`. `error` for an unparseable signature
   part. `signer_matches_from` compares with the protected `From` when there
-  is one.
+  is one. *Changed by ADR 0035:* only with the `From` the reader shows
+  (protected when marked, else outer; first address).
 - Header protection: `protected` when the entity carries protected-headers
   / `hp`; `mismatch` when From / To / Cc address sets differ from the
   outer ones, or (signed-only mail) the outer subject does not contain the

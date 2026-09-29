@@ -100,11 +100,15 @@ account "work" email="ada@work.example" {
 }
 ```
 
-Without `authserv-id` Nail learns the id from your recent inbox mail (when
-most of it carries the same topmost header) and remembers it. Set it when
-the badge does not appear, or to be sure a wrongly learned id is never
-used. Find the id in the source of a received message: it is the first
-word after `Authentication-Results:` in the topmost such header.
+Without `authserv-id` Nail shows no sender badge for the account: it
+never trusts a server name on its own, because a sender can write any
+`Authentication-Results` header when your provider adds none. In
+**Settings → Accounts → Sender checks**, **Suggest from recent mail**
+proposes the name found on top of most of your recent inbox mail (only a
+name that belongs to the server that received the mail); it counts once
+you save it. Check it first: in the source of a received message it is
+the first word after `Authentication-Results:` in the topmost such
+header.
 
 ## Servers
 

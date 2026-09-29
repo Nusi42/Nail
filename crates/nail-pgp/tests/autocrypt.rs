@@ -529,3 +529,210 @@ fn setup_message_roundtrip_between_devices() {
         Err(Error::Invalid(_))
     ));
 }
+
+/// A fresh key (Ed25519 + X25519 encryption subkey, no passphrase) with
+/// these user ids, the first primary.
+fn key_with_user_ids(user_ids: &[&str]) -> pgp::composed::SignedSecretKey {
+    use pgp::composed::{EncryptionCaps, KeyType, SecretKeyParamsBuilder, SubkeyParamsBuilder};
+    use pgp::crypto::ecc_curve::ECCCurve;
+    let subkey = SubkeyParamsBuilder::default()
+        .key_type(KeyType::ECDH(ECCCurve::Curve25519Legacy))
+        .can_encrypt(EncryptionCaps::All)
+        .build()
+        .unwrap();
+    let mut params = SecretKeyParamsBuilder::default();
+    params
+        .key_type(KeyType::Ed25519Legacy)
+        .can_certify(true)
+        .can_sign(true)
+        .primary_user_id(user_ids[0].to_owned())
+        .subkeys(vec![subkey]);
+    for extra in &user_ids[1..] {
+        params.user_id(*extra);
+    }
+    params
+        .build()
+        .unwrap()
+        .generate(rand::thread_rng())
+        .unwrap()
+}
+
+/// The `Autocrypt` header value for `addr` carrying `key` as it is.
+fn header_for(addr: &str, key: &pgp::composed::SignedSecretKey) -> String {
+    AutocryptHeader {
+        addr: addr.to_owned(),
+        prefer_encrypt: AutocryptPreference::Mutual,
+        keydata: nail_pgp::key::to_binary(&key.to_public_key()).unwrap(),
+    }
+    .to_value(false)
+}
+
+/// A PGP/MIME message from `from`, signed with `key`'s primary key.
+fn signed_by(key: &pgp::composed::SignedSecretKey, from: &str) -> Vec<u8> {
+    use pgp::composed::{ArmorOptions, DetachedSignature};
+    let inner = "Content-Type: text/plain; charset=us-ascii\r\n\r\nPay the invoice.";
+    let signature = DetachedSignature::sign_binary_data(
+        rand::thread_rng(),
+        &key.primary_key,
+        &pgp::types::Password::empty(),
+        pgp::crypto::hash::HashAlgorithm::Sha256,
+        inner.as_bytes(),
+    )
+    .unwrap()
+    .to_armored_string(ArmorOptions::default())
+    .unwrap();
+    format!(
+        "From: {from}\r\nSubject: x\r\nMIME-Version: 1.0\r\n\
+Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-signature\"; boundary=\"b\"\r\n\r\n\
+--b\r\n{inner}\r\n--b\r\nContent-Type: application/pgp-signature\r\n\r\n{}\r\n--b--\r\n",
+        signature.replace('\n', "\r\n")
+    )
+    .into_bytes()
+}
+
+fn today() -> String {
+    chrono::Utc::now().to_rfc2822()
+}
+
+#[test]
+fn autocrypt_keys_vouch_only_for_the_header_address() {
+    let env = Env::new();
+    let ring = env.keyring();
+    let mallory = key_with_user_ids(&["CEO <ceo@bank.example>", "<mallory@evil.example>"]);
+    let msg = plain(
+        "mallory@evil.example",
+        "bob@example.net",
+        &today(),
+        &format!(
+            "Autocrypt: {}\r\n",
+            header_for("mallory@evil.example", &mallory)
+        ),
+    );
+    let update =
+        process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
+    assert_eq!(update.keys.len(), 1);
+    // Only the header's address is learned.
+    let stored = ring.get(&update.keys[0]).unwrap();
+    assert_eq!(stored.emails, vec!["mallory@evil.example"]);
+    assert!(
+        recipient_status(&ring, &account(), "ceo@bank.example")
+            .unwrap()
+            .openpgp
+            .is_none()
+    );
+    let own = recipient_status(&ring, &account(), "mallory@evil.example")
+        .unwrap()
+        .openpgp
+        .unwrap();
+    assert_eq!(
+        (own.state, own.trust),
+        (RecipientKeyState::Usable, TrustLevel::Autocrypt)
+    );
+    // A mail "from the CEO" signed with that key does not match its From.
+    let status = env.status(&signed_by(&mallory, "CEO <ceo@bank.example>"));
+    let sig = &status.signatures[0];
+    assert_eq!(sig.state, SignatureState::Valid);
+    assert!(!sig.signer_matches_from, "{sig:?}");
+    assert_eq!(sig.signer.as_deref(), Some("mallory@evil.example"));
+
+    // A key without a user id for the header's address is not learned.
+    let env = Env::new();
+    let ring = env.keyring();
+    let ceo_only = key_with_user_ids(&["CEO <ceo@bank.example>"]);
+    let msg = plain(
+        "mallory@evil.example",
+        "bob@example.net",
+        &today(),
+        &format!(
+            "Autocrypt: {}\r\n",
+            header_for("mallory@evil.example", &ceo_only)
+        ),
+    );
+    let update =
+        process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
+    assert!(update.keys.is_empty());
+    assert!(ring.list(&Default::default()).unwrap().is_empty());
+
+    // Gossip is bound to its address the same way.
+    let gossip = header_for(
+        "bob@example.net",
+        &key_with_user_ids(&["<bob@example.net>", "CEO <ceo@bank.example>"]),
+    )
+    .replace("prefer-encrypt=mutual; ", "");
+    let msg = plain(
+        "carol@example.com",
+        "bob@example.net, alice@example.org",
+        &today(),
+        "",
+    );
+    let update = process_incoming(
+        &ring,
+        &account(),
+        &IncomingMessage::from_raw(&msg),
+        &[gossip],
+    )
+    .unwrap();
+    assert_eq!(update.keys.len(), 1);
+    assert_eq!(
+        ring.get(&update.keys[0]).unwrap().emails,
+        vec!["bob@example.net"]
+    );
+    assert!(
+        recipient_status(&ring, &account(), "ceo@bank.example")
+            .unwrap()
+            .openpgp
+            .is_none()
+    );
+}
+
+#[test]
+fn autocrypt_trust_applies_per_address() {
+    let env = Env::new();
+    let ring = env.keyring();
+    // The user imported a key that claims both addresses (e.g. from an
+    // attachment); it has no trust.
+    let mallory = key_with_user_ids(&["CEO <ceo@bank.example>", "<mallory@evil.example>"]);
+    let imported = ring
+        .import_bytes(
+            &nail_pgp::key::to_binary(&mallory.to_public_key()).unwrap(),
+            KeySource::Imported,
+        )
+        .unwrap();
+    assert_eq!(imported.keys[0].emails.len(), 2);
+    // An Autocrypt header for mallory's own address raises the key's
+    // source to autocrypt ...
+    let msg = plain(
+        "mallory@evil.example",
+        "bob@example.net",
+        &today(),
+        &format!(
+            "Autocrypt: {}\r\n",
+            header_for("mallory@evil.example", &mallory)
+        ),
+    );
+    process_incoming(&ring, &account(), &IncomingMessage::from_raw(&msg), &[]).unwrap();
+    let key = ring.get(&imported.keys[0].id).unwrap();
+    assert_eq!(key.source, KeySource::Autocrypt);
+    // ... but the trust counts only for that address.
+    let for_mallory = ring
+        .recipient_key("mallory@evil.example")
+        .unwrap()
+        .unwrap()
+        .0;
+    assert_eq!(for_mallory.trust, TrustLevel::Autocrypt);
+    let for_ceo = ring.recipient_key("CEO@bank.example").unwrap().unwrap().0;
+    assert_eq!(for_ceo.trust, TrustLevel::Unknown);
+    // A signature "from the CEO" with mallory's key matches the From (the
+    // key does carry the address) but is not trusted for it.
+    let status = env.status(&signed_by(&mallory, "CEO <ceo@bank.example>"));
+    let sig = &status.signatures[0];
+    assert!(sig.signer_matches_from);
+    assert_eq!(sig.trust, TrustLevel::Unknown);
+    // For mallory's own address it is.
+    let status = env.status(&signed_by(&mallory, "<mallory@evil.example>"));
+    assert_eq!(status.signatures[0].trust, TrustLevel::Autocrypt);
+    // A user decision applies to every address.
+    ring.set_trust(&key.id, TrustDecision::Verified).unwrap();
+    let status = env.status(&signed_by(&mallory, "CEO <ceo@bank.example>"));
+    assert_eq!(status.signatures[0].trust, TrustLevel::Verified);
+}

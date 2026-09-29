@@ -748,6 +748,16 @@ pub enum Request {
         /// The new settings.
         settings: SecuritySettings,
     },
+    /// Suggest the `authserv-id` of an account's receiving server, learned
+    /// from its recent inbox mail (the id on top of most of it, belonging
+    /// to the server that received it). Nail never trusts a suggestion by
+    /// itself: only the configured `AccountConfig::authserv_ids` count, so
+    /// the user confirms it by saving it there. Answered with
+    /// [`Response::AuthservIdSuggestion`].
+    SuggestAuthservId {
+        /// The account.
+        account_id: AccountId,
+    },
     /// State of encryption at rest. Answered with [`Response::VaultStatus`].
     GetVaultStatus,
     /// Turn encryption at rest on or off. The migration runs in the
@@ -1137,6 +1147,13 @@ pub enum Response {
     SecuritySettings {
         /// The settings.
         settings: SecuritySettings,
+    },
+    /// Answer to [`Request::SuggestAuthservId`].
+    AuthservIdSuggestion {
+        /// The account.
+        account_id: AccountId,
+        /// The suggested id; `None` when the recent mail shows none.
+        authserv_id: Option<String>,
     },
     /// Answer to [`Request::GetVaultStatus`] and
     /// [`Request::SetVaultEncryption`].
@@ -1722,6 +1739,21 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Request::SetVaultEncryption { enabled: true }).unwrap(),
             json!({"type": "SetVaultEncryption", "enabled": true})
+        );
+        assert_eq!(
+            serde_json::to_value(Request::SuggestAuthservId {
+                account_id: "work".into()
+            })
+            .unwrap(),
+            json!({"type": "SuggestAuthservId", "account_id": "work"})
+        );
+        assert_eq!(
+            serde_json::to_value(Response::AuthservIdSuggestion {
+                account_id: "work".into(),
+                authserv_id: None
+            })
+            .unwrap(),
+            json!({"type": "AuthservIdSuggestion", "account_id": "work", "authserv_id": null})
         );
     }
 

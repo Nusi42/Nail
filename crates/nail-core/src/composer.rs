@@ -585,8 +585,28 @@ impl Service {
             return Ok(());
         }
         // An encrypted message's draft never goes to the server in plain
-        // text (M2a).
-        if draft.crypto.as_ref().is_some_and(|c| c.encrypt) {
+        // text (M2a): decided like sending decides, and an earlier plain
+        // copy (from before encryption was turned on) is deleted.
+        if self
+            .draft_goes_encrypted(&draft, &account.id, &identity)
+            .await
+        {
+            let draft_id = id.clone();
+            let queued = self
+                .inner
+                .store
+                .call(move |s| {
+                    let Some(previous) = s.draft_server_copy(&draft_id)? else {
+                        return Ok(Vec::new());
+                    };
+                    s.set_draft_server_copy(&draft_id, None)?;
+                    match draft_copy_removal_in(s, &previous) {
+                        Some(op) => s.enqueue_all(&[op]),
+                        None => Ok(Vec::new()),
+                    }
+                })
+                .await?;
+            self.announce_enqueued(&queued);
             return Ok(());
         }
         let folder = {
@@ -652,6 +672,61 @@ impl Service {
             .await?;
         self.announce_enqueued(&queued);
         Ok(())
+    }
+
+    /// Whether a draft will be sent encrypted, as the composer shows it:
+    /// the draft's explicit choice, else the identity's defaults
+    /// ([`crate::crypto::effective_crypto`], as `SendDraft` decides), else
+    /// an Autocrypt recommendation to encrypt (the composer's suggestion).
+    /// When the recommendation cannot be computed the answer is `true`:
+    /// a draft is rather kept local than uploaded in plain text.
+    async fn draft_goes_encrypted(
+        &self,
+        draft: &Draft,
+        account: &AccountId,
+        identity: &Identity,
+    ) -> bool {
+        let crypto = crate::crypto::effective_crypto(None, draft.crypto.as_ref(), identity);
+        if crypto.encrypt {
+            return true;
+        }
+        let settings = identity.crypto.clone().unwrap_or_default();
+        if draft.crypto.is_some() || !settings.autocrypt {
+            return false;
+        }
+        let mut recipients: Vec<String> = Vec::new();
+        for address in draft.to.iter().chain(&draft.cc).chain(&draft.bcc) {
+            let email = address.email.trim().to_ascii_lowercase();
+            if !email.is_empty() && !recipients.contains(&email) {
+                recipients.push(email);
+            }
+        }
+        if recipients.is_empty() {
+            return false;
+        }
+        let account = account.clone();
+        let identity = identity.clone();
+        let recommendation = self
+            .blocking(move |s| {
+                let own = crate::crypto::own_keys(s, &identity)?;
+                Ok(nail_pgp::autocrypt::recommend(
+                    &s.pgp(),
+                    &account,
+                    &identity.email,
+                    settings.prefer_encrypt,
+                    own.openpgp,
+                    &recipients,
+                    false,
+                )?)
+            })
+            .await;
+        match recommendation {
+            Ok(r) => r == nail_api::security::AutocryptRecommendation::Encrypt,
+            Err(err) => {
+                tracing::debug!(%err, "cannot compute the Autocrypt recommendation");
+                true
+            }
+        }
     }
 
     /// The operation that deletes a draft's server copy, if it still

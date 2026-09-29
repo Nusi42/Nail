@@ -544,6 +544,24 @@ describe("security mock", () => {
     expect(events).toContainEqual({ type: "SecuritySettingsChanged" });
   });
 
+  it("suggests the authserv-id of the seeded sender checks", async () => {
+    const { send, transport, s } = setup();
+    expect(
+      await send({ type: "SuggestAuthservId", account_id: "acc-work" }, "AuthservIdSuggestion"),
+    ).toMatchObject({ authserv_id: null });
+    s.bySender = securityDemoBySender();
+    expect(
+      await send({ type: "SuggestAuthservId", account_id: "acc-work" }, "AuthservIdSuggestion"),
+    ).toEqual({
+      type: "AuthservIdSuggestion",
+      account_id: "acc-work",
+      authserv_id: "imap.example.org",
+    });
+    expect(await transport.send({ type: "SuggestAuthservId", account_id: "ghost" })).toMatchObject({
+      code: "not_found",
+    });
+  });
+
   it("decorates message bodies by id and by sender", () => {
     const { transport, s } = setup();
     const body = [...transport.data.bodies.values()][0];

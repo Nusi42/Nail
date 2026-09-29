@@ -139,7 +139,15 @@ impl AutocryptHeader {
         out
     }
 
-    /// The key it carries.
+    /// The key it carries, restricted to `addr` ([`key::bind_to_address`]):
+    /// a header vouches only for the binding of its key to its own
+    /// address, so a key without a valid user id for `addr` is refused and
+    /// its other user ids are dropped.
+    pub fn bound_key(&self) -> Result<SignedPublicKey> {
+        key::bind_to_address(&self.key()?, &self.addr)
+    }
+
+    /// The key it carries (as sent; see [`Self::bound_key`]).
     pub fn key(&self) -> Result<SignedPublicKey> {
         let (keys, issues) = key::parse_keys(&self.keydata);
         match keys.into_iter().next() {
@@ -248,7 +256,7 @@ pub fn process_incoming(
         .iter()
         .filter_map(|v| AutocryptHeader::parse(v).ok())
         .filter(|h| &h.addr == from)
-        .filter_map(|h| h.key().ok().map(|k| (h, k)))
+        .filter_map(|h| h.bound_key().ok().map(|k| (h, k)))
         .collect();
     let header = match valid.as_slice() {
         [one] => Some(one.clone()),
@@ -286,7 +294,9 @@ pub fn process_incoming(
         if &header.addr == from || !message.recipients.contains(&header.addr) {
             continue;
         }
-        let Ok(key) = header.key() else { continue };
+        let Ok(key) = header.bound_key() else {
+            continue;
+        };
         let mut peer = store
             .autocrypt_peer(account, &header.addr)?
             .unwrap_or_else(|| new_peer(account, &header.addr));

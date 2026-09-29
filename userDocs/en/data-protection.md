@@ -89,8 +89,15 @@ header:
   address. This is the result the badge shows when it is present.
 
 Anyone can write such a header into a message, so Nail only believes the
-one your **own receiving server** added — recognized by its name — and
-ignores the others, including copies placed further down in the message.
+one your **own receiving server** added — recognized by the name you
+entered under **Settings → Accounts → Sender checks** — and ignores the
+others, including copies placed further down in the message. Without a
+name there, Nail shows no sender badge for that account. **Suggest from
+recent mail** fills in the server named in most of your recent mail;
+compare it with the source of a message you received (the first word
+after `Authentication-Results:` in the topmost such line) before you
+save it: if your provider adds no such header, the name could come from
+the senders.
 "Aligned" in the details means the checked domain belongs to the same
 organization as the `From` address.
 

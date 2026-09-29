@@ -38,7 +38,7 @@ computers on the network cannot reach it.
 | Read mail | Accounts, folders, messages (headers, text and HTML), threads, search, and your filter rules |
 | Original message source | The complete message as received, with all headers |
 | Attachments | The content of attached files (without it, the agent only sees file names and sizes) |
-| Encrypted messages | Content of encrypted messages |
+| Encrypted messages | Content of encrypted messages: every message Nail decrypts for you, however it is packed (OpenPGP, S/MIME, or an encrypted block inside the text) |
 | What is on screen | The message you have open, the text you selected in it, and the draft you are writing |
 
 **Accounts.** Choose single accounts, a virtual account (which includes its

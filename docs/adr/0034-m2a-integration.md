@@ -56,6 +56,8 @@ the Playwright scenarios of plan section 7.
   (`AccountConfig.authserv_ids`, optional on the wire); without it the core
   learns the id from 20 recent inbox messages (80 % share, at most every
   10 minutes) and stores it in `app_settings` (`authserv-id/<account>`).
+  *Superseded by ADR 0035:* only configured ids are trusted;
+  `SuggestAuthservId` proposes one for the user to save.
 - **Warnings** are computed after decryption, so decrypted HTML is checked.
   The reader's attachment list shows `AttachmentWarningMark`.
 - Replying to or forwarding encrypted mail starts with encryption on in
@@ -84,7 +86,9 @@ the Playwright scenarios of plan section 7.
   whose own key and recipients' keys all work (OpenPGP first) → the one
   with an own key → OpenPGP. The UI resolves it the same way.
 - A draft with encryption on is **not uploaded** to the server's Drafts
-  folder (it would sit there in plain text).
+  folder (it would sit there in plain text). *ADR 0035:* "on" includes
+  identity defaults and an Autocrypt recommendation; an earlier plain copy
+  is deleted.
 - **Rules** never forward or answer encrypted mail (`unsupported`; a
   redirect sends the still-encrypted original and is allowed).
 - `SendAutocryptSetup` builds the setup message (texts from
@@ -108,6 +112,8 @@ decrypted documents of opted-in accounts.
 
 - The `encrypted` scope also covers inline PGP messages
   (`is_encrypted_mime` looks for an armored PGP message at a line start).
+  *Superseded by ADR 0035:* the gate is the reader's own result
+  (`CoreAccess::is_encrypted` → `Service::message_is_encrypted`).
 - With decrypted indexing on, a client without `encrypted` gets search
   results without encrypted messages (restricted search path), so a match
   cannot reveal what they say (`McpData::index_holds_decrypted`).

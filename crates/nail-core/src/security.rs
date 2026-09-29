@@ -41,6 +41,18 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::GetVaultStatus => Ok(Response::VaultStatus {
             status: service.inner.vault.status()?,
         }),
+        Request::SuggestAuthservId { account_id } => {
+            // An unknown account is an error, not "no suggestion".
+            service.store().get_account(&account_id)?;
+            let lookup = account_id.clone();
+            let authserv_id = service
+                .blocking(move |s| s.suggest_authserv_id(&lookup))
+                .await?;
+            Ok(Response::AuthservIdSuggestion {
+                account_id,
+                authserv_id,
+            })
+        }
         Request::SetVaultEncryption { enabled } => Ok(Response::VaultStatus {
             status: service.set_vault_encryption(enabled).await?,
         }),

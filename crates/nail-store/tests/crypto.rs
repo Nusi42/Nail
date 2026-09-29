@@ -245,10 +245,25 @@ fn autocrypt_peers_per_account() {
         store
             .put_autocrypt_peer(&AutocryptPeerRecord {
                 email: " ".into(),
-                ..peer
+                ..peer.clone()
             })
             .is_err()
     );
+    // Across accounts, by address.
+    store
+        .put_autocrypt_peer(&AutocryptPeerRecord {
+            account_id: "home".into(),
+            ..peer.clone()
+        })
+        .unwrap();
+    let all = store.autocrypt_peers_for_email(" BOB@example.org").unwrap();
+    assert_eq!(
+        all.iter()
+            .map(|p| p.account_id.as_str())
+            .collect::<Vec<_>>(),
+        ["home", "work"]
+    );
+    assert!(store.autocrypt_peers_for_email("x@y").unwrap().is_empty());
     assert_eq!(store.delete_autocrypt_peers(&"work".into()).unwrap(), 1);
 }
 

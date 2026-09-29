@@ -627,6 +627,20 @@ impl Store {
         })
     }
 
+    /// Autocrypt state of a peer address in every own account.
+    pub fn autocrypt_peers_for_email(&self, email: &str) -> Result<Vec<AutocryptPeerRecord>> {
+        let email = email.trim().to_lowercase();
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT account_id, email, last_seen, autocrypt_timestamp, key_fingerprint,
+                        prefer_encrypt, gossip_timestamp, gossip_fingerprint
+                 FROM autocrypt_peers WHERE email = ?1 ORDER BY account_id",
+            )?;
+            let rows = stmt.query_map([email], peer_from_row)?;
+            Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+        })
+    }
+
     /// Inserts or replaces a peer's Autocrypt state. The caller applies
     /// the Autocrypt update rules (only newer headers win).
     pub fn put_autocrypt_peer(&self, peer: &AutocryptPeerRecord) -> Result<()> {

@@ -1033,7 +1033,6 @@ async fn mail_encrypted_to_someone_else_shows_no_key() {
     let raw =
         String::from_utf8(crypto_fixture(CryptoFixtures::Pgp, "encrypted-to-bob.eml").unwrap())
             .unwrap();
-    assert!(nail_mcp::core_data::is_encrypted_mime(raw.as_bytes()));
     let subject = nail_mime::parse_message(raw.as_bytes()).headers.subject;
     let message = deliver_work(&f, &raw, &subject).await;
     let shown = body(&f, &message).await;
@@ -1042,5 +1041,389 @@ async fn mail_encrypted_to_someone_else_shows_no_key() {
         shown.security.unwrap().encryption.unwrap().state,
         DecryptionState::NoKey
     );
+    f.service.shutdown().await;
+}
+
+/// The armored OpenPGP message inside raw mail.
+fn armored_block(data: &str) -> &str {
+    let start = data.find("-----BEGIN PGP MESSAGE-----").unwrap();
+    let end_marker = "-----END PGP MESSAGE-----";
+    let end = data[start..].find(end_marker).unwrap() + start + end_marker.len();
+    &data[start..end]
+}
+
+fn base64_lines(data: &[u8]) -> String {
+    use base64::Engine as _;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(data);
+    encoded
+        .as_bytes()
+        .chunks(76)
+        .map(|c| std::str::from_utf8(c).unwrap())
+        .collect::<Vec<_>>()
+        .join("\r\n")
+}
+
+/// The MCP `encrypted` gate is the reader's own result: every wrapping the
+/// reader decrypts is gated, not only the top-level encrypted types.
+#[tokio::test]
+async fn mcp_encrypted_gate_follows_the_reader() {
+    use nail_mcp::McpData as _;
+    let f = setup().await;
+    let data = nail_mcp::CoreData(nail_core::McpCore(f.service.clone()));
+    // An OpenPGP and an S/MIME message from work to home.
+    send(
+        &f,
+        draft(MULTI_HOME_EMAIL, "PGP source", "tangerine archipelago"),
+        Some(SendCrypto {
+            encrypt: true,
+            technology: Some(CryptoTechnology::OpenPgp),
+            ..SendCrypto::none()
+        }),
+    )
+    .await;
+    send(
+        &f,
+        draft(MULTI_HOME_EMAIL, "S/MIME source", "tangerine archipelago"),
+        Some(SendCrypto {
+            encrypt: true,
+            technology: Some(CryptoTechnology::Smime),
+            ..SendCrypto::none()
+        }),
+    )
+    .await;
+    let mail = received_count(&f, 2).await;
+    let pgp = &mail
+        .iter()
+        .find(|(_, d)| d.contains("multipart/encrypted"))
+        .unwrap()
+        .1;
+    let smime = &mail
+        .iter()
+        .find(|(_, d)| d.contains("application/pkcs7-mime"))
+        .unwrap()
+        .1;
+    let armored = armored_block(pgp)
+        .replace("\r\n", "\n")
+        .replace('\n', "\r\n");
+    let (_, smime_body) = smime.split_once("\r\n\r\n").unwrap();
+    let head = |subject: &str| {
+        format!(
+            "From: <{MULTI_WORK_EMAIL}>\r\nTo: <{MULTI_HOME_EMAIL}>\r\nSubject: {subject}\r\n\
+             Date: Tue, 29 Sep 2026 10:00:00 +0000\r\nMessage-ID: <{}@test>\r\nMIME-Version: 1.0\r\n",
+            subject.replace(' ', "-")
+        )
+    };
+    let variants = [
+        // Inline PGP in a base64 text part.
+        format!(
+            "{}Content-Type: text/plain; charset=us-ascii\r\nContent-Transfer-Encoding: base64\r\n\r\n{}\r\n",
+            head("Inline base64"),
+            base64_lines(armored.as_bytes())
+        ),
+        // Inline PGP that does not start a line.
+        format!(
+            "{}Content-Type: text/plain; charset=us-ascii\r\n\r\nquoted: {armored}\r\n",
+            head("Inline midline")
+        ),
+        // S/MIME relabelled as a .p7m file.
+        format!(
+            "{}Content-Type: application/octet-stream; name=smime.p7m\r\n\
+             Content-Transfer-Encoding: base64\r\n\r\n{smime_body}",
+            head("Relabelled smime")
+        ),
+        // S/MIME enveloped data inside a multipart/signed layer.
+        format!(
+            "{}Content-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; \
+             micalg=sha-256; boundary=\"sig\"\r\n\r\n--sig\r\n\
+             Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name=smime.p7m\r\n\
+             Content-Transfer-Encoding: base64\r\n\r\n{}\r\n--sig\r\n\
+             Content-Type: application/pkcs7-signature; name=smime.p7s\r\n\
+             Content-Transfer-Encoding: base64\r\n\r\nMIIB\r\n--sig--\r\n",
+            head("Signed smime"),
+            smime_body.trim_end()
+        ),
+    ];
+    for raw in &variants {
+        let message = deliver_home(&f, raw).await;
+        let shown = body(&f, &message).await;
+        assert_eq!(
+            shown
+                .security
+                .as_ref()
+                .and_then(|s| s.encryption.as_ref())
+                .map(|e| e.state),
+            Some(DecryptionState::Decrypted),
+            "{}: the reader decrypts it",
+            message.subject
+        );
+        assert!(
+            data.is_encrypted(&message.id).await.unwrap(),
+            "{}: gated as encrypted",
+            message.subject
+        );
+    }
+    // Plain mail is not gated.
+    let plain = format!(
+        "{}Content-Type: text/plain\r\n\r\nNothing secret.\r\n",
+        head("Plain")
+    );
+    let message = deliver_home(&f, &plain).await;
+    assert!(!data.is_encrypted(&message.id).await.unwrap());
+    f.service.shutdown().await;
+}
+
+fn server_drafts(f: &Fixture) -> Vec<String> {
+    control(f, "imap-messages", json!({ "mailbox": "Drafts" }))
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["subject"].as_str().unwrap_or_default().to_owned())
+        .collect()
+}
+
+async fn save_draft(f: &Fixture, draft: Draft) -> nail_api::DraftId {
+    let Response::DraftSaved { draft_id } = request(f, Request::SaveDraft { draft }).await else {
+        panic!("draft not saved")
+    };
+    draft_id
+}
+
+/// Saves an explicitly plain draft and waits until its copy is on the
+/// server: uploads saved before it have run by then.
+async fn upload_barrier(f: &Fixture, subject: &str) {
+    let mut plain = draft("nokey@example.org", subject, "plain");
+    plain.crypto = Some(SendCrypto::none());
+    save_draft(f, plain).await;
+    eventually("the plain draft on the server", || async {
+        server_drafts(f).contains(&subject.to_owned())
+    })
+    .await;
+}
+
+async fn set_work_encrypt_default(f: &Fixture, encrypt: bool) {
+    let Response::AccountsConfig { config } = request(f, Request::GetAccountsConfig).await else {
+        panic!()
+    };
+    let mut account = config
+        .accounts
+        .into_iter()
+        .find(|a| a.id.as_str() == MULTI_WORK_ID)
+        .unwrap();
+    account.identities[0].crypto.get_or_insert_default().encrypt = encrypt;
+    assert!(matches!(
+        request(
+            f,
+            Request::UpdateAccount {
+                config: Box::new(account),
+                secrets: vec![]
+            }
+        )
+        .await,
+        Response::AccountSaved { .. }
+    ));
+}
+
+#[tokio::test]
+async fn encrypted_drafts_never_reach_the_server_drafts_folder() {
+    let f = setup().await;
+    // Encryption turned on after a plain autosave: the plain copy goes.
+    let mut d = draft("nokey@example.org", "Later encrypted", "secret plans");
+    let id = save_draft(&f, d.clone()).await;
+    eventually("the plain copy on the server", || async {
+        server_drafts(&f).contains(&"Later encrypted".to_owned())
+    })
+    .await;
+    d.id = Some(id);
+    d.crypto = Some(SendCrypto {
+        encrypt: true,
+        ..SendCrypto::none()
+    });
+    save_draft(&f, d).await;
+    eventually("the plain copy removed", || async {
+        !server_drafts(&f).contains(&"Later encrypted".to_owned())
+    })
+    .await;
+    upload_barrier(&f, "Barrier 1").await;
+    assert!(!server_drafts(&f).contains(&"Later encrypted".to_owned()));
+
+    // Encryption from the identity's defaults (no choice in the draft).
+    set_work_encrypt_default(&f, true).await;
+    save_draft(&f, draft(MULTI_HOME_EMAIL, "Encrypted by default", "x")).await;
+    upload_barrier(&f, "Barrier 2").await;
+    assert!(!server_drafts(&f).contains(&"Encrypted by default".to_owned()));
+    set_work_encrypt_default(&f, false).await;
+
+    // Encryption suggested by Autocrypt (alice prefers mutual, as we do).
+    let raw =
+        String::from_utf8(crypto_fixture(CryptoFixtures::Pgp, "autocrypt-alice.eml").unwrap())
+            .unwrap();
+    deliver_work(&f, &raw, "Hi with Autocrypt").await;
+    eventually("Autocrypt recommends encryption", || async {
+        match request(
+            &f,
+            Request::CheckRecipientKeys {
+                identity_id: MULTI_WORK_EMAIL.into(),
+                recipients: vec!["alice@example.org".into()],
+                lookup: false,
+            },
+        )
+        .await
+        {
+            Response::RecipientKeys { report } => report.suggested.encrypt,
+            other => panic!("unexpected {other:?}"),
+        }
+    })
+    .await;
+    save_draft(&f, draft("alice@example.org", "Autocrypt draft", "x")).await;
+    // An explicit "no encryption" is uploaded.
+    let mut explicit = draft("alice@example.org", "Explicitly plain", "x");
+    explicit.crypto = Some(SendCrypto::none());
+    save_draft(&f, explicit).await;
+    upload_barrier(&f, "Barrier 3").await;
+    let on_server = server_drafts(&f);
+    assert!(
+        !on_server.contains(&"Autocrypt draft".to_owned()),
+        "{on_server:?}"
+    );
+    eventually("the explicitly plain draft on the server", || async {
+        server_drafts(&f).contains(&"Explicitly plain".to_owned())
+    })
+    .await;
+    f.service.shutdown().await;
+}
+
+async fn set_work_authserv_ids(f: &Fixture, ids: Vec<String>) {
+    let Response::AccountsConfig { config } = request(f, Request::GetAccountsConfig).await else {
+        panic!()
+    };
+    let mut account = config
+        .accounts
+        .into_iter()
+        .find(|a| a.id.as_str() == MULTI_WORK_ID)
+        .unwrap();
+    account.authserv_ids = ids;
+    assert!(matches!(
+        request(
+            f,
+            Request::UpdateAccount {
+                config: Box::new(account),
+                secrets: vec![]
+            }
+        )
+        .await,
+        Response::AccountSaved { .. }
+    ));
+}
+
+/// Delivers `count` messages carrying `auth` as their topmost
+/// `Authentication-Results` to the work inbox and waits for them.
+async fn deliver_auth_burst(f: &Fixture, tag: &str, hour: u8, auth: &str, count: usize) {
+    let before = inbox(f, MULTI_WORK_ID).await.len();
+    for n in 0..count {
+        let raw = format!(
+            "Received: from evil.example by mx.nail.example; Wed, 30 Dec 2026 08:00:00 +0000\r\n\
+             Authentication-Results: {auth}\r\n\
+             From: Bank <ceo@bank.example>\r\nTo: ada@work.example\r\nSubject: {tag} {n}\r\n\
+             Date: Wed, 30 Dec 2026 {hour:02}:{n:02}:00 +0000\r\nMessage-ID: <{tag}-{n}@bank.example>\r\n\
+             Content-Type: text/plain\r\n\r\nPay now.\r\n"
+        );
+        control(f, "imap-deliver", json!({ "raw": raw }));
+    }
+    request(
+        f,
+        Request::SyncNow {
+            account_id: Some(AccountId::new(MULTI_WORK_ID)),
+        },
+    )
+    .await;
+    eventually("the burst synced", || async {
+        inbox(f, MULTI_WORK_ID).await.len() >= before + count
+    })
+    .await;
+}
+
+async fn suggestion(f: &Fixture) -> Option<String> {
+    match request(
+        f,
+        Request::SuggestAuthservId {
+            account_id: AccountId::new(MULTI_WORK_ID),
+        },
+    )
+    .await
+    {
+        Response::AuthservIdSuggestion {
+            account_id,
+            authserv_id,
+        } => {
+            assert_eq!(account_id.as_str(), MULTI_WORK_ID);
+            authserv_id
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// Without a configured `authserv-id` no sender check is trusted, however
+/// much mail carries the same header; a suggestion only names the
+/// receiving server's own domain and counts once the user saves it.
+#[tokio::test]
+async fn authserv_ids_are_trusted_only_when_configured() {
+    let f = setup().await;
+    set_work_authserv_ids(&f, Vec::new()).await;
+    // A sender floods the inbox with a made-up server's "pass" results.
+    deliver_auth_burst(
+        &f,
+        "Forged",
+        8,
+        "mx.attacker.example; dkim=pass header.d=bank.example; dmarc=pass header.from=bank.example",
+        17,
+    )
+    .await;
+    assert_eq!(suggestion(&f).await, None, "not the receiving server");
+    let forged = inbox(&f, MULTI_WORK_ID)
+        .await
+        .into_iter()
+        .find(|m| m.subject == "Forged 0")
+        .unwrap();
+    assert!(body(&f, &forged).await.auth_results.is_none());
+
+    // Mail whose topmost results name the receiving server's domain: a
+    // suggestion, still not trusted.
+    deliver_auth_burst(
+        &f,
+        "Checked",
+        9,
+        "mx.nail.example; dkim=pass header.d=bank.example; dmarc=pass header.from=bank.example",
+        17,
+    )
+    .await;
+    let suggested = suggestion(&f).await;
+    assert_eq!(suggested.as_deref(), Some("mx.nail.example"));
+    let checked = inbox(&f, MULTI_WORK_ID)
+        .await
+        .into_iter()
+        .find(|m| m.subject == "Checked 0")
+        .unwrap();
+    assert!(body(&f, &checked).await.auth_results.is_none());
+
+    // The user confirms it: now the badge counts.
+    set_work_authserv_ids(&f, vec![suggested.unwrap()]).await;
+    let auth = body(&f, &checked).await.auth_results.expect("trusted now");
+    assert_eq!(auth.summary(), AuthVerdict::Pass);
+    assert!(body(&f, &forged).await.auth_results.is_none());
+
+    // An unknown account is an error.
+    assert!(matches!(
+        request(
+            &f,
+            Request::SuggestAuthservId {
+                account_id: AccountId::new("nope")
+            }
+        )
+        .await,
+        Response::Error {
+            code: ErrorCode::NotFound,
+            ..
+        }
+    ));
     f.service.shutdown().await;
 }

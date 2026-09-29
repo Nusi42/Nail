@@ -77,6 +77,7 @@ export const SECURITY_REQUESTS = [
   "ImportAutocryptSetup",
   "GetSecuritySettings",
   "UpdateSecuritySettings",
+  "SuggestAuthservId",
   "GetVaultStatus",
   "SetVaultEncryption",
 ] as const satisfies readonly Request["type"][];
@@ -632,6 +633,15 @@ export function answerSecurity(core: MockCore, request: SecurityRequest): Respon
       };
       core.emit({ type: "SecuritySettingsChanged" });
       return { type: "SecuritySettings", settings: clone(s.settings) };
+    }
+    case "SuggestAuthservId": {
+      // The id of the seeded sender checks (the mock's "recent mail").
+      if (!core.data.accountsConfig.accounts.some((a) => a.id === request.account_id)) {
+        return errorResponse("not_found", `account ${request.account_id}`);
+      }
+      const overlays = [...Object.values(s.messages), ...Object.values(s.bySender)];
+      const found = overlays.find((o) => o.auth_results)?.auth_results?.authserv_id ?? null;
+      return { type: "AuthservIdSuggestion", account_id: request.account_id, authserv_id: found };
     }
     case "GetVaultStatus":
       return { type: "VaultStatus", status: clone(s.vault) };

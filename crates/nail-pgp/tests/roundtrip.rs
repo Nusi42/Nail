@@ -323,6 +323,129 @@ Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-si
     out
 }
 
+/// A `multipart/signed` message with the outer header `outer` whose
+/// signed part is `inner` (header fields + body), signed by `secret`.
+fn signed_part_with(secret: &pgp::composed::SignedSecretKey, outer: &str, inner: &str) -> Vec<u8> {
+    let signature = DetachedSignature::sign_binary_data(
+        rand::thread_rng(),
+        &secret.primary_key,
+        &Password::empty(),
+        HashAlgorithm::Sha256,
+        inner.as_bytes(),
+    )
+    .unwrap()
+    .to_armored_string(ArmorOptions::default())
+    .unwrap();
+    format!(
+        "{outer}Subject: x\r\nMIME-Version: 1.0\r\n\
+Content-Type: multipart/signed; micalg=pgp-sha256; protocol=\"application/pgp-signature\"; boundary=\"b\"\r\n\r\n\
+--b\r\n{inner}\r\n--b\r\nContent-Type: application/pgp-signature\r\n\r\n{}\r\n--b--\r\n",
+        signature.replace('\n', "\r\n")
+    )
+    .into_bytes()
+}
+
+#[test]
+fn signer_is_bound_to_the_displayed_from_only() {
+    let carol = secret_fixture("carol.sec.asc");
+    let env = Env::with(&["carol.pub.asc"]);
+    let ceo = "From: CEO <ceo@bank.example>\r\n";
+
+    // A From inside the signed part without a header-protection marker is
+    // not what the reader shows: the signer does not match.
+    let raw = signed_part_with(
+        &carol,
+        ceo,
+        "From: carol@example.com\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\nSigned text.",
+    );
+    let outcome = env.read(&raw);
+    let status = outcome.status.unwrap();
+    let sig = &status.signatures[0];
+    assert_eq!(sig.state, SignatureState::Valid);
+    assert_eq!(sig.signer.as_deref(), Some("carol@example.com"));
+    assert!(!sig.signer_matches_from, "{sig:?}");
+    assert_eq!(status.header_protection, HeaderProtection::None);
+    let display = String::from_utf8(outcome.display.unwrap()).unwrap();
+    assert!(display.contains("From: CEO <ceo@bank.example>"));
+
+    // With protected headers the reader shows the signed From: it matches
+    // (and the disagreement is reported as a mismatch).
+    let raw = signed_part_with(
+        &carol,
+        ceo,
+        "From: carol@example.com\r\nContent-Type: text/plain; charset=us-ascii; protected-headers=\"v1\"\r\n\r\nSigned text.",
+    );
+    let outcome = env.read(&raw);
+    let status = outcome.status.unwrap();
+    assert!(status.signatures[0].signer_matches_from);
+    assert_eq!(status.header_protection, HeaderProtection::Mismatch);
+    let display = String::from_utf8(outcome.display.unwrap()).unwrap();
+    assert!(display.contains("From: carol@example.com") && !display.contains("ceo@bank"));
+
+    // Several From addresses: only the first counts (as for S/MIME).
+    let inner = "Content-Type: text/plain; charset=us-ascii\r\n\r\nSigned text.";
+    let first = signed_part_with(
+        &carol,
+        "From: carol@example.com, ceo@bank.example\r\n",
+        inner,
+    );
+    assert!(env.status(&first).signatures[0].signer_matches_from);
+    let second = signed_part_with(
+        &carol,
+        "From: ceo@bank.example, carol@example.com\r\n",
+        inner,
+    );
+    assert!(!env.status(&second).signatures[0].signer_matches_from);
+}
+
+#[test]
+fn encrypted_signer_is_bound_to_the_outer_from_without_protected_headers() {
+    use pgp::composed::MessageBuilder;
+    use pgp::crypto::sym::SymmetricKeyAlgorithm;
+    let carol = secret_fixture("carol.sec.asc");
+    let env = Env::with(&["bob.sec.asc", "carol.pub.asc"]);
+    let bob_stored = env
+        .store
+        .keys_for_email("bob@example.net", None)
+        .unwrap()
+        .remove(0);
+    let bob = env.keyring().public_key(&bob_stored).unwrap();
+    let encrypt_to = |inner: &str| {
+        let mut rng = rand::thread_rng();
+        let mut builder = MessageBuilder::from_bytes("", inner.as_bytes().to_vec())
+            .seipd_v1(&mut rng, SymmetricKeyAlgorithm::AES256);
+        builder
+            .encrypt_to_key(&mut rng, &bob.public_subkeys[0].key)
+            .unwrap();
+        builder.sign(&carol.primary_key, Password::empty(), HashAlgorithm::Sha256);
+        let armored = builder
+            .to_armored_string(&mut rng, ArmorOptions::default())
+            .unwrap();
+        format!(
+            "From: CEO <ceo@bank.example>\r\nSubject: x\r\nMIME-Version: 1.0\r\n\
+Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"e\"\r\n\r\n\
+--e\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n\r\n\
+--e\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--e--\r\n",
+            armored.replace('\n', "\r\n")
+        )
+        .into_bytes()
+    };
+    let raw = encrypt_to("From: carol@example.com\r\nContent-Type: text/plain\r\n\r\nhi");
+    let status = env.status(&raw);
+    assert_eq!(
+        status.encryption.as_ref().unwrap().state,
+        DecryptionState::Decrypted
+    );
+    let sig = &status.signatures[0];
+    assert_eq!(sig.state, SignatureState::Valid);
+    assert!(!sig.signer_matches_from, "{sig:?}");
+    // Protected headers make the inner From the displayed one.
+    let raw = encrypt_to(
+        "From: carol@example.com\r\nContent-Type: text/plain; protected-headers=\"v1\"\r\n\r\nhi",
+    );
+    assert!(env.status(&raw).signatures[0].signer_matches_from);
+}
+
 fn secret_fixture(name: &str) -> pgp::composed::SignedSecretKey {
     let (keys, _) = parse_keys(&fixture(name));
     match keys.into_iter().next().unwrap() {

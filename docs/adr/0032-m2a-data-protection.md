@@ -150,7 +150,9 @@ the newest trusted `ARC-Authentication-Results`. `aligned` uses relaxed
 alignment with an approximated organizational domain (no Public Suffix
 List; private suffixes like `github.io` count as organizations —
 informational only, the server's DMARC verdict decides).
-`learn_authserv_id` proposes the id that is on top in most recent mail.
+`learn_authserv_id` proposes the id that is on top in most recent mail
+(*changed by ADR 0035:* bound to the receiving server's `Received` host,
+and only a suggestion the user saves).
 
 ## Decision 8: link and attachment safety (`nail_mime::links`)
 

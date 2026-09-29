@@ -58,6 +58,8 @@ save_sent_copy: boolean | null,
 /**
  * `authserv-id` values of the account's own receiving servers (M2a):
  * only `Authentication-Results` headers from these produce the sender
- * check badge (RFC 8601 §5). Empty = learned from recent mail.
+ * check badge (RFC 8601 §5). Empty = no badge; ids are never
+ * trusted without being configured here
+ * ([`crate::Request::SuggestAuthservId`] proposes one).
  */
 authserv_ids?: Array<string>, };

@@ -3,7 +3,8 @@
 //!
 //! Anyone can write an `Authentication-Results` header, so only headers
 //! from a **trusted** `authserv-id` (the account's own receiving server,
-//! configured or learned with [`learn_authserv_id`]) produce a result, and
+//! configured by the user; [`learn_authserv_id`] only suggests one) produce
+//! a result, and
 //! of those only the ones in the receiving server's own block:
 //!
 //! * the topmost header with a trusted id, plus further trusted headers
@@ -392,10 +393,49 @@ fn address_in(value: &str) -> Option<String> {
         })
 }
 
-/// The `authserv-id` of the receiving server, learned from recent mail of
-/// the account (header lists of messages it received, newest first): the
-/// id of the topmost `Authentication-Results` header, when the same id is
-/// on top in at least `min_share` (0..=1) of at least three messages.
+/// The host after `by` in a `Received` value, when it is a DNS name (not
+/// an address literal).
+fn received_by(value: &str) -> Option<String> {
+    let mut words = value.split_whitespace();
+    while let Some(word) = words.next() {
+        if !word.eq_ignore_ascii_case("by") {
+            continue;
+        }
+        let host = words.next()?.trim_end_matches([';', ',']);
+        let is_name = host.contains('.')
+            && host.chars().any(|c| c.is_ascii_alphabetic())
+            && !host.contains([':', '[', ']']);
+        return if is_name {
+            domain::normalize_host(host)
+        } else {
+            None
+        };
+    }
+    None
+}
+
+/// The receiving server of a message: the `by` host of the topmost
+/// (newest) `Received` header that names one by DNS name. That header was
+/// added by the account's own mail system, never by the sender.
+fn receiving_host(headers: &[(String, String)]) -> Option<String> {
+    headers
+        .iter()
+        .filter(|(n, _)| n.eq_ignore_ascii_case("Received"))
+        .find_map(|(_, v)| received_by(v))
+}
+
+/// A **suggestion** for the `authserv-id` of an account's receiving
+/// server, from recent mail of the account (header lists of messages it
+/// received, newest first): the id of the topmost `Authentication-Results`
+/// header, when the same id is on top in at least `min_share` (0..=1) of
+/// at least three messages. A message only counts for an id that belongs
+/// to its receiving server (same organizational domain as the `by` host of
+/// its newest `Received` header), so ids made up by senders
+/// (`mx.attacker.example`) are not proposed.
+///
+/// This is never trusted by itself: when the receiving server adds no
+/// `Authentication-Results`, a sender can still name the server's own
+/// domain. The user confirms it (it becomes the configured `authserv-id`).
 pub fn learn_authserv_id<'a>(
     messages: impl IntoIterator<Item = &'a [(String, String)]>,
     min_share: f64,
@@ -409,11 +449,14 @@ pub fn learn_authserv_id<'a>(
             .find(|(n, _)| n.eq_ignore_ascii_case("Authentication-Results"))
             .and_then(|(_, v)| parse_header(v))
             .map(|p| p.authserv_id);
-        if let Some(id) = top {
-            match counts.iter_mut().find(|(i, _)| *i == id) {
-                Some((_, n)) => *n += 1,
-                None => counts.push((id, 1)),
-            }
+        let receiver = receiving_host(headers);
+        let Some(id) = top.filter(|id| receiver.as_deref().is_some_and(|r| domain::aligned(id, r)))
+        else {
+            continue;
+        };
+        match counts.iter_mut().find(|(i, _)| i.eq_ignore_ascii_case(&id)) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((id, 1)),
         }
     }
     if total < 3 {
@@ -663,7 +706,10 @@ From: \"Ada\" <ada@mail.example.org>\r\nSubject: hi\r\n\r\nbody";
     fn learns_the_receiving_servers_id() {
         let top = |id: &str| {
             vec![
-                h("Received", "x"),
+                h(
+                    "Received",
+                    "from mail.sender.example (mail.sender.example [192.0.2.1]) by mx1.example.net with ESMTPS; Tue, 29 Sep 2026 08:00:00 +0000",
+                ),
                 h("Authentication-Results", &format!("{id}; spf=pass")),
                 h("Authentication-Results", "upstream.example; dkim=pass"),
             ]
@@ -683,6 +729,52 @@ From: \"Ada\" <ada@mail.example.org>\r\nSubject: hi\r\n\r\nbody";
             learn_authserv_id(vec![&a[..], &b[..]], 0.5),
             None,
             "too few"
+        );
+    }
+
+    #[test]
+    fn ids_made_up_by_senders_are_not_suggested() {
+        // The receiving server adds no results; every message carries the
+        // sender's own forged header below the server's Received line.
+        let forged = vec![
+            h(
+                "Received",
+                "from evil.example by mail.small.example with ESMTP; Tue, 29 Sep 2026",
+            ),
+            h(
+                "Authentication-Results",
+                "mx.attacker.example; dkim=pass; dmarc=pass header.from=bank.example",
+            ),
+        ];
+        let msgs: Vec<&[(String, String)]> = vec![&forged; 20];
+        assert_eq!(learn_authserv_id(msgs, 0.8), None);
+        // Without any Received header there is no receiving server.
+        let bare = [h("Authentication-Results", "mx.example.net; spf=pass")];
+        assert_eq!(learn_authserv_id(vec![&bare[..]; 5], 0.8), None);
+        // An address literal after "by" does not name the server; the next
+        // Received with a DNS name does (Gmail-style internal hop on top).
+        let gmail = [
+            h(
+                "Received",
+                "by 2002:a05:7300:1234 with SMTP id x; Tue, 29 Sep 2026",
+            ),
+            h(
+                "Received",
+                "from mail.sender.example by mx.google.com with ESMTPS id y",
+            ),
+            h(
+                "Authentication-Results",
+                "mx.google.com; dkim=pass header.d=sender.example",
+            ),
+        ];
+        assert_eq!(
+            learn_authserv_id(vec![&gmail[..]; 3], 0.8).as_deref(),
+            Some("mx.google.com")
+        );
+        assert_eq!(received_by("from x by [192.0.2.1]"), None);
+        assert_eq!(
+            received_by("from x (y) BY Mx.Example.NET;"),
+            Some("mx.example.net".into())
         );
     }
 }

@@ -230,7 +230,7 @@ M2 runs as four waves (four workflows), each shaped like the M1 waves: contract 
 
 ### Wave M2a — End-to-end encryption and data protection
 
-**Status:** WP30–WP35 done (ADRs 0029–0034); automated suites green (cargo, Vitest, Playwright incl. `e2e/tests/security.spec.ts`). Next: the two reviews (one security), fixes, independent verify; the M2 human security review gate stays open.
+**Status:** WP30–WP35 done (ADRs 0029–0034); automated suites green (cargo, Vitest, Playwright incl. `e2e/tests/security.spec.ts`). Review findings fixed (ADR 0035): Autocrypt keys bound to their header's address with per-address trust, signers bound to the displayed `From`, the MCP `encrypted` gate follows the reader, drafts of mail that goes out encrypted (defaults, Autocrypt) stay off the server and earlier plain copies are removed, `authserv-id` trusted only when configured (new `SuggestAuthservId` + account settings "Sender checks"). Next: independent verify; the M2 human security review gate stays open.
 
 #### WP30 — Contract (sequential)
 *Done (ADR 0029):* protocol module `nail_api::security` (+ optional fields on `MessageBody`, `Identity`, `Draft`, `SendDraft`; error codes `locked`, `no_key`, `crypto`), identity `crypto` node in `accounts.kdl`, store v5 with tested accessors (keyring, trust, Autocrypt peers, vault state, message security, settings), stub crates with library smoke tests, slots for WP31–WP34 (incl. `nail-mime` modules and `corpus/crypto/{pgp,smime}`). The core serves the security settings and vault status; other security requests answer `unsupported`, and sign / encrypt on send is refused until WP35.
@@ -264,6 +264,7 @@ Core wiring: decrypt/verify on read (never persist decrypted bodies unless the i
 - **Autocrypt learns only from mail that arrives after a folder's first sync** (the rule inbox); an initial import of old mail does not build peer state.
 - **Partial sends**: when a Bcc copy fails after the visible copy went out, a retry sends the visible copy again.
 - Encryption-at-rest default (on / off) is still the owner's decision; it ships off.
+- **`authserv-id` suggestions** (ADR 0035) can still name the receiving server's own domain when the provider adds no `Authentication-Results` and does not strip forged ones; the user confirms by saving, and the docs say to check the message source first.
 
 ### Wave M2b — Remote UI hardening, installer and CI
 

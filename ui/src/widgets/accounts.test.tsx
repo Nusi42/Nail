@@ -1,8 +1,9 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AccountConfig, DiscoveredAccount } from "../api/generated";
+import { securityDemoBySender } from "../features/security/mock";
 import { createEnv, renderNode, widget, type Env } from "../test/harness";
-import { accountProblems, newIdentity } from "./AccountSettings";
+import { accountProblems, newIdentity, parseAuthservIds } from "./AccountSettings";
 import {
   accountSignIn,
   configFrom,
@@ -276,6 +277,52 @@ describe("account-settings", () => {
     expect(env.transport.data.accounts.map((a) => a.id)).toEqual(["acc-work"]);
     await user.click(screen.getByRole("button", { name: "Add account" }));
     expect(env.store.getState().windows).toEqual(["account-setup"]);
+  });
+
+  it("edits the trusted receiving servers, with a suggestion to confirm", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    env.transport.data.features.security.bySender = securityDemoBySender();
+    renderNode(widget("account-settings"), env);
+    const list = await screen.findByRole("list", { name: "Accounts" });
+    await user.click(await within(list).findByRole("button", { name: /Work/ }));
+    const field = screen.getByRole("textbox", { name: "Trusted receiving servers (authserv-id)" });
+    expect(field).toHaveValue("");
+    expect(field).toHaveAccessibleDescription(/only for results from these servers/);
+    await user.click(screen.getByRole("button", { name: "Suggest from recent mail" }));
+    await waitFor(() => expect(field).toHaveValue("imap.example.org"));
+    expect(screen.getByRole("status")).toHaveTextContent(/Compare it with the source/);
+    // Nothing is trusted until the user saves.
+    expect(env.transport.requests.some((r) => r.type === "UpdateAccount")).toBe(false);
+    await user.type(field, ", mx2.work.example");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
+    const update = env.transport.requests.find((r) => r.type === "UpdateAccount");
+    expect(update?.type === "UpdateAccount" && update.config.authserv_ids).toEqual([
+      "imap.example.org",
+      "mx2.work.example",
+    ]);
+    // A second suggestion does not add the id twice.
+    await user.click(screen.getByRole("button", { name: "Suggest from recent mail" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(/Compare it with the source/),
+    );
+    expect(field).toHaveValue("imap.example.org, mx2.work.example");
+  });
+
+  it("says when recent mail suggests no receiving server", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    renderNode(widget("account-settings"), env);
+    await screen.findByRole("textbox", { name: "Account name" });
+    await user.click(screen.getByRole("button", { name: "Suggest from recent mail" }));
+    expect(
+      await screen.findByText("Your recent mail names no receiving server Nail could suggest."),
+    ).toBeInTheDocument();
+    expect(parseAuthservIds(" a.example,b.example  a.example ")).toEqual([
+      "a.example",
+      "b.example",
+    ]);
   });
 
   it("shows POP3 options for POP3 accounts", async () => {

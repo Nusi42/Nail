@@ -928,16 +928,46 @@ impl<'a> Keyring<'a> {
             .ok_or_else(|| Error::NoKey(format!("no own OpenPGP key for {email}")))
     }
 
+    /// The trust of a key **for one address**. Autocrypt vouches only for
+    /// the binding of a key to the address of its header: a key learned
+    /// from Autocrypt (gossip) has that level only for an address whose
+    /// peer record (in any account) names it; for every other address of
+    /// the key it is `unknown`. User decisions and own keys apply to all
+    /// addresses ([`effective_trust`]).
+    pub fn trust_for(&self, key: &StoredKey, email: &str) -> Result<TrustLevel> {
+        let base = effective_trust(key);
+        if !matches!(base, TrustLevel::Autocrypt | TrustLevel::AutocryptGossip) {
+            return Ok(base);
+        }
+        let fingerprint = &key.data.fingerprint;
+        let names = |f: &Option<String>| {
+            f.as_deref()
+                .is_some_and(|f| f.eq_ignore_ascii_case(fingerprint))
+        };
+        let peers = self.store.autocrypt_peers_for_email(email)?;
+        let level = if peers.iter().any(|p| names(&p.key_fingerprint)) {
+            TrustLevel::Autocrypt
+        } else if peers.iter().any(|p| names(&p.gossip_fingerprint)) {
+            TrustLevel::AutocryptGossip
+        } else {
+            TrustLevel::Unknown
+        };
+        Ok(level.min(base))
+    }
+
     /// The best OpenPGP key of a recipient: usable keys first, then by
-    /// trust, then the newest. `None` when there is no key at all.
+    /// trust for this address ([`Self::trust_for`]), then the newest.
+    /// `None` when there is no key at all.
     pub fn recipient_key(&self, email: &str) -> Result<Option<(RecipientKey, StoredKey)>> {
         let now = self.now();
-        let mut candidates: Vec<(RecipientKey, StoredKey)> = self
+        let email = email.trim().to_lowercase();
+        let mut candidates: Vec<(RecipientKey, StoredKey)> = Vec::new();
+        for k in self
             .store
-            .keys_for_email(email, Some(CryptoTechnology::OpenPgp))?
-            .into_iter()
-            .map(|k| {
-                let trust = effective_trust(&k);
+            .keys_for_email(&email, Some(CryptoTechnology::OpenPgp))?
+        {
+            let trust = self.trust_for(&k, &email)?;
+            candidates.push({
                 let state = if k.data.revoked {
                     RecipientKeyState::Revoked
                 } else if k.data.expires_at.is_some_and(|e| e <= now) {
@@ -959,8 +989,8 @@ impl<'a> Keyring<'a> {
                     },
                     k,
                 )
-            })
-            .collect();
+            });
+        }
         candidates.sort_by_key(|(r, k)| {
             (
                 r.state == RecipientKeyState::Usable,

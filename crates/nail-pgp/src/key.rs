@@ -659,6 +659,58 @@ pub fn minimal_for(key: &SignedPublicKey, addr: &str, now: i64) -> Result<Signed
     ))
 }
 
+/// The key restricted to `addr`, for a key learned from an `Autocrypt` or
+/// `Autocrypt-Gossip` header: only the user ids for `addr` that carry a
+/// valid self-certification are kept (with all their self-signatures, so
+/// revocations stay); every other user id and user attribute is dropped.
+/// The header only vouches for the binding of the key to `addr`, so no
+/// other address may be learned from it. [`Error::Invalid`] when the key
+/// has no valid user id for `addr`.
+pub fn bind_to_address(key: &SignedPublicKey, addr: &str) -> Result<SignedPublicKey> {
+    let addr = addr.trim().to_lowercase();
+    let primary = &key.primary_key;
+    let users: Vec<_> = key
+        .details
+        .users
+        .iter()
+        .filter(|u| {
+            u.id.as_str()
+                .and_then(email_of_user_id)
+                .is_some_and(|e| e == addr)
+        })
+        .filter(|u| {
+            u.signatures.iter().any(|s| {
+                s.typ() != Some(SignatureType::CertRevocation)
+                    && s.verify_certification(primary, Tag::UserId, &u.id).is_ok()
+            })
+        })
+        .map(|u| {
+            let signatures = u
+                .signatures
+                .iter()
+                .filter(|s| s.verify_certification(primary, Tag::UserId, &u.id).is_ok())
+                .cloned()
+                .collect();
+            pgp::types::SignedUser::new(u.id.clone(), signatures)
+        })
+        .collect();
+    if users.is_empty() {
+        return Err(Error::Invalid(format!(
+            "the key has no valid user id for {addr}"
+        )));
+    }
+    Ok(SignedPublicKey::new(
+        primary.clone(),
+        SignedKeyDetails::new(
+            key.details.revocation_signatures.clone(),
+            key.details.direct_signatures.clone(),
+            users,
+            Vec::new(),
+        ),
+        key.public_subkeys.clone(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -795,6 +847,61 @@ mod tests {
         assert!(info.can_encrypt(NOW));
         // Unknown address: falls back to the primary user id.
         assert!(minimal_for(&alice, "other@example.org", NOW).is_ok());
+    }
+
+    /// A fresh Ed25519 key with several user ids (the first is primary).
+    fn multi_uid_key(user_ids: &[&str]) -> SignedPublicKey {
+        use pgp::composed::{KeyType, SecretKeyParamsBuilder};
+        let mut builder = SecretKeyParamsBuilder::default();
+        builder
+            .key_type(KeyType::Ed25519Legacy)
+            .can_certify(true)
+            .can_sign(true)
+            .primary_user_id(user_ids[0].to_owned());
+        for extra in &user_ids[1..] {
+            builder.user_id(*extra);
+        }
+        builder
+            .build()
+            .unwrap()
+            .generate(rand::thread_rng())
+            .unwrap()
+            .to_public_key()
+    }
+
+    #[test]
+    fn autocrypt_keys_are_bound_to_their_address() {
+        let key = multi_uid_key(&["CEO <ceo@bank.example>", "Mallory <Mallory@Evil.example>"]);
+        assert_eq!(
+            KeyInfo::analyze(&key).unwrap().emails,
+            vec!["ceo@bank.example", "mallory@evil.example"]
+        );
+        // Only the header's address survives.
+        let bound = bind_to_address(&key, "mallory@evil.example").unwrap();
+        let info = KeyInfo::analyze(&bound).unwrap();
+        assert_eq!(info.emails, vec!["mallory@evil.example"]);
+        assert_eq!(
+            info.fingerprint,
+            KeyInfo::analyze(&key).unwrap().fingerprint
+        );
+        // A key without a user id for the address is refused.
+        assert!(matches!(
+            bind_to_address(&key, "other@evil.example"),
+            Err(Error::Invalid(_))
+        ));
+        // A user id whose self-signature does not verify does not count.
+        let mut forged = key.clone();
+        let foreign = multi_uid_key(&["x@evil.example"]);
+        forged.details.users[1].signatures = foreign.details.users[0].signatures.clone();
+        assert!(bind_to_address(&forged, "mallory@evil.example").is_err());
+        // Revocations of the key are kept.
+        let eve = public("eve.pub.asc");
+        let eve_addr = KeyInfo::analyze(&eve).unwrap().emails[0].clone();
+        assert!(
+            KeyInfo::analyze(&bind_to_address(&eve, &eve_addr).unwrap())
+                .unwrap()
+                .revoked
+        );
     }
 
     #[test]

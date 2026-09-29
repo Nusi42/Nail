@@ -20,9 +20,8 @@
 //!   encrypted mail, from the gossip inside; decrypted indexing for
 //!   accounts that opted in.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 use nail_api::engine::{BoxFuture, EngineError, Envelope};
 use nail_api::security::{
@@ -40,21 +39,14 @@ use nail_store::{MessageSecurityRecord, StoredKey};
 
 use crate::engine::unix_now;
 use crate::error::{CoreError, Result};
-use crate::service::{Service, ServiceOptions, lock};
+use crate::service::{Service, ServiceOptions};
 
-/// How often the core tries to learn an account's `authserv-id` from its
-/// mail when none is configured.
-const LEARN_AUTHSERV_EVERY: Duration = Duration::from_secs(600);
-
-/// Recent inbox messages looked at to learn the `authserv-id`.
+/// Recent inbox messages looked at to suggest the `authserv-id`.
 const LEARN_AUTHSERV_SAMPLE: u32 = 20;
 
 /// Share of those messages whose topmost `Authentication-Results` must
 /// name the same server.
 const LEARN_AUTHSERV_SHARE: f64 = 0.8;
-
-/// `app_settings` key of a learned `authserv-id` (`<prefix><account>`).
-const LEARNED_AUTHSERV_KEY: &str = "authserv-id/";
 
 /// State of end-to-end encryption, one per service.
 pub(crate) struct CryptoState {
@@ -66,8 +58,6 @@ pub(crate) struct CryptoState {
     pub(crate) anchors: Arc<dyn nail_smime::TrustAnchors>,
     /// HTTPS for WKD / keys.openpgp.org.
     pub(crate) http: Arc<dyn HttpClient>,
-    /// Last attempt to learn an account's `authserv-id`.
-    learned: Mutex<HashMap<AccountId, Instant>>,
 }
 
 impl CryptoState {
@@ -85,7 +75,6 @@ impl CryptoState {
             smime_unlock: nail_smime::keyring::UnlockCache::new(),
             anchors,
             http,
-            learned: Mutex::new(HashMap::new()),
         })
     }
 }
@@ -280,16 +269,51 @@ pub(crate) fn content_entity(raw: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Whether a raw message is end-to-end encrypted: PGP/MIME, S/MIME
-/// enveloped data, or an inline PGP message.
+/// A cheap first look whether a raw message is end-to-end encrypted:
+/// PGP/MIME, S/MIME enveloped data, or an inline PGP message at the start
+/// of a line. Used to pick messages for decrypted indexing and rules; it
+/// can miss unusual wrappings, so access control never relies on it (see
+/// [`Service::message_is_encrypted`]).
 pub(crate) fn is_encrypted_raw(raw: &[u8]) -> bool {
-    if nail_mcp::core_data::is_encrypted_mime(raw) {
+    if encrypted_content_type(raw) || has_inline_pgp_message(raw) {
         return true;
     }
     matches!(
         nail_smime::mime::classify(raw),
         SmimeKind::EnvelopedData | SmimeKind::AuthEnvelopedData
     )
+}
+
+/// An armored OpenPGP message at the start of a line anywhere in the raw
+/// message.
+fn has_inline_pgp_message(raw: &[u8]) -> bool {
+    const ARMOR: &[u8] = b"-----BEGIN PGP MESSAGE-----";
+    raw.windows(ARMOR.len())
+        .enumerate()
+        .any(|(i, w)| w == ARMOR && (i == 0 || raw[i - 1] == b'\n'))
+}
+
+/// The top-level `Content-Type` is an encrypted type.
+fn encrypted_content_type(raw: &[u8]) -> bool {
+    let header_end = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .or_else(|| raw.windows(2).position(|w| w == b"\n\n"))
+        .unwrap_or(raw.len());
+    let headers = String::from_utf8_lossy(&raw[..header_end]).to_ascii_lowercase();
+    // Unfold continuation lines, then find the Content-Type header.
+    let unfolded = headers
+        .replace("\r\n", "\n")
+        .replace("\n ", " ")
+        .replace("\n\t", " ");
+    unfolded.lines().any(|line| {
+        line.strip_prefix("content-type:").is_some_and(|value| {
+            let value = value.trim();
+            value.starts_with("multipart/encrypted")
+                || value.starts_with("application/pkcs7-mime")
+                || value.starts_with("application/x-pkcs7-mime")
+        })
+    })
 }
 
 fn first_from(raw: &[u8]) -> Option<String> {
@@ -412,61 +436,73 @@ impl Service {
         (opened.display.unwrap_or(raw), opened.status)
     }
 
-    /// The `authserv-id`s whose results count for `account`: configured
-    /// (`authserv-id` in `accounts.kdl`), else learned from its recent
-    /// inbox mail and remembered (blocking).
-    pub(crate) fn trusted_authserv_ids(&self, account: &AccountId) -> Vec<String> {
-        if let Some(config) = self.inner.accounts.config().account(account)
-            && !config.authserv_ids.is_empty()
-        {
-            return config.authserv_ids.clone();
-        }
-        let key = format!("{LEARNED_AUTHSERV_KEY}{account}");
+    /// Whether the reader treats a message as end-to-end encrypted: its
+    /// security status reports encryption (blocking). This is what the MCP
+    /// `encrypted` grant is enforced with, so it comes from the reader
+    /// itself ([`open_message`], the same code `GetMessage` runs), never
+    /// from a byte heuristic: every wrapping the reader decrypts counts
+    /// (inline PGP in an encoded or quoted text part, relabelled or signed
+    /// S/MIME envelopes). A cached status or the cheap [`is_encrypted_raw`]
+    /// saying "encrypted" answers early (they can only add gating, never
+    /// remove it). A message whose body is not downloaded has no content to
+    /// reveal: `false`.
+    pub(crate) fn message_is_encrypted(&self, id: &MessageId) -> Result<bool> {
         let store = self.store();
-        if let Ok(Some(id)) = store.setting::<String>(&key) {
-            return vec![id];
-        }
+        if store
+            .message_security(id)?
+            .and_then(|r| r.status)
+            .is_some_and(|s| s.is_encrypted())
         {
-            let mut attempts = lock(&self.inner.crypto.learned);
-            if attempts
-                .get(account)
-                .is_some_and(|at| at.elapsed() < LEARN_AUTHSERV_EVERY)
-            {
-                return Vec::new();
-            }
-            attempts.insert(account.clone(), Instant::now());
+            return Ok(true);
         }
-        let learned = (|| -> Result<Option<String>> {
-            let Some(inbox) = store.folder_with_role(account, FolderRole::Inbox)? else {
-                return Ok(None);
-            };
-            let page = store.list_messages(&inbox, 0, LEARN_AUTHSERV_SAMPLE)?;
-            let mut headers = Vec::new();
-            for summary in &page.messages {
-                let message = store.get_message(&summary.id)?;
-                if let Some(raw) = message.blob_hash.and_then(|h| self.blobs().get(&h).ok()) {
-                    headers.push(nail_mime::header_fields(&raw));
-                }
-            }
-            Ok(nail_mime::auth_results::learn_authserv_id(
-                headers.iter().map(Vec::as_slice),
-                LEARN_AUTHSERV_SHARE,
-            ))
-        })();
-        match learned {
-            Ok(Some(id)) => {
-                tracing::info!(%account, authserv_id = %id, "learned the receiving server's authserv-id");
-                if let Err(err) = store.set_setting(&key, &id) {
-                    tracing::debug!(%err, "cannot remember the authserv-id");
-                }
-                vec![id]
-            }
-            Ok(None) => Vec::new(),
-            Err(err) => {
-                tracing::debug!(%err, "cannot learn the authserv-id");
-                Vec::new()
+        let Some(hash) = store.get_message(id)?.blob_hash else {
+            return Ok(false);
+        };
+        let raw = self.blobs().get(&hash)?;
+        if is_encrypted_raw(&raw) {
+            return Ok(true);
+        }
+        Ok(open_message(self, &raw)
+            .status
+            .is_some_and(|s| s.is_encrypted()))
+    }
+
+    /// The `authserv-id`s whose results count for `account`: only the
+    /// configured ones (`authserv-id` in `accounts.kdl`). An id learned from
+    /// mail is never trusted by itself (a sender can write any
+    /// `Authentication-Results` header when the receiving server adds
+    /// none); [`Self::suggest_authserv_id`] proposes one for the user to
+    /// confirm.
+    pub(crate) fn trusted_authserv_ids(&self, account: &AccountId) -> Vec<String> {
+        self.inner
+            .accounts
+            .config()
+            .account(account)
+            .map(|config| config.authserv_ids.clone())
+            .unwrap_or_default()
+    }
+
+    /// `SuggestAuthservId`: the id on top of most of the account's recent
+    /// inbox mail and bound to the server that received it
+    /// ([`nail_mime::auth_results::learn_authserv_id`]); computed on
+    /// request, never stored or trusted (blocking).
+    pub(crate) fn suggest_authserv_id(&self, account: &AccountId) -> Result<Option<String>> {
+        let store = self.store();
+        let Some(inbox) = store.folder_with_role(account, FolderRole::Inbox)? else {
+            return Ok(None);
+        };
+        let page = store.list_messages(&inbox, 0, LEARN_AUTHSERV_SAMPLE)?;
+        let mut headers = Vec::new();
+        for summary in &page.messages {
+            let message = store.get_message(&summary.id)?;
+            if let Some(raw) = message.blob_hash.and_then(|h| self.blobs().get(&h).ok()) {
+                headers.push(nail_mime::header_fields(&raw));
             }
         }
+        Ok(nail_mime::auth_results::learn_authserv_id(
+            headers.iter().map(Vec::as_slice),
+            LEARN_AUTHSERV_SHARE,
+        ))
     }
 
     /// Applies a received message to the Autocrypt state of `account`

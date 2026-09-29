@@ -72,6 +72,15 @@ impl CoreAccess for FakeCore {
     fn emit(&self, event: Event) {
         self.events.lock().unwrap().push(event);
     }
+
+    async fn is_encrypted(&self, id: &MessageId) -> Result<bool, ApiError> {
+        // The core answers from its reader; the fake knows m3.
+        self.requests
+            .lock()
+            .unwrap()
+            .push(format!("is_encrypted {id}"));
+        Ok(id.as_str() == "m3")
+    }
 }
 
 fn core(dir: &std::path::Path) -> FakeCore {
@@ -135,8 +144,17 @@ async fn core_data_reads_through_requests_store_and_blobs() {
         ErrorCode::NotFound
     );
 
+    // The encrypted gate is the core's answer (its reader), not a guess
+    // from the raw bytes.
     assert!(!data.is_encrypted(&m1).await.unwrap());
     assert!(data.is_encrypted(&"m3".into()).await.unwrap());
+    assert!(
+        data.0
+            .requests
+            .lock()
+            .unwrap()
+            .contains(&"is_encrypted m3".to_owned())
+    );
     assert_eq!(
         data.message_summary(&"nope".into()).await.unwrap_err().code,
         ErrorCode::NotFound

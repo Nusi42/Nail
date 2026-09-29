@@ -889,6 +889,7 @@ impl Service {
             | Request::ImportAutocryptSetup { .. }
             | Request::GetSecuritySettings
             | Request::UpdateSecuritySettings { .. }
+            | Request::SuggestAuthservId { .. }
             | Request::GetVaultStatus
             | Request::SetVaultEncryption { .. }) => crate::security::handle(self, request).await?,
         })

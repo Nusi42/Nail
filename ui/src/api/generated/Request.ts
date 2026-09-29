@@ -595,7 +595,11 @@ passcode: string, } | { "type": "GetSecuritySettings" } | { "type": "UpdateSecur
 /**
  * The new settings.
  */
-settings: SecuritySettings, } | { "type": "GetVaultStatus" } | { "type": "SetVaultEncryption", 
+settings: SecuritySettings, } | { "type": "SuggestAuthservId", 
+/**
+ * The account.
+ */
+account_id: AccountId, } | { "type": "GetVaultStatus" } | { "type": "SetVaultEncryption", 
 /**
  * `true` = encrypt, `false` = decrypt.
  */

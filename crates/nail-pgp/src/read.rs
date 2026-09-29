@@ -75,11 +75,12 @@ impl Component<'_> {
     }
 }
 
-struct Verifier {
+struct Verifier<'k, 'a> {
+    keyring: &'k Keyring<'a>,
     keys: Vec<(StoredKey, SignedPublicKey, KeyInfo)>,
 }
 
-impl Verifier {
+impl Verifier<'_, '_> {
     fn find(&self, sig: &Signature) -> Option<(usize, Component<'_>)> {
         let fingerprints = sig.issuer_fingerprint();
         let ids = sig.issuer_key_id();
@@ -101,8 +102,38 @@ impl Verifier {
         None
     }
 
+    /// Binds a signature to the displayed sender: `from` is the address
+    /// the reader shows (at most one, see [`displayed_from`]). Sets
+    /// `signer` (the key's address that matches, else its first),
+    /// `signer_matches_from` and the key's trust **for that address**
+    /// ([`Keyring::trust_for`]).
+    fn bind(&self, sig: &mut SignatureInfo, from: &[String]) {
+        let Some((stored, _, info)) = sig
+            .key_id
+            .as_ref()
+            .and_then(|id| self.keys.iter().find(|(k, _, _)| &k.id == id))
+        else {
+            sig.signer_matches_from = false;
+            return;
+        };
+        let matched = info.emails.iter().find(|e| from.contains(e));
+        sig.signer_matches_from = matched.is_some();
+        sig.signer = matched.or_else(|| info.emails.first()).cloned();
+        sig.trust = match &sig.signer {
+            Some(email) => self
+                .keyring
+                .trust_for(stored, email)
+                .unwrap_or(TrustLevel::Unknown),
+            // No address at all: Autocrypt vouched for none.
+            None => match effective_trust(stored) {
+                TrustLevel::Autocrypt | TrustLevel::AutocryptGossip => TrustLevel::Unknown,
+                other => other,
+            },
+        };
+    }
+
     /// Checks one signature; `verify` runs the cryptographic check with
-    /// the component found.
+    /// the component found; `from` as in [`Self::bind`].
     fn check(
         &self,
         sig: &Signature,
@@ -160,22 +191,18 @@ impl Verifier {
         } else {
             SignatureState::Valid
         };
-        let signer = info
-            .emails
-            .iter()
-            .find(|e| from.contains(e))
-            .or_else(|| info.emails.first())
-            .cloned();
-        SignatureInfo {
+        let mut out = SignatureInfo {
             state,
-            signer_matches_from: info.emails.iter().any(|e| from.contains(e)),
-            signer,
+            signer_matches_from: false,
+            signer: None,
             key_id: Some(stored.id.clone()),
             fingerprint: Some(info.fingerprint.clone()),
-            trust: effective_trust(stored),
+            trust: TrustLevel::Unknown,
             signed_at: signed_at.map(rfc3339),
             chain: None,
-        }
+        };
+        self.bind(&mut out, from);
+        out
     }
 }
 
@@ -214,7 +241,7 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 struct Reader<'k, 'a> {
     keyring: &'k Keyring<'a>,
-    verifier: Verifier,
+    verifier: Verifier<'k, 'a>,
 }
 
 impl Reader<'_, '_> {
@@ -502,15 +529,23 @@ fn display(outer: &Entity<'_>, inner: &Entity<'_>, protected: &[HeaderField]) ->
     out
 }
 
-/// The From addresses to compare signers with (protected From first).
-fn from_addresses(outer: &Entity<'_>, inner: Option<&Entity<'_>>) -> Vec<String> {
-    let mut out = Vec::new();
-    for entity in inner.into_iter().chain(std::iter::once(outer)) {
-        if let Some(v) = entity.header_value("From") {
-            out.extend(mime::addresses(&v, "From"));
-        }
-    }
-    out
+/// The sender address the reader shows, to bind signers to: the From of
+/// the protected header fields when the message carries protected headers
+/// (they replace the outer ones in the display), else the outer From.
+/// Only the first address counts (as for S/MIME). A `From` inside the
+/// signed or encrypted part without a header-protection marker is never
+/// used: it is not what the reader shows.
+fn displayed_from(outer: &Entity<'_>, protected: &[HeaderField]) -> Vec<String> {
+    let value = match protected.iter().find(|h| h.is("From")) {
+        Some(field) => Some(field.value()),
+        None => outer.header_value("From"),
+    };
+    value
+        .map(|v| mime::addresses(&v, "From"))
+        .unwrap_or_default()
+        .into_iter()
+        .take(1)
+        .collect()
 }
 
 fn gossip_of(inner: &Entity<'_>) -> Vec<String> {
@@ -527,6 +562,7 @@ pub fn read_message(keyring: &Keyring<'_>, raw: &[u8]) -> Result<ReadOutcome> {
     let reader = Reader {
         keyring,
         verifier: Verifier {
+            keyring,
             keys: keyring.all_public()?,
         },
     };
@@ -548,8 +584,13 @@ pub fn read_message(keyring: &Keyring<'_>, raw: &[u8]) -> Result<ReadOutcome> {
             let child_ct = child.content_type();
             if is_signed(&child_ct) {
                 let mut outcome = reader.read_signed(&outer, &child, &child_ct, None);
+                // The raw message is shown: bind signers to its From.
+                let from = displayed_from(&outer, &[]);
                 if let Some(status) = &mut outcome.status {
                     status.partial = parts.parts.len() > 1;
+                    for s in &mut status.signatures {
+                        reader.verifier.bind(s, &from);
+                    }
                 }
                 outcome.display = None;
                 return Ok(outcome);
@@ -588,7 +629,7 @@ impl Reader<'_, '_> {
             });
         };
         let payload = Entity::parse(payload);
-        let from = from_addresses(outer, None);
+        let from = displayed_from(outer, &[]);
         let decrypted = self.decrypt(payload.body, &from)?;
         let Some(plaintext) = decrypted.plaintext else {
             return Ok(ReadOutcome {
@@ -601,25 +642,30 @@ impl Reader<'_, '_> {
         // Sign-then-encrypt as nested multipart/signed (RFC 3156 §6.1).
         if is_signed(&inner_ct) {
             let mut outcome = self.read_signed(outer, &inner, &inner_ct, Some(decrypted.info));
+            // The display carries the From the reader shows.
+            let shown = outcome
+                .display
+                .as_deref()
+                .map(|d| displayed_from(&Entity::parse(d), &[]))
+                .unwrap_or_else(|| displayed_from(outer, &[]));
             if let Some(status) = &mut outcome.status {
                 let mut signatures = decrypted.signatures;
+                for s in &mut signatures {
+                    self.verifier.bind(s, &shown);
+                }
                 signatures.append(&mut status.signatures);
                 status.signatures = signatures;
             }
             return Ok(outcome);
         }
         let (protection, protected) = header_protection(outer, &inner, true);
-        let from = from_addresses(outer, Some(&inner));
-        // Re-derive signer matching with the protected From.
+        // Re-bind the signers to the From the reader shows.
+        let from = displayed_from(outer, &protected);
         let signatures = decrypted
             .signatures
             .into_iter()
             .map(|mut s| {
-                if let Some(signer) = &s.signer
-                    && from.contains(signer)
-                {
-                    s.signer_matches_from = true;
-                }
+                self.verifier.bind(&mut s, &from);
                 s
             })
             .collect();
@@ -655,9 +701,9 @@ impl Reader<'_, '_> {
             };
         };
         let inner = Entity::parse(content);
-        let from = from_addresses(outer, Some(&inner));
-        let signatures = self.verify_detached(content, signature, &from);
         let (protection, protected) = header_protection(outer, &inner, encrypted);
+        let from = displayed_from(outer, &protected);
+        let signatures = self.verify_detached(content, signature, &from);
         let mut st = status(signatures, encryption);
         st.header_protection = protection;
         ReadOutcome {
@@ -673,7 +719,7 @@ impl Reader<'_, '_> {
 
     /// Inline PGP in the text/plain root or first-level text/plain parts.
     fn read_inline(&self, outer: &Entity<'_>, raw: &[u8]) -> Result<ReadOutcome> {
-        let from = from_addresses(outer, None);
+        let from = displayed_from(outer, &[]);
         let mut found = InlineFindings::default();
         let rebuilt = self.rewrite_inline(raw, &from, &mut found, 0)?;
         if !found.any {

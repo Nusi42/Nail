@@ -73,8 +73,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        (rules.kdl, arrival / on-send / schedule / manual runs, undo), mcp.rs
                        (start_mcp_server, McpRunning), customize.rs (write-back, merge) (ADR 0027);
                        M2a: security.rs (every security request), crypto.rs (keyrings, decrypt/verify
-                       on read, sign/encrypt + Autocrypt on send, arrivals, authserv-ids), vault.rs
-                       (VaultCtl, migration with the swappable SearchSlot) (ADR 0034)
+                       on read, sign/encrypt + Autocrypt on send, arrivals, configured authserv-ids +
+                       suggestion, message_is_encrypted = the MCP `encrypted` gate), vault.rs
+                       (VaultCtl, migration with the swappable SearchSlot) (ADR 0034, fixes ADR 0035)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only)
 crates/nail-cli        `nail` binary
 app/src-tauri          Tauri 2 desktop shell (starts the MCP server; main window created in code)
