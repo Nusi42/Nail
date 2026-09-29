@@ -19,6 +19,7 @@ export type * from "./Breakpoint";
 export type * from "./ComposerMode";
 export type * from "./DiscoveredAccount";
 export type * from "./DiscoverySource";
+export type * from "./DiscoveryWarning";
 export type * from "./Draft";
 export type * from "./DraftAttachment";
 export type * from "./DraftId";

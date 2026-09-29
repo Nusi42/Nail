@@ -1,17 +1,11 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { Identity } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../layout/widgetRegistry";
 import { parseAddressList } from "../state/addresses";
-import {
-  discardComposer,
-  identityForRecipients,
-  rulesFor,
-  saveComposer,
-  sendComposer,
-} from "../state/compose";
+import { discardComposer, saveComposer, sendComposer } from "../state/compose";
 import { useComposeContext } from "../state/hooks";
-import { useIdentities, useVirtualAccounts } from "../state/queries";
+import { useChosenIdentity, useIdentities } from "../state/queries";
 import { useUi, type ComposerState } from "../state/uiStore";
 import { Icon } from "./Icon";
 
@@ -72,22 +66,24 @@ export function Composer({ node }: WidgetProps) {
   const updateComposer = useUi((s) => s.updateComposer);
   const accountId = useUi((s) => s.activeAccountId);
   const identities = useIdentities(null);
-  const virtualAccounts = useVirtualAccounts();
   const [later, setLater] = useState(false);
   const [sendAt, setSendAt] = useState("");
   const allowLater = optionBool(node, "send-later", true);
 
-  // Per-domain identity rules of the active virtual account pick the
-  // identity until the user chooses one.
+  // The core picks the identity (per-domain rules of the active virtual
+  // account, the identity a reply goes out from) until the user chooses one.
   const recipients = composer ? `${composer.to},${composer.cc},${composer.bcc}` : "";
   const picked = composer?.identityPicked ?? true;
   const currentIdentity = composer?.identityId ?? null;
+  const emails = useMemo(
+    () => parseAddressList(recipients).addresses.map((a) => a.email),
+    [recipients],
+  );
+  const chosen = useChosenIdentity(accountId, emails, composer?.inReplyTo ?? null, !picked);
   useEffect(() => {
-    if (picked || !virtualAccounts.data) return;
-    const emails = parseAddressList(recipients).addresses.map((a) => a.email);
-    const ruled = identityForRecipients(rulesFor(virtualAccounts.data, accountId), emails);
-    if (ruled !== null && ruled !== currentIdentity) updateComposer({ identityId: ruled });
-  }, [recipients, picked, currentIdentity, virtualAccounts.data, accountId, updateComposer]);
+    if (picked || chosen.data === undefined || chosen.data === null) return;
+    if (chosen.data !== currentIdentity) updateComposer({ identityId: chosen.data });
+  }, [picked, chosen.data, currentIdentity, updateComposer]);
 
   if (!composer) {
     return (

@@ -4,10 +4,18 @@
 //!
 //! * IMAP ([`ImapExecutor`]): flags with `UID STORE`, moves with `MOVE` (or
 //!   `COPY` + `\Deleted` + expunge), deletes to Trash as moves, permanent
-//!   deletes as `\Deleted` + expunge. The new UID from `COPYUID` is stored
-//!   so the target folder's next sync finds the moved row. Moves into
+//!   deletes as `\Deleted` + expunge, Sent copies with `APPEND`. Moves into
 //!   another account append the raw message there and remove it from the
-//!   source.
+//!   source; once the copy is filed the operation is rewritten to the
+//!   remaining expunge, so a retry never files it twice.
+//! * A recorded UID is only used while the folder's UIDVALIDITY is the one
+//!   it was recorded with; otherwise (or when the UID is unknown) the
+//!   message is found again by its Message-ID (ADR 0021).
+//! * The new UID a move or append reports (`COPYUID` / `APPENDUID`) goes to
+//!   the local row when it is still in that folder, and to the operations
+//!   queued after it for the same message ([`nail_store::Store::rebase_later_ops`]),
+//!   so a message moved or deleted again before the first move reached the
+//!   server is still found.
 //! * POP3 and local accounts ([`LocalExecutor`]): everything is local; a
 //!   permanent delete of a downloaded POP3 message is remembered for the
 //!   "delete when deleted locally" policy.
@@ -149,21 +157,8 @@ fn engine_error(err: CoreError) -> EngineError {
     err.into()
 }
 
-/// Where a message is now: its folder and UID (`None` = gone locally).
-async fn location(
-    service: &Service,
-    message: &MessageId,
-) -> Result<Option<(Folder, Option<u32>)>, EngineError> {
-    let id = message.clone();
-    service
-        .store()
-        .call(move |s| match s.get_message(&id) {
-            Ok(m) => Ok(Some((s.get_folder(&m.summary.folder_id)?, m.uid))),
-            Err(err) if err.is_not_found() => Ok(None),
-            Err(err) => Err(err),
-        })
-        .await
-        .map_err(|e| engine_error(e.into()))
+fn store_error(err: nail_store::Error) -> EngineError {
+    engine_error(err.into())
 }
 
 async fn folder(service: &Service, id: &nail_api::FolderId) -> Result<Folder, EngineError> {
@@ -172,29 +167,94 @@ async fn folder(service: &Service, id: &nail_api::FolderId) -> Result<Folder, En
         .store()
         .call(move |s| s.get_folder(&id))
         .await
-        .map_err(|e| engine_error(e.into()))
+        .map_err(store_error)
 }
 
-/// The UID a queued move / delete acts on: the one recorded at enqueue
-/// time, or (for a message moved again before the first move reached the
-/// server) the one the first replay learned.
-async fn source_uid(service: &Service, message: &MessageId, source: &MessageSource) -> Option<u32> {
-    if source.uid.is_some() {
-        return source.uid;
+/// Where a message is now according to its local row (folder, UID with
+/// the folder's stored UIDVALIDITY, Message-ID); `None` = gone locally.
+async fn row_location(
+    service: &Service,
+    message: &MessageId,
+) -> Result<Option<(Folder, MessageSource)>, EngineError> {
+    let id = message.clone();
+    service
+        .store()
+        .call(move |s| {
+            let m = match s.get_message(&id) {
+                Ok(m) => m,
+                Err(err) if err.is_not_found() => return Ok(None),
+                Err(err) => return Err(err),
+            };
+            let folder = s.get_folder(&m.summary.folder_id)?;
+            let uid_validity = match m.uid {
+                Some(_) => s.folder_sync_state(&folder.id)?.uidvalidity,
+                None => None,
+            };
+            let header_message_id = s.message_meta(&id)?.message_id;
+            let source = MessageSource {
+                account_id: m.summary.account_id,
+                folder_id: folder.id.clone(),
+                uid: m.uid,
+                uid_validity,
+                header_message_id,
+            };
+            Ok(Some((folder, source)))
+        })
+        .await
+        .map_err(store_error)
+}
+
+/// Where the message of `op` is on the server when `op` runs: the source
+/// recorded by the next waiting move / delete of the same message (the
+/// local row may already be further along), else its local row.
+async fn server_location(
+    service: &Service,
+    op: &QueuedOp,
+) -> Result<Option<(Folder, MessageSource)>, EngineError> {
+    let message = op.operation.message_id().clone();
+    let (id, after) = (message.clone(), op.id);
+    let next = service
+        .store()
+        .call(move |s| {
+            Ok(s.pending_ops_for_message(&id)?
+                .into_iter()
+                .filter(|o| o.id > after)
+                .find_map(|o| o.operation.source().cloned()))
+        })
+        .await
+        .map_err(store_error)?;
+    match next {
+        Some(source) => Ok(Some((folder(service, &source.folder_id).await?, source))),
+        None => row_location(service, &message).await,
     }
-    location(service, message)
+}
+
+/// The stored UIDVALIDITY of a folder (from its last sync).
+async fn stored_uid_validity(service: &Service, folder: &Folder) -> Option<u32> {
+    let id = folder.id.clone();
+    service
+        .store()
+        .call(move |s| s.folder_sync_state(&id))
         .await
         .ok()
-        .flatten()
-        .and_then(|(_, uid)| uid)
+        .and_then(|state| state.uidvalidity)
 }
 
-/// Records the UID a moved message got in its new folder, when the row is
-/// still there.
-async fn learn_uid(service: &Service, message: &MessageId, target: &Folder, uid: Option<u32>) {
+/// Records that `op` put its message into `folder` with `uid`: the local
+/// row learns the UID when it is still there without one, and later
+/// queued operations that start from `folder` learn it too (the row may
+/// have moved on or be gone already).
+async fn placed(
+    service: &Service,
+    op: &QueuedOp,
+    folder: &Folder,
+    uid: Option<u32>,
+    uid_validity: Option<u32>,
+) {
     let Some(uid) = uid else { return };
-    let id = message.clone();
-    let target = target.id.clone();
+    let id = op.operation.message_id().clone();
+    let target = folder.id.clone();
+    let after = op.id;
     let result = service
         .store()
         .call(move |s| {
@@ -205,47 +265,78 @@ async fn learn_uid(service: &Service, message: &MessageId, target: &Folder, uid:
             {
                 s.set_message_uid(&id, Some(uid))?;
             }
+            s.rebase_later_ops(&id, after, &target, uid, uid_validity)?;
             Ok(())
         })
         .await;
     if let Err(err) = result {
-        tracing::debug!(%err, "cannot record the moved message's UID");
+        tracing::debug!(%err, "cannot record where the message went");
     }
 }
 
-/// Appends a message's raw bytes to a folder of another account (a
-/// cross-account move). Accounts without an IMAP server keep the local
-/// copy only. Returns the new UID when known.
-async fn append_to_account(
+/// When a message cannot be found on the server: fine (nothing to do)
+/// unless an earlier operation of another account, which may still bring
+/// it there, is waiting; then `op` has to wait too.
+async fn not_on_server(
     service: &Service,
-    message: &MessageId,
-    target: &Folder,
-) -> Result<Option<u32>, EngineError> {
-    let settings = match service.imap_settings(&target.account_id) {
-        Some(settings) => settings,
-        None => return Ok(None),
-    };
-    let id = message.clone();
-    let blobs = service.blobs().clone();
-    let (raw, flags) = service
+    op: &QueuedOp,
+) -> Result<Option<(u32, u32)>, EngineError> {
+    let id = op.operation.message_id().clone();
+    let (before, account) = (op.id, op.account_id.clone());
+    let waiting = service
         .store()
         .call(move |s| {
-            let m = s.get_message(&id)?;
-            let raw = match &m.blob_hash {
-                Some(hash) => blobs.get(hash)?,
-                None => Vec::new(),
-            };
-            Ok((raw, m.summary.flags))
+            Ok(s.pending_ops_for_message(&id)?
+                .iter()
+                .any(|o| o.id < before && o.account_id != account))
         })
         .await
-        .map_err(|e| engine_error(e.into()))?;
+        .map_err(store_error)?;
+    if waiting {
+        return Err(EngineError::temporary(
+            ErrorCode::Unavailable,
+            format!(
+                "message {} waits for an earlier operation of another account",
+                op.operation.message_id()
+            ),
+        ));
+    }
+    Ok(None)
+}
+
+/// The raw bytes and flags of a local message, for `APPEND`; `None` when
+/// the row is gone.
+async fn raw_message(
+    service: &Service,
+    message: &MessageId,
+) -> Result<Option<(Vec<u8>, Vec<Flag>)>, EngineError> {
+    let id = message.clone();
+    let blobs = service.blobs().clone();
+    let found = service
+        .store()
+        .call(move |s| {
+            let m = match s.get_message(&id) {
+                Ok(m) => m,
+                Err(err) if err.is_not_found() => return Ok(None),
+                Err(err) => return Err(err),
+            };
+            let raw = match &m.blob_hash {
+                Some(hash) if blobs.contains(hash) => blobs.get(hash)?,
+                _ => Vec::new(),
+            };
+            Ok(Some((raw, m.summary.flags)))
+        })
+        .await
+        .map_err(store_error)?;
+    let Some((raw, flags)) = found else {
+        return Ok(None);
+    };
     if raw.is_empty() {
         return Err(EngineError::permanent(
             ErrorCode::Unavailable,
             format!("message {message} is not downloaded; it cannot be copied"),
         ));
     }
-    let mut client = connect(&settings).await?;
     let mut imap_flags = Vec::new();
     for (on, flag) in [
         (flags.seen, Flag::Seen),
@@ -256,9 +347,81 @@ async fn append_to_account(
             imap_flags.push(flag);
         }
     }
-    let result = client.append(&target.path, &raw, &imap_flags, None).await?;
+    Ok(Some((raw, imap_flags)))
+}
+
+/// Files a local message in `target` on `client` (`APPEND`) and returns
+/// the new UID and the folder's UIDVALIDITY when known.
+///
+/// Idempotent across retries: when an earlier attempt of `op` may have
+/// filed it already (the process stopped, or a later step failed before
+/// the operation was updated), the folder is searched for its Message-ID
+/// first, and a copy that is there is not appended again.
+async fn append_once(
+    client: &mut ImapClient,
+    op: &QueuedOp,
+    target: &Folder,
+    header_message_id: Option<&str>,
+    raw: &[u8],
+    flags: &[Flag],
+) -> Result<(Option<u32>, Option<u32>), EngineError> {
+    if op.attempts > 1
+        && let Some(header) = header_message_id
+    {
+        let found = client.find_by_message_id(&target.path, header).await?;
+        if let Some(uid) = found.first() {
+            let status = client.select_for_write(&target.path).await?;
+            tracing::debug!(op = %op.id, uid, "already filed by an earlier attempt");
+            return Ok((Some(*uid), Some(status.uid_validity)));
+        }
+    }
+    let result = client.append(&target.path, raw, flags, None).await?;
+    Ok((result.uid, result.uid_validity))
+}
+
+/// Appends a message's raw bytes to a folder of another account (a
+/// cross-account move) on a connection of its own. Accounts without an
+/// IMAP server keep the local copy only. Returns the new UID and
+/// UIDVALIDITY when known.
+async fn append_to_account(
+    service: &Service,
+    op: &QueuedOp,
+    target: &Folder,
+    header_message_id: Option<&str>,
+) -> Result<(Option<u32>, Option<u32>), EngineError> {
+    let Some(settings) = service.imap_settings(&target.account_id) else {
+        return Ok((None, None));
+    };
+    let message = op.operation.message_id();
+    let Some((raw, flags)) = raw_message(service, message).await? else {
+        return Err(EngineError::permanent(
+            ErrorCode::NotFound,
+            format!("message {message} is gone locally; it cannot be copied"),
+        ));
+    };
+    let mut client = connect(&settings).await?;
+    let result = append_once(&mut client, op, target, header_message_id, &raw, &flags).await;
     let _ = client.logout().await;
-    Ok(result.uid)
+    result
+}
+
+/// What remains of a cross-account move once the copy is filed in the
+/// target: removing the message from the source. Stored in place of the
+/// move, so a retry does not file the copy again.
+fn remaining_expunge(op: &QueuedOp, source: &MessageSource) -> Operation {
+    Operation::DeleteMessage {
+        message_id: op.operation.message_id().clone(),
+        permanent: true,
+        source: Some(source.clone()),
+        trash_folder_id: None,
+    }
+}
+
+async fn record_remaining(service: &Service, op: &QueuedOp, rest: Operation) {
+    let id = op.id;
+    if let Err(err) = service.store().call(move |s| s.update_op(id, &rest)).await {
+        tracing::warn!(op = %op.id, %err, "cannot record the filed copy of a move");
+    }
 }
 
 /// The IMAP executor, on an engine's connection.
@@ -268,19 +431,92 @@ pub(crate) struct ImapExecutor<'a> {
 }
 
 impl ImapExecutor<'_> {
+    /// The UID to act on in `folder` and the folder's current UIDVALIDITY;
+    /// `None` when the message is not (or no longer) there.
+    ///
+    /// A recorded UID is used only while the folder's UIDVALIDITY is still
+    /// the one it was recorded with. Otherwise (the server renumbered the
+    /// folder), or when the UID was never known, the message is found
+    /// again by its Message-ID; a stale UID is never acted on.
+    async fn resolve(
+        &self,
+        op: &QueuedOp,
+        folder: &Folder,
+        source: &MessageSource,
+    ) -> Result<Option<(u32, u32)>, EngineError> {
+        let status = self
+            .client
+            .lock()
+            .await
+            .select_for_write(&folder.path)
+            .await?;
+        let current = status.uid_validity;
+        let expected = match source.uid_validity {
+            Some(v) => Some(v),
+            None => stored_uid_validity(self.service, folder).await,
+        };
+        if let Some(uid) = source.uid {
+            match expected {
+                Some(v) if v == current => return Ok(Some((uid, current))),
+                None if source.header_message_id.is_none() => return Ok(Some((uid, current))),
+                _ => tracing::info!(
+                    op = %op.id,
+                    folder = %folder.path,
+                    ?expected,
+                    current,
+                    "UIDVALIDITY changed; finding the message by its Message-ID"
+                ),
+            }
+        }
+        let Some(header) = source.header_message_id.as_deref() else {
+            if source.uid.is_some() {
+                return Err(EngineError::permanent(
+                    ErrorCode::Conflict,
+                    format!(
+                        "{} was renumbered on the server and message {} has no Message-ID",
+                        folder.path,
+                        op.operation.message_id()
+                    ),
+                ));
+            }
+            return not_on_server(self.service, op).await;
+        };
+        let found = self
+            .client
+            .lock()
+            .await
+            .find_by_message_id(&folder.path, header)
+            .await?;
+        match found.as_slice() {
+            [uid] => Ok(Some((*uid, current))),
+            [] => not_on_server(self.service, op).await,
+            _ => Err(EngineError::permanent(
+                ErrorCode::Conflict,
+                format!(
+                    "{} holds {} messages with the Message-ID of message {}",
+                    folder.path,
+                    found.len(),
+                    op.operation.message_id()
+                ),
+            )),
+        }
+    }
+
     async fn update_flags(
         &self,
-        message: &MessageId,
+        op: &QueuedOp,
         change: &nail_store::FlagChange,
     ) -> Result<(), EngineError> {
-        let Some((folder, uid)) = location(self.service, message).await? else {
+        let Some((folder, source)) = server_location(self.service, op).await? else {
             return Ok(());
         };
-        let Some(uid) = uid else {
-            return Err(EngineError::temporary(
-                ErrorCode::Unavailable,
-                format!("the UID of message {message} is not known yet"),
-            ));
+        if folder.account_id != op.account_id {
+            // Moved into another account meanwhile: the copy filed there
+            // carries the flags.
+            return Ok(());
+        }
+        let Some((uid, _)) = self.resolve(op, &folder, &source).await? else {
+            return Ok(());
         };
         let api_change = nail_api::FlagChange {
             seen: change.seen,
@@ -300,15 +536,16 @@ impl ImapExecutor<'_> {
 
     async fn move_message(
         &self,
-        message: &MessageId,
+        op: &QueuedOp,
         source: &MessageSource,
         target_id: &nail_api::FolderId,
     ) -> Result<(), EngineError> {
-        let Some(uid) = source_uid(self.service, message, source).await else {
-            // Never reached the server (or a local-only message).
+        let from = folder(self.service, &source.folder_id).await?;
+        let Some((uid, uid_validity)) = self.resolve(op, &from, source).await? else {
+            // Never reached the server (or already moved by an earlier
+            // attempt).
             return Ok(());
         };
-        let from = folder(self.service, &source.folder_id).await?;
         let target = folder(self.service, target_id).await?;
         if target.account_id == from.account_id {
             let result = self
@@ -323,11 +560,23 @@ impl ImapExecutor<'_> {
                 .iter()
                 .find(|(old, _)| *old == uid)
                 .map(|(_, new)| *new);
-            learn_uid(self.service, message, &target, new_uid).await;
+            placed(self.service, op, &target, new_uid, result.copy.uid_validity).await;
             return Ok(());
         }
-        let new_uid = append_to_account(self.service, message, &target).await?;
-        learn_uid(self.service, message, &target, new_uid).await;
+        let (new_uid, new_validity) = append_to_account(
+            self.service,
+            op,
+            &target,
+            source.header_message_id.as_deref(),
+        )
+        .await?;
+        placed(self.service, op, &target, new_uid, new_validity).await;
+        let exact = MessageSource {
+            uid: Some(uid),
+            uid_validity: Some(uid_validity),
+            ..source.clone()
+        };
+        record_remaining(self.service, op, remaining_expunge(op, &exact)).await;
         self.client
             .lock()
             .await
@@ -338,22 +587,52 @@ impl ImapExecutor<'_> {
 
     async fn delete_message(
         &self,
-        message: &MessageId,
+        op: &QueuedOp,
         source: &MessageSource,
         trash: Option<&nail_api::FolderId>,
     ) -> Result<(), EngineError> {
         if let Some(trash) = trash {
-            return self.move_message(message, source, trash).await;
+            return self.move_message(op, source, trash).await;
         }
-        let Some(uid) = source_uid(self.service, message, source).await else {
+        let from = folder(self.service, &source.folder_id).await?;
+        let Some((uid, _)) = self.resolve(op, &from, source).await? else {
             return Ok(());
         };
-        let from = folder(self.service, &source.folder_id).await?;
         self.client
             .lock()
             .await
             .expunge_messages(&from.path, &[uid])
             .await?;
+        Ok(())
+    }
+
+    /// Files a local message (a Sent copy) in its folder on this account's
+    /// server.
+    async fn append_message(
+        &self,
+        op: &QueuedOp,
+        folder_id: &nail_api::FolderId,
+    ) -> Result<(), EngineError> {
+        let message = op.operation.message_id();
+        let Some((raw, flags)) = raw_message(self.service, message).await? else {
+            // Deleted locally before it was filed: nothing to file.
+            return Ok(());
+        };
+        let target = folder(self.service, folder_id).await?;
+        let header = {
+            let id = message.clone();
+            self.service
+                .store()
+                .call(move |s| s.message_meta(&id))
+                .await
+                .map_err(store_error)?
+                .message_id
+        };
+        let (uid, uid_validity) = {
+            let mut client = self.client.lock().await;
+            append_once(&mut client, op, &target, header.as_deref(), &raw, &flags).await?
+        };
+        placed(self.service, op, &target, uid, uid_validity).await;
         Ok(())
     }
 }
@@ -362,25 +641,22 @@ impl OpExecutor for ImapExecutor<'_> {
     fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
         Box::pin(async move {
             match &op.operation {
-                Operation::UpdateFlags { message_id, change } => {
-                    self.update_flags(message_id, change).await
-                }
+                Operation::UpdateFlags { change, .. } => self.update_flags(op, change).await,
                 Operation::MoveMessage {
-                    message_id,
                     target_folder_id,
                     source: Some(source),
-                } => {
-                    self.move_message(message_id, source, target_folder_id)
-                        .await
-                }
+                    ..
+                } => self.move_message(op, source, target_folder_id).await,
                 Operation::DeleteMessage {
-                    message_id,
                     source: Some(source),
                     trash_folder_id,
                     ..
                 } => {
-                    self.delete_message(message_id, source, trash_folder_id.as_ref())
+                    self.delete_message(op, source, trash_folder_id.as_ref())
                         .await
+                }
+                Operation::AppendMessage { folder_id, .. } => {
+                    self.append_message(op, folder_id).await
                 }
                 other => Err(EngineError::permanent(
                     ErrorCode::Internal,
@@ -410,7 +686,7 @@ impl OpExecutor for LocalExecutor<'_> {
                         .store()
                         .call(move |s| s.pop3_mark_deleted(&id))
                         .await
-                        .map_err(|e| engine_error(e.into()))?;
+                        .map_err(store_error)?;
                     Ok(())
                 }
                 Operation::MoveMessage {
@@ -420,16 +696,23 @@ impl OpExecutor for LocalExecutor<'_> {
                 } => {
                     let target = folder(self.service, target_folder_id).await?;
                     if target.account_id != source.account_id {
-                        let new_uid = append_to_account(self.service, message_id, &target).await?;
-                        learn_uid(self.service, message_id, &target, new_uid).await;
-                        // The source copy left the account: for POP3 like
-                        // a local delete.
+                        let (uid, uid_validity) = append_to_account(
+                            self.service,
+                            op,
+                            &target,
+                            source.header_message_id.as_deref(),
+                        )
+                        .await?;
+                        placed(self.service, op, &target, uid, uid_validity).await;
+                        // The copy is filed; what remains is the local
+                        // delete (for POP3 remembered for its policy).
+                        record_remaining(self.service, op, remaining_expunge(op, source)).await;
                         let id = message_id.clone();
-                        let _ = self
-                            .service
+                        self.service
                             .store()
                             .call(move |s| s.pop3_mark_deleted(&id))
-                            .await;
+                            .await
+                            .map_err(store_error)?;
                     }
                     Ok(())
                 }

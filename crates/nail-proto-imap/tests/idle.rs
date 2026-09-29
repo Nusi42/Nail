@@ -377,6 +377,44 @@ async fn the_watcher_refreshes_rejected_tokens_and_backs_off() {
     watcher.stop().await;
 }
 
+/// Review M1a: a server that accepts the login but drops the connection on
+/// `IDLE` must not be reconnected to every `reconnect_min`.
+#[tokio::test]
+async fn a_server_that_drops_idle_is_backed_off_from() {
+    let server = modern_server().await;
+    server.disconnect_on(Some("IDLE"));
+    let mut watcher = MailboxWatcher::spawn(
+        config_for(&server),
+        Arc::new(credentials(&server)),
+        fast_watch().with_healthy_after(Duration::from_secs(30)),
+    );
+    let mut delays = Vec::new();
+    while delays.len() < 4 {
+        match next(&mut watcher).await {
+            WatchEvent::Connected { .. } => {}
+            WatchEvent::Disconnected { retry_in, .. } => delays.push(retry_in.as_millis()),
+            other => panic!("{other:?}"),
+        }
+    }
+    assert_eq!(delays, [20, 40, 80, 160]);
+    watcher.stop().await;
+
+    // A connection that stayed up long enough resets the backoff.
+    let mut watcher = MailboxWatcher::spawn(
+        config_for(&server),
+        Arc::new(credentials(&server)),
+        fast_watch().with_healthy_after(Duration::ZERO),
+    );
+    let mut delays = Vec::new();
+    while delays.len() < 3 {
+        if let WatchEvent::Disconnected { retry_in, .. } = next(&mut watcher).await {
+            delays.push(retry_in.as_millis());
+        }
+    }
+    assert_eq!(delays, [20, 20, 20]);
+    watcher.stop().await;
+}
+
 #[tokio::test]
 async fn the_watcher_backs_off_exponentially_while_the_server_is_down() {
     // A port where nobody listens (the server is gone). Windows retries a

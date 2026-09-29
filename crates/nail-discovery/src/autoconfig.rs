@@ -137,6 +137,7 @@ pub(crate) fn parse_client_config(
                 incoming,
                 outgoing: outgoing.clone(),
                 provider_name: provider_name.clone(),
+                warnings: Vec::new(),
             })
         })
         .collect();

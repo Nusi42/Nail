@@ -1077,10 +1077,24 @@ impl Store {
 
     /// Deletes all messages of a folder and resets its sync state, e.g.
     /// after a `UIDVALIDITY` change. Returns how many messages were deleted.
+    ///
+    /// Messages with queued operations that are still waiting (moved here,
+    /// a Sent copy not filed yet, a pending flag change) are kept with
+    /// their UID cleared: their UIDs are stale, and the next sync adopts
+    /// them again by Message-ID.
     pub fn clear_folder(&self, folder: &FolderId) -> Result<usize> {
         self.with_tx(|tx| {
             folder_account_in_tx(tx, folder)?;
-            let deleted = tx.execute("DELETE FROM messages WHERE folder_id = ?1", [folder.as_str()])?;
+            const WAITING: &str = "SELECT message_id FROM op_queue
+                WHERE message_id IS NOT NULL AND state IN ('pending', 'in_flight')";
+            tx.execute(
+                &format!("UPDATE messages SET uid = NULL WHERE folder_id = ?1 AND id IN ({WAITING})"),
+                [folder.as_str()],
+            )?;
+            let deleted = tx.execute(
+                &format!("DELETE FROM messages WHERE folder_id = ?1 AND id NOT IN ({WAITING})"),
+                [folder.as_str()],
+            )?;
             tx.execute(
                 "UPDATE folders SET uidvalidity = NULL, uidnext = NULL, highestmodseq = NULL WHERE id = ?1",
                 [folder.as_str()],

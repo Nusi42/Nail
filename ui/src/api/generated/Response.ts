@@ -11,6 +11,7 @@ import type { ErrorCode } from "./ErrorCode";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { Identity } from "./Identity";
+import type { IdentityId } from "./IdentityId";
 import type { MessageBody } from "./MessageBody";
 import type { MessageSummary } from "./MessageSummary";
 import type { OAuthFlowId } from "./OAuthFlowId";
@@ -112,7 +113,11 @@ config: AccountConfig, } | { "type": "Identities",
 /**
  * The identities in account order, each account's default first.
  */
-identities: Array<Identity>, } | { "type": "VirtualAccounts", 
+identities: Array<Identity>, } | { "type": "IdentityChosen", 
+/**
+ * The identity; `null` when there is none (no accounts).
+ */
+identity_id: IdentityId | null, } | { "type": "VirtualAccounts", 
 /**
  * User-defined virtual accounts in file order.
  */

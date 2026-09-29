@@ -175,6 +175,7 @@ pub(crate) fn parse_response(xml: &[u8], email: &Email) -> Result<Answer, String
                 incoming,
                 outgoing: outgoing.clone(),
                 provider_name: provider_name.clone(),
+                warnings: Vec::new(),
             })
             .collect(),
     ))

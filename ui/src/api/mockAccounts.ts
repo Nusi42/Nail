@@ -18,6 +18,7 @@ import type {
   OutgoingServer,
   Response,
   SecretInput,
+  MessageId,
   ServerEndpoint,
   VirtualAccountConfig,
 } from "./generated";
@@ -42,6 +43,7 @@ function guess(email: string, domain: string): DiscoveredAccount {
       server: { host: `smtp.${domain}`, port: 465, tls: "implicit", auth },
       options: { dsn: null },
     },
+    warnings: [],
   };
 }
 
@@ -296,6 +298,51 @@ export function removeAccount(core: MockCore, accountId: string): Response {
   }
   core.emit({ type: "AccountsChanged" });
   return { type: "Done" };
+}
+
+/**
+ * Whether an identity rule pattern matches an address: `*@example.com`
+ * (a domain), `*@*.example.com` (subdomains) or a full address;
+ * case-insensitive (as `IdentityRule::matches` in the core).
+ */
+export function patternMatches(pattern: string, email: string): boolean {
+  const p = pattern.trim().toLowerCase();
+  const e = email.trim().toLowerCase();
+  if (p.startsWith("*@*.")) {
+    const domain = e.split("@")[1] ?? "";
+    return domain.endsWith(`.${p.slice(4)}`);
+  }
+  if (p.startsWith("*@")) return (e.split("@")[1] ?? "") === p.slice(2);
+  return p === e;
+}
+
+/**
+ * `ChooseIdentity`, as the core decides: the virtual account's identity
+ * rules, else the identity a replied-to message was sent to, else the
+ * default (a virtual account's `default_identity`, else the first).
+ */
+export function chooseIdentity(
+  d: MockData,
+  accountId: string | null,
+  recipients: readonly string[],
+  replyTo: MessageId | null,
+): Response {
+  const chosen = (id: string | null): Response => ({ type: "IdentityChosen", identity_id: id });
+  const va = accountId === null ? undefined : virtualConfig(d, accountId);
+  const rule = va?.identity_rules.find((r) => recipients.some((x) => patternMatches(r.pattern, x)));
+  if (rule) return chosen(rule.identity);
+  const body = replyTo === null ? undefined : d.bodies.get(replyTo);
+  if (body) {
+    const addressed = [...body.headers.to, ...body.headers.cc].map((a) => a.email.toLowerCase());
+    const all = d.accountsConfig.accounts.flatMap((a) => a.identities);
+    const hit = all.find((i) => addressed.includes(i.email.toLowerCase()));
+    if (hit) return chosen(hit.id);
+  }
+  const listed = listIdentities(d, accountId);
+  if (listed.type !== "Identities") return listed;
+  const preferred = va?.default_identity;
+  const identity = listed.identities.find((i) => i.id === preferred) ?? listed.identities[0];
+  return chosen(identity?.id ?? null);
 }
 
 export function listIdentities(d: MockData, accountId: string | null): Response {

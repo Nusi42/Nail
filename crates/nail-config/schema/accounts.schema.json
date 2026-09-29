@@ -253,7 +253,7 @@
       ]
     },
     "BodiesSchema": {
-      "description": "What to download.",
+      "description": "What to download. Not applied yet: this version always downloads whole\nmessages.",
       "oneOf": [
         {
           "description": "Whole messages.",
@@ -261,12 +261,12 @@
           "const": "full"
         },
         {
-          "description": "Headers; bodies on demand.",
+          "description": "Headers; bodies on demand (not applied yet).",
           "type": "string",
           "const": "headers-only"
         },
         {
-          "description": "Whole messages of the last `days` days.",
+          "description": "Whole messages of the last `days` days (not applied yet).",
           "type": "string",
           "const": "recent"
         }
@@ -297,7 +297,7 @@
       "type": "object",
       "properties": {
         "bodies": {
-          "description": "What to download.",
+          "description": "What to download (not applied yet).",
           "anyOf": [
             {
               "$ref": "#/$defs/BodiesSchema"
@@ -308,7 +308,7 @@
           ]
         },
         "days": {
-          "description": "Days, with bodies=\"recent\".",
+          "description": "Days, with bodies=\"recent\" (not applied yet).",
           "type": [
             "integer",
             "null"
@@ -767,7 +767,7 @@
       "type": "object",
       "properties": {
         "bodies": {
-          "description": "Default for all folders (default full).",
+          "description": "Default for all folders (default full). Not applied yet: whole\nmessages are always downloaded.",
           "anyOf": [
             {
               "$ref": "#/$defs/BodiesSchema"
@@ -778,7 +778,7 @@
           ]
         },
         "days": {
-          "description": "Days, with bodies=\"recent\".",
+          "description": "Days, with bodies=\"recent\" (not applied yet).",
           "type": [
             "integer",
             "null"

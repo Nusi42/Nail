@@ -48,7 +48,17 @@ export function manualCandidate(email: string): DiscoveredAccount {
       server: { host: domain ? `smtp.${domain}` : "", port: 465, tls: "implicit", auth },
       options: { dsn: null },
     },
+    warnings: [],
   };
+}
+
+/**
+ * The proposal to preselect: the best-ranked one without warnings (the core
+ * ranks unauthenticated answers last), else the first.
+ */
+export function preferredCandidate(candidates: DiscoveredAccount[]): number {
+  const trusted = candidates.findIndex((c) => c.warnings.length === 0);
+  return trusted === -1 ? 0 : trusted;
 }
 
 /** A new account from a discovery proposal. */
@@ -205,10 +215,12 @@ export function AccountSetup({ node }: WidgetProps) {
     void run(async () => {
       const found = await client.request({ type: "DiscoverAccount", email: address }, "Discovered");
       setCandidates(found.candidates);
-      setChosen(0);
-      const first = found.candidates[0];
+      const index = preferredCandidate(found.candidates);
+      setChosen(index);
+      const first = found.candidates[index];
       setConfig(configFrom(first ?? manualCandidate(address), address, name));
-      setEditing(first === undefined);
+      // Unverified settings: show the servers, not just a summary.
+      setEditing(first === undefined || first.warnings.length > 0);
       setOAuth(null);
       setStep("servers");
     });
@@ -352,7 +364,9 @@ export function AccountSetup({ node }: WidgetProps) {
                     onChange={() => choose(index)}
                   />
                   <span data-part="account-setup.candidate.source">
-                    {c.provider_name ?? t(`setup-source-${c.source}`)}
+                    {/* A name from an unverified answer could be anything. */}
+                    {(c.warnings.length === 0 ? c.provider_name : null) ??
+                      t(`setup-source-${c.source}`)}
                   </span>
                   <span data-part="account-setup.candidate.servers">
                     {t("setup-candidate-servers", {
@@ -362,9 +376,23 @@ export function AccountSetup({ node }: WidgetProps) {
                         : "-",
                     })}
                   </span>
+                  {c.warnings.map((warning) => (
+                    <span
+                      key={warning}
+                      data-part="account-setup.candidate.warning"
+                      data-warning={warning}
+                    >
+                      {t(`setup-warning-${warning}`)}
+                    </span>
+                  ))}
                 </label>
               ))}
             </fieldset>
+          )}
+          {(candidates[chosen]?.warnings.length ?? 0) > 0 && (
+            <p data-part="account-setup.warning" role="alert">
+              {t("setup-warning-check")}
+            </p>
           )}
           {!editing && (
             <button

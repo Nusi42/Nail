@@ -183,7 +183,13 @@ Identity names (`id`, or the address) must be unique across all accounts.
 ## What to synchronize (`sync`)
 
 By default Nail downloads complete messages of every folder and watches the
-inbox live for new mail. `sync` changes that:
+inbox live for new mail. `sync` changes that.
+
+> **Not active yet:** `bodies` and `days` are accepted and saved, but this
+> version still downloads every message completely, whatever they say. Only
+> `enabled` and `idle` take effect today. Saving space or bandwidth with
+> `bodies="headers-only"` or `"recent"` comes in a later version.
+
 
 ```kdl
 account "work" email="ada@work.example" {
@@ -198,8 +204,8 @@ account "work" email="ada@work.example" {
 
 | Property | Meaning |
 | --- | --- |
-| `bodies` | `"full"` (whole messages), `"headers-only"` (bodies are downloaded when you open a message) or `"recent"` (whole messages from the last `days` days, headers for older ones) |
-| `days` | Number of days for `bodies="recent"` |
+| `bodies` | *Not active yet (see above).* `"full"` (whole messages), `"headers-only"` (bodies are downloaded when you open a message) or `"recent"` (whole messages from the last `days` days, headers for older ones) |
+| `days` | *Not active yet.* Number of days for `bodies="recent"` |
 
 Each `folder` rule picks folders by `path` (the full folder name on the
 server, e.g. `"Lists/rust"`) or by `role` (`"inbox"`, `"sent"`, `"drafts"`,
@@ -207,7 +213,7 @@ server, e.g. `"Lists/rust"`) or by `role` (`"inbox"`, `"sent"`, `"drafts"`,
 
 | Property | Meaning | Default |
 | --- | --- | --- |
-| `bodies`, `days` | As above, for these folders | the `sync` setting |
+| `bodies`, `days` | As above, for these folders (not active yet) | the `sync` setting |
 | `enabled` | `#false` skips the folder entirely | `#true` |
 | `idle` | Watch the folder live for new mail | only the inbox |
 

@@ -189,6 +189,8 @@ fn move_applies_locally_and_records_the_source() {
             account_id: "a1".into(),
             folder_id: "inbox".into(),
             uid: Some(1),
+            uid_validity: None,
+            header_message_id: None,
         })
     );
     let moved = store.get_message(&"m1".into()).unwrap();
@@ -535,4 +537,189 @@ fn merge_records_headers_and_size() {
     let missing = store.messages_missing_meta(10).unwrap();
     assert_eq!(missing.len(), 1);
     assert_eq!(missing[0].0, "m2".into());
+}
+
+#[test]
+fn sources_record_uid_validity_and_message_id() {
+    let store = two_account_store();
+    store
+        .set_folder_sync_state(
+            &"inbox".into(),
+            &nail_store::FolderSyncState {
+                uidvalidity: Some(77),
+                uidnext: Some(10),
+                highestmodseq: None,
+            },
+        )
+        .unwrap();
+    let mut synced = server_copy("m1", "a1", "inbox", 1, Flags::default());
+    synced.meta = Some(MessageMeta {
+        message_id: Some("<m1@example.org>".into()),
+        ..MessageMeta::default()
+    });
+    store.merge_messages(&[synced]).unwrap();
+    let enqueued = store
+        .enqueue(&Operation::DeleteMessage {
+            message_id: "m1".into(),
+            permanent: true,
+            source: None,
+            trash_folder_id: None,
+        })
+        .unwrap();
+    assert_eq!(
+        enqueued.op.operation.source(),
+        Some(&MessageSource {
+            account_id: "a1".into(),
+            folder_id: "inbox".into(),
+            uid: Some(1),
+            uid_validity: Some(77),
+            header_message_id: Some("m1@example.org".into()),
+        })
+    );
+    // Old payloads without the new fields still load.
+    let old: Operation = serde_json::from_value(json!({"type": "delete_message",
+        "message_id": "m1", "permanent": true,
+        "source": {"account_id": "a1", "folder_id": "inbox", "uid": 1}}))
+    .unwrap();
+    assert_eq!(old.source().unwrap().uid_validity, None);
+}
+
+#[test]
+fn later_ops_learn_where_an_earlier_one_put_the_message() {
+    let store = two_account_store();
+    let first = store
+        .enqueue(&Operation::MoveMessage {
+            message_id: "m1".into(),
+            target_folder_id: "archive".into(),
+            source: None,
+        })
+        .unwrap();
+    // A flag change between the moves has no source and is skipped.
+    store.enqueue(&seen("m1", true)).unwrap();
+    let second = store
+        .enqueue(&Operation::DeleteMessage {
+            message_id: "m1".into(),
+            permanent: false,
+            source: None,
+            trash_folder_id: None,
+        })
+        .unwrap();
+    let third = store
+        .enqueue(&Operation::DeleteMessage {
+            message_id: "m1".into(),
+            permanent: true,
+            source: None,
+            trash_folder_id: None,
+        })
+        .unwrap();
+    for op in [&second, &third] {
+        assert_eq!(op.op.operation.source().unwrap().uid, None);
+    }
+
+    // The first move replayed: the message is Archive UID 42 (validity 9).
+    let updated = store
+        .rebase_later_ops(&"m1".into(), first.op.id, &"archive".into(), 42, Some(9))
+        .unwrap();
+    assert_eq!(updated, 1, "only the next move / delete, not beyond it");
+    let second_now = store.get_op(second.op.id).unwrap();
+    let source = second_now.operation.source().unwrap();
+    assert_eq!(source.folder_id, "archive".into());
+    assert_eq!((source.uid, source.uid_validity), (Some(42), Some(9)));
+    assert_eq!(
+        store
+            .get_op(third.op.id)
+            .unwrap()
+            .operation
+            .source()
+            .unwrap()
+            .uid,
+        None
+    );
+
+    // The move to Trash replayed: now the permanent delete knows the UID.
+    let updated = store
+        .rebase_later_ops(&"m1".into(), second.op.id, &"trash".into(), 7, Some(3))
+        .unwrap();
+    assert_eq!(updated, 1);
+    let source = store.get_op(third.op.id).unwrap().operation;
+    assert_eq!(source.source().unwrap().uid, Some(7));
+
+    // A folder that does not match stops the walk; known UIDs are kept.
+    assert_eq!(
+        store
+            .rebase_later_ops(&"m1".into(), first.op.id, &"inbox".into(), 99, None)
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn update_op_rewrites_a_waiting_operation() {
+    let store = two_account_store();
+    let queued = store
+        .enqueue(&Operation::MoveMessage {
+            message_id: "m1".into(),
+            target_folder_id: "inbox2".into(),
+            source: None,
+        })
+        .unwrap();
+    let source = queued.op.operation.source().cloned();
+    let rest = Operation::DeleteMessage {
+        message_id: "m1".into(),
+        permanent: true,
+        source,
+        trash_folder_id: None,
+    };
+    assert!(store.update_op(queued.op.id, &rest).unwrap());
+    let now = store.get_op(queued.op.id).unwrap();
+    assert_eq!(now.operation, rest);
+    assert_eq!(now.state, OpState::Pending);
+    // The local row is untouched: still in the target account.
+    assert_eq!(
+        store.get_message(&"m1".into()).unwrap().summary.folder_id,
+        "inbox2".into()
+    );
+}
+
+#[test]
+fn append_keeps_the_local_row_and_needs_its_folder() {
+    let store = two_account_store();
+    let mut local = message("s1", "a1", "archive", "2026-01-01T00:00:00Z");
+    local.uid = None;
+    store.upsert_message(&local).unwrap();
+    let queued = store
+        .enqueue(&Operation::AppendMessage {
+            message_id: "s1".into(),
+            folder_id: "archive".into(),
+        })
+        .unwrap();
+    assert_eq!(queued.op.account_id, AccountId::from("a1"));
+    assert_eq!(queued.op.operation.kind(), "append_message");
+    assert!(!queued.op.operation.takes_message_away());
+    assert_eq!(queued.changed_folders, [FolderId::from("archive")]);
+    assert!(store.get_message(&"s1".into()).is_ok());
+    assert!(matches!(
+        store.enqueue(&Operation::AppendMessage {
+            message_id: "s1".into(),
+            folder_id: "inbox".into(),
+        }),
+        Err(Error::InvalidData(_))
+    ));
+    // A sync may still update the row (no move / delete is pending).
+    let report = store
+        .merge_messages(&[server_copy("s1", "a1", "archive", 5, Flags::default())])
+        .unwrap();
+    assert_eq!(report.written, 1);
+}
+
+#[test]
+fn clearing_a_folder_keeps_messages_with_waiting_operations() {
+    let store = two_account_store();
+    // m1 has a pending flag change, m2 none.
+    store.enqueue(&seen("m1", true)).unwrap();
+    assert_eq!(store.clear_folder(&"inbox".into()).unwrap(), 1);
+    assert!(store.get_message(&"m2".into()).unwrap_err().is_not_found());
+    let kept = store.get_message(&"m1".into()).unwrap();
+    assert_eq!(kept.uid, None, "its UID belonged to the old UIDVALIDITY");
+    assert!(kept.summary.flags.seen);
 }

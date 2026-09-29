@@ -3,4 +3,4 @@
 /**
  * Classes of query errors.
  */
-export type SearchErrorKind = "unexpected-token" | "unexpected-end" | "unterminated-quote" | "unbalanced-parenthesis" | "unknown-field" | "invalid-value";
+export type SearchErrorKind = "unexpected-token" | "unexpected-end" | "unterminated-quote" | "unbalanced-parenthesis" | "unknown-field" | "invalid-value" | "too-complex";

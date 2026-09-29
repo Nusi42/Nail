@@ -38,6 +38,12 @@ export const queryKeys = {
   message: (id: MessageId | null) => ["message", id] as const,
   accountsConfig: ["accounts-config"] as const,
   identities: (accountId: AccountId | null) => ["identities", accountId] as const,
+  /** Under "identities", so account changes refresh it too. */
+  chosenIdentity: (
+    accountId: AccountId | null,
+    recipients: readonly string[],
+    replyTo: MessageId | null,
+  ) => ["identities", "chosen", accountId, recipients.join(","), replyTo] as const,
   allIdentities: ["identities"] as const,
   virtualAccounts: ["virtual-accounts"] as const,
   accountStatuses: ["account-statuses"] as const,
@@ -144,6 +150,35 @@ export function useIdentities(accountId: AccountId | null, enabled = true) {
     queryFn: async () =>
       (await client.request({ type: "ListIdentities", account_id: accountId }, "Identities"))
         .identities,
+    enabled,
+  });
+}
+
+/**
+ * The identity the core would send from (virtual-account rules, the
+ * identity a reply goes out from, the default).
+ */
+export function useChosenIdentity(
+  accountId: AccountId | null,
+  recipients: readonly string[],
+  replyTo: MessageId | null,
+  enabled = true,
+) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.chosenIdentity(accountId, recipients, replyTo),
+    queryFn: async () =>
+      (
+        await client.request(
+          {
+            type: "ChooseIdentity",
+            account_id: accountId,
+            recipients: [...recipients],
+            reply_to: replyTo,
+          },
+          "IdentityChosen",
+        )
+      ).identity_id,
     enabled,
   });
 }

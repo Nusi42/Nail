@@ -67,7 +67,8 @@ falls back to messages), `GetThread` (no thread view).
 **Identity rules in the UI (interim).** Choosing an identity for a *new*
 message from a virtual account's per-domain rules is done in the composer
 (`identityForRecipients`) until the core offers a request for it; replies
-pick the identity the original was addressed to.
+pick the identity the original was addressed to. *Superseded by ADR 0021:
+the core chooses the identity (`ChooseIdentity`).*
 
 **The mock core implements the whole M1a contract.** `MockTransport` now
 simulates virtual accounts (role merging, hand mappings, per-account

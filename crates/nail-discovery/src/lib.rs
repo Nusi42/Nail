@@ -29,7 +29,9 @@ mod email;
 mod net;
 mod xml;
 
-pub use discover::{Discoverer, DiscoveryError, ISPDB_BASE, discover, protocols, rank};
+pub use discover::{
+    Discoverer, DiscoveryError, ISPDB_BASE, discover, flag_foreign_hosts, protocols, rank,
+};
 pub use net::{
     DnsLookup, HickoryDns, HostProbe, HttpFetch, HttpReply, MxRecord, NetError, ReqwestFetch,
     SrvRecord, TcpProbe,

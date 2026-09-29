@@ -82,6 +82,26 @@ test("an account is added through discovery against the mock servers", async ({ 
   await expect(rows(page).filter({ hasText: "Welcome to New Example Mail" })).toHaveCount(1);
 });
 
+test("settings that could not be verified come with a warning", async ({ page }) => {
+  await page.goto(server.url);
+  await page
+    .getByRole("toolbar", { name: "Main toolbar" })
+    .getByRole("button", { name: "Add account" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Add account" });
+  // Only DNS records answer for this domain, and they point elsewhere.
+  await dialog.getByRole("textbox", { name: "Email address" }).fill("bob@elsewhere.example");
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(dialog.getByText("DNS records of the domain")).toBeVisible();
+  await expect(
+    dialog.locator('[data-part="account-setup.candidate.warning"][data-warning="foreign-hosts"]'),
+  ).toHaveText("The servers are not part of your address's domain.");
+  await expect(dialog.getByRole("alert")).toContainText("could not be verified");
+  // The servers are shown for checking, not just summarized.
+  const incoming = dialog.getByRole("group", { name: "Incoming mail" });
+  await expect(incoming.getByRole("textbox", { name: "Server" })).toHaveValue("imap.mailhost.test");
+});
+
 test("a POP3 account receives mail", async ({ page }) => {
   await page.goto(server.url);
   await accountItems(page).filter({ hasText: "Home" }).click();

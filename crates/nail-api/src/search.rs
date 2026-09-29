@@ -86,17 +86,20 @@ pub enum SearchErrorKind {
     UnknownField,
     /// A value that does not fit its field (a bad date, size or `is:` flag).
     InvalidValue,
+    /// The query is too long or nested too deeply (parentheses, `NOT`).
+    TooComplex,
 }
 
 impl SearchErrorKind {
     /// All kinds.
-    pub const ALL: [SearchErrorKind; 6] = [
+    pub const ALL: [SearchErrorKind; 7] = [
         Self::UnexpectedToken,
         Self::UnexpectedEnd,
         Self::UnterminatedQuote,
         Self::UnbalancedParenthesis,
         Self::UnknownField,
         Self::InvalidValue,
+        Self::TooComplex,
     ];
 
     /// Wire name, e.g. `unknown-field`.
@@ -108,6 +111,7 @@ impl SearchErrorKind {
             Self::UnbalancedParenthesis => "unbalanced-parenthesis",
             Self::UnknownField => "unknown-field",
             Self::InvalidValue => "invalid-value",
+            Self::TooComplex => "too-complex",
         }
     }
 

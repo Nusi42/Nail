@@ -2,21 +2,15 @@ import { QueryClient } from "@tanstack/react-query";
 import { TransportClient } from "../api/client";
 import type { MessageSummary } from "../api/generated";
 import { MockTransport } from "../api/mock";
+import { patternMatches } from "../api/mockAccounts";
 import { createMockData } from "../api/mockData";
+import { displayName, formatAddress, formatAddressList, parseAddressList } from "./addresses";
 import {
-  displayName,
-  formatAddress,
-  formatAddressList,
-  parseAddressList,
-  patternMatches,
-} from "./addresses";
-import {
-  addressedIdentity,
   cancelSend,
+  chooseIdentity,
   discardComposer,
   draftOf,
   emptyComposer,
-  identityForRecipients,
   saveComposer,
   sendComposer,
   startCompose,
@@ -85,16 +79,6 @@ describe("addresses", () => {
     expect(patternMatches("*@client.com", "bob@eu.client.com")).toBe(false);
     expect(patternMatches("*@*.client.com", "bob@eu.client.com")).toBe(true);
     expect(patternMatches("bob@client.com", "bob@client.com")).toBe(true);
-    expect(
-      identityForRecipients(
-        [
-          { pattern: "*@a.example", identity: "work" },
-          { pattern: "*@b.example", identity: "home" },
-        ],
-        ["x@b.example", "y@a.example"],
-      ),
-    ).toBe("work");
-    expect(identityForRecipients([], ["x@b.example"])).toBeNull();
   });
 });
 
@@ -210,14 +194,32 @@ describe("composer flows", () => {
     expect(f?.text).toContain("composer-forward-header");
   });
 
-  it("finds the identity a message was addressed to", async () => {
+  it("asks the core which identity to send from", async () => {
     const ctx = context();
-    const { identities } = await ctx.client.request(
-      { type: "ListIdentities", account_id: null },
-      "Identities",
+    // A reply goes out from the identity the original was sent to.
+    expect((await chooseIdentity(ctx, "acc-personal", [], "acc-work/Inbox#1"))?.id).toBe(
+      "ada@work.example",
     );
-    const body = ctx.transport.data.bodies.get("acc-work/Inbox#1");
-    expect(body && addressedIdentity(identities, body)?.id).toBe("ada@work.example");
+    expect((await chooseIdentity(ctx, "acc-personal", [], null))?.id).toBe("ada@example.org");
+    // A virtual account's rules: the first rule matching any recipient.
+    ctx.transport.data.accountsConfig.virtual_accounts.push({
+      id: "team",
+      name: "Team",
+      members: ["acc-personal", "acc-work"],
+      merge_roles: true,
+      folder_mappings: [],
+      default_identity: "ada@example.org",
+      identity_rules: [
+        { pattern: "*@a.example", identity: "ada@work.example" },
+        { pattern: "*@b.example", identity: "ada@example.org" },
+      ],
+    });
+    expect((await chooseIdentity(ctx, "team", ["x@b.example", "y@a.example"], null))?.id).toBe(
+      "ada@work.example",
+    );
+    expect((await chooseIdentity(ctx, "team", ["x@c.example"], null))?.id).toBe("ada@example.org");
+    const asked = ctx.transport.requests.filter((r) => r.type === "ChooseIdentity");
+    expect(asked).toHaveLength(4);
   });
 
   it("validates before sending", async () => {

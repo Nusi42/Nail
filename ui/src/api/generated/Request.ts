@@ -94,7 +94,19 @@ account_id: AccountId, } | { "type": "ListIdentities",
  * A real account (its identities), a virtual account (its members'
  * identities) or `null` for all.
  */
-account_id: AccountId | null, } | { "type": "ListVirtualAccounts" } | { "type": "AddVirtualAccount", 
+account_id: AccountId | null, } | { "type": "ChooseIdentity", 
+/**
+ * The active account (real or virtual), `null` for all.
+ */
+account_id: AccountId | null, 
+/**
+ * Recipient addresses entered so far (To, Cc, Bcc).
+ */
+recipients: Array<string>, 
+/**
+ * The message replied to or forwarded, if any.
+ */
+reply_to: MessageId | null, } | { "type": "ListVirtualAccounts" } | { "type": "AddVirtualAccount", 
 /**
  * The new virtual account; an empty `id` lets the core derive one.
  */

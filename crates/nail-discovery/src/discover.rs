@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nail_api::accounts::{
-    AuthConfig, DiscoveredAccount, DiscoverySource, ImapOptions, IncomingServer, MailProtocol,
-    OutgoingServer, Pop3Options, ServerEndpoint, SmtpOptions, TlsMode,
+    AuthConfig, DiscoveredAccount, DiscoverySource, DiscoveryWarning, ImapOptions, IncomingServer,
+    MailProtocol, OutgoingServer, Pop3Options, ServerEndpoint, SmtpOptions, TlsMode,
 };
 use url::Url;
 
@@ -159,7 +159,15 @@ impl Discoverer {
             Err(e) => Err(e),
         };
         match found {
-            Ok(found) => found,
+            Ok(mut found) => {
+                if url.scheme() != "https" {
+                    // Anyone on the network path could have answered.
+                    for candidate in &mut found {
+                        candidate.warnings.push(DiscoveryWarning::InsecureSource);
+                    }
+                }
+                found
+            }
             Err(err) => {
                 tracing::debug!(%url, %err, "autoconfig lookup found nothing");
                 Vec::new()
@@ -306,6 +314,7 @@ impl Discoverer {
                 incoming,
                 outgoing: outgoing.clone(),
                 provider_name: None,
+                warnings: Vec::new(),
             })
             .collect()
     }
@@ -376,6 +385,29 @@ impl Discoverer {
         Vec::new()
     }
 
+    /// The address's domain and the base domains of its mail exchangers:
+    /// where its servers are expected to live.
+    async fn expected_domains(&self, email: &Email) -> Vec<String> {
+        let mut domains = vec![email.domain.clone()];
+        let mx = tokio::time::timeout(self.timeout, self.dns.mx(&email.domain)).await;
+        if let Ok(Ok(records)) = mx {
+            for record in records {
+                // The exchanger's parent domain (`mx.provider.example` ->
+                // `provider.example`), not a guessed registrable domain,
+                // so `mail.example.co.uk` never allows all of `co.uk`.
+                let host = record.exchange.trim_end_matches('.').to_ascii_lowercase();
+                let parent = match host.split_once('.') {
+                    Some((_, rest)) if rest.contains('.') => rest.to_owned(),
+                    _ => host,
+                };
+                if !parent.is_empty() && !domains.contains(&parent) {
+                    domains.push(parent);
+                }
+            }
+        }
+        domains
+    }
+
     /// Probes common host names; one candidate per incoming protocol found.
     async fn guess(&self, email: &Email) -> Vec<DiscoveredAccount> {
         let d = &email.domain;
@@ -423,6 +455,7 @@ impl Discoverer {
             incoming,
             outgoing: outgoing.clone(),
             provider_name: None,
+            warnings: Vec::new(),
         })
         .collect()
     }
@@ -486,6 +519,54 @@ fn pop3_server(server: ServerEndpoint) -> IncomingServer {
     }
 }
 
+/// Whether a candidate was fetched over plain HTTP.
+fn insecure(candidate: &DiscoveredAccount) -> bool {
+    candidate
+        .warnings
+        .contains(&DiscoveryWarning::InsecureSource)
+}
+
+/// Whether a candidate came from a source that the domain owner (or
+/// Mozilla's curated ISPDB) authenticated over HTTPS.
+fn authenticated(candidate: &DiscoveredAccount) -> bool {
+    !insecure(candidate)
+        && matches!(
+            candidate.source,
+            DiscoverySource::Autoconfig
+                | DiscoverySource::WellKnown
+                | DiscoverySource::Ispdb
+                | DiscoverySource::Autodiscover
+        )
+}
+
+/// Whether `host` is `domain` or a subdomain of it (ASCII case-insensitive).
+fn under(host: &str, domain: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    let domain = domain.trim_end_matches('.').to_ascii_lowercase();
+    !domain.is_empty() && (host == domain || host.ends_with(&format!(".{domain}")))
+}
+
+/// Adds [`DiscoveryWarning::ForeignHosts`] to candidates from sources
+/// nobody authenticated (plain HTTP, SRV) whose servers are not under one
+/// of `domains` (the address's domain and its MX domains).
+pub fn flag_foreign_hosts(candidates: &mut [DiscoveredAccount], domains: &[String]) {
+    for candidate in candidates {
+        if authenticated(candidate) || candidate.source == DiscoverySource::Guess {
+            continue;
+        }
+        let mut hosts = vec![candidate.incoming.server().host.as_str()];
+        if let Some(outgoing) = &candidate.outgoing {
+            hosts.push(outgoing.server().host.as_str());
+        }
+        let foreign = hosts
+            .iter()
+            .any(|host| !domains.iter().any(|d| under(host, d)));
+        if foreign && !candidate.warnings.contains(&DiscoveryWarning::ForeignHosts) {
+            candidate.warnings.push(DiscoveryWarning::ForeignHosts);
+        }
+    }
+}
+
 fn source_rank(source: DiscoverySource) -> u8 {
     match source {
         DiscoverySource::Autoconfig => 0,
@@ -506,12 +587,20 @@ fn plaintext(candidate: &DiscoveredAccount) -> bool {
             .is_some_and(|o| o.server().tls == TlsMode::Plaintext)
 }
 
-/// Orders candidates: encrypted before unencrypted, then by source (most
-/// trusted first), keeping each source's own order; drops duplicates
-/// (same servers from several sources), keeping the best-ranked one.
+/// Orders candidates: anything fetched over plain HTTP last (and dropped
+/// entirely when an authenticated HTTPS source answered, since it could
+/// have been forged on the network), then encrypted before unencrypted,
+/// then by source (most trusted first), keeping each source's own order;
+/// drops duplicates (same servers from several sources), keeping the
+/// best-ranked one.
 pub fn rank(candidates: Vec<DiscoveredAccount>) -> Vec<DiscoveredAccount> {
-    let mut indexed: Vec<(usize, DiscoveredAccount)> = candidates.into_iter().enumerate().collect();
-    indexed.sort_by_key(|(i, c)| (plaintext(c), source_rank(c.source), *i));
+    let trusted_answer = candidates.iter().any(authenticated);
+    let mut indexed: Vec<(usize, DiscoveredAccount)> = candidates
+        .into_iter()
+        .filter(|c| !(trusted_answer && insecure(c)))
+        .enumerate()
+        .collect();
+    indexed.sort_by_key(|(i, c)| (insecure(c), plaintext(c), source_rank(c.source), *i));
     let mut out: Vec<DiscoveredAccount> = Vec::new();
     for (_, candidate) in indexed {
         let duplicate = out
@@ -526,7 +615,9 @@ pub fn rank(candidates: Vec<DiscoveredAccount>) -> Vec<DiscoveredAccount> {
 
 /// Finds account settings for `email`.
 ///
-/// Runs autoconfig (`autoconfig.<domain>`, `https` then `http`),
+/// Runs autoconfig (`autoconfig.<domain>`, `https` then `http`; results
+/// fetched over `http` carry [`DiscoveryWarning::InsecureSource`], rank
+/// last and are dropped when an authenticated source answered),
 /// `/.well-known/autoconfig`, the ISPDB (by domain, else by MX host), RFC 6186
 /// SRV records and Autodiscover at once, each within
 /// [`Discoverer::timeout`]; if all of them come back empty and guessing is
@@ -554,6 +645,10 @@ pub async fn discover(
         .collect();
     if all.is_empty() && d.guess {
         all = d.bounded("guess", d.guess(&email)).await;
+    }
+    if all.iter().any(|c| !authenticated(c)) {
+        let domains = d.expected_domains(&email).await;
+        flag_foreign_hosts(&mut all, &domains);
     }
     let ranked = rank(all);
     tracing::debug!(domain = %email.domain, candidates = ranked.len(), "discovery finished");
@@ -590,6 +685,7 @@ mod tests {
             },
             outgoing: None,
             provider_name: None,
+            warnings: Vec::new(),
         }
     }
 
@@ -634,5 +730,45 @@ mod tests {
             DiscoveryError::InvalidEmail("x".into()).code(),
             nail_api::ErrorCode::InvalidRequest
         );
+    }
+
+    #[test]
+    fn plain_http_ranks_last_and_is_dropped_next_to_authenticated_answers() {
+        let mut forged = candidate(
+            DiscoverySource::Autoconfig,
+            "imap.evil.example",
+            TlsMode::Implicit,
+        );
+        forged.warnings.push(DiscoveryWarning::InsecureSource);
+        let srv = candidate(DiscoverySource::Srv, "imap.example.org", TlsMode::Implicit);
+        let guess = candidate(
+            DiscoverySource::Guess,
+            "mail.example.org",
+            TlsMode::Starttls,
+        );
+        let ranked = rank(vec![forged.clone(), srv.clone(), guess.clone()]);
+        assert_eq!(ranked, [srv.clone(), guess, forged.clone()]);
+
+        let ispdb = candidate(
+            DiscoverySource::Ispdb,
+            "imap.example.org",
+            TlsMode::Implicit,
+        );
+        let ranked = rank(vec![forged.clone(), ispdb.clone()]);
+        assert_eq!(ranked, [ispdb]);
+
+        let mut all = vec![forged, srv];
+        flag_foreign_hosts(&mut all, &["example.org".to_owned()]);
+        assert_eq!(
+            all[0].warnings,
+            [
+                DiscoveryWarning::InsecureSource,
+                DiscoveryWarning::ForeignHosts
+            ]
+        );
+        assert!(all[1].warnings.is_empty());
+        assert!(under("IMAP.Example.org.", "example.org"));
+        assert!(!under("example.org.evil.example", "example.org"));
+        assert!(!under("badexample.org", "example.org"));
     }
 }

@@ -62,6 +62,14 @@ describe("mock query language", () => {
     expect(parseQuery(text).error).toMatchObject({ kind, start, end });
   });
 
+  it("refuses queries nested too deeply or too long, like the core", () => {
+    const deep = `${"(".repeat(1000)}a${")".repeat(1000)}`;
+    expect(parseQuery(deep).error).toMatchObject({ kind: "too-complex", start: 64, end: 65 });
+    expect(parseQuery(`${"NOT ".repeat(200)}a`).error?.kind).toBe("too-complex");
+    expect(parseQuery("a ".repeat(3000)).error?.kind).toBe("too-complex");
+    expect(parseQuery(`${"(".repeat(64)}a${")".repeat(64)}`).error).toBeNull();
+  });
+
   it("counts positions in UTF-16 code units", () => {
     // "é" and the emoji take 1 and 2 code units: the error starts after them.
     const text = "é😀 colour:x";

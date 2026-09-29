@@ -256,24 +256,26 @@ struct SignatureSchema {
     markdown: Option<String>,
 }
 
-/// What to download.
+/// What to download. Not applied yet: this version always downloads whole
+/// messages.
 #[derive(JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 enum BodiesSchema {
     /// Whole messages.
     Full,
-    /// Headers; bodies on demand.
+    /// Headers; bodies on demand (not applied yet).
     HeadersOnly,
-    /// Whole messages of the last `days` days.
+    /// Whole messages of the last `days` days (not applied yet).
     Recent,
 }
 
 /// `sync bodies=… days=… { folder … }`.
 #[derive(JsonSchema)]
 struct SyncSchema {
-    /// Default for all folders (default full).
+    /// Default for all folders (default full). Not applied yet: whole
+    /// messages are always downloaded.
     bodies: Option<BodiesSchema>,
-    /// Days, with bodies="recent".
+    /// Days, with bodies="recent" (not applied yet).
     #[schemars(range(min = 1, max = 36500))]
     days: Option<u32>,
     /// `folder path=…|role=… bodies=… days=… enabled=… idle=…` rules, later
@@ -307,9 +309,9 @@ struct FolderRuleSchema {
     path: Option<String>,
     /// Special-use role (or use `path`).
     role: Option<RoleSchema>,
-    /// What to download.
+    /// What to download (not applied yet).
     bodies: Option<BodiesSchema>,
-    /// Days, with bodies="recent".
+    /// Days, with bodies="recent" (not applied yet).
     #[schemars(range(min = 1, max = 36500))]
     days: Option<u32>,
     /// Synchronize the folder at all (default `#true`).

@@ -219,6 +219,7 @@ search-error-unterminated-quote = A quotation mark is not closed.
 search-error-unbalanced-parenthesis = The parentheses do not match.
 search-error-unknown-field = Unknown search field.
 search-error-invalid-value = This value does not fit the search field.
+search-error-too-complex = This search is too long or has too many nested parts.
 
 ## OAuth2 sign-in: pages the browser shows after returning to Nail (rendered by the core)
 

@@ -46,6 +46,10 @@ pub struct EngineTiming {
     pub send_retry: Duration,
     /// Overrides every account's poll interval (full passes, POP3 fetches).
     pub poll_override: Option<Duration>,
+    /// An IMAP session (or IDLE watcher connection) that lasted this long
+    /// resets the reconnect backoff when it fails; one that fails sooner
+    /// keeps the backoff growing.
+    pub healthy_after: Duration,
 }
 
 impl Default for EngineTiming {
@@ -55,6 +59,7 @@ impl Default for EngineTiming {
             reconnect_max: Duration::from_secs(300),
             send_retry: Duration::from_secs(60),
             poll_override: None,
+            healthy_after: Duration::from_secs(60),
         }
     }
 }
@@ -67,6 +72,7 @@ impl EngineTiming {
             reconnect_max: Duration::from_secs(1),
             send_retry: Duration::from_secs(1),
             poll_override: None,
+            healthy_after: Duration::from_secs(5),
         }
     }
 }
@@ -612,6 +618,15 @@ impl Service {
             Request::ListIdentities { account_id } => Response::Identities {
                 identities: self.list_identities(account_id.as_ref()).await?,
             },
+            Request::ChooseIdentity {
+                account_id,
+                recipients,
+                reply_to,
+            } => Response::IdentityChosen {
+                identity_id: self
+                    .choose_identity(account_id.as_ref(), &recipients, reply_to)
+                    .await?,
+            },
             Request::ListVirtualAccounts => Response::VirtualAccounts {
                 virtual_accounts: self.inner.accounts.config().virtual_accounts,
             },
@@ -708,7 +723,7 @@ impl Service {
         })
     }
 
-    async fn message_body(&self, id: MessageId) -> Result<MessageBody> {
+    pub(crate) async fn message_body(&self, id: MessageId) -> Result<MessageBody> {
         let store = self.inner.store.clone();
         let blobs = self.inner.blobs.clone();
         tokio::task::spawn_blocking(move || -> Result<MessageBody> {

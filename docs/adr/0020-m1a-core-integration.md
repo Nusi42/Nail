@@ -87,7 +87,8 @@ retryable failure):
   `move_messages` (MOVE or COPY + `\Deleted` + expunge), deletes to Trash as
   moves, permanent deletes as `\Deleted` + expunge. A message moved again
   before its first move reached the server uses the UID the first replay
-  learned.
+  learned. *ADR 0021 adds UIDVALIDITY checks, Message-ID lookups and
+  idempotent cross-account moves.*
 - Moves into another account append the raw message there (a short-lived
   connection to the target's IMAP server; accounts without one keep only
   the local copy) and then expunge it from the source. This is not atomic:
@@ -123,7 +124,9 @@ a small addition to WP13's store made by the integrator.
   files sent mail itself (Gmail, Outlook.com / Office 365 hosts). POP3
   accounts keep the copy in their local Sent folder. The copy is part of
   sending, not a queued operation. A reply marks the original answered
-  through the operation queue.
+  through the operation queue. *Superseded by ADR 0021: the copy is stored
+  locally at once and filed through the operation queue
+  (`AppendMessage`).*
 
 ### Virtual accounts
 
@@ -143,6 +146,7 @@ a small addition to WP13's store made by the integrator.
 - Choosing the sender identity for new messages and replies stays in the
   UI (ADR 0019); the core only lists identities (a virtual account's
   default first). A request for it can move the logic later.
+  *Superseded by ADR 0021: `ChooseIdentity` in the core.*
 
 ### Search
 

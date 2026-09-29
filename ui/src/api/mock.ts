@@ -135,6 +135,8 @@ export class MockTransport implements Transport, MockCore {
         return accounts.removeAccount(this, request.account_id);
       case "ListIdentities":
         return accounts.listIdentities(d, request.account_id);
+      case "ChooseIdentity":
+        return accounts.chooseIdentity(d, request.account_id, request.recipients, request.reply_to);
       case "ListVirtualAccounts":
         return {
           type: "VirtualAccounts",

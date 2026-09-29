@@ -6,11 +6,13 @@
 //! The sender task wakes for the next due entry, builds the message
 //! (plain text in M1a, `mime.rs`), submits it and records the outcome:
 //!
-//! * accepted: `sent`; the draft is deleted; a copy goes to the Sent
-//!   folder (IMAP `APPEND`, unless `save-sent-copy=#false` or the provider
-//!   files sent mail itself, like Gmail and Outlook.com; POP3 accounts keep
-//!   the copy locally); a reply marks the original answered through the
-//!   operation queue;
+//! * accepted: `sent`; the draft is deleted; a copy goes to the local Sent
+//!   folder at once and, for IMAP accounts, to the server's Sent folder
+//!   through the operation queue (`AppendMessage`, replayed like every
+//!   other write, so it survives being offline) — unless
+//!   `save-sent-copy=#false` or the provider files sent mail itself, like
+//!   Gmail and Outlook.com; a reply marks the original answered through
+//!   the operation queue;
 //! * a temporary failure: back to `scheduled` with a growing delay (at
 //!   most five attempts);
 //! * a permanent failure: `failed` until the user retries or edits it.
@@ -305,36 +307,36 @@ impl Service {
             tracing::info!(account = %account_id, "no Sent folder; not keeping a copy");
             return Ok(());
         };
+        // The copy is stored locally at once (so it survives being
+        // offline); an IMAP account files it on the server through the
+        // operation queue (`AppendMessage`), POP3 accounts keep it local.
+        let id = ids::local_message_id(&folder.id, outbox.as_str());
+        let incoming = IncomingMessage {
+            id: Some(id.clone()),
+            flags: Flags {
+                seen: true,
+                ..Flags::default()
+            },
+            raw: raw.to_vec(),
+            ..IncomingMessage::default()
+        };
+        let blobs = self.inner.blobs.clone();
+        let index = Arc::clone(&self.inner.search);
+        let target = folder.clone();
+        self.inner
+            .store
+            .call(move |s| ingest(s, &blobs, Some(&index), &target, 0, &[incoming]))
+            .await?;
         match &account.incoming {
             IncomingServer::Imap { .. } => {
-                let settings = self.imap_settings(&account_id).ok_or_else(|| {
-                    ApiError::internal(format!("account {account_id} has no IMAP settings"))
-                })?;
-                let mut client = crate::sync::connect(&settings).await?;
-                client
-                    .append(&folder.path, raw, &[nail_proto_imap::Flag::Seen], None)
-                    .await?;
-                let _ = client.logout().await;
-                // The engine fetches the copy with its next pass.
-                self.inner.engines.request_sync(&account_id);
+                let op = Operation::AppendMessage {
+                    message_id: id,
+                    folder_id: folder.id.clone(),
+                };
+                // Broadcasts the change and wakes the account's replay.
+                self.enqueue(vec![op]).await?;
             }
             IncomingServer::Pop3 { .. } => {
-                let incoming = IncomingMessage {
-                    id: Some(ids::local_message_id(&folder.id, outbox.as_str())),
-                    flags: Flags {
-                        seen: true,
-                        ..Flags::default()
-                    },
-                    raw: raw.to_vec(),
-                    ..IncomingMessage::default()
-                };
-                let blobs = self.inner.blobs.clone();
-                let index = Arc::clone(&self.inner.search);
-                let target = folder.clone();
-                self.inner
-                    .store
-                    .call(move |s| ingest(s, &blobs, Some(&index), &target, 0, &[incoming]))
-                    .await?;
                 self.broadcast(Event::MailChanged {
                     folder_ids: vec![folder.id.clone()],
                 });

@@ -12,7 +12,8 @@ use nail_api::accounts::{
 use nail_api::engine::EngineError;
 use nail_api::{
     Account, AccountConfig, AccountId, AccountsConfig, ApiError, ErrorCode, Event, Identity,
-    IncomingServer, OutgoingServer, Response, ServerEndpoint, VirtualAccountConfig,
+    IdentityId, IncomingServer, MessageId, OutgoingServer, Response, ServerEndpoint,
+    VirtualAccountConfig,
 };
 use nail_discovery::Discoverer;
 use nail_store::Store;
@@ -56,7 +57,7 @@ pub(crate) fn normalize_account(config: &mut AccountConfig) {
     config.email = config.email.trim().to_owned();
     if config.identities.is_empty() {
         config.identities.push(Identity {
-            id: nail_api::IdentityId::new(config.email.clone()),
+            id: IdentityId::new(config.email.clone()),
             account_id: config.id.clone(),
             email: config.email.clone(),
             name: None,
@@ -469,6 +470,53 @@ impl Service {
             out.insert(0, identity);
         }
         Ok(out)
+    }
+
+    /// `ChooseIdentity`: the virtual account's identity rules, else the
+    /// identity the replied-to message was sent to, else the default.
+    /// Business logic of virtual accounts (plan WP14): every client (the
+    /// UI, MCP agents) gets the same choice.
+    pub(crate) async fn choose_identity(
+        &self,
+        account: Option<&AccountId>,
+        recipients: &[String],
+        reply_to: Option<MessageId>,
+    ) -> Result<Option<IdentityId>> {
+        let config = self.inner.accounts.config();
+        if let Some(va) = account.and_then(|id| config.virtual_account(id))
+            && let Some(rule) = va
+                .identity_rules
+                .iter()
+                .find(|rule| recipients.iter().any(|r| rule.matches(r)))
+        {
+            return Ok(Some(rule.identity.clone()));
+        }
+        if let Some(original) = reply_to {
+            // Unknown or not downloaded: fall back to the default.
+            if let Ok(body) = self.message_body(original).await {
+                let addressed: Vec<String> = body
+                    .headers
+                    .to
+                    .iter()
+                    .chain(&body.headers.cc)
+                    .map(|a| a.email.to_ascii_lowercase())
+                    .collect();
+                if let Some(identity) = self
+                    .list_identities(None)
+                    .await?
+                    .into_iter()
+                    .find(|i| addressed.contains(&i.email.to_ascii_lowercase()))
+                {
+                    return Ok(Some(identity.id));
+                }
+            }
+        }
+        Ok(self
+            .list_identities(account)
+            .await?
+            .into_iter()
+            .next()
+            .map(|i| i.id))
     }
 
     /// `AddVirtualAccount` / `UpdateVirtualAccount`.

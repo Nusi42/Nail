@@ -79,19 +79,3 @@ export function formatAddressList(addresses: readonly Address[]): string {
 export function displayName(address: Address | null | undefined): string {
   return address ? (address.name ?? address.email) : "";
 }
-
-/**
- * Whether an identity rule pattern matches an address: `*@example.com`
- * (a domain), `*@*.example.com` (subdomains) or a full address;
- * case-insensitive.
- */
-export function patternMatches(pattern: string, email: string): boolean {
-  const p = pattern.trim().toLowerCase();
-  const e = email.trim().toLowerCase();
-  if (p.startsWith("*@*.")) {
-    const domain = e.split("@")[1] ?? "";
-    return domain.endsWith(`.${p.slice(4)}`);
-  }
-  if (p.startsWith("*@")) return (e.split("@")[1] ?? "") === p.slice(2);
-  return p === e;
-}

@@ -585,6 +585,36 @@ impl ImapClient {
             .ok_or_else(|| ImapError::Protocol(format!("no status for {path}")))
     }
 
+    /// Makes `path` the selected mailbox read-write, reusing the current
+    /// selection when it fits, and returns its state (its UIDVALIDITY tells
+    /// whether UIDs recorded earlier still name the same messages).
+    pub async fn select_for_write(&mut self, path: &str) -> Result<FolderStatus> {
+        self.ensure_selected(path, true).await?;
+        self.selected
+            .as_ref()
+            .map(|s| s.status)
+            .ok_or_else(|| ImapError::Protocol(format!("no status for {path}")))
+    }
+
+    /// The UIDs of the messages in `path` whose `Message-ID` header is
+    /// `message_id` (angle brackets optional), ascending (`UID SEARCH
+    /// HEADER`). Selects `path` read-write, like the write methods.
+    pub async fn find_by_message_id(&mut self, path: &str, message_id: &str) -> Result<Vec<u32>> {
+        let id = message_id
+            .trim()
+            .trim_start_matches('<')
+            .trim_end_matches('>');
+        if id.is_empty() {
+            return Ok(Vec::new());
+        }
+        // With the brackets, the substring match of SEARCH HEADER only
+        // matches this exact id.
+        let wanted = quote(&format!("<{id}>"))?;
+        self.ensure_selected(path, true).await?;
+        self.search(&format!("HEADER Message-ID {wanted}"), |_| true)
+            .await
+    }
+
     /// Makes `path` the selected mailbox, read-write when `writable`;
     /// reuses the current selection when it fits.
     pub(crate) async fn ensure_selected(&mut self, path: &str, writable: bool) -> Result<()> {

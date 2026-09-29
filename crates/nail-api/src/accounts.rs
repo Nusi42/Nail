@@ -830,8 +830,26 @@ pub struct DiscoveredAccount {
     #[serde(default)]
     pub outgoing: Option<OutgoingServer>,
     /// Provider display name from the source (e.g. "Example Mail"), if any.
+    /// Untrusted text from the source.
     #[serde(default)]
     pub provider_name: Option<String>,
+    /// Reasons to check the proposal before sending a password to it;
+    /// empty for proposals from authenticated sources.
+    #[serde(default)]
+    pub warnings: Vec<DiscoveryWarning>,
+}
+
+/// Why a discovered proposal needs a second look (see
+/// [`DiscoveredAccount::warnings`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum DiscoveryWarning {
+    /// Fetched over plain HTTP: anyone on the network path could have
+    /// forged it.
+    InsecureSource,
+    /// A server is neither under the address's domain nor under the domain
+    /// of its mail exchanger (MX).
+    ForeignHosts,
 }
 
 /// Source of discovered settings, most trusted first.

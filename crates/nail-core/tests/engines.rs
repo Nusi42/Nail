@@ -995,6 +995,104 @@ async fn virtual_accounts_merge_folders_and_dedupe() {
     f.service.shutdown().await;
 }
 
+async fn chosen(
+    service: &Service,
+    account: Option<&str>,
+    recipients: &[&str],
+    reply_to: Option<&nail_api::MessageId>,
+) -> Option<String> {
+    match request(
+        service,
+        Request::ChooseIdentity {
+            account_id: account.map(AccountId::new),
+            recipients: recipients.iter().map(|r| (*r).to_owned()).collect(),
+            reply_to: reply_to.cloned(),
+        },
+    )
+    .await
+    {
+        Response::IdentityChosen { identity_id } => identity_id.map(|i| i.as_str().to_owned()),
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// Review M1a: the sending identity (virtual-account rules, the identity a
+/// reply goes out from, the default) is chosen by the core, for every
+/// client alike.
+#[tokio::test]
+async fn the_core_chooses_the_sending_identity() {
+    let f = setup().await;
+    synced(&f).await;
+    request(
+        &f.service,
+        Request::AddVirtualAccount {
+            config: Box::new(VirtualAccountConfig {
+                id: AccountId::new("both"),
+                name: "Both".into(),
+                members: vec![MULTI_WORK_ID.into(), MULTI_HOME_ID.into()],
+                merge_roles: true,
+                folder_mappings: vec![],
+                default_identity: Some(MULTI_WORK_EMAIL.into()),
+                identity_rules: vec![nail_api::accounts::IdentityRule {
+                    pattern: "*@home.example".into(),
+                    identity: MULTI_HOME_EMAIL.into(),
+                }],
+            }),
+        },
+    )
+    .await;
+    let s = &f.service;
+    // Defaults: the virtual account's default identity; a real account's own.
+    assert_eq!(
+        chosen(s, Some("both"), &[], None).await.as_deref(),
+        Some(MULTI_WORK_EMAIL)
+    );
+    assert_eq!(
+        chosen(s, Some(MULTI_HOME_ID), &[], None).await.as_deref(),
+        Some(MULTI_HOME_EMAIL)
+    );
+    // A rule matching any recipient decides (case-insensitively).
+    assert_eq!(
+        chosen(
+            s,
+            Some("both"),
+            &["bob@example.org", "Grace@HOME.example"],
+            None
+        )
+        .await
+        .as_deref(),
+        Some(MULTI_HOME_EMAIL)
+    );
+    // Rules belong to the virtual account only.
+    assert_eq!(
+        chosen(s, Some(MULTI_WORK_ID), &["grace@home.example"], None)
+            .await
+            .as_deref(),
+        Some(MULTI_WORK_EMAIL)
+    );
+    // A reply goes out from the identity the original was sent to.
+    let garden = find(s, MULTI_HOME_ID, FolderRole::Inbox, "Garden party").await;
+    assert_eq!(
+        chosen(
+            s,
+            Some(MULTI_WORK_ID),
+            &["grace@home.example"],
+            Some(&garden.id)
+        )
+        .await
+        .as_deref(),
+        Some(MULTI_HOME_EMAIL)
+    );
+    // An unknown original falls back to the default.
+    assert_eq!(
+        chosen(s, Some(MULTI_WORK_ID), &[], Some(&"m-unknown".into()))
+            .await
+            .as_deref(),
+        Some(MULTI_WORK_EMAIL)
+    );
+    f.service.shutdown().await;
+}
+
 #[tokio::test]
 async fn hand_edits_of_accounts_kdl_apply_or_report_errors() {
     let f = setup().await;
@@ -1292,5 +1390,457 @@ async fn send_later_waits_for_its_time() {
         Response::Done
     );
     assert!(smtp_subjects(&f).is_empty());
+    f.service.shutdown().await;
+}
+
+async fn go_offline(f: &Fixture) {
+    control(f, "imap-offline", json!({ "offline": true }));
+    eventually("work offline", || async {
+        statuses(&f.service)
+            .await
+            .contains(&(AccountId::new(MULTI_WORK_ID), AccountState::Offline))
+    })
+    .await;
+}
+
+fn server_subjects(f: &Fixture, account: &str, mailbox: &str) -> Vec<String> {
+    control(
+        f,
+        "imap-messages",
+        json!({ "account": account, "mailbox": mailbox }),
+    )
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|m| m["subject"].as_str().unwrap_or_default().to_owned())
+    .collect()
+}
+
+fn count(subjects: &[String], subject: &str) -> usize {
+    subjects.iter().filter(|s| s.contains(subject)).count()
+}
+
+async fn queue_empty(f: &Fixture) {
+    eventually("queue empty", || async {
+        f.service.store().pending_op_count().unwrap() == 0
+    })
+    .await;
+}
+
+async fn delete(service: &Service, message: &MessageSummary, permanent: bool) {
+    op_ids(
+        request(
+            service,
+            Request::DeleteMessages {
+                message_ids: vec![message.id.clone()],
+                permanent,
+            },
+        )
+        .await,
+    );
+}
+
+async fn move_to(service: &Service, message: &MessageSummary, role: FolderRole) {
+    op_ids(
+        request(
+            service,
+            Request::MoveMessages {
+                message_ids: vec![message.id.clone()],
+                target: MoveTarget::Role(role),
+            },
+        )
+        .await,
+    );
+}
+
+async fn flag(service: &Service, message: &MessageSummary) {
+    op_ids(
+        request(
+            service,
+            Request::UpdateFlags {
+                message_ids: vec![message.id.clone()],
+                change: FlagChange {
+                    flagged: Some(true),
+                    ..FlagChange::default()
+                },
+            },
+        )
+        .await,
+    );
+}
+
+async fn local_subjects(service: &Service, role: FolderRole) -> Vec<String> {
+    let folder = folder(service, MULTI_WORK_ID, role).await.unwrap();
+    messages(service, &folder.id)
+        .await
+        .into_iter()
+        .map(|m| m.subject)
+        .collect()
+}
+
+/// Review M1a: a queued delete / move / flag change must not act on a UID
+/// that the server reassigned (UIDVALIDITY change) while it waited.
+#[tokio::test]
+async fn queued_writes_survive_a_uidvalidity_change() {
+    let f = setup().await;
+    synced(&f).await;
+    go_offline(&f).await;
+    let photo = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Photo of the new lab bench",
+    )
+    .await;
+    let invoice = find(&f.service, MULTI_WORK_ID, FolderRole::Inbox, "Your invoice").await;
+    let welcome = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Welcome to Nail",
+    )
+    .await;
+    delete(&f.service, &photo, true).await;
+    move_to(&f.service, &invoice, FolderRole::Archive).await;
+    flag(&f.service, &welcome).await;
+
+    // Meanwhile the server rebuilds INBOX: one message goes, the rest is
+    // renumbered from 1 under a new UIDVALIDITY.
+    let inbox = f.demo.work.store().mailbox("INBOX").unwrap();
+    // The first message that none of the writes is about (the newsletter,
+    // UID 2): every later UID shifts down by one.
+    let first = inbox
+        .messages
+        .iter()
+        .find(|m| {
+            let raw = String::from_utf8_lossy(&m.raw);
+            !["lab bench", "invoice", "Welcome to Nail"]
+                .iter()
+                .any(|t| raw.contains(t))
+        })
+        .unwrap();
+    f.demo.work.store().expunge("INBOX", first.uid);
+    f.demo.work.store().reset_uid_validity("INBOX").unwrap();
+    let before = server_subjects(&f, MULTI_WORK_ID, "INBOX");
+    assert_eq!(count(&before, "Grüße aus München"), 1);
+
+    control(&f, "imap-offline", json!({ "offline": false }));
+    queue_empty(&f).await;
+    eventually("the right messages changed on the server", || async {
+        let inbox = server_subjects(&f, MULTI_WORK_ID, "INBOX");
+        count(&inbox, "Photo of the new lab bench") == 0
+            && count(&inbox, "Your invoice") == 0
+            && count(
+                &server_subjects(&f, MULTI_WORK_ID, "Archive"),
+                "Your invoice",
+            ) == 1
+    })
+    .await;
+    let after = server_subjects(&f, MULTI_WORK_ID, "INBOX");
+    assert_eq!(after.len(), before.len() - 2, "{after:?}");
+    assert_eq!(count(&after, "Grüße aus München"), 1, "{after:?}");
+    assert_eq!(count(&after, "Welcome to Nail"), 1, "{after:?}");
+    let flagged: Vec<String> = f
+        .demo
+        .work
+        .store()
+        .mailbox("INBOX")
+        .unwrap()
+        .messages
+        .iter()
+        .filter(|m| m.flags.iter().any(|x| x == "\\Flagged"))
+        .map(|m| String::from_utf8_lossy(&m.raw).into_owned())
+        .collect();
+    assert!(
+        flagged.iter().any(|raw| raw.contains("Welcome to Nail")),
+        "the flag went missing"
+    );
+    let flagged_before = inbox
+        .messages
+        .iter()
+        .filter(|m| m.flags.iter().any(|x| x == "\\Flagged"))
+        .count();
+    assert!(
+        flagged.len() <= flagged_before + 1,
+        "a renumbered message got the flag: {} flagged",
+        flagged.len()
+    );
+    f.service.shutdown().await;
+}
+
+/// Review M1a: moving (or deleting) a message again before the first move
+/// reached the server must not be dropped.
+#[tokio::test]
+async fn moves_and_deletes_made_before_replay_are_all_applied() {
+    let f = setup().await;
+    synced(&f).await;
+    go_offline(&f).await;
+    // (A) Archive, then delete for good.
+    let welcome = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Welcome to Nail",
+    )
+    .await;
+    move_to(&f.service, &welcome, FolderRole::Archive).await;
+    delete(&f.service, &welcome, true).await;
+    // (B) Archive, then to Trash.
+    let photo = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Photo of the new lab bench",
+    )
+    .await;
+    move_to(&f.service, &photo, FolderRole::Archive).await;
+    delete(&f.service, &photo, false).await;
+    // (C) Archive, flag, then back to INBOX.
+    let invoice = find(&f.service, MULTI_WORK_ID, FolderRole::Inbox, "Your invoice").await;
+    move_to(&f.service, &invoice, FolderRole::Archive).await;
+    flag(&f.service, &invoice).await;
+    move_to(&f.service, &invoice, FolderRole::Inbox).await;
+
+    control(&f, "imap-offline", json!({ "offline": false }));
+    queue_empty(&f).await;
+    let failed = f
+        .service
+        .store()
+        .list_ops(Some(nail_store::OpState::Failed))
+        .unwrap();
+    assert!(failed.is_empty(), "{failed:?}");
+    let (inbox, archive, trash) = (
+        server_subjects(&f, MULTI_WORK_ID, "INBOX"),
+        server_subjects(&f, MULTI_WORK_ID, "Archive"),
+        server_subjects(&f, MULTI_WORK_ID, "Trash"),
+    );
+    for mailbox in [&inbox, &archive, &trash] {
+        assert_eq!(count(mailbox, "Welcome to Nail"), 0, "{mailbox:?}");
+    }
+    assert_eq!(count(&trash, "Photo of the new lab bench"), 1);
+    assert_eq!(count(&archive, "Photo of the new lab bench"), 0);
+    assert_eq!(count(&inbox, "Your invoice"), 1);
+    assert_eq!(count(&archive, "Your invoice"), 0);
+    assert!(
+        server_flags(&f, "INBOX", "Your invoice")
+            .is_some_and(|flags| flags.iter().any(|x| x == "\\Flagged"))
+    );
+
+    // After a sync every message shows once, where the user put it.
+    request(
+        &f.service,
+        Request::SyncNow {
+            account_id: Some(AccountId::new(MULTI_WORK_ID)),
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    eventually("local folders match", || async {
+        let inbox = local_subjects(&f.service, FolderRole::Inbox).await;
+        let archive = local_subjects(&f.service, FolderRole::Archive).await;
+        let trash = local_subjects(&f.service, FolderRole::Trash).await;
+        [&inbox, &archive, &trash]
+            .iter()
+            .all(|m| count(m, "Welcome to Nail") == 0)
+            && count(&trash, "Photo of the new lab bench") == 1
+            && count(&archive, "Photo of the new lab bench") == 0
+            && count(&inbox, "Your invoice") == 1
+            && count(&archive, "Your invoice") == 0
+    })
+    .await;
+    let trashed = f.service.store().get_message(&photo.id).unwrap();
+    assert!(trashed.uid.is_some(), "the trashed row learned its UID");
+    f.service.shutdown().await;
+}
+
+/// Review M1a: a server that accepts the login but fails the session right
+/// away must not get a full reconnect-and-sync every `reconnect_min`.
+#[tokio::test]
+async fn a_session_failing_right_after_login_backs_off() {
+    let f = setup().await;
+    synced(&f).await;
+    // Every session now breaks at its first LIST (the start of a pass).
+    f.demo.work.disconnect_on(Some("LIST"));
+    request(
+        &f.service,
+        Request::SyncNow {
+            account_id: Some(AccountId::new(MULTI_WORK_ID)),
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let before = f.demo.work.connection_count();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let attempts = f.demo.work.connection_count() - before;
+    // Growing delays (0.4 s, 0.8 s, then 1 s): about four attempts in 3 s;
+    // resetting to 0.2 s after every login would make it a dozen or more.
+    assert!(attempts <= 6, "{attempts} reconnects in 3 s");
+    f.demo.work.disconnect_on(None);
+    f.service.shutdown().await;
+}
+
+/// A demo-multi fixture with a third, IMAP account "new" (the discoverable
+/// mock server).
+async fn setup_with_new_account() -> Fixture {
+    use nail_api::engine::SecretStore;
+    let demo = start_demo_multi().await.unwrap();
+    let data_dir = tempfile::tempdir().unwrap();
+    let config_dir = tempfile::tempdir().unwrap();
+    let kdl = format!(
+        "{}\naccount \"new\" email=\"{MULTI_NEW_EMAIL}\" name=\"New\" {{\n    imap host=\"127.0.0.1\" port={} tls=\"plaintext\"\n}}\n",
+        demo.accounts_kdl(),
+        demo.new_imap.port()
+    );
+    std::fs::write(config_dir.path().join("accounts.kdl"), kdl).unwrap();
+    demo.secrets
+        .set(
+            &nail_api::SecretRef::default_for(
+                &AccountId::new("new"),
+                nail_api::accounts::SecretKind::Password,
+            ),
+            MULTI_NEW_PASSWORD,
+        )
+        .unwrap();
+    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
+    let service = Service::open(options).unwrap();
+    Fixture {
+        service,
+        demo,
+        config_dir,
+        _data_dir: data_dir,
+    }
+}
+
+/// Review M1a: a cross-account move whose source step fails after the copy
+/// was filed must not file it again on retry.
+#[tokio::test]
+async fn a_retried_cross_account_move_files_one_copy() {
+    let f = setup_with_new_account().await;
+    synced(&f).await;
+    eventually("new synced", || async {
+        inbox_count(&f.service, "new").await == 1
+    })
+    .await;
+    let new_inbox = folder(&f.service, "new", FolderRole::Inbox).await.unwrap();
+    let welcome = find(
+        &f.service,
+        MULTI_WORK_ID,
+        FolderRole::Inbox,
+        "Welcome to Nail",
+    )
+    .await;
+    // The source's expunge breaks the connection (a retryable failure)
+    // after the copy reached the target.
+    f.demo.work.disconnect_on(Some("UID EXPUNGE"));
+    op_ids(
+        request(
+            &f.service,
+            Request::MoveMessages {
+                message_ids: vec![welcome.id.clone()],
+                target: MoveTarget::FolderId(new_inbox.id.clone()),
+            },
+        )
+        .await,
+    );
+    eventually("copy filed in the target", || async {
+        count(&server_subjects(&f, "new", "INBOX"), "Welcome to Nail") == 1
+    })
+    .await;
+    // Let the engine fail and retry a few times.
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(f.service.store().pending_op_count().unwrap(), 1);
+    f.demo.work.disconnect_on(None);
+    queue_empty(&f).await;
+    eventually("gone from the source", || async {
+        count(
+            &server_subjects(&f, MULTI_WORK_ID, "INBOX"),
+            "Welcome to Nail",
+        ) == 0
+    })
+    .await;
+    assert_eq!(
+        count(&server_subjects(&f, "new", "INBOX"), "Welcome to Nail"),
+        1,
+        "the retry filed another copy"
+    );
+    f.service.shutdown().await;
+}
+
+/// Review M1a: the Sent copy goes through the operation queue, so an IMAP
+/// outage while sending does not lose it.
+#[tokio::test]
+async fn the_sent_copy_waits_for_the_imap_server() {
+    const SUBJECT: &str = "Sent while IMAP is down";
+    let f = setup().await;
+    synced(&f).await;
+    go_offline(&f).await;
+    let sent = save(
+        &f.service,
+        draft(MULTI_WORK_EMAIL, "bob@example.org", SUBJECT),
+    )
+    .await;
+    request(
+        &f.service,
+        Request::SendDraft {
+            draft_id: sent,
+            delay_secs: Some(0),
+            send_at: None,
+        },
+    )
+    .await;
+    eventually("SMTP received it", || async {
+        smtp_subjects(&f).iter().any(|d| d.contains(SUBJECT))
+    })
+    .await;
+    eventually("local Sent copy at once", || async {
+        count(&local_subjects(&f.service, FolderRole::Sent).await, SUBJECT) == 1
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT),
+        0
+    );
+    assert!(f.service.store().pending_op_count().unwrap() >= 1);
+
+    control(&f, "imap-offline", json!({ "offline": false }));
+    eventually("filed on the server", || async {
+        count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT) == 1
+    })
+    .await;
+    queue_empty(&f).await;
+    request(
+        &f.service,
+        Request::SyncNow {
+            account_id: Some(AccountId::new(MULTI_WORK_ID)),
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        count(&local_subjects(&f.service, FolderRole::Sent).await, SUBJECT),
+        1,
+        "the synced copy is the local one, not a second row"
+    );
+    let sent_folder = folder(&f.service, MULTI_WORK_ID, FolderRole::Sent)
+        .await
+        .unwrap();
+    let copy = messages(&f.service, &sent_folder.id)
+        .await
+        .into_iter()
+        .find(|m| m.subject == SUBJECT)
+        .unwrap();
+    assert!(
+        f.service
+            .store()
+            .get_message(&copy.id)
+            .unwrap()
+            .uid
+            .is_some()
+    );
+    assert_eq!(
+        count(&server_subjects(&f, MULTI_WORK_ID, "Sent"), SUBJECT),
+        1
+    );
     f.service.shutdown().await;
 }

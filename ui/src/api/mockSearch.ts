@@ -163,8 +163,14 @@ function tokenize(text: string): Token[] {
   return tokens;
 }
 
+/** Longest query accepted (the core counts bytes; close enough here). */
+const MAX_QUERY_LENGTH = 4096;
+/** Deepest nesting of parentheses and NOT / minus (as in nail-search). */
+const MAX_NESTING = 64;
+
 class Parser {
   private pos = 0;
+  private nesting = 0;
   constructor(
     private readonly tokens: Token[],
     private readonly length: number,
@@ -213,12 +219,22 @@ class Parser {
     return items.length === 1 ? (items[0] as QueryNode) : { type: "and", items };
   }
 
+  private enter(token: Token) {
+    if (this.nesting >= MAX_NESTING) {
+      throw new QueryError("too-complex", "nested too deeply", token.start, token.end);
+    }
+    this.nesting++;
+  }
+
   private unary(): QueryNode {
     const next = this.peek();
     if (next?.kind === "not") {
+      this.enter(next);
       this.pos++;
       if (!this.peek()) throw this.endError("NOT needs something to negate");
-      return { type: "not", item: this.unary() };
+      const item = this.unary();
+      this.nesting--;
+      return { type: "not", item };
     }
     return this.primary();
   }
@@ -227,6 +243,7 @@ class Parser {
     const next = this.peek();
     if (!next) throw this.endError("the query ends too early");
     if (next.kind === "lparen") {
+      this.enter(next);
       this.pos++;
       const inner = this.peek();
       if (!inner) {
@@ -240,6 +257,7 @@ class Parser {
         throw new QueryError("unbalanced-parenthesis", "( is not closed", next.start, next.end);
       }
       this.pos++;
+      this.nesting--;
       return node;
     }
     if (next.kind === "term") {
@@ -261,6 +279,9 @@ class Parser {
 /** Parses a query; throws nothing, returns the error instead. */
 export function parseQuery(text: string): { node: QueryNode | null; error: SearchError | null } {
   try {
+    if (text.length > MAX_QUERY_LENGTH) {
+      throw new QueryError("too-complex", "the query is too long", 0, text.length);
+    }
     const tokens = tokenize(text);
     if (tokens.length === 0) return { node: null, error: null };
     return { node: new Parser(tokens, text.length).parse(), error: null };

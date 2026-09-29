@@ -52,6 +52,11 @@ pub struct WatchConfig {
     pub reconnect_min: Duration,
     /// Longest reconnect delay (default 5 minutes).
     pub reconnect_max: Duration,
+    /// A connection that lasted this long counts as healthy: the backoff
+    /// starts again at `reconnect_min` after it fails (default 1 minute).
+    /// A connection that fails sooner (a server that accepts the login but
+    /// drops `IDLE`) keeps the backoff growing, so it is not hammered.
+    pub healthy_after: Duration,
 }
 
 impl Default for WatchConfig {
@@ -70,6 +75,7 @@ impl WatchConfig {
             poll_interval: Duration::from_secs(120),
             reconnect_min: Duration::from_secs(1),
             reconnect_max: Duration::from_secs(300),
+            healthy_after: Duration::from_secs(60),
         }
     }
 
@@ -91,6 +97,13 @@ impl WatchConfig {
     #[must_use]
     pub fn with_poll_interval(mut self, interval: Duration) -> Self {
         self.poll_interval = interval;
+        self
+    }
+
+    /// Sets how long a connection must last to reset the backoff.
+    #[must_use]
+    pub fn with_healthy_after(mut self, after: Duration) -> Self {
+        self.healthy_after = after;
         self
     }
 
@@ -220,7 +233,7 @@ async fn run(
         let error = match connected {
             Ok((mut client, status)) => {
                 refresh = false;
-                backoff = watch.reconnect_min;
+                let since = tokio::time::Instant::now();
                 let mode = if watch.use_idle && client.capabilities().has("IDLE") {
                     WatchMode::Idle
                 } else {
@@ -239,7 +252,14 @@ async fn run(
                         let _ = tokio::time::timeout(config.timeout, client.logout()).await;
                         return;
                     }
-                    Err(err) => err,
+                    Err(err) => {
+                        // Only a connection that stayed up for a while
+                        // resets the backoff.
+                        if since.elapsed() >= watch.healthy_after {
+                            backoff = watch.reconnect_min;
+                        }
+                        err
+                    }
                 }
             }
             Err(err) => {

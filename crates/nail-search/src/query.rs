@@ -665,11 +665,21 @@ fn parse_date(s: &str) -> Option<DateValue> {
 // ---------------------------------------------------------------------------
 // Parser
 
+/// Longest query text accepted, in bytes.
+pub const MAX_QUERY_BYTES: usize = 4096;
+/// Deepest nesting of parentheses and `NOT` / `-` accepted. The parser
+/// recurses once per level, so this bounds its stack use: a pasted
+/// `((((…` must be an error, not a stack overflow that aborts the core.
+pub const MAX_NESTING: usize = 64;
+
 struct Parser<'a> {
     tokens: &'a [Token],
     pos: usize,
     len: usize,
+    /// Open parentheses.
     depth: usize,
+    /// Open parentheses and pending negations (recursion depth).
+    nesting: usize,
 }
 
 impl Parser<'_> {
@@ -727,6 +737,41 @@ impl Parser<'_> {
         };
         self.pos += 1;
         match token.tok {
+            Tok::Not | Tok::Minus | Tok::LParen => {
+                if self.nesting >= MAX_NESTING {
+                    return err(
+                        SearchErrorKind::TooComplex,
+                        token.span,
+                        format!("nested more than {MAX_NESTING} levels deep"),
+                    );
+                }
+                self.nesting += 1;
+                let result = self.nested(token);
+                self.nesting -= 1;
+                result
+            }
+            Tok::Term(term) => Ok(Query::Term(term)),
+            Tok::RParen if self.depth == 0 => err(
+                SearchErrorKind::UnbalancedParenthesis,
+                token.span,
+                "closing parenthesis without an opening one",
+            ),
+            Tok::RParen => err(
+                SearchErrorKind::UnexpectedToken,
+                token.span,
+                "expected a search term before the closing parenthesis",
+            ),
+            Tok::And | Tok::Or => err(
+                SearchErrorKind::UnexpectedToken,
+                token.span,
+                "expected a search term before this operator",
+            ),
+        }
+    }
+
+    /// A negation or a parenthesized group (one nesting level).
+    fn nested(&mut self, token: Token) -> Result<Query, ParseError> {
+        match token.tok {
             Tok::Not | Tok::Minus => Ok(Query::Not(Box::new(self.unary()?))),
             Tok::Term(term) => Ok(Query::Term(term)),
             Tok::LParen => {
@@ -766,20 +811,10 @@ impl Parser<'_> {
                     ),
                 }
             }
-            Tok::RParen if self.depth == 0 => err(
-                SearchErrorKind::UnbalancedParenthesis,
-                token.span,
-                "closing parenthesis without an opening one",
-            ),
-            Tok::RParen => err(
+            _ => err(
                 SearchErrorKind::UnexpectedToken,
                 token.span,
-                "expected a search term before the closing parenthesis",
-            ),
-            Tok::And | Tok::Or => err(
-                SearchErrorKind::UnexpectedToken,
-                token.span,
-                "expected a search term before this operator",
+                "unexpected token",
             ),
         }
     }
@@ -799,6 +834,13 @@ fn flatten(items: Vec<Query>, or: bool) -> Vec<Query> {
 }
 
 fn parse_bytes(text: &str) -> Result<Query, ParseError> {
+    if text.len() > MAX_QUERY_BYTES {
+        return err(
+            SearchErrorKind::TooComplex,
+            Span::new(0, text.len()),
+            format!("longer than {MAX_QUERY_BYTES} bytes"),
+        );
+    }
     let tokens = Lexer { text, pos: 0 }.tokens()?;
     if tokens.is_empty() {
         return Ok(Query::All);
@@ -808,6 +850,7 @@ fn parse_bytes(text: &str) -> Result<Query, ParseError> {
         pos: 0,
         len: text.len(),
         depth: 0,
+        nesting: 0,
     };
     let query = parser.or_expr()?;
     match parser.peek() {
@@ -1012,6 +1055,42 @@ mod tests {
     fn e(s: &str) -> (SearchErrorKind, u32, u32) {
         let err = parse_query(s).expect_err(s);
         (err.kind, err.start, err.end)
+    }
+
+    /// Review M1a: deep nesting must be a parse error, never a stack
+    /// overflow (which aborts the whole core).
+    #[test]
+    fn nesting_and_length_are_bounded() {
+        let deep = format!("{}a{}", "(".repeat(1000), ")".repeat(1000));
+        assert!(deep.len() < MAX_QUERY_BYTES);
+        assert_eq!(e(&deep), (SearchErrorKind::TooComplex, 64, 65));
+        assert_eq!(e(&"(".repeat(1000)).0, SearchErrorKind::TooComplex);
+        let nots = format!("{}a", "NOT ".repeat(500));
+        assert_eq!(e(&nots).0, SearchErrorKind::TooComplex);
+        let minus = format!("{}a{}", "-(".repeat(40), ")".repeat(40));
+        assert_eq!(e(&minus).0, SearchErrorKind::TooComplex);
+        let mixed = format!("{}a{}", "NOT (".repeat(40), ")".repeat(40));
+        assert_eq!(e(&mixed).0, SearchErrorKind::TooComplex);
+        // 20 000 NOTs: refused for their length before parsing.
+        let long = format!("{}a", "NOT ".repeat(20_000));
+        assert_eq!(
+            e(&long),
+            (
+                SearchErrorKind::TooComplex,
+                0,
+                u32::try_from(long.len()).unwrap()
+            )
+        );
+        // The limits themselves are fine.
+        let ok = format!("{}a{}", "(".repeat(MAX_NESTING), ")".repeat(MAX_NESTING));
+        assert_eq!(p(&ok), text("a"));
+        let ok = format!("{}a", "NOT ".repeat(MAX_NESTING));
+        assert!(parse_query(&ok).is_ok());
+        assert!(parse_query(&"a ".repeat(MAX_QUERY_BYTES / 2)).is_ok());
+        assert_eq!(
+            SearchErrorKind::TooComplex.message_id(),
+            "search-error-too-complex"
+        );
     }
 
     fn text(v: &str) -> Query {

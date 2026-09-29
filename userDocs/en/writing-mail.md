@@ -9,8 +9,9 @@ Markdown mail come in a later version.
 
 - **From** chooses the identity you send as. New messages start with the
   default identity of the selected account (see [Accounts](accounts.md));
-  replies use the identity the message was sent to. Your signature is
-  added below a `-- ` line.
+  replies use the identity the message was sent to. In a virtual account
+  with identity rules, the identity follows the recipients you enter until
+  you choose one yourself. Your signature is added below a `-- ` line.
 - **To**, **Cc**, **Bcc**: several addresses are separated by commas, as
   `ada@example.org` or `Ada Lovelace <ada@example.org>`. **Add Cc** and
   **Add Bcc** show those fields.
@@ -35,8 +36,11 @@ then. Nail must be running at that time.
 ## Copies in Sent
 
 After a message went out, Nail puts a copy into the account's Sent folder
-on the server. Gmail and Outlook.com file sent mail themselves, so Nail
-does not add a second copy there; `save-sent-copy` in the
+at once, and then on the server. If the mail server cannot be reached
+right then (you are offline, or only the outgoing server works), the copy
+waits and is uploaded as soon as the account is back online, like every
+other change you make. Gmail and Outlook.com file sent mail themselves, so
+Nail does not add a second copy there; `save-sent-copy` in the
 [accounts reference](accounts-reference.md) overrides this per account.
 POP3 accounts keep the copy in their local Sent folder.
 

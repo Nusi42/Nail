@@ -15,17 +15,77 @@ use crate::cli::{Seed, ServeArgs};
 /// Environment variable naming the UI directory.
 pub const UI_DIR_ENV: &str = "NAIL_UI_DIR";
 
+/// The directories of a run. A seeded (demo) run never falls back to the
+/// real data and config directories: missing ones are temporary and go
+/// away with this value.
+pub struct Dirs {
+    pub data: PathBuf,
+    pub config: PathBuf,
+    _temp: Option<tempfile::TempDir>,
+}
+
+/// `--data-dir` / `--config-dir`, else temporary directories for a demo
+/// seed, else the platform defaults.
+pub fn resolve_dirs(
+    data_dir: Option<PathBuf>,
+    config_dir: Option<PathBuf>,
+    seed: Option<Seed>,
+) -> anyhow::Result<Dirs> {
+    let temp = if seed.is_some() && (data_dir.is_none() || config_dir.is_none()) {
+        let dir = tempfile::Builder::new()
+            .prefix("nail-demo-")
+            .tempdir()
+            .context("cannot create a temporary directory for the demo")?;
+        tracing::info!(dir = %dir.path().display(), "demo run in a temporary directory");
+        Some(dir)
+    } else {
+        None
+    };
+    let pick =
+        |given: Option<PathBuf>, sub: &str, default: fn() -> Option<PathBuf>, flag: &str| match (
+            given, &temp,
+        ) {
+            (Some(dir), _) => Ok(dir),
+            (None, Some(temp)) => Ok(temp.path().join(sub)),
+            (None, None) => {
+                default().with_context(|| format!("no default {sub} directory; pass {flag}"))
+            }
+        };
+    Ok(Dirs {
+        data: pick(data_dir, "data", paths::default_data_dir, "--data-dir")?,
+        config: pick(
+            config_dir,
+            "config",
+            paths::default_config_dir,
+            "--config-dir",
+        )?,
+        _temp: temp,
+    })
+}
+
+/// Writes the demo-multi `accounts.kdl` into `config_dir`. Refuses a
+/// directory whose `accounts.kdl` is not a demo one: the run would replace
+/// its accounts' secrets with the in-memory demo keychain and write demo
+/// state next to real accounts. An earlier demo file is replaced (its mock
+/// server ports are gone).
+pub fn write_demo_multi_config(demo: &DemoMulti, config_dir: &Path) -> anyhow::Result<()> {
+    let path = config_dir.join("accounts.kdl");
+    if let Ok(existing) = std::fs::read_to_string(&path)
+        && !existing.starts_with(nail_core::demo::MULTI_CONFIG_MARKER)
+    {
+        anyhow::bail!(
+            "{} holds real accounts; --seed demo-multi needs an empty --config-dir (or none, for a temporary one)",
+            path.display()
+        );
+    }
+    std::fs::create_dir_all(config_dir)
+        .and_then(|()| std::fs::write(&path, demo.accounts_kdl()))
+        .with_context(|| format!("cannot write {}", path.display()))
+}
+
 pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
-    let data_dir = match args.data_dir {
-        Some(dir) => dir,
-        None => paths::default_data_dir().context("no default data directory; pass --data-dir")?,
-    };
-    let config_dir = match args.config_dir {
-        Some(dir) => dir,
-        None => {
-            paths::default_config_dir().context("no default config directory; pass --config-dir")?
-        }
-    };
+    let dirs = resolve_dirs(args.data_dir, args.config_dir, args.seed)?;
+    let (data_dir, config_dir) = (dirs.data.clone(), dirs.config.clone());
     let ui_dir = resolve_ui_dir(
         args.ui_dir,
         std::env::var_os(UI_DIR_ENV).map(PathBuf::from),
@@ -42,8 +102,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let mut demo_multi = None;
     if args.seed == Some(Seed::DemoMulti) {
         let demo = nail_core::demo::start_demo_multi().await?;
-        demo.write_config(&config_dir)
-            .with_context(|| format!("cannot write accounts.kdl to {}", config_dir.display()))?;
+        write_demo_multi_config(&demo, &config_dir)?;
         options = demo.service_options(options);
         tracing::info!(
             imap = %demo.work.addr(),
@@ -118,6 +177,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         .await?;
     service.shutdown().await;
     drop(demo_multi);
+    drop(dirs);
     Ok(())
 }
 
@@ -157,6 +217,60 @@ pub fn resolve_ui_dir(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Review M1a: a seeded run without directories must not touch the
+    /// real data and config directories.
+    #[test]
+    fn seeded_runs_default_to_temporary_directories() {
+        for seed in [Seed::Demo, Seed::DemoImap, Seed::DemoMulti] {
+            let dirs = resolve_dirs(None, None, Some(seed)).unwrap();
+            assert_ne!(Some(&dirs.data), paths::default_data_dir().as_ref());
+            assert_ne!(Some(&dirs.config), paths::default_config_dir().as_ref());
+            assert!(
+                dirs.data.starts_with(std::env::temp_dir()),
+                "{:?}",
+                dirs.data
+            );
+            let root = dirs.data.parent().unwrap().to_path_buf();
+            assert!(root.is_dir());
+            drop(dirs);
+            assert!(!root.exists(), "the temporary directory is removed");
+        }
+        // Explicit directories are used as given; only the missing one is
+        // temporary.
+        let dirs = resolve_dirs(Some("d".into()), None, Some(Seed::Demo)).unwrap();
+        assert_eq!(dirs.data, PathBuf::from("d"));
+        assert!(dirs.config.starts_with(std::env::temp_dir()));
+        let dirs = resolve_dirs(Some("d".into()), Some("c".into()), Some(Seed::Demo)).unwrap();
+        assert_eq!((dirs.data, dirs.config), ("d".into(), "c".into()));
+        // Without a seed: the platform defaults.
+        let dirs = resolve_dirs(None, None, None).unwrap();
+        assert_eq!(Some(dirs.data), paths::default_data_dir());
+    }
+
+    #[tokio::test]
+    async fn demo_multi_refuses_real_accounts() {
+        let demo = nail_core::demo::start_demo_multi().await.unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let path = config.path().join("accounts.kdl");
+        // Empty directory: written.
+        write_demo_multi_config(&demo, config.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), demo.accounts_kdl());
+        // An earlier demo file: replaced (new ports).
+        std::fs::write(
+            &path,
+            format!("{}\nold", nail_core::demo::MULTI_CONFIG_MARKER),
+        )
+        .unwrap();
+        write_demo_multi_config(&demo, config.path()).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), demo.accounts_kdl());
+        // Real accounts: refused and left alone.
+        let real = "account \"me\" email=\"me@example.org\" { imap host=\"imap.example.org\" }\n";
+        std::fs::write(&path, real).unwrap();
+        let err = write_demo_multi_config(&demo, config.path()).unwrap_err();
+        assert!(err.to_string().contains("real accounts"), "{err}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), real);
+    }
 
     #[test]
     fn explicit_ui_dir_wins() {

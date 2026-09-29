@@ -1338,6 +1338,21 @@
       }
     },
     {
+      "selector": "account-setup.candidate.warning",
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-danger)"
+      }
+    },
+    {
+      "selector": "account-setup.warning",
+      "declarations": {
+        "padding": "var(--nail-space-sm) var(--nail-space-md)",
+        "border-left": "4px solid var(--nail-color-danger)",
+        "color": "var(--nail-color-danger)"
+      }
+    },
+    {
       "selector": "account-setup.actions",
       "declarations": {
         "display": "flex",

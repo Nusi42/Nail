@@ -4,19 +4,9 @@
  * the UI store (`composer`); drafts and the outbox are the core's.
  */
 import { NailError, errorMessageIdOf } from "../api/client";
-import type {
-  AccountId,
-  Draft,
-  DraftId,
-  Identity,
-  IdentityId,
-  IdentityRule,
-  MessageBody,
-  MessageId,
-  VirtualAccountConfig,
-} from "../api/generated";
+import type { AccountId, Draft, DraftId, Identity, MessageId } from "../api/generated";
 import type { MessageArgs } from "../i18n/localizer";
-import { displayName, formatAddressList, parseAddressList, patternMatches } from "./addresses";
+import { displayName, formatAddressList, parseAddressList } from "./addresses";
 import type { WriteContext } from "./mailOps";
 import { queryKeys } from "./queries";
 import type { ComposerState } from "./uiStore";
@@ -61,47 +51,28 @@ async function identitiesOf(ctx: ComposeContext, accountId: AccountId | null): P
   });
 }
 
-async function virtualAccountsOf(ctx: ComposeContext): Promise<VirtualAccountConfig[]> {
-  try {
-    return await ctx.queryClient.fetchQuery({
-      queryKey: queryKeys.virtualAccounts,
-      queryFn: async () =>
-        (await ctx.client.request({ type: "ListVirtualAccounts" }, "VirtualAccounts"))
-          .virtual_accounts,
-    });
-  } catch {
-    return [];
-  }
-}
-
-/** The identity rules of a user-defined virtual account (none for others). */
-export function rulesFor(
-  virtualAccounts: readonly VirtualAccountConfig[],
-  accountId: AccountId | null,
-): IdentityRule[] {
-  return virtualAccounts.find((v) => v.id === accountId)?.identity_rules ?? [];
-}
-
-/** The first rule matching any recipient decides the identity. */
-export function identityForRecipients(
-  rules: readonly IdentityRule[],
-  recipients: readonly string[],
-): IdentityId | null {
-  for (const rule of rules) {
-    if (recipients.some((r) => patternMatches(rule.pattern, r))) return rule.identity;
-  }
-  return null;
-}
-
-/** Default identity for new messages from the active (real or virtual) account. */
-export async function defaultIdentity(
+/**
+ * The identity to send from, as the core chooses it: the virtual account's
+ * identity rules, else the identity a replied-to message was sent to, else
+ * the account's default.
+ */
+export async function chooseIdentity(
   ctx: ComposeContext,
   accountId: AccountId | null,
+  recipients: readonly string[],
+  replyTo: MessageId | null,
 ): Promise<Identity | null> {
-  const identities = await identitiesOf(ctx, accountId);
-  const va = (await virtualAccountsOf(ctx)).find((v) => v.id === accountId);
-  const preferred = va?.default_identity;
-  return identities.find((i) => i.id === preferred) ?? identities[0] ?? null;
+  const { identity_id } = await ctx.client.request(
+    {
+      type: "ChooseIdentity",
+      account_id: accountId,
+      recipients: [...recipients],
+      reply_to: replyTo,
+    },
+    "IdentityChosen",
+  );
+  if (identity_id === null) return null;
+  return (await identitiesOf(ctx, null)).find((i) => i.id === identity_id) ?? null;
 }
 
 function signatureBlock(identity: Identity | null | undefined): string {
@@ -122,7 +93,7 @@ export async function startCompose(ctx: ComposeContext): Promise<void> {
     ctx.store.getState().openWindow(COMPOSER_WINDOW);
     return;
   }
-  const identity = await defaultIdentity(ctx, ctx.store.getState().activeAccountId);
+  const identity = await chooseIdentity(ctx, ctx.store.getState().activeAccountId, [], null);
   open(ctx, {
     ...emptyComposer(),
     identityId: identity?.id ?? null,
@@ -155,17 +126,6 @@ function quote(text: string): string {
     .join("\n");
 }
 
-/** The identity an original message was addressed to, if it is one of ours. */
-export function addressedIdentity(
-  identities: readonly Identity[],
-  message: MessageBody,
-): Identity | undefined {
-  const recipients = [...message.headers.to, ...message.headers.cc].map((a) =>
-    a.email.toLowerCase(),
-  );
-  return identities.find((i) => recipients.includes(i.email.toLowerCase()));
-}
-
 /** Opens the composer to reply to or forward a message. */
 export async function startReply(
   ctx: ComposeContext,
@@ -179,10 +139,17 @@ export async function startReply(
   });
   const identities = await identitiesOf(ctx, null);
   const accountId = ctx.store.getState().activeAccountId;
-  const fallback = await defaultIdentity(ctx, accountId);
-  const identity = addressedIdentity(identities, message) ?? fallback;
   const own = new Set(identities.map((i) => i.email.toLowerCase()));
   const h = message.headers;
+  const answered = h.reply_to.length > 0 ? h.reply_to : h.from;
+  const recipients =
+    mode === "forward" ? [] : [...answered, ...(mode === "reply-all" ? [...h.to, ...h.cc] : [])];
+  const identity = await chooseIdentity(
+    ctx,
+    accountId,
+    recipients.map((a) => a.email),
+    message.id,
+  );
   const composer = emptyComposer();
   composer.identityId = identity?.id ?? null;
   const sender = h.from[0];

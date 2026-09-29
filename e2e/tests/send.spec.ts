@@ -73,3 +73,39 @@ test("a plain-text mail is sent, once cancelled by undo and once for real", asyn
     page.locator('[data-part="message-list.row"]').filter({ hasText: "Review notes" }),
   ).toHaveCount(1);
 });
+
+test("the Sent copy of a mail sent while IMAP is down is filed later", async ({ page }) => {
+  await page.goto(server.url);
+  await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
+  await control(server, "imap-offline", { offline: true });
+  await expect(
+    page.locator('[data-part="account-switcher.item"][data-kind="imap"]'),
+  ).toHaveAttribute("data-status", "offline");
+
+  // SMTP still works: the mail goes out and its copy shows in Sent at once.
+  const { body } = await compose(page, "Written offline");
+  await body.press("Control+Enter");
+  const status = page.getByRole("status");
+  await expect(status.getByText("Message sent.")).toBeVisible({ timeout: 15_000 });
+  await page.locator('[data-part="folder-tree.item"][data-role="sent"]').click();
+  const copy = page
+    .locator('[data-part="message-list.row"]')
+    .filter({ hasText: "Written offline" });
+  await expect(copy).toHaveCount(1);
+  expect((await serverMessages(server, "Sent")).some((m) => m.subject === "Written offline")).toBe(
+    false,
+  );
+
+  // Back online, the queued copy reaches the server; the list keeps one row.
+  await control(server, "imap-offline", { offline: false });
+  await expect
+    .poll(
+      async () =>
+        (await serverMessages(server, "Sent")).filter((m) => m.subject === "Written offline")
+          .length,
+    )
+    .toBe(1);
+  await page.locator('[data-part="message-list"]').focus();
+  await page.keyboard.press("F5");
+  await expect(copy).toHaveCount(1);
+});

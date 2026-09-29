@@ -25,7 +25,9 @@ use crate::config::layout::ResolvedLayout;
 use crate::config::theme::ResolvedTheme;
 use crate::domain::{Account, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
-use crate::ids::{AccountId, DraftId, FolderId, MessageId, OAuthFlowId, OpId, OutboxId, ThreadId};
+use crate::ids::{
+    AccountId, DraftId, FolderId, IdentityId, MessageId, OAuthFlowId, OpId, OutboxId, ThreadId,
+};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
 use crate::search::{SearchError, SearchHit, SearchQuery};
 
@@ -145,6 +147,22 @@ pub enum Request {
         /// A real account (its identities), a virtual account (its members'
         /// identities) or `null` for all.
         account_id: Option<AccountId>,
+    },
+    /// The identity to send from, for a new message, a reply or a forward.
+    /// Answered with [`Response::IdentityChosen`]. The first of: the
+    /// virtual account's identity rules (the first rule matching any
+    /// recipient), the identity the replied-to message was addressed to,
+    /// the account's default identity (a virtual account's
+    /// `default-identity`, else its first).
+    ChooseIdentity {
+        /// The active account (real or virtual), `null` for all.
+        account_id: Option<AccountId>,
+        /// Recipient addresses entered so far (To, Cc, Bcc).
+        #[serde(default)]
+        recipients: Vec<String>,
+        /// The message replied to or forwarded, if any.
+        #[serde(default)]
+        reply_to: Option<MessageId>,
     },
     /// User-defined virtual accounts. Answered with
     /// [`Response::VirtualAccounts`].
@@ -355,6 +373,11 @@ pub enum Response {
     Identities {
         /// The identities in account order, each account's default first.
         identities: Vec<Identity>,
+    },
+    /// Answer to [`Request::ChooseIdentity`].
+    IdentityChosen {
+        /// The identity; `null` when there is none (no accounts).
+        identity_id: Option<IdentityId>,
     },
     /// Answer to [`Request::ListVirtualAccounts`].
     VirtualAccounts {

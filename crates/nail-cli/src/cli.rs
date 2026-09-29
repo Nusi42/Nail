@@ -62,8 +62,9 @@ pub enum Seed {
     DemoImap,
     /// Two configured accounts (IMAP with IDLE, POP3) and SMTP on
     /// in-process mock servers, plus a discoverable third account; writes
-    /// accounts.kdl if missing, keeps secrets in memory, and exposes the
-    /// test controls at /api/test/… (for end-to-end tests).
+    /// its accounts.kdl (refusing a config directory with other accounts),
+    /// keeps secrets in memory, and exposes the test controls at
+    /// /api/test/… (for end-to-end tests).
     DemoMulti,
 }
 
@@ -83,7 +84,9 @@ pub struct ServeArgs {
     /// next to the executable, or the repository's ui/dist.
     #[arg(long, value_name = "DIR")]
     pub ui_dir: Option<PathBuf>,
-    /// Load demo data before serving.
+    /// Load demo data before serving. Without --data-dir / --config-dir,
+    /// a seeded run uses temporary directories (removed on exit), never
+    /// the real ones.
     #[arg(long, value_enum)]
     pub seed: Option<Seed>,
     /// UI language override (BCP 47, e.g. "de"); default: the browser's.

@@ -1,12 +1,13 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { AccountConfig } from "../api/generated";
+import type { AccountConfig, DiscoveredAccount } from "../api/generated";
 import { createEnv, renderNode, widget, type Env } from "../test/harness";
 import { accountProblems, newIdentity } from "./AccountSettings";
 import {
   accountSignIn,
   configFrom,
   manualCandidate,
+  preferredCandidate,
   secretsFor,
   withAccountSignIn,
 } from "./AccountSetup";
@@ -136,6 +137,53 @@ describe("account-setup", () => {
     await user.type(screen.getByLabelText("Password"), "pw");
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     expect(await screen.findByText("The server could not be reached.")).toBeInTheDocument();
+  });
+
+  it("never preselects unverified settings and warns about them", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    const forged: DiscoveredAccount = {
+      ...manualCandidate("ada@forged.example"),
+      source: "autoconfig",
+      provider_name: "Forged Mail",
+      incoming: {
+        ...manualCandidate("ada@forged.example").incoming,
+        server: { ...manualCandidate("x@attacker.example").incoming.server },
+      },
+      warnings: ["insecure-source", "foreign-hosts"],
+    };
+    const srv: DiscoveredAccount = { ...manualCandidate("ada@forged.example"), source: "srv" };
+    // Even when a source ranked it first, the verified proposal is chosen.
+    env.transport.data.discovery["forged.example"] = [forged, srv];
+    const { container } = renderNode(widget("account-setup"), env);
+    await user.type(screen.getByRole("textbox", { name: "Email address" }), "ada@forged.example");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const trusted = await screen.findByRole("radio", { name: /DNS records of the domain/ });
+    expect(trusted).toBeChecked();
+    expect(screen.queryByText("Forged Mail")).toBeNull();
+    const warnings = container.querySelectorAll('[data-part="account-setup.candidate.warning"]');
+    expect([...warnings].map((w) => w.getAttribute("data-warning"))).toEqual([
+      "insecure-source",
+      "foreign-hosts",
+    ]);
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // Choosing the unverified one shows its servers and a warning.
+    await user.click(screen.getByRole("radio", { name: /Received without encryption/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("could not be verified");
+
+    // With nothing else found, it is shown for editing, with the warning.
+    env.transport.data.discovery["forged.example"] = [forged];
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be verified");
+    const incoming = screen.getByRole("group", { name: "Incoming mail" });
+    expect(within(incoming).getByRole("textbox", { name: "Server" })).toHaveValue(
+      "imap.attacker.example",
+    );
+    expect(preferredCandidate([forged, srv])).toBe(1);
+    expect(preferredCandidate([forged])).toBe(0);
+    expect(preferredCandidate([])).toBe(0);
   });
 
   it("builds configurations and secrets", () => {

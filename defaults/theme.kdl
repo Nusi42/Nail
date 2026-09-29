@@ -723,6 +723,15 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
         color "$color.fg-muted"
     }
+    part "account-setup.candidate.warning" {
+        font-size "$font-size.sm"
+        color "$color.danger"
+    }
+    part "account-setup.warning" {
+        padding "$space.sm" "$space.md"
+        border-left "4px solid $color.danger"
+        color "$color.danger"
+    }
     part "account-setup.actions" {
         display "flex"
         justify-content "flex-end"

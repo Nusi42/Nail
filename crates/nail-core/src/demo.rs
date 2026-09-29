@@ -42,6 +42,11 @@ pub const DEMO_ACCOUNT_ID: &str = "demo";
 /// Id of the IMAP demo account served by [`start_demo_imap`].
 pub const DEMO_IMAP_ACCOUNT_ID: &str = "demo-imap";
 
+/// First line of the `accounts.kdl` that `--seed demo-multi` writes; marks
+/// a config directory as a demo one that may be overwritten.
+pub const MULTI_CONFIG_MARKER: &str =
+    "// Demo accounts of `nail serve --seed demo-multi` (mock servers on 127.0.0.1).";
+
 /// The address the demo corpus is written to.
 const DEMO_EMAIL: &str = "sam@nail.example";
 
@@ -314,9 +319,17 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         "/mail/config-v1.1.xml",
         MockResponse::xml(autoconfig_xml(new_imap.port(), smtp.port())),
     );
-    let dns = MockDnsServer::start(DnsZone::new())
-        .await
-        .map_err(io_error)?;
+    // `elsewhere.example` only has SRV records, pointing outside its domain:
+    // setup shows them as unverified.
+    let mut zone = DnsZone::new();
+    zone.add_srv(
+        "_imaps._tcp.elsewhere.example",
+        0,
+        0,
+        993,
+        "imap.mailhost.test",
+    );
+    let dns = MockDnsServer::start(zone).await.map_err(io_error)?;
     let client =
         nail_auth::http_client_builder(nail_auth::tls_config_with_roots(&[]).map_err(io_error)?)
             .no_proxy()
@@ -370,7 +383,7 @@ impl DemoMulti {
     pub fn accounts_kdl(&self) -> String {
         let (imap, pop3, smtp) = (self.work.port(), self.home.port(), self.smtp.port());
         format!(
-            r#"// Demo accounts of `nail serve --seed demo-multi` (mock servers on 127.0.0.1).
+            r#"{MULTI_CONFIG_MARKER}
 undo-send-delay 5
 
 account "{MULTI_WORK_ID}" email="{MULTI_WORK_EMAIL}" name="Work" {{

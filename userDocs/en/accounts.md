@@ -19,6 +19,14 @@ Click **Add account** in the toolbar (or in **Settings → Accounts**).
    pick one. **Edit server settings** lets you change the protocol (IMAP or
    POP3), server name, port, security (TLS, STARTTLS or none) and user name.
    If nothing was found, you enter them yourself.
+
+   Some answers cannot be verified: they arrived without encryption (anyone
+   on your network, for example on public Wi-Fi, could have changed them),
+   or they come from DNS records and point to servers outside your
+   address's domain. Nail marks such proposals with a warning, never
+   selects them on its own when a verified one exists, and shows their
+   servers for you to check. Only continue with them if you know these are
+   your provider's servers; otherwise your password goes to someone else.
 3. **Sign in.** Choose how you sign in:
    - **Password:** type it. It is stored in the Windows credential manager,
      never in a file.

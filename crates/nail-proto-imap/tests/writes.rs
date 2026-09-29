@@ -429,3 +429,57 @@ async fn folders_are_created_renamed_and_deleted() {
             .all(|m| !m.name.starts_with("Drafts"))
     );
 }
+
+#[tokio::test]
+async fn messages_are_found_by_message_id_and_uid_validity_is_reported() {
+    let server = modern_server().await;
+    let mut client = login(&server).await;
+    let status = client.select_for_write("INBOX").await.unwrap();
+    assert_eq!(
+        status.uid_validity,
+        server.store().mailbox("INBOX").unwrap().uid_validity
+    );
+    assert_eq!(
+        client
+            .find_by_message_id("INBOX", "two@example.org")
+            .await
+            .unwrap(),
+        [2]
+    );
+    // Brackets are optional; only the exact id matches (not a substring).
+    assert_eq!(
+        client
+            .find_by_message_id("INBOX", "<three@example.org>")
+            .await
+            .unwrap(),
+        [3]
+    );
+    assert!(
+        client
+            .find_by_message_id("INBOX", "wo@example.org")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        client
+            .find_by_message_id("INBOX", " <> ")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // After a rebuild the UIDs change and so does the UIDVALIDITY.
+    server.store().expunge("INBOX", 1);
+    let new_validity = server.store().reset_uid_validity("INBOX").unwrap();
+    let mut client = login(&server).await;
+    let status = client.select_for_write("INBOX").await.unwrap();
+    assert_eq!(status.uid_validity, new_validity);
+    assert_eq!(
+        client
+            .find_by_message_id("INBOX", "two@example.org")
+            .await
+            .unwrap(),
+        [1]
+    );
+}

@@ -1243,6 +1243,7 @@ impl Session {
                 Criterion::Flag(flag, wanted) => message.has_flag(flag) == *wanted,
                 Criterion::Uid(set) => set.contains(message.uid, max_uid),
                 Criterion::Seq(set) => set.contains(seq, max_seq),
+                Criterion::Header(field, value) => header_contains(&message.raw, field, value),
             });
             if matches {
                 hits.push(if uid { message.uid } else { seq });
@@ -1576,6 +1577,28 @@ enum Criterion {
     Flag(&'static str, bool),
     Uid(SequenceSet),
     Seq(SequenceSet),
+    /// `HEADER <field> <string>`: the field contains the string (ASCII
+    /// case-insensitive, RFC 3501).
+    Header(String, String),
+}
+
+/// Whether a header field of `raw` contains `value` (ASCII case-insensitive;
+/// folded lines are unfolded). An empty `value` matches any message that
+/// has the field.
+fn header_contains(raw: &[u8], field: &str, value: &str) -> bool {
+    let end = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .unwrap_or(raw.len());
+    let head = String::from_utf8_lossy(&raw[..end])
+        .replace("\r\n ", " ")
+        .replace("\r\n\t", " ");
+    let value = value.to_ascii_lowercase();
+    head.split("\r\n").any(|line| {
+        line.split_once(':').is_some_and(|(name, body)| {
+            name.trim().eq_ignore_ascii_case(field) && body.to_ascii_lowercase().contains(&value)
+        })
+    })
 }
 
 fn parse_search(args: &[Token]) -> Result<Vec<Criterion>, String> {
@@ -1602,6 +1625,17 @@ fn parse_search(args: &[Token]) -> Result<Vec<Criterion>, String> {
                     .and_then(Token::as_text)
                     .ok_or("UID needs a set")?;
                 Criterion::Uid(SequenceSet::parse(&set).ok_or("invalid UID set")?)
+            }
+            "HEADER" => {
+                let field = iter
+                    .next()
+                    .and_then(Token::as_text)
+                    .ok_or("HEADER needs a field name")?;
+                let value = iter
+                    .next()
+                    .and_then(Token::as_text)
+                    .ok_or("HEADER needs a string")?;
+                Criterion::Header(field, value)
             }
             _ => match SequenceSet::parse(&key) {
                 Some(set) => Criterion::Seq(set),

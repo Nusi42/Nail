@@ -72,3 +72,4 @@ character, and underlines the spot:
 | The parentheses do not match. | `(from:ada` |
 | The search ends too early. | `from:ada AND` |
 | This word cannot appear here. | `OR from:ada` |
+| This search is too long or has too many nested parts. | more than 64 nested parentheses or `NOT`s, or more than 4096 characters |

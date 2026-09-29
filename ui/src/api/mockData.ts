@@ -389,6 +389,7 @@ export function createMockData(inboxSize = 250): MockData {
             },
             options: { dsn: null },
           },
+          warnings: [],
         },
       ],
     },

@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use nail_api::accounts::{AuthConfig, DiscoveredAccount, DiscoverySource, IncomingServer, TlsMode};
+use nail_api::accounts::{
+    AuthConfig, DiscoveredAccount, DiscoverySource, DiscoveryWarning, IncomingServer, TlsMode,
+};
 use nail_discovery::{Discoverer, DiscoveryError, HickoryDns, ReqwestFetch, TcpProbe, discover};
 use nail_testkit_net::{DnsZone, MockDnsServer, MockHttpServer, MockResponse};
 
@@ -391,4 +393,126 @@ async fn invalid_addresses() {
         .unwrap_err();
     assert!(matches!(err, DiscoveryError::InvalidEmail(_)));
     assert!(m.http.requests().is_empty());
+}
+
+const FORGED: &str = r#"<clientConfig version="1.1"><emailProvider id="example.org">
+  <displayName>Example Mail (really)</displayName>
+  <incomingServer type="imap"><hostname>imap.attacker.example</hostname><port>993</port><socketType>SSL</socketType>
+    <username>%EMAILADDRESS%</username><authentication>password-cleartext</authentication></incomingServer>
+  <outgoingServer type="smtp"><hostname>smtp.attacker.example</hostname><port>465</port><socketType>SSL</socketType>
+    <username>%EMAILADDRESS%</username><authentication>password-cleartext</authentication></outgoingServer>
+</emailProvider></clientConfig>"#;
+
+/// The mock HTTP server, except that every `https` request fails (a domain
+/// without an HTTPS autoconfig host): only the plain-HTTP fallback answers.
+#[derive(Debug)]
+struct HttpOnly(ReqwestFetch);
+
+impl nail_discovery::HttpFetch for HttpOnly {
+    fn get<'a>(
+        &'a self,
+        url: &'a url::Url,
+    ) -> nail_api::engine::BoxFuture<'a, Result<nail_discovery::HttpReply, nail_discovery::NetError>>
+    {
+        Box::pin(async move {
+            if url.scheme() == "https" && url.host_str() != Some("autoconfig.thunderbird.net") {
+                return Err(nail_discovery::NetError("no HTTPS here".into()));
+            }
+            self.0.get(url).await
+        })
+    }
+
+    fn post<'a>(
+        &'a self,
+        url: &'a url::Url,
+        content_type: &'a str,
+        body: Vec<u8>,
+    ) -> nail_api::engine::BoxFuture<'a, Result<nail_discovery::HttpReply, nail_discovery::NetError>>
+    {
+        self.0.post(url, content_type, body)
+    }
+}
+
+fn http_only_discoverer(m: &Mocks) -> Discoverer {
+    let client = nail_auth::http_client_builder(nail_auth::tls_config_with_roots(&[]).unwrap())
+        .no_proxy()
+        .build()
+        .unwrap();
+    Discoverer::new(
+        Arc::new(HttpOnly(
+            ReqwestFetch::new(client).route_all_to(m.http.addr()),
+        )),
+        Arc::new(HickoryDns::with_name_server(m.dns.addr(), Duration::from_secs(2)).unwrap()),
+        Arc::new(TcpProbe::with_overrides(
+            Duration::from_secs(2),
+            HashMap::new(),
+        )),
+    )
+    .with_timeout(Duration::from_secs(5))
+}
+
+/// Review M1a: an autoconfig answer fetched over plain HTTP can be forged
+/// by anyone on the network; it must never outrank an authenticated or
+/// DNS answer, and it carries warnings for the setup form.
+#[tokio::test]
+async fn plain_http_answers_rank_last_and_carry_warnings() {
+    let mut zone = DnsZone::new();
+    zone.add_srv("_imaps._tcp.example.org", 0, 0, 993, "imap.example.org")
+        .add_mx("example.org", 10, "mx1.mailhost.example");
+    let m = mocks(zone).await;
+    m.http.get(
+        Some("autoconfig.example.org"),
+        "/mail/config-v1.1.xml",
+        MockResponse::xml(FORGED),
+    );
+    let found = discover("ada@example.org", &http_only_discoverer(&m))
+        .await
+        .unwrap();
+    assert_eq!(
+        hosts(&found),
+        [
+            (DiscoverySource::Srv, "imap.example.org".to_owned(), None),
+            (
+                DiscoverySource::Autoconfig,
+                "imap.attacker.example".to_owned(),
+                Some("smtp.attacker.example".to_owned())
+            ),
+        ]
+    );
+    assert!(found[0].warnings.is_empty(), "{:?}", found[0].warnings);
+    assert_eq!(
+        found[1].warnings,
+        [
+            DiscoveryWarning::InsecureSource,
+            DiscoveryWarning::ForeignHosts
+        ]
+    );
+
+    // Hosts under the MX domain are not foreign.
+    m.http.get(
+        Some("autoconfig.example.org"),
+        "/mail/config-v1.1.xml",
+        MockResponse::xml(FORGED.replace("attacker.example", "mailhost.example")),
+    );
+    let found = discover("ada@example.org", &http_only_discoverer(&m))
+        .await
+        .unwrap();
+    assert_eq!(found[1].warnings, [DiscoveryWarning::InsecureSource]);
+
+    // When an authenticated HTTPS source answers, the HTTP answer is gone.
+    m.http.get(
+        Some("autoconfig.thunderbird.net"),
+        "/v1.1/example.org",
+        MockResponse::xml(AUTOCONFIG),
+    );
+    let found = discover("ada@example.org", &http_only_discoverer(&m))
+        .await
+        .unwrap();
+    assert_eq!(found[0].source, DiscoverySource::Ispdb);
+    assert!(
+        found
+            .iter()
+            .all(|c| !c.warnings.contains(&DiscoveryWarning::InsecureSource)),
+        "{found:?}"
+    );
 }

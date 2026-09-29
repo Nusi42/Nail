@@ -572,6 +572,11 @@ async fn reset_folder(ctx: &SyncCtx, folder: &Folder, uid_validity: u32) -> Resu
                 .map(|(_, id)| id)
                 .collect();
             let dropped = s.clear_folder(&target.id)?;
+            // Messages with waiting operations stay (without their UID).
+            let gone: Vec<_> = gone
+                .into_iter()
+                .filter(|id| s.get_message(id).is_err())
+                .collect();
             tracing::info!(folder = %target.path, dropped, "UIDVALIDITY changed; refetching");
             s.set_folder_sync_state(&target.id, &restart)?;
             if let Err(err) = index.remove(&gone) {

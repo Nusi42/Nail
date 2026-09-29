@@ -136,14 +136,28 @@ impl From<nail_api::FlagChange> for FlagChange {
 
 /// Where a message was before a move or delete: what the replayer needs
 /// to find it on the server. Recorded by [`Store::enqueue`].
+///
+/// A UID is only meaningful together with the folder's UIDVALIDITY: the
+/// replayer compares `uid_validity` with the server's current one and, on
+/// a mismatch, finds the message again by `header_message_id` instead of
+/// acting on a stale UID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSource {
     /// The account it was in.
     pub account_id: AccountId,
     /// The folder it was in.
     pub folder_id: FolderId,
-    /// Its UID in that folder (`None` for a local-only message).
+    /// Its UID in that folder (`None` for a local-only message, or while an
+    /// earlier queued operation has not reported it yet).
     pub uid: Option<u32>,
+    /// The folder's UIDVALIDITY that `uid` belongs to (`None` when unknown,
+    /// e.g. for operations queued before it was recorded).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uid_validity: Option<u32>,
+    /// The message's `Message-ID` header (without angle brackets), to find
+    /// it again when the UID is unknown or stale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_message_id: Option<String>,
 }
 
 /// A user-initiated write. Stored as JSON in `op_queue.payload`, so variants
@@ -188,6 +202,16 @@ pub enum Operation {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         trash_folder_id: Option<FolderId>,
     },
+    /// File a message that so far exists only locally (a Sent copy) in its
+    /// folder on the server (`APPEND`). The local row exists before the
+    /// operation is queued and nothing changes locally; the replayer
+    /// uploads the row's raw bytes and records the new UID.
+    AppendMessage {
+        /// The local message (its row holds the raw bytes and flags).
+        message_id: MessageId,
+        /// The folder to file it in (the row's folder when queued).
+        folder_id: FolderId,
+    },
 }
 
 impl Operation {
@@ -197,6 +221,7 @@ impl Operation {
             Self::UpdateFlags { .. } => "update_flags",
             Self::MoveMessage { .. } => "move_message",
             Self::DeleteMessage { .. } => "delete_message",
+            Self::AppendMessage { .. } => "append_message",
         }
     }
 
@@ -205,7 +230,28 @@ impl Operation {
         match self {
             Self::UpdateFlags { message_id, .. }
             | Self::MoveMessage { message_id, .. }
-            | Self::DeleteMessage { message_id, .. } => message_id,
+            | Self::DeleteMessage { message_id, .. }
+            | Self::AppendMessage { message_id, .. } => message_id,
+        }
+    }
+
+    /// Where the message is on the server before this operation runs (moves
+    /// and deletes; filled in by [`Store::enqueue`]).
+    pub fn source(&self) -> Option<&MessageSource> {
+        match self {
+            Self::MoveMessage { source, .. } | Self::DeleteMessage { source, .. } => {
+                source.as_ref()
+            }
+            Self::UpdateFlags { .. } | Self::AppendMessage { .. } => None,
+        }
+    }
+
+    fn source_mut(&mut self) -> Option<&mut MessageSource> {
+        match self {
+            Self::MoveMessage { source, .. } | Self::DeleteMessage { source, .. } => {
+                source.as_mut()
+            }
+            Self::UpdateFlags { .. } | Self::AppendMessage { .. } => None,
         }
     }
 
@@ -238,12 +284,7 @@ impl Operation {
                 target_folder_id,
                 ..
             } => {
-                let stored = message_in_tx(tx, message_id)?;
-                let source = MessageSource {
-                    account_id: stored.summary.account_id.clone(),
-                    folder_id: stored.summary.folder_id.clone(),
-                    uid: stored.uid,
-                };
+                let source = source_in_tx(tx, message_id)?;
                 if *target_folder_id == source.folder_id {
                     return Err(Error::InvalidData(format!(
                         "message {message_id} is already in folder {target_folder_id}"
@@ -267,12 +308,7 @@ impl Operation {
                 permanent,
                 ..
             } => {
-                let stored = message_in_tx(tx, message_id)?;
-                let source = MessageSource {
-                    account_id: stored.summary.account_id.clone(),
-                    folder_id: stored.summary.folder_id.clone(),
-                    uid: stored.uid,
-                };
+                let source = source_in_tx(tx, message_id)?;
                 let trash = if *permanent {
                     None
                 } else {
@@ -303,8 +339,51 @@ impl Operation {
                     },
                 ))
             }
+            Self::AppendMessage {
+                message_id,
+                folder_id,
+            } => {
+                let summary = message_in_tx(tx, message_id)?.summary;
+                if summary.folder_id != *folder_id {
+                    return Err(Error::InvalidData(format!(
+                        "message {message_id} is not in folder {folder_id}"
+                    )));
+                }
+                Ok((summary.account_id, vec![summary.folder_id], self.clone()))
+            }
         }
     }
+}
+
+/// Where a message is now, for [`MessageSource`].
+fn source_in_tx(tx: &Transaction<'_>, id: &MessageId) -> Result<MessageSource> {
+    let stored = message_in_tx(tx, id)?;
+    let uid_validity = match stored.uid {
+        Some(_) => tx
+            .query_row(
+                "SELECT uidvalidity FROM folders WHERE id = ?1",
+                [stored.summary.folder_id.as_str()],
+                |r| r.get::<_, Option<u32>>(0),
+            )
+            .optional()?
+            .flatten(),
+        None => None,
+    };
+    let header_message_id = tx
+        .query_row(
+            "SELECT message_id FROM messages WHERE id = ?1",
+            [id.as_str()],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(MessageSource {
+        account_id: stored.summary.account_id,
+        folder_id: stored.summary.folder_id,
+        uid: stored.uid,
+        uid_validity,
+        header_message_id,
+    })
 }
 
 /// Moves a message row locally; its UID becomes unknown until the replay
@@ -599,6 +678,76 @@ impl Store {
             ))?;
             let rows = stmt.query_map([id.as_str()], op_from_row)?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    /// Replaces the stored form of a `pending` or `in_flight` operation,
+    /// e.g. when a replayer finished part of it and a retry must not repeat
+    /// that part. The local tables are not touched. Returns whether the
+    /// operation was still waiting.
+    pub fn update_op(&self, id: OpId, operation: &Operation) -> Result<bool> {
+        let payload = serde_json::to_string(operation)?;
+        self.with_conn(|conn| {
+            Ok(conn.execute(
+                &format!(
+                    "UPDATE op_queue SET kind = ?2, payload = ?3, updated_at = {NOW}
+                     WHERE id = ?1 AND state IN ('pending', 'in_flight')"
+                ),
+                params![id.0, operation.kind(), payload],
+            )? > 0)
+        })
+    }
+
+    /// Tells the operations queued after `after` for `message` where an
+    /// earlier operation put it on the server: each waiting move or delete
+    /// whose recorded source is `folder` with an unknown UID gets `uid` (and
+    /// `uid_validity`). Stops at the first operation that takes the message
+    /// out of `folder`. Returns how many were updated.
+    pub fn rebase_later_ops(
+        &self,
+        message: &MessageId,
+        after: OpId,
+        folder: &FolderId,
+        uid: u32,
+        uid_validity: Option<u32>,
+    ) -> Result<usize> {
+        self.with_tx(|tx| {
+            let rows = {
+                let mut stmt = tx.prepare_cached(
+                    "SELECT id, payload FROM op_queue
+                     WHERE message_id = ?1 AND id > ?2 AND state IN ('pending', 'in_flight')
+                     ORDER BY id",
+                )?;
+                stmt.query_map(params![message.as_str(), after.0], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            let mut updated = 0;
+            for (id, payload) in rows {
+                let mut operation: Operation = serde_json::from_str(&payload)?;
+                let takes_away = operation.takes_message_away();
+                if let Some(source) = operation.source_mut() {
+                    if source.folder_id != *folder {
+                        break;
+                    }
+                    if source.uid.is_none() {
+                        source.uid = Some(uid);
+                        source.uid_validity = uid_validity;
+                        tx.execute(
+                            &format!(
+                                "UPDATE op_queue SET payload = ?2, updated_at = {NOW} WHERE id = ?1"
+                            ),
+                            params![id, serde_json::to_string(&operation)?],
+                        )?;
+                        updated += 1;
+                    }
+                }
+                if takes_away {
+                    break;
+                }
+            }
+            Ok(updated)
         })
     }
 

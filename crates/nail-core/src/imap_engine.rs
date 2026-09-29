@@ -70,15 +70,22 @@ pub(crate) async fn run(
         };
         let err = match connected {
             Ok(client) => {
-                backoff = timing.reconnect_min;
                 service.set_status(&account.id, AccountState::Online, None);
+                let since = tokio::time::Instant::now();
                 match session(
                     &service, &account, &settings, client, &signals, &mut stop, poll,
                 )
                 .await
                 {
                     SessionEnd::Stopped => break,
-                    SessionEnd::Failed(err) => err,
+                    SessionEnd::Failed(err) => {
+                        // A session that failed right after connecting does
+                        // not reset the backoff (no reconnect storm).
+                        if since.elapsed() >= timing.healthy_after {
+                            backoff = timing.reconnect_min;
+                        }
+                        err
+                    }
                 }
             }
             Err(err) => CoreError::from(err),
@@ -240,7 +247,8 @@ impl WatcherSet {
                 continue;
             }
             let config = WatchConfig::new(folder.path.clone())
-                .with_reconnect(timing.reconnect_min, timing.reconnect_max);
+                .with_reconnect(timing.reconnect_min, timing.reconnect_max)
+                .with_healthy_after(timing.healthy_after);
             let mut watcher = MailboxWatcher::spawn(
                 settings.config.clone(),
                 Arc::clone(&settings.credentials),
