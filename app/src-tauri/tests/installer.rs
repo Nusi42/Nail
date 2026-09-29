@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use nail_app_lib::AppArgs;
-use nail_app_lib::launch::{FILE_EXTENSIONS, LaunchRequest, URL_SCHEMES};
+use nail_app_lib::launch::{FILE_EXTENSIONS, URL_SCHEMES, parse};
 
 fn app_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -117,7 +117,7 @@ fn every_registered_scheme_and_type_is_handled_by_the_app() {
         } else {
             format!("{scheme}://example.org/c.ics")
         };
-        assert!(LaunchRequest::parse(&url).is_some(), "{scheme} not parsed");
+        assert!(parse(&url).is_some(), "{scheme} not parsed");
     }
     for extension in FILE_EXTENSIONS {
         let progid = format!("${{NAIL_PROGID_{}}}", extension.to_uppercase());
@@ -132,7 +132,7 @@ fn every_registered_scheme_and_type_is_handled_by_the_app() {
             ".{extension} not unregistered"
         );
         assert!(
-            LaunchRequest::parse(&format!(r"C:\a.{extension}")).is_some(),
+            parse(&format!(r"C:\a.{extension}")).is_some(),
             ".{extension} not parsed"
         );
     }

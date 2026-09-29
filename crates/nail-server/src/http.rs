@@ -35,6 +35,7 @@ pub(crate) struct AppConfig {
     pub(crate) sandbox_origins: Vec<String>,
     pub(crate) proxy: Option<Arc<Proxy>>,
     pub(crate) acme: Option<AcmeChallenges>,
+    pub(crate) auth: Option<nail_remote_auth::RemoteAuth>,
 }
 
 impl AppConfig {
@@ -53,6 +54,7 @@ impl AppConfig {
             sandbox_origins: Vec::new(),
             proxy: None,
             acme: None,
+            auth: None,
         }
     }
 }
@@ -86,17 +88,28 @@ pub(crate) fn proxy_routes<S: Clone + Send + Sync + 'static>(proxy: Arc<Proxy>) 
 }
 
 pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
-    let mut api = Router::new()
+    // What needs a session in the remote UI: the protocol, raw mail and
+    // the proxy.
+    let mut session_routes = Router::new()
         .route("/api/ws", get(ws::upgrade))
         .route("/api/blob/{hash}", get(blob));
+    if let Some(proxy) = config.proxy {
+        session_routes = session_routes.merge(proxy_routes(proxy));
+    }
+    let mut session_routes = session_routes.with_state(service.clone());
+    let mut api = Router::new();
+    if let Some(auth) = config.auth {
+        session_routes = session_routes.layer(middleware::from_fn_with_state(
+            auth.clone(),
+            nail_remote_auth::http::require_session,
+        ));
+        api = api.merge(nail_remote_auth::http::router(auth));
+    }
     if let Some(control) = config.control {
         let test = Router::new()
             .route("/api/test/{command}", post(test_control))
             .with_state(control);
         api = api.merge(test);
-    }
-    if let Some(proxy) = config.proxy {
-        api = api.merge(proxy_routes(proxy));
     }
     if let Some(challenges) = config.acme {
         let acme = Router::new()
@@ -105,8 +118,8 @@ pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
         api = api.merge(acme);
     }
     let api = api
-        .route("/api/{*rest}", any(not_found))
-        .with_state(service);
+        .merge(session_routes)
+        .route("/api/{*rest}", any(not_found));
 
     let app = match config.ui_dir {
         Some(dir) => {
@@ -129,6 +142,22 @@ pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
         guard::check,
     ))
     .layer(middleware::from_fn_with_state(header_set, headers::apply))
+    .layer(middleware::map_request(peer_socket_addr))
+}
+
+/// Copies the peer address from the listener's [`crate::ClientAddr`] into
+/// `ConnectInfo<SocketAddr>`, where `nail-remote-auth` reads it (rate
+/// limits per address, audit entries).
+async fn peer_socket_addr(mut request: axum::extract::Request) -> axum::extract::Request {
+    use axum::extract::ConnectInfo;
+    if let Some(ConnectInfo(crate::ClientAddr(addr))) = request
+        .extensions()
+        .get::<ConnectInfo<crate::ClientAddr>>()
+        .cloned()
+    {
+        request.extensions_mut().insert(ConnectInfo(addr));
+    }
+    request
 }
 
 /// `GET /api/proxy/{token}`: a remote resource through the proxy.
@@ -219,7 +248,19 @@ async fn test_control(
 }
 
 /// `GET /api/blob/{hash}`: the raw RFC 5322 message with that SHA-256.
-async fn blob(State(service): State<Service>, Path(hash): Path<String>) -> Response {
+/// A remote session needs the `raw-source` scope and a grant for every
+/// account (a blob is not tied to one message).
+async fn blob(
+    State(service): State<Service>,
+    session: Option<axum::Extension<nail_remote_auth::RemoteSessionCtx>>,
+    Path(hash): Path<String>,
+) -> Response {
+    if let Some(axum::Extension(ctx)) = session {
+        let mail = &ctx.grant().mail;
+        if !mail.has(nail_api::McpScope::RawSource) || !mail.all_accounts {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+    }
     let file_name = format!("attachment; filename=\"{}.eml\"", hash.escape_default());
     let result = tokio::task::spawn_blocking(move || service.blob(&hash)).await;
     let bytes = match result {

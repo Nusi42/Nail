@@ -21,13 +21,20 @@
 //!
 //! The result must still only be rendered inside the sandboxed reader iframe
 //! with a restrictive CSP; the sanitizer is one layer, not the only one.
+//!
+//! Every remote reference is counted ([`SanitizedHtml::remote_resources`]).
+//! When the user allowed remote content, [`sanitize_html_with`] replaces
+//! each one with the URL a [`ProxyRewriter`] returns (a signed
+//! `nail-proxy:` URL, [`crate::remote_content`]) instead of removing it.
 
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use ammonia::{Builder, UrlRelative};
+
+use crate::remote_content::{ProxyRewriter, remote_target};
 
 /// The result of [`sanitize_html`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +43,32 @@ pub struct SanitizedHtml {
     pub html: String,
     /// `true` when remote content (images, backgrounds) was removed.
     pub remote_content_blocked: bool,
+    /// Remote references found (`src` / `background` attributes and CSS
+    /// `url(...)` in `style`), whether removed or rewritten.
+    pub remote_resources: u32,
+}
+
+/// What the attribute filter records and uses about remote content.
+struct Remote {
+    blocked: AtomicBool,
+    count: AtomicU32,
+    rewriter: Option<ProxyRewriter>,
+}
+
+impl Remote {
+    /// Counts one remote reference and returns its replacement, or marks
+    /// the content blocked and returns `None`.
+    fn replace(&self, value: &str) -> Option<String> {
+        self.count.fetch_add(1, Ordering::Relaxed);
+        let replaced = self
+            .rewriter
+            .as_ref()
+            .and_then(|rewrite| remote_target(value).and_then(|url| rewrite(&url)));
+        if replaced.is_none() {
+            self.blocked.store(true, Ordering::Relaxed);
+        }
+        replaced
+    }
 }
 
 /// Tags removed together with everything inside them.
@@ -108,21 +141,34 @@ const DATA_IMAGE_PREFIXES: &[&str] = &[
     "data:image/webp",
 ];
 
-/// Sanitizes an HTML mail body. Never panics on malformed input.
+/// Sanitizes an HTML mail body, removing remote content. Never panics on
+/// malformed input.
 pub fn sanitize_html(html: &str) -> SanitizedHtml {
-    let blocked = Arc::new(AtomicBool::new(false));
-    let html = builder(Arc::clone(&blocked))
+    sanitize_html_with(html, None)
+}
+
+/// Sanitizes an HTML mail body; with a `rewriter`, remote references are
+/// replaced by what it returns (references it refuses are removed as
+/// usual). Never panics on malformed input.
+pub fn sanitize_html_with(html: &str, rewriter: Option<ProxyRewriter>) -> SanitizedHtml {
+    let remote = Arc::new(Remote {
+        blocked: AtomicBool::new(false),
+        count: AtomicU32::new(0),
+        rewriter,
+    });
+    let html = builder(Arc::clone(&remote))
         .clean(html)
         .to_string()
         .trim()
         .to_owned();
     SanitizedHtml {
         html,
-        remote_content_blocked: blocked.load(Ordering::Relaxed),
+        remote_content_blocked: remote.blocked.load(Ordering::Relaxed),
+        remote_resources: remote.count.load(Ordering::Relaxed),
     }
 }
 
-fn builder(blocked: Arc<AtomicBool>) -> Builder<'static> {
+fn builder(remote: Arc<Remote>) -> Builder<'static> {
     let mut builder = Builder::default();
     builder
         .add_tags(EXTRA_TAGS)
@@ -139,7 +185,7 @@ fn builder(blocked: Arc<AtomicBool>) -> Builder<'static> {
         builder.add_tag_attributes(tag, attributes.iter());
     }
     builder.attribute_filter(move |element, attribute, value| {
-        filter_attribute(element, attribute, value, &blocked)
+        filter_attribute(element, attribute, value, &remote)
     });
     builder
 }
@@ -148,22 +194,19 @@ fn filter_attribute<'u>(
     element: &str,
     attribute: &str,
     value: &'u str,
-    blocked: &AtomicBool,
+    remote: &Remote,
 ) -> Option<Cow<'u, str>> {
     match (element, attribute) {
         (_, "src" | "background") => match classify_url(value) {
             UrlKind::Cid | UrlKind::DataImage => Some(Cow::Borrowed(value)),
-            UrlKind::Remote => {
-                blocked.store(true, Ordering::Relaxed);
-                None
-            }
+            UrlKind::Remote => remote.replace(value).map(Cow::Owned),
             UrlKind::Link | UrlKind::Other => None,
         },
         (_, "href") => match classify_url(value) {
             UrlKind::Remote | UrlKind::Link => Some(Cow::Borrowed(value)),
             _ => None,
         },
-        (_, "style") => filter_style(value, blocked),
+        (_, "style") => filter_style(value, remote),
         _ => Some(Cow::Borrowed(value)),
     }
 }
@@ -211,7 +254,7 @@ fn classify_url(value: &str) -> UrlKind {
 }
 
 /// Filters an inline `style` attribute declaration by declaration.
-fn filter_style<'u>(style: &'u str, blocked: &AtomicBool) -> Option<Cow<'u, str>> {
+fn filter_style<'u>(style: &'u str, remote: &Remote) -> Option<Cow<'u, str>> {
     const FORBIDDEN: &[&str] = &[
         "expression(",
         "javascript:",
@@ -222,7 +265,7 @@ fn filter_style<'u>(style: &'u str, blocked: &AtomicBool) -> Option<Cow<'u, str>
         "\\",
         "/*",
     ];
-    let mut kept = Vec::new();
+    let mut kept: Vec<Cow<'u, str>> = Vec::new();
     for declaration in style.split(';') {
         let declaration = declaration.trim();
         if declaration.is_empty() {
@@ -234,7 +277,9 @@ fn filter_style<'u>(style: &'u str, blocked: &AtomicBool) -> Option<Cow<'u, str>
         }
         let urls = css_urls(&lower);
         if urls.iter().any(|url| classify_url(url) == UrlKind::Remote) {
-            blocked.store(true, Ordering::Relaxed);
+            if let Some(rewritten) = rewrite_css_urls(declaration, remote) {
+                kept.push(Cow::Owned(rewritten));
+            }
             continue;
         }
         if urls
@@ -243,7 +288,7 @@ fn filter_style<'u>(style: &'u str, blocked: &AtomicBool) -> Option<Cow<'u, str>
         {
             continue;
         }
-        kept.push(declaration);
+        kept.push(Cow::Borrowed(declaration));
     }
     if kept.is_empty() {
         return None;
@@ -254,6 +299,48 @@ fn filter_style<'u>(style: &'u str, blocked: &AtomicBool) -> Option<Cow<'u, str>
     } else {
         Some(Cow::Owned(joined))
     }
+}
+
+/// A declaration with remote `url(...)` references: every remote one
+/// counted and replaced through the rewriter (`url("<replacement>")`),
+/// `cid:` / `data:` images kept. `None` (drop the declaration) when any
+/// reference cannot be kept or replaced, or the declaration uses
+/// `image-set()` / `src()`, whose bare strings are URLs too.
+fn rewrite_css_urls(declaration: &str, remote: &Remote) -> Option<String> {
+    let lower = declaration.to_ascii_lowercase();
+    let mut ok = !(lower.contains("image-set(") || lower.contains("src("));
+    let mut out = String::with_capacity(declaration.len());
+    let mut pos = 0;
+    while let Some(found) = lower[pos..].find("url(") {
+        let start = pos + found;
+        out.push_str(&declaration[pos..start]);
+        let arg_start = start + 4;
+        let Some(close) = declaration[arg_start..].find(')') else {
+            // `url(` without a closing parenthesis: never kept.
+            remote.replace("");
+            return None;
+        };
+        let arg_end = arg_start + close;
+        let url = declaration[arg_start..arg_end]
+            .trim()
+            .trim_matches(|c| c == '"' || c == '\'')
+            .trim();
+        match classify_url(url) {
+            UrlKind::Cid | UrlKind::DataImage => out.push_str(&declaration[start..=arg_end]),
+            UrlKind::Remote => match remote.replace(url) {
+                Some(replacement) if !replacement.contains(['"', '\\', '(', ')']) => {
+                    out.push_str("url(\"");
+                    out.push_str(&replacement);
+                    out.push_str("\")");
+                }
+                _ => ok = false,
+            },
+            UrlKind::Link | UrlKind::Other => ok = false,
+        }
+        pos = arg_end + 1;
+    }
+    out.push_str(&declaration[pos..]);
+    ok.then_some(out)
 }
 
 /// Extracts the arguments of `url(...)` and `image-set(...)`-style

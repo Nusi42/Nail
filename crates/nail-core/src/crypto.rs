@@ -400,7 +400,24 @@ impl Service {
                 let raw = service.blobs().get(&hash)?;
                 let opened = open_message(service, &raw);
                 let display = opened.display.as_deref().unwrap_or(&raw);
-                let mut body = nail_mime::parse_message(display).into_body(id.clone());
+                let sender = stored.summary.from.as_ref().map(|a| a.email.clone());
+                let (allowed_by, rewriter) =
+                    crate::remote::remote_rewriter(service, &id, sender.as_deref());
+                let rewriting = rewriter.is_some();
+                let parsed = nail_mime::parse_message_with(display, rewriter);
+                let resources = parsed.remote_resources;
+                let mut body = parsed.into_body(id.clone());
+                // Allowed content loads through the proxy; references it
+                // refuses (private or local targets) stay removed for good,
+                // which is not "blocked" in the reader's sense.
+                if rewriting {
+                    body.remote_content_blocked = false;
+                }
+                body.remote_content = crate::remote::decorate_remote_content(
+                    resources,
+                    allowed_by,
+                    sender.as_deref(),
+                );
                 body.security = opened.status.clone();
                 let trusted = service.trusted_authserv_ids(&stored.summary.account_id);
                 body.auth_results = nail_mime::auth_results::auth_results_of_raw(&raw, &trusted);

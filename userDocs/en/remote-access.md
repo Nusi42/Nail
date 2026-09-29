@@ -21,7 +21,9 @@ Open **Settings → Remote access**.
     or office network. Windows may ask once whether Nail may accept
     connections.
   - *One address…* — one network address of this computer.
-- **Port** — 4780 unless you change it.
+- **Port** — 4780 unless you change it. If you also use Nail in the
+  browser on this computer (`nail serve`, which uses 4780 as well), choose
+  another port for remote access.
 - **Host name** — the name other devices use to reach this computer,
   for example `nail-desktop.local`. **Passkeys need a name**; they do not
   work with a bare IP address.
@@ -31,6 +33,10 @@ Open **Settings → Remote access**.
   `192.168.1.0/24`, one per line.
 - **Sessions** — how long a device stays signed in when idle, at most,
   and how long a fresh confirmation lasts for sensitive changes.
+
+Saving starts remote access at once (or restarts it with the new
+settings); switching it off stops it and signs nobody out — devices sign in
+again the next time. Nail on this computer itself never needs a sign-in.
 
 The **Status** part shows whether remote access runs, the addresses to
 open, how many devices are signed in, and the **certificate fingerprint**

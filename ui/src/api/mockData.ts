@@ -20,6 +20,7 @@ import type {
   Folder,
   FolderRole,
   Identity,
+  LaunchRequest,
   MessageBody,
   MessageSummary,
   OutboxEntry,
@@ -62,6 +63,10 @@ export interface MockData {
   failedOps: Map<string, string>;
   /** The last reported UI context. */
   uiContext: UiContext;
+  /** Launch requests waiting for the UI (`TakeLaunchRequests`). */
+  launches: LaunchRequest[];
+  /** `.eml` files the mock can "import": path → message id shown. */
+  messageFiles: Map<string, string>;
   /** State of the feature mocks (`src/features/<name>/mock.ts`). */
   features: MockFeatures;
   /** Behaviour switches for tests. */
@@ -436,6 +441,8 @@ export function createMockData(inboxSize = 250): MockData {
     },
     failedOps: new Map(),
     uiContext: emptyUiContext(),
+    launches: [],
+    messageFiles: new Map(),
     features: {
       composer: createComposerMockState(),
       rules: createRulesMockState(),

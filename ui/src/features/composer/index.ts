@@ -21,6 +21,7 @@ export {
   openRichDraft,
   saveRich,
   sendRich,
+  startMailtoCompose,
   startRichCompose,
   startRichReply,
   discardRich,

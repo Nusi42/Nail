@@ -122,6 +122,10 @@ pub struct ServiceOptions {
     /// HTTPS for online key lookups (WKD, keys.openpgp.org); `None` = the
     /// real network (rustls, HTTPS only).
     pub key_lookup: Option<Arc<dyn nail_pgp::discovery::HttpClient>>,
+    /// How the remote-content proxy fetches; `None` = the real network
+    /// (rustls, platform verifier, system DNS). Seeded runs pass one that
+    /// reaches only their mock servers.
+    pub proxy_fetcher: Option<nail_proxy::Fetcher>,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -138,6 +142,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("timing", &self.timing)
             .field("fixed_trust_anchors", &self.trust_anchors.is_some())
             .field("key_lookup_mock", &self.key_lookup.is_some())
+            .field("proxy_fetcher", &self.proxy_fetcher.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -159,6 +164,7 @@ impl ServiceOptions {
             timing: EngineTiming::default(),
             trust_anchors: None,
             key_lookup: None,
+            proxy_fetcher: None,
         }
     }
 }
@@ -208,6 +214,10 @@ pub(crate) struct Inner {
     pub(crate) crypto: crate::crypto::CryptoState,
     /// Encryption at rest (M2a).
     pub(crate) vault: crate::vault::VaultCtl,
+    /// Remote UI and remote content (M2b).
+    pub(crate) remote: crate::remote::RemoteState,
+    /// Launch requests waiting for the UI (M2b).
+    pub(crate) launches: Mutex<Vec<nail_api::LaunchRequest>>,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -309,6 +319,12 @@ impl Service {
         let accounts = AccountManager::load(config.dir());
         let rules = crate::rules::RulesManager::load(config.dir());
         let crypto = crate::crypto::CryptoState::new(options)?;
+        let remote = crate::remote::RemoteState::new(
+            store.clone(),
+            Arc::clone(&secrets),
+            events.clone(),
+            options.proxy_fetcher.clone(),
+        );
         let http = nail_auth::http_client()
             .map_err(|err| ApiError::internal(format!("cannot build the HTTP client: {err}")))?;
         let tokens = Arc::new(Tokens::new(
@@ -345,6 +361,8 @@ impl Service {
                 mcp_info: Mutex::new(None),
                 crypto,
                 vault,
+                remote,
+                launches: Mutex::new(Vec::new()),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -379,15 +397,21 @@ impl Service {
         }));
     }
 
-    /// Removes MCP audit entries and finished rule runs older than
-    /// [`HISTORY_RETENTION_DAYS`] before `now` (Unix seconds). Returns how
-    /// many of each were removed.
+    /// Removes MCP audit entries, finished rule runs and remote-UI audit
+    /// entries older than [`HISTORY_RETENTION_DAYS`] before `now` (Unix
+    /// seconds), and remote-content allows of messages that no longer
+    /// exist. Returns how many MCP entries and rule runs were removed.
     pub async fn purge_history(&self, now: i64) -> Result<(usize, usize)> {
         let before = now - HISTORY_RETENTION_DAYS * 86_400;
         Ok(self
             .inner
             .store
-            .call(move |s| Ok((s.purge_mcp_audit(before)?, s.purge_rule_runs(before)?)))
+            .call(move |s| {
+                let purged = (s.purge_mcp_audit(before)?, s.purge_rule_runs(before)?);
+                s.purge_remote_audit(before)?;
+                s.purge_stale_remote_content_allows()?;
+                Ok(purged)
+            })
             .await?)
     }
 
@@ -922,6 +946,9 @@ impl Service {
             | Request::ListRemoteContentAllows
             | Request::RemoveRemoteContentAllow { .. }) => {
                 crate::remote::handle(self, request).await?
+            }
+            request @ (Request::TakeLaunchRequests | Request::ImportMessageFile { .. }) => {
+                crate::launch::handle(self, request).await?
             }
         })
     }

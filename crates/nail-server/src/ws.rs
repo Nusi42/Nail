@@ -1,12 +1,27 @@
 //! `/api/ws`: the Nail protocol over one WebSocket.
+//!
+//! In the remote UI the upgrade passed the session middleware, so the
+//! socket belongs to one remote session: every request goes through
+//! [`Service::handle_remote`] (authorization, grant narrowing), the session
+//! is re-checked every [`REFRESH_EVERY`] (idle / absolute expiry, revoked
+//! device, disabled user; a narrowed grant applies from then on), and the
+//! socket closes when the session ends (`RemoteSessionEnded`).
+
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
-use nail_api::{ApiError, RpcRequest, ServerMessage};
+use nail_api::{ApiError, Event, RpcRequest, ServerMessage};
 use nail_core::Service;
-use tokio::sync::{broadcast, mpsc};
+use nail_remote_auth::RemoteSessionCtx;
+use tokio::sync::{broadcast, mpsc, watch};
+
+/// How often an idle remote session's socket re-checks its session (each
+/// request re-checks it too). An open socket counts as activity.
+const REFRESH_EVERY: Duration = Duration::from_secs(60);
 
 /// Largest accepted request frame. Requests are small JSON objects.
 const MAX_FRAME: usize = 1 << 20;
@@ -16,14 +31,30 @@ const OUTBOX: usize = 256;
 /// Upgrades to a WebSocket. `Host` and `Origin` were already checked
 /// against the loopback allowlist by [`crate::guard`] (no cross-site
 /// WebSocket hijacking, no DNS rebinding).
-pub(crate) async fn upgrade(State(service): State<Service>, ws: WebSocketUpgrade) -> Response {
+pub(crate) async fn upgrade(
+    State(service): State<Service>,
+    session: Option<axum::Extension<RemoteSessionCtx>>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    let session = session.map(|axum::Extension(ctx)| Arc::new(RwLock::new(ctx)));
     ws.max_message_size(MAX_FRAME)
         .max_frame_size(MAX_FRAME)
-        .on_upgrade(move |socket| serve_socket(socket, service))
+        .on_upgrade(move |socket| serve_socket(socket, service, session))
 }
 
-async fn serve_socket(socket: WebSocket, service: Service) {
+type Session = Arc<RwLock<RemoteSessionCtx>>;
+
+fn current(session: &Session) -> RemoteSessionCtx {
+    session
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
+async fn serve_socket(socket: WebSocket, service: Service, session: Option<Session>) {
     let (mut sink, mut stream) = socket.split();
+    // Turns true when a remote session ends: the socket closes.
+    let (end_tx, mut end_rx) = watch::channel(false);
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(OUTBOX);
 
     // Writer: the only task that touches the sink.
@@ -53,6 +84,8 @@ async fn serve_socket(socket: WebSocket, service: Service) {
         let tx = tx.clone();
         let service = service.clone();
         let mut events = service.subscribe();
+        let own_session = session.as_ref().map(|s| current(s).session.id);
+        let end_tx = end_tx.clone();
         tokio::spawn(async move {
             loop {
                 let batch = match events.recv().await {
@@ -66,7 +99,15 @@ async fn serve_socket(socket: WebSocket, service: Service) {
                     Err(broadcast::error::RecvError::Closed) => break,
                 };
                 for event in batch {
+                    let ends = matches!(
+                        (&event, &own_session),
+                        (Event::RemoteSessionEnded { session_id, .. }, Some(own)) if session_id == own
+                    );
                     if tx.send(event.into()).await.is_err() {
+                        return;
+                    }
+                    if ends {
+                        let _ = end_tx.send(true);
                         return;
                     }
                 }
@@ -74,8 +115,38 @@ async fn serve_socket(socket: WebSocket, service: Service) {
         })
     };
 
+    // A remote session is re-checked periodically.
+    let refresher = session.clone().map(|session| {
+        let service = service.clone();
+        let end_tx = end_tx.clone();
+        tokio::spawn(async move {
+            let mut every = tokio::time::interval(REFRESH_EVERY);
+            every.tick().await;
+            loop {
+                every.tick().await;
+                let ctx = current(&session);
+                match service.remote_auth().refresh(&ctx) {
+                    Some(fresh) => {
+                        *session
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) = fresh;
+                    }
+                    None => {
+                        let _ = end_tx.send(true);
+                        return;
+                    }
+                }
+            }
+        })
+    });
+
     // Requests: each is answered concurrently; responses carry the id.
-    while let Some(frame) = stream.next().await {
+    loop {
+        let frame = tokio::select! {
+            frame = stream.next() => frame,
+            _ = end_rx.wait_for(|ended| *ended) => break,
+        };
+        let Some(frame) = frame else { break };
         let text = match frame {
             Ok(Message::Text(text)) => text,
             Ok(Message::Close(_)) | Err(_) => break,
@@ -89,8 +160,34 @@ async fn serve_socket(socket: WebSocket, service: Service) {
             Ok(RpcRequest { id, request }) => {
                 let service = service.clone();
                 let tx = tx.clone();
+                // Every request re-reads the session: a re-authentication
+                // or a narrowed grant applies at once, an ended session
+                // closes the socket.
+                let ctx = match &session {
+                    Some(session) => match service.remote_auth().refresh(&current(session)) {
+                        Some(fresh) => {
+                            *session
+                                .write()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) = fresh.clone();
+                            Some(fresh)
+                        }
+                        None => {
+                            let response = ApiError::new(
+                                nail_api::ErrorCode::AuthFailed,
+                                "the remote session has ended",
+                            )
+                            .into();
+                            let _ = tx.send(ServerMessage::Response { id, response }).await;
+                            break;
+                        }
+                    },
+                    None => None,
+                };
                 tokio::spawn(async move {
-                    let response = service.handle(request).await;
+                    let response = match ctx {
+                        Some(ctx) => service.handle_remote(&ctx, request).await,
+                        None => service.handle(request).await,
+                    };
                     let _ = tx.send(ServerMessage::Response { id, response }).await;
                 });
             }
@@ -110,6 +207,9 @@ async fn serve_socket(socket: WebSocket, service: Service) {
     }
 
     forwarder.abort();
+    if let Some(refresher) = refresher {
+        refresher.abort();
+    }
     drop(tx);
     // In-flight handlers hold senders; the writer ends once they are done.
     let _ = writer.await;

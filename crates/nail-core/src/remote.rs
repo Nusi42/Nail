@@ -1,29 +1,289 @@
-//! Requests of wave M2b (ADR 0036): the remote UI's settings and status,
-//! users, devices, sessions, pairing codes and audit log, and the
-//! remote-content allow-lists.
+//! Requests of wave M2b (ADRs 0036, 0041): the remote UI's settings and
+//! status, users, credentials, devices, sessions, pairing codes and audit
+//! log, and the remote-content allow-lists; plus the state behind them.
 //!
 //! [`Service::dispatch`](crate::service::Service) routes exactly these
-//! requests here (one match arm). What needs only the store is served now;
-//! what needs `nail-remote-auth` (password hashing, TOTP, pairing-code
-//! generation) or `nail-server` (the listener, certificates) answers
-//! `unsupported` until WP45 wires those crates in. Filling
-//! `MessageBody::remote_content` and rewriting remote URLs to proxy URLs
-//! is WP45's as well.
+//! requests here (one match arm). Credential and pairing requests go to
+//! [`nail_remote_auth::RemoteAuth::handle_admin`] (hashing, TOTP, codes).
 //!
-//! The remote UI never runs before WP45, so the status is always
-//! `stopped`, and settings are stored but take effect only then.
-//! Invalid settings and internet mode are refused already.
+//! **The listener** lives in `nail-server` (which depends on this crate,
+//! not the other way round). A host attaches with
+//! [`Service::attach_remote_ui`] and receives [`RemoteUiCommand`]s
+//! (apply settings, regenerate the certificate); it reports what runs with
+//! [`Service::report_remote_ui`]. Without a host (tests, embedders) the
+//! settings are stored and the status stays `stopped`.
+//!
+//! **Remote content**: [`RemoteState`] holds the proxy's [`Signer`] (key
+//! in the keychain) and the [`Proxy`] (fetcher + a [`TargetCheck`] that
+//! re-reads the allow-lists). `GetMessage` fills
+//! `MessageBody::remote_content` and, for allowed messages, rewrites
+//! remote references to `nail-proxy:` URLs ([`decorate_remote_content`]).
 
+use std::sync::{Arc, Mutex, OnceLock};
+
+use nail_api::engine::SecretStore;
 use nail_api::remote::{
-    RemoteUiSettings, RemoteUiSettingsIssue, RemoteUiStatus, SessionEndReason, internet_mode_lock,
+    RemoteUiSettings, RemoteUiSettingsIssue, RemoteUiState, RemoteUiStatus, SessionEndReason,
+    internet_mode_lock,
 };
-use nail_api::remote_content::{RemoteContentScope, normalize_allow_value, sender_domain};
-use nail_api::{ApiError, ErrorCode, Event, RemoteSessionId, Request, Response};
-use nail_store::REMOTE_UI_SETTINGS_KEY;
+use nail_api::remote_content::{
+    RemoteContentInfo, RemoteContentScope, normalize_allow_value, sender_domain,
+};
+use nail_api::{ApiError, ErrorCode, Event, MessageId, RemoteSessionId, Request, Response};
+use nail_proxy::{Check, Fetcher, Proxy, ProxyKey, Signer, TargetCheck};
+use nail_remote_auth::{AuthConfig, AuthDeps, AuthPolicy, EventSink, RemoteAuth, SystemClock};
+use nail_store::{REMOTE_UI_SETTINGS_KEY, Store};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::engine::unix_now;
 use crate::error::Result;
-use crate::service::Service;
+use crate::service::{Service, lock};
+
+/// How long `RegenerateRemoteCertificate` waits for the host.
+const REGENERATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// What the core asks of the remote-UI host (`nail-server`).
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum RemoteUiCommand {
+    /// Start, restart or stop the listener for these (valid) settings.
+    Apply(Box<RemoteUiSettings>),
+    /// Make a new self-signed certificate and restart with it; answer
+    /// when done.
+    RegenerateCertificate(oneshot::Sender<std::result::Result<(), ApiError>>),
+}
+
+/// Remote-UI and remote-content state of a [`Service`].
+pub(crate) struct RemoteState {
+    /// Authentication, sessions, admin operations (ADR 0037).
+    pub(crate) auth: RemoteAuth,
+    store: Store,
+    secrets: Arc<dyn SecretStore>,
+    /// The fetcher given in the options (taken when the proxy is built).
+    fetcher: Mutex<Option<Fetcher>>,
+    /// Proxy URL signing, built on first use (the key lives in the
+    /// keychain; `None` when it cannot be read or created).
+    signer: OnceLock<Option<Signer>>,
+    /// The proxy, built on first use (`None` without a signer or TLS).
+    proxy: OnceLock<Option<Arc<Proxy>>>,
+    host: Mutex<Option<mpsc::UnboundedSender<RemoteUiCommand>>>,
+    /// What the host reported (`None` = nothing runs).
+    status: Mutex<Option<RemoteUiStatus>>,
+    /// The running remote UI's sandbox origin (mail documents).
+    sandbox_origin: Mutex<Option<String>>,
+}
+
+/// Broadcasts `nail-remote-auth`'s events like the core's own.
+#[derive(Debug)]
+struct BroadcastSink(broadcast::Sender<Event>);
+
+impl EventSink for BroadcastSink {
+    fn emit(&self, event: Event) {
+        let _ = self.0.send(event);
+    }
+}
+
+/// The proxy's second opinion: the message's remote content is still
+/// allowed (an entry may have been removed since the token was minted).
+struct AllowCheck(Store);
+
+impl TargetCheck for AllowCheck {
+    fn allows<'a>(&'a self, message_id: &'a str, _url: &'a url::Url) -> Check<'a> {
+        let id = MessageId::from(message_id);
+        Box::pin(async move {
+            self.0
+                .call(move |s| {
+                    let message = s.get_message(&id)?;
+                    let sender = message.summary.from.map(|a| a.email);
+                    s.remote_content_allowed_by(&id, sender.as_deref())
+                })
+                .await
+                .ok()
+                .flatten()
+                .is_some()
+        })
+    }
+}
+
+impl RemoteState {
+    /// Builds the state. The proxy key is read from (or created in) the
+    /// keychain only when remote content is first rewritten or served;
+    /// `fetcher` overrides the network fetcher (demos: mock servers only).
+    pub(crate) fn new(
+        store: Store,
+        secrets: Arc<dyn SecretStore>,
+        events: broadcast::Sender<Event>,
+        fetcher: Option<Fetcher>,
+    ) -> Self {
+        let auth = RemoteAuth::new(
+            AuthDeps {
+                store: store.clone(),
+                secrets: Arc::clone(&secrets),
+                clock: Arc::new(SystemClock),
+                events: Arc::new(BroadcastSink(events)),
+            },
+            AuthConfig::default(),
+            AuthPolicy::default(),
+        );
+        Self {
+            auth,
+            store,
+            secrets,
+            fetcher: Mutex::new(fetcher),
+            signer: OnceLock::new(),
+            proxy: OnceLock::new(),
+            host: Mutex::new(None),
+            status: Mutex::new(None),
+            sandbox_origin: Mutex::new(None),
+        }
+    }
+
+    /// The signer (blocking on first use: keychain).
+    pub(crate) fn signer(&self) -> Option<&Signer> {
+        self.signer
+            .get_or_init(|| match ProxyKey::load_or_create(self.secrets.as_ref()) {
+                Ok(key) => Some(Signer::new(key)),
+                Err(err) => {
+                    tracing::warn!(%err, "no proxy key; remote content stays blocked");
+                    None
+                }
+            })
+            .as_ref()
+    }
+
+    /// The proxy (blocking on first use: keychain).
+    fn proxy(&self) -> Option<Arc<Proxy>> {
+        self.proxy
+            .get_or_init(|| {
+                let signer = self.signer()?.clone();
+                let fetcher = lock(&self.fetcher).take().or_else(|| match nail_auth::tls_config() {
+                    Ok(tls) => Some(Fetcher::new(Arc::new(tls))),
+                    Err(err) => {
+                        tracing::warn!(%err, "no TLS configuration for the remote-content proxy");
+                        None
+                    }
+                })?;
+                Some(Arc::new(
+                    Proxy::new(signer, fetcher)
+                        .with_check(Arc::new(AllowCheck(self.store.clone()))),
+                ))
+            })
+            .clone()
+    }
+}
+
+impl Service {
+    /// Remote-UI authentication (login route, sessions, authorization).
+    pub fn remote_auth(&self) -> &RemoteAuth {
+        &self.inner.remote.auth
+    }
+
+    /// The remote-content proxy (web route and desktop protocol); `None`
+    /// when no proxy key could be loaded. The first call reads (or
+    /// creates) the key in the keychain.
+    pub fn remote_proxy(&self) -> Option<Arc<Proxy>> {
+        self.inner.remote.proxy()
+    }
+
+    /// The stored remote-UI settings (defaults when none were saved).
+    pub fn remote_ui_settings(&self) -> RemoteUiSettings {
+        remote_ui_settings(self).unwrap_or_default()
+    }
+
+    /// Makes the caller the remote-UI host: it receives every later
+    /// [`RemoteUiCommand`] (a previous host is detached). The host starts
+    /// from [`Service::remote_ui_settings`] itself.
+    pub fn attach_remote_ui(&self) -> mpsc::UnboundedReceiver<RemoteUiCommand> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        *lock(&self.inner.remote.host) = Some(tx);
+        rx
+    }
+
+    /// The host reports what runs (`None` = stopped) and the sandbox
+    /// origin of mail documents; broadcast as `RemoteUiStatusChanged`.
+    pub fn report_remote_ui(&self, status: Option<RemoteUiStatus>, sandbox_origin: Option<String>) {
+        *lock(&self.inner.remote.status) = status;
+        *lock(&self.inner.remote.sandbox_origin) = sandbox_origin;
+        match remote_ui_status(self) {
+            Ok(status) => self.broadcast(Event::RemoteUiStatusChanged { status }),
+            Err(err) => tracing::warn!(%err, "cannot read the remote-UI status"),
+        }
+    }
+
+    /// The sandbox origin of the running remote UI (mail documents).
+    pub(crate) fn remote_sandbox_origin(&self) -> Option<String> {
+        lock(&self.inner.remote.sandbox_origin).clone()
+    }
+
+    /// A render token URL for `message` on the sandbox origin, when the
+    /// remote UI runs with one.
+    pub(crate) fn remote_render_url(&self, message: &MessageId) -> Option<String> {
+        let origin = self.remote_sandbox_origin()?;
+        let token = self
+            .inner
+            .remote
+            .signer()?
+            .sign_render(message.as_str())
+            .ok()?;
+        Some(format!(
+            "{origin}{}{token}",
+            nail_api::remote_content::RENDER_PATH
+        ))
+    }
+
+    fn send_to_host(&self, command: RemoteUiCommand) -> bool {
+        let mut host = lock(&self.inner.remote.host);
+        match host.as_ref().map(|tx| tx.send(command)) {
+            Some(Ok(())) => true,
+            Some(Err(_)) => {
+                *host = None;
+                false
+            }
+            None => false,
+        }
+    }
+}
+
+/// Fills `remote_content` of a message being read (blocking): whether it
+/// has remote resources and why they are allowed. Returns the rewriter
+/// for [`nail_mime::parse_message_with`] when they are.
+pub(crate) fn remote_rewriter(
+    service: &Service,
+    id: &MessageId,
+    sender: Option<&str>,
+) -> (Option<RemoteContentScope>, Option<nail_mime::ProxyRewriter>) {
+    let allowed_by = match service.store().remote_content_allowed_by(id, sender) {
+        Ok(allowed) => allowed,
+        Err(err) => {
+            tracing::warn!(%err, "cannot read the remote-content allow-lists");
+            None
+        }
+    };
+    // The key is only needed (and read) once content is allowed.
+    let rewriter = allowed_by
+        .and_then(|_| service.inner.remote.signer().cloned())
+        .map(|signer| {
+            let message = id.as_str().to_owned();
+            Arc::new(move |url: &str| signer.proxy_url(&message, url).ok())
+                as nail_mime::ProxyRewriter
+        });
+    (allowed_by, rewriter)
+}
+
+/// `MessageBody::remote_content` for a message with `resources` remote
+/// references (`None` when it has none).
+pub(crate) fn decorate_remote_content(
+    resources: u32,
+    allowed_by: Option<RemoteContentScope>,
+    sender: Option<&str>,
+) -> Option<RemoteContentInfo> {
+    (resources > 0).then(|| RemoteContentInfo {
+        resources,
+        allowed_by,
+        sender: sender.and_then(|s| normalize_allow_value(RemoteContentScope::Sender, s)),
+        domain: sender.and_then(sender_domain),
+    })
+}
 
 /// Audit entries returned at most per page.
 const MAX_AUDIT_PAGE: u32 = 500;
@@ -37,6 +297,15 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::UpdateRemoteUiSettings { settings } => {
             check_settings(&settings)?;
             store.set_setting(REMOTE_UI_SETTINGS_KEY, &settings)?;
+            let enabled = settings.enabled;
+            if service.send_to_host(RemoteUiCommand::Apply(Box::new(settings.clone()))) && enabled {
+                // The host reports `running` (or `failed`) when done.
+                let mut starting = remote_ui_status(service)?;
+                starting.state = RemoteUiState::Starting;
+                starting.error = None;
+                starting.message = None;
+                *lock(&service.inner.remote.status) = Some(starting);
+            }
             let status = remote_ui_status(service)?;
             service.broadcast(Event::RemoteUiStatusChanged {
                 status: status.clone(),
@@ -196,18 +465,34 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             Ok(Response::Done)
         }
-        // Wired by WP45: nail-server (certificates) and nail-remote-auth
-        // (hashing, TOTP, pairing codes).
-        other @ (Request::RegenerateRemoteCertificate
-        | Request::SetRemotePassword { .. }
+        Request::RegenerateRemoteCertificate => {
+            let (tx, rx) = oneshot::channel();
+            if !service.send_to_host(RemoteUiCommand::RegenerateCertificate(tx)) {
+                return Err(
+                    ApiError::unsupported("the remote UI is not available in this app").into(),
+                );
+            }
+            match tokio::time::timeout(REGENERATE_TIMEOUT, rx).await {
+                Ok(Ok(result)) => result?,
+                _ => {
+                    return Err(ApiError::new(
+                        ErrorCode::Unavailable,
+                        "the remote UI did not answer",
+                    )
+                    .into());
+                }
+            }
+            remote_ui(service)
+        }
+        // Hashing, TOTP and pairing codes (nail-remote-auth); from the
+        // desktop, so without a remote actor.
+        request @ (Request::SetRemotePassword { .. }
         | Request::StartTotpEnrollment { .. }
         | Request::ConfirmTotpEnrollment { .. }
         | Request::DisableTotp { .. }
-        | Request::CreatePairingCode { .. }) => Err(ApiError::unsupported(format!(
-            "{} is not available yet (remote UI, M2b)",
-            crate::service::request_name(&other)
-        ))
-        .into()),
+        | Request::CreatePairingCode { .. }) => {
+            Ok(service.remote_auth().handle_admin(request, None).await?)
+        }
         other => Err(ApiError::internal(format!(
             "{} is not a remote-UI request",
             crate::service::request_name(&other)
@@ -224,9 +509,11 @@ pub(crate) fn remote_ui_settings(service: &Service) -> Result<RemoteUiSettings> 
         .unwrap_or_default())
 }
 
-/// The remote UI's state: not running until WP45 wires the server.
+/// The remote UI's state as the host reported it (`stopped` without one).
 pub(crate) fn remote_ui_status(service: &Service) -> Result<RemoteUiStatus> {
-    let mut status = RemoteUiStatus::stopped();
+    let mut status = lock(&service.inner.remote.status)
+        .clone()
+        .unwrap_or_else(RemoteUiStatus::stopped);
     status.active_sessions = service.store().count_active_remote_sessions(unix_now())?;
     Ok(status)
 }

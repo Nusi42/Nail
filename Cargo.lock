@@ -4142,11 +4142,14 @@ dependencies = [
  "clap",
  "nail-api",
  "nail-core",
+ "nail-proxy",
+ "nail-server",
  "pretty_assertions",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-single-instance",
  "tempfile",
  "tokio",
  "tracing",
@@ -4248,6 +4251,8 @@ dependencies = [
  "nail-proto-imap",
  "nail-proto-pop3",
  "nail-proto-smtp",
+ "nail-proxy",
+ "nail-remote-auth",
  "nail-rules",
  "nail-search",
  "nail-smime",
@@ -4267,6 +4272,8 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "url",
+ "zeroize",
 ]
 
 [[package]]
@@ -4484,6 +4491,7 @@ dependencies = [
  "nail-api",
  "nail-core",
  "nail-proxy",
+ "nail-remote-auth",
  "nail-store",
  "pretty_assertions",
  "rcgen",
@@ -7644,6 +7652,22 @@ dependencies = [
  "syn 2.0.119",
  "tauri-codegen",
  "tauri-utils",
+]
+
+[[package]]
+name = "tauri-plugin-single-instance"
+version = "2.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91baf4f5db4b008fc2bcada0f7d3a49b45d911f94575ac236f225ed67554f5c0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "windows-sys 0.61.2",
+ "zbus",
 ]
 
 [[package]]

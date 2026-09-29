@@ -41,6 +41,7 @@ pub mod cert;
 mod guard;
 pub mod headers;
 mod http;
+pub mod remote_ui;
 pub mod sandbox;
 pub mod tls;
 mod ws;
@@ -58,6 +59,7 @@ use tokio::task::JoinHandle;
 
 pub use headers::HeaderProfile;
 pub use http::{router, router_with_control};
+pub use remote_ui::{RemoteUiHost, RemoteUiOptions};
 pub use sandbox::MailSource;
 pub use tls::ClientAddr;
 
@@ -161,6 +163,12 @@ pub struct TransportOptions {
     pub headers: HeaderProfile,
     /// Serve ACME HTTP-01 challenges ([`acme`]; internet mode only).
     pub acme_challenges: Option<AcmeChallenges>,
+    /// Remote-UI authentication: mounts `POST /api/auth` and lets only
+    /// requests with a valid session reach the WebSocket, blobs and the
+    /// proxy; every WebSocket request is authorized
+    /// ([`nail_core::Service::handle_remote`]). `None` = the local UI
+    /// (loopback `nail serve`, no login).
+    pub auth: Option<nail_remote_auth::RemoteAuth>,
 }
 
 impl std::fmt::Debug for TransportOptions {
@@ -172,6 +180,7 @@ impl std::fmt::Debug for TransportOptions {
             .field("proxy", &self.proxy.is_some())
             .field("sandbox", &self.sandbox)
             .field("headers", &self.headers)
+            .field("auth", &self.auth.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -278,6 +287,7 @@ impl Server {
                     .unwrap_or_default(),
                 proxy: transport.proxy.clone(),
                 acme: transport.acme_challenges.clone(),
+                auth: transport.auth.clone(),
             },
         );
 
@@ -302,7 +312,9 @@ impl Server {
                     sandbox::SandboxState {
                         proxy: Arc::clone(proxy),
                         source,
-                        frame_ancestors: hosts.origins().join(" "),
+                        frame_ancestors: headers::csp_sources(&hosts.origins())
+                            .collect::<Vec<_>>()
+                            .join(" "),
                         scheme,
                     },
                     sandbox_hosts,

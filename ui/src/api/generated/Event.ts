@@ -167,4 +167,4 @@ reason: SessionEndReason, } | { "type": "RemoteSecurityAlert",
 /**
  * The alert.
  */
-alert: RemoteAlert, } | { "type": "RemoteContentPolicyChanged" };
+alert: RemoteAlert, } | { "type": "RemoteContentPolicyChanged" } | { "type": "LaunchRequested" };

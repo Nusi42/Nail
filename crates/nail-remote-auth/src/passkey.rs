@@ -5,8 +5,11 @@
 //! * The relying-party id is the configured **host name**; IP addresses
 //!   are refused ([`RelyingParty::new`]), because browsers refuse them.
 //! * Registration creates discoverable credentials with user verification
-//!   required (`credProtect` = user verification required), excluding the
-//!   user's existing credentials.
+//!   required, excluding the user's existing credentials. `credProtect`
+//!   (user verification required) is requested but not enforced by the
+//!   browser: many platform authenticators do not implement the extension,
+//!   and an enforced one makes the browser refuse to create the passkey.
+//!   Every login requires user verification anyway (ADR 0041).
 //! * Login uses discoverable requests (no user name needed) with user
 //!   verification required; the signature counter must grow (a cloned
 //!   authenticator is refused).
@@ -24,11 +27,14 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 use webauthn_rp::bin::{Decode, Encode};
 use webauthn_rp::request::auth::AuthenticationVerificationOptions;
+use webauthn_rp::request::register::CredProtect;
 use webauthn_rp::request::register::{
     Nickname, PublicKeyCredentialUserEntity, RegistrationVerificationOptions, UserHandle64,
     Username,
 };
-use webauthn_rp::request::{AsciiDomain, DomainOrigin, PublicKeyCredentialDescriptor, RpId};
+use webauthn_rp::request::{
+    AsciiDomain, DomainOrigin, ExtensionInfo, PublicKeyCredentialDescriptor, RpId,
+};
 use webauthn_rp::response::register::{CompressedPubKey, DynamicState, StaticState};
 use webauthn_rp::response::{AuthTransports, CredentialId};
 use webauthn_rp::{
@@ -301,7 +307,10 @@ pub fn start_registration(
             })
         })
         .collect();
-    let (server, client) = PublicKeyCredentialCreationOptions::passkey(&rp.rp_id, user, exclude)
+    let mut creation = PublicKeyCredentialCreationOptions::passkey(&rp.rp_id, user, exclude);
+    creation.extensions.cred_protect =
+        CredProtect::UserVerificationRequired(ExtensionInfo::AllowDontEnforceValue);
+    let (server, client) = creation
         .start_ceremony()
         .map_err(|e| AuthError::Internal(format!("webauthn: {e}")))?;
     let options =
@@ -468,6 +477,16 @@ mod tests {
         );
         assert_eq!(options["authenticatorSelection"]["residentKey"], "required");
         assert_eq!(options["excludeCredentials"].as_array().unwrap().len(), 1);
+        // credProtect is asked for, not enforced by the browser (authenticators
+        // without the extension could not create a passkey otherwise).
+        assert_eq!(
+            options["extensions"]["credentialProtectionPolicy"],
+            "userVerificationRequired"
+        );
+        assert_eq!(
+            options["extensions"]["enforceCredentialProtectionPolicy"],
+            false
+        );
     }
 
     #[test]

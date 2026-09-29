@@ -58,17 +58,44 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
 | Playwright only (already built) | `npm run e2e:only` |
 | The desktop app for the WebView2 smoke test | `npm run build:desktop` |
+| Installer and release scripts (node:test) | `node --test "scripts/test/*.test.mjs"` |
+| Licences, bans, sources, advisories | `cargo deny check` (advisories need the RustSec database from GitHub) |
 
-CI (`.github/workflows/ci.yml`, `windows-latest`) runs all of these, except
-the desktop smoke test (see below).
+CI (`.github/workflows/ci.yml`) runs these jobs:
+
+| Job | Runner | What |
+| --- | --- | --- |
+| `build-test` | `windows-latest` | build, `cargo test --workspace`, clippy, fmt, Vitest, lint, the Playwright web tests, the script tests |
+| `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke test with `NAIL_E2E_DESKTOP=1` |
+| `installer` | `windows-latest` | `node scripts/build-installer.mjs`, the install → start → uninstall smoke test, uploads installer, portable zip, SBOMs and checksums |
+| `deny` | `ubuntu-latest` | `cargo deny check` |
+| `interop` | `ubuntu-latest` | the engines against real Dovecot and Stalwart (below) |
+
+### Installer, portable zip and SBOMs (ADR 0040)
+
+```sh
+node scripts/build-installer.mjs [--skip-ui]      # NSIS installer, portable zip, SBOMs, SHA256SUMS → <build dir>/dist
+powershell -File scripts/installer-smoke.ps1      # silent install to a temp dir, start, uninstall
+node scripts/sbom.mjs                             # CycloneDX SBOMs of the Rust and npm dependencies
+```
+
+Nothing is written into the repository. The installer's NSIS template is a
+copy of Tauri's (`app/src-tauri/installer/installer.nsi`); a test fails when
+the Tauri CLI version changes, so re-copy it on upgrades.
+
+### Interop tests (real servers, CI job `interop`)
+
+`scripts/interop/` is its own Cargo workspace (copy the root `Cargo.lock`
+into it first); see `scripts/interop/README.md`. It needs Docker, so it runs
+in CI only; without `NAIL_INTEROP=1` the server tests return at once.
 
 ### Dependency rules
 
 No GPL / LGPL / AGPL dependency, no OpenSSL and no aws-lc (TLS uses
-`ring`; ADRs 0029 and 0036). Until WP44 adds `cargo-deny`, check by hand
-after adding a crate: `cargo tree -i openssl-sys`, `cargo tree -i aws-lc-rs`
-and `cargo tree -i aws-lc-sys` must answer "did not match any packages",
-and `cargo metadata --format-version 1` must list only permissive licences.
+`ring`; ADRs 0029 and 0036). `deny.toml` enforces the licence allowlist,
+bans `openssl-sys` / `aws-lc-*` and allows only crates.io: run
+`cargo deny check` after adding a crate (CI runs it too). It records the
+RUSTSEC-2023-0071 exception (`rsa` 0.9, ADR 0034).
 
 ### End-to-end tests (Playwright)
 
@@ -132,7 +159,9 @@ How it works:
 | `e2e/tests/mcp.spec.ts` | an MCP client created in the settings is denied until "Read mail" is granted, then reads `nail://accounts` and finds messages with `search_messages` over Streamable HTTP (`e2e/support/mcp.ts`); the activity log shows both |
 | `e2e/tests/customization.spec.ts` | the inspector (part path, theme rules, layout node with file positions), dragging a divider writes `layout.kdl`, the merge dialog applies a shared theme and reverts it (backup), the error list shows every error of two broken files and clears one when it is fixed |
 | `e2e/tests/security.spec.ts` | `--seed demo-multi` (both accounts have an OpenPGP key and an S/MIME certificate of the test CA): a signed + encrypted OpenPGP mail from Work to Home with `Subject: ...` on the mock SMTP server, read in Home with a verified badge; a tampered signature shows as invalid; an S/MIME sign + encrypt round trip with a valid chain; Autocrypt turns encryption on after one message (`autocrypt-alice.eml`); the sender badge from a trusted `Authentication-Results` (`authserv-id "mx.nail.example"`) and a look-alike link warning; encryption at rest on and off with mail and search intact; an MCP client reads an encrypted message only with the "Encrypted messages" grant |
-| `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server |
+| `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server; a second app started with a `mailto:` link opens the composer with its fields |
+| `e2e/tests/remote.spec.ts` | the remote UI (turned on over the local WebSocket: TLS with a self-signed certificate, host name `localhost`) in a second browser context: pairing with a code from the desktop's dialog (fingerprint, used code refused, Trusted Types block an injected script), passkey registration and login with a CDP virtual authenticator, password + TOTP (a used code refused), password guessing slowed down (backoff, audit), session revoke on the desktop logs the browser out, internet mode locked in the settings and in the core, the local UI's CSP blocking an inline script (`e2e/support/remote.ts`: `rpc`, `enableRemoteUi`, `totp`, `trustingBrowser`) |
+| `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed |
 
 ### Generated files and snapshots
 
@@ -185,8 +214,16 @@ A seeded run never uses your real profile: without `--data-dir` /
 cargo run -p nail-cli -- serve --seed demo --data-dir "$TEMP/nail-data" --config-dir "$TEMP/nail-config"
 ```
 
-The server binds to 127.0.0.1 only and has no authentication in M0
-(ADR 0009). `nail serve` never opens an editor on the machine (the browser
+The server binds to 127.0.0.1 only and has no authentication (ADR 0009):
+it is the desktop's own UI. The **remote UI** is separate (ADR 0041): off
+by default, turned on in Settings → Remote access (`UpdateRemoteUiSettings`),
+it listens on its own port with TLS (a self-signed certificate kept in the
+store, its key in the keychain) and requires a login (pairing code,
+passkey, password + code). `nail serve` and the desktop app both run it
+when enabled. Seeded runs never fetch remote content from the internet:
+their proxy resolves no names (demo-multi: only its mock image host).
+A `nail.exe` in the portable zip (`bin\nail.exe` next to the `portable`
+marker's folder) defaults to the zip's `data` and `config` folders. `nail serve` never opens an editor on the machine (the browser
 may be elsewhere): "open file at line" (`OpenConfigFile`) answers
 `unsupported` there (`ServiceOptions::open_editor`, ADR 0028). The desktop
 app opens one unless it is seeded.
@@ -222,6 +259,7 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `pop3-deliver` | `raw`, `uid?` | New message in the POP3 maildrop |
 | `pop3-state` | – | `{uids, deleted}` of the POP3 server |
 | `smtp-messages` | – | What the SMTP server received: `{from, to, data}` |
+| `remote-content` | – | `{images, private, requests}`: base URLs of the made-up image hosts (`images.nail.example` → the mock HTTP server, `private.nail.example` → a private address the proxy refuses) and the paths the image host was asked for |
 
 For UI work with hot module reloading, run `npm run dev` (Vite on
 `http://localhost:5173`). Add `?mock=1` to use the in-memory mock core. Add
@@ -260,7 +298,10 @@ npm run build
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo --data-dir "$TEMP/nail-app-data" --config-dir "$TEMP/nail-app-config"
 ```
 
-The app accepts `--data-dir`, `--config-dir`, `--seed demo` and `--locale`.
+The app accepts `--data-dir`, `--config-dir`, `--seed demo` and `--locale`,
+plus what Windows passes after `--` (a `mailto:` link, a `.eml` / `.ics` /
+`.vcf` file; ADR 0041): the UI takes these launch requests from the core.
+A second start of an unseeded app hands its targets to the running one.
 With `--seed demo` and no directories it runs in a temporary directory
 (data, config and the WebView2 profile), like `nail serve --seed`. It
 starts the MCP server like `nail serve`.
@@ -328,3 +369,16 @@ For M2a:
   warnings, encryption-at-rest settings, Autocrypt setup)
 - **0034:** M2a integration (decrypt / verify on read, sign / encrypt on send, Autocrypt in and
   out, the vault switch with the swappable search index, MCP `encrypted` rule, demo keys, e2e)
+- **0035:** M2a review fixes
+
+For M2b:
+
+- **0036:** the M2b contract (remote UI, remote content, store v6, `webauthn_rp`, slots)
+- **0037:** remote-UI authentication (`nail-remote-auth`: passkeys, Argon2id + TOTP, pairing,
+  sessions, rate limits, authorization, axum login route and middleware)
+- **0038:** transport and browser hardening (`nail-server` TLS, certificates, ACME, headers,
+  sandbox origin; `nail-proxy`)
+- **0039:** the remote-UI and privacy UI
+- **0040:** installer, portable build, cargo-deny, SBOMs, CI jobs
+- **0041:** M2b integration (remote-UI host, `handle_remote`, remote content through the proxy,
+  Trusted Types, sandbox rendering, launch requests, e2e)

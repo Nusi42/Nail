@@ -9,7 +9,9 @@ import type { NailClient } from "./api/client";
 import { errorMessageIdOf } from "./api/client";
 import type { AccountStatus, ThemeMode } from "./api/generated";
 import { normalizeLayout, normalizeTheme } from "./api/normalize";
-import { createClient } from "./api/select";
+import { createClient, selectTransportKind } from "./api/select";
+import { remoteStore } from "./features/remote";
+import { ReauthPrompt, RemoteLoginPage, checkRemoteGate, type GateState } from "./RemoteGate";
 import { appRegistry } from "./features/registry";
 import { I18nProvider, useT } from "./i18n/I18nProvider";
 import { LayoutContext } from "./layout/LayoutContext";
@@ -69,13 +71,50 @@ export function App({
 }: AppProps) {
   const [client, setClient] = useState<NailClient | null>(givenClient ?? null);
   const [failed, setFailed] = useState(false);
+  // The remote UI's login gate (web mode only; ADR 0041).
+  const [gate, setGate] = useState<GateState>(() =>
+    givenClient !== undefined ||
+    selectTransportKind({
+      search: window.location.search,
+      hasTauri: "__TAURI_INTERNALS__" in window,
+    }) !== "websocket"
+      ? "open"
+      : "checking",
+  );
   const [queryClient] = useState(() => givenQueryClient ?? createQueryClient());
   const [store] = useState(
     () => givenStore ?? createUiStore(overridesFromUrl(window.location.search)),
   );
 
   useEffect(() => {
-    if (client) return;
+    if (gate !== "checking") return;
+    let cancelled = false;
+    void checkRemoteGate().then((state) => {
+      if (!cancelled) setGate(state);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [gate]);
+
+  // A remote session that ends (logout, revoked, expired) shows the login
+  // page again; the next login opens a new connection.
+  useEffect(
+    () =>
+      remoteStore.subscribe((state, previous) => {
+        if (state.ended !== null && previous.ended === null) {
+          setClient((current) => {
+            current?.close();
+            return null;
+          });
+          setGate("login");
+        }
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    if (client || gate !== "open") return;
     let cancelled = false;
     createClient().then(
       (created) => {
@@ -90,10 +129,16 @@ export function App({
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, gate]);
 
   let content: ReactNode;
-  if (client) {
+  if (gate === "login") {
+    content = (
+      <I18nProvider locale={store.getState().localeOverride}>
+        <RemoteLoginPage onLoggedIn={() => setGate("open")} />
+      </I18nProvider>
+    );
+  } else if (client) {
     content = (
       <ClientContext.Provider value={client}>
         <Shell widgets={widgets ?? appRegistry.widgets} windowName={windowName ?? "main"} />
@@ -306,6 +351,7 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
                     <WindowLayer layout={config.data.layout} />
                   </main>
                   <FeatureEffects />
+                  <ReauthPrompt />
                 </WidgetRegistryContext.Provider>
               </ActionsProvider>
             </DialogRegistryContext.Provider>

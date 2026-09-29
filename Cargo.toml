@@ -223,6 +223,9 @@ open = "5.4.4"
 # Desktop shell
 tauri = { version = "2.12", features = [] }
 tauri-build = { version = "2.7", features = [] }
+# A second start (a mailto: click while Nail runs) hands its arguments to
+# the running app (MIT / Apache-2.0; ADR 0041).
+tauri-plugin-single-instance = "2.5.1"
 
 # Testing
 tempfile = "3.27"

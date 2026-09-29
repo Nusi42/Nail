@@ -761,4 +761,8 @@ scope: RemoteContentScope,
 /**
  * Its value (as listed).
  */
-value: string, };
+value: string, } | { "type": "TakeLaunchRequests" } | { "type": "ImportMessageFile", 
+/**
+ * Absolute path of the file.
+ */
+path: string, };

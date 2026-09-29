@@ -1652,6 +1652,18 @@ impl Store {
         })
     }
 
+    /// Removes per-message entries whose message no longer exists
+    /// (deleted or expunged); returns how many.
+    pub fn purge_stale_remote_content_allows(&self) -> Result<usize> {
+        self.with_conn(|conn| {
+            Ok(conn.execute(
+                "DELETE FROM remote_content_allow WHERE scope = 'message'
+                 AND value NOT IN (SELECT id FROM messages)",
+                [],
+            )?)
+        })
+    }
+
     /// Why a message's remote content is allowed: the most specific
     /// matching entry (message, then sender address, then the sender's
     /// domain), `None` = blocked.

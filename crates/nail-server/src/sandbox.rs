@@ -33,7 +33,10 @@ use nail_core::Service;
 use nail_proxy::{Proxy, Purpose};
 
 /// Route prefix of mail documents on the sandbox origin.
-pub const RENDER_PATH: &str = "/render/";
+pub const RENDER_PATH: &str = nail_api::remote_content::RENDER_PATH;
+
+/// Longest reader stylesheet accepted in the `css` query parameter.
+pub const MAX_CSS_LEN: usize = 16 * 1024;
 
 /// A boxed HTML lookup.
 pub type HtmlLookup<'a> = Pin<Box<dyn Future<Output = Option<String>> + Send + 'a>>;
@@ -70,12 +73,15 @@ pub(crate) struct SandboxState {
 }
 
 /// The sandbox document for `html`: `nail-proxy:` URLs resolved to this
-/// origin's proxy route, no referrer.
-pub fn document(html: &str) -> String {
+/// origin's proxy route, no referrer, and the reader stylesheet `css`
+/// (the app's theme; it cannot close its `<style>` element).
+pub fn document(html: &str, css: &str) -> String {
     let body = html.replace(PROXY_URL_SCHEME, PROXY_PATH);
+    let css = css.replace("</", "<\\/");
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
-         <meta name=\"referrer\" content=\"no-referrer\"></head><body>{body}</body></html>"
+         <meta name=\"referrer\" content=\"no-referrer\"><style>{css}</style></head>\
+         <body>{body}</body></html>"
     )
 }
 
@@ -98,11 +104,21 @@ pub(crate) fn router(state: SandboxState) -> Router {
         .fallback(|| async { StatusCode::NOT_FOUND })
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct RenderQuery {
+    css: Option<String>,
+}
+
 async fn render(
     State(state): State<SandboxState>,
     Path(token): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<RenderQuery>,
     headers: HeaderMap,
 ) -> Response {
+    let css = query.css.unwrap_or_default();
+    if css.len() > MAX_CSS_LEN {
+        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    }
     let Ok(grant) = state.proxy.signer().verify(&token, Purpose::Render) else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -132,7 +148,7 @@ async fn render(
                 HeaderValue::from_static("cross-origin"),
             ),
         ],
-        document(&html),
+        document(&html, &css),
     )
         .into_response()
 }
@@ -143,7 +159,11 @@ mod tests {
 
     #[test]
     fn documents_point_proxy_urls_at_this_origin() {
-        let doc = document(r#"<p><img src="nail-proxy:abc.def" alt=""></p>"#);
+        let doc = document(
+            r#"<p><img src="nail-proxy:abc.def" alt=""></p>"#,
+            "body { color: red } </style><script>x</script>",
+        );
+        assert!(doc.contains("<style>body { color: red } <\\/style><script>x<\\/script></style>"));
         assert!(doc.contains(r#"<img src="/api/proxy/abc.def""#));
         assert!(!doc.contains("nail-proxy:"));
         assert!(doc.starts_with("<!doctype html>"));

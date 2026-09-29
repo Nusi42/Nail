@@ -49,6 +49,7 @@ pub mod domain;
 pub mod engine;
 pub mod error;
 pub mod ids;
+pub mod launch;
 pub mod mcp;
 pub mod ops;
 pub mod protocol;
@@ -89,6 +90,7 @@ pub use ids::{
     OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId,
     RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
+pub use launch::{LaunchRequest, MailtoLink};
 pub use mcp::{McpClient, McpGrant, McpScope};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use protocol::{

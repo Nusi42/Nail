@@ -236,6 +236,10 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::AllowRemoteContent { .. } => ("AllowRemoteContent", Scope(S::Read)),
         Request::ListRemoteContentAllows => ("ListRemoteContentAllows", Scope(S::Read)),
         Request::RemoveRemoteContentAllow { .. } => ("RemoveRemoteContentAllow", Scope(S::Read)),
+
+        // --- Launch requests: they read local files of the desktop ---
+        Request::TakeLaunchRequests => ("TakeLaunchRequests", DesktopOnly),
+        Request::ImportMessageFile { .. } => ("ImportMessageFile", DesktopOnly),
     };
     RequestAccess { name, access }
 }

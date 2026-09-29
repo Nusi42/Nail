@@ -84,3 +84,25 @@ test("the rich composer renders Markdown in the core and the MCP server runs", a
     /http:\/\/127\.0\.0\.1:\d+\/mcp/,
   );
 });
+
+test("a mailto: link the app is started with opens the composer", async () => {
+  // A second app of its own (seeded runs are independent instances).
+  const linked = await startDesktop(freePort(), [
+    "mailto:grace@navy.example?subject=Hello%20from%20a%20link&body=See%20you%20soon",
+  ]);
+  const cdp = await chromium.connectOverCDP(linked.cdpUrl);
+  try {
+    await expect
+      .poll(() => cdp.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
+      .toBeGreaterThan(0);
+    const window = cdp.contexts().flatMap((c) => c.pages())[0]!;
+    const dialog = window.getByRole("dialog", { name: "New message" });
+    await expect(dialog).toBeVisible({ timeout: 60_000 });
+    await expect(dialog.getByRole("textbox", { name: "Subject" })).toHaveValue("Hello from a link");
+    await expect(dialog.getByRole("textbox", { name: "To" })).toHaveValue(/grace@navy\.example/);
+    await expect(dialog.getByRole("textbox", { name: "Message" })).toHaveValue(/^See you soon/);
+  } finally {
+    await cdp.close().catch(() => undefined);
+    await linked.stop();
+  }
+});

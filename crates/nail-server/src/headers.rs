@@ -52,11 +52,21 @@ pub const PERMISSIONS_POLICY: &str = "camera=(), microphone=(), geolocation=(), 
      usb=(), serial=(), hid=(), bluetooth=(), midi=(), display-capture=(), \
      publickey-credentials-get=(self), publickey-credentials-create=(self)";
 
+/// The origins a CSP source list can name: CSP has no syntax for IPv6
+/// literals (`https://[::1]:4780` is an invalid source that browsers drop
+/// with a warning), so they are left out.
+pub fn csp_sources(origins: &[String]) -> impl Iterator<Item = &str> {
+    origins
+        .iter()
+        .map(String::as_str)
+        .filter(|origin| !origin.contains('['))
+}
+
 /// The app's Content Security Policy. `sandbox_origins` may frame mail;
 /// `strict` enforces Trusted Types; `tls` upgrades mixed content.
 pub fn app_csp(sandbox_origins: &[String], strict: bool, tls: bool) -> String {
     let mut frame_src = "'self' blob: data:".to_owned();
-    for origin in sandbox_origins {
+    for origin in csp_sources(sandbox_origins) {
         frame_src.push(' ');
         frame_src.push_str(origin);
     }
@@ -194,6 +204,23 @@ pub(crate) async fn apply(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ipv6_literals_are_left_out_of_csp_source_lists() {
+        let csp = app_csp(
+            &[
+                "https://[::1]:4781".to_owned(),
+                "https://nail.local:4781".to_owned(),
+            ],
+            true,
+            true,
+        );
+        assert!(!csp.contains('['), "{csp}");
+        assert!(
+            csp.contains("frame-src 'self' blob: data: https://nail.local:4781;"),
+            "{csp}"
+        );
+    }
+
     use super::*;
 
     #[test]

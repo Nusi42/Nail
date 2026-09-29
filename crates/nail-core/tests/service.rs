@@ -779,8 +779,8 @@ async fn m2a_security_requests() {
 
 /// M2b (ADR 0036): the remote-UI settings (validated; internet mode
 /// refused), users, devices, sessions, pairing codes, the audit log and the
-/// remote-content allow-lists are served from the store; hashing, TOTP,
-/// pairing-code creation and certificates answer `unsupported` until WP45.
+/// remote-content allow-lists are served from the store; hashing, TOTP and
+/// pairing codes by nail-remote-auth (WP45); certificates need a host.
 #[tokio::test]
 async fn m2b_remote_requests() {
     use nail_api::remote::{
@@ -994,28 +994,37 @@ async fn m2b_remote_requests() {
         Response::RemoteAudit { entries: vec![] }
     );
 
-    // Waiting for nail-remote-auth / nail-server (WP45).
-    for request in [
-        Request::SetRemotePassword {
-            user_id: user.id.clone(),
-            password: Some("correct horse battery staple".into()),
-        },
-        Request::StartTotpEnrollment {
-            user_id: user.id.clone(),
-        },
-        Request::CreatePairingCode {
-            user_id: user.id.clone(),
-            device_name: None,
-            grant: None,
-            ttl_minutes: None,
-        },
-        Request::RegenerateRemoteCertificate,
-    ] {
-        assert_eq!(
-            error_code(fx.service.handle(request).await),
-            ErrorCode::Unsupported
-        );
-    }
+    // Credentials and pairing codes are served by nail-remote-auth (WP45;
+    // details in tests/remote.rs); certificates need the remote-UI host
+    // (nail-server), which this bare service does not have.
+    assert!(matches!(
+        fx.service
+            .handle(Request::SetRemotePassword {
+                user_id: user.id.clone(),
+                password: Some("correct horse battery staple".into()),
+            })
+            .await,
+        Response::RemoteUserSaved { .. }
+    ));
+    assert!(matches!(
+        fx.service
+            .handle(Request::CreatePairingCode {
+                user_id: user.id.clone(),
+                device_name: None,
+                grant: None,
+                ttl_minutes: None,
+            })
+            .await,
+        Response::PairingCodeCreated { .. }
+    ));
+    assert_eq!(
+        error_code(
+            fx.service
+                .handle(Request::RegenerateRemoteCertificate)
+                .await
+        ),
+        ErrorCode::Unsupported
+    );
     assert_eq!(
         fx.service
             .handle(Request::DeleteRemoteUser {

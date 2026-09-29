@@ -8,7 +8,7 @@
  * fake timers). `data.behaviour` makes the mock fail on purpose.
  */
 import { Listeners, type ConnectionStatus, type Transport } from "./client";
-import type { Event as NailEvent, Request, Response } from "./generated";
+import type { LaunchRequest, Event as NailEvent, Request, Response } from "./generated";
 import * as accounts from "./mockAccounts";
 import { createMockData, type MockData } from "./mockData";
 import * as mail from "./mockMail";
@@ -52,6 +52,12 @@ export class MockTransport implements Transport, MockCore {
   }
 
   /** Pushes an event to all subscribers, as the core would. */
+  /** Like the desktop shell: queues launch requests and tells the UI. */
+  pushLaunch(requests: LaunchRequest[]): void {
+    this.data.launches.push(...requests);
+    this.emit({ type: "LaunchRequested" });
+  }
+
   emit(event: NailEvent): void {
     this.events.emit(event);
   }
@@ -218,6 +224,15 @@ export class MockTransport implements Transport, MockCore {
         return { type: "Done" };
       case "GetUiContext":
         return { type: "UiContext", context: structuredClone(d.uiContext) };
+      case "TakeLaunchRequests":
+        return { type: "LaunchRequests", requests: d.launches.splice(0) };
+      case "ImportMessageFile": {
+        const id = d.messageFiles.get(request.path);
+        const message = id === undefined ? undefined : d.messages.find((m) => m.id === id);
+        return message
+          ? { type: "MessageImported", message: structuredClone(message) }
+          : notFound(`file ${request.path}`);
+      }
     }
   }
 }

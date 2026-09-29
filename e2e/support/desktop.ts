@@ -44,10 +44,12 @@ async function waitForCdp(url: string, child: ChildProcess, timeoutMs: number): 
 /**
  * Starts `nail-app --seed demo` (temporary data, config and WebView2
  * profile; ADR 0021) with remote debugging on `port`, only for this
- * process: the variable is set in the child's environment.
+ * process: the variable is set in the child's environment. `targets` are
+ * what Windows would pass (a `mailto:` link, a file).
  */
-export async function startDesktop(port: number): Promise<DesktopApp> {
-  const child = spawn(desktopBinary(), ["--seed", "demo"], {
+export async function startDesktop(port: number, targets: string[] = []): Promise<DesktopApp> {
+  const args = ["--seed", "demo", ...(targets.length > 0 ? ["--", ...targets] : [])];
+  const child = spawn(desktopBinary(), args, {
     cwd: repoRoot,
     stdio: ["ignore", "ignore", "inherit"],
     env: {

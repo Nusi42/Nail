@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; img-src 'self' data: blob: nail-proxy: http://nail-proxy.localhost; font-src 'self' data: nail-proxy: http://nail-proxy.localhost; style-src 'self' 'unsafe-inline'; frame-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost"
     }
   },
   "bundle": {
@@ -32,6 +32,9 @@
     "publisher": "Nail",
     "copyright": "Copyright (c) Nail contributors",
     "category": "Productivity",
+    "resources": {
+      "../../ui/dist/": "ui/"
+    },
     "shortDescription": "Mail, calendar and contacts",
     "longDescription": "Nail is an email and PIM client with a Rust core, a customizable UI and MCP access to your data.",
     "icon": [

@@ -16,6 +16,13 @@
 //! with, [`portable`] keeps everything beside the executable in the portable
 //! build, and [`setup_helper`] does the installer's PATH and credential
 //! work.
+//!
+//! M2b integration (ADR 0041): launch requests go to the core
+//! ([`Service::push_launch_requests`]; a second start forwards its own to
+//! this instance), the `nail-proxy:` protocol serves allowed remote
+//! content through the core's proxy ([`PROXY_PROTOCOL`]), and the remote
+//! UI (TLS + login) runs when enabled in the settings
+//! ([`nail_server::RemoteUiHost`]).
 
 pub mod launch;
 pub mod portable;
@@ -29,6 +36,11 @@ use tokio::sync::broadcast;
 
 /// Name of the Tauri event channel carrying `nail_api::Event`s.
 pub const EVENT_CHANNEL: &str = "nail://event";
+
+/// The custom protocol the reader loads proxied remote content from
+/// (`nail-proxy:<token>` in `sanitized_html`; WebView2 serves it as
+/// `http://nail-proxy.localhost/<token>`).
+pub const PROXY_PROTOCOL: &str = "nail-proxy";
 
 /// Command-line options of the desktop app (development and testing aids,
 /// plus what Windows and the installer pass).
@@ -126,7 +138,7 @@ impl AppArgs {
 
     /// The launch requests among [`Self::targets`].
     pub fn launch_requests(&self) -> Vec<launch::LaunchRequest> {
-        launch::LaunchRequest::from_args(&self.targets)
+        launch::from_args(&self.targets)
     }
 
     /// The directory that replaces the platform defaults: the temporary
@@ -185,6 +197,8 @@ pub struct Running {
     pub mcp: Option<nail_core::McpRunning>,
     /// The temporary directory of a seeded run.
     pub temp: Option<tempfile::TempDir>,
+    /// The remote UI (stopped when the app exits).
+    pub _remote_ui: nail_server::RemoteUiHost,
 }
 
 /// Answers one request. Config errors found before the UI asked for its
@@ -201,12 +215,52 @@ pub async fn call(service: &Service, request: Request) -> (Response, Vec<Event>)
     (response, events)
 }
 
-/// Hands the UI the launch requests (`mailto:` links, opened files) that
-/// are still pending; each one once. The integrator (M2b WP45) maps them
-/// onto `nail_api` requests.
-#[tauri::command]
-fn nail_launch_requests(pending: State<'_, launch::PendingLaunch>) -> Vec<launch::LaunchRequest> {
-    pending.take()
+/// Answers a `nail-proxy` protocol request (`/<token>`) through the
+/// core's proxy: only tokens the core signed for allowed messages, public
+/// addresses, size and type limits (ADR 0038). Errors carry no body.
+pub async fn proxy_response(
+    proxy: Option<&nail_proxy::Proxy>,
+    path: &str,
+) -> tauri::http::Response<Vec<u8>> {
+    let token = path.trim_start_matches('/');
+    let token = token.split(['?', '#']).next().unwrap_or_default();
+    let mut builder = tauri::http::Response::builder();
+    for (name, value) in nail_proxy::RESPONSE_HEADERS {
+        builder = builder.header(*name, *value);
+    }
+    let result = match proxy {
+        Some(proxy) => proxy.serve(token).await.map_err(|err| err.status()),
+        None => Err(404),
+    };
+    let response = match result {
+        Ok(resource) => builder
+            .status(200)
+            .header("content-type", resource.content_type)
+            .header("cache-control", resource.cache_control)
+            .body(resource.body),
+        Err(status) => builder
+            .status(status)
+            .header("cache-control", "no-store")
+            .body(Vec::new()),
+    };
+    response.unwrap_or_else(|_| {
+        let mut fallback = tauri::http::Response::new(Vec::new());
+        *fallback.status_mut() = tauri::http::StatusCode::INTERNAL_SERVER_ERROR;
+        fallback
+    })
+}
+
+/// The UI files the remote UI serves: `NAIL_UI_DIR`, the bundled `ui`
+/// resource, or the repository's `ui/dist` (development).
+fn remote_ui_dir(resource_dir: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+    std::env::var_os("NAIL_UI_DIR")
+        .map(std::path::PathBuf::from)
+        .into_iter()
+        .chain(resource_dir.map(|d| d.join("ui")))
+        .chain(std::iter::once(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui/dist"),
+        ))
+        .find(|dir| dir.join("index.html").is_file())
 }
 
 /// The single IPC command: one `Request` in, one `Response` out.
@@ -317,7 +371,37 @@ pub fn run() {
         tracing::info!(count = launch_requests.len(), "launch requests pending");
     }
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    // One Nail per profile: a second start (a mailto: click, an opened
+    // file) hands its targets to this one. Seeded runs (tests, demos) have
+    // their own temporary profile and stay independent.
+    if args.seed.is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let requests = launch::from_args(argv.iter().skip(1));
+            tracing::info!(
+                count = requests.len(),
+                "another start forwarded its targets"
+            );
+            if let Some(service) = app.try_state::<Service>() {
+                service.push_launch_requests(requests);
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }));
+    }
+    builder
+        .register_asynchronous_uri_scheme_protocol(PROXY_PROTOCOL, |ctx, request, responder| {
+            let proxy = ctx
+                .app_handle()
+                .try_state::<Service>()
+                .and_then(|service| service.remote_proxy());
+            let path = request.uri().path().to_owned();
+            tauri::async_runtime::spawn(async move {
+                responder.respond(proxy_response(proxy.as_deref(), &path).await);
+            });
+        })
         .setup(move |app| {
             // Opened within Tauri's runtime, so the account engines, the
             // outbox and the index upkeep start on it (and the accounts.kdl
@@ -350,8 +434,19 @@ pub fn run() {
             {
                 tracing::warn!(%err, "cannot start minimized");
             }
-            app.manage(Running { mcp, temp });
-            app.manage(launch::PendingLaunch::new(launch_requests));
+            service.push_launch_requests(launch_requests.clone());
+            let ui_dir = remote_ui_dir(app.path().resource_dir().ok());
+            let remote_ui = tauri::async_runtime::block_on(async {
+                nail_server::RemoteUiHost::start(
+                    service.clone(),
+                    nail_server::RemoteUiOptions::new(ui_dir),
+                )
+            });
+            app.manage(Running {
+                mcp,
+                temp,
+                _remote_ui: remote_ui,
+            });
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(forward_events(
                 service.clone(),
@@ -361,7 +456,7 @@ pub fn run() {
             app.manage(service);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![nail_call, nail_launch_requests])
+        .invoke_handler(tauri::generate_handler![nail_call])
         .run(tauri::generate_context!())
         .expect("failed to run the Tauri application");
 }
@@ -555,6 +650,43 @@ mod tests {
             "{:?}",
             seen[2]
         );
+    }
+
+    #[tokio::test]
+    async fn the_proxy_protocol_serves_only_signed_tokens() {
+        // No proxy (no key): nothing is served.
+        let none = proxy_response(None, "/abc.def").await;
+        assert_eq!(none.status(), 404);
+        assert!(none.body().is_empty());
+        assert_eq!(none.headers()["x-content-type-options"], "nosniff");
+
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let args = AppArgs {
+            data_dir: Some(data.path().into()),
+            config_dir: Some(config.path().into()),
+            seed: Some("demo".into()),
+            ..AppArgs::default()
+        };
+        let service = open_service(&args).unwrap();
+        let proxy = service.remote_proxy().unwrap();
+        // A forged token: 404, inert headers, no body.
+        let forged = proxy_response(Some(&proxy), "/forged.token").await;
+        assert_eq!(forged.status(), 404);
+        assert!(
+            forged.headers()["content-security-policy"]
+                .to_str()
+                .unwrap()
+                .contains("sandbox")
+        );
+        // A signed token for a message that is not allowed: the core says no.
+        let token = proxy
+            .signer()
+            .sign_resource("m-1", "https://images.example.org/a.png")
+            .unwrap();
+        let denied = proxy_response(Some(&proxy), &format!("/{token}")).await;
+        assert_eq!(denied.status(), 403);
+        service.shutdown().await;
     }
 
     #[tokio::test]

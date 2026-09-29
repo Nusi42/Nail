@@ -48,8 +48,17 @@ these, open **Settings > Apps > Default apps**, pick **Nail**, and choose
 the link and file types you want it to handle. You can also right-click a
 file and use **Open with > Nail**.
 
-Calendar and contact import arrive in a later preview; until then Nail
-receives these files and links but does not import them yet.
+What happens when you open one:
+
+- a **`mailto:` link** opens a new message with the recipients, subject
+  and text of the link;
+- an **`.eml` file** is shown in Nail under **Opened files** (a local
+  account that only holds the messages you opened this way);
+- **calendar and contact files and links** (`webcal:`, `.ics`, `.vcf`)
+  arrive in a later preview; until then Nail says it cannot import them
+  yet.
+
+If Nail is already running, the link or file opens in that window.
 
 ### Silent installation
 

@@ -29,6 +29,11 @@ pub const PROXY_URL_SCHEME: &str = "nail-proxy:";
 /// /api/proxy/<token>`).
 pub const PROXY_PATH: &str = "/api/proxy/";
 
+/// Route prefix of mail documents on the remote UI's sandbox origin (`GET
+/// /render/<token>`, see [`crate::MessageBody::render_url`]). An optional
+/// `css` query parameter carries the reader stylesheet.
+pub const RENDER_PATH: &str = "/render/";
+
 /// What an allow-list entry covers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]

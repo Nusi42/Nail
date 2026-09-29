@@ -33,7 +33,8 @@ use nail_api::{
     MessageSummary,
 };
 
-pub use sanitize::{SanitizedHtml, sanitize_html};
+pub use remote_content::ProxyRewriter;
+pub use sanitize::{SanitizedHtml, sanitize_html, sanitize_html_with};
 pub use text::{PREVIEW_CHARS, preview_text};
 
 /// Date used for [`MessageSummary::date`] when neither the `Date` header nor
@@ -55,6 +56,9 @@ pub struct ParsedMessage {
     pub sanitized_html: Option<String>,
     /// Whether the sanitizer removed remote content.
     pub remote_content_blocked: bool,
+    /// Remote references in the HTML body (removed, or rewritten by the
+    /// [`ProxyRewriter`] of [`parse_message_with`]).
+    pub remote_resources: u32,
     /// Attachments (including inline parts) in MIME order.
     pub attachments: Vec<AttachmentInfo>,
     /// List preview (see [`preview_text`]).
@@ -114,6 +118,7 @@ impl ParsedMessage {
             warnings: Vec::new(),
             // Filled by the core (M2b): allow-lists and proxied URLs.
             remote_content: None,
+            render_url: None,
         }
     }
 }
@@ -142,9 +147,15 @@ pub struct AttachmentContent {
 /// Parses a raw RFC 5322 message. Never panics; malformed input yields a
 /// best-effort result.
 pub fn parse_message(raw: &[u8]) -> ParsedMessage {
+    parse_message_with(raw, None)
+}
+
+/// [`parse_message`], with remote content in the HTML body replaced
+/// through `rewriter` instead of removed (see [`remote_content`]).
+pub fn parse_message_with(raw: &[u8], rewriter: Option<ProxyRewriter>) -> ParsedMessage {
     guarded(|| {
         parse(raw)
-            .map(|message| build(&message))
+            .map(|message| build(&message, rewriter))
             .unwrap_or_default()
     })
     .unwrap_or_default()
@@ -288,7 +299,7 @@ fn guarded<T>(f: impl FnOnce() -> T) -> Option<T> {
     }
 }
 
-fn build(message: &Message<'_>) -> ParsedMessage {
+fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessage {
     let headers = MessageHeaders {
         subject: message
             .subject()
@@ -306,7 +317,7 @@ fn build(message: &Message<'_>) -> ParsedMessage {
     };
 
     let text = body_text(message);
-    let html = body_html(message).map(|html| sanitize_html(&html));
+    let html = body_html(message).map(|html| sanitize_html_with(&html, rewriter));
     let preview = preview_text(&text, PREVIEW_CHARS);
     let attachments = message
         .attachments()
@@ -320,6 +331,7 @@ fn build(message: &Message<'_>) -> ParsedMessage {
         references: id_list(message.references()),
         text,
         remote_content_blocked: html.as_ref().is_some_and(|h| h.remote_content_blocked),
+        remote_resources: html.as_ref().map_or(0, |h| h.remote_resources),
         sanitized_html: html.map(|h| h.html),
         attachments,
         preview,

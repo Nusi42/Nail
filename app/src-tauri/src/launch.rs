@@ -1,26 +1,20 @@
 //! Launch targets: what Windows hands the app when it is started as the
-//! handler of a URL scheme or a file type (plan M2b WP44).
+//! handler of a URL scheme or a file type (plan M2b WP44; ADRs 0040, 0041).
 //!
 //! The installer registers Nail for `mailto:`, `webcal:` / `webcals:` and
 //! the `.eml`, `.ics` and `.vcf` file types (`installer/hooks.nsh`); Windows
-//! then starts `Nail.exe "<url or path>"`. [`LaunchRequest::parse`] turns
-//! such an argument into a typed request. The shell keeps the requests of
-//! its own start in [`PendingLaunch`] until the UI takes them
-//! (`nail_launch_requests`) and emits later ones on [`LAUNCH_CHANNEL`].
+//! then starts `Nail.exe -- "<url or path>"`. [`parse`] turns such an
+//! argument into a [`LaunchRequest`] (the contract type in
+//! [`nail_api::launch`]); the shell hands them to the core
+//! ([`nail_core::Service::push_launch_requests`]), and the UI takes them
+//! and acts (composer, import). A second start while Nail runs forwards
+//! its requests to the running instance (single-instance plugin).
 //!
-//! What each request does (compose, subscribe, import) is decided by the
-//! integrator (M2b WP45), which maps these types onto `nail_api` requests.
 //! Nothing here opens a file or fetches a URL.
 
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+pub use nail_api::launch::{LaunchRequest, MailtoLink};
 
-use serde::Serialize;
-
-/// Tauri event channel for launch requests that arrive while the app runs.
-pub const LAUNCH_CHANNEL: &str = "nail://launch";
-
-/// URL schemes the installer registers, with the request kind they map to.
+/// URL schemes the installer registers.
 pub const URL_SCHEMES: [&str; 3] = ["mailto", "webcal", "webcals"];
 
 /// File extensions (without the dot) the installer registers.
@@ -30,104 +24,46 @@ pub const FILE_EXTENSIONS: [&str; 3] = ["eml", "ics", "vcf"];
 /// long (a body), but nothing legitimate comes close to this.
 pub const MAX_ARGUMENT_BYTES: usize = 64 * 1024;
 
-/// A `mailto:` link (RFC 6068), decoded. Addresses are not validated here;
-/// the composer does that like for typed input.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MailtoLink {
-    /// Recipients from the path and every `to=` field.
-    pub to: Vec<String>,
-    /// `cc=` recipients.
-    pub cc: Vec<String>,
-    /// `bcc=` recipients (the composer must show them).
-    pub bcc: Vec<String>,
-    /// `subject=`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub subject: Option<String>,
-    /// `body=` (plain text; RFC 6068 line breaks are `%0D%0A`).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub body: Option<String>,
-    /// `in-reply-to=` (a Message-ID).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub in_reply_to: Option<String>,
-}
-
-/// One thing the app was asked to open at launch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum LaunchRequest {
-    /// `mailto:`: open the composer with these fields.
-    Compose {
-        /// The decoded link.
-        mailto: MailtoLink,
-    },
-    /// `webcal:` / `webcals:`: offer to subscribe to a calendar.
-    SubscribeCalendar {
-        /// The link as given.
-        url: String,
-        /// The `https:` URL to fetch (both schemes are fetched over HTTPS;
-        /// plain HTTP only after the user agrees, decided by the importer).
-        https_url: String,
-    },
-    /// A `.eml` file: show the message.
-    OpenMessageFile {
-        /// Absolute path as Windows passed it.
-        path: PathBuf,
-    },
-    /// A `.ics` file: offer to import the events.
-    ImportCalendarFile {
-        /// Absolute path as Windows passed it.
-        path: PathBuf,
-    },
-    /// A `.vcf` file: offer to import the contacts.
-    ImportContactsFile {
-        /// Absolute path as Windows passed it.
-        path: PathBuf,
-    },
-}
-
-impl LaunchRequest {
-    /// Parses one launch argument; `None` for anything that is not a
-    /// registered scheme or file type (or is malformed / too long).
-    pub fn parse(argument: &str) -> Option<Self> {
-        let argument = argument.trim();
-        if argument.is_empty() || argument.len() > MAX_ARGUMENT_BYTES {
-            return None;
-        }
-        if let Some((scheme, rest)) = split_scheme(argument) {
-            return match scheme.as_str() {
-                "mailto" => Some(Self::Compose {
-                    mailto: parse_mailto(rest),
-                }),
-                "webcal" | "webcals" => parse_webcal(argument, rest),
-                _ => None,
-            };
-        }
-        let path = Path::new(argument);
-        let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-        let path = path.to_path_buf();
-        match extension.as_str() {
-            "eml" => Some(Self::OpenMessageFile { path }),
-            "ics" => Some(Self::ImportCalendarFile { path }),
-            "vcf" => Some(Self::ImportContactsFile { path }),
+/// Parses one launch argument; `None` for anything that is not a
+/// registered scheme or file type (or is malformed / too long).
+pub fn parse(argument: &str) -> Option<LaunchRequest> {
+    let argument = argument.trim();
+    if argument.is_empty() || argument.len() > MAX_ARGUMENT_BYTES {
+        return None;
+    }
+    if let Some((scheme, rest)) = split_scheme(argument) {
+        return match scheme.as_str() {
+            "mailto" => Some(LaunchRequest::Compose {
+                mailto: parse_mailto(rest),
+            }),
+            "webcal" | "webcals" => parse_webcal(argument, rest),
             _ => None,
-        }
+        };
     }
+    let path = std::path::Path::new(argument);
+    let extension = path.extension()?.to_str()?.to_ascii_lowercase();
+    let path = argument.to_owned();
+    match extension.as_str() {
+        "eml" => Some(LaunchRequest::OpenMessageFile { path }),
+        "ics" => Some(LaunchRequest::ImportCalendarFile { path }),
+        "vcf" => Some(LaunchRequest::ImportContactsFile { path }),
+        _ => None,
+    }
+}
 
-    /// Every launch request among `arguments` (the program name excluded),
-    /// in order. Flags and unknown arguments are skipped, so this also works
-    /// on a command line that clap rejected.
-    pub fn from_args<I, S>(arguments: I) -> Vec<Self>
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        arguments
-            .into_iter()
-            .filter(|a| !a.as_ref().starts_with('-'))
-            .filter_map(|a| Self::parse(a.as_ref()))
-            .collect()
-    }
+/// Every launch request among `arguments` (the program name excluded),
+/// in order. Flags and unknown arguments are skipped, so this also works
+/// on a command line that clap rejected.
+pub fn from_args<I, S>(arguments: I) -> Vec<LaunchRequest>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    arguments
+        .into_iter()
+        .filter(|a| !a.as_ref().starts_with('-'))
+        .filter_map(|a| parse(a.as_ref()))
+        .collect()
 }
 
 /// Splits `scheme:rest` for URL-like arguments. A drive letter (`C:\…`) is
@@ -212,42 +148,13 @@ fn percent_decode(input: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Launch requests the UI has not taken yet (Tauri state).
-#[derive(Debug, Default)]
-pub struct PendingLaunch(Mutex<Vec<LaunchRequest>>);
-
-impl PendingLaunch {
-    /// A queue holding `requests`.
-    pub fn new(requests: Vec<LaunchRequest>) -> Self {
-        Self(Mutex::new(requests))
-    }
-
-    /// Adds requests (e.g. from a second start, once single-instance
-    /// forwarding exists).
-    pub fn push(&self, requests: impl IntoIterator<Item = LaunchRequest>) {
-        self.lock().extend(requests);
-    }
-
-    /// Takes every pending request; each is handed out once.
-    pub fn take(&self) -> Vec<LaunchRequest> {
-        std::mem::take(&mut *self.lock())
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<LaunchRequest>> {
-        // A panic while holding the lock cannot leave the Vec inconsistent.
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
     fn mailto(argument: &str) -> MailtoLink {
-        match LaunchRequest::parse(argument) {
+        match parse(argument) {
             Some(LaunchRequest::Compose { mailto }) => mailto,
             other => panic!("{argument}: {other:?}"),
         }
@@ -313,14 +220,14 @@ mod tests {
     #[test]
     fn webcal_links_become_https() {
         assert_eq!(
-            LaunchRequest::parse("webcal://example.org/cal.ics?x=1"),
+            parse("webcal://example.org/cal.ics?x=1"),
             Some(LaunchRequest::SubscribeCalendar {
                 url: "webcal://example.org/cal.ics?x=1".into(),
                 https_url: "https://example.org/cal.ics?x=1".into(),
             })
         );
         assert!(matches!(
-            LaunchRequest::parse("WEBCALS://example.org/a"),
+            parse("WEBCALS://example.org/a"),
             Some(LaunchRequest::SubscribeCalendar { https_url, .. }) if https_url == "https://example.org/a"
         ));
         for bad in [
@@ -329,24 +236,24 @@ mod tests {
             "webcal:///path",
             "webcal://a b/",
         ] {
-            assert_eq!(LaunchRequest::parse(bad), None, "{bad}");
+            assert_eq!(parse(bad), None, "{bad}");
         }
     }
 
     #[test]
     fn files_by_extension() {
         assert_eq!(
-            LaunchRequest::parse(r"C:\Users\ada\Downloads\Offer.EML"),
+            parse(r"C:\Users\ada\Downloads\Offer.EML"),
             Some(LaunchRequest::OpenMessageFile {
                 path: r"C:\Users\ada\Downloads\Offer.EML".into()
             })
         );
         assert!(matches!(
-            LaunchRequest::parse(r"D:\cal\team.ics"),
+            parse(r"D:\cal\team.ics"),
             Some(LaunchRequest::ImportCalendarFile { .. })
         ));
         assert!(matches!(
-            LaunchRequest::parse(r"\\server\share\people.vcf"),
+            parse(r"\\server\share\people.vcf"),
             Some(LaunchRequest::ImportContactsFile { .. })
         ));
         for other in [
@@ -355,7 +262,7 @@ mod tests {
             "https://example.org/a.eml",
             "x:",
         ] {
-            assert_eq!(LaunchRequest::parse(other), None, "{other}");
+            assert_eq!(parse(other), None, "{other}");
         }
     }
 
@@ -367,11 +274,11 @@ mod tests {
             } else {
                 format!("{scheme}://example.org/c.ics")
             };
-            assert!(LaunchRequest::parse(&argument).is_some(), "{scheme}");
+            assert!(parse(&argument).is_some(), "{scheme}");
         }
         for extension in FILE_EXTENSIONS {
             assert!(
-                LaunchRequest::parse(&format!(r"C:\f.{extension}")).is_some(),
+                parse(&format!(r"C:\f.{extension}")).is_some(),
                 "{extension}"
             );
         }
@@ -380,13 +287,13 @@ mod tests {
     #[test]
     fn oversized_and_empty_arguments_are_ignored() {
         let long = format!("mailto:a@x?body={}", "x".repeat(MAX_ARGUMENT_BYTES));
-        assert_eq!(LaunchRequest::parse(&long), None);
-        assert_eq!(LaunchRequest::parse("   "), None);
+        assert_eq!(parse(&long), None);
+        assert_eq!(parse("   "), None);
     }
 
     #[test]
     fn from_args_skips_flags_and_unknown_arguments() {
-        let requests = LaunchRequest::from_args([
+        let requests = from_args([
             "--autostart",
             "mailto:a@x",
             "--data-dir",
@@ -399,25 +306,13 @@ mod tests {
     }
 
     #[test]
-    fn requests_serialize_for_the_webview() {
-        let json =
-            serde_json::to_value(LaunchRequest::parse("mailto:a@x?subject=s").unwrap()).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "type": "compose",
-                "mailto": { "to": ["a@x"], "cc": [], "bcc": [], "subject": "s" }
-            })
-        );
-        let json = serde_json::to_value(LaunchRequest::parse(r"C:\a.ics").unwrap()).unwrap();
-        assert_eq!(json["type"], "importCalendarFile");
-    }
-
-    #[test]
-    fn pending_requests_are_handed_out_once() {
-        let pending = PendingLaunch::new(LaunchRequest::from_args(["mailto:a@x"]));
-        pending.push(LaunchRequest::from_args([r"C:\b.vcf"]));
-        assert_eq!(pending.take().len(), 2);
-        assert!(pending.take().is_empty());
+    fn requests_serialize_as_the_contract_says() {
+        let json = serde_json::to_value(parse("mailto:a@x?subject=s").unwrap()).unwrap();
+        assert_eq!(json["type"], "Compose");
+        assert_eq!(json["mailto"]["to"], serde_json::json!(["a@x"]));
+        assert_eq!(json["mailto"]["subject"], "s");
+        let json = serde_json::to_value(parse(r"C:\a.ics").unwrap()).unwrap();
+        assert_eq!(json["type"], "ImportCalendarFile");
+        assert_eq!(json["path"], r"C:\a.ics");
     }
 }

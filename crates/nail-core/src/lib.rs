@@ -31,6 +31,7 @@ mod error;
 mod ids;
 mod imap_engine;
 mod ingest;
+mod launch;
 mod mail;
 mod mcp;
 mod oauth;
@@ -38,6 +39,7 @@ mod outbox;
 pub mod paths;
 mod pop3_engine;
 mod remote;
+mod remote_access;
 mod replay;
 mod rule_mail;
 mod rules;
@@ -53,6 +55,7 @@ mod watch;
 
 pub use error::{CoreError, Result};
 pub use mcp::{McpCore, McpRunning, mcp_endpoint_path};
+pub use remote::RemoteUiCommand;
 pub use service::{
     EVENT_CAPACITY, EngineTiming, HISTORY_RETENTION_DAYS, MAX_PAGE_SIZE, Service, ServiceOptions,
 };

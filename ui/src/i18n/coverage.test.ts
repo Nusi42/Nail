@@ -86,6 +86,7 @@ const PREFIXES = [
   "toolbar-",
   "layout-",
   "app-",
+  "launch-",
   ...FEATURE_MESSAGES.flatMap((m) => m.prefixes),
 ];
 /** Literals with those prefixes that are not message ids (part names). */
@@ -95,6 +96,7 @@ const NOT_MESSAGES = new Set([
   "virtual-accounts",
   "virtual-account-editor",
   "virtual-editor",
+  "launch-notice",
   ...FEATURE_MESSAGES.flatMap((m) => m.notMessages),
 ]);
 

@@ -757,6 +757,7 @@ mod tests {
             auth_results: None,
             warnings: Vec::new(),
             remote_content: None,
+            render_url: None,
         };
         let w = message_warnings(&body);
         assert_eq!(w.len(), 2, "{w:?}");

@@ -3,6 +3,7 @@
  * `?mock=1` → mock (dev), Tauri webview → Tauri IPC, otherwise WebSocket.
  */
 import { TransportClient, type NailClient, type Transport } from "./client";
+import { ReauthTransport } from "./reauth";
 
 export type TransportKind = "mock" | "tauri" | "websocket";
 
@@ -39,7 +40,8 @@ export async function createClient(win: Window = window): Promise<NailClient> {
     }
     case "websocket": {
       const { WebSocketTransport } = await import("./websocket");
-      transport = new WebSocketTransport();
+      // The remote UI asks to confirm the user before admin requests.
+      transport = new ReauthTransport(new WebSocketTransport());
       break;
     }
   }

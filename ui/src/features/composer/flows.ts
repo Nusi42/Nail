@@ -15,6 +15,7 @@ import type {
   DraftAttachment,
   DraftId,
   Identity,
+  MailtoLink,
   MessageId,
 } from "../../api/generated";
 import {
@@ -89,6 +90,60 @@ export async function startRichCompose(
   } catch (error) {
     if (!fallsBackToPlain(error)) throw error;
     await startCompose(ctx);
+  }
+}
+
+/**
+ * Opens the composer for a `mailto:` link (a launch request): a new plain
+ * text draft with the link's recipients, subject and body above the
+ * signature. An unfinished message is resumed instead (the link waits
+ * until the user starts a new one: it is never merged into another draft).
+ */
+export async function startMailtoCompose(ctx: ComposeContext, link: MailtoLink): Promise<void> {
+  if (ctx.store.getState().composer) {
+    ctx.store.getState().openWindow(COMPOSER_WINDOW);
+    return;
+  }
+  const addresses = (list: readonly string[]) => list.map((email) => ({ name: null, email }));
+  try {
+    const { draft } = await ctx.client.request(
+      {
+        type: "NewDraft",
+        identity_id: null,
+        account_id: ctx.store.getState().activeAccountId,
+        mode: "plain",
+        context: null,
+      },
+      "Draft",
+    );
+    const body = link.body ?? "";
+    open(
+      ctx,
+      {
+        ...draft,
+        to: addresses(link.to),
+        cc: addresses(link.cc),
+        bcc: addresses(link.bcc),
+        subject: link.subject ?? draft.subject,
+        text: body === "" ? draft.text : `${body}\n\n${draft.text}`.trimEnd(),
+      },
+      false,
+      false,
+    );
+  } catch (error) {
+    if (!fallsBackToPlain(error)) throw error;
+    await startCompose(ctx);
+    const ui = ctx.store.getState();
+    const text = ui.composer?.text ?? "";
+    ui.updateComposer({
+      to: link.to.join(", "),
+      cc: link.cc.join(", "),
+      bcc: link.bcc.join(", "),
+      showCc: link.cc.length > 0,
+      showBcc: link.bcc.length > 0,
+      subject: link.subject ?? "",
+      text: link.body ? `${link.body}\n\n${text}`.trimEnd() : text,
+    });
   }
 }
 

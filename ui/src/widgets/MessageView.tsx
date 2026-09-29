@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
 import { AttachmentWarningMark } from "../features/security";
 import type { Address, MessageBody } from "../api/generated";
@@ -9,7 +9,8 @@ import { findSummary, setFlags } from "../state/mailOps";
 import { useMessage } from "../state/queries";
 import { useUi } from "../state/uiStore";
 import { useReaderCss } from "../theme/ThemeProvider";
-import { readerDocument } from "../theme/reader";
+import { proxyBase, readerDocument } from "../theme/reader";
+import { setSrcdoc } from "../theme/trustedHtml";
 
 /** Header fields the widget can show (`headers` option). */
 export const HEADER_FIELDS = ["from", "to", "cc", "reply-to", "date"] as const;
@@ -59,19 +60,51 @@ function formatSize(bytes: number, locale: string): string {
       }).format(kb / 1024);
 }
 
+/** The address of the message document on the remote UI's sandbox origin. */
+function renderSrc(renderUrl: string, css: string): string {
+  const url = new URL(renderUrl);
+  url.searchParams.set("css", css);
+  return url.toString();
+}
+
+/**
+ * The HTML body in a sandboxed frame without scripts: from the remote UI's
+ * separate sandbox origin when the core names one (`render_url`), else as
+ * `srcdoc` (set through the Trusted Types policy).
+ */
 function Body({ message }: { message: MessageBody }) {
   const t = useT();
   const css = useReaderCss();
   const html = message.sanitized_html;
-  const srcDoc = useMemo(() => (html === null ? null : readerDocument(html, css)), [html, css]);
-  if (srcDoc !== null) {
+  const renderUrl = message.render_url ?? null;
+  const srcDoc = useMemo(
+    () => (html === null || renderUrl !== null ? null : readerDocument(html, css, proxyBase())),
+    [html, css, renderUrl],
+  );
+  const frame = useRef<HTMLIFrameElement>(null);
+  useLayoutEffect(() => {
+    if (frame.current && srcDoc !== null) setSrcdoc(frame.current, srcDoc);
+  }, [srcDoc]);
+  const title = t("message-view-body-title", { subject: message.headers.subject });
+  if (html !== null && renderUrl !== null) {
     return (
       <iframe
         data-part="message-view.body"
         sandbox=""
-        srcDoc={srcDoc}
+        src={renderSrc(renderUrl, css)}
         referrerPolicy="no-referrer"
-        title={t("message-view-body-title", { subject: message.headers.subject })}
+        title={title}
+      />
+    );
+  }
+  if (srcDoc !== null) {
+    return (
+      <iframe
+        ref={frame}
+        data-part="message-view.body"
+        sandbox=""
+        referrerPolicy="no-referrer"
+        title={title}
       />
     );
   }

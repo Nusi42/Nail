@@ -11,6 +11,7 @@ the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036):
 | `customization/` | WP24         | inspector, layout write-back, merge dialog, config errors, saved searches     |
 | `security/`      | M2a WP34     | key manager, crypto settings, composer toggles, badges, warnings, vault       |
 | `remote/`        | M2b WP43     | login, pairing, sessions / devices, remote-UI settings, remote content, audit |
+| `launch/`        | M2b WP45     | launch requests of the desktop app (`mailto:` → composer, `.eml` → import)    |
 
 ## Files of a slot
 

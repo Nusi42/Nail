@@ -16,7 +16,11 @@
 //! ([`demo_options`]); `demo-multi` also gives both accounts an OpenPGP
 //! key and an S/MIME certificate ([`DemoMulti::seed_security`]).
 //!
-//! No network access beyond `127.0.0.1` is involved in any of them.
+//! No network access beyond `127.0.0.1` is involved in any of them: the
+//! remote-content proxy of a seeded run resolves no names
+//! ([`offline_fetcher`]); demo-multi's resolves two made-up hosts only —
+//! [`MULTI_IMAGES_HOST`] to its mock HTTP server and
+//! [`MULTI_PRIVATE_HOST`] to a private address the proxy must refuse.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -59,6 +63,32 @@ pub const MULTI_CONFIG_MARKER: &str =
 
 /// The address the demo corpus is written to.
 const DEMO_EMAIL: &str = "sam@nail.example";
+
+/// A made-up image host of demo-multi: the proxy reaches it on the mock
+/// HTTP server (loopback, allowed only for that port in seeded runs).
+pub const MULTI_IMAGES_HOST: &str = "images.nail.example";
+/// A made-up host of demo-multi that resolves to a private address (the
+/// proxy refuses it).
+pub const MULTI_PRIVATE_HOST: &str = "private.nail.example";
+
+/// A 1×1 PNG (the demo image).
+const PIXEL_PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
+];
+
+/// The remote-content fetcher of seeded runs: every name is unknown, so
+/// nothing is fetched (allowed content fails with `502`).
+pub fn offline_fetcher() -> Option<nail_proxy::Fetcher> {
+    let tls = nail_auth::tls_config().ok()?;
+    Some(
+        nail_proxy::Fetcher::new(Arc::new(tls))
+            .with_resolver(nail_proxy::testing::ScriptedResolver::new()),
+    )
+}
 
 /// Password of the corpus' PKCS#12 files.
 pub const DEMO_PKCS12_PASSWORD: &str = "nail-test";
@@ -103,6 +133,9 @@ pub fn demo_options(mut options: crate::ServiceOptions) -> crate::ServiceOptions
     }
     options.trust_anchors = Some(test_trust_anchors());
     options.key_lookup = Some(Arc::new(OfflineKeyLookup));
+    if options.proxy_fetcher.is_none() {
+        options.proxy_fetcher = offline_fetcher();
+    }
     options
 }
 
@@ -370,6 +403,19 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     .map_err(io_error)?;
 
     let http = MockHttpServer::start().await.map_err(io_error)?;
+    for path in ["/logo.png", "/pixel.png"] {
+        http.get(
+            Some(MULTI_IMAGES_HOST),
+            path,
+            MockResponse {
+                status: 200,
+                content_type: "image/png".to_owned(),
+                body: PIXEL_PNG.to_vec(),
+                headers: vec![("Set-Cookie".to_owned(), "tracker=1".to_owned())],
+                delay: None,
+            },
+        );
+    }
     http.get(
         Some("autoconfig.new.example"),
         "/mail/config-v1.1.xml",
@@ -477,6 +523,7 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     /// short reconnect delays, the test trust anchor, offline key lookups.
     pub fn service_options(&self, mut options: crate::ServiceOptions) -> crate::ServiceOptions {
         options.secrets = Some(Arc::clone(&self.secrets) as Arc<dyn SecretStore>);
+        options.proxy_fetcher = self.proxy_fetcher();
         options.discoverer = Some(Arc::clone(&self.discoverer));
         options.timing = crate::EngineTiming::fast();
         options.open_browser = false;
@@ -522,6 +569,21 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
         Ok(())
     }
 
+    /// The proxy's fetcher: [`MULTI_IMAGES_HOST`] is the mock HTTP server
+    /// (loopback, allowed for its port only), [`MULTI_PRIVATE_HOST`] a
+    /// private address; every other name is unknown.
+    fn proxy_fetcher(&self) -> Option<nail_proxy::Fetcher> {
+        let resolver = nail_proxy::testing::ScriptedResolver::new();
+        resolver.set(MULTI_IMAGES_HOST, &["127.0.0.1"]);
+        resolver.set(MULTI_PRIVATE_HOST, &["10.0.0.7"]);
+        let tls = nail_auth::tls_config().ok()?;
+        Some(
+            nail_proxy::Fetcher::new(Arc::new(tls))
+                .with_resolver(resolver)
+                .allow_loopback_port_for_tests(self.http.addr().port()),
+        )
+    }
+
     fn imap(&self, account: &str) -> std::result::Result<&MockImapServer, String> {
         match account {
             MULTI_WORK_ID => Ok(&self.work),
@@ -542,6 +604,8 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     /// * `pop3-deliver {raw, uid?}` → `{uid}`
     /// * `pop3-state` → `{uids, deleted}`
     /// * `smtp-messages` → `[{from, to, data}]`
+    /// * `remote-content` → `{images, private, requests}`: base URLs of the
+    ///   made-up image hosts and the paths the image host was asked for
     ///
     /// `account` defaults to the IMAP account `work` (`new` is the
     /// discoverable one), `mailbox` to `INBOX`.
@@ -635,6 +699,21 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
                     })
                     .collect(),
             )),
+            "remote-content" => {
+                let port = self.http.addr().port();
+                let requests: Vec<Value> = self
+                    .http
+                    .requests()
+                    .into_iter()
+                    .filter(|r| r.host == MULTI_IMAGES_HOST)
+                    .map(|r| json!(r.path))
+                    .collect();
+                Ok(json!({
+                    "images": format!("http://{MULTI_IMAGES_HOST}:{port}"),
+                    "private": format!("http://{MULTI_PRIVATE_HOST}:{port}"),
+                    "requests": requests,
+                }))
+            }
             other => Err(format!("unknown control command {other:?}")),
         }
     }

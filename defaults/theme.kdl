@@ -2586,4 +2586,44 @@ theme "default" mode="system" {
     part "remote-alerts.toast[kind=\"new-device\"]" { border-left "3px solid $color.warning"; }
     part "remote-alerts.title" { font-weight "$font-weight.bold"; }
     part "remote-alerts.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "remote-reauth.overlay" {
+        position "fixed"
+        top 0
+        right 0
+        bottom 0
+        left 0
+        z-index 1002
+        display "flex"
+        align-items "center"
+        justify-content "center"
+        background-color "$color.scrim"
+    }
+    part "remote-reauth.overlay remote-reauth" {
+        max-width 420
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+
+    // ---- Opening links and files (ADR 0041) ----
+
+    part "launch-notice" {
+        position "fixed"
+        left 16
+        bottom 16
+        z-index 1001
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        max-width 480
+        padding "$space.md"
+        border "$border.thin"
+        border-left "3px solid $color.warning"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "launch-notice.text" { margin 0; }
 }

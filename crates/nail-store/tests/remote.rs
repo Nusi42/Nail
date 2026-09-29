@@ -661,3 +661,21 @@ fn remote_ui_settings_are_a_json_setting() {
         Some(settings)
     );
 }
+
+#[test]
+fn stale_message_allows_are_purged() {
+    let store = store();
+    store
+        .allow_remote_content(RemoteContentScope::Message, "gone-1", None, T0)
+        .unwrap();
+    store
+        .allow_remote_content(RemoteContentScope::Sender, "news@shop.example", None, T0)
+        .unwrap();
+    // No message "gone-1" exists (deleted or expunged): its entry goes,
+    // sender and domain entries never do.
+    assert_eq!(store.purge_stale_remote_content_allows().unwrap(), 1);
+    let left = store.list_remote_content_allows().unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].scope, RemoteContentScope::Sender);
+    assert_eq!(store.purge_stale_remote_content_allows().unwrap(), 0);
+}

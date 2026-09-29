@@ -8,7 +8,9 @@ use std::sync::Arc;
 use anyhow::Context;
 use nail_core::demo::DemoMulti;
 use nail_core::{Service, ServiceOptions, paths};
-use nail_server::{Server, ServerOptions, TestControl};
+use nail_server::{
+    RemoteUiHost, RemoteUiOptions, Server, ServerOptions, TestControl, TransportOptions,
+};
 
 use crate::cli::{Seed, ServeArgs};
 
@@ -41,13 +43,19 @@ pub fn resolve_dirs(
     } else {
         None
     };
+    // The portable zip keeps everything beside the app (`bin\nail.exe`
+    // next to the `portable` marker's directory).
+    let portable = std::env::current_exe()
+        .ok()
+        .and_then(|exe| portable_root_beside(&exe));
     let pick =
         |given: Option<PathBuf>, sub: &str, default: fn() -> Option<PathBuf>, flag: &str| match (
-            given, &temp,
+            given, &temp, &portable,
         ) {
-            (Some(dir), _) => Ok(dir),
-            (None, Some(temp)) => Ok(temp.path().join(sub)),
-            (None, None) => {
+            (Some(dir), _, _) => Ok(dir),
+            (None, Some(temp), _) => Ok(temp.path().join(sub)),
+            (None, None, Some(root)) => Ok(root.join(sub)),
+            (None, None, None) => {
                 default().with_context(|| format!("no default {sub} directory; pass {flag}"))
             }
         };
@@ -61,6 +69,21 @@ pub fn resolve_dirs(
         )?,
         _temp: temp,
     })
+}
+
+/// Name of the portable build's marker file (as the desktop app's
+/// `portable::MARKER`).
+pub const PORTABLE_MARKER: &str = "portable";
+
+/// The portable build's root for `nail` at `exe`: in the portable zip the
+/// CLI is `<root>\bin\nail.exe` and the marker is `<root>\portable`; data
+/// and config then default to `<root>\data` and `<root>\config`, like the
+/// desktop app's.
+pub fn portable_root_beside(exe: &Path) -> Option<PathBuf> {
+    let root = exe.parent()?.parent()?;
+    root.join(PORTABLE_MARKER)
+        .is_file()
+        .then(|| root.to_path_buf())
 }
 
 /// Writes the demo-multi `accounts.kdl` into `config_dir`. Refuses a
@@ -179,15 +202,23 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let test_control = demo_multi
         .clone()
         .map(|demo| Arc::new(DemoControl(demo)) as Arc<dyn TestControl>);
-    let server = Server::bind(
+    // The local UI: loopback, no login, with the remote-content proxy.
+    let server = Server::bind_with(
         service.clone(),
         ServerOptions {
             addr: SocketAddr::from((Ipv4Addr::LOCALHOST, args.port)),
-            ui_dir,
+            ui_dir: ui_dir.clone(),
             test_control,
+        },
+        TransportOptions {
+            proxy: service.remote_proxy(),
+            ..TransportOptions::default()
         },
     )
     .await?;
+    // The remote UI (TLS + login), when enabled in the settings; the
+    // desktop's settings start, restart and stop it (ADR 0041).
+    let remote_ui = RemoteUiHost::start(service.clone(), RemoteUiOptions::new(ui_dir));
     let url = server.url();
     // The URL is the only thing written to stdout, so scripts (and the
     // Playwright harness) can read it.
@@ -210,6 +241,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
             }
         })
         .await?;
+    drop(remote_ui);
     if let Some(mcp) = mcp {
         mcp.shutdown().await;
     }
@@ -255,6 +287,16 @@ pub fn resolve_ui_dir(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_portable_zip_keeps_data_beside_the_app() {
+        let root = tempfile::tempdir().unwrap();
+        let exe = root.path().join("bin").join("nail.exe");
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        assert_eq!(portable_root_beside(&exe), None);
+        std::fs::write(root.path().join(PORTABLE_MARKER), "").unwrap();
+        assert_eq!(portable_root_beside(&exe), Some(root.path().to_path_buf()));
+    }
 
     /// Review M1a: a seeded run without directories must not touch the
     /// real data and config directories.

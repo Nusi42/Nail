@@ -7569,6 +7569,79 @@
         "gap": "var(--nail-space-sm)"
       },
       "source": null
+    },
+    {
+      "selector": "remote-reauth.overlay",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "fixed",
+        "top": "0",
+        "right": "0",
+        "bottom": "0",
+        "left": "0",
+        "z-index": "1002",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "background-color": "var(--nail-color-scrim)"
+      },
+      "source": null
+    },
+    {
+      "selector": "remote-reauth",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "remote-reauth.overlay",
+          "states": [],
+          "conditions": []
+        }
+      ],
+      "declarations": {
+        "max-width": "420px",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "launch-notice",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "fixed",
+        "left": "16px",
+        "bottom": "16px",
+        "z-index": "1001",
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "max-width": "480px",
+        "padding": "var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-left": "3px solid var(--nail-color-warning)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "launch-notice.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0"
+      },
+      "source": null
     }
   ],
   "icons": {

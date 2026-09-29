@@ -30,6 +30,7 @@ describe("feature registry", () => {
       "customization",
       "security",
       "remote",
+      "launch",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);

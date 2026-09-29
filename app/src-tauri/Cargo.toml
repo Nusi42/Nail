@@ -21,6 +21,10 @@ tauri-build.workspace = true
 [dependencies]
 nail-api.workspace = true
 nail-core = { workspace = true, features = ["demo"] }
+# The remote UI (TLS + login) and the remote-content proxy (ADR 0041).
+nail-server.workspace = true
+nail-proxy.workspace = true
+tauri-plugin-single-instance.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

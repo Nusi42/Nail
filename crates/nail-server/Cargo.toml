@@ -25,6 +25,7 @@ tokio-rustls.workspace = true
 rcgen.workspace = true
 instant-acme.workspace = true
 nail-proxy.workspace = true
+nail-remote-auth.workspace = true
 # The certificate record lives in the store's settings (ADR 0036:
 # `REMOTE_UI_CERTIFICATE_KEY`, owned by nail-server); its key in the keychain.
 nail-store.workspace = true

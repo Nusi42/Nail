@@ -274,6 +274,14 @@ pub struct MessageBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub remote_content: Option<RemoteContentInfo>,
+    /// Where the browser UI loads the HTML body from (M2b, remote UI
+    /// only): `<sandbox origin>/render/<token>`, a separate origin that
+    /// serves nothing but mail documents and the proxy
+    /// ([`crate::remote_content::RENDER_PATH`]). The reader frames it
+    /// instead of `sanitized_html`; absent = render `sanitized_html`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub render_url: Option<String>,
 }
 
 #[cfg(test)]

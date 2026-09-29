@@ -268,24 +268,43 @@ Core wiring: decrypt/verify on read (never persist decrypted bodies unless the i
 
 ### Wave M2b — Remote UI hardening, installer and CI
 
+**Status:** WP40–WP45 done (ADRs 0036–0041); automated suites green (cargo, Vitest, Playwright incl. `remote.spec.ts`, `remote-content.spec.ts` and the desktop smoke test with a `mailto:` start). Next: the two reviews (one security), fixes, independent verify; the first CI run of the `installer`, `deny` and `interop` jobs; the M2 human security review gate stays open, internet mode stays locked.
+
 #### WP40 — Contract (sequential)
 Remote-UI settings (enabled, bind address, port, TLS mode self-signed/ACME, internet mode locked flag), users and credentials (password hash, TOTP secret, passkeys), sessions and devices, pairing codes, scopes per session, remote-content policy (per message / sender / domain allow-lists), audit entries for logins.
 *Done (ADR 0036):* `nail_api::remote` (settings with shared validation and the internet-mode lock, `RemoteGrant` = MCP grant + `admin`, users / passkeys / devices / sessions / pairing codes / audit / alerts, the `POST /api/auth` login protocol) and `nail_api::remote_content` (allow-lists, `nail-proxy:` URLs, optional `MessageBody.remote_content`); error codes `forbidden`, `reauth_required`, `rate_limited`; store v6 with hashed or keychain-referenced secrets only and tested invariants; the core serves the store-backed requests, the rest answers `unsupported` until WP45. Stub crates `nail-remote-auth`, `nail-proxy` and TLS libraries in `nail-server` with smoke tests. Deviation: passkeys use `webauthn_rp` (pure Rust) because `webauthn-rs` requires OpenSSL.
 
 #### WP41 — Authentication and sessions (parallel)
 Passkeys via `webauthn-rs` (MPL-2.0, unmodified), password (Argon2id) + TOTP (`totp-rs`), one-time pairing codes approved on the desktop, device-bound short-lived sessions in `HttpOnly; Secure; SameSite=Strict` cookies with rotation, re-authentication for sensitive actions, per-IP and per-account rate limits with exponential backoff and lockout notification, session list and revoke, new-device alert, audit log. Tests incl. brute-force and replay attempts.
+*Done (ADR 0037):* `nail-remote-auth` on `webauthn_rp` (ADR 0036 deviation), CSRF tokens bound to the device (`x-nail-csrf` response header after pairing), a 7-day throttle window (see follow-ups), the exhaustive `required_access`, axum login route and session middleware.
 
 #### WP42 — Transport and browser hardening (parallel)
 TLS 1.3 (1.2 only with forward-secret AEAD) with `rustls`; self-signed certificate generation (`rcgen`) with fingerprint shown for pinning at pairing; ACME (`instant-acme`) wired but only usable in the locked internet mode; HSTS, strict CSP without inline script, Trusted Types, COOP/COEP, `frame-ancestors 'none'`; Origin/Host checks; a separate sandbox origin for mail HTML; the remote-content proxy for desktop and web: signed URLs derived from messages, blocks private / link-local / loopback ranges, size and type limits, never an open proxy; loading remote content per message / sender / domain. Tests incl. SSRF attempts and DNS rebinding.
+*Done (ADR 0038):* `Server::bind_with` (TLS, host names, allowed networks, header profiles, sandbox origin, proxy route, ACME challenges), `nail-proxy` (check-then-pin fetcher with the OS resolver instead of hickory). The `nail-mime` rewriting hook moved to WP45.
 
 #### WP43 — Remote-UI and privacy UI (parallel)
 Login (passkey first, password + TOTP fallback), pairing flow on both sides (desktop shows code and fingerprint, browser enters code), sessions and devices management, remote-UI settings on the desktop (enable, bind address, TLS mode, internet mode shown as locked with the reason), "load remote content" bar in the reader with per-sender/domain choices, security audit view.
+*Done (ADR 0039):* six widgets, the pairing dialog, login / re-authentication pages over `POST /api/auth`, alert toasts, full UI mocks (`@simplewebauthn/browser`, `uqr`; both MIT).
 
 #### WP44 — Installer and CI (parallel)
 Tauri NSIS installer per the design (per-user by default, WebView2 bootstrapper, `mailto:` / `webcal:` protocol handlers and `.eml` / `.ics` / `.vcf` associations via RegisteredApplications + Capabilities, optional start with Windows, optional `nail` CLI on `PATH`, uninstall keeps data unless the user opts in), portable zip; `cargo-deny` with the licence allowlist and advisories; SBOM (CycloneDX) per build; CI jobs: installer build artifact, desktop smoke test on `windows-latest`, and a Linux interop job running the engine tests against real Dovecot and Stalwart containers (IMAP, POP3, SMTP, ManageSieve).
+*Done (ADR 0040):* NSIS template copy (installs to `%LOCALAPPDATA%\Programs\Nail`), per-user registration hooks, portable zip, `deny.toml` (RUSTSEC-2023-0071 exception), CycloneDX SBOMs, CI jobs `desktop`, `installer`, `deny`, `interop` (`scripts/interop/`, own workspace; ManageSieve deferred to M2c). The advisories check and the interop job have not run yet (no network / Docker locally).
 
 #### WP45 — Integration (sequential)
 Wire the remote UI with auth into `nail serve` and the desktop app; migrate existing loopback-only behaviour; **Playwright:** pairing a second browser context with a code; passkey login via Playwright's virtual authenticator; password + TOTP login; brute force triggers backoff; session revoke logs the browser out; remote images blocked, loaded through the proxy after "allow sender", a proxy request to 127.0.0.1 or a private IP is refused; CSP blocks an injected inline script; internet mode cannot be enabled; installer build smoke (install to a temp dir, start, uninstall) in CI.
+*Done (ADR 0041):* `nail_server::RemoteUiHost` runs the remote UI from the core's settings (off by default; TLS + login; the desktop's own UI stays loopback without login), per-request authorization and grant narrowing in the core (`Service::handle_remote`), remote content rewritten through the `nail-mime` hook and served by the proxy (web route, sandbox origin, desktop `nail-proxy` protocol), mail HTML of the remote UI on the sandbox origin (`MessageBody.render_url`), Trusted Types for `srcdoc`, launch requests in the contract (`mailto:` → composer, `.eml` → "Opened files"; single instance), the M2a restart test with encryption at rest, `nail` portable mode. All listed Playwright scenarios pass (`remote.spec.ts`, `remote-content.spec.ts`, `desktop.spec.ts`); the installer smoke runs in CI.
+
+#### M2b follow-ups (deviations and deferrals)
+- **Throttle window**: 7 days because the store resets a count after the window from the *first* failure; a v7 change (window from the last failure) would allow hours.
+- **Passkeys** are discoverable-only (no `allowCredentials` for non-resident security keys); `credProtect` is requested, not enforced by the browser (ADR 0041).
+- **Login page** is unstyled (runs before the theme); serve the default theme without a session.
+- **Events on remote sockets** are not narrowed per grant (ids and counts only); render tokens are bearer capabilities for one message for an hour (bind them to the session).
+- **Remote content**: no "load once" scope; no per-session proxy rate limit; the `TargetCheck` re-reads the allow-lists but not whether the message still references the URL.
+- **CSRF key** is per process: browsers fetch a new token after a restart (handled by the UI).
+- **Audit growth**: remote audit entries are purged after 90 days with the other history.
+- **Installer / CI**: first runs of `deny` (advisories) and `interop` (pin Stalwart / Dovecot images afterwards); offline WebView2 variant, German installer strings, tray and hidden autostart, per-machine MSI (M4), signing.
+- **Launch requests**: `webcal:`, `.ics` and `.vcf` answer "not supported yet" until M3; `in-reply-to` of `mailto:` is ignored; a "Choose Nail in Default apps" button (`ms-settings:defaultapps?registeredAppUser=Nail`) is not built.
+- **ACME** is wired but untested end to end (needs the network and port 80; internet mode stays locked).
 
 ### Wave M2c — Server-side rules and polish
 

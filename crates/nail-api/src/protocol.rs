@@ -36,6 +36,7 @@ use crate::ids::{
     OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId,
     RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
+use crate::launch::LaunchRequest;
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
 use crate::remote::{
@@ -975,6 +976,20 @@ pub enum Request {
         /// Its value (as listed).
         value: String,
     },
+
+    // --- Launch requests (M2b, desktop only; ADR 0041) ---
+    /// The launch requests (`mailto:` links, opened files) waiting for the
+    /// UI; each is handed out once. Answered with
+    /// [`Response::LaunchRequests`].
+    TakeLaunchRequests,
+    /// Import a `.eml` file into the local "Opened files" account
+    /// ([`crate::launch::OPENED_FILES_ACCOUNT_ID`]) to show it. Answered
+    /// with [`Response::MessageImported`]; `not_found` / `invalid_request`
+    /// for a missing, oversized or unreadable file.
+    ImportMessageFile {
+        /// Absolute path of the file.
+        path: String,
+    },
 }
 
 /// The core's answer to one [`Request`].
@@ -1441,6 +1456,16 @@ pub enum Response {
         /// Entries by scope (message, sender, domain), newest first.
         entries: Vec<RemoteContentAllow>,
     },
+    /// Answer to [`Request::TakeLaunchRequests`].
+    LaunchRequests {
+        /// Oldest first.
+        requests: Vec<LaunchRequest>,
+    },
+    /// Answer to [`Request::ImportMessageFile`].
+    MessageImported {
+        /// The imported message.
+        message: Box<MessageSummary>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -1639,6 +1664,9 @@ pub enum Event {
     /// The remote-content allow-lists changed; clients refetch the shown
     /// message and the lists.
     RemoteContentPolicyChanged,
+    /// A launch request arrived (the app was asked to open a link or a
+    /// file); the UI takes it with [`Request::TakeLaunchRequests`].
+    LaunchRequested,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).

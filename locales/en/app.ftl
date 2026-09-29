@@ -237,3 +237,14 @@ search-error-too-complex = This search is too long or has too many nested parts.
 oauth-callback-title = Nail sign-in
 oauth-callback-success = Signed in. You can close this window and return to Nail.
 oauth-callback-failure = Sign-in did not complete. Close this window and try again in Nail.
+
+## Opening links and files (mailto:, .eml, .ics, .vcf; rendered by the core and the UI)
+
+# Name of the local account that opened .eml files are shown in.
+opened-files-account = Opened files
+opened-files-folder = Opened files
+launch-notice-label = Opening links and files
+launch-unsupported-calendar = Calendars cannot be imported yet. This will come with a later version of Nail.
+launch-unsupported-contacts = Contacts cannot be imported yet. This will come with a later version of Nail.
+launch-open-failed = The file could not be opened: { $reason }
+launch-dismiss = Dismiss

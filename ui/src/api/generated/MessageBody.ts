@@ -62,4 +62,12 @@ warnings?: Array<MessageWarning>,
  * references them as `nail-proxy:<token>`); absent when it has none.
  * `remote_content_blocked` stays `true` while they are blocked.
  */
-remote_content?: RemoteContentInfo, };
+remote_content?: RemoteContentInfo, 
+/**
+ * Where the browser UI loads the HTML body from (M2b, remote UI
+ * only): `<sandbox origin>/render/<token>`, a separate origin that
+ * serves nothing but mail documents and the proxy
+ * ([`crate::remote_content::RENDER_PATH`]). The reader frames it
+ * instead of `sanitized_html`; absent = render `sanitized_html`.
+ */
+render_url?: string, };

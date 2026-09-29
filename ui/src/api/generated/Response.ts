@@ -23,6 +23,7 @@ import type { KeyEncoding } from "./KeyEncoding";
 import type { KeyImportResult } from "./KeyImportResult";
 import type { KeyLookupCandidate } from "./KeyLookupCandidate";
 import type { KeyLookupFailure } from "./KeyLookupFailure";
+import type { LaunchRequest } from "./LaunchRequest";
 import type { McpAuditEntry } from "./McpAuditEntry";
 import type { McpClient } from "./McpClient";
 import type { McpServerInfo } from "./McpServerInfo";
@@ -494,7 +495,15 @@ entry: RemoteContentAllow, } | { "type": "RemoteContentAllows",
 /**
  * Entries by scope (message, sender, domain), newest first.
  */
-entries: Array<RemoteContentAllow>, } | { "type": "Error", 
+entries: Array<RemoteContentAllow>, } | { "type": "LaunchRequests", 
+/**
+ * Oldest first.
+ */
+requests: Array<LaunchRequest>, } | { "type": "MessageImported", 
+/**
+ * The imported message.
+ */
+message: MessageSummary, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */
