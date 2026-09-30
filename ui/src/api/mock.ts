@@ -22,6 +22,7 @@ import {
 } from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
+import { answerPlugins, isPluginsRequest } from "../features/plugins/mock";
 import { answerRemote, decorateRemoteContent, isRemoteRequest } from "../features/remote/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
 import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
@@ -112,6 +113,7 @@ export class MockTransport implements Transport, MockCore {
     if (isSieveRequest(request)) return answerSieve(this, request);
     if (isTriageRequest(request)) return answerTriage(this, request);
     if (isSyncRequest(request)) return answerSync(this, request);
+    if (isPluginsRequest(request)) return answerPlugins(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };

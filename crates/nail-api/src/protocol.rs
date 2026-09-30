@@ -13,7 +13,10 @@
 //!
 //! See `docs/adr/0002-rpc-protocol.md`.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use ts_rs::TS;
 
 use crate::accounts::BodyPolicy;
@@ -34,13 +37,19 @@ use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, Threa
 use crate::error::{ApiError, ErrorCode};
 use crate::ids::{
     AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId,
-    RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PluginDialogId, PluginId, RemoteDeviceId,
+    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 use crate::launch::LaunchRequest;
 use crate::localized::LocalizedMessage;
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
+use crate::plugins::runtime::PluginCommandSurface;
+use crate::plugins::{
+    PluginDialog, PluginGrant, PluginInfo, PluginInstallPreview, PluginLogEntry,
+    PluginNotification, PluginPackageSource, PluginSettingDef, PluginStopReason, PluginUiNode,
+    PluginUiTarget,
+};
 use crate::remote::{
     PairingCode, RemoteAlert, RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession,
     RemoteSessionFilter, RemoteUiSettings, RemoteUiStatus, RemoteUser, RemoteUserUpdate,
@@ -1170,6 +1179,175 @@ pub enum Request {
         /// The message.
         message_id: MessageId,
     },
+
+    // --- Plug-ins: administration (M2d WP60, ADR 0050) ---
+    /// Every installed plug-in (dev plug-ins included). Answered with
+    /// [`Response::Plugins`].
+    ListPlugins,
+    /// One plug-in. Answered with [`Response::Plugin`]; `not_found`.
+    GetPlugin {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// Read a package (a `.nailplugin` file or URL) without installing it,
+    /// for the install dialog (manifest, permissions, issues, hash).
+    /// Answered with [`Response::PluginInstallPreview`]; `invalid_request`
+    /// for a `dev` source, `too_large`, `network`.
+    PreviewPluginInstall {
+        /// The package.
+        source: PluginPackageSource,
+    },
+    /// Install (or update) a package with the permissions the user
+    /// granted. Answered with [`Response::Plugin`], followed by
+    /// [`Event::PluginsChanged`]; `conflict` when the package's hash is not
+    /// `package_sha256` (it changed since the preview), `invalid_request`
+    /// for manifest issues, grants of undeclared permissions or a `dev`
+    /// source.
+    InstallPlugin {
+        /// The package.
+        source: PluginPackageSource,
+        /// SHA-256 (hex) from [`Request::PreviewPluginInstall`].
+        package_sha256: String,
+        /// The granted permissions.
+        grants: Vec<PluginGrant>,
+        /// Whether to enable (start) it right away.
+        enable: bool,
+    },
+    /// Load an unpacked plug-in folder for development (`nail plugin dev`):
+    /// installed as a `dev` plug-in, enabled, reloaded when its files
+    /// change. Desktop only. Answered with [`Response::Plugin`];
+    /// `invalid_request` with the manifest's issues.
+    LoadDevPlugin {
+        /// Absolute path of the folder holding `manifest.json`.
+        folder: String,
+        /// The granted permissions (the CLI grants what the manifest
+        /// declares).
+        grants: Vec<PluginGrant>,
+    },
+    /// Enable and start a plug-in (also restarts a crashed one). Answered
+    /// with [`Response::Plugin`], followed by [`Event::PluginsChanged`].
+    EnablePlugin {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// Stop and disable a plug-in. Answered with [`Response::Plugin`],
+    /// followed by [`Event::PluginsChanged`].
+    DisablePlugin {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// Stop and remove a plug-in with its grants, settings, storage and
+    /// logs. Items it placed in `layout.kdl` stay (the UI ignores actions
+    /// and panels of missing plug-ins; the user removes them). Answered
+    /// with [`Response::Done`], followed by [`Event::PluginsChanged`].
+    UninstallPlugin {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// Replace a plug-in's grants (revoking = leaving one out). Answered
+    /// with [`Response::Plugin`], followed by [`Event::PluginsChanged`];
+    /// `invalid_request` for undeclared permissions or account lists on
+    /// permissions that take none.
+    UpdatePluginGrants {
+        /// The plug-in.
+        plugin_id: PluginId,
+        /// The complete new grants.
+        grants: Vec<PluginGrant>,
+    },
+    /// Log lines, oldest first. Answered with [`Response::PluginLogs`].
+    ListPluginLogs {
+        /// One plug-in; `null` = all.
+        #[serde(default)]
+        plugin_id: Option<PluginId>,
+        /// Only lines after this sequence number (for tailing).
+        #[serde(default)]
+        after_seq: Option<u64>,
+        /// At most this many lines (the newest ones).
+        limit: u32,
+    },
+    /// Delete a plug-in's log. Answered with [`Response::Done`].
+    ClearPluginLogs {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// A plug-in's settings schema and values. Answered with
+    /// [`Response::PluginSettings`].
+    GetPluginSettings {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// Change a plug-in's settings (missing keys keep their value).
+    /// Answered with [`Response::PluginSettings`]; `invalid_request` for
+    /// unknown keys or invalid values.
+    UpdatePluginSettings {
+        /// The plug-in.
+        plugin_id: PluginId,
+        /// Setting key → value.
+        values: BTreeMap<String, Value>,
+    },
+    /// The user's `layout.kdl` with the plug-in's suggested placements
+    /// added, compared with the current file, for the merge dialog; apply
+    /// with [`Request::ApplyConfigMerge`] (`file: layout`, `incoming`).
+    /// Answered with [`Response::PluginPlacements`].
+    PreviewPluginPlacements {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+
+    // --- Plug-ins: running (M2d) ---
+    /// Run a plug-in command (`plugin.<id>.<command>`) with the UI's
+    /// context. Answered with [`Response::Done`] once the plug-in took it;
+    /// what it does arrives as events (dialogs, notifications, log lines).
+    /// `not_found` for an unknown command, `unavailable` when the plug-in
+    /// is disabled or crashed.
+    RunPluginCommand {
+        /// The action id.
+        command: String,
+        /// Where it was invoked.
+        surface: PluginCommandSurface,
+        /// The UI's context (selection, open message, folder, draft).
+        context: UiContext,
+        /// The UI's random id (see [`crate::plugins::runtime`]).
+        #[serde(default)]
+        client_id: Option<String>,
+    },
+    /// Close a plug-in dialog with a button (or dismiss it with `null`)
+    /// and its values. Answered with [`Response::Done`], followed by
+    /// [`Event::PluginDialogClosed`]; `not_found` when it is no longer
+    /// open.
+    RespondPluginDialog {
+        /// The dialog.
+        dialog_id: PluginDialogId,
+        /// The button id; `null` = dismissed.
+        button: Option<String>,
+        /// Values of the input nodes by id.
+        values: BTreeMap<String, Value>,
+    },
+    /// A button inside a dialog body or panel was pressed. Answered with
+    /// [`Response::Done`].
+    PluginUiAction {
+        /// Where.
+        target: PluginUiTarget,
+        /// The button's id.
+        component_id: String,
+        /// Current values of the input nodes of that dialog or panel.
+        values: BTreeMap<String, Value>,
+        /// The UI's random id.
+        #[serde(default)]
+        client_id: Option<String>,
+    },
+    /// The content of a plug-in panel (`plugin-panel "<id>.<panel>"`) for
+    /// the UI's context. Answered with [`Response::PluginPanel`]; later
+    /// changes arrive as [`Event::PluginPanelChanged`].
+    GetPluginPanel {
+        /// `<plugin>.<panel>`.
+        panel: String,
+        /// The UI's context.
+        context: UiContext,
+        /// The UI's random id.
+        #[serde(default)]
+        client_id: Option<String>,
+    },
 }
 
 /// The core's answer to one [`Request`].
@@ -1718,6 +1896,51 @@ pub enum Response {
         /// The unsaved rule (empty id).
         rule: Box<Rule>,
     },
+    /// Answer to [`Request::ListPlugins`].
+    Plugins {
+        /// Installed plug-ins, by name.
+        plugins: Vec<PluginInfo>,
+    },
+    /// Answer to the requests that change or read one plug-in.
+    Plugin {
+        /// The plug-in.
+        plugin: Box<PluginInfo>,
+    },
+    /// Answer to [`Request::PreviewPluginInstall`].
+    PluginInstallPreview {
+        /// What installing would do.
+        preview: Box<PluginInstallPreview>,
+    },
+    /// Answer to [`Request::ListPluginLogs`].
+    PluginLogs {
+        /// Log lines, oldest first.
+        entries: Vec<PluginLogEntry>,
+    },
+    /// Answer to the plug-in settings requests.
+    PluginSettings {
+        /// The plug-in.
+        plugin_id: PluginId,
+        /// The schema (titles resolved).
+        schema: Vec<PluginSettingDef>,
+        /// Every setting's value (defaults filled in).
+        values: BTreeMap<String, Value>,
+    },
+    /// Answer to [`Request::PreviewPluginPlacements`].
+    PluginPlacements {
+        /// The plug-in.
+        plugin_id: PluginId,
+        /// The user's `layout.kdl` with the placements added.
+        incoming: String,
+        /// The comparison for the merge dialog.
+        preview: Box<ConfigMergePreview>,
+    },
+    /// Answer to [`Request::GetPluginPanel`].
+    PluginPanel {
+        /// `<plugin>.<panel>`.
+        panel: String,
+        /// Its content (empty while the plug-in has not rendered it).
+        tree: Vec<PluginUiNode>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -1979,6 +2202,56 @@ pub enum Event {
     },
     /// The MCP settings changed (and the server may have moved).
     McpSettingsChanged,
+    /// Plug-ins were installed, removed, enabled, disabled, re-granted,
+    /// reloaded or changed state; clients refetch [`Request::ListPlugins`]
+    /// (toolbars, menus, keys and panels depend on it).
+    PluginsChanged,
+    /// A plug-in opened a dialog. A UI shows it when `client_id` is its own
+    /// or `null`.
+    PluginDialogOpened {
+        /// The dialog.
+        dialog: Box<PluginDialog>,
+    },
+    /// A plug-in dialog was closed (answered in some UI, closed by the
+    /// plug-in, or its plug-in stopped); every UI removes it.
+    PluginDialogClosed {
+        /// The dialog.
+        dialog_id: PluginDialogId,
+        /// Its plug-in.
+        plugin_id: PluginId,
+    },
+    /// A plug-in notification (toast; OS notification when `system`).
+    PluginNotification {
+        /// What to show.
+        notification: Box<PluginNotification>,
+    },
+    /// A plug-in panel's content changed.
+    PluginPanelChanged {
+        /// `<plugin>.<panel>`.
+        panel: String,
+        /// The new content.
+        tree: Vec<PluginUiNode>,
+    },
+    /// A new log line (the plug-in manager and `nail plugin dev` tail
+    /// them).
+    PluginLogLine {
+        /// The line.
+        entry: Box<PluginLogEntry>,
+    },
+    /// A plug-in's runtime stopped; crashes (errors, CPU budget, memory
+    /// limit) flag it as `crashed` and the UI tells the user.
+    PluginStopped {
+        /// The plug-in.
+        plugin_id: PluginId,
+        /// Why.
+        reason: PluginStopReason,
+        /// Details (English, for logs).
+        error: Option<String>,
+        /// The user-facing text (ADR 0043).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        localized: Option<Box<LocalizedMessage>>,
+    },
 }
 
 /// A request frame on a multiplexed transport (WebSocket).

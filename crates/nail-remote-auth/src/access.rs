@@ -275,6 +275,29 @@ pub fn required_access(request: &Request) -> RequestAccess {
 
         // --- Rules from messages ---
         Request::RuleFromMessage { .. } => ("RuleFromMessage", Scope(S::Rules)),
+
+        // --- Plug-ins (M2d, ADR 0050). Plug-ins read mail with their own
+        // grants, so using them needs a grant for every account (the core
+        // checks `full`); administering them is `admin`. Loading a dev
+        // folder reads the desktop's files. ---
+        Request::ListPlugins => ("ListPlugins", Scope(S::Read)),
+        Request::GetPlugin { .. } => ("GetPlugin", Scope(S::Read)),
+        Request::PreviewPluginInstall { .. } => ("PreviewPluginInstall", Admin),
+        Request::InstallPlugin { .. } => ("InstallPlugin", Admin),
+        Request::LoadDevPlugin { .. } => ("LoadDevPlugin", DesktopOnly),
+        Request::EnablePlugin { .. } => ("EnablePlugin", Admin),
+        Request::DisablePlugin { .. } => ("DisablePlugin", Admin),
+        Request::UninstallPlugin { .. } => ("UninstallPlugin", Admin),
+        Request::UpdatePluginGrants { .. } => ("UpdatePluginGrants", Admin),
+        Request::ListPluginLogs { .. } => ("ListPluginLogs", Admin),
+        Request::ClearPluginLogs { .. } => ("ClearPluginLogs", Admin),
+        Request::GetPluginSettings { .. } => ("GetPluginSettings", Admin),
+        Request::UpdatePluginSettings { .. } => ("UpdatePluginSettings", Admin),
+        Request::PreviewPluginPlacements { .. } => ("PreviewPluginPlacements", Admin),
+        Request::RunPluginCommand { .. } => ("RunPluginCommand", Scope(S::Read)),
+        Request::RespondPluginDialog { .. } => ("RespondPluginDialog", Scope(S::Read)),
+        Request::PluginUiAction { .. } => ("PluginUiAction", Scope(S::Read)),
+        Request::GetPluginPanel { .. } => ("GetPluginPanel", Scope(S::Read)),
     };
     RequestAccess { name, access }
 }
@@ -463,6 +486,20 @@ mod tests {
             Request::RuleFromMessage {
                 message_id: "m1".into(),
             },
+            Request::ListPlugins,
+            Request::LoadDevPlugin {
+                folder: "C:/dev/x".into(),
+                grants: vec![],
+            },
+            Request::RunPluginCommand {
+                command: "plugin.x.y".into(),
+                surface: nail_api::plugins::PluginCommandSurface::Reader,
+                context: nail_api::UiContext::default(),
+                client_id: None,
+            },
+            Request::PreviewPluginPlacements {
+                plugin_id: "x".into(),
+            },
         ] {
             let wire = serde_json::to_value(&request).unwrap();
             assert_eq!(wire["type"], required_access(&request).name);
@@ -482,5 +519,51 @@ mod tests {
             .audited()
         );
         assert!(required_access(&Request::RegenerateRemoteCertificate).audited());
+    }
+}
+
+#[cfg(test)]
+mod plugin_tests {
+    use super::*;
+
+    #[test]
+    fn plugin_administration_is_admin_and_dev_loading_desktop_only() {
+        let id = || nail_api::PluginId::new("x");
+        for request in [
+            Request::EnablePlugin { plugin_id: id() },
+            Request::DisablePlugin { plugin_id: id() },
+            Request::UninstallPlugin { plugin_id: id() },
+            Request::UpdatePluginGrants {
+                plugin_id: id(),
+                grants: vec![],
+            },
+            Request::ListPluginLogs {
+                plugin_id: None,
+                after_seq: None,
+                limit: 10,
+            },
+            Request::GetPluginSettings { plugin_id: id() },
+        ] {
+            assert_eq!(
+                required_access(&request).access,
+                Access::Admin,
+                "{request:?}"
+            );
+        }
+        assert_eq!(
+            required_access(&Request::LoadDevPlugin {
+                folder: "C:/x".into(),
+                grants: vec![],
+            })
+            .access,
+            Access::DesktopOnly
+        );
+        let run = required_access(&Request::RespondPluginDialog {
+            dialog_id: "d1".into(),
+            button: None,
+            values: Default::default(),
+        });
+        assert_eq!(run.access, Access::Scope(McpScope::Read));
+        assert!(!run.audited(), "reads are not audited");
     }
 }

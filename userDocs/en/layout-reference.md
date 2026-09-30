@@ -187,10 +187,11 @@ A widget is a node named after its kind. Its properties are its options.
 | `status-bar` | `items`: any of `sync-progress`, `account-status`, `ops` (changes being saved), `send-status` (undo send), `folder-counts` |
 | `text` | `text`: literal text or `@message.id` |
 | `spacer` | — |
+| `plugin-panel` | the panel as argument: `plugin-panel "<plugin-id>.<panel>"` (or `panel="…"`); see [Plug-ins](plugins/README.md) |
 
 The widgets `calendar`, `agenda`, `mini-month`, `task-list`,
 `contact-list` and `contact-card` are accepted in the file but not
-available yet. Plug-in widgets are written `plugin.<plugin-id>.<name>`.
+available yet. Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`.
 
 ```kdl
 stack sizes="auto auto 1fr" {

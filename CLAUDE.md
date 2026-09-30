@@ -41,13 +41,19 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        settings, rule placement, vacation), triage (junk, snooze,
                        notifications), sync (folder sync policy, body state), menus
                        (context menus resolved from the layout) (ADR 0043)
+                       M2d: plugins (manifest + validation, permissions / grants, the
+                       declarative UI component set `PluginUiNode` + validate_tree, dialogs,
+                       notifications, command contexts, the plug-in mail view, admin types);
+                       export_plugin_typescript → packages/plugin-api/src/generated (ADR 0050)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
                        M2c: `sieve` node of an IMAP account, reset-toolbar / reset-key-binding
                        write-back, src/l10n.rs (fluent-bundle `Catalog` over every catalog, English
-                       fallback; every ConfigError / rule issue carries a LocalizedMessage) (ADRs 0043, 0046)
-crates/nail-store      SQLite metadata (v8), blob store, per-account operation queue with sync-side
+                       fallback; every ConfigError / rule issue carries a LocalizedMessage) (ADRs 0043, 0046);
+                       M2d: `plugin-panel "<plugin>.<panel>"` widget (widgets/plugins.rs), placements
+                       slot src/plugins.rs (ADR 0050)
+crates/nail-store      SQLite metadata (v9), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -63,7 +69,10 @@ crates/nail-store      SQLite metadata (v8), blob store, per-account operation q
                        detach bodies, fetch targets), lock.rs DataDirLock (ADR 0046);
                        v8: sieve_state.location / server_rules (SieveUpload), folder_marks
                        (the hidden Snoozed folder), wake_snoozed (records + queue in one
-                       transaction), orphaned_in_folder, bounded junk training (ADR 0049)
+                       transaction), orphaned_in_folder, bounded junk training (ADR 0049);
+                       v9: plugins.rs — installed plug-ins, grants, settings, per-plug-in KV storage
+                       with quotas (QuotaExceeded), bounded logs; storage values + log messages
+                       sealed at rest (ADR 0050)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
                        warnings) (ADR 0032); remote_content.rs: ProxyRewriter, parse_message_with
@@ -90,6 +99,8 @@ crates/nail-sieve      compiler (rules + vacation → one Sieve script, placemen
                        SieveAuth), upload / remove of the managed script (ADR 0044)
 crates/nail-triage     pure logic: tokenizer, junk classifier, snooze scheduler (timer wheel),
                        notification policy + batcher, local times; writes as TriageOp (ADR 0045)
+crates/nail-plugins   plug-in host (M2d WP61): QuickJS per plug-in (rquickjs), permission gate,
+                       `nail.*` preview API, .nailplugin (zip) packages, dev reload (ADR 0050)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -127,13 +138,16 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        batching → NotificationRequested), bodies.rs (on-demand fetch), headers-only
                        sync in sync.rs / ingest.rs, server search in search.rs, replay connection
                        in imap_engine.rs, clock.rs AdjustableClock (ServiceOptions::clock),
-                       paths::lock_data_dir, strings.rs over nail_config::l10n
+                       paths::lock_data_dir, strings.rs over nail_config::l10n;
+                       M2d: plugins.rs (store-backed plug-in administration; host requests
+                       answer `unsupported` until WP64) (ADR 0050)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
                        M2c: render tokens bound to the session (sandbox.rs), proxy_limit.rs (ADR 0048)
 crates/nail-cli        `nail` binary; messages.rs (localized stderr), headless `nail mcp`
-                       (`--config-dir`, `--no-start`, `--mcp-port`), serve holds the data-dir lock
+                       (`--config-dir`, `--no-start`, `--mcp-port`), serve holds the data-dir lock;
+                       plugin.rs: `nail plugin dev <folder>` (M2d WP61)
 app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the settings' port and
                        restarts it on change, and the remote-UI host; data-dir lock; OS notifications
                        for NotificationRequested; main window created in code; nail-proxy protocol;
@@ -142,14 +156,18 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
                        M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
                        triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
-                       (context menus, resolve.ts), customization/Editors.tsx); RemoteGate.tsx
+                       (context menus, resolve.ts), customization/Editors.tsx; M2d: plugins/);
+                       RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        theme/BootTheme.tsx (themed boot / login pages), src/a11y.test.tsx (axe in
                        Vitest); vite.config.ts splits vendor / catalogs chunks, TipTap / CodeMirror
                        load lazily
+packages/              npm workspaces (M2d): plugin-api (@nail/plugin-api; src/generated from
+                       nail-api), create-nail-plugin (starter template) (ADR 0050)
+examples/              example plug-ins (M2d)
 e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts)
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
-locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c)
+locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl M2d)
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
 ```
@@ -159,18 +177,18 @@ scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, test/
 Full details in `docs/dev-setup.md`; keep both in sync.
 
 ```
-npm ci                                     # npm workspaces: ui, e2e
+npm ci                                     # npm workspaces: ui, e2e, packages/*
 npm run build                              # ui/dist — required before any `cargo … --workspace` (Tauri embeds it)
 cargo test                                 # default members = all crates except app/src-tauri
 cargo test --workspace                     # incl. the Tauri shell (after npm run build)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
-npm test                                   # Vitest (ui), incl. the lint-rule self-test
+npm test                                   # Vitest (ui), incl. the lint-rule self-test; then packages/* `test`
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
 npm run build:desktop                      # nail-app (custom-protocol) for the desktop smoke test, own target dir
-npm run gen:api                            # regenerate ui/src/api/generated from nail-api (a test fails when stale)
+npm run gen:api                            # regenerate ui/src/api/generated + packages/plugin-api/src/generated (a test fails when stale)
 node --test "scripts/test/*.test.mjs"      # installer / release script tests
 cargo deny check                           # licences, bans (openssl, aws-lc), sources, advisories (deny.toml)
 node scripts/build-installer.mjs [--skip-ui]   # NSIS installer, portable zip, SBOMs → build dir (never the repo)
@@ -244,6 +262,14 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `nail-testkit-net/src/managesieve.rs`, `locales/*/core{,-sieve,-triage}.ftl`). The core serves
   the store-backed requests; `SyncSieve`, `PreviewSieveScript`, `MarkJunk`, `(Un)SnoozeMessages`
   answer `unsupported` until WP55. `nail-api/tests/catalog.rs` checks contract Fluent ids.
+- M2d contract: ADR 0050 (`nail_api::plugins`: manifest, permissions `mail.read`, `mail.read.body`,
+  `calendar.read` (placeholder), `ui.dialogs`, `notifications`, `storage`, `network:<host>`; component
+  trees; plug-in admin / runtime requests and events; plug-in-facing JSON is camelCase, protocol
+  snake_case; store v9; stub crate `nail-plugins` with rquickjs 0.14 + zip 8.6 (deflate via zlib-rs);
+  slots `nail-cli/src/plugin.rs`, `nail-config/src/{plugins.rs,widgets/plugins.rs}`,
+  `ui/src/features/plugins/`, `locales/*/{plugins,core-plugins}.ftl`, `packages/*`, `examples/`,
+  `userDocs/en/plugins/`). Remote sessions use plug-ins only with a grant for every account; plug-in
+  administration is `admin`, dev loading desktop only. Host requests answer `unsupported` until WP64.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

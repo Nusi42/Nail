@@ -51,6 +51,7 @@ mod layout;
 mod manager;
 mod merge;
 mod open;
+pub mod plugins;
 mod render;
 pub mod rules;
 mod schema;

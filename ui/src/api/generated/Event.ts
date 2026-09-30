@@ -12,6 +12,13 @@ import type { OAuthFlowId } from "./OAuthFlowId";
 import type { OpStatus } from "./OpStatus";
 import type { OutboxId } from "./OutboxId";
 import type { OutboxState } from "./OutboxState";
+import type { PluginDialog } from "./PluginDialog";
+import type { PluginDialogId } from "./PluginDialogId";
+import type { PluginId } from "./PluginId";
+import type { PluginLogEntry } from "./PluginLogEntry";
+import type { PluginNotification } from "./PluginNotification";
+import type { PluginStopReason } from "./PluginStopReason";
+import type { PluginUiNode } from "./PluginUiNode";
 import type { RemoteAlert } from "./RemoteAlert";
 import type { RemoteSessionId } from "./RemoteSessionId";
 import type { RemoteUiStatus } from "./RemoteUiStatus";
@@ -201,4 +208,48 @@ account_id: AccountId, } | { "type": "SnoozeChanged" } | { "type": "Notification
 /**
  * What to show.
  */
-notification: MailNotification, } | { "type": "McpSettingsChanged" };
+notification: MailNotification, } | { "type": "McpSettingsChanged" } | { "type": "PluginsChanged" } | { "type": "PluginDialogOpened", 
+/**
+ * The dialog.
+ */
+dialog: PluginDialog, } | { "type": "PluginDialogClosed", 
+/**
+ * The dialog.
+ */
+dialog_id: PluginDialogId, 
+/**
+ * Its plug-in.
+ */
+plugin_id: PluginId, } | { "type": "PluginNotification", 
+/**
+ * What to show.
+ */
+notification: PluginNotification, } | { "type": "PluginPanelChanged", 
+/**
+ * `<plugin>.<panel>`.
+ */
+panel: string, 
+/**
+ * The new content.
+ */
+tree: Array<PluginUiNode>, } | { "type": "PluginLogLine", 
+/**
+ * The line.
+ */
+entry: PluginLogEntry, } | { "type": "PluginStopped", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, 
+/**
+ * Why.
+ */
+reason: PluginStopReason, 
+/**
+ * Details (English, for logs).
+ */
+error: string | null, 
+/**
+ * The user-facing text (ADR 0043).
+ */
+localized?: LocalizedMessage, };

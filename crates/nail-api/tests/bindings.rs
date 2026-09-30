@@ -1,5 +1,6 @@
 //! Fails when the checked-in TypeScript bindings in `ui/src/api/generated/`
-//! differ from what the current Rust types generate.
+//! (the whole API) or `packages/plugin-api/src/generated/` (what plug-in
+//! code sees, M2d) differ from what the current Rust types generate.
 //!
 //! To regenerate: `npm run gen:api`, or
 //! `NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings`.
@@ -7,8 +8,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+type Export = fn(&Path) -> Result<Vec<String>, ts_rs::ExportError>;
+
 fn checked_in_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui/src/api/generated")
+}
+
+fn plugin_api_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/plugin-api/src/generated")
 }
 
 /// Reads every file below `dir` into `relative path -> contents` with line
@@ -43,22 +50,38 @@ fn read_tree(dir: &Path) -> BTreeMap<String, String> {
 
 #[test]
 fn typescript_bindings_are_up_to_date() {
+    check_up_to_date(
+        nail_api::export_typescript,
+        &checked_in_dir(),
+        "ui/src/api/generated",
+    );
+}
+
+#[test]
+fn plugin_api_bindings_are_up_to_date() {
+    check_up_to_date(
+        nail_api::export_plugin_typescript,
+        &plugin_api_dir(),
+        "packages/plugin-api/src/generated",
+    );
+}
+
+fn check_up_to_date(export: Export, target: &Path, name: &str) {
     let fresh_dir = tempfile::tempdir().unwrap();
-    let written = nail_api::export_typescript(fresh_dir.path()).unwrap();
+    let written = export(fresh_dir.path()).unwrap();
     let fresh = read_tree(fresh_dir.path());
     assert_eq!(written, fresh.keys().cloned().collect::<Vec<_>>());
 
-    let target = checked_in_dir();
     if std::env::var_os("NAIL_UPDATE_BINDINGS").is_some() {
         if target.exists() {
-            std::fs::remove_dir_all(&target).unwrap();
+            std::fs::remove_dir_all(target).unwrap();
         }
-        std::fs::create_dir_all(&target).unwrap();
-        nail_api::export_typescript(&target).unwrap();
+        std::fs::create_dir_all(target).unwrap();
+        export(target).unwrap();
         return;
     }
 
-    let current = read_tree(&target);
+    let current = read_tree(target);
     let missing: Vec<_> = fresh.keys().filter(|k| !current.contains_key(*k)).collect();
     let extra: Vec<_> = current.keys().filter(|k| !fresh.contains_key(*k)).collect();
     let changed: Vec<_> = fresh
@@ -68,7 +91,7 @@ fn typescript_bindings_are_up_to_date() {
         .collect();
     assert!(
         missing.is_empty() && extra.is_empty() && changed.is_empty(),
-        "TypeScript bindings in ui/src/api/generated are stale.\n\
+        "TypeScript bindings in {name} are stale.\n\
          missing: {missing:?}\nextra: {extra:?}\nchanged: {changed:?}\n\
          Regenerate with `npm run gen:api` \
          (or NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings)."
@@ -96,4 +119,29 @@ fn bindings_contain_the_protocol_roots() {
     assert!(request.contains("\"type\": \"ListAccounts\""), "{request}");
     let rpc = std::fs::read_to_string(dir.path().join("RpcRequest.ts")).unwrap();
     assert!(rpc.contains("id: number"), "u64 must map to number: {rpc}");
+}
+
+#[test]
+fn plugin_bindings_hold_the_plugin_surface_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let written = nail_api::export_plugin_typescript(dir.path()).unwrap();
+    for name in [
+        "PluginManifest.ts",
+        "PluginUiNode.ts",
+        "PluginDialogSpec.ts",
+        "PluginDialogResult.ts",
+        "PluginPermission.ts",
+        "PluginMessage.ts",
+        "index.ts",
+    ] {
+        assert!(written.iter().any(|f| f == name), "{name}: {written:?}");
+    }
+    for protocol in ["Request.ts", "Response.ts", "Event.ts", "PluginInfo.ts"] {
+        assert!(!written.iter().any(|f| f == protocol), "{protocol} leaked");
+    }
+    let permission = std::fs::read_to_string(dir.path().join("PluginPermission.ts")).unwrap();
+    assert!(permission.contains("`network:${string}`"), "{permission}");
+    let node = std::fs::read_to_string(dir.path().join("PluginUiNode.ts")).unwrap();
+    assert!(node.contains("\"type\": \"contact-picker\""), "{node}");
+    assert!(node.contains("maxLength?: number"), "{node}");
 }

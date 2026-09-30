@@ -1,7 +1,8 @@
 # Feature slots
 
 Parallel work packages each own one directory here, so no two packages edit
-the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036; M2c: ADR 0043):
+the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036; M2c: ADR 0043;
+M2d: ADR 0050):
 
 | Directory        | Work package | Owns                                                                          |
 | ---------------- | ------------ | ----------------------------------------------------------------------------- |
@@ -16,6 +17,7 @@ the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036; M2c: ADR 0043):
 | `triage/`        | M2c WP54     | junk marking and classifier, snooze, notification settings, Web Notifications |
 | `sync/`          | M2c WP54     | per-folder sync policy, bodies on demand                                      |
 | `menus/`         | M2c WP54     | right-click context menus from `layout.kdl` (`resolve.ts`)                    |
+| `plugins/`       | M2d WP62     | plug-in UI trees, dialogs, panels, commands, install dialog, plug-in manager  |
 
 ## Files of a slot
 

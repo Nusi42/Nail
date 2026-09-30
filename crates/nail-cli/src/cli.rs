@@ -25,6 +25,12 @@ pub enum Command {
     /// 127.0.0.1); starts Nail headless when it is not running. The
     /// client's token is read from $NAIL_MCP_TOKEN.
     Mcp(McpArgs),
+    /// Plug-in tools (M2d).
+    Plugin {
+        /// The plug-in tool.
+        #[command(subcommand)]
+        command: crate::plugin::PluginCommand,
+    },
     /// Configuration tools.
     Config {
         /// The config tool.

@@ -41,6 +41,7 @@ mod notify;
 mod oauth;
 mod outbox;
 pub mod paths;
+mod plugins;
 mod pop3_engine;
 mod remote;
 mod remote_access;

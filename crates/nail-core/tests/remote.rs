@@ -1386,3 +1386,92 @@ async fn the_remote_audit_log_follows_its_retention_setting() {
         Response::Error { .. }
     ));
 }
+
+/// M2d (ADR 0050): plug-ins read mail with their own grants, so remote
+/// sessions need a grant for every account to see or use them, and
+/// administration needs `admin`.
+#[tokio::test]
+async fn plugins_need_full_grants_remotely() {
+    use nail_api::plugins::{PluginCommandSurface, PluginManifest, PluginPackageSource};
+    let f = setup();
+    let manifest = PluginManifest::parse(
+        br#"{"id": "x", "name": "X", "version": "1.0.0", "apiVersion": "1", "main": "i.js"}"#,
+    )
+    .unwrap();
+    f.service
+        .store()
+        .install_plugin(&nail_store::PluginInstall {
+            manifest: &manifest,
+            source: &PluginPackageSource::Dev {
+                folder: "C:/dev/x".into(),
+            },
+            package_sha256: None,
+            grants: &[],
+            enabled: true,
+        })
+        .unwrap();
+    let service = &f.service;
+    let run = || Request::RunPluginCommand {
+        command: "plugin.x.y".into(),
+        surface: PluginCommandSurface::List,
+        context: UiContext::default(),
+        client_id: None,
+    };
+
+    let mut narrow = RemoteAccessPreset::ReadOnly.grant();
+    narrow.mail.all_accounts = false;
+    narrow.mail.accounts = vec![AccountId::new(DEMO_ACCOUNT_ID)];
+    let narrow = remote_session(&f, "narrow", narrow).await;
+    assert_eq!(
+        service.handle_remote(&narrow, Request::ListPlugins).await,
+        Response::Plugins { plugins: vec![] }
+    );
+    for request in [
+        Request::GetPlugin {
+            plugin_id: "x".into(),
+        },
+        run(),
+    ] {
+        let response = service.handle_remote(&narrow, request).await;
+        assert_eq!(
+            error_code(&response),
+            Some(ErrorCode::Forbidden),
+            "{response:?}"
+        );
+    }
+
+    let full = remote_session(&f, "full", RemoteAccessPreset::ReadOnly.grant()).await;
+    match service.handle_remote(&full, Request::ListPlugins).await {
+        Response::Plugins { plugins } => assert_eq!(plugins.len(), 1),
+        other => panic!("{other:?}"),
+    }
+    // Allowed through; the host answers once it is wired in (WP64).
+    assert_eq!(
+        error_code(&service.handle_remote(&full, run()).await),
+        Some(ErrorCode::Unsupported)
+    );
+    for request in [
+        Request::EnablePlugin {
+            plugin_id: "x".into(),
+        },
+        Request::LoadDevPlugin {
+            folder: "C:/dev/x".into(),
+            grants: vec![],
+        },
+        Request::InstallPlugin {
+            source: PluginPackageSource::File {
+                path: "C:/x.nailplugin".into(),
+            },
+            package_sha256: "a".repeat(64),
+            grants: vec![],
+            enable: true,
+        },
+    ] {
+        let response = service.handle_remote(&full, request).await;
+        assert_eq!(
+            error_code(&response),
+            Some(ErrorCode::Forbidden),
+            "{response:?}"
+        );
+    }
+}

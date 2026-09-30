@@ -40,6 +40,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/composer.ftl"),
     ),
     (
+        "core-plugins.ftl",
+        include_str!("../../../locales/en/core-plugins.ftl"),
+    ),
+    (
         "core-sieve.ftl",
         include_str!("../../../locales/en/core-sieve.ftl"),
     ),
@@ -54,6 +58,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ),
     ("mcp.ftl", include_str!("../../../locales/en/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/en/menus.ftl")),
+    (
+        "plugins.ftl",
+        include_str!("../../../locales/en/plugins.ftl"),
+    ),
     ("remote.ftl", include_str!("../../../locales/en/remote.ftl")),
     ("rules.ftl", include_str!("../../../locales/en/rules.ftl")),
     (
@@ -81,6 +89,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/composer.ftl"),
     ),
     (
+        "core-plugins.ftl",
+        include_str!("../../../locales/de/core-plugins.ftl"),
+    ),
+    (
         "core-sieve.ftl",
         include_str!("../../../locales/de/core-sieve.ftl"),
     ),
@@ -95,6 +107,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ),
     ("mcp.ftl", include_str!("../../../locales/de/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/de/menus.ftl")),
+    (
+        "plugins.ftl",
+        include_str!("../../../locales/de/plugins.ftl"),
+    ),
     ("remote.ftl", include_str!("../../../locales/de/remote.ftl")),
     ("rules.ftl", include_str!("../../../locales/de/rules.ftl")),
     (

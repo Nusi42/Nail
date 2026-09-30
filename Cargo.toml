@@ -23,6 +23,7 @@ members = [
     "crates/nail-proxy",
     "crates/nail-sieve",
     "crates/nail-triage",
+    "crates/nail-plugins",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -54,6 +55,7 @@ default-members = [
     "crates/nail-proxy",
     "crates/nail-sieve",
     "crates/nail-triage",
+    "crates/nail-plugins",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -91,6 +93,7 @@ nail-remote-auth = { path = "crates/nail-remote-auth" }
 nail-proxy = { path = "crates/nail-proxy" }
 nail-sieve = { path = "crates/nail-sieve" }
 nail-triage = { path = "crates/nail-triage" }
+nail-plugins = { path = "crates/nail-plugins" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -216,6 +219,18 @@ fluent-bundle = "0.16.0"
 unic-langid = "0.9.6"
 # Desktop OS notifications (the shell shows `NotificationRequested`, WP55).
 tauri-plugin-notification = "2.5.0"
+
+# M2d (ADR 0050). Plug-in host (nail-plugins, WP61). Licences: MIT only.
+# QuickJS through rquickjs: the QuickJS-NG C sources are compiled by `cc`
+# (MSVC works; no bindgen / libclang: pre-generated bindings are used).
+# `futures`: async host functions (the Client API is async); `loader`: ES
+# module loading of the bundled entry; `macro` / `classes` / `properties`:
+# binding the `nail.*` API. Memory limits and interrupt handlers are core
+# features.
+rquickjs = { version = "0.14.0", features = ["futures", "loader", "macro", "classes", "properties"] }
+# `.nailplugin` archives (zip): deflate through zlib-rs (pure Rust, Zlib
+# licence); no bzip2 / zstd / lzma C code, no AES.
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

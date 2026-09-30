@@ -1051,6 +1051,25 @@ impl Service {
             request @ Request::RuleFromMessage { .. } => {
                 crate::rules::handle(self, request).await?
             }
+            // M2d plug-ins (ADR 0050): one arm, the host is wired by WP64.
+            request @ (Request::ListPlugins
+            | Request::GetPlugin { .. }
+            | Request::PreviewPluginInstall { .. }
+            | Request::InstallPlugin { .. }
+            | Request::LoadDevPlugin { .. }
+            | Request::EnablePlugin { .. }
+            | Request::DisablePlugin { .. }
+            | Request::UninstallPlugin { .. }
+            | Request::UpdatePluginGrants { .. }
+            | Request::ListPluginLogs { .. }
+            | Request::ClearPluginLogs { .. }
+            | Request::GetPluginSettings { .. }
+            | Request::UpdatePluginSettings { .. }
+            | Request::PreviewPluginPlacements { .. }
+            | Request::RunPluginCommand { .. }
+            | Request::RespondPluginDialog { .. }
+            | Request::PluginUiAction { .. }
+            | Request::GetPluginPanel { .. }) => crate::plugins::handle(self, request).await?,
         })
     }
 }

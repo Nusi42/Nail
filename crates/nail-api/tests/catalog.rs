@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 use nail_api::ErrorCode;
 use nail_api::mcp::McpSettingsIssue;
+use nail_api::plugins::{
+    PluginManifestIssueKind, PluginPermission, PluginStopReason, PluginUiIssueKind,
+};
 use nail_api::sieve::{ManageSieveIssue, VacationIssue};
 use nail_api::triage::{JunkIssue, NotificationIssue};
 
@@ -60,6 +63,24 @@ fn contract_message_ids_exist_in_english() {
             .iter()
             .map(|i| i.message_id().to_owned()),
     );
+    // M2d (ADR 0050): plug-in manifests, UI trees, stops, permissions.
+    wanted.extend(
+        PluginManifestIssueKind::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(
+        PluginUiIssueKind::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(
+        PluginStopReason::ALL
+            .iter()
+            .map(|r| r.message_id().to_owned()),
+    );
+    wanted.extend(PluginPermission::label_ids().into_iter().map(str::to_owned));
+    wanted.push("plugin-settings-invalid".to_owned());
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -81,7 +102,13 @@ fn contract_message_ids_exist_in_english() {
 #[test]
 fn german_catalogs_are_the_same_files() {
     assert_eq!(files("de"), files("en"));
-    for file in ["core.ftl", "core-sieve.ftl", "core-triage.ftl"] {
+    for file in [
+        "core.ftl",
+        "core-sieve.ftl",
+        "core-triage.ftl",
+        "core-plugins.ftl",
+        "plugins.ftl",
+    ] {
         assert!(files("en").contains(file), "{file}");
     }
 }

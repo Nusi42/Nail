@@ -5,6 +5,8 @@
 //! * `nail mcp --client <name>` bridges a stdio MCP client to Nail's MCP
 //!   server (see `nail-mcp`), starting the core headless when Nail is not
 //!   running (M2c).
+//! * `nail plugin dev <folder>` loads an unpacked plug-in with hot reload
+//!   and shows its log (M2d; WP61).
 //! * `nail config schema` prints the JSON Schema of `theme.kdl` / `layout.kdl`.
 //!
 //! `serve` and a headless `mcp` hold the data directory's single-instance
@@ -17,6 +19,7 @@
 mod cli;
 mod mcp;
 mod messages;
+mod plugin;
 mod serve;
 
 use std::io::Write;
@@ -54,6 +57,13 @@ fn run(cli: Cli) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             runtime.block_on(mcp::run(args))
+        }
+        Command::Plugin { command } => {
+            init_tracing(0);
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            runtime.block_on(plugin::run(command))
         }
         Command::Config {
             command: ConfigCommand::Schema { kind },

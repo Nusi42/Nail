@@ -10,7 +10,7 @@ is the primary platform. User-facing documentation lives in
 | --- | --- | --- |
 | Rust | 1.97, `x86_64-pc-windows-msvc` | `rustup component add rustfmt clippy` |
 | Visual Studio Build Tools | 2022, "Desktop development with C++" | MSVC linker; SQLite and zstd are compiled from source |
-| Node.js / npm | 26 / 11 | npm workspaces (`ui`, `e2e`); **not** pnpm (ADR 0001) |
+| Node.js / npm | 26 / 11 | npm workspaces (`ui`, `e2e`, `packages/*`); **not** pnpm (ADR 0001) |
 | WebView2 runtime | evergreen | Preinstalled on Windows 11; needed by the desktop app only |
 | Playwright Chromium | matches `@playwright/test` | `npx -w e2e playwright install chromium`, once per machine |
 
@@ -37,7 +37,7 @@ exception is `ui/dist` (gitignored, about 1 MB), see ADR 0011.
 ## Install and build
 
 ```sh
-npm ci                       # JS dependencies for ui/ and e2e/
+npm ci                       # JS dependencies for ui/, e2e/ and packages/*
 npm run build                # ui/dist (the Tauri shell embeds it; nail serve serves it)
 cargo build                  # all crates except the desktop shell
 cargo build -p nail-app      # the desktop shell (needs ui/dist)
@@ -53,7 +53,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Rust unit and integration tests | `cargo test --workspace` |
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust formatting | `cargo fmt --all --check` |
-| UI unit tests (Vitest), incl. the lint-rule self-test | `npm test` |
+| UI unit tests (Vitest), incl. the lint-rule self-test, then the `test` scripts of `packages/*` | `npm test` |
 | ESLint, TypeScript, Prettier (ui and e2e) | `npm run lint` |
 | Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
 | Playwright only (already built) | `npm run e2e:only` |
@@ -175,6 +175,7 @@ regenerate it with the matching command:
 | File(s) | Regenerate with |
 | --- | --- |
 | `ui/src/api/generated/` (TypeScript types from `nail-api`) | `npm run gen:api` |
+| `packages/plugin-api/src/generated/` (plug-in-facing TypeScript types from `nail-api`, M2d) | `npm run gen:api` |
 | `crates/nail-config/schema/*.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema` |
 | `crates/nail-mime/tests/snapshots/` (insta) | `INSTA_UPDATE=always cargo test -p nail-mime --test corpus`, or `cargo insta review` |
 | `crates/nail-api/fixtures/default-{theme,layout}.json` (after changing `defaults/*.kdl`) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults`, then `npx prettier --write crates/nail-api/fixtures` |

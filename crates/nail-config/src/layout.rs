@@ -524,10 +524,23 @@ impl LayoutReader<'_, '_> {
                     .arg("widgets", widgets::kinds().collect::<Vec<_>>().join(", ")),
             ));
         }
-        check_max_args(src, node, 0)?;
+        // `plugin-panel "<plugin>.<panel>"` takes its panel as an argument
+        // (stored as the `panel` option; M2d, ADR 0050).
+        let is_panel = kind == nail_api::plugins::PLUGIN_PANEL_WIDGET;
+        check_max_args(src, node, usize::from(is_panel))?;
         let (id, label) = self.id_label(node)?;
 
         let mut options = Map::new();
+        if is_panel && !args(node).is_empty() {
+            let (panel, entry) = arg_str(src, node, 0)?;
+            if nail_api::plugins::parse_plugin_panel_id(panel).is_none() {
+                return Err(src.entry_err(
+                    entry,
+                    msg("config-plugin-panel-invalid").arg("panel", panel),
+                ));
+            }
+            options.insert("panel".to_owned(), Value::from(panel));
+        }
         for (key, entry) in k::props(node) {
             if key == "id" || key == "label" {
                 continue;
@@ -550,6 +563,17 @@ impl LayoutReader<'_, '_> {
                     ));
                 };
                 check_option(src, entry, key, *ty)?;
+            }
+            if is_panel && key == "panel" {
+                let panel = entry.value().as_string().unwrap_or_default();
+                if options.contains_key("panel")
+                    || nail_api::plugins::parse_plugin_panel_id(panel).is_none()
+                {
+                    return Err(src.entry_err(
+                        entry,
+                        msg("config-plugin-panel-invalid").arg("panel", panel),
+                    ));
+                }
             }
             options.insert(key.to_owned(), to_json(src, entry)?);
         }

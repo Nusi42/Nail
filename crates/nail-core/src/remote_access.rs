@@ -432,6 +432,37 @@ impl Service {
             Request::RuleFromMessage { message_id } => {
                 self.check_readable(access, message_id).await
             }
+
+            // M2d plug-ins: a plug-in reads mail with its own grants, so
+            // using one needs a grant for every account; the list is
+            // narrowed to nothing instead. Packages and folders on the
+            // desktop's disk are never read for a remote session.
+            Request::ListPlugins
+            | Request::EnablePlugin { .. }
+            | Request::DisablePlugin { .. }
+            | Request::UninstallPlugin { .. }
+            | Request::UpdatePluginGrants { .. }
+            | Request::ListPluginLogs { .. }
+            | Request::ClearPluginLogs { .. }
+            | Request::GetPluginSettings { .. }
+            | Request::UpdatePluginSettings { .. }
+            | Request::PreviewPluginPlacements { .. } => Ok(()),
+            Request::GetPlugin { .. }
+            | Request::RunPluginCommand { .. }
+            | Request::RespondPluginDialog { .. }
+            | Request::PluginUiAction { .. }
+            | Request::GetPluginPanel { .. } => check_full(access),
+            Request::PreviewPluginInstall { source } | Request::InstallPlugin { source, .. } => {
+                match source {
+                    nail_api::plugins::PluginPackageSource::Url { .. } => Ok(()),
+                    _ => Err(
+                        forbidden("remote sessions install plug-ins from URLs only".into()).into(),
+                    ),
+                }
+            }
+            Request::LoadDevPlugin { .. } => {
+                Err(forbidden("dev plug-ins are loaded on the desktop only".into()).into())
+            }
         }
     }
 
@@ -903,6 +934,8 @@ impl Service {
             Response::UiContext { context } => Response::UiContext {
                 context: self.narrow_ui_context(access, context).await?,
             },
+            // Plug-ins need a grant for every account (M2d).
+            Response::Plugins { .. } if !full(access) => Response::Plugins { plugins: vec![] },
             other => other,
         })
     }
@@ -1051,6 +1084,14 @@ impl Service {
                 account_ok && folder_ok && (account_named || full(&access))
             }
             Event::McpSettingsChanged => admin,
+            // M2d: plug-ins read with their own grants: full grants only;
+            // logs and crashes are administration.
+            Event::PluginsChanged
+            | Event::PluginDialogOpened { .. }
+            | Event::PluginDialogClosed { .. }
+            | Event::PluginNotification { .. }
+            | Event::PluginPanelChanged { .. } => full(&access),
+            Event::PluginLogLine { .. } | Event::PluginStopped { .. } => admin,
         };
         allowed.then_some(event)
     }

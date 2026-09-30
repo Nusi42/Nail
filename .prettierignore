@@ -1,5 +1,6 @@
 # Generated or foreign content
 ui/src/api/generated/
+packages/plugin-api/src/generated/
 ui/dist/
 node_modules/
 coverage/

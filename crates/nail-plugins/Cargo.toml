@@ -1,0 +1,36 @@
+[package]
+name = "nail-plugins"
+description = "Nail's plug-in host: one sandboxed QuickJS runtime per plug-in, the permission gate, the preview API bindings and .nailplugin packages"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+# One QuickJS runtime per plug-in (memory limit, interrupt handler for the
+# CPU budget; no std / os modules are ever loaded).
+rquickjs.workspace = true
+# `.nailplugin` archives.
+zip.workspace = true
+# Package hashes (SHA-256, hex).
+sha2.workspace = true
+hex.workspace = true
+# `nail.http.fetch` URL checks against `network:` permissions.
+url.workspace = true
+# Hot reload of dev plug-ins (`nail plugin dev`).
+notify-debouncer-mini.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

@@ -31,6 +31,12 @@ import type { OpId } from "./OpId";
 import type { OutboxId } from "./OutboxId";
 import type { PairingId } from "./PairingId";
 import type { PasskeyId } from "./PasskeyId";
+import type { PluginCommandSurface } from "./PluginCommandSurface";
+import type { PluginDialogId } from "./PluginDialogId";
+import type { PluginGrant } from "./PluginGrant";
+import type { PluginId } from "./PluginId";
+import type { PluginPackageSource } from "./PluginPackageSource";
+import type { PluginUiTarget } from "./PluginUiTarget";
 import type { RemoteContentScope } from "./RemoteContentScope";
 import type { RemoteDeviceId } from "./RemoteDeviceId";
 import type { RemoteGrant } from "./RemoteGrant";
@@ -55,6 +61,7 @@ import type { UiContext } from "./UiContext";
 import type { VacationSettings } from "./VacationSettings";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
 import type { WindowsCertStore } from "./WindowsCertStore";
+import type { JsonValue } from "./serde_json/JsonValue";
 
 /**
  * A request from a client to the core.
@@ -882,4 +889,145 @@ settings: McpSettings, } | { "type": "RuleFromMessage",
 /**
  * The message.
  */
-message_id: MessageId, };
+message_id: MessageId, } | { "type": "ListPlugins" } | { "type": "GetPlugin", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "PreviewPluginInstall", 
+/**
+ * The package.
+ */
+source: PluginPackageSource, } | { "type": "InstallPlugin", 
+/**
+ * The package.
+ */
+source: PluginPackageSource, 
+/**
+ * SHA-256 (hex) from [`Request::PreviewPluginInstall`].
+ */
+package_sha256: string, 
+/**
+ * The granted permissions.
+ */
+grants: Array<PluginGrant>, 
+/**
+ * Whether to enable (start) it right away.
+ */
+enable: boolean, } | { "type": "LoadDevPlugin", 
+/**
+ * Absolute path of the folder holding `manifest.json`.
+ */
+folder: string, 
+/**
+ * The granted permissions (the CLI grants what the manifest
+ * declares).
+ */
+grants: Array<PluginGrant>, } | { "type": "EnablePlugin", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "DisablePlugin", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "UninstallPlugin", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "UpdatePluginGrants", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, 
+/**
+ * The complete new grants.
+ */
+grants: Array<PluginGrant>, } | { "type": "ListPluginLogs", 
+/**
+ * One plug-in; `null` = all.
+ */
+plugin_id: PluginId | null, 
+/**
+ * Only lines after this sequence number (for tailing).
+ */
+after_seq: number | null, 
+/**
+ * At most this many lines (the newest ones).
+ */
+limit: number, } | { "type": "ClearPluginLogs", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "GetPluginSettings", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "UpdatePluginSettings", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, 
+/**
+ * Setting key → value.
+ */
+values: { [key in string]: JsonValue }, } | { "type": "PreviewPluginPlacements", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, } | { "type": "RunPluginCommand", 
+/**
+ * The action id.
+ */
+command: string, 
+/**
+ * Where it was invoked.
+ */
+surface: PluginCommandSurface, 
+/**
+ * The UI's context (selection, open message, folder, draft).
+ */
+context: UiContext, 
+/**
+ * The UI's random id (see [`crate::plugins::runtime`]).
+ */
+client_id: string | null, } | { "type": "RespondPluginDialog", 
+/**
+ * The dialog.
+ */
+dialog_id: PluginDialogId, 
+/**
+ * The button id; `null` = dismissed.
+ */
+button: string | null, 
+/**
+ * Values of the input nodes by id.
+ */
+values: { [key in string]: JsonValue }, } | { "type": "PluginUiAction", 
+/**
+ * Where.
+ */
+target: PluginUiTarget, 
+/**
+ * The button's id.
+ */
+component_id: string, 
+/**
+ * Current values of the input nodes of that dialog or panel.
+ */
+values: { [key in string]: JsonValue }, 
+/**
+ * The UI's random id.
+ */
+client_id: string | null, } | { "type": "GetPluginPanel", 
+/**
+ * `<plugin>.<panel>`.
+ */
+panel: string, 
+/**
+ * The UI's context.
+ */
+context: UiContext, 
+/**
+ * The UI's random id.
+ */
+client_id: string | null, };

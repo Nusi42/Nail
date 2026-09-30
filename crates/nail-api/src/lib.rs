@@ -32,6 +32,11 @@
 //!   classifier, snooze, notification settings and requests), [`sync`]
 //!   (per-folder sync policy, on-demand bodies), [`menus`] (context menus
 //!   resolved from the layout).
+//! * M2d (ADR 0050): [`plugins`] — the plug-in preview: `manifest.json`,
+//!   permissions and grants, the declarative UI component set, dialogs,
+//!   notifications, the read-only mail view, installed plug-ins, logs and
+//!   settings. Its plug-in-facing types are also exported for the SDK
+//!   (`@nail/plugin-api`) by [`export_plugin_typescript`].
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -61,6 +66,7 @@ pub mod localized;
 pub mod mcp;
 pub mod menus;
 pub mod ops;
+pub mod plugins;
 pub mod protocol;
 pub mod remote;
 pub mod remote_content;
@@ -99,14 +105,15 @@ pub use domain::{
 pub use error::{ApiError, ErrorCode};
 pub use ids::{
     AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, RemoteDeviceId, RemoteSessionId,
-    RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PluginDialogId, PluginId, RemoteDeviceId,
+    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
 };
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
 pub use mcp::{McpClient, McpGrant, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
+pub use plugins::{PluginGrant, PluginInfo, PluginManifest, PluginPermission, PluginUiNode};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
 };
@@ -185,7 +192,45 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     ManageSieveConfig::export_all(&cfg)?;
     JunkVerdict::export_all(&cfg)?;
     LocalizedMessage::export_all(&cfg)?;
+    // M2d: plug-in types the UI names but that are reachable only through
+    // other types (or not at all).
+    plugins::PluginManifestIssueKind::export_all(&cfg)?;
+    plugins::PluginUiIssue::export_all(&cfg)?;
+    plugins::PluginDialogResult::export_all(&cfg)?;
+    plugins::PluginCommandContext::export_all(&cfg)?;
 
+    write_index(out_dir)
+}
+
+/// Writes the TypeScript definitions that plug-in code sees into
+/// `out_dir` (`packages/plugin-api/src/generated/`): the manifest, the
+/// component trees, dialogs and their results, notifications, command
+/// contexts, the mail view, permissions and log levels, with everything
+/// they reference, plus an `index.ts`. Same format as
+/// [`export_typescript`].
+pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
+    use ts_rs::TS;
+
+    let cfg = ts_rs::Config::new()
+        .with_out_dir(out_dir)
+        .with_large_int("number");
+    PluginManifest::export_all(&cfg)?;
+    plugins::PluginManifestIssue::export_all(&cfg)?;
+    PluginUiNode::export_all(&cfg)?;
+    plugins::PluginDialogSpec::export_all(&cfg)?;
+    plugins::PluginDialogResult::export_all(&cfg)?;
+    plugins::PluginNotificationSpec::export_all(&cfg)?;
+    plugins::PluginCommandContext::export_all(&cfg)?;
+    plugins::PluginMessage::export_all(&cfg)?;
+    plugins::PluginMessageBody::export_all(&cfg)?;
+    PluginPermission::export_all(&cfg)?;
+    plugins::PluginLogLevel::export_all(&cfg)?;
+    write_index(out_dir)
+}
+
+/// Writes `index.ts` re-exporting every generated file below `out_dir`;
+/// returns all written paths (relative, sorted, `/` separators).
+fn write_index(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportError> {
     let mut files = Vec::new();
     collect_ts_files(out_dir, out_dir, &mut files)?;
     files.retain(|f| f != TS_INDEX_FILE);

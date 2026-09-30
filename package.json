@@ -10,12 +10,13 @@
   },
   "workspaces": [
     "ui",
-    "e2e"
+    "e2e",
+    "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev -w ui",
     "build": "npm run build -w ui",
-    "test": "npm run test -w ui",
+    "test": "npm run test -w ui && npm run test -w packages --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

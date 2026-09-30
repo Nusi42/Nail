@@ -40,6 +40,12 @@ import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { OutboxId } from "./OutboxId";
 import type { PairingCode } from "./PairingCode";
+import type { PluginId } from "./PluginId";
+import type { PluginInfo } from "./PluginInfo";
+import type { PluginInstallPreview } from "./PluginInstallPreview";
+import type { PluginLogEntry } from "./PluginLogEntry";
+import type { PluginSettingDef } from "./PluginSettingDef";
+import type { PluginUiNode } from "./PluginUiNode";
 import type { RecipientKeysReport } from "./RecipientKeysReport";
 import type { RemoteAuditEntry } from "./RemoteAuditEntry";
 import type { RemoteContentAllow } from "./RemoteContentAllow";
@@ -68,6 +74,7 @@ import type { VacationSettings } from "./VacationSettings";
 import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
 import type { WindowsCertificate } from "./WindowsCertificate";
+import type { JsonValue } from "./serde_json/JsonValue";
 
 /**
  * The core's answer to one [`Request`].
@@ -586,7 +593,55 @@ info: McpServerInfo, } | { "type": "RuleSuggested",
 /**
  * The unsaved rule (empty id).
  */
-rule: Rule, } | { "type": "Error", 
+rule: Rule, } | { "type": "Plugins", 
+/**
+ * Installed plug-ins, by name.
+ */
+plugins: Array<PluginInfo>, } | { "type": "Plugin", 
+/**
+ * The plug-in.
+ */
+plugin: PluginInfo, } | { "type": "PluginInstallPreview", 
+/**
+ * What installing would do.
+ */
+preview: PluginInstallPreview, } | { "type": "PluginLogs", 
+/**
+ * Log lines, oldest first.
+ */
+entries: Array<PluginLogEntry>, } | { "type": "PluginSettings", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, 
+/**
+ * The schema (titles resolved).
+ */
+schema: Array<PluginSettingDef>, 
+/**
+ * Every setting's value (defaults filled in).
+ */
+values: { [key in string]: JsonValue }, } | { "type": "PluginPlacements", 
+/**
+ * The plug-in.
+ */
+plugin_id: PluginId, 
+/**
+ * The user's `layout.kdl` with the placements added.
+ */
+incoming: string, 
+/**
+ * The comparison for the merge dialog.
+ */
+preview: ConfigMergePreview, } | { "type": "PluginPanel", 
+/**
+ * `<plugin>.<panel>`.
+ */
+panel: string, 
+/**
+ * Its content (empty while the plug-in has not rendered it).
+ */
+tree: Array<PluginUiNode>, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

@@ -52,6 +52,11 @@
 //!   [`Store::body_fetch_targets`], [`Store::bodies_before`]); the
 //!   single-instance lock of a data directory ([`DataDirLock`]); the MCP
 //!   settings ([`Store::mcp_settings`]).
+//! * M2d (schema v9, ADR 0050): installed plug-ins ([`PluginRecord`],
+//!   [`Store::install_plugin`]), their grants, settings, key-value storage
+//!   with quotas ([`Store::plugin_storage_set`]) and bounded logs
+//!   ([`Store::append_plugin_log`]); storage values and log messages are
+//!   sealed at rest.
 //!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
@@ -66,6 +71,7 @@ mod filter;
 pub mod lock;
 mod mail;
 mod mcp;
+mod plugins;
 mod pop3;
 mod queue;
 mod remote;
@@ -94,6 +100,9 @@ pub use mail::{
     SyncedMessage,
 };
 pub use mcp::{McpAuditRecord, hash_mcp_token};
+pub use plugins::{
+    PluginInstall, PluginLogLine, PluginRecord, check_grants as check_plugin_grants,
+};
 pub use pop3::{Pop3State, Pop3Uid};
 pub use queue::{
     Enqueued, FlagChange, MessageSource, OpId, OpState, Operation, QueuedOp, ReplayOutcome,

@@ -58,6 +58,14 @@ pub enum Error {
     /// failed.
     #[error("crypto: {0}")]
     Crypto(String),
+    /// A plug-in's storage write would exceed its quota (M2d).
+    #[error("plug-in storage quota exceeded: {used} of {quota} bytes")]
+    QuotaExceeded {
+        /// Bytes the write would use.
+        used: u64,
+        /// The quota.
+        quota: u64,
+    },
     /// A blocking store task panicked or was cancelled.
     #[error("store task failed: {0}")]
     Task(#[from] tokio::task::JoinError),
@@ -92,6 +100,7 @@ impl From<Error> for ApiError {
             Error::Conflict(_) => ErrorCode::Conflict,
             Error::Locked(_) => ErrorCode::Locked,
             Error::Crypto(_) => ErrorCode::Crypto,
+            Error::QuotaExceeded { .. } => ErrorCode::TooLarge,
             _ => ErrorCode::Internal,
         };
         ApiError::new(code, err.to_string())

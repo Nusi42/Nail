@@ -145,6 +145,18 @@ string_id!(
     /// code itself, which is shown once and stored only as a hash.
     PairingId
 );
+string_id!(
+    /// Identifies an installed plug-in: the `id` of its manifest
+    /// (`follow-up`, M2d). Unlike the other ids it is chosen by the
+    /// plug-in's author, not by the core; its form is checked by
+    /// [`crate::plugins::is_plugin_id`].
+    PluginId
+);
+string_id!(
+    /// Identifies an open plug-in dialog ([`crate::plugins::PluginDialog`],
+    /// M2d). Opaque, made by the core.
+    PluginDialogId
+);
 
 impl AccountId {
     /// Id of the built-in "All accounts" virtual account (the unified

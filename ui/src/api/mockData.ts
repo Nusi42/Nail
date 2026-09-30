@@ -35,6 +35,7 @@ import {
   type CustomizationMockState,
 } from "../features/customization/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
+import { createPluginsMockState, type PluginsMockState } from "../features/plugins/mock";
 import { createRemoteMockState, type RemoteMockState } from "../features/remote/mock";
 import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
 import { createSecurityMockState, type SecurityMockState } from "../features/security/mock";
@@ -85,6 +86,7 @@ export interface MockFeatures {
   remote: RemoteMockState;
   sieve: SieveMockState;
   triage: TriageMockState;
+  plugins: PluginsMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -456,6 +458,7 @@ export function createMockData(inboxSize = 250): MockData {
       remote: createRemoteMockState(),
       sieve: createSieveMockState(),
       triage: createTriageMockState(),
+      plugins: createPluginsMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

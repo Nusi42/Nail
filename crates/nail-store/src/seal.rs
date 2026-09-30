@@ -232,6 +232,17 @@ pub const SEALED_COLUMNS: &[SealedColumn] = &[
         column: "payload",
         key: "id",
     },
+    // Plug-in storage values (JSON) and log messages (M2d, ADR 0050).
+    SealedColumn {
+        table: "plugin_storage",
+        column: "value",
+        key: "id",
+    },
+    SealedColumn {
+        table: "plugin_logs",
+        column: "message",
+        key: "seq",
+    },
 ];
 
 /// Progress of the sealed columns: how many values are sealed and how many

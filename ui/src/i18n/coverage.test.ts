@@ -25,6 +25,7 @@ import * as rulesMessages from "../features/rules/messages";
 import * as remoteMessages from "../features/remote/messages";
 import * as securityMessages from "../features/security/messages";
 import * as menusMessages from "../features/menus/messages";
+import * as pluginsMessages from "../features/plugins/messages";
 import * as sieveMessages from "../features/sieve/messages";
 import * as syncMessages from "../features/sync/messages";
 import * as triageMessages from "../features/triage/messages";
@@ -42,6 +43,7 @@ const FEATURE_MESSAGES = [
   triageMessages,
   syncMessages,
   menusMessages,
+  pluginsMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");
