@@ -22,7 +22,7 @@ layout "custom" extends="default" {
                         row "{subject}"
                         row "{preview}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
                         // Signature / encryption and sender check badges, then
@@ -31,6 +31,10 @@ layout "custom" extends="default" {
                         security-warnings id="message-warnings"
                         // Remote images stay blocked until you allow them.
                         remote-content id="message-remote-content"
+                        // Junk verdict with "Not junk"; a body that is not
+                        // stored yet with "Download full message".
+                        junk-verdict id="message-junk"
+                        sync-message-body id="message-body-status"
                         message-view id="message" headers="from to cc date"
                     }
                 }
@@ -56,12 +60,14 @@ layout "custom" extends="default" {
                         row "{from.name}  {date | relative}"
                         row "{subject}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
                         security-message id="message-security"
                         security-warnings id="message-warnings"
                         remote-content id="message-remote-content"
+                        junk-verdict id="message-junk"
+                        sync-message-body id="message-body-status"
                         message-view id="message" headers="from date"
                     }
                 }

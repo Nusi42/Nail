@@ -333,6 +333,27 @@ fn broken_conditions_are_reported_with_their_path() {
         "{}",
         text[2]
     );
+    // The localized texts name the same conditions and read the same.
+    let ids: Vec<&str> = issues.iter().map(|i| i.localized.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["rule-issue-regex", "rule-issue-query", "rule-issue-date"]
+    );
+    for (issue, text) in issues.iter().zip(&text) {
+        assert_eq!(&nail_config::l10n::english(&issue.localized), text);
+    }
+    // An error of the whole tree says "conditions".
+    let mut root = arrival(r#"subject contains="x""#, "stop");
+    root.conditions = Condition::Header {
+        name: " ".into(),
+        matches: None,
+    };
+    let issue = &validate(&root)[0];
+    assert_eq!(issue.to_string(), "conditions: the header name is empty");
+    assert_eq!(
+        nail_config::l10n::english(&issue.localized),
+        issue.to_string()
+    );
     assert!(CompiledRule::new(r).is_err());
 }
 

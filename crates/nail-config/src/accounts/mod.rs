@@ -217,7 +217,7 @@ impl AccountsDocument {
                         line: 1,
                         column: 1,
                     },
-                    "the configuration cannot be written as accounts.kdl (it changes when read back)",
+                    crate::l10n::msg("config-accounts-not-writable"),
                 ));
             }
             self.text = canonical;

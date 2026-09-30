@@ -286,6 +286,16 @@ pub enum Request {
         /// The draft.
         draft_id: DraftId,
     },
+    /// The content of one attachment of a saved draft (e.g. the preview of
+    /// an inline image when a draft is reopened). Only blobs the draft lists
+    /// in `attachments` are served. Answered with
+    /// [`Response::AttachmentData`].
+    GetDraftAttachment {
+        /// The draft.
+        draft_id: DraftId,
+        /// The attachment's blob hash ([`crate::DraftAttachment::blob`]).
+        blob: String,
+    },
     /// Saved drafts that are not in the outbox, most recently changed
     /// first (to continue one after a restart). Answered with
     /// [`Response::Drafts`].
@@ -1328,6 +1338,13 @@ pub enum Response {
     Draft {
         /// The draft.
         draft: Box<Draft>,
+    },
+    /// Answer to [`Request::GetDraftAttachment`].
+    AttachmentData {
+        /// MIME type (from the draft's attachment entry).
+        mime: String,
+        /// The content, base64 (standard alphabet, padded).
+        data: String,
     },
     /// Answer to [`Request::ListDrafts`].
     Drafts {

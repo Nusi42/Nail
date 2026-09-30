@@ -75,7 +75,13 @@ afterEach(() => {
 
 describe("slot contributions", () => {
   it("registers widgets, actions, dialogs, events and effects", () => {
-    expect(Object.keys(widgets).sort()).toEqual(["config-errors", "smart-folders"]);
+    expect(Object.keys(widgets).sort()).toEqual([
+      "column-editor",
+      "config-errors",
+      "key-binding-editor",
+      "smart-folders",
+      "toolbar-editor",
+    ]);
     expect(Object.keys(actions).sort()).toEqual([
       "customize.errors",
       "customize.merge",

@@ -16,6 +16,7 @@ import type {
   SearchErrorKind,
 } from "../api/generated";
 import { QUERY_HINTS, hintMessageId } from "../widgets/SearchBar";
+import { COLUMN_IDS } from "../widgets/MessageList";
 import { errorMessageId } from "../api/client";
 import * as composerMessages from "../features/composer/messages";
 import * as customizationMessages from "../features/customization/messages";
@@ -174,6 +175,7 @@ function runtimeIds(): string[] {
     ...["google", "microsoft"].flatMap((p) => [`oauth-provider-${p}`, `sign-in-oauth-${p}`]),
     ...["composer", "outbox", "move", "account-setup", "settings"].map((w) => `window-${w}`),
     ...[...QUERY_HINTS, ...VALUE_HINTS].map(hintMessageId),
+    ...COLUMN_IDS.map((c) => `message-list-column-${c}`),
     "account-all",
     ...FEATURE_MESSAGES.flatMap((m) => m.runtimeIds()),
   ];

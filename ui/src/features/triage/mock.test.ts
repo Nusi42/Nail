@@ -57,10 +57,10 @@ describe("triage mock", () => {
     expect(
       await t.send({
         type: "MarkJunk",
-        message_ids: [],
+        message_ids: ["nope"],
         junk: true,
       }),
-    ).toMatchObject({ code: "unsupported" });
+    ).toMatchObject({ code: "not_found" });
     const quiet = {
       ...defaultNotificationSettings(),
       quiet_hours: { start: "22:00", end: "07:00", days: [] },

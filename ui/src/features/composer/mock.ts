@@ -437,3 +437,19 @@ export function acceptRichDrafts(transport: MockTransport): void {
     return send(request);
   };
 }
+
+/**
+ * `GetDraftAttachment`: the bytes of a blob attached to that draft, and only
+ * of such a blob (like the core).
+ */
+export function answerDraftAttachment(
+  core: MockCore,
+  request: { draft_id: string; blob: string },
+): Response {
+  const draft = core.data.drafts.get(request.draft_id);
+  if (!draft) return errorResponse("not_found", `draft ${request.draft_id} not found`);
+  const attachment = draft.attachments.find((a) => a.blob === request.blob);
+  const blob = attachment ? core.data.features.composer.blobs.get(request.blob) : undefined;
+  if (!attachment || !blob) return errorResponse("not_found", `blob ${request.blob} not in draft`);
+  return { type: "AttachmentData", mime: blob.mime, data: blob.data };
+}

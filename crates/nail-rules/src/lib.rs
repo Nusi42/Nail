@@ -26,6 +26,12 @@
 //!   automatic responses, so rules cannot loop), and the notify choice.
 //! * [`test_rule`] — the dry run behind "Test rule": matches, what would
 //!   happen and why each matched ([`ConditionHit`]s).
+//! * [`rule_from_message`] — "create rule from message" from the full
+//!   header list: the mailing list (`List-Id`, `List-Post`,
+//!   `X-Mailing-List`), else the sender, else the subject (M2c WP53).
+//! * Problems ([`RuleIssue`], [`ConditionError`]) carry an English
+//!   diagnostic and a [`nail_api::LocalizedMessage`] (`rule-issue-*` in
+//!   `locales/<lang>/core.ftl`; ADR 0043).
 //!
 //! The `query` condition evaluates the search language (parsed by
 //! `nail-search`) against the message itself, without the index.
@@ -37,14 +43,17 @@ mod engine;
 mod message;
 mod plan;
 mod query;
+mod suggest;
 mod text;
 mod time;
 
 pub use condition::{CompiledCondition, ConditionError, ConditionHit, ConditionPath};
 pub use engine::{
     AppliedRule, CompiledRule, Explanation, IssueLocation, MessageOutcome, RuleIssue, RuleSet,
-    TestMatch, TestReport, rule_from_message, run_rule, test_rule, validate,
+    TestMatch, TestReport, run_rule, test_rule, validate,
 };
+pub use suggest::rule_from_message;
+
 pub use message::{
     AccountInfo, Attachment, Env, FolderInfo, Mailbox, MessageData, MessageView, StaticMailbox,
 };
@@ -54,3 +63,14 @@ pub use plan::{
 };
 pub use text::{Matcher, REGEX_SIZE_LIMIT, glob_match};
 pub use time::{days_from_civil, parse_day};
+
+#[cfg(test)]
+mod catalog_tests {
+    /// Every `rule-issue-*` id built here has an English text in core.ftl.
+    #[test]
+    fn every_message_id_is_in_the_catalog() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let missing = nail_config::l10n::missing_message_ids(&src, &["rule-issue-"]);
+        assert!(missing.is_empty(), "{missing:#?}");
+    }
+}

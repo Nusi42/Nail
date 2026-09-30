@@ -125,6 +125,33 @@ impl Service {
         Ok(id)
     }
 
+    /// `GetDraftAttachment`: the content of a blob the draft lists in its
+    /// attachments (never any other blob, so a draft id cannot be used to
+    /// read arbitrary stored mail).
+    pub(crate) async fn draft_attachment(
+        &self,
+        draft_id: DraftId,
+        blob: String,
+    ) -> Result<nail_api::Response> {
+        use base64::Engine as _;
+        let draft = self
+            .inner
+            .store
+            .call(move |s| s.get_draft(&draft_id))
+            .await?;
+        let attachment = draft
+            .attachments
+            .iter()
+            .find(|a| a.blob == blob)
+            .ok_or_else(|| ApiError::not_found(format!("the draft has no attachment {blob}")))?;
+        let hash = nail_store::BlobHash::parse(&attachment.blob)?;
+        let bytes = self.inner.blobs.get(&hash)?;
+        Ok(nail_api::Response::AttachmentData {
+            mime: attachment.mime.clone(),
+            data: base64::engine::general_purpose::STANDARD.encode(bytes),
+        })
+    }
+
     /// `ListDrafts`: saved drafts that are not waiting in the outbox.
     pub(crate) async fn list_drafts(&self) -> Result<Vec<Draft>> {
         Ok(self

@@ -4372,6 +4372,7 @@ dependencies = [
  "getrandom 0.3.4",
  "nail-api",
  "nail-auth",
+ "nail-config",
  "nail-mime",
  "nail-store",
  "reqwest",
@@ -4389,6 +4390,7 @@ name = "nail-mime"
 version = "0.1.0"
 dependencies = [
  "ammonia",
+ "comrak",
  "idna",
  "insta",
  "mail-parser",
@@ -4538,6 +4540,7 @@ version = "0.1.0"
 dependencies = [
  "nail-api",
  "nail-mime",
+ "nail-proto-imap",
  "nail-store",
  "pretty_assertions",
  "proptest",
@@ -4592,7 +4595,9 @@ dependencies = [
  "nail-testkit-net",
  "pretty_assertions",
  "regex",
+ "regex-syntax",
  "rustls",
+ "rustls-platform-verifier",
  "sha2 0.11.0",
  "thiserror 2.0.21",
  "tokio",
@@ -4696,6 +4701,7 @@ dependencies = [
  "chrono",
  "nail-api",
  "pretty_assertions",
+ "proptest",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

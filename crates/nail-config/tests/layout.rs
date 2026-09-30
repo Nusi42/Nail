@@ -448,7 +448,11 @@ fn action_key_toolbar_and_menu_errors() {
         15,
         "join chord keys",
     );
-    check("keys { bind \"j\"; }", 10, "needs the action as argument 2");
+    check(
+        "keys { bind \"j\"; }",
+        10,
+        "`bind` needs a value as argument 2",
+    );
     check(
         "keys { bind \"j\" \"mail.next \\\"x\"; }",
         19,

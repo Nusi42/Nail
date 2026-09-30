@@ -131,6 +131,13 @@ impl Connection {
         Ok(Some(line))
     }
 
+    /// Reads exactly `n` bytes (a ManageSieve `{n+}` literal).
+    pub(crate) async fn read_exact_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+        let mut data = vec![0; n];
+        self.reader.read_exact(&mut data).await?;
+        Ok(data)
+    }
+
     /// Reads a dot-terminated block (SMTP `DATA`), undoing dot-stuffing.
     /// Lines end in CRLF in the result. Fails when the block exceeds
     /// `max_bytes`; the rest is still consumed so the session can go on.

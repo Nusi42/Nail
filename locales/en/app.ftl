@@ -87,6 +87,13 @@ message-list-search-results = { $count ->
 }
 message-list-search-empty = No messages match this search.
 message-list-search-invalid = The search could not be run. Check the query above.
+# Column titles of a list with `columns` (Settings → Customize → Columns).
+message-list-column-from = From
+message-list-column-subject = Subject
+message-list-column-date = Date
+message-list-column-preview = Preview
+message-list-column-tags = Tags
+message-list-column-account = Account
 
 ## Thread view
 

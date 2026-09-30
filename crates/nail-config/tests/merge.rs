@@ -375,7 +375,9 @@ fn errors_are_reported() {
         MergeTake::Mine,
     )
     .unwrap_err();
-    assert!(matches!(err, EditError::Invalid(m) if m.contains("keys:nope")));
+    assert!(
+        matches!(err, EditError::Invalid(m) if nail_config::l10n::english(&m).contains("keys:nope"))
+    );
     let err = preview_merge(ConfigFile::Accounts, None, "").unwrap_err();
     assert_eq!(
         nail_api::ApiError::from(err).code,

@@ -2,25 +2,43 @@
 //!
 //! * `nail serve` runs the core headless and serves the web UI and the API
 //!   on localhost (see `nail-server`).
-//! * `nail mcp --client <name>` bridges a stdio MCP client to the running
-//!   app's MCP server (see `nail-mcp`).
+//! * `nail mcp --client <name>` bridges a stdio MCP client to Nail's MCP
+//!   server (see `nail-mcp`), starting the core headless when Nail is not
+//!   running (M2c).
 //! * `nail config schema` prints the JSON Schema of `theme.kdl` / `layout.kdl`.
 //!
-//! Command-line help and log output are English developer tooling in M0;
-//! see `docs/adr/0009-core-service.md`.
+//! `serve` and a headless `mcp` hold the data directory's single-instance
+//! lock (`nail_store::DataDirLock`).
+//!
+//! Command-line help and log output are English developer tooling (see
+//! `docs/adr/0009-core-service.md`); errors and notices a user reads are
+//! localized (`messages`, M2c ADR 0043).
 
 mod cli;
 mod mcp;
+mod messages;
 mod serve;
 
 use std::io::Write;
+use std::process::ExitCode;
 
 use clap::Parser;
 
 use crate::cli::{Cli, Command, ConfigCommand, SchemaKind};
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     let cli = Cli::parse();
+    match run(cli) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            tracing::debug!(?err, "nail failed");
+            eprintln!("{}", messages::render_error(&err, &messages::catalog()));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Serve(args) => {
             init_tracing(args.verbose);

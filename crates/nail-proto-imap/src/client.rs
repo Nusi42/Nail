@@ -8,7 +8,7 @@ use std::fmt;
 
 use imap_proto::types::{
     Address as ImapAddress, AttributeValue, Capability, Envelope as ImapEnvelope, MailboxDatum,
-    ResponseCode, UidSetMember,
+    MessageSection, ResponseCode, SectionPath, UidSetMember,
 };
 use imap_proto::{Response, Status};
 use nail_api::{Address, Flags};
@@ -27,6 +27,13 @@ use crate::transport::{establish, with_timeout};
 const FETCH_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY.PEEK[])";
 /// The same with the mod-sequence, for CONDSTORE servers.
 const FETCH_QUERY_MODSEQ: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE MODSEQ BODY.PEEK[])";
+/// Data items of a headers-only fetch (sync policy "headers only"): the
+/// header block instead of the whole message; `RFC822.SIZE` stays the full
+/// size.
+const HEADERS_QUERY: &str = "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY.PEEK[HEADER])";
+/// The same with the mod-sequence, for CONDSTORE servers.
+const HEADERS_QUERY_MODSEQ: &str =
+    "(UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE MODSEQ BODY.PEEK[HEADER])";
 /// Maximum number of UIDs per metadata command (`UID FETCH … RFC822.SIZE`),
 /// which keeps command lines short for sparse UID sets.
 const METADATA_CHUNK: usize = 1000;
@@ -144,8 +151,12 @@ pub struct FetchedMessage {
     pub envelope: Option<Envelope>,
     /// Mod-sequence (RFC 7162) on CONDSTORE servers.
     pub modseq: Option<u64>,
-    /// The complete raw message (`BODY[]`).
+    /// The complete raw message (`BODY[]`), or only its header block
+    /// (`BODY[HEADER]`, ending with the empty line) when `headers_only`.
     pub raw: Vec<u8>,
+    /// Whether `raw` holds only the header block (a headers-only fetch,
+    /// see [`crate::BodyFetch`]).
+    pub headers_only: bool,
 }
 
 /// What [`ImapClient::plan_fetch`] found to fetch in a mailbox: the new
@@ -748,6 +759,16 @@ impl ImapClient {
     /// Bodies can be large, so the command has no overall deadline: it fails
     /// only when the server stays silent for the configured timeout.
     pub async fn fetch_batch(&mut self, uids: &[u32]) -> Result<Vec<FetchedMessage>> {
+        self.fetch_uids(uids, false).await
+    }
+
+    /// [`Self::fetch_batch`] with the header block only (`headers_only`)
+    /// or the whole message.
+    pub(crate) async fn fetch_uids(
+        &mut self,
+        uids: &[u32],
+        headers_only: bool,
+    ) -> Result<Vec<FetchedMessage>> {
         if self.selected.is_none() {
             return Err(ImapError::Protocol("no mailbox examined".to_owned()));
         }
@@ -757,10 +778,11 @@ impl ImapClient {
         if wanted.is_empty() {
             return Ok(Vec::new());
         }
-        let query = if self.capabilities.has("CONDSTORE") {
-            FETCH_QUERY_MODSEQ
-        } else {
-            FETCH_QUERY
+        let query = match (headers_only, self.capabilities.has("CONDSTORE")) {
+            (false, true) => FETCH_QUERY_MODSEQ,
+            (false, false) => FETCH_QUERY,
+            (true, true) => HEADERS_QUERY_MODSEQ,
+            (true, false) => HEADERS_QUERY,
         };
         let mut fetched = Vec::with_capacity(wanted.len());
         let command = format!("UID FETCH {} {query}", uid_set(&wanted));
@@ -768,8 +790,9 @@ impl ImapClient {
             if let Response::Fetch(_, attributes) = response {
                 // Unsolicited FETCH responses (flag updates) for other
                 // messages may be interleaved; keep only what was asked.
-                if let Some(message) =
-                    convert_fetch(attributes).filter(|m| wanted.binary_search(&m.uid).is_ok())
+                if let Some(message) = convert_fetch(attributes)
+                    .filter(|m| m.headers_only == headers_only)
+                    .filter(|m| wanted.binary_search(&m.uid).is_ok())
                 {
                     fetched.push(message);
                     return Ok(true);
@@ -1250,6 +1273,7 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
     let mut envelope = None;
     let mut modseq = None;
     let mut raw = None;
+    let mut headers_only = false;
     for attribute in attributes {
         match attribute {
             AttributeValue::Uid(value) => uid = Some(*value),
@@ -1266,6 +1290,15 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
                 ..
             }
             | AttributeValue::Rfc822(Some(data)) => raw = Some(data.to_vec()),
+            AttributeValue::BodySection {
+                section: Some(SectionPath::Full(MessageSection::Header)),
+                data: Some(data),
+                ..
+            }
+            | AttributeValue::Rfc822Header(Some(data)) => {
+                raw = Some(data.to_vec());
+                headers_only = true;
+            }
             _ => {}
         }
     }
@@ -1285,6 +1318,7 @@ fn convert_fetch(attributes: &[AttributeValue<'_>]) -> Option<FetchedMessage> {
         envelope,
         modseq,
         raw,
+        headers_only,
     })
 }
 

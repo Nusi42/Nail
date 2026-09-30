@@ -46,8 +46,23 @@ describe("sieve mock", () => {
       type: "SieveStatus",
       accounts: [{ account_id: account.id, state: "pending", script_name: "nail" }],
     });
-    const unsupported = await t.send({ type: "SyncSieve", account_id: account.id });
-    expect(unsupported).toMatchObject({ type: "Error", code: "unsupported" });
+    const synced = await t.send({ type: "SyncSieve", account_id: account.id });
+    expect(synced).toMatchObject({
+      type: "SieveStatus",
+      accounts: [{ account_id: account.id, state: "in-sync", other_scripts: ["roundcube"] }],
+    });
+    const preview = await t.send({ type: "PreviewSieveScript", account_id: account.id });
+    expect(preview).toMatchObject({ type: "SieveScript", account_id: account.id });
+    t.data.features.sieve.failWith = "network";
+    expect(await t.send({ type: "GetSieveStatus", account_id: account.id })).toMatchObject({
+      accounts: [{ state: "failed", error: "network" }],
+    });
+    const pop = t.data.accountsConfig.accounts.find((a) => a.incoming.protocol !== "imap");
+    if (pop) {
+      expect(await t.send({ type: "SyncSieve", account_id: pop.id })).toMatchObject({
+        code: "unsupported",
+      });
+    }
   });
 
   it("validates and stores vacation replies", async () => {

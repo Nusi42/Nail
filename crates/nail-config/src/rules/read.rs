@@ -12,11 +12,12 @@ use nail_api::rules::{
     AddressField, AuthMethod, AuthResult, Comparison, Condition, DateComparison, FolderRef,
     MessageFlag, Rule, RuleAction, RuleScope, RuleTrigger, TextMatch, TextOp,
 };
-use nail_api::{AccountId, FolderRole, IdentityId, RuleId};
+use nail_api::{AccountId, FolderRole, IdentityId, LocalizedMessage, RuleId};
 
 use super::{derive_rule_id, is_valid_rule_id};
 use crate::error::ConfigError;
 use crate::kdl_util::{Source, args, children, describe, name, props};
+use crate::l10n::msg;
 
 /// Text comparison properties, in the order they are listed in messages.
 pub(crate) const TEXT_OPS: &[(&str, TextOp)] = &[
@@ -119,7 +120,10 @@ pub(crate) fn read(src: &Source<'_>) -> (Vec<Rule>, Vec<ConfigError>) {
             && is_valid_rule_id(id)
             && !explicit.insert(id.to_owned())
         {
-            reader.push(src.entry_err(entry, format!("the rule id {id:?} is used twice")));
+            reader.push(src.entry_err(
+                entry,
+                msg("config-rule-id-duplicate").arg("id", id.to_string()),
+            ));
         }
     }
     let mut taken: HashSet<String> = explicit.clone();
@@ -128,10 +132,7 @@ pub(crate) fn read(src: &Source<'_>) -> (Vec<Rule>, Vec<ConfigError>) {
         if name(node) != "rule" {
             reader.push(src.node_err(
                 node,
-                format!(
-                    "unknown node `{}` (a rules file contains only `rule \"<name>\" {{ … }}` nodes)",
-                    name(node)
-                ),
+                msg("config-rules-unknown-node").arg("node", name(node)),
             ));
             continue;
         }
@@ -171,20 +172,15 @@ impl Reader<'_, '_> {
         let mut seen = HashSet::new();
         for (key, entry) in props(node) {
             if !allowed.contains(&key) {
-                let hint = if allowed.is_empty() {
-                    format!("`{}` takes no properties", name(node))
-                } else {
-                    format!("allowed: {}", allowed.join(", "))
-                };
                 return Err(self.src.entry_err(
                     entry,
-                    format!("unknown property `{key}` on `{}` ({hint})", name(node)),
+                    crate::kdl_util::unknown_property(key, name(node), allowed),
                 ));
             }
             if !seen.insert(key) {
                 return Err(self
                     .src
-                    .entry_err(entry, format!("property `{key}` is set twice")));
+                    .entry_err(entry, msg("config-duplicate-property").arg("key", key)));
             }
         }
         Ok(())
@@ -196,29 +192,25 @@ impl Reader<'_, '_> {
             return Err(self.src.entry_err(
                 extra,
                 if max == 0 {
-                    format!("`{}` takes no arguments", name(node))
+                    msg("config-no-arguments").arg("node", name(node))
                 } else {
-                    format!(
-                        "too many arguments for `{}` (expected at most {max})",
-                        name(node)
-                    )
+                    msg("config-too-many-arguments")
+                        .arg("node", name(node))
+                        .arg("max", max)
                 },
             ));
         }
         if args.len() < min {
-            return Err(self
-                .src
-                .node_err(node, format!("`{}` needs {what}", name(node))));
+            return Err(self.src.node_err(node, msg(what).arg("node", name(node))));
         }
         Ok(())
     }
 
     fn check_no_children(&self, node: &KdlNode) -> R<()> {
         if let Some(child) = children(node).first() {
-            return Err(self.src.node_err(
-                child,
-                format!("`{}` does not take a children block", name(node)),
-            ));
+            return Err(self
+                .src
+                .node_err(child, msg("config-no-children").arg("node", name(node))));
         }
         Ok(())
     }
@@ -227,7 +219,9 @@ impl Reader<'_, '_> {
         entry.value().as_string().ok_or_else(|| {
             self.src.entry_err(
                 entry,
-                format!("{what} must be a string, found {}", describe(entry.value())),
+                msg("config-expected-string")
+                    .arg("what", what)
+                    .arg("found", describe(entry.value())),
             )
         })
     }
@@ -237,7 +231,7 @@ impl Reader<'_, '_> {
         if s.trim().is_empty() {
             return Err(self
                 .src
-                .entry_err(entry, format!("{what} must not be empty")));
+                .entry_err(entry, msg("config-empty").arg("what", what)));
         }
         Ok(s)
     }
@@ -261,7 +255,9 @@ impl Reader<'_, '_> {
             KdlValue::Bool(b) => Ok(*b),
             other => Err(self.src.entry_err(
                 entry,
-                format!("{what} must be #true or #false, found {}", describe(other)),
+                msg("config-expected-bool")
+                    .arg("what", what)
+                    .arg("found", describe(other)),
             )),
         }
     }
@@ -276,7 +272,7 @@ impl Reader<'_, '_> {
     fn arg_bool(&self, node: &KdlNode) -> R<bool> {
         match args(node).first() {
             None => Ok(true),
-            Some(entry) => self.bool_entry(entry, &format!("the argument of `{}`", name(node))),
+            Some(entry) => self.bool_entry(entry, &format!("`{}`", name(node))),
         }
     }
 
@@ -289,17 +285,20 @@ impl Reader<'_, '_> {
             .ok_or_else(|| {
                 self.src.entry_err(
                     entry,
-                    format!(
-                        "{what} must be a whole number of at least {min}, found {}",
-                        describe(entry.value())
-                    ),
+                    msg("config-expected-at-least")
+                        .arg("what", what)
+                        .arg("min", min)
+                        .arg("found", describe(entry.value())),
                 )
             })
     }
 
     fn uint32(&self, entry: &KdlEntry, what: &str, min: u64) -> R<u32> {
         let n = self.uint(entry, what, min)?;
-        u32::try_from(n).map_err(|_| self.src.entry_err(entry, format!("{what} is too large")))
+        u32::try_from(n).map_err(|_| {
+            self.src
+                .entry_err(entry, msg("config-number-too-large").arg("what", what))
+        })
     }
 
     fn account_id(&self, entry: &KdlEntry, what: &str) -> R<AccountId> {
@@ -307,7 +306,7 @@ impl Reader<'_, '_> {
         if id.chars().any(|c| c.is_whitespace() || c.is_control()) {
             return Err(self
                 .src
-                .entry_err(entry, format!("{what} must not contain spaces")));
+                .entry_err(entry, msg("config-no-spaces").arg("what", what)));
         }
         Ok(AccountId::new(id))
     }
@@ -317,7 +316,9 @@ impl Reader<'_, '_> {
         lookup(ROLES, s).ok_or_else(|| {
             self.src.entry_err(
                 entry,
-                format!("unknown folder role {s:?} (expected {})", names(ROLES)),
+                msg("config-role-unknown")
+                    .arg("found", s)
+                    .arg("expected", names(ROLES)),
             )
         })
     }
@@ -325,7 +326,7 @@ impl Reader<'_, '_> {
     /// `"<path>"` or `role="<role>"`, plus an optional `account="<id>"`.
     fn folder_ref(&self, node: &KdlNode) -> R<FolderRef> {
         self.check_props(node, &["role", "account"])?;
-        self.check_args(node, 0, 1, "a folder path")?;
+        self.check_args(node, 0, 1, "")?;
         self.check_no_children(node)?;
         let account_id = node
             .entry("account")
@@ -333,7 +334,9 @@ impl Reader<'_, '_> {
             .transpose()?;
         match (args(node).first(), node.entry("role")) {
             (Some(path), None) => Ok(FolderRef::Path {
-                path: self.nonempty(path, "the folder path")?.to_owned(),
+                path: self
+                    .nonempty(path, &format!("`{}`", name(node)))?
+                    .to_owned(),
                 account_id,
             }),
             (None, Some(role)) => Ok(FolderRef::Role {
@@ -342,14 +345,11 @@ impl Reader<'_, '_> {
             }),
             (Some(_), Some(role)) => Err(self.src.entry_err(
                 role,
-                format!("`{}` takes a folder path or `role=`, not both", name(node)),
+                msg("config-rule-folder-path-or-role").arg("node", name(node)),
             )),
             (None, None) => Err(self.src.node_err(
                 node,
-                format!(
-                    "`{}` needs a folder: a path like \"Lists/Rust\" or role=\"archive\"",
-                    name(node)
-                ),
+                msg("config-rule-needs-folder").arg("node", name(node)),
             )),
         }
     }
@@ -363,9 +363,10 @@ impl Reader<'_, '_> {
         for (key, entry) in props(node) {
             if let Some(op) = lookup(TEXT_OPS, key) {
                 if found.is_some() {
-                    return Err(self
-                        .src
-                        .entry_err(entry, format!("`{}` takes only one comparison", name(node))));
+                    return Err(self.src.entry_err(
+                        entry,
+                        msg("config-rule-one-comparison").arg("node", name(node)),
+                    ));
                 }
                 found = Some((op, entry));
             }
@@ -375,17 +376,15 @@ impl Reader<'_, '_> {
             if required {
                 return Err(self.src.node_err(
                     node,
-                    format!(
-                        "`{}` needs a comparison: {}=\"…\"",
-                        name(node),
-                        names(TEXT_OPS).replace(", ", "=\"…\", ")
-                    ),
+                    msg("config-rule-needs-comparison")
+                        .arg("node", name(node))
+                        .arg("ops", names(TEXT_OPS)),
                 ));
             }
             if let Some(cs) = node.entry("case-sensitive") {
                 return Err(self
                     .src
-                    .entry_err(cs, "`case-sensitive` needs a comparison to apply to"));
+                    .entry_err(cs, msg("config-rule-case-without-comparison")));
             }
             return Ok(None);
         };
@@ -393,7 +392,7 @@ impl Reader<'_, '_> {
         if value.is_empty() && op != TextOp::Equals {
             return Err(self
                 .src
-                .entry_err(entry, "the comparison text must not be empty"));
+                .entry_err(entry, msg("config-rule-comparison-empty")));
         }
         Ok(Some(TextMatch {
             op,
@@ -413,7 +412,7 @@ impl Reader<'_, '_> {
     fn rule(&self, node: &KdlNode, taken: &mut HashSet<String>) -> Option<Rule> {
         let header = (|| -> R<(String, Option<RuleId>, bool)> {
             self.check_props(node, &["id", "enabled", "trigger", "scope"])?;
-            self.check_args(node, 1, 1, "a name: rule \"<name>\" { … }")?;
+            self.check_args(node, 1, 1, "config-rule-needs-name")?;
             let name = self
                 .nonempty(args(node)[0], "the rule name")?
                 .trim()
@@ -423,12 +422,9 @@ impl Reader<'_, '_> {
                 Some(entry) => {
                     let id = self.string(entry, "`id`")?;
                     if !is_valid_rule_id(id) {
-                        return Err(self.src.entry_err(
-                            entry,
-                            format!(
-                                "invalid rule id {id:?} (1 to 64 lowercase letters, digits, `-`, `_`, `.`)"
-                            ),
-                        ));
+                        return Err(self
+                            .src
+                            .entry_err(entry, msg("config-rule-id-invalid").arg("id", id)));
                     }
                     Some(RuleId::new(id))
                 }
@@ -460,7 +456,10 @@ impl Reader<'_, '_> {
                 "trigger" => {
                     if let Some(trigger) = self.ok(self.trigger(child)) {
                         if triggers.contains(&trigger) {
-                            self.push(self.src.node_err(child, "this trigger is listed twice"));
+                            self.push(
+                                self.src
+                                    .node_err(child, msg("config-rule-trigger-duplicate")),
+                            );
                         } else {
                             triggers.push(trigger);
                         }
@@ -469,24 +468,33 @@ impl Reader<'_, '_> {
                 "scope" => scope.extend(self.ok(self.scope(child))),
                 "when" => {
                     if conditions.is_some() {
-                        self.push(self.src.node_err(child, "a rule has only one `when` block"));
+                        self.push(
+                            self.src
+                                .node_err(child, msg("config-rule-one-block").arg("node", "when")),
+                        );
                     } else {
                         conditions = Some(self.when(child));
                     }
                 }
                 "then" => {
                     if actions.is_some() {
-                        self.push(self.src.node_err(child, "a rule has only one `then` block"));
+                        self.push(
+                            self.src
+                                .node_err(child, msg("config-rule-one-block").arg("node", "then")),
+                        );
                     } else {
                         actions = Some(self.then(child));
                     }
                 }
-                other => self.push(self.src.node_err(
-                    child,
-                    format!(
-                        "unknown node `{other}` in a rule (expected trigger, scope, when or then)"
+                other => self.push(
+                    self.src.node_err(
+                        child,
+                        msg("config-unknown-child")
+                            .arg("node", other)
+                            .arg("parent", "rule")
+                            .arg("expected", "trigger, scope, when, then"),
                     ),
-                )),
+                ),
             }
         }
         Some(Rule {
@@ -504,17 +512,17 @@ impl Reader<'_, '_> {
     fn simple_trigger(&self, entry: &KdlEntry) -> R<RuleTrigger> {
         let s = self.string(entry, "`trigger`")?;
         lookup(SIMPLE_TRIGGERS, s).ok_or_else(|| {
-            let hint = if matches!(s, "schedule" | "older-than") {
-                format!(" (`{s}` needs parameters: use a child node, e.g. trigger \"schedule\" every=60)")
-            } else {
-                String::new()
-            };
             self.src.entry_err(
                 entry,
-                format!(
-                    "unknown trigger {s:?} (expected {}){hint}",
-                    names(SIMPLE_TRIGGERS)
-                ),
+                if matches!(s, "schedule" | "older-than") {
+                    msg("config-rule-trigger-needs-params")
+                        .arg("found", s)
+                        .arg("expected", names(SIMPLE_TRIGGERS))
+                } else {
+                    msg("config-rule-trigger-unknown")
+                        .arg("found", s)
+                        .arg("expected", names(SIMPLE_TRIGGERS))
+                },
             )
         })
     }
@@ -523,21 +531,16 @@ impl Reader<'_, '_> {
     /// `trigger "schedule" every=<minutes | "30m" | "2h" | "1d">`,
     /// `trigger "older-than" days=<n>`.
     fn trigger(&self, node: &KdlNode) -> R<RuleTrigger> {
-        self.check_args(
-            node,
-            1,
-            1,
-            "a kind: arrival, on-send, manual, schedule or older-than",
-        )?;
+        self.check_args(node, 1, 1, "config-rule-needs-trigger-kind")?;
         self.check_no_children(node)?;
         let entry = args(node)[0];
-        let kind = self.string(entry, "the trigger kind")?;
+        let kind = self.string(entry, "`trigger`")?;
         match kind {
             "schedule" => {
                 self.check_props(node, &["every"])?;
                 let every = node.entry("every").ok_or_else(|| {
                     self.src
-                        .node_err(node, "`schedule` needs every=<minutes> (or \"2h\", \"1d\")")
+                        .node_err(node, msg("config-rule-schedule-needs-every"))
                 })?;
                 Ok(RuleTrigger::Schedule {
                     interval_minutes: self.interval(every)?,
@@ -545,9 +548,10 @@ impl Reader<'_, '_> {
             }
             "older-than" => {
                 self.check_props(node, &["days"])?;
-                let days = node
-                    .entry("days")
-                    .ok_or_else(|| self.src.node_err(node, "`older-than` needs days=<n>"))?;
+                let days = node.entry("days").ok_or_else(|| {
+                    self.src
+                        .node_err(node, msg("config-rule-older-than-needs-days"))
+                })?;
                 Ok(RuleTrigger::OlderThan {
                     days: self.uint32(days, "`days`", 1)?,
                 })
@@ -566,10 +570,7 @@ impl Reader<'_, '_> {
         let bad = || {
             self.src.entry_err(
                 entry,
-                format!(
-                    "`every` must be minutes (a whole number) or a duration like \"30m\", \"2h\", \"1d\"; found {}",
-                    describe(entry.value())
-                ),
+                msg("config-rule-every-invalid").arg("found", describe(entry.value())),
             )
         };
         let s = entry.value().as_string().ok_or_else(bad)?.trim();
@@ -591,15 +592,10 @@ impl Reader<'_, '_> {
     /// `scope "<spec>" [account="<id>"]`.
     fn scope(&self, node: &KdlNode) -> R<RuleScope> {
         self.check_props(node, &["account"])?;
-        self.check_args(
-            node,
-            1,
-            1,
-            "what it covers: \"account:<id>\", \"virtual:<id>\", \"folder:<path>\" or \"role:<role>\"",
-        )?;
+        self.check_args(node, 1, 1, "config-rule-needs-scope")?;
         self.check_no_children(node)?;
         let entry = args(node)[0];
-        let spec = self.string(entry, "the scope")?;
+        let spec = self.string(entry, "`scope`")?;
         let account = node
             .entry("account")
             .map(|e| self.account_id(e, "`account`"))
@@ -610,21 +606,19 @@ impl Reader<'_, '_> {
     fn scope_spec(&self, entry: &KdlEntry, spec: &str, account: Option<AccountId>) -> R<RuleScope> {
         let (kind, rest) = spec.split_once(':').unwrap_or((spec, ""));
         let rest = rest.trim();
-        let bad = |message: String| Err(self.src.entry_err(entry, message));
+        let bad = |message: LocalizedMessage| Err(self.src.entry_err(entry, message));
         if rest.is_empty() {
-            return bad(format!(
-                "invalid scope {spec:?} (expected \"account:<id>\", \"virtual:<id>\", \"folder:<path>\" or \"role:<role>\")"
-            ));
+            return bad(msg("config-rule-scope-invalid").arg("found", format!("{spec:?}")));
         }
         match kind {
             "account" | "virtual" => {
                 if account.is_some() {
-                    return bad(format!(
-                        "`account=` applies only to folder and role scopes, not to {kind:?}"
-                    ));
+                    return bad(
+                        msg("config-rule-scope-account-option").arg("kind", format!("{kind:?}"))
+                    );
                 }
                 if rest.chars().any(|c| c.is_whitespace() || c.is_control()) {
-                    return bad("an account name must not contain spaces".to_owned());
+                    return bad(msg("config-no-spaces").arg("what", "`account`"));
                 }
                 Ok(RuleScope::Account {
                     account_id: AccountId::new(rest),
@@ -643,14 +637,11 @@ impl Reader<'_, '_> {
                         account_id: account,
                     },
                 }),
-                None => bad(format!(
-                    "unknown folder role {rest:?} (expected {})",
-                    names(ROLES)
-                )),
+                None => bad(msg("config-role-unknown")
+                    .arg("found", rest)
+                    .arg("expected", names(ROLES))),
             },
-            _ => bad(format!(
-                "unknown scope kind {kind:?} (expected account, virtual, folder or role)"
-            )),
+            _ => bad(msg("config-rule-scope-kind-unknown").arg("found", format!("{kind:?}"))),
         }
     }
 
@@ -664,13 +655,14 @@ impl Reader<'_, '_> {
             match args(node).first() {
                 None => Ok("all"),
                 Some(entry) => {
-                    let s = self.string(entry, "the argument of `when`")?;
+                    let s = self.string(entry, "`when`")?;
                     if matches!(s, "all" | "any") {
                         Ok(s)
                     } else {
-                        Err(self
-                            .src
-                            .entry_err(entry, format!("`when` takes `all` or `any`, found {s:?}")))
+                        Err(self.src.entry_err(
+                            entry,
+                            msg("config-rule-when-mode").arg("found", format!("{s:?}")),
+                        ))
                     }
                 }
             }
@@ -700,14 +692,16 @@ impl Reader<'_, '_> {
         }
         if let Some(method) = lookup(AUTH_METHODS, kind) {
             self.check_props(node, &[])?;
-            self.check_args(node, 1, 1, "a result, e.g. \"pass\" or \"fail\"")?;
+            self.check_args(node, 1, 1, "config-rule-needs-result")?;
             self.check_no_children(node)?;
             let entry = args(node)[0];
-            let s = self.string(entry, "the result")?;
+            let s = self.string(entry, &format!("`{}`", name(node)))?;
             let result = lookup(AUTH_RESULTS, s).ok_or_else(|| {
                 self.src.entry_err(
                     entry,
-                    format!("unknown result {s:?} (expected {})", names(AUTH_RESULTS)),
+                    msg("config-auth-result-unknown")
+                        .arg("found", s)
+                        .arg("expected", names(AUTH_RESULTS)),
                 )
             })?;
             return Ok(Condition::Auth { method, result });
@@ -738,21 +732,21 @@ impl Reader<'_, '_> {
                 let mut allowed = Self::text_props();
                 allowed.push("exists");
                 self.check_props(node, &allowed)?;
-                self.check_args(node, 1, 1, "a header name, e.g. header \"List-Id\"")?;
+                self.check_args(node, 1, 1, "config-rule-needs-header")?;
                 self.check_no_children(node)?;
-                let header = self.nonempty(args(node)[0], "the header name")?;
+                let header = self.nonempty(args(node)[0], "`header`")?;
                 if header.contains(':') || header.chars().any(char::is_whitespace) {
-                    return Err(self
-                        .src
-                        .entry_err(args(node)[0], format!("{header:?} is not a header name")));
+                    return Err(self.src.entry_err(
+                        args(node)[0],
+                        msg("config-rule-header-name-invalid").arg("found", format!("{header:?}")),
+                    ));
                 }
                 let exists = self.prop_bool(node, "exists")?;
                 let matches = self.text_match(node, false)?;
                 match (exists, matches) {
-                    (Some(_), Some(_)) => Err(self.src.node_err(
-                        node,
-                        "`header` takes either `exists=` or a comparison, not both",
-                    )),
+                    (Some(_), Some(_)) => Err(self
+                        .src
+                        .node_err(node, msg("config-rule-header-exists-or-comparison"))),
                     (Some(false), None) => Ok(Condition::Not {
                         condition: Box::new(Condition::Header {
                             name: header.to_owned(),
@@ -778,14 +772,9 @@ impl Reader<'_, '_> {
             }
             "query" => {
                 self.check_props(node, &[])?;
-                self.check_args(
-                    node,
-                    1,
-                    1,
-                    "a search query, e.g. query \"from:*@example.com\"",
-                )?;
+                self.check_args(node, 1, 1, "config-rule-needs-query")?;
                 self.check_no_children(node)?;
-                let query = self.nonempty(args(node)[0], "the query")?;
+                let query = self.nonempty(args(node)[0], "`query`")?;
                 Ok(Condition::Query {
                     query: query.to_owned(),
                 })
@@ -802,16 +791,17 @@ impl Reader<'_, '_> {
                         other => {
                             return Err(self.src.node_err(
                                 child,
-                                format!(
-                                    "unknown node `{other}` in `attachment` (expected name or type)"
-                                ),
+                                msg("config-unknown-child")
+                                    .arg("node", other)
+                                    .arg("parent", "attachment")
+                                    .arg("expected", "name, type"),
                             ));
                         }
                     };
                     if slot.is_some() {
                         return Err(self
                             .src
-                            .node_err(child, format!("`{}` is given twice", name(child))));
+                            .node_err(child, msg("config-set-twice").arg("node", name(child))));
                     }
                     self.check_props(child, &Self::text_props())?;
                     self.check_args(child, 0, 0, "")?;
@@ -833,7 +823,7 @@ impl Reader<'_, '_> {
                         ("larger", Comparison::Greater),
                         ("smaller", Comparison::Less),
                     ],
-                    "larger=<bytes> or smaller=<bytes> (e.g. larger=\"5MB\")",
+                    "config-rule-needs-size",
                 )?;
                 Ok(Condition::Size {
                     cmp,
@@ -850,13 +840,13 @@ impl Reader<'_, '_> {
                         ("before", DateComparison::Before),
                         ("after", DateComparison::After),
                     ],
-                    "before=\"YYYY-MM-DD\" or after=\"YYYY-MM-DD\"",
+                    "config-rule-needs-date",
                 )?;
-                let date = self.string(entry, "the date")?;
+                let date = self.string(entry, "`date`")?;
                 if !is_valid_date(date) {
                     return Err(self.src.entry_err(
                         entry,
-                        format!("{date:?} is not a date (expected YYYY-MM-DD)"),
+                        msg("config-rule-date-invalid").arg("found", format!("{date:?}")),
                     ));
                 }
                 Ok(Condition::Date {
@@ -874,23 +864,25 @@ impl Reader<'_, '_> {
                         ("older-than", Comparison::Greater),
                         ("newer-than", Comparison::Less),
                     ],
-                    "older-than=<days> or newer-than=<days>",
+                    "config-rule-needs-age",
                 )?;
                 Ok(Condition::Age {
                     cmp,
-                    days: self.uint32(entry, "the number of days", 0)?,
+                    days: self.uint32(entry, "`age`", 0)?,
                 })
             }
             "flag" => {
                 self.check_props(node, &["set"])?;
-                self.check_args(node, 1, 1, "a flag: seen, flagged, answered or draft")?;
+                self.check_args(node, 1, 1, "config-rule-needs-flag")?;
                 self.check_no_children(node)?;
                 let entry = args(node)[0];
-                let s = self.string(entry, "the flag")?;
+                let s = self.string(entry, "`flag`")?;
                 let flag = lookup(FLAGS, s).ok_or_else(|| {
                     self.src.entry_err(
                         entry,
-                        format!("unknown flag {s:?} (expected {})", names(FLAGS)),
+                        msg("config-flag-unknown")
+                            .arg("found", s)
+                            .arg("expected", names(FLAGS)),
                     )
                 })?;
                 Ok(Condition::Flag {
@@ -900,7 +892,7 @@ impl Reader<'_, '_> {
             }
             "tag" => {
                 self.check_props(node, &[])?;
-                self.check_args(node, 1, 1, "a tag")?;
+                self.check_args(node, 1, 1, "config-rule-needs-tag")?;
                 self.check_no_children(node)?;
                 Ok(Condition::Tag {
                     tag: self.tag(args(node)[0])?,
@@ -908,10 +900,10 @@ impl Reader<'_, '_> {
             }
             "account" => {
                 self.check_props(node, &[])?;
-                self.check_args(node, 1, 1, "an account name")?;
+                self.check_args(node, 1, 1, "config-rule-needs-account")?;
                 self.check_no_children(node)?;
                 Ok(Condition::Account {
-                    account_id: self.account_id(args(node)[0], "the account name")?,
+                    account_id: self.account_id(args(node)[0], "`account`")?,
                 })
             }
             "folder" => Ok(Condition::Folder {
@@ -927,7 +919,9 @@ impl Reader<'_, '_> {
             }
             other => Err(self.src.node_err(
                 node,
-                format!("unknown condition `{other}` (expected {CONDITIONS})"),
+                msg("config-rule-condition-unknown")
+                    .arg("node", other)
+                    .arg("expected", CONDITIONS),
             )),
         }
     }
@@ -945,31 +939,27 @@ impl Reader<'_, '_> {
                 if found.is_some() {
                     return Err(self.src.entry_err(
                         entry,
-                        format!("`{}` takes only one of {}", name(node), names(options)),
+                        msg("config-rule-only-one-of")
+                            .arg("node", name(node))
+                            .arg("options", names(options)),
                     ));
                 }
                 found = Some((v, entry));
             }
         }
-        found.ok_or_else(|| {
-            self.src
-                .node_err(node, format!("`{}` needs {what}", name(node)))
-        })
+        found.ok_or_else(|| self.src.node_err(node, msg(what).arg("node", name(node))))
     }
 
     /// Bytes: a whole number, or a string with a unit (`k`, `m`, `g`,
     /// 1024-based, optional trailing `b`, any case): `"10kb"`, `"5MB"`.
     fn size(&self, entry: &KdlEntry) -> R<u64> {
         if entry.value().as_integer().is_some() {
-            return self.uint(entry, "the size", 0);
+            return self.uint(entry, "`size`", 0);
         }
         let bad = || {
             self.src.entry_err(
                 entry,
-                format!(
-                    "a size is a number of bytes or a string like \"500k\" or \"5MB\"; found {}",
-                    describe(entry.value())
-                ),
+                msg("config-rule-size-invalid").arg("found", describe(entry.value())),
             )
         };
         let s = entry.value().as_string().ok_or_else(bad)?;
@@ -977,14 +967,14 @@ impl Reader<'_, '_> {
     }
 
     fn tag(&self, entry: &KdlEntry) -> R<String> {
-        let tag = self.nonempty(entry, "the tag")?;
+        let tag = self.nonempty(entry, "`tag`")?;
         if tag
             .chars()
             .any(|c| c.is_whitespace() || c.is_control() || "(){%*\"\\]".contains(c))
         {
             return Err(self.src.entry_err(
                 entry,
-                format!("{tag:?} cannot be a tag (no spaces or any of ( ) {{ % * \" \\ ])"),
+                msg("config-rule-tag-invalid").arg("found", format!("{tag:?}")),
             ));
         }
         Ok(tag.to_owned())
@@ -1033,7 +1023,7 @@ impl Reader<'_, '_> {
                 Ok(RuleAction::Stop)
             }
             "tag" | "untag" => {
-                leaf(&[], 1, 1, "a tag")?;
+                leaf(&[], 1, 1, "config-rule-needs-tag")?;
                 let tag = self.tag(args(node)[0])?;
                 Ok(if kind == "tag" {
                     RuleAction::Tag { tag }
@@ -1065,14 +1055,15 @@ impl Reader<'_, '_> {
                 } else {
                     &[]
                 };
-                leaf(allowed, 1, usize::MAX, "at least one address")?;
+                leaf(allowed, 1, usize::MAX, "config-rule-needs-address")?;
                 let mut to = Vec::new();
                 for entry in args(node) {
-                    let address = self.nonempty(entry, "an address")?.trim();
+                    let address = self.nonempty(entry, &format!("`{}`", name(node)))?.trim();
                     if !is_plausible_address(address) {
-                        return Err(self
-                            .src
-                            .entry_err(entry, format!("{address:?} is not an email address")));
+                        return Err(self.src.entry_err(
+                            entry,
+                            msg("config-rule-address-invalid").arg("found", format!("{address:?}")),
+                        ));
                     }
                     to.push(address.to_owned());
                 }
@@ -1086,9 +1077,9 @@ impl Reader<'_, '_> {
                 }
             }
             "reply" => {
-                leaf(&["identity"], 1, 1, "a template text: reply \"Thanks, …\"")?;
+                leaf(&["identity"], 1, 1, "config-rule-needs-template")?;
                 let template = self
-                    .arg_string(node, "the template")?
+                    .arg_string(node, "`reply`")?
                     .unwrap_or_default()
                     .to_owned();
                 Ok(RuleAction::Reply {
@@ -1098,7 +1089,9 @@ impl Reader<'_, '_> {
             }
             other => Err(self.src.node_err(
                 node,
-                format!("unknown action `{other}` (expected {ACTIONS})"),
+                msg("config-rule-action-unknown")
+                    .arg("node", other)
+                    .arg("expected", ACTIONS),
             )),
         }
     }

@@ -76,8 +76,42 @@ are kept exactly as they were, and only the `sizes="…"` value changes.
 
 Nail writes toolbar contents and order, key bindings (removing a default
 binding writes `unbind "<key>"`) and the column order of a list
-(`columns="…"` on `message-list`) the same careful way. This version has no
-editor for those in the window yet; until then, change them in the file.
+(`columns="…"` on `message-list`) the same careful way, with the editors
+below.
+
+## Editing toolbars, shortcuts and columns
+
+Settings → Customize has three editors under the error list. Nothing is
+written until you click **Save to layout.kdl**; **Undo changes** forgets
+what you did since.
+
+**Toolbars.** Choose a toolbar (`main`, `reader`, `customize`, or one of
+your own). Each entry has **Up**, **Down** and **Remove**; with the
+keyboard, **Alt+Up** and **Alt+Down** move the focused entry. Add any
+action, a separator or a flexible space at the end. **Back to the default
+toolbar** removes your version from the file, so the default applies again.
+
+**Keys.** The table lists every shortcut with where it works (everywhere,
+message list, reader, composer, search field, folder list, dialogs). To add
+one, choose where and the action (and an argument for actions that take
+one, such as `view.toggle` with `sidebar`), click the **Keys** field and
+press the keys: a chord such as `Ctrl+Shift+M`, or several keys in a row
+for a sequence such as `G` then `R`. Backspace removes the last key. When
+the keys already do something there, the editor says what they replace.
+**Remove** deletes a shortcut (a default one gets `unbind`); **Default**
+brings back the default layout's binding for those keys.
+
+**Columns.** A message list normally shows rows made from templates. Choose
+columns — From, Subject, Date, Preview, Tags, Account — and their order to
+show it as a table instead; Nail writes `columns="from subject date"` on
+that `message-list`.
+
+## Right-click menus
+
+The menus that open on a right-click (or Shift+F10 and the menu key) are
+defined in `layout.kdl` with `menu "context:<part>"`; see the
+[layout reference](layout-reference.md#menus) and
+[Accessibility](accessibility.md#context-menus).
 
 ## Applying someone else's theme or layout: the merge dialog
 

@@ -1,7 +1,10 @@
 //! CSS knowledge used by the theme: the supported property subset, value
 //! safety checks and token references.
 
+use nail_api::LocalizedMessage;
 use nail_api::config::theme::css_var_name;
+
+use crate::l10n::msg;
 
 /// Token categories (see `nail_api::TokenSet`).
 pub const TOKEN_CATEGORIES: &[&str] = &[
@@ -116,6 +119,7 @@ pub const PROPERTIES: &[&str] = &[
     "border-color",
     "border-width",
     "border-style",
+    "border-collapse",
     "border-top-color",
     "border-right-color",
     "border-bottom-color",
@@ -218,20 +222,18 @@ pub fn px(number: &str) -> String {
 
 /// Rejects values that could load remote content or break out of a
 /// declaration. Returns a readable reason.
-pub fn check_value_safety(value: &str) -> Result<(), String> {
+pub fn check_value_safety(value: &str) -> Result<(), LocalizedMessage> {
     if let Some(c) = value
         .chars()
         .find(|c| matches!(c, ';' | '{' | '}' | '<' | '>' | '\\'))
     {
-        return Err(format!(
-            "the character `{c}` is not allowed in theme values"
-        ));
+        return Err(msg("config-css-character").arg("character", c.to_string()));
     }
     check_no_remote(value)
 }
 
 /// Rejects constructs that load remote content (also used for `raw-css`).
-pub fn check_no_remote(css: &str) -> Result<(), String> {
+pub fn check_no_remote(css: &str) -> Result<(), LocalizedMessage> {
     let lower = css.to_ascii_lowercase();
     for banned in [
         "url(",
@@ -242,10 +244,7 @@ pub fn check_no_remote(css: &str) -> Result<(), String> {
         "javascript:",
     ] {
         if lower.contains(banned) {
-            return Err(format!(
-                "`{}` is not allowed: theme files cannot load external resources",
-                banned.trim_end_matches('(')
-            ));
+            return Err(msg("config-css-remote").arg("construct", banned.trim_end_matches('(')));
         }
     }
     Ok(())
@@ -266,7 +265,7 @@ pub struct TokenRef {
 pub fn resolve_token_refs(
     value: &str,
     exists: impl Fn(&str, &str) -> bool,
-) -> Result<(String, Vec<TokenRef>), String> {
+) -> Result<(String, Vec<TokenRef>), LocalizedMessage> {
     let mut out = String::with_capacity(value.len());
     let mut refs = Vec::new();
     let mut rest = value;
@@ -289,19 +288,16 @@ pub fn resolve_token_refs(
             .map(|s| s[..ident_len(s)].trim_end_matches('-'))
             .unwrap_or_default();
         if category.is_empty() || name.is_empty() {
-            return Err(
-                "`$` must start a token reference like `$color.accent` (write `$$` for a literal `$`)"
-                    .to_owned(),
-            );
+            return Err(msg("config-token-reference-invalid"));
         }
         if !TOKEN_CATEGORIES.contains(&category) {
-            return Err(format!(
-                "unknown token category `{category}` in `${category}.{name}` (known: {})",
-                TOKEN_CATEGORIES.join(", ")
-            ));
+            return Err(msg("config-token-category-unknown")
+                .arg("category", category)
+                .arg("token", format!("${category}.{name}"))
+                .arg("known", TOKEN_CATEGORIES.join(", ")));
         }
         if !exists(category, name) {
-            return Err(format!("unknown token `${category}.{name}`"));
+            return Err(msg("config-unknown-token").arg("token", format!("${category}.{name}")));
         }
         out.push_str("var(");
         out.push_str(&css_var_name(category, name));
@@ -346,10 +342,13 @@ mod tests {
     #[test]
     fn bad_token_refs_are_reported() {
         let err = resolve_token_refs("$color.nope", |_, n| n != "nope").unwrap_err();
+        let err = crate::l10n::english(&err);
         assert!(err.contains("unknown token `$color.nope`"), "{err}");
         let err = resolve_token_refs("$colour.bg", all).unwrap_err();
+        let err = crate::l10n::english(&err);
         assert!(err.contains("unknown token category `colour`"), "{err}");
         let err = resolve_token_refs("5$", all).unwrap_err();
+        let err = crate::l10n::english(&err);
         assert!(err.contains("$$"), "{err}");
         assert!(resolve_token_refs("$color", all).is_err());
     }

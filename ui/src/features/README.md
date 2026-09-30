@@ -8,7 +8,7 @@ the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036; M2c: ADR 0043):
 | `composer/`      | WP21         | HTML / Markdown composer, preview, attachments, address autocomplete          |
 | `rules/`         | WP22         | rule list and editor, test preview, run history and undo                      |
 | `mcp/`           | WP23         | MCP client settings, audit log, UI-context indicator and reporting            |
-| `customization/` | WP24         | inspector, layout write-back, merge dialog, config errors, saved searches     |
+| `customization/` | WP24, WP54   | inspector, write-back, merge dialog, errors, saved searches; M2c editors      |
 | `security/`      | M2a WP34     | key manager, crypto settings, composer toggles, badges, warnings, vault       |
 | `remote/`        | M2b WP43     | login, pairing, sessions / devices, remote-UI settings, remote content, audit |
 | `launch/`        | M2b WP45     | launch requests of the desktop app (`mailto:` → composer, `.eml` → import)    |

@@ -1,8 +1,8 @@
 //! Rules in order: triggers, scope, conditions, actions; dry runs and
 //! schedules.
 
-use nail_api::rules::{Condition, Rule, RuleAction, RuleRunCause, RuleScope, RuleTrigger};
-use nail_api::{MessageId, RuleId};
+use nail_api::rules::{Rule, RuleAction, RuleRunCause, RuleScope, RuleTrigger};
+use nail_api::{LocalizedMessage, MessageId, RuleId};
 use serde::{Deserialize, Serialize};
 
 use crate::condition::{CompiledCondition, ConditionError, ConditionHit};
@@ -39,6 +39,11 @@ pub struct RuleIssue {
     pub location: IssueLocation,
     /// Diagnostic (English).
     pub message: String,
+    /// The user-facing text: a `rule-issue-*` id of
+    /// `locales/<lang>/core.ftl` whose arguments name the trigger, action
+    /// or condition (`trigger`, `action`: 1-based; `condition`: a path like
+    /// `2.1` or `root`).
+    pub localized: LocalizedMessage,
 }
 
 impl std::fmt::Display for RuleIssue {
@@ -53,7 +58,8 @@ impl std::fmt::Display for RuleIssue {
                 "{}",
                 ConditionError {
                     path: path.clone(),
-                    message: self.message.clone()
+                    message: self.message.clone(),
+                    localized: self.localized.clone(),
                 }
             ),
             IssueLocation::Action { index } => write!(f, "action {}: {}", index + 1, self.message),
@@ -65,14 +71,31 @@ impl std::fmt::Display for RuleIssue {
 /// dates, empty names, tags and recipient lists, zero intervals.
 pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
     let mut issues = Vec::new();
-    let mut push = |location, message: &str| {
+    let mut push = |location: IssueLocation, message: &str, id: &str| {
+        let localized = match &location {
+            IssueLocation::Rule => LocalizedMessage::new(id),
+            IssueLocation::Trigger { index } => {
+                LocalizedMessage::new(id).arg("trigger", index.saturating_add(1))
+            }
+            IssueLocation::Action { index } => {
+                LocalizedMessage::new(id).arg("action", index.saturating_add(1))
+            }
+            IssueLocation::Condition { path } => {
+                LocalizedMessage::new(id).arg("condition", crate::condition::condition_label(path))
+            }
+        };
         issues.push(RuleIssue {
             location,
             message: message.to_owned(),
+            localized,
         });
     };
     if rule.name.trim().is_empty() {
-        push(IssueLocation::Rule, "the rule needs a name");
+        push(
+            IssueLocation::Rule,
+            "the rule needs a name",
+            "rule-issue-name-empty",
+        );
     }
     for (i, trigger) in rule.triggers.iter().enumerate() {
         let index = u32::try_from(i).unwrap_or(u32::MAX);
@@ -82,10 +105,12 @@ pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
             } => push(
                 IssueLocation::Trigger { index },
                 "the schedule interval must be at least one minute",
+                "rule-issue-schedule-zero",
             ),
             RuleTrigger::OlderThan { days: 0 } => push(
                 IssueLocation::Trigger { index },
                 "the age must be at least one day",
+                "rule-issue-age-zero",
             ),
             _ => {}
         }
@@ -96,24 +121,36 @@ pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
         };
         match action {
             RuleAction::Tag { tag } | RuleAction::Untag { tag } if tag.trim().is_empty() => {
-                push(location, "the tag is empty");
+                push(location, "the tag is empty", "rule-issue-tag-empty");
             }
             RuleAction::Forward { to, .. } | RuleAction::Redirect { to } if to.is_empty() => {
-                push(location, "there are no recipients");
+                push(
+                    location,
+                    "there are no recipients",
+                    "rule-issue-no-recipients",
+                );
             }
             RuleAction::Forward { to, .. } | RuleAction::Redirect { to }
                 if to.iter().any(|a| !a.contains('@')) =>
             {
-                push(location, "a recipient is not an email address");
+                push(
+                    location,
+                    "a recipient is not an email address",
+                    "rule-issue-recipient-invalid",
+                );
             }
             RuleAction::Reply { template, .. } if template.trim().is_empty() => {
-                push(location, "the reply template is empty");
+                push(
+                    location,
+                    "the reply template is empty",
+                    "rule-issue-template-empty",
+                );
             }
             RuleAction::Move { folder } | RuleAction::Copy { folder } => {
                 if let nail_api::rules::FolderRef::Path { path, .. } = folder
                     && path.trim().is_empty()
                 {
-                    push(location, "the folder is empty");
+                    push(location, "the folder is empty", "rule-issue-folder-empty");
                 }
             }
             _ => {}
@@ -123,6 +160,7 @@ pub fn validate(rule: &Rule) -> Vec<RuleIssue> {
         issues.extend(errors.into_iter().map(|e| RuleIssue {
             location: IssueLocation::Condition { path: e.path },
             message: e.message,
+            localized: e.localized,
         }));
     }
     issues
@@ -563,60 +601,4 @@ pub fn test_rule<'m>(
         });
     }
     report
-}
-
-/// A rule pre-filled from a message ("create rule from message"): its
-/// sender, and its mailing list when it has one; no actions yet.
-pub fn rule_from_message(message: &dyn MessageView) -> Rule {
-    use nail_api::rules::{AddressField, TextMatch, TextOp};
-    let list = message
-        .header_values("List-Id")
-        .into_iter()
-        .next()
-        .map(|v| {
-            v.rfind('<')
-                .and_then(|s| v[s + 1..].find('>').map(|e| v[s + 1..s + 1 + e].to_owned()))
-                .unwrap_or(v)
-        });
-    let from = message
-        .addresses(AddressField::From)
-        .into_iter()
-        .next()
-        .map(|a| a.email);
-    let condition = match (list, &from) {
-        (Some(list), _) => Condition::ListId {
-            matches: Some(TextMatch {
-                op: TextOp::Contains,
-                value: list.trim().to_owned(),
-                case_sensitive: false,
-            }),
-        },
-        (None, Some(from)) => Condition::Address {
-            field: AddressField::From,
-            matches: TextMatch {
-                op: TextOp::Equals,
-                value: from.clone(),
-                case_sensitive: false,
-            },
-        },
-        (None, None) => Condition::Subject {
-            matches: TextMatch {
-                op: TextOp::Equals,
-                value: message.subject(),
-                case_sensitive: false,
-            },
-        },
-    };
-    Rule {
-        id: RuleId::new(""),
-        name: from.unwrap_or_else(|| message.subject()),
-        enabled: true,
-        triggers: vec![RuleTrigger::Arrival],
-        scope: Vec::new(),
-        conditions: Condition::All {
-            conditions: vec![condition],
-        },
-        actions: Vec::new(),
-        source: None,
-    }
 }

@@ -4,9 +4,10 @@
  * these requests here). Stateless: the policy lives in the mock's
  * `accountsConfig`, as the core's lives in `accounts.kdl`.
  *
- * Every mock message has its body, so `FetchMessageBodies` reports known
- * messages as fetched and unknown ones as failed (like the core before
- * on-demand fetching is wired).
+ * Every mock message has its body; `FetchMessageBodies` reports known
+ * messages as fetched (clearing `headers_only`, like the core's on-demand
+ * fetch, with `MailChanged`) and unknown ones as failed.
+ * Ids in `failingBodies` fail (an unreachable server).
  */
 import type { Request, Response } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
@@ -24,6 +25,9 @@ export type SyncRequest = Extract<Request, { type: (typeof SYNC_REQUESTS)[number
 export function isSyncRequest(request: Request): request is SyncRequest {
   return (SYNC_REQUESTS as readonly string[]).includes(request.type);
 }
+
+/** Message ids whose body download fails (tests: offline server). */
+export const failingBodies = new Set<string>();
 
 export function answerSync(core: MockCore, request: SyncRequest): Response {
   const d = core.data;
@@ -55,11 +59,22 @@ export function answerSync(core: MockCore, request: SyncRequest): Response {
       return { type: "FolderSyncPolicy", policy: resolvePolicy(updated, folder) };
     }
     case "FetchMessageBodies": {
-      const known = new Set(d.messages.map((m) => m.id));
+      const fetched = d.messages.filter(
+        (m) => request.message_ids.includes(m.id) && !failingBodies.has(m.id),
+      );
+      const changed = new Set<string>();
+      for (const m of fetched) {
+        if (m.headers_only) {
+          m.headers_only = false;
+          changed.add(m.folder_id);
+        }
+      }
+      if (changed.size > 0) core.emit({ type: "MailChanged", folder_ids: [...changed] });
+      const ok = new Set(fetched.map((m) => m.id));
       return {
         type: "BodiesFetched",
-        fetched: request.message_ids.filter((id) => known.has(id)),
-        failed: request.message_ids.filter((id) => !known.has(id)),
+        fetched: request.message_ids.filter((id) => ok.has(id)),
+        failed: request.message_ids.filter((id) => !ok.has(id)),
       };
     }
   }

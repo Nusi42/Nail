@@ -24,7 +24,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Json, Router};
 use nail_api::Event;
-use nail_api::mcp::{McpCallKind, McpOutcome, McpServerInfo};
+use nail_api::mcp::{McpCallKind, McpOutcome, McpServerInfo, McpSettings};
 use nail_store::{McpAuditRecord, Store, hash_mcp_token};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
@@ -40,6 +40,15 @@ use crate::uri::ResourceRef;
 pub const MCP_PATH: &str = "/mcp";
 /// Path of the "who am I" check.
 pub const WHOAMI_PATH: &str = "/whoami";
+
+/// The port to start on: an explicit override (`nail serve --mcp-port`),
+/// else the fixed port of the MCP settings, else 0 (any free port; clients
+/// find it in the endpoint file). A fixed port lets clients that cannot
+/// read the endpoint file keep one URL; when it is taken the server does not
+/// fall back to another port ([`crate::messages::start_error`] explains).
+pub fn configured_port(settings: &McpSettings, override_port: Option<u16>) -> u16 {
+    override_port.or(settings.port).unwrap_or(0)
+}
 
 /// How to start the server.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -143,9 +152,9 @@ async fn authenticate(State(auth): State<AuthState>, mut request: Request, next:
     };
     let Some(client) = client else {
         let detail = if bearer(request.headers()).is_some() {
-            "unknown or revoked token"
+            crate::messages::DETAIL_REFUSED_TOKEN
         } else {
-            "missing bearer token"
+            crate::messages::DETAIL_MISSING_TOKEN
         };
         let at = now();
         let (write, dropped) = auth
@@ -162,7 +171,7 @@ async fn authenticate(State(auth): State<AuthState>, mut request: Request, next:
                 kind: McpCallKind::Connect,
                 name: MCP_PATH.to_owned(),
                 outcome: McpOutcome::Denied,
-                detail: Some(format!("{dropped} more refused connections not logged")),
+                detail: Some(crate::messages::refused_summary(dropped)),
             });
         }
         if write {
@@ -367,6 +376,15 @@ mod tests {
         assert_eq!(denied.admit(1030), (false, 0));
         assert_eq!(denied.admit(1060), (true, 81));
         assert_eq!(denied.admit(1061), (true, 0));
+    }
+
+    #[test]
+    fn the_port_comes_from_the_override_then_the_settings() {
+        let fixed = McpSettings { port: Some(4799) };
+        assert_eq!(configured_port(&fixed, None), 4799);
+        assert_eq!(configured_port(&fixed, Some(5000)), 5000);
+        assert_eq!(configured_port(&fixed, Some(0)), 0, "0 = any free port");
+        assert_eq!(configured_port(&McpSettings::default(), None), 0);
     }
 
     #[test]

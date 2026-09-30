@@ -19,6 +19,8 @@ unicode-segmentation.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# Property tests (tokenizer, timer wheel, quiet hours); same as nail-search.
+proptest = "1.11"
 
 [lints]
 workspace = true

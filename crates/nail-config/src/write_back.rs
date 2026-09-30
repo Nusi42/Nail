@@ -10,7 +10,7 @@
 //! binding that the defaults define writes an `unbind`.
 
 use kdl::{KdlDocument, KdlNode, KdlValue};
-use nail_api::{ApiError, ErrorCode, LayoutNodeRef, LayoutPatch, ToolbarItem};
+use nail_api::{ApiError, ErrorCode, LayoutNodeRef, LayoutPatch, LocalizedMessage, ToolbarItem};
 use serde_json::Value;
 
 use crate::error::ConfigError;
@@ -19,6 +19,7 @@ use crate::kdl_edit::{
     replace_rendered, same_node, set_prop, str_prop, to_text,
 };
 use crate::kdl_util::is_kebab;
+use crate::l10n::msg;
 use crate::layout::normalize_key;
 use crate::render;
 use crate::{DEFAULT_LAYOUT_KDL, LayoutFile, default_layout, parse_layout_all};
@@ -33,7 +34,7 @@ pub enum EditError {
     Config(Vec<ConfigError>),
     /// The request does not fit the file (unknown window, wrong number of
     /// sizes, …).
-    Invalid(String),
+    Invalid(LocalizedMessage),
 }
 
 impl std::fmt::Display for EditError {
@@ -47,7 +48,7 @@ impl std::fmt::Display for EditError {
                 }
                 Ok(())
             }
-            Self::Invalid(message) => f.write_str(message),
+            Self::Invalid(message) => f.write_str(&crate::l10n::english(message)),
         }
     }
 }
@@ -57,14 +58,22 @@ impl std::error::Error for EditError {}
 impl From<EditError> for ApiError {
     fn from(error: EditError) -> Self {
         match &error {
-            EditError::Config(_) => ApiError::new(ErrorCode::Config, error.to_string()),
-            EditError::Invalid(_) => ApiError::invalid_request(error.to_string()),
+            EditError::Config(errors) => {
+                let api = ApiError::new(ErrorCode::Config, error.to_string());
+                match errors.first() {
+                    Some(first) => api.with_localized((*first.localized).clone()),
+                    None => api,
+                }
+            }
+            EditError::Invalid(message) => {
+                ApiError::invalid_request(error.to_string()).with_localized(message.clone())
+            }
         }
     }
 }
 
-fn invalid(message: impl Into<String>) -> EditError {
-    EditError::Invalid(message.into())
+fn invalid(message: LocalizedMessage) -> EditError {
+    EditError::Invalid(message)
 }
 
 /// Applies `patches` (in order, as one edit) to the text of `layout.kdl`
@@ -86,10 +95,11 @@ pub fn apply_layout_patches(
     }
     let out = editor.finish();
     if let Err(errors) = parse_layout_all(&out, file) {
-        return Err(invalid(format!(
-            "the change would make {file} invalid: {}",
-            errors[0]
-        )));
+        return Err(invalid(
+            msg("config-edit-makes-invalid")
+                .arg("file", file)
+                .arg("error", errors[0].to_string()),
+        ));
     }
     Ok(out)
 }
@@ -119,12 +129,13 @@ impl LayoutEditor {
     /// Starts editing valid text whose single top-level node is `root`
     /// (`layout` or `theme`).
     pub(crate) fn open(text: &str, root: &str, sparse: bool) -> Result<Self, EditError> {
-        let doc = KdlDocument::parse_v2(text).map_err(|e| invalid(e.to_string()))?;
+        let doc = KdlDocument::parse_v2(text)
+            .map_err(|e| invalid(msg("config-syntax").arg("detail", e.to_string())))?;
         let root = doc
             .nodes()
             .iter()
             .position(|n| n.name().value() == root)
-            .ok_or_else(|| invalid(format!("the file has no `{root}` node")))?;
+            .ok_or_else(|| invalid(msg("config-edit-no-root").arg("root", root)))?;
         Ok(Self {
             doc,
             root,
@@ -152,36 +163,46 @@ impl LayoutEditor {
             LayoutPatch::SplitSizes { node, sizes } => {
                 for size in sizes {
                     if size.is_empty() || size.contains(char::is_whitespace) {
-                        return Err(invalid(format!("invalid size {size:?}")));
+                        return Err(invalid(
+                            msg("config-edit-size-invalid").arg("size", format!("{size:?}")),
+                        ));
                     }
                 }
                 let target = self.node_mut(node)?;
                 let name = target.name().value().to_owned();
                 if name != "split" && name != "stack" {
-                    return Err(invalid(format!(
-                        "the node at {node:?} is a `{name}`, not a split or stack"
-                    )));
+                    return Err(invalid(
+                        msg("config-edit-not-split")
+                            .arg("node", format!("{node:?}"))
+                            .arg("name", name),
+                    ));
                 }
                 let children = target.children().map_or(0, |c| c.nodes().len());
                 if children != sizes.len() {
-                    return Err(invalid(format!(
-                        "{} sizes for a `{name}` with {children} children",
-                        sizes.len()
-                    )));
+                    return Err(invalid(
+                        msg("config-edit-sizes-count")
+                            .arg("count", sizes.len())
+                            .arg("name", name)
+                            .arg("children", children),
+                    ));
                 }
                 set_prop(target, "sizes", KdlValue::String(sizes.join(" ")));
                 Ok(())
             }
             LayoutPatch::ColumnOrder { node, columns } => {
                 if columns.is_empty() || columns.iter().any(|c| !is_kebab(c)) {
-                    return Err(invalid(format!("invalid column ids {columns:?}")));
+                    return Err(invalid(
+                        msg("config-edit-columns-invalid").arg("columns", format!("{columns:?}")),
+                    ));
                 }
                 let target = self.node_mut(node)?;
                 let name = target.name().value();
                 if matches!(name, "split" | "stack" | "tabs") {
-                    return Err(invalid(format!(
-                        "the node at {node:?} is a `{name}` container, not a list widget"
-                    )));
+                    return Err(invalid(
+                        msg("config-edit-not-list")
+                            .arg("node", format!("{node:?}"))
+                            .arg("name", name),
+                    ));
                 }
                 set_prop(target, "columns", KdlValue::String(columns.join(" ")));
                 Ok(())
@@ -251,16 +272,17 @@ impl LayoutEditor {
     /// Copies the default definitions of a window into a sparse file.
     fn copy_default_window(&mut self, name: &str) -> Result<(), EditError> {
         if !self.sparse {
-            return Err(invalid(format!("the layout has no window `{name}`")));
+            return Err(invalid(msg("config-edit-no-window").arg("name", name)));
         }
-        let defaults = KdlDocument::parse_v2(DEFAULT_LAYOUT_KDL)
-            .map_err(|e| invalid(format!("the default layout does not parse: {e}")))?;
+        let defaults = KdlDocument::parse_v2(DEFAULT_LAYOUT_KDL).map_err(|e| {
+            invalid(msg("config-edit-default-invalid").arg("detail", e.to_string()))
+        })?;
         let default_body = defaults.nodes()[0]
             .children()
-            .ok_or_else(|| invalid("the default layout is empty"))?;
+            .ok_or_else(|| invalid(msg("config-edit-default-empty")))?;
         let sites = Self::window_sites(default_body, name);
         if sites.is_empty() {
-            return Err(invalid(format!("the layout has no window `{name}`")));
+            return Err(invalid(msg("config-edit-no-window").arg("name", name)));
         }
         let pad = self.style.pad(1);
         let mut text = String::new();
@@ -303,10 +325,11 @@ impl LayoutEditor {
         }
         let sites = Self::window_sites(self.body(), &node.window);
         let site = *sites.get(node.breakpoint as usize).ok_or_else(|| {
-            invalid(format!(
-                "window `{}` has no breakpoint {}",
-                node.window, node.breakpoint
-            ))
+            invalid(
+                msg("config-edit-no-breakpoint")
+                    .arg("name", node.window.as_str())
+                    .arg("breakpoint", node.breakpoint),
+            )
         })?;
         let body = self.body();
         let window = match site.inner {
@@ -317,13 +340,17 @@ impl LayoutEditor {
             .children_mut()
             .as_mut()
             .and_then(|c| c.nodes_mut().first_mut())
-            .ok_or_else(|| invalid(format!("window `{}` is empty", node.window)))?;
+            .ok_or_else(|| {
+                invalid(msg("config-edit-window-empty").arg("name", node.window.as_str()))
+            })?;
         for &index in &node.path {
             current = current
                 .children_mut()
                 .as_mut()
                 .and_then(|c| c.nodes_mut().get_mut(index as usize))
-                .ok_or_else(|| invalid(format!("no node at path {:?}", node.path)))?;
+                .ok_or_else(|| {
+                    invalid(msg("config-edit-no-node").arg("path", format!("{:?}", node.path)))
+                })?;
         }
         Ok(current)
     }
@@ -357,13 +384,15 @@ impl LayoutEditor {
 
     fn set_toolbar(&mut self, name: &str, items: &[ToolbarItem]) -> Result<(), EditError> {
         if !is_kebab(name) {
-            return Err(invalid(format!("invalid toolbar name `{name}`")));
+            return Err(invalid(
+                msg("config-toolbar-name-invalid").arg("name", name),
+            ));
         }
         let style = self.style.clone();
         let sites = Self::named_sites(self.body(), "toolbar", name);
         let Some(&(block, index)) = sites.last() else {
             let text = render::toolbar(name, items, 1, &style)
-                .ok_or_else(|| invalid("toolbar item arguments must be plain values"))?;
+                .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             append_rendered(self.body(), 1, &text, &style);
             return Ok(());
         };
@@ -380,7 +409,7 @@ impl LayoutEditor {
             .is_some_and(|first| first.format().is_some_and(|f| f.leading.contains('\n')));
         if !multiline {
             let text = render::toolbar(name, items, depth, &style)
-                .ok_or_else(|| invalid("toolbar item arguments must be plain values"))?;
+                .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             replace_rendered(parent, index, &text);
             return Ok(());
         }
@@ -391,7 +420,7 @@ impl LayoutEditor {
         let mut nodes = Vec::with_capacity(items.len());
         for item in items {
             let text = render::toolbar_item(item, depth + 1, &style)
-                .ok_or_else(|| invalid("toolbar item arguments must be plain values"))?;
+                .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             let fresh = parse_rendered(&text).remove(0);
             let reused = old
                 .iter_mut()
@@ -444,7 +473,9 @@ impl LayoutEditor {
     /// file gets the default items written back.
     fn reset_toolbar(&mut self, name: &str) -> Result<(), EditError> {
         if !is_kebab(name) {
-            return Err(invalid(format!("invalid toolbar name `{name}`")));
+            return Err(invalid(
+                msg("config-toolbar-name-invalid").arg("name", name),
+            ));
         }
         let style = self.style.clone();
         let sites = Self::named_sites(self.body(), "toolbar", name);
@@ -478,7 +509,9 @@ impl LayoutEditor {
     /// (non-sparse) file gets the default binding written back.
     fn reset_binding(&mut self, context: &str, key: &str) -> Result<(), EditError> {
         if context != "global" && !is_kebab(context) {
-            return Err(invalid(format!("invalid key context `{context}`")));
+            return Err(invalid(
+                msg("config-key-context-invalid").arg("context", context),
+            ));
         }
         let key = normalize_key(key).map_err(invalid)?;
         let style = self.style.clone();
@@ -542,7 +575,9 @@ impl LayoutEditor {
         action: Option<(&String, &Vec<Value>)>,
     ) -> Result<(), EditError> {
         if context != "global" && !is_kebab(context) {
-            return Err(invalid(format!("invalid key context `{context}`")));
+            return Err(invalid(
+                msg("config-key-context-invalid").arg("context", context),
+            ));
         }
         let key = normalize_key(key).map_err(invalid)?;
         let style = self.style.clone();
@@ -567,7 +602,7 @@ impl LayoutEditor {
         match action {
             Some((action, args)) => {
                 let text = render::bind(&key, action, args, 2, &style)
-                    .ok_or_else(|| invalid("binding arguments must be plain values"))?;
+                    .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
                 if let Some(&(b, i)) = matches.last() {
                     let block = self.body().nodes_mut()[b].ensure_children();
                     replace_rendered(block, i, &text);

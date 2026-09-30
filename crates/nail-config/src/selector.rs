@@ -8,9 +8,10 @@
 //! compound's name (`.subject` after `message-list.row` means
 //! `message-list.row.subject`).
 
-use nail_api::{AncestorSelector, PartCondition};
+use nail_api::{AncestorSelector, LocalizedMessage, PartCondition};
 
 use crate::kdl_util::{is_dotted_kebab, is_kebab};
+use crate::l10n::msg;
 
 /// A parsed selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +33,7 @@ struct Compound {
 }
 
 /// Parses a part selector. Errors are readable messages.
-pub fn parse_selector(input: &str) -> Result<Selector, String> {
+pub fn parse_selector(input: &str) -> Result<Selector, LocalizedMessage> {
     let mut compounds: Vec<Compound> = Vec::new();
     for raw in input.split_whitespace() {
         let prev = compounds.last().map(|c| c.name.as_str());
@@ -40,7 +41,7 @@ pub fn parse_selector(input: &str) -> Result<Selector, String> {
     }
     let target = compounds
         .pop()
-        .ok_or_else(|| "a part selector must not be empty".to_owned())?;
+        .ok_or_else(|| msg("config-selector-empty"))?;
     Ok(Selector {
         selector: target.name,
         states: target.states,
@@ -56,27 +57,21 @@ pub fn parse_selector(input: &str) -> Result<Selector, String> {
     })
 }
 
-fn parse_compound(raw: &str, prev: Option<&str>) -> Result<Compound, String> {
+fn parse_compound(raw: &str, prev: Option<&str>) -> Result<Compound, LocalizedMessage> {
     let name_end = raw.find([':', '[']).unwrap_or(raw.len());
     let written = &raw[..name_end];
     let name = match (written.strip_prefix('.'), prev) {
         (Some(rel), Some(prev)) => format!("{prev}.{rel}"),
         (Some(_), None) => {
-            return Err(format!(
-                "`{written}` continues a previous part name, but there is none"
-            ));
+            return Err(msg("config-selector-relative").arg("part", written));
         }
         (None, _) if written.is_empty() => {
-            return Err(format!(
-                "`{raw}` needs a part name before its states or conditions"
-            ));
+            return Err(msg("config-selector-needs-name").arg("selector", raw));
         }
         (None, _) => written.to_owned(),
     };
     if !is_dotted_kebab(&name) {
-        return Err(format!(
-            "invalid part name `{name}`: use dot-separated lowercase words like `message-list.row`"
-        ));
+        return Err(msg("config-part-name-invalid").arg("name", name.as_str()));
     }
 
     let mut compound = Compound {
@@ -90,26 +85,24 @@ fn parse_compound(raw: &str, prev: Option<&str>) -> Result<Compound, String> {
             let end = after.find([':', '[']).unwrap_or(after.len());
             let state = &after[..end];
             if !is_kebab(state) {
-                return Err(format!(
-                    "invalid state `:{state}`: use lowercase words like `:selected`"
-                ));
+                return Err(msg("config-selector-state-invalid").arg("state", state));
             }
             compound.states.push(state.to_owned());
             rest = &after[end..];
         } else if let Some(after) = rest.strip_prefix('[') {
             let end = after
                 .find(']')
-                .ok_or_else(|| format!("missing `]` in `{raw}`"))?;
+                .ok_or_else(|| msg("config-selector-bracket").arg("selector", raw))?;
             compound.conditions.push(parse_condition(&after[..end])?);
             rest = &after[end + 1..];
         } else {
-            return Err(format!("unexpected `{rest}` in part selector"));
+            return Err(msg("config-selector-unexpected").arg("text", rest));
         }
     }
     Ok(compound)
 }
 
-fn parse_condition(inner: &str) -> Result<PartCondition, String> {
+fn parse_condition(inner: &str) -> Result<PartCondition, LocalizedMessage> {
     let (key, value) = match inner.split_once('=') {
         None => (inner, None),
         Some((key, raw)) => {
@@ -118,15 +111,13 @@ fn parse_condition(inner: &str) -> Result<PartCondition, String> {
                 .find_map(|q| raw.strip_prefix(*q).and_then(|v| v.strip_suffix(*q)))
                 .unwrap_or(raw);
             if value.is_empty() || value.contains(['"', '\'']) {
-                return Err(format!("invalid condition value in `[{inner}]`"));
+                return Err(msg("config-selector-condition-value").arg("condition", inner));
             }
             (key, Some(value.to_owned()))
         }
     };
     if !is_kebab(key) {
-        return Err(format!(
-            "invalid condition `[{inner}]`: the key must be a lowercase word like `tag`"
-        ));
+        return Err(msg("config-selector-condition-key").arg("condition", inner));
     }
     Ok(PartCondition {
         key: key.to_owned(),
@@ -194,7 +185,7 @@ mod tests {
             ("row[tag=]", "invalid condition value"),
             ("row]x", "invalid part name"),
         ] {
-            let err = parse_selector(input).unwrap_err();
+            let err = crate::l10n::english(&parse_selector(input).unwrap_err());
             assert!(err.contains(needle), "{input:?}: {err}");
         }
     }

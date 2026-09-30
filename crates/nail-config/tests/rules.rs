@@ -586,11 +586,11 @@ fn specific_errors() {
         ),
         (
             "rule \"a\" { when { attachment { size larger=1 } } }",
-            "expected name or type",
+            "expected name, type",
         ),
         (
             "rule \"a\" { when { attachment { name contains=\"a\"\n name contains=\"b\" } } }",
-            "given twice",
+            "is set twice",
         ),
         ("rule \"a\" { when { folder } }", "needs a folder"),
         (

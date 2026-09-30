@@ -40,8 +40,7 @@ import {
   switchMode,
   uploadFiles,
 } from "./flows";
-import { HtmlEditor } from "./HtmlEditor";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { LazyHtmlEditor, LazyMarkdownEditor, prefetchEditors } from "./lazyEditors";
 import { Preview } from "./Preview";
 import { needsReminder, parseKeywords } from "./reminder";
 import { AUTOSAVE_MS, richStoreFor, useRich, useRichStoreApi, type RichState } from "./store";
@@ -212,6 +211,9 @@ export function Composer({ node }: WidgetProps) {
   const keywords = useMemo(() => parseKeywords(t("composer-attachment-keywords")), [t]);
 
   useAutosave(ctx, composer, rich);
+
+  // The rich editors live in their own chunks: start loading them now.
+  useEffect(() => prefetchEditors(), []);
 
   // `composer.attach` asks for the file picker.
   useEffect(() => {
@@ -496,7 +498,7 @@ export function Composer({ node }: WidgetProps) {
         </>
       )}
       {mode === "html" && (
-        <HtmlEditor
+        <LazyHtmlEditor
           value={rich.html}
           label={bodyLabel}
           previews={rich.inlinePreviews}
@@ -508,7 +510,7 @@ export function Composer({ node }: WidgetProps) {
       )}
       {mode === "markdown" && (
         <div data-part="composer.markdown" data-state={rich.preview ? "split" : undefined}>
-          <MarkdownEditor
+          <LazyMarkdownEditor
             value={rich.markdown}
             label={bodyLabel}
             onChange={(markdown) => richApi.setState({ markdown })}

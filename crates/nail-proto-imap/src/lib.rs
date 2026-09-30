@@ -20,6 +20,12 @@
 //! [create](ImapClient::create_folder) / [rename](ImapClient::rename_folder)
 //! / [delete](ImapClient::delete_folder).
 //!
+//! Sync policies (M2c WP53): [`ImapClient::fetch_batch_with`] fetches a
+//! planned batch as whole messages, header blocks only, or whole messages
+//! since a day ([`BodyFetch`]); [`ImapClient::fetch_body`] fetches one
+//! body on demand. Server-side search: [`ImapClient::search_messages`]
+//! runs a [`SearchKey`] (`UID SEARCH`, `CHARSET UTF-8` when needed).
+//!
 //! Push: [`ImapClient::idle`] waits for changes on one connection;
 //! [`MailboxWatcher`] keeps a dedicated connection in `IDLE` (re-issued
 //! every 29 minutes) or polls with `NOOP`, reconnects with backoff and
@@ -30,6 +36,7 @@
 //! see `docs/adr/0005-imap-library.md` and
 //! `docs/adr/0018-wp11-imap-engine.md`.
 
+mod bodies;
 mod capabilities;
 mod changes;
 mod client;
@@ -41,10 +48,12 @@ mod folder;
 mod idle;
 mod resync;
 mod sasl;
+mod search;
 mod transport;
 mod watch;
 mod write;
 
+pub use bodies::{BodyFetch, ImapDate};
 pub use capabilities::Capabilities;
 pub use changes::{FlagUpdate, MailboxChange};
 pub use client::{
@@ -62,6 +71,7 @@ pub use folder::{
 };
 pub use idle::{IDLE_REISSUE, IdleEnd, IdleOutcome};
 pub use resync::{FlagResync, ResyncMethod, ResyncState};
+pub use search::SearchKey;
 pub use transport::ImapStream;
 pub use watch::{CredentialProvider, MailboxWatcher, WatchConfig, WatchEvent, WatchMode};
 pub use write::{

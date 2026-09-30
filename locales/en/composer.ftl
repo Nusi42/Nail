@@ -105,3 +105,8 @@ composer-action-set-mode = Change format
 composer-action-toggle-preview = Show or hide the preview
 composer-action-toggle-source = Show or hide the HTML source
 composer-action-attach = Attach a file
+
+## Editors loaded on demand (M2c WP54)
+
+composer-editor-loading = Loading the editor…
+composer-editor-failed = The editor could not be loaded. Reload Nail and try again.

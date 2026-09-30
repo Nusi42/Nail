@@ -45,6 +45,27 @@ pub enum BridgeError {
     Transport(String),
 }
 
+impl BridgeError {
+    /// The user-facing text (`mcp-core-bridge-*` in `core.ftl`), which
+    /// `nail mcp` prints; the English `Display` stays for logs.
+    pub fn localized(&self) -> nail_api::LocalizedMessage {
+        use nail_api::LocalizedMessage as M;
+        match self {
+            Self::NoToken => M::new("mcp-core-bridge-no-token").arg("variable", TOKEN_ENV),
+            Self::NotRunning(detail) => {
+                M::new("mcp-core-bridge-not-running").arg("detail", detail.as_str())
+            }
+            Self::Unauthorized => M::new("mcp-core-bridge-token-refused"),
+            Self::WrongClient { expected, actual } => M::new("mcp-core-bridge-wrong-client")
+                .arg("expected", expected.as_str())
+                .arg("actual", actual.as_str()),
+            Self::Transport(detail) => {
+                M::new("mcp-core-bridge-transport").arg("detail", detail.as_str())
+            }
+        }
+    }
+}
+
 /// Where and as whom to connect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BridgeOptions {
@@ -148,5 +169,42 @@ where
                     .map_err(|e| BridgeError::Transport(e.to_string()))?;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errors_have_user_facing_texts() {
+        let cases = [
+            (BridgeError::NoToken, "mcp-core-bridge-no-token"),
+            (
+                BridgeError::NotRunning("refused".into()),
+                "mcp-core-bridge-not-running",
+            ),
+            (BridgeError::Unauthorized, "mcp-core-bridge-token-refused"),
+            (
+                BridgeError::WrongClient {
+                    expected: "a".into(),
+                    actual: "b".into(),
+                },
+                "mcp-core-bridge-wrong-client",
+            ),
+            (
+                BridgeError::Transport("reset".into()),
+                "mcp-core-bridge-transport",
+            ),
+        ];
+        for (error, id) in cases {
+            let localized = error.localized();
+            assert_eq!(localized.id, id);
+            assert!(localized.is_valid());
+        }
+        assert_eq!(
+            BridgeError::NoToken.localized().args["variable"],
+            TOKEN_ENV.into()
+        );
     }
 }

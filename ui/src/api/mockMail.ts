@@ -228,7 +228,7 @@ export function folderMessages(d: MockData, folderId: FolderId): MessageSummary[
 // ---------------------------------------------------------------------------
 // Writes
 
-function findMessages(d: MockData, ids: readonly MessageId[]): MessageSummary[] | null {
+export function findMessages(d: MockData, ids: readonly MessageId[]): MessageSummary[] | null {
   const found = ids.map((id) => d.messages.find((m) => m.id === id));
   return found.every((m) => m !== undefined) ? (found as MessageSummary[]) : null;
 }
@@ -237,7 +237,12 @@ function findMessages(d: MockData, ids: readonly MessageId[]): MessageSummary[] 
  * Queues one op per affected account, applies the change locally at once
  * (as the core does) and replays it asynchronously with `OpStatus` events.
  */
-function queue(core: MockCore, targets: MessageSummary[], apply: () => FolderId[]): Response {
+/** Applies a write at once and "replays" it per account (`Queued` + `OpStatus`). */
+export function queue(
+  core: MockCore,
+  targets: MessageSummary[],
+  apply: () => FolderId[],
+): Response {
   const folders = apply();
   const accounts = [...new Set(targets.map((m) => m.account_id))];
   const opIds = accounts.map(() => core.nextId("op-"));

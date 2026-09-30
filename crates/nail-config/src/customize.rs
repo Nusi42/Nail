@@ -14,6 +14,7 @@ use nail_api::{ApiError, ConfigBackupId, ConfigFile, ErrorCode, LayoutPatch};
 
 use crate::backup;
 use crate::error::ConfigError;
+use crate::l10n::msg;
 use crate::manager::{ConfigKind, ConfigManager, ConfigUpdate};
 use crate::merge::{self, MergeOutcome};
 use crate::open;
@@ -26,10 +27,11 @@ fn io_error(file: ConfigFile, error: &std::io::Error) -> ApiError {
 fn mergeable(file: ConfigFile) -> Result<(), ApiError> {
     match file {
         ConfigFile::Theme | ConfigFile::Layout => Ok(()),
-        other => Err(ApiError::invalid_request(format!(
-            "{} cannot be merged (only theme.kdl and layout.kdl)",
-            other.file_name()
-        ))),
+        other => {
+            let localized = msg("config-merge-unsupported").arg("file", other.file_name());
+            Err(ApiError::invalid_request(crate::l10n::english(&localized))
+                .with_localized(localized))
+        }
     }
 }
 
@@ -137,13 +139,16 @@ impl ConfigManager {
         let restored =
             backup::restore(self.dir(), file, backup_id).map_err(|e| io_error(file, &e))?;
         if restored.is_none() {
-            return Err(ApiError::new(
-                ErrorCode::NotFound,
-                match backup_id {
-                    Some(id) => format!("no backup {id} of {}", file.file_name()),
-                    None => format!("no backup of {}", file.file_name()),
-                },
-            ));
+            let localized = match backup_id {
+                Some(id) => msg("config-backup-missing")
+                    .arg("backup", id.to_string())
+                    .arg("file", file.file_name()),
+                None => msg("config-backup-none").arg("file", file.file_name()),
+            };
+            return Err(
+                ApiError::new(ErrorCode::NotFound, crate::l10n::english(&localized))
+                    .with_localized(localized),
+            );
         }
         Ok(self.updates_after_write(file))
     }

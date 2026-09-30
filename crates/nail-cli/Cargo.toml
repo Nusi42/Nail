@@ -13,6 +13,8 @@ nail-config.workspace = true
 nail-core = { workspace = true, features = ["demo"] }
 nail-server.workspace = true
 nail-mcp.workspace = true
+# The data directory's single-instance lock and the MCP settings (M2c).
+nail-store.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 serde_json.workspace = true
@@ -24,7 +26,6 @@ tempfile.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
-nail-store.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]

@@ -129,3 +129,22 @@ fn empty_extension_equals_the_default() {
         nail_config::parse_layout("layout \"default\" extends=\"default\"", "layout.kdl").unwrap();
     assert_eq!(layout, nail_config::default_layout());
 }
+
+/// The example themes shipped in `defaults/themes/` (e.g. high contrast)
+/// parse and resolve.
+#[test]
+fn example_themes_parse() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../defaults/themes");
+    let mut count = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "kdl") {
+            let text = std::fs::read_to_string(&path).unwrap();
+            if let Err(e) = nail_config::parse_theme(&text, "theme.kdl") {
+                panic!("{}: {e}", path.display());
+            }
+            count += 1;
+        }
+    }
+    assert!(count >= 1, "no example themes in {}", dir.display());
+}

@@ -11,6 +11,8 @@ publish.workspace = true
 nail-api.workspace = true
 nail-store.workspace = true
 nail-mime.workspace = true
+# The server-side search fallback builds IMAP search keys (src/imap.rs).
+nail-proto-imap.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tantivy.workspace = true

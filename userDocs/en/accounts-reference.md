@@ -137,6 +137,9 @@ account "work" email="ada@work.example" {
 Without a `sieve` node every rule runs in Nail. POP3 accounts cannot use
 `sieve`.
 
+Which rules can run on the server, the vacation reply and what Nail
+changes there: [Server-side rules and vacation replies](server-side-rules.md).
+
 ## Servers
 
 | Property | Meaning | Default |

@@ -17,6 +17,9 @@
 //!   decrypted mail is indexed only for accounts that opted in; the index
 //!   then counts as sensitive. [`SearchIndex::open_with`] takes the
 //!   encryption-at-rest directory wrapper.
+//! * [`imap`] — the server-side search fallback (M2c WP53): a query as an
+//!   IMAP search key for messages without a local body
+//!   ([`imap::server_search`], [`imap::needs_server`]).
 
 #![warn(missing_docs)]
 
@@ -24,6 +27,7 @@ mod date;
 mod document;
 mod error;
 mod exec;
+pub mod imap;
 mod index;
 mod policy;
 pub mod query;

@@ -5,14 +5,16 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::Context;
+use nail_api::LocalizedMessage;
 use nail_core::demo::DemoMulti;
 use nail_core::{Service, ServiceOptions, paths};
 use nail_server::{
     RemoteUiHost, RemoteUiOptions, Server, ServerOptions, TestControl, TransportOptions,
 };
+use nail_store::DataDirLock;
 
 use crate::cli::{Seed, ServeArgs};
+use crate::messages::{self, Localized};
 
 /// Environment variable naming the UI directory.
 pub const UI_DIR_ENV: &str = "NAIL_UI_DIR";
@@ -37,7 +39,7 @@ pub fn resolve_dirs(
         let dir = tempfile::Builder::new()
             .prefix("nail-demo-")
             .tempdir()
-            .context("cannot create a temporary directory for the demo")?;
+            .localized(|| LocalizedMessage::new("cli-demo-temp-dir"))?;
         tracing::info!(dir = %dir.path().display(), "demo run in a temporary directory");
         Some(dir)
     } else {
@@ -55,9 +57,8 @@ pub fn resolve_dirs(
             (Some(dir), _, _) => Ok(dir),
             (None, Some(temp), _) => Ok(temp.path().join(sub)),
             (None, None, Some(root)) => Ok(root.join(sub)),
-            (None, None, None) => {
-                default().with_context(|| format!("no default {sub} directory; pass {flag}"))
-            }
+            (None, None, None) => default()
+                .localized(|| LocalizedMessage::new("cli-no-default-dir").arg("flag", flag)),
         };
     Ok(Dirs {
         data: pick(data_dir, "data", paths::default_data_dir, "--data-dir")?,
@@ -96,14 +97,15 @@ pub fn write_demo_multi_config(demo: &DemoMulti, config_dir: &Path) -> anyhow::R
     if let Ok(existing) = std::fs::read_to_string(&path)
         && !existing.starts_with(nail_core::demo::MULTI_CONFIG_MARKER)
     {
-        anyhow::bail!(
-            "{} holds real accounts; --seed demo-multi needs an empty --config-dir (or none, for a temporary one)",
-            path.display()
-        );
+        return Err(messages::error(
+            LocalizedMessage::new("cli-demo-real-accounts").arg("path", path.display().to_string()),
+        ));
     }
     std::fs::create_dir_all(config_dir)
         .and_then(|()| std::fs::write(&path, demo.accounts_kdl()))
-        .with_context(|| format!("cannot write {}", path.display()))
+        .localized(|| {
+            LocalizedMessage::new("cli-cannot-write").arg("path", path.display().to_string())
+        })
 }
 
 /// What a `nail serve` session may start on this machine. Seeded (demo,
@@ -118,6 +120,8 @@ fn browser_mode(options: &mut ServiceOptions, seed: Option<Seed>) {
 pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     let dirs = resolve_dirs(args.data_dir, args.config_dir, args.seed)?;
     let (data_dir, config_dir) = (dirs.data.clone(), dirs.config.clone());
+    // One process per data directory (a headless `nail mcp` included).
+    let lock = DataDirLock::acquire(&data_dir, "serve")?;
     let ui_dir = resolve_ui_dir(
         args.ui_dir,
         std::env::var_os(UI_DIR_ENV).map(PathBuf::from),
@@ -149,8 +153,9 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         );
         demo_multi = Some(Arc::new(demo));
     }
-    let service = Service::open(options)
-        .with_context(|| format!("cannot open the data directory {}", data_dir.display()))?;
+    let service = Service::open(options).localized(|| {
+        LocalizedMessage::new("cli-cannot-open-data-dir").arg("dir", data_dir.display().to_string())
+    })?;
 
     if let Some(demo) = &demo_multi {
         demo.seed_security(&service).await?;
@@ -191,10 +196,12 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         None
     } else {
         let endpoint = nail_mcp::endpoint::endpoint_path(&data_dir);
+        let settings = service.store().call(|s| s.mcp_settings()).await?;
+        let port = nail_mcp::configured_port(&settings, args.mcp_port);
         let running = service
-            .start_mcp_server(args.mcp_port, Some(endpoint))
+            .start_mcp_server(port, Some(endpoint))
             .await
-            .context("cannot start the MCP server")?;
+            .map_err(|err| messages::mcp_start_failed(port, err.into()))?;
         tracing::info!(url = %running.url(), "MCP server running");
         Some(running)
     };
@@ -247,6 +254,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     }
     service.shutdown().await;
     drop(demo_multi);
+    drop(lock);
     drop(dirs);
     Ok(())
 }

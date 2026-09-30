@@ -15,7 +15,11 @@ import * as mail from "./mockMail";
 import { errorResponse, type MockCore } from "./mockMail";
 import * as outbox from "./mockOutbox";
 import { parseQuery } from "./mockSearch";
-import { answerComposer, isComposerRequest } from "../features/composer/mock";
+import {
+  answerComposer,
+  answerDraftAttachment,
+  isComposerRequest,
+} from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerRemote, decorateRemoteContent, isRemoteRequest } from "../features/remote/mock";
@@ -23,7 +27,7 @@ import { answerRules, isRulesRequest } from "../features/rules/mock";
 import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
 import { answerSieve, isSieveRequest } from "../features/sieve/mock";
 import { answerSync, isSyncRequest } from "../features/sync/mock";
-import { answerTriage, isTriageRequest } from "../features/triage/mock";
+import { answerTriage, decorateJunk, isTriageRequest } from "../features/triage/mock";
 
 export interface MockTransportOptions {
   data?: MockData;
@@ -135,7 +139,10 @@ export class MockTransport implements Transport, MockCore {
         return body
           ? {
               type: "Message",
-              message: decorateRemoteContent(this, decorateMessageBody(this, body)),
+              message: decorateJunk(
+                this,
+                decorateRemoteContent(this, decorateMessageBody(this, body)),
+              ),
             }
           : notFound(`message ${request.id}`);
       }
@@ -207,6 +214,8 @@ export class MockTransport implements Transport, MockCore {
         return outbox.saveDraft(this, request.draft);
       case "GetDraft":
         return outbox.getDraft(this, request.draft_id);
+      case "GetDraftAttachment":
+        return answerDraftAttachment(this, request);
       case "DeleteDraft":
         return outbox.deleteDraft(this, request.draft_id);
       case "ListDrafts":

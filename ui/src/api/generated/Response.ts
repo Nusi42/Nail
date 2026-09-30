@@ -235,7 +235,15 @@ draft_id: DraftId, } | { "type": "Draft",
 /**
  * The draft.
  */
-draft: Draft, } | { "type": "Drafts", 
+draft: Draft, } | { "type": "AttachmentData", 
+/**
+ * MIME type (from the draft's attachment entry).
+ */
+mime: string, 
+/**
+ * The content, base64 (standard alphabet, padded).
+ */
+data: string, } | { "type": "Drafts", 
 /**
  * The drafts, each with its id.
  */

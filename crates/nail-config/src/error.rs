@@ -1,6 +1,8 @@
 //! The configuration error type.
 
-use nail_api::{ApiError, ConfigIssue, ErrorCode, Event, SourceLocation};
+use nail_api::{ApiError, ConfigIssue, ErrorCode, Event, LocalizedMessage, SourceLocation};
+
+use crate::l10n;
 
 /// What went wrong with a configuration file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -17,8 +19,9 @@ pub enum ConfigErrorKind {
 
 /// A configuration error with its position in the file.
 ///
-/// Messages are English diagnostics, like compiler messages; the UI shows
-/// them next to the localized `error-config` text.
+/// `localized` is the user-facing text (a Fluent id of
+/// `locales/<lang>/core.ftl` with arguments, M2c ADR 0043); `message` is its
+/// English rendering, a diagnostic like a compiler message (logs, CLI).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{file}:{line}:{column}: {message}")]
 pub struct ConfigError {
@@ -30,35 +33,44 @@ pub struct ConfigError {
     pub line: u32,
     /// 1-based column in characters (1 when the error has no position).
     pub column: u32,
-    /// Readable description of the problem.
+    /// Readable description of the problem (English).
     pub message: String,
+    /// The same as a Fluent id + arguments (what the UI shows).
+    pub localized: Box<LocalizedMessage>,
 }
 
 impl ConfigError {
     /// Creates an error at a source location.
-    pub fn at(kind: ConfigErrorKind, loc: &SourceLocation, message: impl Into<String>) -> Self {
+    pub fn at(kind: ConfigErrorKind, loc: &SourceLocation, localized: LocalizedMessage) -> Self {
         Self {
             kind,
             file: loc.file.clone(),
             line: loc.line,
             column: loc.column,
-            message: message.into(),
+            message: l10n::english(&localized),
+            localized: Box::new(localized),
         }
     }
 
     /// Creates an [`ConfigErrorKind::Invalid`] error at a source location.
-    pub fn invalid(loc: &SourceLocation, message: impl Into<String>) -> Self {
-        Self::at(ConfigErrorKind::Invalid, loc, message)
+    pub fn invalid(loc: &SourceLocation, localized: LocalizedMessage) -> Self {
+        Self::at(ConfigErrorKind::Invalid, loc, localized)
     }
 
-    /// Creates an [`ConfigErrorKind::Io`] error for a whole file.
+    /// Creates an [`ConfigErrorKind::Io`] error for a whole file
+    /// (`config-io`; the OS error text is an argument).
     pub fn io(file: impl Into<String>, error: &std::io::Error) -> Self {
+        let file = file.into();
+        let localized = l10n::msg("config-io")
+            .arg("file", file.as_str())
+            .arg("detail", error.to_string());
         Self {
             kind: ConfigErrorKind::Io,
-            file: file.into(),
+            file,
             line: 1,
             column: 1,
             message: error.to_string(),
+            localized: Box::new(localized),
         }
     }
 
@@ -78,7 +90,7 @@ impl ConfigError {
             line: self.line,
             column: self.column,
             message: self.message.clone(),
-            localized: None,
+            localized: Some((*self.localized).clone()),
         }
     }
 
@@ -89,7 +101,7 @@ impl ConfigError {
             line: self.line,
             column: self.column,
             message: self.message.clone(),
-            localized: None,
+            localized: Some((*self.localized).clone()),
         }
     }
 }
@@ -113,6 +125,12 @@ pub fn issues(file: &str, errors: &[ConfigError]) -> Vec<ConfigIssue> {
             let mut issue = err.to_issue();
             if err.file != file {
                 issue.message = format!("{}: {}", err.file, err.message);
+                // The event names one file: say where this error is.
+                if let Some(localized) = &mut issue.localized {
+                    localized
+                        .args
+                        .insert("in_file".to_owned(), err.file.as_str().into());
+                }
             }
             issue
         })
@@ -121,7 +139,12 @@ pub fn issues(file: &str, errors: &[ConfigError]) -> Vec<ConfigIssue> {
 
 impl From<ConfigError> for ApiError {
     fn from(error: ConfigError) -> Self {
-        ApiError::new(ErrorCode::Config, error.to_string())
+        let localized = (*error.localized)
+            .clone()
+            .arg("file", error.file.as_str())
+            .arg("line", error.line)
+            .arg("column", error.column);
+        ApiError::new(ErrorCode::Config, error.to_string()).with_localized(localized)
     }
 }
 
@@ -136,7 +159,7 @@ mod tests {
                 line: 3,
                 column: 7,
             },
-            "unknown token `$color.nope`",
+            l10n::msg("config-unknown-token").arg("token", "$color.nope"),
         )
     }
 
@@ -158,13 +181,23 @@ mod tests {
                 line: 3,
                 column: 7,
                 message: "unknown token `$color.nope`".into(),
-                localized: None,
+                localized: Some(l10n::msg("config-unknown-token").arg("token", "$color.nope")),
             }
         );
         let api: ApiError = err.clone().into();
         assert_eq!(api.code, ErrorCode::Config);
         assert!(api.message.contains("theme.kdl:3:7"));
+        let localized = api.localized.unwrap();
+        assert_eq!(localized.id, "config-unknown-token");
+        assert_eq!(localized.args["line"], 3u32.into());
         assert_eq!(err.location().line, 3);
+        // An error of another file names it in the issue.
+        let issues = issues("layout.kdl", &[err]);
+        assert!(issues[0].message.starts_with("theme.kdl: "));
+        assert_eq!(
+            issues[0].localized.as_ref().unwrap().args["in_file"],
+            "theme.kdl".into()
+        );
     }
 
     #[test]
@@ -176,6 +209,12 @@ mod tests {
         assert_eq!(
             (err.kind, err.line, err.column),
             (ConfigErrorKind::Io, 1, 1)
+        );
+        assert_eq!(err.message, "denied");
+        assert_eq!(err.localized.id, "config-io");
+        assert_eq!(
+            l10n::english(&err.localized),
+            "cannot read layout.kdl: denied"
         );
     }
 }

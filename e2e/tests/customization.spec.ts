@@ -100,7 +100,7 @@ test("the merge dialog applies a shared theme and reverts it", async ({ page, na
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = page.getByRole("dialog", { name: "Settings" });
   await settings.getByRole("tab", { name: "Customize" }).click();
-  await settings.getByRole("button", { name: "Apply a theme or layout…" }).click();
+  await settings.getByRole("button", { name: "Apply a theme or layout…", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Apply a theme or layout" });
   await dialog.getByRole("textbox").fill(SHARED_THEME);
   await dialog.getByRole("button", { name: "Compare with mine" }).click();

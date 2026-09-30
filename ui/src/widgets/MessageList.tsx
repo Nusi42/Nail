@@ -24,6 +24,29 @@ import { useGeometry } from "../theme/ThemeProvider";
 /** Row templates used when the layout gives none (or only invalid ones). */
 export const DEFAULT_ROWS = ["{from.name | bold-if-unread}  {date | relative}", "{subject}"];
 
+/**
+ * Columns a list can show instead of row templates (`columns="from subject
+ * date"`, edited in Settings → Customize), each rendered by a template.
+ */
+export const COLUMN_TEMPLATES = {
+  from: "{from.name | bold-if-unread}",
+  subject: "{subject | bold-if-unread}",
+  date: "{date | short-date}",
+  preview: "{preview}",
+  tags: "{tags | chips}",
+  account: "{account}",
+} as const;
+
+export type ColumnId = keyof typeof COLUMN_TEMPLATES;
+export const COLUMN_IDS = Object.keys(COLUMN_TEMPLATES) as ColumnId[];
+
+/** The known columns of a `columns` option, in order (unknown ones are skipped). */
+export function columnsOf(node: WidgetNode): ColumnId[] {
+  const value = node.options.columns;
+  if (typeof value !== "string") return [];
+  return value.split(/\s+/).filter((c): c is ColumnId => Object.hasOwn(COLUMN_TEMPLATES, c));
+}
+
 /** Compiles row templates, dropping invalid ones with a warning. */
 export function compileRows(rows: readonly string[]): CompiledTemplate[] {
   const compiled: CompiledTemplate[] = [];
@@ -45,6 +68,8 @@ export function rowStates(message: MessageSummary, selected: boolean): string | 
   if (message.flags.flagged) states.push("flagged");
   if (message.flags.answered) states.push("answered");
   if (message.has_attachments) states.push("has-attachments");
+  // M2c: only the headers are stored (the body downloads on open).
+  if (message.headers_only) states.push("headers-only");
   return states.length > 0 ? states.join(" ") : undefined;
 }
 
@@ -191,6 +216,17 @@ export function MessageList({ node }: WidgetProps) {
   const pageSize = Math.max(1, Math.min(1000, optionNumber(node, "page-size", 100)));
   const { rows, query, activeSearch, searchError, total } = useRows(node, pageSize);
   const templates = useMemo(() => compileRows(node.rows), [node.rows]);
+  const columnKey = columnsOf(node).join(" ");
+  const columns = useMemo(
+    () =>
+      columnKey === ""
+        ? []
+        : columnKey.split(" ").map((c) => ({
+            id: c as ColumnId,
+            template: compileTemplate(COLUMN_TEMPLATES[c as ColumnId]),
+          })),
+    [columnKey],
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -208,7 +244,7 @@ export function MessageList({ node }: WidgetProps) {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 20 * templates.length + 14,
+    estimateSize: () => 20 * (columns.length > 0 ? 1 : templates.length) + 14,
     overscan: 8,
     getItemKey: (index) => rows[index]?.key ?? index,
   });
@@ -279,6 +315,15 @@ export function MessageList({ node }: WidgetProps) {
         </div>
       )}
       {status}
+      {columns.length > 0 && (
+        <div data-part="message-list.header" aria-hidden="true">
+          {columns.map((c) => (
+            <span key={c.id} data-part="message-list.header.cell" data-column={c.id}>
+              {t(`message-list-column-${c.id}`)}
+            </span>
+          ))}
+        </div>
+      )}
       <div data-part="message-list.spacer" data-geom={`${geom}-before`} aria-hidden="true" />
       {items.map((item) => {
         const row = rows[item.index];
@@ -304,13 +349,25 @@ export function MessageList({ node }: WidgetProps) {
               scrollRef.current?.focus({ preventScroll: true });
             }}
           >
-            {templates.map((template, line) => (
-              <div key={line} data-part="message-list.row.line">
-                {renderTemplate(template, row.data, ctx).map((segment, index) => (
-                  <SegmentView key={index} segment={segment} />
+            {columns.length > 0 ? (
+              <div data-part="message-list.row.columns">
+                {columns.map((c) => (
+                  <span key={c.id} data-part="message-list.row.cell" data-column={c.id}>
+                    {renderTemplate(c.template, row.data, ctx).map((segment, index) => (
+                      <SegmentView key={index} segment={segment} />
+                    ))}
+                  </span>
                 ))}
               </div>
-            ))}
+            ) : (
+              templates.map((template, line) => (
+                <div key={line} data-part="message-list.row.line">
+                  {renderTemplate(template, row.data, ctx).map((segment, index) => (
+                    <SegmentView key={index} segment={segment} />
+                  ))}
+                </div>
+              ))
+            )}
           </div>
         );
       })}

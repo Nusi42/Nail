@@ -401,7 +401,7 @@ fn normalize_msgids(ids: &[String]) -> Vec<String> {
 
 /// What the sync-side merge did with one incoming message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MergeOutcome {
+pub(crate) enum MergeOutcome {
     /// Written as the server reported it.
     Written,
     /// Written with pending local flag / tag changes re-applied on top.
@@ -410,7 +410,7 @@ enum MergeOutcome {
     Skipped,
 }
 
-fn upsert_message_in_tx(
+pub(crate) fn upsert_message_in_tx(
     tx: &Transaction<'_>,
     msg: &StoredMessage,
     meta: Option<&MessageMeta>,

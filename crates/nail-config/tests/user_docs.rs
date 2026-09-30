@@ -141,3 +141,14 @@ fn markdown_mail_examples_are_valid() {
         assert!(identity.mail_style.is_some(), "{block}");
     }
 }
+
+#[test]
+fn accessibility_guide_examples_are_valid() {
+    let blocks = kdl_blocks("accessibility.md");
+    assert!(!blocks.is_empty(), "the guide has a theme example");
+    for block in blocks {
+        if let Err(e) = nail_config::parse_theme(&block, "theme.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}

@@ -14,7 +14,11 @@ To list whole conversations instead of single messages, set
 
 ## Flag, archive, move, delete
 
-The toolbar above the message and these keys act on the selected message:
+The toolbar above the message, the message's right-click menu (or
+**Shift+F10** / the menu key on the selected message) and these keys act on
+the selected message.
+
+### Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
@@ -25,9 +29,41 @@ The toolbar above the message and these keys act on the selected message:
 | `Delete` | Move to Trash (in Trash: delete for good) |
 | `Shift+Delete` | Delete for good |
 | `r`, `a`, `f` | Reply, reply all, forward |
+| `b` | Snooze (see below) |
+| `Shift+J` | Mark as junk |
+| `Shift+F10`, menu key | The context menu of the selected message or focused folder |
 
 Opening a message marks it as read. The next message is selected after you
 archive, move or delete one.
+
+## Snooze
+
+Press `b`, click **Snooze…** or choose it in the message's menu, then pick
+**Later today**, **Tomorrow**, **This weekend**, **Next week** or a date and
+time: the message is out of the way until then. **Snoozed messages** in the
+main toolbar lists them; **Wake up now** brings one back at once. How
+snoozing works (also offline and on other devices) is explained in
+[Junk mail, snooze and notifications](junk-snooze-notifications.md#snooze).
+
+## Junk mail
+
+**Mark as junk** (`Shift+J`, the toolbar or the message's menu) moves a
+message to the Junk folder; **Not junk** moves it back. When a message is
+junk, the reader says so above it (and who decided) with a **Not junk**
+button. Nail's own junk filter is set up per account in Settings → **Junk
+mail**: turn it on, choose the threshold and how much training it needs,
+see how far it is, or reset it. See
+[Junk mail, snooze and notifications](junk-snooze-notifications.md#junk-mail).
+
+## Messages that are not downloaded yet
+
+Per folder you can choose to keep only the headers, or only the last few
+days in full: Settings → **Synchronization** (choose the account and the
+folder), or **Synchronization…** in a folder's right-click menu. "As the
+account" removes the folder's own setting. Such messages are marked in the
+list; opening one downloads it. If that fails (for example offline), the
+reader says so and offers **Download full message** to try again. POP3
+accounts always keep full messages.
 
 ## Working offline
 

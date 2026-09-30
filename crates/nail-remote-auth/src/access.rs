@@ -118,6 +118,7 @@ pub fn required_access(request: &Request) -> RequestAccess {
         // --- Drafts and sending ---
         Request::SaveDraft { .. } => ("SaveDraft", Scope(S::Draft)),
         Request::GetDraft { .. } => ("GetDraft", Scope(S::Draft)),
+        Request::GetDraftAttachment { .. } => ("GetDraftAttachment", Scope(S::Draft)),
         Request::ListDrafts => ("ListDrafts", Scope(S::Draft)),
         Request::DeleteDraft { .. } => ("DeleteDraft", Scope(S::Draft)),
         Request::SendDraft { .. } => ("SendDraft", Scope(S::Send)),

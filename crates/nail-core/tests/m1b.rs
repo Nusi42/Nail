@@ -317,6 +317,46 @@ async fn html_markdown_and_attachments_reach_the_smtp_server() {
         panic!()
     };
     assert_eq!(attachment.size, 13);
+
+    // A saved draft serves the content of its own attachments (inline
+    // image previews after reopening), nothing else.
+    let mut with_file = blank_draft("Draft with a file");
+    with_file.attachments = vec![attachment.clone()];
+    let draft_id = save(&f.service, with_file).await;
+    let Response::AttachmentData { mime, data } = request(
+        &f.service,
+        Request::GetDraftAttachment {
+            draft_id: draft_id.clone(),
+            blob: attachment.blob.clone(),
+        },
+    )
+    .await
+    else {
+        panic!("no attachment data")
+    };
+    assert_eq!(mime, "text/plain");
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .unwrap(),
+        b"attached text"
+    );
+    let other = save(&f.service, blank_draft("Draft without files")).await;
+    assert!(matches!(
+        request(
+            &f.service,
+            Request::GetDraftAttachment {
+                draft_id: other,
+                blob: attachment.blob.clone(),
+            },
+        )
+        .await,
+        Response::Error {
+            code: ErrorCode::NotFound,
+            ..
+        }
+    ));
+
     let mut markdown = blank_draft("Markdown mail");
     markdown.mode = ComposerMode::Markdown;
     markdown.markdown = Some("# Title\n\n*emphasis* and `code`".into());

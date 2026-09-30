@@ -6,8 +6,8 @@ use std::collections::{HashMap, HashSet};
 use indexmap::IndexMap;
 use kdl::KdlNode;
 use nail_api::{
-    HtmlDarkMode, Icon, MessageDisplay, PartRule, RawCss, ResolvedTheme, SourceLocation, ThemeMode,
-    TokenSet,
+    HtmlDarkMode, Icon, LocalizedMessage, MessageDisplay, PartRule, RawCss, ResolvedTheme,
+    SourceLocation, ThemeMode, TokenSet,
 };
 use schemars::JsonSchema;
 
@@ -17,6 +17,7 @@ use crate::kdl_util::{
     self as k, Errors, Located, Source, arg_str, args, check_max_args, check_no_children,
     check_props, children, is_dotted_kebab, is_kebab, prop_str, scalar_to_string, sort_errors,
 };
+use crate::l10n::msg;
 use crate::selector::{Selector, parse_selector};
 
 /// The only base a file can extend in M0.
@@ -249,22 +250,21 @@ pub(crate) fn single_root<'d>(
     let Some(first) = nodes.first() else {
         return Err(ConfigError::invalid(
             &src.loc_at(0),
-            format!("the file is empty; expected `{expected} \"<name>\" {{ … }}`"),
+            msg("config-file-empty").arg("root", expected),
         ));
     };
     for node in nodes {
         if k::name(node) != expected {
             return Err(src.node_err(
                 node,
-                format!(
-                    "unexpected `{}` at the top level; the file contains a single `{expected} \"<name>\" {{ … }}` node",
-                    k::name(node)
-                ),
+                msg("config-top-level-unexpected")
+                    .arg("node", k::name(node))
+                    .arg("root", expected),
             ));
         }
     }
     if let Some(second) = nodes.get(1) {
-        return Err(src.node_err(second, format!("only one `{expected}` node is allowed")));
+        return Err(src.node_err(second, msg("config-root-duplicate").arg("root", expected)));
     }
     Ok(first)
 }
@@ -279,7 +279,9 @@ pub(crate) fn read_extends(
         Some((base, _)) if base == DEFAULT_BASE => Ok(Some(base.to_owned())),
         Some((base, entry)) => Err(src.entry_err(
             entry,
-            format!("unknown base `{base}`: only extends=\"{DEFAULT_BASE}\" is supported"),
+            msg("config-extends-unknown")
+                .arg("base", base)
+                .arg("default", DEFAULT_BASE),
         )),
     }
 }
@@ -295,7 +297,7 @@ impl ThemeReader<'_, '_> {
         let e = self.errors;
         e.ok(check_props(src, node, &["extends", "mode"]));
         e.ok(check_max_args(src, node, 1));
-        let name = match e.ok(arg_str(src, node, 0, "the theme name")) {
+        let name = match e.ok(arg_str(src, node, 0)) {
             Some((name, entry)) => src.located(entry, name.to_owned()),
             None => Located::new(String::new(), src.node_loc(node)),
         };
@@ -304,10 +306,7 @@ impl ThemeReader<'_, '_> {
             .flatten()
             .and_then(|(m, entry)| {
                 e.ok(ModeSetting::parse(m).ok_or_else(|| {
-                    src.entry_err(
-                        entry,
-                        format!("unknown mode `{m}` (use system, light, dark or high-contrast)"),
-                    )
+                    src.entry_err(entry, msg("config-mode-unknown").arg("found", m))
                 }))
             });
         let mut file = ThemeFile {
@@ -370,23 +369,23 @@ impl ThemeReader<'_, '_> {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 2)?;
                 check_no_children(src, node)?;
-                let (selector, sel_entry) = arg_str(src, node, 0, "the part name")?;
+                let (selector, sel_entry) = arg_str(src, node, 0)?;
                 if !is_dotted_kebab(selector) {
-                    return Err(src.entry_err(sel_entry, format!("invalid part name `{selector}`")));
+                    return Err(src.entry_err(
+                        sel_entry,
+                        msg("config-part-name-invalid").arg("name", selector),
+                    ));
                 }
-                let (css_text, css_entry) = arg_str(src, node, 1, "the CSS declarations")?;
+                let (css_text, css_entry) = arg_str(src, node, 1)?;
                 file.raw_css.push(RawCssDef {
                     selector: selector.to_owned(),
                     css: src.located(css_entry, css_text.to_owned()),
                 });
             }
             other => {
-                return Err(src.node_err(
-                    node,
-                    format!(
-                        "unknown theme section `{other}` (expected tokens, modes, part, parts, icon, icons, message, sounds or raw-css)"
-                    ),
-                ));
+                return Err(
+                    src.node_err(node, msg("config-theme-unknown-section").arg("node", other))
+                );
             }
         }
         Ok(())
@@ -399,7 +398,7 @@ impl ThemeReader<'_, '_> {
         check_props(src, node, css::MODES)?;
         check_max_args(src, node, 2)?;
         check_no_children(src, node)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the token name")?;
+        let (name, name_entry) = arg_str(src, node, 0)?;
         check_token_name(src, name_entry, name)?;
 
         let mut def = TokenDef::default();
@@ -417,9 +416,9 @@ impl ThemeReader<'_, '_> {
         if def.value.is_none() {
             return Err(src.node_err(
                 node,
-                format!(
-                    "token `{category}.{name}` needs a value, e.g. `{category} \"{name}\" <value>`"
-                ),
+                msg("config-token-needs-value-example")
+                    .arg("category", category)
+                    .arg("name", name),
             ));
         }
         let tokens = file.tokens.entry(category.to_owned()).or_default();
@@ -443,7 +442,7 @@ impl ThemeReader<'_, '_> {
         if !css::MODES.contains(&mode) {
             return Err(src.node_err(
                 node,
-                format!("unknown mode `{mode}` (expected light, dark or high-contrast)"),
+                msg("config-mode-override-mode-unknown").arg("found", mode),
             ));
         }
         check_props(src, node, &[])?;
@@ -466,10 +465,13 @@ impl ThemeReader<'_, '_> {
         check_props(src, token, &[])?;
         check_max_args(src, token, 2)?;
         check_no_children(src, token)?;
-        let (name, name_entry) = arg_str(src, token, 0, "the token name")?;
+        let (name, name_entry) = arg_str(src, token, 0)?;
         check_token_name(src, name_entry, name)?;
         let entry = *args(token).get(1).ok_or_else(|| {
-            src.node_err(token, format!("token `{category}.{name}` needs a value"))
+            src.node_err(
+                token,
+                msg("config-token-needs-value").arg("token", format!("{category}.{name}")),
+            )
         })?;
         let value = self.token_value(category, entry)?;
         file.tokens
@@ -488,7 +490,7 @@ impl ThemeReader<'_, '_> {
         entry: &kdl::KdlEntry,
     ) -> Result<Located<String>, ConfigError> {
         let src = self.src;
-        let mut value = scalar_to_string(src, entry, "a token value")?;
+        let mut value = scalar_to_string(src, entry, &format!("`{category}`"))?;
         if !entry.value().is_string() && css::PX_TOKEN_CATEGORIES.contains(&category) {
             value = css::px(&value);
         }
@@ -502,7 +504,7 @@ impl ThemeReader<'_, '_> {
         let src = self.src;
         check_props(src, node, &[])?;
         check_max_args(src, node, 1)?;
-        let (selector, sel_entry) = arg_str(src, node, 0, "the part selector")?;
+        let (selector, sel_entry) = arg_str(src, node, 0)?;
         parse_selector(selector).map_err(|msg| src.entry_err(sel_entry, msg))?;
         let mut declarations = IndexMap::new();
         let mut failed = false;
@@ -521,7 +523,7 @@ impl ThemeReader<'_, '_> {
             return Ok(None);
         }
         if declarations.is_empty() {
-            return Err(src.node_err(node, format!("part `{selector}` has no declarations")));
+            return Err(src.node_err(node, msg("config-part-empty").arg("selector", selector)));
         }
         Ok(Some(PartDef {
             selector: src.located(sel_entry, selector.to_owned()),
@@ -536,20 +538,18 @@ impl ThemeReader<'_, '_> {
         if !css::PROPERTIES.contains(&property) {
             return Err(src.node_err(
                 decl,
-                format!(
-                    "unsupported CSS property `{property}` (see the theme reference for the supported subset; `raw-css` covers the rest)"
-                ),
+                msg("config-css-property-unsupported").arg("property", property),
             ));
         }
         check_props(src, decl, &[])?;
         check_no_children(src, decl)?;
         let values = args(decl);
         if values.is_empty() {
-            return Err(src.node_err(decl, format!("`{property}` needs a value")));
+            return Err(src.node_err(decl, msg("config-needs-value").arg("node", property)));
         }
         let mut parts = Vec::with_capacity(values.len());
         for entry in &values {
-            let mut v = scalar_to_string(src, entry, "a CSS value")?;
+            let mut v = scalar_to_string(src, entry, &format!("`{property}`"))?;
             if !entry.value().is_string() && css::is_length_property(property) {
                 v = css::px(&v);
             }
@@ -564,24 +564,27 @@ impl ThemeReader<'_, '_> {
         check_props(src, node, &["svg", "view-box"])?;
         check_max_args(src, node, 1)?;
         check_no_children(src, node)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the icon name")?;
+        let (name, name_entry) = arg_str(src, node, 0)?;
         if !is_kebab(name) {
-            return Err(src.entry_err(name_entry, format!("invalid icon name `{name}`")));
+            return Err(src.entry_err(
+                name_entry,
+                msg("config-icon-name-invalid").arg("name", name),
+            ));
         }
-        let (svg, svg_entry) = prop_str(src, node, "svg")?.ok_or_else(|| {
-            src.node_err(node, format!("icon `{name}` needs svg=\"<path data>\""))
-        })?;
+        let (svg, svg_entry) = prop_str(src, node, "svg")?
+            .ok_or_else(|| src.node_err(node, msg("config-icon-needs-svg").arg("name", name)))?;
         if let Some(c) = svg.chars().find(|c| !is_path_char(*c)) {
-            return Err(src.entry_err(svg_entry, format!("`{c}` is not allowed in SVG path data")));
+            return Err(src.entry_err(
+                svg_entry,
+                msg("config-svg-character").arg("character", c.to_string()),
+            ));
         }
         let view_box = match prop_str(src, node, "view-box")? {
             None => None,
             Some((vb, entry)) => {
                 let numbers: Vec<_> = vb.split_whitespace().collect();
                 if numbers.len() != 4 || numbers.iter().any(|n| n.parse::<f64>().is_err()) {
-                    return Err(
-                        src.entry_err(entry, "view-box must be four numbers, e.g. \"0 0 24 24\"")
-                    );
+                    return Err(src.entry_err(entry, msg("config-view-box-invalid")));
                 }
                 Some(vb.to_owned())
             }
@@ -614,13 +617,13 @@ impl ThemeReader<'_, '_> {
         let key = k::name(field);
         let values = args(field);
         let Some(first) = values.first() else {
-            return Err(src.node_err(field, format!("`{key}` needs a value")));
+            return Err(src.node_err(field, msg("config-needs-value").arg("node", key)));
         };
         if key != "quote-colors" {
             check_max_args(src, field, 1)?;
         }
         let single = |what: &str| -> Result<Located<String>, ConfigError> {
-            let v = scalar_to_string(src, first, what)?;
+            let v = scalar_to_string(src, first, &format!("`{what}`"))?;
             css::check_value_safety(&v).map_err(|msg| src.entry_err(first, msg))?;
             Ok(src.located(first, v))
         };
@@ -639,14 +642,14 @@ impl ThemeReader<'_, '_> {
             "quote-colors" => {
                 let mut colors = Vec::new();
                 for entry in &values {
-                    let v = k::entry_str(src, entry, "a quote colour")?;
+                    let v = k::entry_str(src, entry, "`quote-colors`")?;
                     css::check_value_safety(v).map_err(|msg| src.entry_err(entry, msg))?;
                     colors.push(src.located(entry, v.to_owned()));
                 }
                 message.quote_colors = Some(colors);
             }
             "html-dark-mode" => {
-                let v = k::entry_str(src, first, "html-dark-mode")?;
+                let v = k::entry_str(src, first, "`html-dark-mode`")?;
                 message.html_dark_mode = Some(match v {
                     "off" => HtmlDarkModeSetting::Off,
                     "invert" => HtmlDarkModeSetting::Invert,
@@ -654,7 +657,7 @@ impl ThemeReader<'_, '_> {
                     _ => {
                         return Err(src.entry_err(
                             first,
-                            format!("unknown html-dark-mode `{v}` (use off, invert or smart)"),
+                            msg("config-html-dark-mode-unknown").arg("found", v),
                         ));
                     }
                 });
@@ -662,9 +665,7 @@ impl ThemeReader<'_, '_> {
             other => {
                 return Err(src.node_err(
                     field,
-                    format!(
-                        "unknown message setting `{other}` (expected font-family, text-font-family, font-size, line-height, max-width, quote-colors or html-dark-mode)"
-                    ),
+                    msg("config-message-setting-unknown").arg("node", other),
                 ));
             }
         }
@@ -687,24 +688,18 @@ impl ThemeReader<'_, '_> {
         let src = self.src;
         let event = k::name(sound);
         if !is_dotted_kebab(event) {
-            return Err(src.node_err(
-                sound,
-                format!("invalid event name `{event}`, e.g. mail.new"),
-            ));
+            return Err(src.node_err(sound, msg("config-sound-event-invalid").arg("event", event)));
         }
         check_props(src, sound, &[])?;
         check_max_args(src, sound, 1)?;
         check_no_children(src, sound)?;
-        let (value, entry) = arg_str(src, sound, 0, "the sound name or file")?;
+        let (value, entry) = arg_str(src, sound, 0)?;
         let bad = value.is_empty()
             || value.contains("..")
             || value.contains(':')
             || value.starts_with(['/', '\\']);
         if bad {
-            return Err(src.entry_err(
-                entry,
-                "sounds must be a bundled sound name or a path inside the config directory",
-            ));
+            return Err(src.entry_err(entry, msg("config-sound-invalid")));
         }
         file.sounds.insert(event.to_owned(), value.to_owned());
 
@@ -723,10 +718,10 @@ fn expect_name(
     } else {
         Err(src.node_err(
             node,
-            format!(
-                "`{section}` may only contain `{expected}` nodes, found `{}`",
-                k::name(node)
-            ),
+            msg("config-section-only")
+                .arg("section", section)
+                .arg("expected", expected)
+                .arg("found", k::name(node)),
         ))
     }
 }
@@ -738,10 +733,9 @@ fn token_category<'n>(src: &Source<'_>, node: &'n KdlNode) -> Result<&'n str, Co
     } else {
         Err(src.node_err(
             node,
-            format!(
-                "unknown token category `{category}` (expected one of {})",
-                css::TOKEN_CATEGORIES.join(", ")
-            ),
+            msg("config-token-category-unknown-node")
+                .arg("category", category)
+                .arg("known", css::TOKEN_CATEGORIES.join(", ")),
         ))
     }
 }
@@ -760,10 +754,7 @@ fn check_token_name(
     if valid {
         Ok(())
     } else {
-        Err(src.entry_err(
-            entry,
-            format!("invalid token name `{name}`: use lowercase letters, digits and hyphens"),
-        ))
+        Err(src.entry_err(entry, msg("config-token-name-invalid").arg("name", name)))
     }
 }
 
@@ -850,7 +841,8 @@ impl ThemeFile {
                     let loc = loc.unwrap_or_else(|| self.name.loc.clone());
                     errors.push(ConfigError::invalid(
                         &loc,
-                        format!("mode override for unknown token `{category}.{name}`"),
+                        msg("config-mode-override-unknown")
+                            .arg("token", format!("{category}.{name}")),
                     ));
                     continue;
                 };
@@ -945,7 +937,7 @@ impl ThemeFile {
         let missing = |field: &str| {
             ConfigError::invalid(
                 &self.name.loc,
-                format!("the theme's `message` section is missing `{field}`"),
+                msg("config-message-missing").arg("field", field),
             )
         };
         let mut required = |value: &Option<Located<String>>, field: &str| -> String {
@@ -1026,15 +1018,15 @@ fn resolve_raw_css(
     resolve_str: &dyn Fn(&Located<String>) -> Result<String, ConfigError>,
 ) -> Result<RawCss, ConfigError> {
     let css_text = resolve_str(&def.css)?;
-    let err = |msg: String| ConfigError::invalid(&def.css.loc, msg);
+    let err = |msg: LocalizedMessage| ConfigError::invalid(&def.css.loc, msg);
     css::check_no_remote(&css_text).map_err(err)?;
     if let Some(c) = css_text
         .chars()
         .find(|c| matches!(c, '{' | '}' | '<' | '>' | '\\'))
     {
-        return Err(err(format!(
-            "the character `{c}` is not allowed in raw-css"
-        )));
+        return Err(err(
+            msg("config-raw-css-character").arg("character", c.to_string())
+        ));
     }
     Ok(RawCss {
         selector: def.selector.clone(),
@@ -1085,7 +1077,7 @@ fn check_token_cycles(
                     .collect();
                 errors.push(ConfigError::invalid(
                     loc,
-                    format!("token reference cycle: {}", chain.join(" → ")),
+                    msg("config-token-cycle").arg("chain", chain.join(" → ")),
                 ));
                 continue;
             }

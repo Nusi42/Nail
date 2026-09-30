@@ -818,6 +818,9 @@ impl Service {
                     draft: Box::new(draft),
                 }
             }
+            Request::GetDraftAttachment { draft_id, blob } => {
+                self.draft_attachment(draft_id, blob).await?
+            }
             Request::ListDrafts => Response::Drafts {
                 drafts: self.list_drafts().await?,
             },

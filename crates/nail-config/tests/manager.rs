@@ -86,7 +86,9 @@ fn reload_keeps_the_last_valid_configuration() {
             line: 2,
             column: 27,
             message: "unknown token `$color.nope`".into(),
-            localized: None,
+            localized: Some(
+                nail_api::LocalizedMessage::new("config-unknown-token").arg("token", "$color.nope")
+            ),
         }
     );
     assert_eq!(

@@ -2,11 +2,11 @@
 //! dates), then evaluated against messages, optionally with an explanation
 //! of which condition matched and on what value.
 
-use nail_api::AccountId;
 use nail_api::rules::{
     AddressField, AuthMethod, AuthResult, Comparison, Condition, DateComparison, FolderRef,
     MessageFlag,
 };
+use nail_api::{AccountId, LocalizedMessage};
 use serde::{Deserialize, Serialize};
 
 use crate::message::{Env, MessageView};
@@ -37,6 +37,32 @@ pub struct ConditionError {
     pub path: ConditionPath,
     /// Diagnostic (English).
     pub message: String,
+    /// The user-facing text (`rule-issue-*` in `locales/<lang>/core.ftl`),
+    /// naming the condition like the diagnostic does.
+    pub localized: LocalizedMessage,
+}
+
+impl ConditionError {
+    fn new(path: &[u32], message: String, localized: LocalizedMessage) -> Self {
+        Self {
+            path: path.to_vec(),
+            message,
+            localized: localized.arg("condition", condition_label(path)),
+        }
+    }
+}
+
+/// The `condition` argument of `rule-issue-*` messages: the 1-based path
+/// (`2.1`), or `root` for the condition tree itself.
+pub(crate) fn condition_label(path: &[u32]) -> String {
+    if path.is_empty() {
+        "root".to_owned()
+    } else {
+        path.iter()
+            .map(|i| (i + 1).to_string())
+            .collect::<Vec<_>>()
+            .join(".")
+    }
 }
 
 impl std::fmt::Display for ConditionError {
@@ -116,10 +142,11 @@ fn matcher(
     match Matcher::new(m) {
         Ok(m) => Some(m),
         Err(e) => {
-            errors.push(ConditionError {
-                path: path.to_vec(),
-                message: format!("invalid regular expression: {e}"),
-            });
+            errors.push(ConditionError::new(
+                path,
+                format!("invalid regular expression: {e}"),
+                LocalizedMessage::new("rule-issue-regex").arg("detail", e.to_string()),
+            ));
             None
         }
     }
@@ -152,10 +179,11 @@ fn compile(condition: &Condition, path: &mut Vec<u32>, errors: &mut Vec<Conditio
         }
         Condition::Header { name, matches } => {
             if name.trim().is_empty() {
-                errors.push(ConditionError {
-                    path: path.clone(),
-                    message: "the header name is empty".into(),
-                });
+                errors.push(ConditionError::new(
+                    path,
+                    "the header name is empty".into(),
+                    LocalizedMessage::new("rule-issue-header-empty"),
+                ));
             }
             match matches {
                 None => Node::Header(name.trim().to_owned(), None),
@@ -175,13 +203,17 @@ fn compile(condition: &Condition, path: &mut Vec<u32>, errors: &mut Vec<Conditio
         Condition::Query { query } => match nail_search::parse_query(query) {
             Ok(q) => Node::Query(Box::new(q)),
             Err(e) => {
-                errors.push(ConditionError {
-                    path: path.clone(),
-                    message: format!(
+                errors.push(ConditionError::new(
+                    path,
+                    format!(
                         "invalid search query: {} (at {}–{})",
                         e.message, e.start, e.end
                     ),
-                });
+                    LocalizedMessage::new("rule-issue-query")
+                        .arg("detail", e.message.as_str())
+                        .arg("start", e.start)
+                        .arg("end", e.end),
+                ));
                 never()
             }
         },
@@ -197,10 +229,11 @@ fn compile(condition: &Condition, path: &mut Vec<u32>, errors: &mut Vec<Conditio
         Condition::Date { cmp, date } => match parse_day(date) {
             Some(day) => Node::Date(*cmp, day),
             None => {
-                errors.push(ConditionError {
-                    path: path.clone(),
-                    message: format!("{date:?} is not a date (expected YYYY-MM-DD)"),
-                });
+                errors.push(ConditionError::new(
+                    path,
+                    format!("{date:?} is not a date (expected YYYY-MM-DD)"),
+                    LocalizedMessage::new("rule-issue-date").arg("found", date.as_str()),
+                ));
                 never()
             }
         },

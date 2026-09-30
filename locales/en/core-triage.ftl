@@ -15,3 +15,8 @@ notification-snooze-woke-title = { $count ->
         [one] A snoozed message is back
        *[other] { $count } snoozed messages are back
     }
+
+# Snooze requests the scheduler refuses (SnoozeError::message_id).
+snooze-error-not-in-future = The snooze time has to be in the future.
+snooze-error-too-far = The snooze time is too far away (at most ten years).
+snooze-error-store = The snooze could not be saved.

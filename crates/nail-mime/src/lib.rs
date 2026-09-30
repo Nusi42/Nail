@@ -18,6 +18,7 @@
 pub mod auth_results;
 mod domain;
 pub mod links;
+mod markdown;
 pub mod remote_content;
 mod sanitize;
 mod text;
@@ -318,13 +319,38 @@ fn build(message: &Message<'_>, rewriter: Option<ProxyRewriter>) -> ParsedMessag
         message_id: message.message_id().map(str::to_owned),
     };
 
-    let text = body_text(message);
-    let html = body_html(message).map(|html| sanitize_html_with(&html, rewriter));
+    // `text/markdown` alternatives are bodies, not attachments (M2c).
+    let markdown = markdown::alternatives(message);
+    let markdown_source = (!markdown.is_empty()).then(|| {
+        markdown
+            .iter()
+            .map(|(_, source)| source.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    });
+    let has_plain = message
+        .text_bodies()
+        .any(|part| matches!(part.body, PartType::Text(_)));
+    let text = match &markdown_source {
+        Some(source) if !has_plain => source.clone(),
+        _ => body_text(message),
+    };
+    let html = body_html(message)
+        .or_else(|| markdown_source.as_deref().map(markdown::to_html))
+        .map(|html| sanitize_html_with(&html, rewriter));
     let preview = preview_text(&text, PREVIEW_CHARS);
     let attachments = message
-        .attachments()
+        .attachments
+        .iter()
         .enumerate()
-        .map(|(index, part)| attachment_info(u32::try_from(index).unwrap_or(u32::MAX), part))
+        .filter(|(_, id)| !markdown.iter().any(|(md, _)| md == *id))
+        .filter_map(|(index, id)| {
+            let part = message.parts.get(usize::try_from(*id).ok()?)?;
+            Some(attachment_info(
+                u32::try_from(index).unwrap_or(u32::MAX),
+                part,
+            ))
+        })
         .collect();
 
     ParsedMessage {

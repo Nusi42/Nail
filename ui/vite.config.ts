@@ -23,6 +23,25 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        // Keep the app's own chunk small (M2c WP54): the React runtime and
+        // the other libraries every window needs, and the Fluent catalogs,
+        // are separate chunks that load in parallel and stay cached across
+        // app updates. The TipTap / CodeMirror editors load on demand
+        // (`features/composer/lazyEditors.tsx`).
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor",
+              test: /node_modules[\\/](react|react-dom|scheduler|@tanstack|zustand|@fluent)[\\/]/,
+              priority: 20,
+            },
+            { name: "catalogs", test: /[\\/]locales[\\/][^\\/]+[\\/][^\\/]+\.ftl/, priority: 10 },
+          ],
+        },
+      },
+    },
   },
   test: {
     environment: "jsdom",

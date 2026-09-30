@@ -3,15 +3,19 @@
  * (ADR 0043), used by `MockTransport` (`../../api/mock.ts` routes exactly
  * these requests here). State lives in `data.features.sieve`.
  *
- * Behaves like the core after WP50: the state per account comes from its
- * `sieve` settings (IMAP accounts only); vacation settings are validated
- * and stored; compiling and uploading (`SyncSieve`, `PreviewSieveScript`)
- * answer `unsupported` until WP55 wires `nail-sieve`. WP54 may extend it.
+ * Behaves like the core once WP55 wires `nail-sieve` (ADR 0043): the state
+ * per account comes from its `sieve` settings (IMAP accounts only);
+ * vacation settings are validated and stored; `SyncSieve` "uploads" (state
+ * `in-sync`, the usual extensions), `PreviewSieveScript` returns a small
+ * stand-in script. Placements are simplified: arrival rules run on the
+ * server, the others in Nail (the real compiler is `nail-sieve`, WP51).
+ * `data.features.sieve.failWith` makes uploads fail.
  */
 import type {
   AccountConfig,
   Request,
   Response,
+  RuleSieveStatus,
   SieveAccountStatus,
   VacationSettings,
 } from "../../api/generated";
@@ -37,11 +41,18 @@ export function isSieveRequest(request: Request): request is SieveRequest {
 export interface SieveMockState {
   /** Vacation settings by account id (absent = the defaults). */
   vacation: Record<string, VacationSettings>;
+  /** Last upload per account (RFC 3339). */
+  uploaded: Record<string, string>;
+  /** Makes the next uploads fail with this error code. */
+  failWith: "network" | "rejected" | null;
 }
 
 export function createSieveMockState(): SieveMockState {
-  return { vacation: {} };
+  return { vacation: {}, uploaded: {}, failWith: null };
 }
+
+/** Extensions the mock server announces. */
+export const MOCK_EXTENSIONS = ["fileinto", "imap4flags", "vacation", "date", "regex", "variables"];
 
 function state(core: MockCore): SieveMockState {
   return core.data.features.sieve;
@@ -66,21 +77,48 @@ function sieveAccount(core: MockCore, id: string): AccountConfig | Response {
   return account;
 }
 
-function status(account: AccountConfig): SieveAccountStatus {
+function placements(core: MockCore, account: AccountConfig): RuleSieveStatus[] {
+  return core.data.features.rules.rules
+    .filter(
+      (r) =>
+        r.enabled &&
+        (r.scope.length === 0 ||
+          r.scope.some((s) => s.type === "folder" || s.account_id === account.id)),
+    )
+    .map((r) => ({
+      rule_id: r.id,
+      placement: r.triggers.some((t) => t.type === "arrival") ? "server" : "client",
+      reasons: [],
+    }));
+}
+
+function status(core: MockCore, account: AccountConfig): SieveAccountStatus {
+  const s = state(core);
   const sieve = account.sieve;
   const enabled = sieve !== undefined && sieve.enabled !== false;
+  const uploaded = s.uploaded[account.id] ?? null;
+  const failed = enabled && s.failWith !== null;
   return {
     account_id: account.id,
-    state: enabled ? "pending" : "disabled",
+    state: !enabled ? "disabled" : failed ? "failed" : uploaded ? "in-sync" : "pending",
     script_name: sieve?.script_name ?? "nail",
-    uploaded_at: null,
-    extensions: [],
-    other_scripts: [],
-    rules: [],
-    vacation_active: false,
-    error: null,
-    message: null,
+    uploaded_at: uploaded,
+    extensions: uploaded ? [...MOCK_EXTENSIONS] : [],
+    other_scripts: uploaded ? ["roundcube"] : [],
+    rules: enabled ? placements(core, account) : [],
+    vacation_active: uploaded !== null && (s.vacation[account.id]?.enabled ?? false),
+    error: failed ? s.failWith : null,
+    message: failed ? "upload failed" : null,
   };
+}
+
+function script(core: MockCore, account: AccountConfig): string {
+  const vacation = state(core).vacation[account.id];
+  const lines = [`# Nail rules for ${account.name}`, 'require ["fileinto", "vacation"];'];
+  if (vacation?.enabled) {
+    lines.push(`vacation :days ${vacation.days} ${JSON.stringify(vacation.body)};`);
+  }
+  return `${lines.join("\n")}\n`;
 }
 
 export function answerSieve(core: MockCore, request: SieveRequest): Response {
@@ -89,17 +127,30 @@ export function answerSieve(core: MockCore, request: SieveRequest): Response {
     case "GetSieveStatus": {
       if (request.account_id === null) {
         const accounts = core.data.accountsConfig.accounts.filter((a) => a.sieve !== undefined);
-        return { type: "SieveStatus", accounts: accounts.map(status) };
+        return { type: "SieveStatus", accounts: accounts.map((a) => status(core, a)) };
       }
       const account = imapAccount(core, request.account_id);
       if ("type" in account) return account;
-      return { type: "SieveStatus", accounts: [status(account)] };
+      return { type: "SieveStatus", accounts: [status(core, account)] };
     }
-    case "SyncSieve":
+    case "SyncSieve": {
+      const account = sieveAccount(core, request.account_id);
+      if ("type" in account) return account;
+      if (account.sieve?.enabled !== false && s.failWith === null) {
+        s.uploaded[account.id] = new Date().toISOString();
+      }
+      core.emit({ type: "SieveStatusChanged", account_id: account.id });
+      return { type: "SieveStatus", accounts: [status(core, account)] };
+    }
     case "PreviewSieveScript": {
       const account = sieveAccount(core, request.account_id);
       if ("type" in account) return account;
-      return errorResponse("unsupported", "Sieve uploads are not wired yet");
+      return {
+        type: "SieveScript",
+        account_id: account.id,
+        script: script(core, account),
+        rules: placements(core, account),
+      };
     }
     case "GetVacation": {
       const account = imapAccount(core, request.account_id);

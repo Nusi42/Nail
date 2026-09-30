@@ -264,7 +264,7 @@ fn structural_errors_point_at_the_node() {
         3,
         "unknown theme section `colours`",
     );
-    assert_error("theme 5", 1, 7, "the theme name must be a string");
+    assert_error("theme 5", 1, 7, "`theme` #1 must be a string");
     assert_error(
         "theme \"x\" extends=\"default\" {\n  tokens { colour \"a\" \"red\"; }\n}",
         2,

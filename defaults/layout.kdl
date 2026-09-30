@@ -28,7 +28,7 @@ layout "default" {
                         row "{subject}"
                         row "{preview}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
                         // Signature / encryption and sender check badges, then
@@ -37,6 +37,10 @@ layout "default" {
                         security-warnings id="message-warnings"
                         // Remote images stay blocked until you allow them.
                         remote-content id="message-remote-content"
+                        // Junk verdict with "Not junk"; a body that is not
+                        // stored yet with "Download full message".
+                        junk-verdict id="message-junk"
+                        sync-message-body id="message-body-status"
                         message-view id="message" headers="from to cc date"
                     }
                 }
@@ -64,12 +68,14 @@ layout "default" {
                         row "{from.name}  {date | relative}"
                         row "{subject}"
                     }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto 1fr" {
+                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
                         thread-view id="thread" expand="none"
                         security-message id="message-security"
                         security-warnings id="message-warnings"
                         remote-content id="message-remote-content"
+                        junk-verdict id="message-junk"
+                        sync-message-body id="message-body-status"
                         message-view id="message" headers="from date"
                     }
                 }
@@ -99,6 +105,10 @@ layout "default" {
     window "rules" {
         rule-manager id="rules"
     }
+    // Snoozed messages, with "Wake up now".
+    window "snoozed" {
+        snooze-list id="snoozed"
+    }
     window "settings" {
         tabs id="settings-tabs" {
             account-settings id="account-settings" label="@settings.tab.accounts"
@@ -113,9 +123,22 @@ layout "default" {
             remote-devices id="remote-devices" label="@remote.settings.tab.devices"
             remote-audit id="remote-audit" label="@remote.settings.tab.audit"
             remote-content-allows id="remote-content-allows" label="@remote.settings.tab.privacy"
-            stack id="customize" label="@settings.tab.customize" sizes="auto 1fr" {
+            // Server-side rules (Sieve) and the vacation reply.
+            sieve-status id="sieve-status" label="@sieve.settings.tab"
+            vacation-editor id="vacation" label="@vacation.settings.tab"
+            junk-settings id="junk-settings" label="@junk.settings.tab"
+            notification-settings id="notification-settings" label="@notification.settings.tab"
+            // What each folder downloads (full, headers only, recent days).
+            sync-folder-policies id="sync-policies" label="@sync.settings.tab"
+            stack id="customize" label="@settings.tab.customize" sizes="auto auto 1fr" {
                 toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 config-errors id="settings-config-errors"
+                // Toolbars, shortcuts and list columns, written into this file.
+                tabs id="customize-editors" label="@customize.editors.tabs" {
+                    toolbar-editor id="toolbar-editor" label="@customize.toolbar.tab"
+                    key-binding-editor id="key-binding-editor" label="@customize.keys.tab"
+                    column-editor id="column-editor" label="@customize.columns.tab"
+                }
             }
         }
     }
@@ -161,6 +184,13 @@ layout "default" {
         action "remote.pair"      label="@remote.action.pair"
         action "remote.content.allow" label="@remote.action.load-content"
         action "remote.logout"    label="@remote.action.logout"
+        action "menu.context"     label="@context-menu.action.open"
+        action "junk.mark"        label="@junk.action.mark"        icon="junk"
+        action "junk.not-junk"    label="@junk.action.not-junk"    icon="inbox"
+        action "snooze.open"      label="@snooze.action.open"      icon="snooze"
+        action "snooze.list"      label="@snooze.action.list"      icon="snooze"
+        action "sync.download-message" label="@sync.action.download-message" icon="download"
+        action "sync.folder-policy" label="@sync.action.folder-policy" icon="sync"
     }
 
     keys context="list" {
@@ -207,6 +237,11 @@ layout "default" {
         bind "g o" "outbox.open"
         bind "ctrl+," "settings.open"
         bind "ctrl+shift+i" "inspector.toggle"
+        bind "b" "snooze.open"
+        bind "shift+j" "junk.mark"
+        // The context menu of the focused item (list row, folder, message).
+        bind "shift+f10" "menu.context"
+        bind "contextmenu" "menu.context"
     }
 
     toolbar "main" {
@@ -215,6 +250,7 @@ layout "default" {
         separator
         item "outbox.open"
         item "rules.open"
+        item "snooze.list"
         spacer
         item "account.add"
         item "settings.open"
@@ -231,6 +267,8 @@ layout "default" {
         separator
         item "mail.toggle-read"
         item "mail.toggle-flag"
+        item "snooze.open"
+        item "junk.mark"
         item "rules.create-from-message"
         item "security.autocrypt.import"
     }
@@ -241,6 +279,7 @@ layout "default" {
         item "inspector.toggle"
     }
 
+    // Right-click menus (also Shift+F10 and the menu key), per part.
     menu "context:message-list.row" {
         item "mail.reply"
         item "mail.reply-all"
@@ -248,11 +287,41 @@ layout "default" {
         separator
         item "mail.toggle-read"
         item "mail.toggle-flag"
+        item "snooze.open"
         separator
         item "mail.archive"
         item "mail.move"
         item "mail.delete"
         separator
+        item "junk.mark"
+        item "junk.not-junk"
+        item "sync.download-message"
+        separator
         item "rules.create-from-message"
+    }
+
+    menu "context:thread-view.message" {
+        item "mail.reply"
+        item "mail.reply-all"
+        item "mail.forward"
+        separator
+        item "mail.toggle-read"
+        item "mail.toggle-flag"
+    }
+
+    menu "context:message-view" {
+        item "mail.reply"
+        item "mail.reply-all"
+        item "mail.forward"
+        separator
+        item "snooze.open"
+        item "junk.mark"
+        item "junk.not-junk"
+        item "sync.download-message"
+    }
+
+    menu "context:folder-tree.folder" {
+        item "sync.now"
+        item "sync.folder-policy"
     }
 }

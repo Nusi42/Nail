@@ -31,6 +31,7 @@ import { queryKeys } from "../../state/queries";
 import { composerSendBlock, composerSendCrypto, loadComposerCrypto } from "../security";
 import { bodyOf, draftKey, fromDraft, richDraftOf } from "./draft";
 import { needsReminder, parseKeywords } from "./reminder";
+import { loadInlinePreviews } from "./inlineImages";
 import { primeRich, richStoreFor, type RichState } from "./store";
 
 /**
@@ -174,7 +175,10 @@ export async function startRichReply(
 /** Opens a saved draft (any mode) in the composer. */
 export async function openRichDraft(ctx: ComposeContext, draftId: DraftId): Promise<void> {
   const { draft } = await ctx.client.request({ type: "GetDraft", draft_id: draftId }, "Draft");
-  open(ctx, { ...draft, id: draft.id ?? draftId }, true, true);
+  const opened = { ...draft, id: draft.id ?? draftId };
+  open(ctx, opened, true, true);
+  // Inline images saved in another session: fetch their previews.
+  if (opened.mode === "html") void loadInlinePreviews(ctx, opened);
 }
 
 /** The save in flight, per UI store. */

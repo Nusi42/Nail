@@ -115,7 +115,12 @@ function refresh(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.allThreads });
 }
 
-async function queued(
+/**
+ * Sends a write the core queues (`Queued`), remembers its operations for
+ * the status bar and refetches folders; on failure it shows the core's
+ * state again. For feature writes (junk, snooze, …) too.
+ */
+export async function queued(
   ctx: WriteContext,
   request: Parameters<NailClient["request"]>[0],
   quiet = false,
@@ -186,7 +191,8 @@ export function nextSelection(
   return null;
 }
 
-function removeFromLists(ctx: WriteContext, ids: readonly MessageId[]): void {
+/** Takes messages out of every cached list at once and moves the selection on. */
+export function removeFromLists(ctx: WriteContext, ids: readonly MessageId[]): void {
   const ui = ctx.store.getState();
   const next = nextSelection(ui.messageOrder, ui.selectedMessageId, ids);
   patchSummaries(ctx.queryClient, ids, () => null);

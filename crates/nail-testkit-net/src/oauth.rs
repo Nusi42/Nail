@@ -11,9 +11,10 @@
 //!   (optionally rotating refresh tokens). Errors use the RFC 6749 JSON
 //!   shape (`invalid_grant`, `invalid_client`, …).
 //!
-//! A test plays the browser: fetch [`MockOAuthServer::authorize`]'s URL
-//! without following redirects and deliver the `Location` to the client's
-//! loopback listener, or call [`MockOAuthServer::approve`] which does both.
+//! A test plays the browser: fetch the authorization URL the client built
+//! (on [`MockOAuthServer::authorize_url`]) without following redirects and
+//! deliver the `Location` to the client's loopback listener, or call
+//! [`MockOAuthServer::approve`] which does both.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;

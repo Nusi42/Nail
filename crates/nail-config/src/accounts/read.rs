@@ -13,7 +13,7 @@ use nail_api::accounts::{
 };
 use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
 use nail_api::sieve::{ManageSieveConfig, is_script_name};
-use nail_api::{AccountId, FolderRole, IdentityId};
+use nail_api::{AccountId, FolderRole, IdentityId, LocalizedMessage};
 
 use super::{
     MAX_UNDO_SEND_SECS, MIN_POLL_INTERVAL_SECS, is_valid_account_id, is_valid_identity_pattern,
@@ -21,8 +21,9 @@ use super::{
 use crate::error::ConfigError;
 use crate::kdl_util::{
     Errors, Source, arg_str, args, check_max_args, check_no_children, check_props, children,
-    describe, name, prop_str, props,
+    describe, name, prop_str, props, what_arg, what_key,
 };
+use crate::l10n::msg;
 
 /// Property names that would put a secret into the file. They are refused
 /// with a hint to the keychain instead of a generic "unknown property".
@@ -62,10 +63,7 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
                     if !ids.insert(account.id.to_string()) {
                         return Err(src.node_err(
                             node,
-                            format!(
-                                "an account named {:?} is already defined",
-                                account.id.as_str()
-                            ),
+                            msg("config-account-duplicate").arg("name", account.id.as_str()),
                         ));
                     }
                     let identity_nodes: Vec<&KdlNode> = children(node)
@@ -78,12 +76,9 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
                             .is_some()
                         {
                             return Err(src.node_err(
-                            identity_nodes.get(index).copied().unwrap_or(node),
-                            format!(
-                                "identity id {:?} is used twice; give one of them a different `id=`",
-                                identity.id.as_str()
-                            ),
-                        ));
+                                identity_nodes.get(index).copied().unwrap_or(node),
+                                msg("config-identity-duplicate").arg("id", identity.id.as_str()),
+                            ));
                         }
                     }
                     oauth_refs.extend(provider_refs.into_iter().map(|p| (p, node)));
@@ -95,25 +90,29 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
                     if !provider_ids.insert(provider.id.clone()) {
                         return Err(src.node_err(
                             node,
-                            format!("OAuth provider {:?} is defined twice", provider.id),
+                            msg("config-oauth-provider-duplicate").arg("id", provider.id.as_str()),
                         ));
                     }
                     config.oauth_providers.push(provider);
                 }
                 "undo-send-delay" => {
                     if undo_seen {
-                        return Err(src.node_err(node, "`undo-send-delay` is set twice"));
+                        return Err(src.node_err(
+                            node,
+                            msg("config-set-twice").arg("node", "undo-send-delay"),
+                        ));
                     }
                     undo_seen = true;
                     config.undo_send_secs = Some(reader.undo_send_delay(node)?);
                 }
                 other => {
                     return Err(src.node_err(
-                    node,
-                    format!(
-                        "unknown node `{other}` (expected account, virtual-account, oauth-provider or undo-send-delay)"
-                    ),
-                ));
+                        node,
+                        msg("config-unknown-node").arg("node", other).arg(
+                            "expected",
+                            "account, virtual-account, oauth-provider, undo-send-delay",
+                        ),
+                    ));
                 }
             }
             Ok(())
@@ -126,9 +125,7 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
         if !built_in && !provider_ids.contains(&provider) {
             errors.push(src.node_err(
                 node,
-                format!(
-                    "unknown OAuth provider {provider:?} (built in: google, microsoft; others need an `oauth-provider` node)"
-                ),
+                msg("config-oauth-provider-unknown").arg("id", provider.as_str()),
             ));
         }
     }
@@ -141,10 +138,7 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
         if !ids.insert(virtual_account.id.to_string()) {
             errors.push(src.node_err(
                 node,
-                format!(
-                    "the name {:?} is already used by another account or virtual account",
-                    virtual_account.id.as_str()
-                ),
+                msg("config-account-name-taken").arg("name", virtual_account.id.as_str()),
             ));
         }
         config.virtual_accounts.push(virtual_account);
@@ -162,12 +156,9 @@ impl Reader<'_, '_> {
     fn check_props(&self, node: &KdlNode, allowed: &[&str]) -> Result<(), ConfigError> {
         for (key, entry) in props(node) {
             if SECRET_PROPS.contains(&key) {
-                return Err(self.src.entry_err(
-                    entry,
-                    format!(
-                        "`{key}` is not allowed: secrets are never stored in accounts.kdl. Keep them in the OS keychain and reference them with secret=\"keychain:nail/<account>/password\""
-                    ),
-                ));
+                return Err(self
+                    .src
+                    .entry_err(entry, msg("config-secret-not-allowed").arg("key", key)));
             }
         }
         check_props(self.src, node, allowed)
@@ -179,7 +170,7 @@ impl Reader<'_, '_> {
             if !seen.insert(key) {
                 return Err(self
                     .src
-                    .entry_err(entry, format!("property `{key}` is set twice")));
+                    .entry_err(entry, msg("config-duplicate-property").arg("key", key)));
             }
         }
         Ok(())
@@ -193,7 +184,7 @@ impl Reader<'_, '_> {
         match prop_str(self.src, node, key)? {
             Some((s, entry)) if s.trim().is_empty() => Err(self
                 .src
-                .entry_err(entry, format!("`{key}` must not be empty"))),
+                .entry_err(entry, msg("config-empty").arg("what", what_key(key)))),
             other => Ok(other.map(|(s, _)| s.to_owned())),
         }
     }
@@ -205,7 +196,9 @@ impl Reader<'_, '_> {
                 KdlValue::Bool(b) => Ok(Some(*b)),
                 other => Err(self.src.entry_err(
                     entry,
-                    format!("`{key}` must be #true or #false, found {}", describe(other)),
+                    msg("config-expected-bool")
+                        .arg("what", what_key(key))
+                        .arg("found", describe(other)),
                 )),
             },
         }
@@ -229,10 +222,11 @@ impl Reader<'_, '_> {
         value.map(Some).ok_or_else(|| {
             self.src.entry_err(
                 entry,
-                format!(
-                    "`{key}` must be a whole number from {min} to {max}, found {}",
-                    describe(entry.value())
-                ),
+                msg("config-expected-range")
+                    .arg("what", what_key(key))
+                    .arg("min", min)
+                    .arg("max", max)
+                    .arg("found", describe(entry.value())),
             )
         })
     }
@@ -240,9 +234,14 @@ impl Reader<'_, '_> {
     fn prop_secret(&self, node: &KdlNode, key: &str) -> Result<Option<SecretRef>, ConfigError> {
         match prop_str(self.src, node, key)? {
             None => Ok(None),
-            Some((text, entry)) => SecretRef::parse(text)
-                .map(Some)
-                .map_err(|e| self.src.entry_err(entry, format!("`{key}`: {e}"))),
+            Some((text, entry)) => SecretRef::parse(text).map(Some).map_err(|_| {
+                self.src.entry_err(
+                    entry,
+                    msg("config-secret-invalid")
+                        .arg("key", key)
+                        .arg("found", format!("{text:?}")),
+                )
+            }),
         }
     }
 
@@ -255,33 +254,27 @@ impl Reader<'_, '_> {
                 } else {
                     Err(self.src.entry_err(
                         entry,
-                        format!(
-                            "`{key}` must be an https:// URL (http:// only for localhost), found {text:?}"
-                        ),
+                        msg("config-expected-url")
+                            .arg("what", what_key(key))
+                            .arg("found", format!("{text:?}")),
                     ))
                 }
             }
         }
     }
 
-    fn id_arg(&self, node: &KdlNode, what: &str) -> Result<AccountId, ConfigError> {
-        let (id, entry) = arg_str(self.src, node, 0, what)?;
+    fn id_arg(&self, node: &KdlNode) -> Result<AccountId, ConfigError> {
+        let (id, entry) = arg_str(self.src, node, 0)?;
         if id == AccountId::ALL {
             return Err(self.src.entry_err(
                 entry,
-                format!(
-                    "{:?} is reserved for the built-in \"All accounts\" virtual account",
-                    AccountId::ALL
-                ),
+                msg("config-account-name-reserved").arg("name", AccountId::ALL),
             ));
         }
         if !is_valid_account_id(id) {
-            return Err(self.src.entry_err(
-                entry,
-                format!(
-                    "invalid name {id:?}: use 1 to 64 lowercase letters, digits, `-`, `_` or `.`, starting with a letter or digit"
-                ),
-            ));
+            return Err(self
+                .src
+                .entry_err(entry, msg("config-account-name-invalid").arg("name", id)));
         }
         Ok(AccountId::new(id))
     }
@@ -292,9 +285,9 @@ impl Reader<'_, '_> {
         } else {
             Err(self.src.entry_err(
                 entry,
-                format!(
-                    "{what} must be an email address like \"name@example.org\", found {text:?}"
-                ),
+                msg("config-expected-email")
+                    .arg("what", what)
+                    .arg("found", format!("{text:?}")),
             ))
         }
     }
@@ -306,13 +299,14 @@ impl Reader<'_, '_> {
         self.check_props(node, &["name", "email", "enabled", "save-sent-copy"])?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 1)?;
-        let id = self.id_arg(node, "the account name")?;
+        let id = self.id_arg(node)?;
         let email = match prop_str(self.src, node, "email")? {
             Some((text, entry)) => self.email(entry, text, "`email`")?,
             None => {
-                return Err(self
-                    .src
-                    .node_err(node, format!("account {:?} needs email=\"…\"", id.as_str())));
+                return Err(self.src.node_err(
+                    node,
+                    msg("config-account-needs-email").arg("name", id.as_str()),
+                ));
             }
         };
         let display = self
@@ -332,16 +326,15 @@ impl Reader<'_, '_> {
             match name(child) {
                 "authserv-id" => {
                     if authserv_ids.is_some() {
-                        return Err(self.src.node_err(child, "`authserv-id` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "authserv-id")));
                     }
                     authserv_ids = Some(self.authserv_ids(child)?);
                 }
                 protocol @ ("imap" | "pop3") => {
                     if incoming.is_some() {
-                        return Err(self.src.node_err(
-                            child,
-                            "an account has exactly one incoming server (`imap` or `pop3`)",
-                        ));
+                        return Err(self.src.node_err(child, msg("config-account-one-incoming")));
                     }
                     let (server, provider) = self.server(child, &email)?;
                     providers.extend(provider);
@@ -359,9 +352,7 @@ impl Reader<'_, '_> {
                 }
                 "smtp" => {
                     if outgoing.is_some() {
-                        return Err(self
-                            .src
-                            .node_err(child, "an account has at most one `smtp` server"));
+                        return Err(self.src.node_err(child, msg("config-account-one-smtp")));
                     }
                     let (server, provider) = self.server(child, &email)?;
                     providers.extend(provider);
@@ -375,22 +366,30 @@ impl Reader<'_, '_> {
                 "identity" => identities.push(self.identity(child, &id)?),
                 "sync" => {
                     if sync.is_some() {
-                        return Err(self.src.node_err(child, "`sync` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "sync")));
                     }
                     sync = Some(self.sync(child)?);
                 }
                 "sieve" => {
                     if sieve.is_some() {
-                        return Err(self.src.node_err(child, "`sieve` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "sieve")));
                     }
                     sieve = Some((self.sieve(child)?, child));
                 }
                 other => {
                     return Err(self.src.node_err(
                         child,
-                        format!(
-                            "unknown node `{other}` in `account` (expected imap, pop3, smtp, identity, sync, sieve or authserv-id)"
-                        ),
+                        msg("config-unknown-child")
+                            .arg("node", other)
+                            .arg("parent", "account")
+                            .arg(
+                                "expected",
+                                "imap, pop3, smtp, identity, sync, sieve, authserv-id",
+                            ),
                     ));
                 }
             }
@@ -398,18 +397,13 @@ impl Reader<'_, '_> {
         let incoming = incoming.ok_or_else(|| {
             self.src.node_err(
                 node,
-                format!(
-                    "account {:?} needs an incoming server: an `imap` or `pop3` node",
-                    id.as_str()
-                ),
+                msg("config-account-needs-incoming").arg("name", id.as_str()),
             )
         })?;
         if let Some((_, child)) = &sieve
             && !matches!(incoming, IncomingServer::Imap { .. })
         {
-            return Err(self
-                .src
-                .node_err(child, "`sieve` (ManageSieve) needs an IMAP account"));
+            return Err(self.src.node_err(child, msg("config-sieve-needs-imap")));
         }
         if identities.is_empty() {
             identities.push(Identity {
@@ -434,10 +428,7 @@ impl Reader<'_, '_> {
             if !seen.insert(identity.id.clone()) {
                 return Err(self.src.node_err(
                     child,
-                    format!(
-                        "identity id {:?} is used twice; give one of them a different `id=`",
-                        identity.id.as_str()
-                    ),
+                    msg("config-identity-duplicate").arg("id", identity.id.as_str()),
                 ));
             }
         }
@@ -475,7 +466,9 @@ impl Reader<'_, '_> {
                 {
                     return Err(self.src.entry_err(
                         entry,
-                        format!("`host` must be a host name or IP address, found {h:?}"),
+                        msg("config-expected-host")
+                            .arg("what", "`host`")
+                            .arg("found", format!("{h:?}")),
                     ));
                 }
                 Some(h.to_owned())
@@ -489,9 +482,10 @@ impl Reader<'_, '_> {
             Some((t, entry)) => {
                 return Err(self.src.entry_err(
                     entry,
-                    format!(
-                        "`tls` must be \"implicit\", \"starttls\" or \"plaintext\", found {t:?}"
-                    ),
+                    msg("config-expected-one-of")
+                        .arg("what", "`tls`")
+                        .arg("choices", "\"implicit\", \"starttls\", \"plaintext\"")
+                        .arg("found", format!("{t:?}")),
                 ));
             }
         };
@@ -504,9 +498,7 @@ impl Reader<'_, '_> {
                 if !is_script_name(s) {
                     return Err(self.src.entry_err(
                         entry,
-                        format!(
-                            "`script` must be 1 to 128 characters without control characters or slashes, found {s:?}"
-                        ),
+                        msg("config-sieve-script-invalid").arg("found", format!("{s:?}")),
                     ));
                 }
                 Some(s.to_owned())
@@ -528,17 +520,15 @@ impl Reader<'_, '_> {
         check_no_children(self.src, node)?;
         let list = args(node);
         if list.is_empty() {
-            return Err(self
-                .src
-                .node_err(node, "`authserv-id` needs at least one server id"));
+            return Err(self.src.node_err(node, msg("config-authserv-id-empty")));
         }
         let mut ids = Vec::new();
         for entry in list {
-            let text = crate::kdl_util::entry_str(self.src, entry, "a server id")?.trim();
+            let text = crate::kdl_util::entry_str(self.src, entry, "`authserv-id`")?.trim();
             if text.is_empty() || text.chars().any(|c| c.is_whitespace() || c == ';') {
                 return Err(self.src.entry_err(
                     entry,
-                    format!("{text:?} is not a server id like \"mx.example.net\""),
+                    msg("config-authserv-id-invalid").arg("found", format!("{text:?}")),
                 ));
             }
             let id = text.to_ascii_lowercase();
@@ -592,32 +582,38 @@ impl Reader<'_, '_> {
                 {
                     return Err(self.src.entry_err(
                         entry,
-                        format!("`host` must be a host name or IP address, found {h:?}"),
+                        msg("config-expected-host")
+                            .arg("what", "`host`")
+                            .arg("found", format!("{h:?}")),
                     ));
                 }
                 h.to_owned()
             }
             None => {
-                return Err(self
-                    .src
-                    .node_err(node, format!("`{}` needs host=\"…\"", name(node))));
+                return Err(self.src.node_err(
+                    node,
+                    msg("config-needs-property")
+                        .arg("node", name(node))
+                        .arg("key", "host"),
+                ));
             }
         };
         let tls = match prop_str(self.src, node, "tls")? {
             None => TlsMode::Implicit,
-            Some((t, entry)) => {
-                match t {
-                    "implicit" => TlsMode::Implicit,
-                    "starttls" => TlsMode::Starttls,
-                    "plaintext" => TlsMode::Plaintext,
-                    _ => {
-                        return Err(self.src.entry_err(
+            Some((t, entry)) => match t {
+                "implicit" => TlsMode::Implicit,
+                "starttls" => TlsMode::Starttls,
+                "plaintext" => TlsMode::Plaintext,
+                _ => {
+                    return Err(self.src.entry_err(
                         entry,
-                        format!("`tls` must be \"implicit\", \"starttls\" or \"plaintext\", found {t:?}"),
+                        msg("config-expected-one-of")
+                            .arg("what", "`tls`")
+                            .arg("choices", "\"implicit\", \"starttls\", \"plaintext\"")
+                            .arg("found", format!("{t:?}")),
                     ));
-                    }
                 }
-            }
+            },
         };
         let port = match self.prop_u32_range(node, "port", 1, 65535)? {
             Some(p) => u16::try_from(p).unwrap_or(u16::MAX),
@@ -628,15 +624,16 @@ impl Reader<'_, '_> {
             if name(child) != "auth" {
                 return Err(self.src.node_err(
                     child,
-                    format!(
-                        "unknown node `{}` in `{}` (expected auth)",
-                        name(child),
-                        name(node)
-                    ),
+                    msg("config-unknown-child")
+                        .arg("node", name(child))
+                        .arg("parent", name(node))
+                        .arg("expected", "auth"),
                 ));
             }
             if auth.is_some() {
-                return Err(self.src.node_err(child, "`auth` is set twice"));
+                return Err(self
+                    .src
+                    .node_err(child, msg("config-set-twice").arg("node", "auth")));
             }
             auth = Some(self.auth(child, protocol, account_email)?);
         }
@@ -670,7 +667,7 @@ impl Reader<'_, '_> {
         check_max_args(self.src, node, 1)?;
         check_no_children(self.src, node)?;
         self.check_unique_props(node)?;
-        let (method, method_entry) = arg_str(self.src, node, 0, "the method")?;
+        let (method, method_entry) = arg_str(self.src, node, 0)?;
         let username = |this: &Self| -> Result<String, ConfigError> {
             Ok(this
                 .prop_nonempty(node, "username")?
@@ -687,10 +684,10 @@ impl Reader<'_, '_> {
                 let names: Vec<&str> = allowed.iter().map(|m| mechanism_name(*m)).collect();
                 this.src.entry_err(
                     entry,
-                    format!(
-                        "`mechanism` must be one of {} here, found {text:?}",
-                        names.join(", ")
-                    ),
+                    msg("config-expected-one-of")
+                        .arg("what", "`mechanism`")
+                        .arg("choices", names.join(", "))
+                        .arg("found", format!("{text:?}")),
                 )
             })
         };
@@ -719,10 +716,7 @@ impl Reader<'_, '_> {
                 let provider = match prop_str(self.src, node, "provider")? {
                     Some((p, _)) => p.to_owned(),
                     None => {
-                        return Err(self.src.node_err(
-                            node,
-                            "`auth \"oauth2\"` needs provider=\"google\", \"microsoft\" or the id of an `oauth-provider`",
-                        ));
+                        return Err(self.src.node_err(node, msg("config-oauth-needs-provider")));
                     }
                 };
                 (
@@ -755,9 +749,7 @@ impl Reader<'_, '_> {
             other => {
                 return Err(self.src.entry_err(
                     method_entry,
-                    format!(
-                        "unknown auth method {other:?} (expected \"password\", \"oauth2\", \"client-certificate\" or \"none\")"
-                    ),
+                    msg("config-auth-method-unknown").arg("found", format!("{other:?}")),
                 ));
             }
         })
@@ -791,10 +783,9 @@ impl Reader<'_, '_> {
         if options.leave_on_server == Some(false) {
             for key in ["delete-after-days", "delete-when-deleted-locally"] {
                 if let Some(entry) = node.entry(key) {
-                    return Err(self.src.entry_err(
-                        entry,
-                        format!("`{key}` only applies with leave-on-server=#true"),
-                    ));
+                    return Err(self
+                        .src
+                        .entry_err(entry, msg("config-needs-leave-on-server").arg("key", key)));
                 }
             }
         }
@@ -805,14 +796,12 @@ impl Reader<'_, '_> {
         self.check_props(node, &["id", "name", "reply-to", "composer", "posting"])?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 1)?;
-        let (email, entry) = arg_str(self.src, node, 0, "the sender address")?;
-        let email = self.email(entry, email, "the identity")?;
+        let (email, entry) = arg_str(self.src, node, 0)?;
+        let email = self.email(entry, email, "`identity`")?;
         let id = match prop_str(self.src, node, "id")? {
             Some((id, entry)) => {
                 if id.is_empty() || id.chars().any(|c| c.is_whitespace() || c.is_control()) {
-                    return Err(self
-                        .src
-                        .entry_err(entry, "`id` must be non-empty and contain no spaces"));
+                    return Err(self.src.entry_err(entry, msg("config-identity-id-invalid")));
                 }
                 IdentityId::new(id)
             }
@@ -824,19 +813,20 @@ impl Reader<'_, '_> {
         };
         let composer_mode = match prop_str(self.src, node, "composer")? {
             None => None,
-            Some((text, entry)) => {
-                Some(match text {
-                    "plain" => ComposerMode::Plain,
-                    "html" => ComposerMode::Html,
-                    "markdown" => ComposerMode::Markdown,
-                    _ => {
-                        return Err(self.src.entry_err(
+            Some((text, entry)) => Some(match text {
+                "plain" => ComposerMode::Plain,
+                "html" => ComposerMode::Html,
+                "markdown" => ComposerMode::Markdown,
+                _ => {
+                    return Err(self.src.entry_err(
                         entry,
-                        format!("`composer` must be \"plain\", \"html\" or \"markdown\", found {text:?}"),
+                        msg("config-expected-one-of")
+                            .arg("what", "`composer`")
+                            .arg("choices", "\"plain\", \"html\", \"markdown\"")
+                            .arg("found", format!("{text:?}")),
                     ));
-                    }
-                })
-            }
+                }
+            }),
         };
         let posting = match prop_str(self.src, node, "posting")? {
             None => None,
@@ -845,7 +835,10 @@ impl Reader<'_, '_> {
             Some((text, entry)) => {
                 return Err(self.src.entry_err(
                     entry,
-                    format!("`posting` must be \"top\" or \"bottom\", found {text:?}"),
+                    msg("config-expected-one-of")
+                        .arg("what", "`posting`")
+                        .arg("choices", "\"top\", \"bottom\"")
+                        .arg("found", format!("{text:?}")),
                 ));
             }
         };
@@ -860,16 +853,18 @@ impl Reader<'_, '_> {
                     check_no_children(self.src, child)?;
                     let list = args(child);
                     if list.is_empty() {
-                        return Err(self.src.node_err(child, "`bcc` needs at least one address"));
+                        return Err(self.src.node_err(child, msg("config-bcc-empty")));
                     }
                     for entry in list {
-                        let text = crate::kdl_util::entry_str(self.src, entry, "a bcc address")?;
-                        bcc.push(self.email(entry, text, "a bcc address")?);
+                        let text = crate::kdl_util::entry_str(self.src, entry, "`bcc`")?;
+                        bcc.push(self.email(entry, text, "`bcc`")?);
                     }
                 }
                 "signature" => {
                     if signature.is_some() {
-                        return Err(self.src.node_err(child, "`signature` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "signature")));
                     }
                     self.check_props(child, &["html", "markdown"])?;
                     self.check_unique_props(child)?;
@@ -877,8 +872,7 @@ impl Reader<'_, '_> {
                     check_no_children(self.src, child)?;
                     let text = match args(child).first() {
                         Some(entry) => Some(
-                            crate::kdl_util::entry_str(self.src, entry, "the signature text")?
-                                .to_owned(),
+                            crate::kdl_util::entry_str(self.src, entry, "`signature`")?.to_owned(),
                         ),
                         None => None,
                     };
@@ -890,7 +884,9 @@ impl Reader<'_, '_> {
                 }
                 "mail-style" => {
                     if mail_style.is_some() {
-                        return Err(self.src.node_err(child, "`mail-style` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "mail-style")));
                     }
                     self.check_props(child, &["css", "code-theme"])?;
                     self.check_unique_props(child)?;
@@ -903,16 +899,19 @@ impl Reader<'_, '_> {
                 }
                 "crypto" => {
                     if crypto.is_some() {
-                        return Err(self.src.node_err(child, "`crypto` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "crypto")));
                     }
                     crypto = Some(self.identity_crypto(child)?);
                 }
                 other => {
                     return Err(self.src.node_err(
                         child,
-                        format!(
-                            "unknown node `{other}` in `identity` (expected bcc, signature, mail-style or crypto)"
-                        ),
+                        msg("config-unknown-child")
+                            .arg("node", other)
+                            .arg("parent", "identity")
+                            .arg("expected", "bcc, signature, mail-style, crypto"),
                     ));
                 }
             }
@@ -960,9 +959,10 @@ impl Reader<'_, '_> {
             Some((text, entry)) => {
                 return Err(self.src.entry_err(
                     entry,
-                    format!(
-                        "`technology` must be \"auto\", \"openpgp\" or \"smime\", found {text:?}"
-                    ),
+                    msg("config-expected-one-of")
+                        .arg("what", "`technology`")
+                        .arg("choices", "\"auto\", \"openpgp\", \"smime\"")
+                        .arg("found", format!("{text:?}")),
                 ));
             }
         };
@@ -973,9 +973,10 @@ impl Reader<'_, '_> {
             Some((text, entry)) => {
                 return Err(self.src.entry_err(
                     entry,
-                    format!(
-                        "`prefer-encrypt` must be \"mutual\" or \"nopreference\", found {text:?}"
-                    ),
+                    msg("config-expected-one-of")
+                        .arg("what", "`prefer-encrypt`")
+                        .arg("choices", "\"mutual\", \"nopreference\"")
+                        .arg("found", format!("{text:?}")),
                 ));
             }
         };
@@ -1015,9 +1016,10 @@ impl Reader<'_, '_> {
                 .join(" or ");
             return Err(self.src.entry_err(
                 entry,
-                format!(
-                    "`{key}` must be a fingerprint of {lengths} hexadecimal digits, found {text:?}"
-                ),
+                msg("config-fingerprint-invalid")
+                    .arg("key", key)
+                    .arg("lengths", lengths)
+                    .arg("found", format!("{text:?}")),
             ));
         }
         Ok(Some(hex.to_ascii_uppercase()))
@@ -1033,15 +1035,16 @@ impl Reader<'_, '_> {
                 "recent" => BodyPolicy::Recent {
                     days: days.ok_or_else(|| {
                         self.src
-                            .entry_err(entry, "bodies=\"recent\" needs days=<number of days>")
+                            .entry_err(entry, msg("config-sync-recent-needs-days"))
                     })?,
                 },
                 _ => {
                     return Err(self.src.entry_err(
                         entry,
-                        format!(
-                            "`bodies` must be \"full\", \"headers-only\" or \"recent\", found {text:?}"
-                        ),
+                        msg("config-expected-one-of")
+                            .arg("what", "`bodies`")
+                            .arg("choices", "\"full\", \"headers-only\", \"recent\"")
+                            .arg("found", format!("{text:?}")),
                     ));
                 }
             }),
@@ -1051,7 +1054,7 @@ impl Reader<'_, '_> {
         {
             return Err(self
                 .src
-                .entry_err(entry, "`days` only applies with bodies=\"recent\""));
+                .entry_err(entry, msg("config-sync-days-needs-recent")));
         }
         Ok(policy)
     }
@@ -1066,7 +1069,10 @@ impl Reader<'_, '_> {
             if name(child) != "folder" {
                 return Err(self.src.node_err(
                     child,
-                    format!("unknown node `{}` in `sync` (expected folder)", name(child)),
+                    msg("config-unknown-child")
+                        .arg("node", name(child))
+                        .arg("parent", "sync")
+                        .arg("expected", "folder"),
                 ));
             }
             self.check_props(
@@ -1084,10 +1090,7 @@ impl Reader<'_, '_> {
                 idle: self.prop_bool(child, "idle")?,
             };
             if rule.bodies.is_none() && rule.enabled.is_none() && rule.idle.is_none() {
-                return Err(self.src.node_err(
-                    child,
-                    "this `folder` rule changes nothing; set bodies=, enabled= or idle=",
-                ));
+                return Err(self.src.node_err(child, msg("config-sync-rule-empty")));
             }
             folders.push(rule);
         }
@@ -1100,24 +1103,27 @@ impl Reader<'_, '_> {
         match (path, role) {
             (Some((p, entry)), None) => {
                 if p.is_empty() {
-                    return Err(self.src.entry_err(entry, "`path` must not be empty"));
+                    return Err(self
+                        .src
+                        .entry_err(entry, msg("config-empty").arg("what", "`path`")));
                 }
                 Ok(FolderMatch::Path(p.to_owned()))
             }
             (None, Some((r, entry))) => parse_role(r).map(FolderMatch::Role).ok_or_else(|| {
                 self.src.entry_err(
                     entry,
-                    format!(
-                        "`role` must be inbox, sent, drafts, archive, junk or trash, found {r:?}"
-                    ),
+                    msg("config-expected-one-of")
+                        .arg("what", "`role`")
+                        .arg("choices", "inbox, sent, drafts, archive, junk, trash")
+                        .arg("found", format!("{r:?}")),
                 )
             }),
-            (Some(_), Some((_, entry))) => Err(self
-                .src
-                .entry_err(entry, "use either `path` or `role`, not both")),
+            (Some(_), Some((_, entry))) => {
+                Err(self.src.entry_err(entry, msg("config-path-or-role")))
+            }
             (None, None) => Err(self
                 .src
-                .node_err(node, "`folder` needs path=\"…\" or role=\"…\"")),
+                .node_err(node, msg("config-folder-needs-path-or-role"))),
         }
     }
 
@@ -1132,7 +1138,7 @@ impl Reader<'_, '_> {
         self.check_props(node, &["name", "default-identity", "merge-roles"])?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 1)?;
-        let id = self.id_arg(node, "the virtual account name")?;
+        let id = self.id_arg(node)?;
         let display = self
             .prop_nonempty(node, "name")?
             .unwrap_or_else(|| id.to_string());
@@ -1145,38 +1151,37 @@ impl Reader<'_, '_> {
             match name(child) {
                 "members" => {
                     if members.is_some() {
-                        return Err(self.src.node_err(child, "`members` is set twice"));
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-set-twice").arg("node", "members")));
                     }
                     self.check_props(child, &[])?;
                     check_no_children(self.src, child)?;
                     let mut list: Vec<AccountId> = Vec::new();
                     for entry in args(child) {
-                        let member =
-                            crate::kdl_util::entry_str(self.src, entry, "a member account")?;
+                        let member = crate::kdl_util::entry_str(self.src, entry, "`members`")?;
                         let member = AccountId::new(member);
                         if config.account(&member).is_none() {
-                            let hint = if config.virtual_account(&member).is_some() {
-                                " (virtual accounts cannot be members)"
-                            } else {
-                                ""
-                            };
                             return Err(self.src.entry_err(
                                 entry,
-                                format!("unknown account {:?}{hint}", member.as_str()),
+                                msg(if config.virtual_account(&member).is_some() {
+                                    "config-member-virtual"
+                                } else {
+                                    "config-member-unknown"
+                                })
+                                .arg("name", member.as_str()),
                             ));
                         }
                         if list.contains(&member) {
                             return Err(self.src.entry_err(
                                 entry,
-                                format!("account {:?} is listed twice", member.as_str()),
+                                msg("config-member-duplicate").arg("name", member.as_str()),
                             ));
                         }
                         list.push(member);
                     }
                     if list.is_empty() {
-                        return Err(self
-                            .src
-                            .node_err(child, "`members` needs at least one account"));
+                        return Err(self.src.node_err(child, msg("config-members-empty")));
                     }
                     members = Some(list);
                 }
@@ -1185,19 +1190,21 @@ impl Reader<'_, '_> {
                     self.check_props(child, &["identity"])?;
                     check_max_args(self.src, child, 1)?;
                     check_no_children(self.src, child)?;
-                    let (pattern, entry) = arg_str(self.src, child, 0, "an address pattern")?;
+                    let (pattern, entry) = arg_str(self.src, child, 0)?;
                     if !is_valid_identity_pattern(pattern) {
                         return Err(self.src.entry_err(
                             entry,
-                            format!(
-                                "invalid pattern {pattern:?} (use \"*@example.com\", \"*@*.example.com\" or a full address)"
-                            ),
+                            msg("config-identity-pattern-invalid")
+                                .arg("found", format!("{pattern:?}")),
                         ));
                     }
                     let Some((identity, _)) = prop_str(self.src, child, "identity")? else {
-                        return Err(self
-                            .src
-                            .node_err(child, "`identity-rule` needs identity=\"…\""));
+                        return Err(self.src.node_err(
+                            child,
+                            msg("config-needs-property")
+                                .arg("node", "identity-rule")
+                                .arg("key", "identity"),
+                        ));
                     };
                     rules.push((
                         IdentityRule {
@@ -1210,9 +1217,10 @@ impl Reader<'_, '_> {
                 other => {
                     return Err(self.src.node_err(
                         child,
-                        format!(
-                            "unknown node `{other}` in `virtual-account` (expected members, map or identity-rule)"
-                        ),
+                        msg("config-unknown-child")
+                            .arg("node", other)
+                            .arg("parent", "virtual-account")
+                            .arg("expected", "members, map, identity-rule"),
                     ));
                 }
             }
@@ -1220,10 +1228,7 @@ impl Reader<'_, '_> {
         let members = members.ok_or_else(|| {
             self.src.node_err(
                 node,
-                format!(
-                    "virtual account {:?} needs `members \"<account>\" …`",
-                    id.as_str()
-                ),
+                msg("config-virtual-needs-members").arg("name", id.as_str()),
             )
         })?;
 
@@ -1233,31 +1238,31 @@ impl Reader<'_, '_> {
             .zip(children(node).iter().filter(|c| name(c) == "map"))
         {
             if !names.insert(mapping.name.clone()) {
-                return Err(self
-                    .src
-                    .node_err(child, format!("folder {:?} is mapped twice", mapping.name)));
+                return Err(self.src.node_err(
+                    child,
+                    msg("config-map-folder-duplicate").arg("name", mapping.name.as_str()),
+                ));
             }
             for (source, folder_node) in mapping.sources.iter().zip(children(child)) {
                 if !members.contains(&source.account_id) {
                     return Err(self.src.node_err(
                         folder_node,
-                        format!(
-                            "account {:?} is not a member of this virtual account",
-                            source.account_id.as_str()
-                        ),
+                        msg("config-map-not-member").arg("name", source.account_id.as_str()),
                     ));
                 }
             }
         }
 
         let check_identity =
-            |id: &IdentityId, at: &dyn Fn(String) -> ConfigError| match identity_owner.get(id) {
-                None => Err(at(format!("unknown identity {:?}", id.as_str()))),
-                Some(owner) if !members.contains(owner) => Err(at(format!(
-                    "identity {:?} belongs to account {:?}, which is not a member",
-                    id.as_str(),
-                    owner.as_str()
-                ))),
+            |id: &IdentityId, at: &dyn Fn(LocalizedMessage) -> ConfigError| match identity_owner
+                .get(id)
+            {
+                None => Err(at(msg("config-identity-unknown").arg("id", id.as_str()))),
+                Some(owner) if !members.contains(owner) => {
+                    Err(at(msg("config-identity-not-member")
+                        .arg("id", id.as_str())
+                        .arg("account", owner.as_str())))
+                }
                 Some(_) => Ok(()),
             };
         let default_identity = match prop_str(self.src, node, "default-identity")? {
@@ -1290,47 +1295,61 @@ impl Reader<'_, '_> {
     fn mapping(&self, node: &KdlNode) -> Result<FolderMapping, ConfigError> {
         self.check_props(node, &[])?;
         check_max_args(self.src, node, 1)?;
-        let (folder_name, entry) = arg_str(self.src, node, 0, "the folder name")?;
+        let (folder_name, entry) = arg_str(self.src, node, 0)?;
         if folder_name.trim().is_empty() {
             return Err(self
                 .src
-                .entry_err(entry, "the folder name must not be empty"));
+                .entry_err(entry, msg("config-empty").arg("what", what_arg(node, 0))));
         }
         let mut sources = Vec::new();
         for child in children(node) {
             if name(child) != "folder" {
                 return Err(self.src.node_err(
                     child,
-                    format!("unknown node `{}` in `map` (expected folder)", name(child)),
+                    msg("config-unknown-child")
+                        .arg("node", name(child))
+                        .arg("parent", "map")
+                        .arg("expected", "folder"),
                 ));
             }
             self.check_props(child, &["account", "path"])?;
             check_max_args(self.src, child, 0)?;
             check_no_children(self.src, child)?;
             let Some((account, _)) = prop_str(self.src, child, "account")? else {
-                return Err(self.src.node_err(child, "`folder` needs account=\"…\""));
+                return Err(self.src.node_err(
+                    child,
+                    msg("config-needs-property")
+                        .arg("node", "folder")
+                        .arg("key", "account"),
+                ));
             };
             let path = match prop_str(self.src, child, "path")? {
                 Some(("", entry)) => {
-                    return Err(self.src.entry_err(entry, "`path` must not be empty"));
+                    return Err(self
+                        .src
+                        .entry_err(entry, msg("config-empty").arg("what", "`path`")));
                 }
                 Some((p, _)) => p.to_owned(),
-                None => return Err(self.src.node_err(child, "`folder` needs path=\"…\"")),
+                None => {
+                    return Err(self.src.node_err(
+                        child,
+                        msg("config-needs-property")
+                            .arg("node", "folder")
+                            .arg("key", "path"),
+                    ));
+                }
             };
             let source = FolderSource {
                 account_id: AccountId::new(account),
                 path,
             };
             if sources.contains(&source) {
-                return Err(self.src.node_err(child, "this folder is listed twice"));
+                return Err(self.src.node_err(child, msg("config-map-entry-duplicate")));
             }
             sources.push(source);
         }
         if sources.is_empty() {
-            return Err(self.src.node_err(
-                node,
-                "`map` needs at least one `folder account=\"…\" path=\"…\"`",
-            ));
+            return Err(self.src.node_err(node, msg("config-map-empty")));
         }
         Ok(FolderMapping {
             name: folder_name.to_owned(),
@@ -1347,41 +1366,41 @@ impl Reader<'_, '_> {
         )?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 1)?;
-        let (id, entry) = arg_str(self.src, node, 0, "the provider id")?;
+        let (id, entry) = arg_str(self.src, node, 0)?;
         if !crate::kdl_util::is_kebab(id) {
-            return Err(self.src.entry_err(
-                entry,
-                format!("invalid provider id {id:?}: use lowercase letters, digits and `-`"),
-            ));
+            return Err(self
+                .src
+                .entry_err(entry, msg("config-oauth-provider-id-invalid").arg("id", id)));
         }
         let client_id = self.prop_nonempty(node, "client-id")?.ok_or_else(|| {
-            self.src
-                .node_err(node, format!("oauth-provider {id:?} needs client-id=\"…\""))
+            self.src.node_err(
+                node,
+                msg("config-oauth-provider-needs-client-id").arg("id", id),
+            )
         })?;
         let auth_url = self.prop_url(node, "auth-url")?;
         let token_url = self.prop_url(node, "token-url")?;
         let built_in = OAuthProviderConfig::BUILT_IN.contains(&id);
         if !built_in && (auth_url.is_none() || token_url.is_none()) {
-            return Err(self.src.node_err(
-                node,
-                format!("oauth-provider {id:?} is not built in and needs auth-url=\"…\" and token-url=\"…\""),
-            ));
+            return Err(self
+                .src
+                .node_err(node, msg("config-oauth-provider-needs-urls").arg("id", id)));
         }
         let mut scopes = Vec::new();
         for child in children(node) {
             if name(child) != "scopes" {
                 return Err(self.src.node_err(
                     child,
-                    format!(
-                        "unknown node `{}` in `oauth-provider` (expected scopes)",
-                        name(child)
-                    ),
+                    msg("config-unknown-child")
+                        .arg("node", name(child))
+                        .arg("parent", "oauth-provider")
+                        .arg("expected", "scopes"),
                 ));
             }
             self.check_props(child, &[])?;
             check_no_children(self.src, child)?;
             for entry in args(child) {
-                scopes.push(crate::kdl_util::entry_str(self.src, entry, "a scope")?.to_owned());
+                scopes.push(crate::kdl_util::entry_str(self.src, entry, "`scopes`")?.to_owned());
             }
         }
         Ok(OAuthProviderConfig {
@@ -1400,7 +1419,7 @@ impl Reader<'_, '_> {
         check_max_args(self.src, node, 1)?;
         let entry = *args(node).first().ok_or_else(|| {
             self.src
-                .node_err(node, "`undo-send-delay` needs a number of seconds")
+                .node_err(node, msg("config-undo-send-needs-seconds"))
         })?;
         entry
             .value()
@@ -1410,10 +1429,11 @@ impl Reader<'_, '_> {
             .ok_or_else(|| {
                 self.src.entry_err(
                     entry,
-                    format!(
-                        "`undo-send-delay` must be a whole number of seconds from 0 to {MAX_UNDO_SEND_SECS}, found {}",
-                        describe(entry.value())
-                    ),
+                    msg("config-expected-range")
+                        .arg("what", "`undo-send-delay`")
+                        .arg("min", 0)
+                        .arg("max", MAX_UNDO_SEND_SECS)
+                        .arg("found", describe(entry.value())),
                 )
             })
     }

@@ -5,6 +5,7 @@
  * runtime are listed by `runtimeIds`.
  */
 import type { MergeChange, MergeConflictKind, MergeSection } from "../../api/generated";
+import { KEY_CONTEXTS } from "./editorModel";
 import { DIALOGS, MERGE_FILES } from "./names";
 
 /** Prefixes of message ids written literally in this feature's sources. */
@@ -23,7 +24,7 @@ export const prefixes: readonly string[] = [
  * Literals with those prefixes that are not message ids: the `toolbar-order`
  * layout patch (the global `toolbar-` prefix catches it).
  */
-export const notMessages: readonly string[] = ["toolbar-order"];
+export const notMessages: readonly string[] = ["toolbar-order", "toolbar-editor"];
 
 const SECTIONS: MergeSection[] = [
   "header",
@@ -56,6 +57,12 @@ export function runtimeIds(): string[] {
     ...CHANGES.map((c) => `merge-change-${c}`),
     ...MERGE_FILES.map((f) => `merge-dialog-file-${f}`),
     ...Object.values(DIALOGS).map((name) => `window-${name}`),
+    ...["separator", "spacer"].map((k) => `customize-toolbar-${k}`),
+    ...KEY_CONTEXTS.map((c) => `customize-keys-context-${c}`),
+    "customize-saved",
+    "customize-reset-done",
+    "customize-keys-added",
+    "customize-keys-removed",
     "inspector-hint",
     "inspector-hint-pinned",
     "customize-open-unsupported",

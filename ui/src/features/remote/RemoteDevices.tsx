@@ -287,7 +287,8 @@ export function RemoteDevicesWidget({ node }: WidgetProps) {
       aria-label={node.label ? label(node.label) : t("remote-devices-title")}
     >
       {loadError && <ErrorLine error={errorMessageIdOf(loadError)} />}
-      <section data-part="remote-devices.section" aria-label={t("remote-devices-title")}>
+      {/* Not a second landmark: the widget itself is the "Devices" region. */}
+      <div data-part="remote-devices.section">
         <h3 data-part="remote-devices.title">{t("remote-devices-title")}</h3>
         <button
           type="button"
@@ -322,7 +323,7 @@ export function RemoteDevicesWidget({ node }: WidgetProps) {
             </ul>
           </>
         )}
-      </section>
+      </div>
       <section data-part="remote-sessions" aria-label={t("remote-sessions-title")}>
         <h3 data-part="remote-devices.title">{t("remote-sessions-title")}</h3>
         <Toggle

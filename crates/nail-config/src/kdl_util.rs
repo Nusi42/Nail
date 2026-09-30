@@ -3,11 +3,12 @@
 use std::borrow::Cow;
 
 use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
-use nail_api::SourceLocation;
+use nail_api::{LocalizedMessage, SourceLocation};
 use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde_json::Value;
 
 use crate::error::{ConfigError, ConfigErrorKind};
+use crate::l10n::msg;
 
 /// A value together with the place in a file where it was written.
 ///
@@ -82,7 +83,7 @@ impl<'a> Source<'a> {
             return Err(vec![ConfigError::at(
                 ConfigErrorKind::Syntax,
                 &self.loc_at(offset),
-                format!("syntax error: nested more than {MAX_NESTING} levels deep"),
+                msg("config-syntax-nesting").arg("max", MAX_NESTING),
             )]);
         }
         KdlDocument::parse_v2(self.text).map_err(|err| {
@@ -90,19 +91,18 @@ impl<'a> Source<'a> {
                 .diagnostics
                 .iter()
                 .map(|diag| {
-                    let mut message = diag
-                        .message
-                        .clone()
-                        .unwrap_or_else(|| "invalid KDL".to_owned());
-                    if let Some(help) = &diag.help {
-                        message.push_str(" (");
-                        message.push_str(help);
-                        message.push(')');
-                    }
+                    // The parser's own (English) description is an argument.
+                    let localized = match (&diag.message, &diag.help) {
+                        (Some(detail), Some(help)) => msg("config-syntax-help")
+                            .arg("detail", detail.as_str())
+                            .arg("help", help.as_str()),
+                        (Some(detail), None) => msg("config-syntax").arg("detail", detail.as_str()),
+                        (None, _) => msg("config-syntax-invalid"),
+                    };
                     ConfigError::at(
                         ConfigErrorKind::Syntax,
                         &self.loc_at(diag.span.offset()),
-                        format!("syntax error: {message}"),
+                        localized,
                     )
                 })
                 .collect();
@@ -110,7 +110,7 @@ impl<'a> Source<'a> {
                 errors.push(ConfigError::at(
                     ConfigErrorKind::Syntax,
                     &self.loc_at(0),
-                    "invalid KDL document",
+                    msg("config-syntax-invalid"),
                 ));
             }
             // The parser's own order: its first diagnostic is the primary one.
@@ -145,12 +145,12 @@ impl<'a> Source<'a> {
     }
 
     /// An "invalid" error at a node.
-    pub(crate) fn node_err(&self, node: &KdlNode, message: impl Into<String>) -> ConfigError {
+    pub(crate) fn node_err(&self, node: &KdlNode, message: LocalizedMessage) -> ConfigError {
         ConfigError::invalid(&self.node_loc(node), message)
     }
 
     /// An "invalid" error at an entry.
-    pub(crate) fn entry_err(&self, entry: &KdlEntry, message: impl Into<String>) -> ConfigError {
+    pub(crate) fn entry_err(&self, entry: &KdlEntry, message: LocalizedMessage) -> ConfigError {
         ConfigError::invalid(&self.entry_loc(entry), message)
     }
 
@@ -201,12 +201,13 @@ pub(crate) fn sort_errors(errors: &mut Vec<ConfigError>) {
     errors.dedup();
 }
 
-/// Short human description of a KDL value, for error messages.
+/// A KDL value as written (`"text"`, `5`, `#true`, `#null`), for the
+/// `found` argument of error messages (language-neutral).
 pub(crate) fn describe(value: &KdlValue) -> String {
     match value {
-        KdlValue::String(s) => format!("the string {s:?}"),
-        KdlValue::Integer(i) => format!("the number {i}"),
-        KdlValue::Float(f) => format!("the number {f}"),
+        KdlValue::String(s) => format!("{s:?}"),
+        KdlValue::Integer(i) => i.to_string(),
+        KdlValue::Float(f) => f.to_string(),
         KdlValue::Bool(b) => format!("#{b}"),
         KdlValue::Null => "#null".to_owned(),
     }
@@ -245,15 +246,7 @@ pub(crate) fn check_props(
 ) -> Result<(), ConfigError> {
     for (key, entry) in props(node) {
         if !allowed.contains(&key) {
-            let hint = if allowed.is_empty() {
-                format!("`{}` takes no properties", name(node))
-            } else {
-                format!("allowed: {}", allowed.join(", "))
-            };
-            return Err(src.entry_err(
-                entry,
-                format!("unknown property `{key}` on `{}` ({hint})", name(node)),
-            ));
+            return Err(src.entry_err(entry, unknown_property(key, name(node), allowed)));
         }
     }
     Ok(())
@@ -268,10 +261,9 @@ pub(crate) fn check_max_args(
     if let Some(extra) = args(node).get(max) {
         return Err(src.entry_err(
             extra,
-            format!(
-                "too many arguments for `{}` (expected at most {max})",
-                name(node)
-            ),
+            msg("config-too-many-arguments")
+                .arg("node", name(node))
+                .arg("max", max),
         ));
     }
     Ok(())
@@ -280,15 +272,13 @@ pub(crate) fn check_max_args(
 /// Checks that the node has no children block.
 pub(crate) fn check_no_children(src: &Source<'_>, node: &KdlNode) -> Result<(), ConfigError> {
     if let Some(child) = children(node).first() {
-        return Err(src.node_err(
-            child,
-            format!("`{}` does not take a children block", name(node)),
-        ));
+        return Err(src.node_err(child, msg("config-no-children").arg("node", name(node))));
     }
     Ok(())
 }
 
-/// Reads a string value.
+/// Reads a string value. `what` names it in the message: a property
+/// ([`what_key`]) or a node's argument ([`what_arg`]).
 pub(crate) fn entry_str<'e>(
     src: &Source<'_>,
     entry: &'e KdlEntry,
@@ -297,9 +287,35 @@ pub(crate) fn entry_str<'e>(
     entry.value().as_string().ok_or_else(|| {
         src.entry_err(
             entry,
-            format!("{what} must be a string, found {}", describe(entry.value())),
+            msg("config-expected-string")
+                .arg("what", what)
+                .arg("found", describe(entry.value())),
         )
     })
+}
+
+/// The `what` of an argument in messages: `` `node` #1 ``.
+pub(crate) fn what_arg(node: &KdlNode, index: usize) -> String {
+    format!("`{}` #{}", name(node), index + 1)
+}
+
+/// The `what` of a property in messages: `` `key` ``.
+pub(crate) fn what_key(key: &str) -> String {
+    format!("`{key}`")
+}
+
+/// "unknown property", with the allowed ones as a hint.
+pub(crate) fn unknown_property(key: &str, node: &str, allowed: &[&str]) -> LocalizedMessage {
+    if allowed.is_empty() {
+        msg("config-unknown-property-none")
+            .arg("key", key)
+            .arg("node", node)
+    } else {
+        msg("config-unknown-property-hint")
+            .arg("key", key)
+            .arg("node", node)
+            .arg("allowed", allowed.join(", "))
+    }
 }
 
 /// Reads the required string argument at `index`.
@@ -307,15 +323,16 @@ pub(crate) fn arg_str<'n>(
     src: &Source<'_>,
     node: &'n KdlNode,
     index: usize,
-    what: &str,
 ) -> Result<(&'n str, &'n KdlEntry), ConfigError> {
     let entry = *args(node).get(index).ok_or_else(|| {
         src.node_err(
             node,
-            format!("`{}` needs {what} as argument {}", name(node), index + 1),
+            msg("config-missing-argument")
+                .arg("node", name(node))
+                .arg("index", index + 1),
         )
     })?;
-    Ok((entry_str(src, entry, what)?, entry))
+    Ok((entry_str(src, entry, &what_arg(node, index))?, entry))
 }
 
 /// Reads an optional string property.
@@ -326,7 +343,7 @@ pub(crate) fn prop_str<'n>(
 ) -> Result<Option<(&'n str, &'n KdlEntry)>, ConfigError> {
     match node.entry(key) {
         None => Ok(None),
-        Some(entry) => Ok(Some((entry_str(src, entry, &format!("`{key}`"))?, entry))),
+        Some(entry) => Ok(Some((entry_str(src, entry, &what_key(key))?, entry))),
     }
 }
 
@@ -346,10 +363,9 @@ pub(crate) fn prop_u32(
             .ok_or_else(|| {
                 src.entry_err(
                     entry,
-                    format!(
-                        "`{key}` must be a non-negative whole number, found {}",
-                        describe(entry.value())
-                    ),
+                    msg("config-expected-count")
+                        .arg("what", what_key(key))
+                        .arg("found", describe(entry.value())),
                 )
             }),
     }
@@ -374,10 +390,9 @@ pub(crate) fn scalar_to_string(
         KdlValue::Float(f) => Ok(format_float(*f)),
         other => Err(src.entry_err(
             entry,
-            format!(
-                "{what} must be a string or a number, found {}",
-                describe(other)
-            ),
+            msg("config-expected-string-or-number")
+                .arg("what", what)
+                .arg("found", describe(other)),
         )),
     }
 }
@@ -388,10 +403,10 @@ pub(crate) fn to_json(src: &Source<'_>, entry: &KdlEntry) -> Result<Value, Confi
         KdlValue::String(s) => Value::String(s.clone()),
         KdlValue::Integer(i) => i64::try_from(*i)
             .map(Value::from)
-            .map_err(|_| src.entry_err(entry, "number is out of range"))?,
+            .map_err(|_| src.entry_err(entry, msg("config-number-out-of-range")))?,
         KdlValue::Float(f) => serde_json::Number::from_f64(*f)
             .map(Value::Number)
-            .ok_or_else(|| src.entry_err(entry, "number must be finite"))?,
+            .ok_or_else(|| src.entry_err(entry, msg("config-number-not-finite")))?,
         KdlValue::Bool(b) => Value::Bool(*b),
         KdlValue::Null => Value::Null,
     })

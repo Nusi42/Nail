@@ -46,6 +46,20 @@ A Markdown message is sent as:
 Attachments and quoted replies work as in the other modes (see [Writing
 mail](composer.md)). A reply in Markdown quotes the original with `>`.
 
+## Receiving Markdown mail
+
+Mail can carry Markdown too: from Nail (the optional source part above) or
+from other programs that send `text/markdown`. Nail reads such a part as
+another version of the message, never as an attachment:
+
+- next to plain text and HTML, the reader shows those as usual;
+- with only HTML, the text view shows the Markdown as written;
+- a message that is only Markdown (or Markdown and plain text) is shown
+  formatted: Nail renders it the same way as your own Markdown, without
+  passing on any raw HTML it contains.
+
+A Markdown *file* attached to a message (`notes.md`) stays an attachment.
+
 ## Switching modes
 
 Plain text becomes Markdown unchanged, and Markdown becomes HTML without

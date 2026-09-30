@@ -43,6 +43,7 @@ use nail_api::{RuleId, SourceLocation};
 
 use crate::error::{ConfigError, ConfigErrorKind};
 use crate::kdl_util::Source;
+use crate::l10n::msg;
 
 pub use schema::rules_schema;
 
@@ -82,11 +83,7 @@ pub fn parse_rule_text(text: &str) -> Result<Rule, Vec<ConfigError>> {
     match rules.len() {
         1 => Ok(rules.remove(0)),
         n => {
-            let message = if n == 0 {
-                "expected one `rule \"<name>\" { … }` node, found none".to_owned()
-            } else {
-                format!("expected one `rule` node, found {n}")
-            };
+            let message = msg("config-rule-text-count").arg("count", n);
             errors.push(ConfigError::invalid(&src.loc_at(0), message));
             Err(errors)
         }
@@ -285,9 +282,9 @@ impl RulesDocument {
             let canonical = write::render_all(&wanted, &write::detect_indent(&self.text));
             let reparsed = parse_rules(&canonical, &self.file)?;
             if !same_list(&reparsed, &wanted) {
-                return Err(vec![self.whole_file_error(
-                    "the rules cannot be written as rules.kdl (they change when read back)",
-                )]);
+                return Err(vec![
+                    self.whole_file_error(msg("config-rules-not-writable")),
+                ]);
             }
             self.text = canonical;
             self.rules = reparsed;
@@ -310,7 +307,9 @@ impl RulesDocument {
     ) -> Result<Rule, Vec<ConfigError>> {
         let mut rule = normalize_rule(rule);
         if rule.name.is_empty() {
-            return Err(vec![self.whole_file_error("a rule needs a name")]);
+            return Err(vec![
+                self.whole_file_error(msg("config-rule-needs-name-value")),
+            ]);
         }
         let mut rules = self.rules.clone();
         if rule.id.as_str().is_empty() {
@@ -349,9 +348,9 @@ impl RulesDocument {
                 .iter()
                 .all(|id| seen.insert(id) && self.rule(id).is_some());
         if !complete {
-            return Err(vec![self.whole_file_error(
-                "the new order must list every rule exactly once",
-            )]);
+            return Err(vec![
+                self.whole_file_error(msg("config-rules-order-incomplete")),
+            ]);
         }
         let rules = ids.iter().filter_map(|id| self.rule(id).cloned()).collect();
         self.set_rules(rules)
@@ -361,25 +360,25 @@ impl RulesDocument {
         let mut seen = std::collections::HashSet::new();
         for rule in rules {
             if !is_valid_rule_id(rule.id.as_str()) {
-                return Some(self.whole_file_error(format!(
-                    "invalid rule id {:?} (lowercase letters, digits, `-`, `_`, `.`)",
-                    rule.id.as_str()
-                )));
+                return Some(
+                    self.whole_file_error(
+                        msg("config-rule-id-invalid").arg("id", rule.id.as_str()),
+                    ),
+                );
             }
             if !seen.insert(rule.id.as_str()) {
-                return Some(self.whole_file_error(format!(
-                    "the rule id {:?} is used twice",
-                    rule.id.as_str()
-                )));
+                return Some(self.whole_file_error(
+                    msg("config-rule-id-duplicate").arg("id", rule.id.as_str()),
+                ));
             }
             if rule.name.is_empty() {
-                return Some(self.whole_file_error("a rule needs a name"));
+                return Some(self.whole_file_error(msg("config-rule-needs-name-value")));
             }
         }
         None
     }
 
-    fn whole_file_error(&self, message: impl Into<String>) -> ConfigError {
+    fn whole_file_error(&self, message: nail_api::LocalizedMessage) -> ConfigError {
         ConfigError::at(
             ConfigErrorKind::Invalid,
             &SourceLocation {

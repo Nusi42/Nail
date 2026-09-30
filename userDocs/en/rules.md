@@ -216,3 +216,7 @@ be undone as a whole. Forwards, redirects and replies are sent through the
 outbox right away (without the undo-send delay), with a copy in Sent. When
 you are offline they wait in the outbox and are sent once the account is
 back online.
+
+Accounts with ManageSieve can run rules **on the mail server** instead, so
+they apply while Nail is closed; such a rule does not run again in Nail when
+mail arrives. See [Server-side rules and vacation replies](server-side-rules.md).

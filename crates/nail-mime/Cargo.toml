@@ -12,6 +12,8 @@ nail-api.workspace = true
 tracing.workspace = true
 mail-parser = { workspace = true, features = ["full_encoding"] }
 ammonia = "4.2.0"
+# M2c WP53: `text/markdown` bodies without an HTML alternative are rendered.
+comrak.workspace = true
 # M2a WP33 (ADR 0029): link safety (punycode, confusables).
 idna.workspace = true
 unicode-security.workspace = true

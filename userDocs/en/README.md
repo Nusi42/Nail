@@ -6,18 +6,21 @@ Guides and references for people using Nail.
 | --- | --- |
 | [Getting started](getting-started.md) | Starting Nail (desktop or browser), the demo mailbox, finding your way around, privacy when reading mail, where settings and mail are kept |
 | [Accounts](accounts.md) | Adding an account, signing in, account and identity settings, the unified inbox, virtual accounts, connection states |
-| [Reading and organizing mail](mail.md) | Conversations, flags, archive, move, delete, keyboard shortcuts, the offline queue |
+| [Reading and organizing mail](mail.md) | Conversations, flags, archive, move, delete, keyboard shortcuts, snooze, junk mail and the junk filter, messages downloaded on demand, the offline queue |
 | [Searching](search.md) | The search bar and the search language: fields, AND / OR / NOT, quotes, error messages |
 | [Writing mail](composer.md) | The composer: plain text, HTML and Markdown, attachments and the reminder, replies and signatures, drafts saved to the server, undo send, send later, the outbox |
 | [Markdown mail](markdown-mail.md) | What Markdown can do, what recipients get, the mail stylesheet and code colours per identity |
+| [Accessibility](accessibility.md) | Keyboard use, context menus (Shift+F10), shortcut / toolbar / column editors, screen readers, the high-contrast theme, reduced motion |
 | [Filter rules](rules.md) | Rules that sort, tag and answer mail: when they run, conditions, actions, testing, undoing a run, `rules.kdl` |
+| [Server-side rules and vacation replies](server-side-rules.md) | Rules that run on your mail server (Sieve / ManageSieve), which rules can run there and why others stay in Nail, the vacation reply, what Nail changes on the server |
+| [Junk mail, snooze and notifications](junk-snooze-notifications.md) | The server's Junk flags and Nail's own junk filter, snoozing and waking messages, new-mail notifications, quiet hours, per-account / folder / rule settings |
 | [Signing, encryption and data protection](security.md) | Keys and certificates, trust, defaults per address, composer toggles, reader badges and warnings, OpenPGP and Autocrypt, S/MIME, encryption at rest, Autocrypt setup |
 | [Data protection in detail](data-protection.md) | What encryption at rest covers, the key, switching it on and off, searching encrypted mail, the sender check, link and attachment warnings |
 | [Remote access and remote content](remote-access.md) | Turning remote access on, internet mode (locked), users, passwords, two-step verification and passkeys, pairing a device, signing in, devices and sessions, the security log, loading remote content per message / sender / domain, the privacy list |
 | [Remote sign-in security](remote-sign-in-security.md) | How passwords, verification codes, passkeys and pairing codes are protected, sessions and their limits, re-authentication, rate limits and lockouts, what the security log records |
 | [Secure connections and remote content](remote-connections.md) | HTTPS and the certificate fingerprint, allowed networks, what the browser is told, mail shown from a separate address, how remote images are fetched through Nail |
 | [Connecting AI agents (MCP)](mcp.md) | MCP clients, tokens, permissions, configuring agents (HTTP and `nail mcp`), resources and tools, the activity log, safety |
-| [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
+| [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, editing toolbars, shortcuts and list columns, right-click menus, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
 | [Installing Nail on Windows](installing.md) | Installer options, Default apps, silent install, uninstall and your data, the portable version |
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |

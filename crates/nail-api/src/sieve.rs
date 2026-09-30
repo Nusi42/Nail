@@ -168,7 +168,7 @@ pub struct RuleSieveStatus {
     pub rule_id: RuleId,
     /// Where it runs.
     pub placement: RulePlacement,
-    /// Why it is `client` or `not-expressible` (e.g. `sieve-reason-body`
+    /// Why it is `client` or `not-expressible` (e.g. `sieve-reason-query`
     /// with the condition's position); empty for `server`.
     #[serde(default)]
     pub reasons: Vec<LocalizedMessage>,

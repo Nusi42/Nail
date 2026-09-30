@@ -5,7 +5,13 @@
  * `Event`s. It is transport-agnostic: the desktop app uses Tauri IPC, the
  * browser a WebSocket, tests and `?mock=1` an in-memory mock.
  */
-import type { ErrorCode, Event as NailEvent, Request, Response } from "./generated";
+import type {
+  ErrorCode,
+  LocalizedMessage,
+  Event as NailEvent,
+  Request,
+  Response,
+} from "./generated";
 
 /** Connection state of a transport, shown in the status bar. */
 export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "closed";
@@ -27,11 +33,14 @@ export interface Transport {
 /** An error answered by the core, or a transport failure. */
 export class NailError extends Error {
   readonly code: ErrorCode;
+  /** The core's user-facing text, when it has a more specific one (ADR 0043). */
+  readonly localized: LocalizedMessage | null;
 
-  constructor(code: ErrorCode, message: string) {
+  constructor(code: ErrorCode, message: string, localized: LocalizedMessage | null = null) {
     super(message);
     this.name = "NailError";
     this.code = code;
+    this.localized = localized;
   }
 }
 
@@ -43,6 +52,15 @@ export function errorMessageId(code: ErrorCode): string {
 /** Fluent message id for any thrown value. */
 export function errorMessageIdOf(error: unknown): string {
   return errorMessageId(error instanceof NailError ? error.code : "internal");
+}
+
+/**
+ * The user-facing message of any thrown value: the core's `localized` text
+ * when it sent one, else the text of the error code (ADR 0043).
+ */
+export function errorMessageOf(error: unknown): LocalizedMessage {
+  if (error instanceof NailError && error.localized) return error.localized;
+  return { id: errorMessageIdOf(error) };
 }
 
 type ResponseOf<T extends Response["type"]> = Extract<Response, { type: T }>;
@@ -84,7 +102,7 @@ export class TransportClient implements NailClient {
       return response as ResponseOf<T>;
     }
     if (response.type === "Error") {
-      throw new NailError(response.code, response.message);
+      throw new NailError(response.code, response.message, response.localized ?? null);
     }
     throw new NailError(
       "internal",

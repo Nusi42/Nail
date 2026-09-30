@@ -199,7 +199,31 @@ ${[
 [data-part="mcp-audit.table"] { border-collapse: collapse; }
 [data-part="search-bar.error.query"] { white-space: pre; }
 [data-part="search-bar.input"]::-webkit-search-cancel-button { display: none; }
-${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${d}"], [data-part="folder-picker.item"][data-depth="${d}"] { margin-inline-start: ${d * 16}px; }`).join("\n")}`;
+${[1, 2, 3, 4, 5, 6].map((d) => `[data-part="folder-tree.item"][data-depth="${d}"], [data-part="folder-picker.item"][data-depth="${d}"] { margin-inline-start: ${d * 16}px; }`).join("\n")}
+[data-part="context-menu"] { position: fixed; z-index: 1000; }
+[data-part="context-menu.item"] { display: flex; align-items: center; width: 100%; font: inherit; text-align: start; }
+[data-part="context-menu.submenu"] { position: relative; }
+[data-part="context-menu.popup"] { position: absolute; inset-inline-start: 100%; top: 0; }
+[data-part="message-list.row.columns"], [data-part="message-list.header"] { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+[data-part="message-list.row.cell"] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${[
+  "toolbar-editor.items",
+  "column-editor.items",
+  "snooze.presets",
+  "snooze-list.items",
+  "notification-settings.accounts",
+  "sieve-status.issues",
+  "vacation-editor.issues",
+  "junk-settings.issues",
+  "notification-settings.issues",
+  "sync-policy.issues",
+]
+  .map((part) => `[data-part="${part}"]`)
+  .join(", ")} { list-style: none; margin: 0; padding: 0; }
+/* Reduced motion (M2c): the OS setting stops animations and transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {

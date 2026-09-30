@@ -332,6 +332,7 @@ impl Service {
                 Ok(())
             }
             Request::GetDraft { draft_id }
+            | Request::GetDraftAttachment { draft_id, .. }
             | Request::DeleteDraft { draft_id }
             | Request::SendDraft { draft_id, .. } => self.check_draft(access, draft_id).await,
             Request::CancelSend { outbox_id } => self.check_outbox(access, outbox_id).await,

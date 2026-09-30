@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import type { JsonValue } from "../api/generated";
 import { useActionEnabled, useActions } from "../actions/ActionsProvider";
 import { useLabel, useT } from "../i18n/I18nProvider";
@@ -36,6 +37,26 @@ function ToolbarButton({ action, args, label: labelOverride, icon: iconOverride 
   );
 }
 
+/** Left / Right / Home / End move between a toolbar's enabled buttons. */
+export function onToolbarKeyDown(event: KeyboardEvent<HTMLElement>): void {
+  const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+  if (!keys.includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+  const buttons = [
+    ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+      '[data-part="toolbar.button"]:not(:disabled)',
+    ),
+  ];
+  if (buttons.length === 0) return;
+  const at = buttons.indexOf(event.target as HTMLButtonElement);
+  let next: number;
+  if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = buttons.length - 1;
+  else if (at < 0) next = 0;
+  else next = (at + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+  event.preventDefault();
+  buttons[next]?.focus();
+}
+
 /** A toolbar from the layout's `toolbars` section (`toolbar` option). */
 export function Toolbar({ node }: WidgetProps) {
   const t = useT();
@@ -50,6 +71,7 @@ export function Toolbar({ node }: WidgetProps) {
       data-node-id={node.id ?? undefined}
       role="toolbar"
       aria-label={node.label ? label(node.label) : t("toolbar-label")}
+      onKeyDown={onToolbarKeyDown}
     >
       {items.map((item, index) => {
         switch (item.type) {

@@ -173,7 +173,9 @@ fn column_order_is_written_to_the_list_widget() {
         "layout.kdl",
     )
     .unwrap_err();
-    assert!(matches!(err, EditError::Invalid(m) if m.contains("container")));
+    assert!(
+        matches!(err, EditError::Invalid(m) if nail_config::l10n::english(&m).contains("container"))
+    );
 }
 
 #[test]
@@ -386,5 +388,7 @@ fn bad_patches_are_refused_without_writing() {
         "layout.kdl",
     )
     .unwrap_err();
-    assert!(matches!(err, EditError::Invalid(m) if m.contains("no window `outbox`")));
+    assert!(
+        matches!(err, EditError::Invalid(m) if nail_config::l10n::english(&m).contains("no window `outbox`"))
+    );
 }

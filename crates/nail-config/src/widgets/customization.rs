@@ -19,6 +19,11 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
         &[],
         false,
     ),
+    // M2c WP54: the Customize tab's editors (toolbar order, key bindings,
+    // message-list columns), written back through the layout patches.
+    widget("toolbar-editor", &[], &[], false),
+    widget("key-binding-editor", &[], &[], false),
+    widget("column-editor", &[], &[], false),
 ];
 
 #[cfg(test)]

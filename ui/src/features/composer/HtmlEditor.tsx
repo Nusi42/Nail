@@ -125,6 +125,17 @@ export function HtmlEditor({
     emitted.current = value;
   }, [editor, value, source]);
 
+  // Previews that arrive later (inline images of a reopened draft) replace
+  // their `cid:` references in the editor; the stored HTML stays the same.
+  useEffect(() => {
+    if (!editor || source) return;
+    const shown = editor.getHTML();
+    if (!Object.keys(previews).some((cid) => shown.includes(`cid:${cid}`))) return;
+    editor.commands.setContent(toDisplayHtml(toStoredHtml(shown, previews), previews), {
+      emitUpdate: false,
+    });
+  }, [editor, previews, source]);
+
   const run = (command: Command) => {
     if (editor) command.run(editor.chain().focus()).run();
   };

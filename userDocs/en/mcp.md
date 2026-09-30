@@ -65,10 +65,14 @@ not read.
 ## Configuring your agent
 
 Settings → MCP clients shows the server's address, usually
-`http://127.0.0.1:<port>/mcp`. Nail picks a free port each time it starts,
-so the address can change; `nail mcp` (below) always finds the current
-one. When Nail runs as `nail serve`, `--mcp-port <port>` keeps the port
-fixed and `--no-mcp` turns the server off.
+`http://127.0.0.1:<port>/mcp`. By default Nail picks a free port each time
+it starts, so the address can change; `nail mcp` (below) always finds the
+current one. For agents that can only be given a fixed address, set a
+**fixed port** in the MCP settings (1024 or higher); Nail then always uses
+that port and says so when another program already has it, instead of
+moving to another one. When Nail runs as `nail serve`, `--mcp-port <port>`
+overrides the setting for that run (`0` = any free port) and `--no-mcp`
+turns the server off.
 
 **Agents that connect over HTTP** ("Streamable HTTP" transport) use that
 address and send the token as a bearer token:
@@ -94,17 +98,31 @@ line. For example, in an agent's JSON configuration:
 ```
 
 `nail mcp` connects to the running Nail app and forwards everything to it,
-so the same permissions and the same activity log apply. Options:
+so the same permissions and the same activity log apply.
+
+**When Nail is not running**, `nail mcp` starts it without a window for as
+long as the agent is connected: it opens your data, keeps your accounts in
+sync and runs the MCP server (on the fixed port when you set one), then
+stops when the agent disconnects. Only one Nail uses a data folder at a
+time: while this headless Nail runs, a second `nail mcp` connects to it,
+and `nail serve` on the same folder refuses to start. If another
+Nail runs on the folder with its MCP server turned off, `nail mcp` says so
+instead of opening your data a second time.
+
+Options:
 
 | Option | Meaning |
 | --- | --- |
 | `--client <name>` | The client's name as created in Settings. Nail checks that the token belongs to this client. |
-| `--url <address>` | The server address, if it cannot be found automatically. |
+| `--url <address>` | The server address, if it cannot be found automatically. Never starts Nail. |
 | `--data-dir <folder>` | Nail's data folder, if it is not the default. |
+| `--config-dir <folder>` | Nail's settings folder for a Nail it starts, if it is not the default. |
+| `--no-start` | Only connect to a running Nail; stop with a message when none is running. |
+| `--mcp-port <port>` | The port of a Nail it starts, overriding the fixed port of the settings (`0` = any free port). |
 
-Nail must be running (the desktop app, or `nail serve`). If it is not,
-`nail mcp` stops with a message saying so. Messages from `nail mcp` go to
-the agent's log (standard error).
+Messages from `nail mcp` go to the agent's log (standard error), in the
+language of the `NAIL_LOCALE` (or `LANG`) environment variable when Nail
+has it, else in English.
 
 ## What agents can read
 

@@ -217,7 +217,15 @@ draft: Draft, } | { "type": "GetDraft",
 /**
  * The draft.
  */
-draft_id: DraftId, } | { "type": "ListDrafts" } | { "type": "DeleteDraft", 
+draft_id: DraftId, } | { "type": "GetDraftAttachment", 
+/**
+ * The draft.
+ */
+draft_id: DraftId, 
+/**
+ * The attachment's blob hash ([`crate::DraftAttachment::blob`]).
+ */
+blob: string, } | { "type": "ListDrafts" } | { "type": "DeleteDraft", 
 /**
  * The draft.
  */

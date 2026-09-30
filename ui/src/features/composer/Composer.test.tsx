@@ -7,6 +7,12 @@ import { markdownViewIn } from "./MarkdownEditor";
 import { composerCryptoStore } from "../security";
 import { acceptRichDrafts } from "./mock";
 import { AUTOSAVE_MS, richStoreFor, type RichState } from "./store";
+import { loadHtmlEditor, loadMarkdownEditor } from "./lazyEditors";
+import { openRichDraft } from "./flows";
+import { loadInlinePreviews, missingInlineImages } from "./inlineImages";
+
+// The editors are lazy chunks: load them once so they render at once.
+beforeAll(() => Promise.all([loadHtmlEditor(), loadMarkdownEditor()]));
 
 // jsdom has no layout: CodeMirror and ProseMirror measure text ranges.
 beforeAll(() => {
@@ -339,5 +345,101 @@ describe("rich composer", () => {
     await within(from).findByRole("option", { name: "Ada Lovelace <ada@work.example>" });
     await user.selectOptions(from, "ada@work.example");
     expect(env.store.getState().composer?.text).toBe("Hi\n\n-- \nAda Lovelace\nAnalyst");
+  });
+});
+
+describe("inline images of reopened drafts", () => {
+  const PNG = "iVBORw0KGgo=";
+
+  async function savedDraft(env: Env): Promise<string> {
+    const { attachment } = await env.client.request(
+      {
+        type: "UploadAttachment",
+        filename: "logo.png",
+        mime: "image/png",
+        data: PNG,
+        content_id: "logo1@nail",
+      },
+      "AttachmentUploaded",
+    );
+    const { draft_id } = await env.client.request(
+      {
+        type: "SaveDraft",
+        draft: {
+          id: null,
+          identity_id: "ada@example.org",
+          to: [],
+          cc: [],
+          bcc: [],
+          subject: "With a logo",
+          mode: "html",
+          text: "",
+          html: '<p>Hi</p><p><img src="cid:logo1@nail" alt="logo.png"></p>',
+          markdown: null,
+          attachments: [attachment],
+          context: null,
+          signature: "none",
+          markdown_part: false,
+        },
+      },
+      "DraftSaved",
+    );
+    return draft_id;
+  }
+
+  it("lists referenced inline images without a preview", () => {
+    const attachment = {
+      filename: "a.png",
+      mime: "image/png",
+      size: 1,
+      blob: "b",
+      content_id: "A@x",
+    };
+    const draft = { html: '<img src="cid:a@x">', attachments: [attachment] };
+    expect(missingInlineImages(draft, {})).toEqual([attachment]);
+    expect(missingInlineImages(draft, { "A@x": "data:" })).toEqual([]);
+    expect(missingInlineImages({ html: "<p></p>", attachments: [attachment] }, {})).toEqual([]);
+  });
+
+  it("shows the images of a draft saved in another session", async () => {
+    const env = composerEnv();
+    const draftId = await savedDraft(env);
+    // A new session: nothing is known about the images.
+    env.store.setState({ composer: null, windows: [] });
+    richStoreFor(env.store).setState({ inlinePreviews: {} });
+    const ctx = {
+      client: env.client,
+      store: env.store,
+      queryClient: env.queryClient,
+      t: (id: string) => id,
+      locale: "en",
+    };
+    await openRichDraft(ctx, draftId);
+    await waitFor(() =>
+      expect(rich(env).inlinePreviews["logo1@nail"]).toBe(`data:image/png;base64,${PNG}`),
+    );
+    expect(env.transport.requests).toContainEqual(
+      expect.objectContaining({ type: "GetDraftAttachment", draft_id: draftId }),
+    );
+    const { container } = renderNode(widget("composer"), env);
+    await waitFor(() =>
+      expect(htmlEditorIn(container)?.getHTML()).toContain(`src="data:image/png;base64,${PNG}"`),
+    );
+    // The stored HTML still references the content id.
+    expect(rich(env).html).toContain('src="cid:logo1@nail"');
+  });
+
+  it("keeps the alt text when the core does not serve the image", async () => {
+    const env = composerEnv();
+    const draftId = await savedDraft(env);
+    richStoreFor(env.store).setState({ inlinePreviews: {} });
+    const draft = env.transport.data.drafts.get(draftId);
+    if (!draft) throw new Error("no draft");
+    const loaded = await loadInlinePreviews(
+      { client: env.client, store: env.store },
+      { ...draft, attachments: draft.attachments.map((a) => ({ ...a, blob: "unknown" })) },
+    );
+    expect(loaded).toBe(0);
+    expect(rich(env).inlinePreviews).toEqual({});
   });
 });

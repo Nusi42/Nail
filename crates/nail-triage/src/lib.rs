@@ -1,27 +1,54 @@
 //! Junk classifier, snooze scheduler and notification policy (plan M2c
-//! WP52; contract ADR 0043). **Pure logic**: no I/O, no store, no clock of
-//! its own (callers pass "now"), so everything is unit-testable.
+//! WP52; contract ADR 0043, design ADR 0045). **Pure logic**: no I/O,
+//! no store and no clock of its own. Persistence goes through traits the
+//! core implements on its store ([`classifier::JunkStore`],
+//! [`snooze::SnoozeStore`]), time through [`clock::Clock`] (tests use
+//! [`clock::ManualClock`]), and every write is returned as a
+//! [`ops::TriageOp`] for the core's operation queue.
 //!
-//! **Stub (WP50).** WP52 fills this crate against `nail_api::triage`.
-//! Expected shape:
-//!
-//! * `classifier` — a tokenizer over headers (`From`, `Subject`,
-//!   `List-Id`, …, prefixed by header name) and body text, and a Bayesian
-//!   (Robinson / Fisher) classifier over token counts `(junk, ham)` per
-//!   token. The counts come from the store (`Store::junk_token_counts`;
-//!   `Store::train_junk` hashes the tokens); the classifier returns a
-//!   score 0–100 and a verdict against `JunkSettings::threshold`, and
-//!   nothing before `JunkSettings::min_training` messages of each class.
-//! * `snooze` — the scheduler: next wake time from the snooze records,
-//!   which records are due, the wake folder fallback (the folder is gone →
-//!   Inbox), rebinding by `Message-ID` after a resync.
-//! * `notify` — the notification policy: given `NotificationSettings`,
-//!   the arriving messages (account, folder, role), the rules' `notify`
-//!   decisions and the local time, which `MailNotification`s to request
-//!   (grouped per folder, preview only when allowed, quiet hours across
-//!   midnight and per weekday).
+//! * [`tokenize`] — tokens of selected headers, decoded text and links.
+//! * [`classifier`] — per-account Bayesian classifier (Robinson / Fisher),
+//!   thresholds with an "unsure" band, training with undo, arrival and
+//!   "Mark as junk" plans that never delete.
+//! * [`snooze`] — wake times in a [`wheel::TimerWheel`], the `$Snoozed`
+//!   keyword and hidden `Snoozed` folder as planned writes, restart
+//!   catch-up, rebinding by `Message-ID`.
+//! * [`notify`] — the notification policy (settings, overrides, rules,
+//!   quiet hours across midnight and time zones) and burst batching.
+//! * [`localtime`] — local wall-clock times across DST changes.
 
 #![warn(missing_docs)]
+
+pub mod classifier;
+pub mod clock;
+pub mod localtime;
+pub mod notify;
+pub mod ops;
+pub mod snooze;
+pub mod tokenize;
+pub mod wheel;
+
+pub use classifier::{
+    Classification, ClassifierParams, JunkClass, JunkStore, MemoryJunkStore, TrainingReceipt,
+};
+pub use clock::{Clock, ManualClock, SystemClock};
+pub use notify::{Arrival, Decision, NotificationBatcher};
+pub use ops::{FolderTarget, TriageOp};
+pub use snooze::{MemorySnoozeStore, SnoozeEntry, SnoozeScheduler, SnoozeStore};
+pub use tokenize::{TokenSource, Tokenizer};
+
+/// Every Fluent message id this crate produces (all in
+/// `locales/en/core-triage.ftl`; checked by `tests/catalog.rs`).
+pub const FLUENT_IDS: &[&str] = &[
+    "notification-new-mail-title",
+    "notification-new-mail-body",
+    "notification-snooze-woke-title",
+    "notification-test-title",
+    "notification-test-body",
+    "snooze-error-not-in-future",
+    "snooze-error-too-far",
+    "snooze-error-store",
+];
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

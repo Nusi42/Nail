@@ -8,6 +8,7 @@
  */
 import type { Feature, FeatureEventHandler } from "../types";
 import { ConfigErrors, ConfigErrorsDialog } from "./ConfigErrors";
+import { ColumnEditor, KeyBindingEditor, ToolbarEditor } from "./Editors";
 import { Inspector } from "./Inspector";
 import { MergeDialog } from "./MergeDialog";
 import { SmartFolders, savedSearchesKey } from "./SmartFolders";
@@ -21,6 +22,10 @@ export { DIALOGS };
 export const widgets: Feature["widgets"] = {
   "config-errors": ConfigErrors,
   "smart-folders": SmartFolders,
+  // M2c WP54: the Customize tab's editors (write-back through layout patches).
+  "toolbar-editor": ToolbarEditor,
+  "key-binding-editor": KeyBindingEditor,
+  "column-editor": ColumnEditor,
 };
 
 /** Action ids → handlers. */

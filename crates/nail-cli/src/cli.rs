@@ -21,8 +21,9 @@ pub struct Cli {
 pub enum Command {
     /// Run the core headless and serve the web UI on localhost.
     Serve(ServeArgs),
-    /// Connect a stdio MCP client to the running app (forwards to its MCP
-    /// server on 127.0.0.1). The client's token is read from $NAIL_MCP_TOKEN.
+    /// Connect a stdio MCP client to Nail (forwards to its MCP server on
+    /// 127.0.0.1); starts Nail headless when it is not running. The
+    /// client's token is read from $NAIL_MCP_TOKEN.
     Mcp(McpArgs),
     /// Configuration tools.
     Config {
@@ -102,9 +103,10 @@ pub struct ServeArgs {
     #[arg(long)]
     pub no_watch: bool,
     /// Port of the MCP server on 127.0.0.1 (0 picks a free port; agents
-    /// find it in <data-dir>/mcp-endpoint.json).
-    #[arg(long, value_name = "PORT", default_value_t = 0)]
-    pub mcp_port: u16,
+    /// find it in <data-dir>/mcp-endpoint.json). Default: the fixed port of
+    /// the MCP settings, else a free port.
+    #[arg(long, value_name = "PORT")]
+    pub mcp_port: Option<u16>,
     /// Do not start the MCP server.
     #[arg(long)]
     pub no_mcp: bool,
@@ -124,9 +126,19 @@ pub struct McpArgs {
     /// directory (mcp-endpoint.json).
     #[arg(long, value_name = "URL")]
     pub url: Option<String>,
-    /// Data directory of the running app. Default: %LOCALAPPDATA%\Nail.
+    /// Data directory. Default: %LOCALAPPDATA%\Nail.
     #[arg(long, value_name = "DIR")]
     pub data_dir: Option<PathBuf>,
+    /// Config directory for a headless start. Default: %APPDATA%\Nail.
+    #[arg(long, value_name = "DIR")]
+    pub config_dir: Option<PathBuf>,
+    /// Only connect to a running Nail; never start it headless.
+    #[arg(long)]
+    pub no_start: bool,
+    /// Port of the MCP server of a headless start (0 = any free port).
+    /// Default: the fixed port of the MCP settings, else any free port.
+    #[arg(long, value_name = "PORT")]
+    pub mcp_port: Option<u16>,
 }
 
 #[cfg(test)]
@@ -164,7 +176,7 @@ mod tests {
                 locale: None,
                 open: false,
                 no_watch: false,
-                mcp_port: 0,
+                mcp_port: None,
                 no_mcp: false,
                 verbose: 0,
             }
@@ -204,7 +216,7 @@ mod tests {
                 locale: Some("de".into()),
                 open: true,
                 no_watch: true,
-                mcp_port: 4799,
+                mcp_port: Some(4799),
                 no_mcp: true,
                 verbose: 2,
             }
@@ -236,6 +248,9 @@ mod tests {
                     client: "claude".into(),
                     url: None,
                     data_dir: None,
+                    config_dir: None,
+                    no_start: false,
+                    mcp_port: None,
                 }
             ),
             other => panic!("unexpected {other:?}"),
@@ -248,6 +263,11 @@ mod tests {
             "http://127.0.0.1:1/mcp",
             "--data-dir",
             "d",
+            "--config-dir",
+            "c",
+            "--no-start",
+            "--mcp-port",
+            "4799",
         ])
         .unwrap()
         .command
@@ -255,6 +275,9 @@ mod tests {
             Command::Mcp(args) => {
                 assert_eq!(args.url.as_deref(), Some("http://127.0.0.1:1/mcp"));
                 assert_eq!(args.data_dir, Some("d".into()));
+                assert_eq!(args.config_dir, Some("c".into()));
+                assert!(args.no_start);
+                assert_eq!(args.mcp_port, Some(4799));
             }
             other => panic!("unexpected {other:?}"),
         }

@@ -193,7 +193,7 @@ Text: `color`, `font`, `font-family`, `font-size`, `font-weight`,
 Backgrounds and borders: `background`, `background-color`, `border`,
 `border-top`, `border-right`, `border-bottom`, `border-left`,
 `border-color`, `border-width`, `border-style`, the per-side `-color` and
-`-width` variants, `border-radius` and its four corners, `outline`,
+`-width` variants, `border-radius` and its four corners, `border-collapse`, `outline`,
 `outline-color`, `outline-width`, `outline-style`, `outline-offset`,
 `box-shadow`, `opacity`, `accent-color`, `caret-color`, `fill`, `stroke`,
 `stroke-width`.
@@ -265,6 +265,31 @@ For properties the theme does not support yet. The CSS applies to the named
 part only, tokens work as usual, and the same safety rules apply (no
 `url()`, no `@import`, no braces). Raw CSS may stop working in a later
 version when part structure changes.
+
+## High contrast and reduced motion
+
+The default theme has `high-contrast=` values for its colours, used when
+Windows runs a contrast theme (with `mode="system"`) or when the theme sets
+`mode="high-contrast"`. Nail ships an example theme with stronger contrast,
+bigger text and thicker focus rings: `defaults/themes/high-contrast.kdl`
+(see [Accessibility](accessibility.md#high-contrast)).
+
+When Windows asks for fewer animations, Nail stops all transitions and
+animations, whatever the theme says. Set the `motion` tokens to `0ms` to
+turn them off always.
+
+New parts of this version: `context-menu`, `context-menu.item` (states
+`focus`, `disabled`, `expanded`), `context-menu.item.icon`,
+`context-menu.item.label`, `context-menu.item.shortcut`,
+`context-menu.item.arrow`, `context-menu.separator`, `context-menu.popup`;
+`message-list.header`, `message-list.row.columns`, `message-list.row.cell`
+(condition `column`), the row state `headers-only`; `junk-verdict`,
+`sync-message-body` (state `failed`, `fetching`), `snooze`,
+`snooze.preset`, `snooze-list`, `snooze-list.item`, `sieve-status`,
+`vacation-editor`, `junk-settings`, `notification-settings`,
+`sync-folder-policies`, `sync-policy`, `toolbar-editor`,
+`key-binding-editor`, `column-editor` with their sub-parts (use the
+inspector to find them), and `composer.editor-loading`.
 
 ## Error messages
 

@@ -29,13 +29,15 @@ use nail_api::customize::{
     MergeSection, MergeSectionPreview, MergeTake,
 };
 use nail_api::{
-    ConfigFile, KeyBinding, LayoutNode, MenuItem, ResolvedLayout, ResolvedTheme, ToolbarItem,
+    ConfigFile, KeyBinding, LayoutNode, LocalizedMessage, MenuItem, ResolvedLayout, ResolvedTheme,
+    ToolbarItem,
 };
 
 use crate::error::ConfigError;
 use crate::kdl_edit::{
     Style, first_arg, remove_node, remove_prop, replace_rendered, set_first_arg, set_prop,
 };
+use crate::l10n::msg;
 use crate::render;
 use crate::theme::ThemeFile;
 use crate::write_back::{EditError, LayoutEditor, NEW_LAYOUT};
@@ -113,12 +115,12 @@ pub fn resolve_merge(
     default: MergeTake,
 ) -> Result<MergeOutcome, EditError> {
     let plan = Plan::build(file, mine, incoming)?.map_err(|errors| {
-        EditError::Invalid(format!(
-            "the incoming {} has {} error(s), e.g. {}",
-            file.file_name(),
-            errors.len(),
-            errors[0]
-        ))
+        EditError::Invalid(
+            msg("config-merge-incoming-invalid")
+                .arg("file", file.file_name())
+                .arg("count", errors.len())
+                .arg("error", errors[0].to_string()),
+        )
     })?;
     let text = plan.merged_text(mine, incoming, choices, default)?;
     let name = file.file_name();
@@ -426,11 +428,11 @@ struct Plan {
     models: Models,
 }
 
-fn conflict(kind: MergeConflictKind, message: String) -> MergeConflict {
+fn conflict(kind: MergeConflictKind, localized: LocalizedMessage) -> MergeConflict {
     MergeConflict {
         kind,
-        message,
-        localized: None,
+        message: crate::l10n::english(&localized),
+        localized: Some(localized),
     }
 }
 
@@ -444,10 +446,9 @@ impl Plan {
         match file {
             ConfigFile::Theme => Self::build_theme(mine, incoming),
             ConfigFile::Layout => Self::build_layout(mine, incoming),
-            other => Err(EditError::Invalid(format!(
-                "{} cannot be merged (only theme.kdl and layout.kdl)",
-                other.file_name()
-            ))),
+            other => Err(EditError::Invalid(
+                msg("config-merge-unsupported").arg("file", other.file_name()),
+            )),
         }
     }
 
@@ -513,10 +514,7 @@ impl Plan {
             if item.theirs.is_none() && sparse && defaults.contains(&item.item) {
                 item.conflicts.push(conflict(
                     MergeConflictKind::Invalid,
-                    format!(
-                        "the default theme defines `{}`; a file that extends the defaults cannot remove it, so it stays",
-                        item.item.label()
-                    ),
+                    msg("config-merge-default-theme-item").arg("item", item.item.label()),
                 ));
             }
             if let Some(text) = &item.theirs {
@@ -525,9 +523,8 @@ impl Plan {
                     if !own && !mine_tokens.contains(&(category.clone(), name.clone())) {
                         item.conflicts.push(conflict(
                             MergeConflictKind::Invalid,
-                            format!(
-                                "uses `${category}.{name}`, which only the incoming theme defines; take that token too"
-                            ),
+                            msg("config-merge-needs-token")
+                                .arg("token", format!("${category}.{name}")),
                         ));
                     }
                 }
@@ -597,10 +594,7 @@ impl Plan {
             {
                 conflicts.push(conflict(
                     MergeConflictKind::Invalid,
-                    format!(
-                        "the default layout defines `{}`; a file that extends the defaults cannot remove it, so it stays",
-                        item.item.label()
-                    ),
+                    msg("config-merge-default-layout-item").arg("item", item.item.label()),
                 ));
             }
             match &item.item {
@@ -613,7 +607,7 @@ impl Plan {
                     for kind in theirs_kinds.iter().filter(|k| k.starts_with("plugin.")) {
                         conflicts.push(conflict(
                             MergeConflictKind::UnknownWidget,
-                            format!("the plug-in widget `{kind}` is not installed"),
+                            msg("config-merge-widget-missing").arg("widget", kind.as_str()),
                         ));
                     }
                     let mine_kinds = mine_model
@@ -705,10 +699,9 @@ impl Plan {
         let ids: HashSet<String> = self.items.iter().map(|i| i.item.id()).collect();
         for choice in choices {
             if !ids.contains(&choice.item_id) {
-                return Err(EditError::Invalid(format!(
-                    "unknown merge item `{}`",
-                    choice.item_id
-                )));
+                return Err(EditError::Invalid(
+                    msg("config-merge-item-unknown").arg("item", choice.item_id.to_string()),
+                ));
             }
             chosen.insert(&choice.item_id, choice.take);
         }
@@ -860,7 +853,7 @@ fn menu_actions(items: &[MenuItem]) -> Vec<String> {
 fn unknown_action(action: &str) -> MergeConflict {
     conflict(
         MergeConflictKind::UnknownAction,
-        format!("the action `{action}` does not exist (a plug-in that is not installed?)"),
+        msg("config-merge-action-missing").arg("action", action),
     )
 }
 
@@ -868,10 +861,7 @@ fn dropped_conflict(dropped: &[&String]) -> MergeConflict {
     let names: Vec<&str> = dropped.iter().map(|s| s.as_str()).collect();
     conflict(
         MergeConflictKind::DropsPluginItems,
-        format!(
-            "taking this drops plug-in items you placed: {}",
-            names.join(", ")
-        ),
+        msg("config-merge-drops-plugin-items").arg("items", names.join(", ")),
     )
 }
 
@@ -896,10 +886,10 @@ fn key_conflicts(theirs: &KeyBinding, mine: &[KeyBinding]) -> Vec<MergeConflict>
         if same || prefix || shadow {
             out.push(conflict(
                 MergeConflictKind::DuplicateKey,
-                format!(
-                    "your layout binds `{}` to `{}` in {}",
-                    other.key, other.action, other.context
-                ),
+                msg("config-merge-key-taken")
+                    .arg("key", other.key.as_str())
+                    .arg("action", other.action.as_str())
+                    .arg("context", other.context.as_str()),
             ));
         }
     }
@@ -1126,7 +1116,7 @@ fn apply_layout_item(
     sparse: bool,
 ) -> Result<(), EditError> {
     let style = editor.style.clone();
-    let plain = || EditError::Invalid("the incoming item has values KDL cannot hold".to_owned());
+    let plain = || EditError::Invalid(msg("config-merge-not-kdl"));
     match item {
         Item::Name => set_first_arg(
             editor.root_node(),

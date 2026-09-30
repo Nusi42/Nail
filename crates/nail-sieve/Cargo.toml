@@ -17,9 +17,15 @@ tracing.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
 rustls.workspace = true
+# Server certificates checked against the OS trust store (like IMAP / POP3).
+rustls-platform-verifier.workspace = true
 base64.workspace = true
 # `:regex` validation of rule patterns before compiling.
 regex.workspace = true
+# The rule's Rust regex parsed into an AST and rewritten as POSIX ERE (the
+# Sieve `regex` extension's dialect). Already in the lock through `regex`
+# (MIT / Apache-2.0).
+regex-syntax = "0.8.11"
 # SHA-256 of uploaded scripts (the store records it).
 sha2.workspace = true
 hex.workspace = true

@@ -144,6 +144,8 @@
                     "auto",
                     "auto",
                     "auto",
+                    "auto",
+                    "auto",
                     "1fr"
                   ],
                   "children": [
@@ -192,6 +194,24 @@
                       "id": "message-remote-content",
                       "label": null,
                       "kind": "remote-content",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "message-junk",
+                      "label": null,
+                      "kind": "junk-verdict",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "message-body-status",
+                      "label": null,
+                      "kind": "sync-message-body",
                       "options": {},
                       "rows": [],
                       "source": null
@@ -354,6 +374,8 @@
                     "auto",
                     "auto",
                     "auto",
+                    "auto",
+                    "auto",
                     "1fr"
                   ],
                   "children": [
@@ -402,6 +424,24 @@
                       "id": "message-remote-content",
                       "label": null,
                       "kind": "remote-content",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "message-junk",
+                      "label": null,
+                      "kind": "junk-verdict",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "message-body-status",
+                      "label": null,
+                      "kind": "sync-message-body",
                       "options": {},
                       "rows": [],
                       "source": null
@@ -540,6 +580,21 @@
         }
       }
     ],
+    "snoozed": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "widget",
+          "id": "snoozed",
+          "label": null,
+          "kind": "snooze-list",
+          "options": {},
+          "rows": [],
+          "source": null
+        }
+      }
+    ],
     "settings": [
       {
         "min_width": null,
@@ -659,10 +714,56 @@
               "source": null
             },
             {
+              "type": "widget",
+              "id": "sieve-status",
+              "label": "@sieve.settings.tab",
+              "kind": "sieve-status",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "vacation",
+              "label": "@vacation.settings.tab",
+              "kind": "vacation-editor",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "junk-settings",
+              "label": "@junk.settings.tab",
+              "kind": "junk-settings",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "notification-settings",
+              "label": "@notification.settings.tab",
+              "kind": "notification-settings",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "sync-policies",
+              "label": "@sync.settings.tab",
+              "kind": "sync-folder-policies",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
               "type": "stack",
               "id": "customize",
               "label": "@settings.tab.customize",
               "sizes": [
+                "auto",
                 "auto",
                 "1fr"
               ],
@@ -686,6 +787,41 @@
                   "options": {},
                   "rows": [],
                   "source": null
+                },
+                {
+                  "type": "tabs",
+                  "id": "customize-editors",
+                  "label": "@customize.editors.tabs",
+                  "active": 0,
+                  "children": [
+                    {
+                      "type": "widget",
+                      "id": "toolbar-editor",
+                      "label": "@customize.toolbar.tab",
+                      "kind": "toolbar-editor",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "key-binding-editor",
+                      "label": "@customize.keys.tab",
+                      "kind": "key-binding-editor",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "column-editor",
+                      "label": "@customize.columns.tab",
+                      "kind": "column-editor",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    }
+                  ]
                 }
               ]
             }
@@ -938,6 +1074,48 @@
       "icon": null,
       "alias_of": null,
       "args": []
+    },
+    "menu.context": {
+      "label": "@context-menu.action.open",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "junk.mark": {
+      "label": "@junk.action.mark",
+      "icon": "junk",
+      "alias_of": null,
+      "args": []
+    },
+    "junk.not-junk": {
+      "label": "@junk.action.not-junk",
+      "icon": "inbox",
+      "alias_of": null,
+      "args": []
+    },
+    "snooze.open": {
+      "label": "@snooze.action.open",
+      "icon": "snooze",
+      "alias_of": null,
+      "args": []
+    },
+    "snooze.list": {
+      "label": "@snooze.action.list",
+      "icon": "snooze",
+      "alias_of": null,
+      "args": []
+    },
+    "sync.download-message": {
+      "label": "@sync.action.download-message",
+      "icon": "download",
+      "alias_of": null,
+      "args": []
+    },
+    "sync.folder-policy": {
+      "label": "@sync.action.folder-policy",
+      "icon": "sync",
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
@@ -1112,6 +1290,30 @@
       "key": "ctrl+shift+i",
       "action": "inspector.toggle",
       "args": []
+    },
+    {
+      "context": "global",
+      "key": "b",
+      "action": "snooze.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "shift+j",
+      "action": "junk.mark",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "shift+f10",
+      "action": "menu.context",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "contextmenu",
+      "action": "menu.context",
+      "args": []
     }
   ],
   "toolbars": {
@@ -1143,6 +1345,13 @@
       {
         "type": "action",
         "action": "rules.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "snooze.list",
         "args": [],
         "label": null,
         "icon": null
@@ -1230,6 +1439,20 @@
       },
       {
         "type": "action",
+        "action": "snooze.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "junk.mark",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "rules.create-from-message",
         "args": [],
         "label": null,
@@ -1308,6 +1531,13 @@
         "icon": null
       },
       {
+        "type": "action",
+        "action": "snooze.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
         "type": "separator"
       },
       {
@@ -1336,7 +1566,141 @@
       },
       {
         "type": "action",
+        "action": "junk.mark",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "junk.not-junk",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "sync.download-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
         "action": "rules.create-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "context:thread-view.message": [
+      {
+        "type": "action",
+        "action": "mail.reply",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.reply-all",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.forward",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "mail.toggle-read",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.toggle-flag",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "context:message-view": [
+      {
+        "type": "action",
+        "action": "mail.reply",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.reply-all",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.forward",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "snooze.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "junk.mark",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "junk.not-junk",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "sync.download-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "context:folder-tree.folder": [
+      {
+        "type": "action",
+        "action": "sync.now",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "sync.folder-policy",
         "args": [],
         "label": null,
         "icon": null

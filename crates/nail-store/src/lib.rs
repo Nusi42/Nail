@@ -46,15 +46,24 @@
 //!   sensitive columns and blob files; [`Store::convert_fields`],
 //!   [`BlobStore::convert`] and [`Store::compact`] serve the migration.
 //!
+//! * M2c WP53: body-less messages of "headers only" / "recent N days"
+//!   folders and on-demand bodies ([`Store::merge_with_body_state`],
+//!   [`Store::attach_body`], [`Store::detach_body`],
+//!   [`Store::body_fetch_targets`], [`Store::bodies_before`]); the
+//!   single-instance lock of a data directory ([`DataDirLock`]); the MCP
+//!   settings ([`Store::mcp_settings`]).
+//!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
 
 mod addresses;
 pub mod blob;
+mod bodies;
 mod compose;
 mod crypto;
 mod error;
 mod filter;
+pub mod lock;
 mod mail;
 mod mcp;
 mod pop3;
@@ -71,6 +80,7 @@ mod triage;
 use std::path::Path;
 
 pub use blob::{BlobHash, BlobStore};
+pub use bodies::{BodyFetchTarget, StoredBody};
 pub use compose::{DraftServerCopy, SendOutcome};
 pub use crypto::{
     AutocryptPeerRecord, KeyData, MessageSecurityRecord, SECURITY_SETTINGS_KEY, SecretKeyData,
@@ -78,6 +88,7 @@ pub use crypto::{
 };
 pub use error::{Error, Result};
 pub use filter::{MessageFilter, SizeCmp};
+pub use lock::{DataDirLock, LOCK_FILE, LockError, LockHolder};
 pub use mail::{
     FolderCounts, FolderSyncState, MergeReport, MessageMeta, MessagePage, StoredMessage,
     SyncedMessage,

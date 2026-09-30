@@ -111,7 +111,7 @@ test.describe("windows and dialogs of demo-multi", () => {
       expect(await violations(page), tab).toEqual([]);
     }
     // The merge dialog, opened from the Customize tab.
-    await settings.getByRole("button", { name: "Apply a theme or layout…" }).click();
+    await settings.getByRole("button", { name: "Apply a theme or layout…", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Apply a theme or layout" })).toBeVisible();
     expect(await violations(page)).toEqual([]);
   });

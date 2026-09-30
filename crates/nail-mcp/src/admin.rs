@@ -71,7 +71,8 @@ pub async fn handle(
             if name.is_empty() || name.chars().count() > MAX_NAME_LEN {
                 return Err(ApiError::invalid_request(format!(
                     "an MCP client name has 1 to {MAX_NAME_LEN} characters"
-                )));
+                ))
+                .with_localized(crate::messages::client_name_length(MAX_NAME_LEN)));
             }
             let token = new_token()?;
             let hash = hash_mcp_token(&token);

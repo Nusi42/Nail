@@ -20,6 +20,9 @@
 //!   untrusted data ([`content`]).
 //! * [`admin`] answers the Client API requests of the settings UI;
 //!   [`bridge`] is `nail mcp --client <name>` (stdio ↔ loopback HTTP).
+//! * M2c (WP53): a fixed port from the MCP settings ([`configured_port`]);
+//!   user-facing texts as Fluent ids ([`messages`]: audit details, start
+//!   and bridge errors, admin errors). Agents keep reading English.
 //!
 //! Data comes through the [`McpData`] trait, which the core implements
 //! (usually via [`CoreData`]) and tests fake.
@@ -34,6 +37,7 @@ pub mod core_data;
 pub mod data;
 pub mod endpoint;
 pub mod http;
+pub mod messages;
 pub mod server;
 mod subscriptions;
 pub mod tools;
@@ -41,5 +45,5 @@ pub mod uri;
 
 pub use core_data::{CoreAccess, CoreData};
 pub use data::{AttachmentData, DataResult, McpData, MessagePage, SearchOutcome, ThreadData};
-pub use http::{McpServer, ServerOptions};
+pub use http::{McpServer, ServerOptions, configured_port};
 pub use server::{AuthedClient, ClientSource, NailMcp};

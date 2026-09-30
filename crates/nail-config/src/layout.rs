@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use indexmap::IndexMap;
 use kdl::{KdlEntry, KdlNode};
 use nail_api::{
-    ActionDef, Breakpoint, KeyBinding, LayoutNode, MenuItem, Orientation, ResolvedLayout,
-    SourceLocation, ToolbarItem,
+    ActionDef, Breakpoint, KeyBinding, LayoutNode, LocalizedMessage, MenuItem, Orientation,
+    ResolvedLayout, SourceLocation, ToolbarItem,
 };
 use schemars::JsonSchema;
 use serde_json::{Map, Value};
@@ -18,6 +18,7 @@ use crate::kdl_util::{
     check_props, children, describe, is_dotted_kebab, is_kebab, prop_str, prop_u32, sort_errors,
     to_json,
 };
+use crate::l10n::msg;
 use crate::schema::{ActionSchema, BreakpointSchema, MenuItemSchema, ToolbarItemSchema};
 use crate::theme::{read_extends, single_root};
 use crate::widgets::{self, OptionType};
@@ -136,7 +137,7 @@ impl LayoutReader<'_, '_> {
         let e = self.errors;
         e.ok(check_props(src, node, &["extends"]));
         e.ok(check_max_args(src, node, 1));
-        let name = match e.ok(arg_str(src, node, 0, "the layout name")) {
+        let name = match e.ok(arg_str(src, node, 0)) {
             Some((name, entry)) => src.located(entry, name.to_owned()),
             None => Located::new(String::new(), src.node_loc(node)),
         };
@@ -194,9 +195,7 @@ impl LayoutReader<'_, '_> {
             other => {
                 return Err(src.node_err(
                     child,
-                    format!(
-                        "unknown layout section `{other}` (expected window, breakpoint, action(s), keys, toolbar(s) or menu(s))"
-                    ),
+                    msg("config-layout-unknown-section").arg("node", other),
                 ));
             }
         }
@@ -215,10 +214,10 @@ impl LayoutReader<'_, '_> {
         } else {
             Err(self.src.node_err(
                 node,
-                format!(
-                    "`{section}` may only contain `{expected}` nodes, found `{}`",
-                    k::name(node)
-                ),
+                msg("config-section-only")
+                    .arg("section", section)
+                    .arg("expected", expected)
+                    .arg("found", k::name(node)),
             ))
         }
     }
@@ -234,12 +233,12 @@ impl LayoutReader<'_, '_> {
         {
             return Err(src.node_err(
                 node,
-                format!("min-width {lo} is larger than max-width {hi}"),
+                msg("config-breakpoint-range").arg("min", lo).arg("max", hi),
             ));
         }
         let windows = children(node);
         if windows.is_empty() {
-            return Err(src.node_err(node, "`breakpoint` needs at least one `window`"));
+            return Err(src.node_err(node, msg("config-breakpoint-empty")));
         }
         for window in windows {
             self.errors.ok(self
@@ -259,17 +258,15 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         check_props(src, node, &[])?;
         check_max_args(src, node, 1)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the window name")?;
+        let (name, name_entry) = arg_str(src, node, 0)?;
         if !is_kebab(name) {
-            return Err(src.entry_err(name_entry, format!("invalid window name `{name}`")));
+            return Err(src.entry_err(
+                name_entry,
+                msg("config-window-name-invalid").arg("name", name),
+            ));
         }
         let [root] = children(node) else {
-            return Err(src.node_err(
-                node,
-                format!(
-                    "window `{name}` must contain exactly one root node (a container or widget)"
-                ),
-            ));
+            return Err(src.node_err(node, msg("config-window-one-root").arg("name", name)));
         };
         let root_node = root;
         let root = self.node(root_node)?;
@@ -296,10 +293,9 @@ impl LayoutReader<'_, '_> {
             && let Some(id) = entry.value().as_string()
             && !seen.insert(id.to_owned())
         {
-            return Err(self.src.entry_err(
-                entry,
-                format!("the id `{id}` is used twice in this window tree"),
-            ));
+            return Err(self
+                .src
+                .entry_err(entry, msg("config-id-duplicate").arg("id", id)));
         }
         for child in children(node) {
             self.check_unique_ids(child, seen)?;
@@ -314,10 +310,7 @@ impl LayoutReader<'_, '_> {
             None => None,
             Some((id, entry)) => {
                 if !is_kebab(id) {
-                    return Err(src.entry_err(
-                        entry,
-                        format!("invalid id `{id}`: use lowercase words like `reader-pane`"),
-                    ));
+                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
                 }
                 Some(id.to_owned())
             }
@@ -336,10 +329,9 @@ impl LayoutReader<'_, '_> {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
             if !valid {
-                return Err(self.src.entry_err(
-                    entry,
-                    format!("invalid message id in label `{label}`, e.g. \"@mail.action.reply\""),
-                ));
+                return Err(self
+                    .src
+                    .entry_err(entry, msg("config-label-invalid").arg("label", label)));
             }
         }
         Ok(label.to_owned())
@@ -371,15 +363,13 @@ impl LayoutReader<'_, '_> {
                     .or_else(|| node.entry("orientation"));
                 let orientation = match orientation_entry {
                     None => Orientation::Horizontal,
-                    Some(entry) => match k::entry_str(src, entry, "the orientation")? {
+                    Some(entry) => match k::entry_str(src, entry, "`orientation`")? {
                         "horizontal" => Orientation::Horizontal,
                         "vertical" => Orientation::Vertical,
                         other => {
                             return Err(src.entry_err(
                                 entry,
-                                format!(
-                                    "unknown orientation `{other}` (use horizontal or vertical)"
-                                ),
+                                msg("config-orientation-unknown").arg("found", other),
                             ));
                         }
                     },
@@ -404,10 +394,7 @@ impl LayoutReader<'_, '_> {
                         .map(|f| match f.as_str() {
                             "true" => Ok(true),
                             "false" => Ok(false),
-                            _ => Err(src.node_err(
-                                node,
-                                "collapsible must list `true` or `false` per child, e.g. \"true false true\"",
-                            )),
+                            _ => Err(src.node_err(node, msg("config-collapsible-invalid"))),
                         })
                         .collect::<Result<_, _>>()?,
                 };
@@ -416,10 +403,9 @@ impl LayoutReader<'_, '_> {
                     Some(entry) => entry.value().as_bool().ok_or_else(|| {
                         src.entry_err(
                             entry,
-                            format!(
-                                "resizable must be #true or #false, found {}",
-                                describe(entry.value())
-                            ),
+                            msg("config-expected-bool")
+                                .arg("what", "resizable")
+                                .arg("found", describe(entry.value())),
                         )
                     })?,
                 };
@@ -459,10 +445,9 @@ impl LayoutReader<'_, '_> {
                 if active as usize >= children.len() {
                     return Err(src.node_err(
                         node,
-                        format!(
-                            "active={active} but the tabs have only {} children",
-                            children.len()
-                        ),
+                        msg("config-tabs-active-range")
+                            .arg("active", active)
+                            .arg("count", children.len()),
                     ));
                 }
                 Ok(LayoutNode::Tabs {
@@ -472,10 +457,9 @@ impl LayoutReader<'_, '_> {
                     children,
                 })
             }
-            other if FUTURE_CONTAINERS.contains(&other) => Err(src.node_err(
-                node,
-                format!("the `{other}` container is not supported yet (use split, stack or tabs)"),
-            )),
+            other if FUTURE_CONTAINERS.contains(&other) => {
+                Err(src.node_err(node, msg("config-container-unsupported").arg("node", other)))
+            }
             _ => self.widget(node),
         }
     }
@@ -483,10 +467,9 @@ impl LayoutReader<'_, '_> {
     fn children(&self, node: &KdlNode) -> Result<Vec<LayoutNode>, ConfigError> {
         let nodes = children(node);
         if nodes.is_empty() {
-            return Err(self.src.node_err(
-                node,
-                format!("`{}` needs at least one child", k::name(node)),
-            ));
+            return Err(self
+                .src
+                .node_err(node, msg("config-needs-child").arg("node", k::name(node))));
         }
         // Every child is read, so that errors deeper in the tree are all
         // reported: the first error is returned, later ones are recorded.
@@ -516,11 +499,11 @@ impl LayoutReader<'_, '_> {
         if items.len() != count {
             return Err(self.src.entry_err(
                 entry,
-                format!(
-                    "`{key}` lists {} values but `{}` has {count} children",
-                    items.len(),
-                    k::name(node)
-                ),
+                msg("config-list-length")
+                    .arg("key", key)
+                    .arg("count", items.len())
+                    .arg("node", k::name(node))
+                    .arg("children", count),
             ));
         }
         Ok(Some(items))
@@ -536,10 +519,9 @@ impl LayoutReader<'_, '_> {
         if spec.is_none() && !is_plugin {
             return Err(src.node_err(
                 node,
-                format!(
-                    "unknown widget or container `{kind}` (containers: split, stack, tabs; widgets: {})",
-                    widgets::kinds().collect::<Vec<_>>().join(", ")
-                ),
+                msg("config-widget-unknown")
+                    .arg("node", kind)
+                    .arg("widgets", widgets::kinds().collect::<Vec<_>>().join(", ")),
             ));
         }
         check_max_args(src, node, 0)?;
@@ -553,14 +535,18 @@ impl LayoutReader<'_, '_> {
             if let Some(allowed) = spec.and_then(|s| s.options) {
                 let Some((_, ty)) = allowed.iter().find(|(name, _)| *name == key) else {
                     let names: Vec<_> = allowed.iter().map(|(n, _)| *n).collect();
-                    let hint = if names.is_empty() {
-                        "it has no options".to_owned()
-                    } else {
-                        format!("options: {}", names.join(", "))
-                    };
                     return Err(src.entry_err(
                         entry,
-                        format!("unknown option `{key}` for `{kind}` ({hint})"),
+                        if names.is_empty() {
+                            msg("config-option-unknown-none")
+                                .arg("key", key)
+                                .arg("node", kind)
+                        } else {
+                            msg("config-option-unknown")
+                                .arg("key", key)
+                                .arg("node", kind)
+                                .arg("options", names.join(", "))
+                        },
                     ));
                 };
                 check_option(src, entry, key, *ty)?;
@@ -570,9 +556,12 @@ impl LayoutReader<'_, '_> {
         if let Some(spec) = spec {
             for required in spec.required {
                 if !options.contains_key(*required) {
-                    return Err(
-                        src.node_err(node, format!("`{kind}` needs the option `{required}`"))
-                    );
+                    return Err(src.node_err(
+                        node,
+                        msg("config-option-required")
+                            .arg("node", kind)
+                            .arg("option", *required),
+                    ));
                 }
             }
         }
@@ -582,19 +571,18 @@ impl LayoutReader<'_, '_> {
             if k::name(row) != "row" {
                 return Err(src.node_err(
                     row,
-                    format!(
-                        "unexpected `{}` inside `{kind}`; widgets only contain `row` templates",
-                        k::name(row)
-                    ),
+                    msg("config-widget-row-only")
+                        .arg("node", k::name(row))
+                        .arg("widget", kind),
                 ));
             }
             if spec.is_some_and(|s| !s.rows) {
-                return Err(src.node_err(row, format!("`{kind}` does not take row templates")));
+                return Err(src.node_err(row, msg("config-widget-no-rows").arg("widget", kind)));
             }
             check_props(src, row, &[])?;
             check_max_args(src, row, 1)?;
             check_no_children(src, row)?;
-            let (template, entry) = arg_str(src, row, 0, "the row template")?;
+            let (template, entry) = arg_str(src, row, 0)?;
             check_template(template).map_err(|msg| src.entry_err(entry, msg))?;
             rows.push(template.to_owned());
         }
@@ -613,7 +601,7 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         check_props(src, node, &["label", "icon", "alias-of"])?;
         check_no_children(src, node)?;
-        let (id, id_entry) = arg_str(src, node, 0, "the action id")?;
+        let (id, id_entry) = arg_str(src, node, 0)?;
         check_action_id(src, id_entry, id)?;
         let label = match prop_str(src, node, "label")? {
             None => None,
@@ -623,7 +611,9 @@ impl LayoutReader<'_, '_> {
             None => None,
             Some((icon, entry)) => {
                 if !is_kebab(icon) {
-                    return Err(src.entry_err(entry, format!("invalid icon name `{icon}`")));
+                    return Err(
+                        src.entry_err(entry, msg("config-icon-name-invalid").arg("name", icon))
+                    );
                 }
                 Some(icon.to_owned())
             }
@@ -639,10 +629,7 @@ impl LayoutReader<'_, '_> {
         if alias_of.is_none()
             && let Some(first) = extra.first()
         {
-            return Err(src.entry_err(
-                first,
-                "action arguments are only allowed together with alias-of",
-            ));
+            return Err(src.entry_err(first, msg("config-action-args-need-alias")));
         }
         let args = extra
             .iter()
@@ -668,10 +655,9 @@ impl LayoutReader<'_, '_> {
             None => "global".to_owned(),
             Some((ctx, entry)) => {
                 if !is_kebab(ctx) {
-                    return Err(src.entry_err(
-                        entry,
-                        format!("invalid context `{ctx}`, e.g. list, reader, global"),
-                    ));
+                    return Err(
+                        src.entry_err(entry, msg("config-key-context-invalid").arg("context", ctx))
+                    );
                 }
                 ctx.to_owned()
             }
@@ -689,7 +675,7 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         check_props(src, bind, &[])?;
         check_no_children(src, bind)?;
-        let (key, key_entry) = arg_str(src, bind, 0, "the key")?;
+        let (key, key_entry) = arg_str(src, bind, 0)?;
         let key = normalize_key(key).map_err(|msg| src.entry_err(key_entry, msg))?;
         match k::name(bind) {
             "bind" => {
@@ -710,10 +696,7 @@ impl LayoutReader<'_, '_> {
                     args: Vec::new(),
                 })
             }
-            other => Err(src.node_err(
-                bind,
-                format!("unexpected `{other}` in `keys` (use bind or unbind)"),
-            )),
+            other => Err(src.node_err(bind, msg("config-keys-unexpected").arg("node", other))),
         }
     }
 
@@ -725,7 +708,7 @@ impl LayoutReader<'_, '_> {
         index: usize,
     ) -> Result<(String, Vec<Value>), ConfigError> {
         let src = self.src;
-        let (spec, entry) = arg_str(src, node, index, "the action")?;
+        let (spec, entry) = arg_str(src, node, index)?;
         let (action, mut action_args) =
             parse_action_spec(spec).map_err(|msg| src.entry_err(entry, msg))?;
         check_action_id(src, entry, &action)?;
@@ -739,9 +722,12 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         check_props(src, node, &[])?;
         check_max_args(src, node, 1)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the toolbar name")?;
+        let (name, name_entry) = arg_str(src, node, 0)?;
         if !is_kebab(name) {
-            return Err(src.entry_err(name_entry, format!("invalid toolbar name `{name}`")));
+            return Err(src.entry_err(
+                name_entry,
+                msg("config-toolbar-name-invalid").arg("name", name),
+            ));
         }
         let mut items = Vec::new();
         for item in children(node) {
@@ -775,10 +761,7 @@ impl LayoutReader<'_, '_> {
                     ToolbarItem::Separator
                 })
             }
-            other => Err(src.node_err(
-                item,
-                format!("unexpected `{other}` in toolbar (use item, spacer or separator)"),
-            )),
+            other => Err(src.node_err(item, msg("config-toolbar-unexpected").arg("node", other))),
         }
     }
 
@@ -799,12 +782,12 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         check_props(src, node, &[])?;
         check_max_args(src, node, 1)?;
-        let (name, name_entry) = arg_str(src, node, 0, "the menu name")?;
+        let (name, name_entry) = arg_str(src, node, 0)?;
         let valid = name == "app" || name.strip_prefix("context:").is_some_and(is_dotted_kebab);
         if !valid {
             return Err(src.entry_err(
                 name_entry,
-                format!("invalid menu name `{name}`: use \"app\" or \"context:<part>\""),
+                msg("config-menu-name-invalid").arg("name", name),
             ));
         }
         let items = self.menu_items(node)?;
@@ -837,7 +820,7 @@ impl LayoutReader<'_, '_> {
                 "submenu" => {
                     check_props(src, item, &[])?;
                     check_max_args(src, item, 1)?;
-                    let (label, entry) = arg_str(src, item, 0, "the submenu label")?;
+                    let (label, entry) = arg_str(src, item, 0)?;
                     let label = self.label(label, entry)?;
                     MenuItem::Submenu {
                         label,
@@ -845,10 +828,9 @@ impl LayoutReader<'_, '_> {
                     }
                 }
                 other => {
-                    return Err(src.node_err(
-                        item,
-                        format!("unexpected `{other}` in menu (use item, separator or submenu)"),
-                    ));
+                    return Err(
+                        src.node_err(item, msg("config-menu-unexpected").arg("node", other))
+                    );
                 }
             });
         }
@@ -872,18 +854,18 @@ fn check_option(
     if ok {
         return Ok(());
     }
-    let expected = match ty {
-        OptionType::Bool => "#true or #false".to_owned(),
-        OptionType::UInt => "a non-negative whole number".to_owned(),
-        OptionType::Str => "a string".to_owned(),
-        OptionType::OneOf(choices) => format!("one of {}", choices.join(", ")),
-    };
     Err(src.entry_err(
         entry,
-        format!(
-            "option `{key}` must be {expected}, found {}",
-            describe(value)
-        ),
+        match ty {
+            OptionType::Bool => msg("config-option-bool"),
+            OptionType::UInt => msg("config-option-count"),
+            OptionType::Str => msg("config-option-string"),
+            OptionType::OneOf(choices) => {
+                msg("config-option-one-of").arg("choices", choices.join(", "))
+            }
+        }
+        .arg("key", key)
+        .arg("found", describe(value)),
     ))
 }
 
@@ -891,17 +873,14 @@ fn check_action_id(src: &Source<'_>, entry: &KdlEntry, id: &str) -> Result<(), C
     if is_dotted_kebab(id) && id.contains('.') {
         Ok(())
     } else {
-        Err(src.entry_err(
-            entry,
-            format!("invalid action id `{id}`: use dotted lowercase names like `mail.reply`"),
-        ))
+        Err(src.entry_err(entry, msg("config-action-id-invalid").arg("id", id)))
     }
 }
 
 /// Splits `nav.goto-folder "Inbox" 2` into the action id and its arguments.
 /// Quoted words are strings; bare numbers are numbers; other bare words are
 /// strings.
-fn parse_action_spec(spec: &str) -> Result<(String, Vec<Value>), String> {
+fn parse_action_spec(spec: &str) -> Result<(String, Vec<Value>), LocalizedMessage> {
     let mut words: Vec<Value> = Vec::new();
     let mut chars = spec.trim().chars().peekable();
     let mut action: Option<String> = None;
@@ -917,7 +896,7 @@ fn parse_action_spec(spec: &str) -> Result<(String, Vec<Value>), String> {
                 match chars.next() {
                     Some('"') => break,
                     Some(ch) => word.push(ch),
-                    None => return Err(format!("unterminated quote in `{spec}`")),
+                    None => return Err(msg("config-action-quote").arg("spec", spec)),
                 }
             }
             Value::String(word)
@@ -947,19 +926,19 @@ fn parse_action_spec(spec: &str) -> Result<(String, Vec<Value>), String> {
             }
         };
         if action.is_none() {
-            return Err(format!("`{spec}` must start with an action id"));
+            return Err(msg("config-action-spec-start").arg("spec", spec));
         }
         words.push(value);
     }
-    let action = action.ok_or_else(|| "the action must not be empty".to_owned())?;
+    let action = action.ok_or_else(|| msg("config-action-empty"))?;
     Ok((action, words))
 }
 
 /// Lowercases a key sequence and checks its shape (`ctrl+shift+m`, `g i`).
-pub(crate) fn normalize_key(key: &str) -> Result<String, String> {
+pub(crate) fn normalize_key(key: &str) -> Result<String, LocalizedMessage> {
     let steps: Vec<String> = key.split_whitespace().map(str::to_lowercase).collect();
     if steps.is_empty() {
-        return Err("the key must not be empty".to_owned());
+        return Err(msg("config-key-empty"));
     }
     for step in &steps {
         // `+` alone (or as the last key of a chord, `ctrl++`) is the plus key.
@@ -968,28 +947,26 @@ pub(crate) fn normalize_key(key: &str) -> Result<String, String> {
             |head| head.split('+').chain(std::iter::once("+")).collect(),
         );
         if step != "+" && keys.iter().any(|k| k.is_empty()) {
-            return Err(format!(
-                "invalid key `{key}`: join chord keys with `+`, e.g. \"ctrl+shift+m\""
-            ));
+            return Err(msg("config-key-invalid").arg("key", key));
         }
     }
     Ok(steps.join(" "))
 }
 
 /// Checks that `{…}` placeholders in a row template are balanced.
-fn check_template(template: &str) -> Result<(), String> {
+fn check_template(template: &str) -> Result<(), LocalizedMessage> {
     let mut open = false;
     for c in template.chars() {
         match (c, open) {
             ('{', false) => open = true,
             ('}', true) => open = false,
-            ('{', true) => return Err(format!("nested `{{` in template `{template}`")),
-            ('}', false) => return Err(format!("unmatched `}}` in template `{template}`")),
+            ('{', true) => return Err(msg("config-template-nested").arg("template", template)),
+            ('}', false) => return Err(msg("config-template-unmatched").arg("template", template)),
             _ => {}
         }
     }
     if open {
-        return Err(format!("unclosed `{{` in template `{template}`"));
+        return Err(msg("config-template-unclosed").arg("template", template));
     }
     Ok(())
 }
@@ -1021,7 +998,7 @@ impl LayoutFile {
         if !self.windows.contains_key("main") {
             errors.push(ConfigError::invalid(
                 &self.name.loc,
-                "the layout defines no `main` window",
+                msg("config-layout-no-main"),
             ));
         }
 
@@ -1122,7 +1099,7 @@ fn check_toolbar_refs(
         });
         errors.push(ConfigError::invalid(
             &loc,
-            format!("unknown toolbar `{name}` (define it with `toolbar \"{name}\" {{ … }}`)"),
+            msg("config-toolbar-unknown").arg("name", name),
         ));
     }
     for child in node.children() {

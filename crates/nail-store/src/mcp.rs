@@ -325,6 +325,15 @@ impl Store {
     }
 }
 
+impl Store {
+    /// The MCP server settings (`MCP_SETTINGS_KEY` in `app_settings`;
+    /// defaults when never saved): the fixed port the server starts on
+    /// (M2c WP53, `nail_mcp::configured_port`).
+    pub fn mcp_settings(&self) -> Result<nail_api::mcp::McpSettings> {
+        Ok(self.setting(crate::MCP_SETTINGS_KEY)?.unwrap_or_default())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

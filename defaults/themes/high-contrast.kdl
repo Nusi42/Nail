@@ -1,0 +1,82 @@
+// Nail example theme: high contrast.
+//
+// Pure black and white with yellow and cyan accents, thick focus rings,
+// visible borders on every control, larger text and no animations. It is
+// always in high-contrast mode, whatever Windows is set to (the default
+// theme already follows Windows' contrast themes by itself).
+//
+// To use it, copy this file to your configuration folder as theme.kdl (or
+// merge it with Settings → Customize → "Apply a theme or layout…").
+// See userDocs/en/accessibility.md.
+
+theme "High contrast" extends="default" mode="high-contrast" {
+    tokens {
+        // The same colours in every mode, so the theme never looks washed out.
+        color "bg"           "#000000"
+        color "bg-subtle"    "#000000"
+        color "bg-raised"    "#1f1f1f"
+        color "fg"           "#ffffff"
+        color "fg-muted"     "#ffffff"
+        color "border"       "#ffffff"
+        color "accent"       "#ffff00"
+        color "accent-fg"    "#000000"
+        color "selection"    "#ffff00"
+        color "selection-fg" "#000000"
+        color "unread"       "#ffff00"
+        color "flagged"      "#ff8080"
+        color "danger"       "#ff8080"
+        color "warning"      "#ffff00"
+        color "success"      "#80ff80"
+        color "focus-ring"   "#00ffff"
+        color "quote-1"      "#ffff00"
+        color "quote-2"      "#80ff80"
+        color "quote-3"      "#00ffff"
+        color "scrim"        "rgb(0 0 0 / 0.85)"
+
+        // One step larger text, more generous rows.
+        font-size "xs" 12
+        font-size "sm" 14
+        font-size "md" 16
+        font-size "lg" 18
+        font-size "xl" 22
+        space "row" 8
+
+        border "thin" "2px solid $color.border"
+        shadow "raised"  "none"
+        shadow "overlay" "0 0 0 2px $color.border"
+
+        // No motion at all.
+        motion "fast"   "0ms"
+        motion "normal" "0ms"
+    }
+
+    // Focus is always clearly visible: a thick cyan ring with a gap.
+    part "toolbar.button:focus-visible" {
+        outline "3px solid $color.focus-ring"
+        outline-offset 2
+    }
+    part "form.button:focus-visible" {
+        outline "3px solid $color.focus-ring"
+        outline-offset 2
+    }
+    part "form.input:focus-visible" { outline "3px solid $color.focus-ring"; }
+    part "message-list.row:focus-visible" { outline "3px solid $color.focus-ring"; }
+    part "folder-tree.item:focus-visible" { outline "3px solid $color.focus-ring"; }
+    part "context-menu.item:focus-visible" {
+        outline "3px solid $color.focus-ring"
+        outline-offset -3
+    }
+
+    // Controls are outlined, not only coloured.
+    part "toolbar.button" { border "$border.thin"; }
+    part "tabs.tab" { border "$border.thin"; }
+    part "tabs.tab:selected" { text-decoration "underline"; }
+
+    // Selection and unread mail are told apart by more than colour.
+    part "message-list.row:selected" { outline "2px solid $color.selection"; }
+    part "message-list.row:unread" { border-left-width 6; }
+    part "message-list.row:flagged" { text-decoration "underline"; }
+
+    // Dividers are easy to see and to grab.
+    part "split.divider" { background-color "$color.border"; }
+}

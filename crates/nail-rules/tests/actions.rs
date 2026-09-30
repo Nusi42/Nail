@@ -674,6 +674,12 @@ fn validation_lists_every_problem() {
             "action 5: the folder is empty",
         ]
     );
+    // The localized texts read the same in English (core.ftl).
+    let localized: Vec<String> = validate(&rule)
+        .iter()
+        .map(|issue| nail_config::l10n::english(&issue.localized))
+        .collect();
+    assert_eq!(localized, issues);
     let set = RuleSet::new([rule, named("ok", "", "", "stop")]);
     assert_eq!(set.rules().len(), 1);
     assert_eq!(set.broken().len(), 1);
@@ -683,7 +689,7 @@ fn validation_lists_every_problem() {
 #[test]
 fn rules_from_messages() {
     let from_list = rule_from_message(&newsletter());
-    assert_eq!(from_list.name, "ada@substack.com");
+    assert_eq!(from_list.name, "Rust Weekly", "named after the list");
     assert_eq!(from_list.triggers, [nail_api::rules::RuleTrigger::Arrival]);
     let text = nail_config::rules::rule_to_text(&from_list);
     assert!(

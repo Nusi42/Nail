@@ -14,7 +14,9 @@
 //!   ISPDB and Autodiscover;
 //! * [`MockDnsServer`] / [`DnsZone`]: SRV / MX / A answers over UDP
 //!   ([`hickory_proto`] messages) or in memory;
-//! * [`managesieve`]: the mock ManageSieve server (M2c WP51).
+//! * [`MockSieveServer`]: ManageSieve (RFC 5804: STARTTLS, AUTHENTICATE
+//!   PLAIN / XOAUTH2 / OAUTHBEARER, the script commands, minimal script
+//!   validation, recorded uploads, fault injection; M2c WP51).
 //!
 //! TLS certificates come from [`nail_testkit::tls`]; clients trust
 //! `ca_der()` of the server. The mock IMAP server stays in `nail-testkit`.
@@ -32,6 +34,9 @@ mod stream;
 
 pub use dns::{DnsZone, MockDnsServer, MxAnswer, SrvAnswer, ZoneAnswer};
 pub use http::{MockHttpServer, MockResponse, RecordedRequest};
+pub use managesieve::{
+    MockSieveConfig, MockSieveServer, SieveUpload, StoredScript, validate_script,
+};
 pub use nail_testkit::MockTls;
 pub use oauth::{IssuedToken, MockOAuthConfig, MockOAuthServer, TokenRequest};
 pub use pop3::{MockPop3Config, MockPop3Server, Pop3Message, apop_digest};

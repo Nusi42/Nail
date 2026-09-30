@@ -29,6 +29,7 @@ import {
   type AppConfig,
 } from "./state/queries";
 import { UiStoreContext, createUiStore, useUi, useUiStoreApi, type UiStore } from "./state/uiStore";
+import { BootTheme } from "./theme/BootTheme";
 import { ThemeProvider } from "./theme/ThemeProvider";
 
 export interface AppProps {
@@ -133,9 +134,14 @@ export function App({
 
   let content: ReactNode;
   if (gate === "login") {
+    // Before a session there is no configuration: the default theme styles it.
     content = (
       <I18nProvider locale={store.getState().localeOverride}>
-        <RemoteLoginPage onLoggedIn={() => setGate("open")} />
+        <BootTheme modeOverride={store.getState().modeOverride}>
+          <div data-part="app" data-state="login">
+            <RemoteLoginPage onLoggedIn={() => setGate("open")} />
+          </div>
+        </BootTheme>
       </I18nProvider>
     );
   } else if (client) {
@@ -147,10 +153,12 @@ export function App({
   } else {
     content = (
       <I18nProvider locale={store.getState().localeOverride}>
-        <AppStatus
-          state={failed ? "error" : "loading"}
-          messageId={failed ? "error-unavailable" : "app-loading"}
-        />
+        <BootTheme modeOverride={store.getState().modeOverride}>
+          <AppStatus
+            state={failed ? "error" : "loading"}
+            messageId={failed ? "error-unavailable" : "app-loading"}
+          />
+        </BootTheme>
       </I18nProvider>
     );
   }
@@ -357,10 +365,14 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
             </DialogRegistryContext.Provider>
           </LayoutContext.Provider>
         </ThemeProvider>
-      ) : config.isError ? (
-        <AppStatus state="error" messageId={errorMessageIdOf(config.error)} />
       ) : (
-        <AppStatus state="loading" messageId="app-loading" />
+        <BootTheme modeOverride={modeOverride}>
+          {config.isError ? (
+            <AppStatus state="error" messageId={errorMessageIdOf(config.error)} />
+          ) : (
+            <AppStatus state="loading" messageId="app-loading" />
+          )}
+        </BootTheme>
       )}
     </I18nProvider>
   );

@@ -173,6 +173,15 @@ A widget is a node named after its kind. Its properties are its options.
 | `security-warnings` | — (warnings about deceptive links and risky attachments of the shown message) |
 | `security-composer` | — (Sign and Encrypt switches with the key status of every recipient) |
 | `config-errors` | `hide-when-valid` (`#true`/`#false`): show nothing while every config file is valid (see [Customizing](customization.md#all-configuration-errors-at-once)) |
+| `toolbar-editor`, `key-binding-editor`, `column-editor` | — (the Customize editors for toolbars, shortcuts and list columns; see [Customizing](customization.md#editing-toolbars-shortcuts-and-columns)) |
+| `sieve-status` | — (server-side rules: ManageSieve per account, the script's state, where each rule runs; see [Server-side rules and vacation replies](server-side-rules.md)) |
+| `vacation-editor` | — (the vacation reply of an account) |
+| `junk-settings` | — (Nail's junk filter per account and its training; see [Junk mail, snooze and notifications](junk-snooze-notifications.md#junk-mail)) |
+| `junk-verdict` | — (in the reader: "This message is junk" with **Not junk**) |
+| `snooze-list` | — (the snoozed messages with **Wake up now**) |
+| `notification-settings` | — (new-mail notifications, per account and folder, quiet hours, a test notification, allowing them in the browser; see [Junk mail, snooze and notifications](junk-snooze-notifications.md#new-mail-notifications)) |
+| `sync-folder-policies` | — (what each folder downloads; see [Reading and organizing mail](mail.md#messages-that-are-not-downloaded-yet)) |
+| `sync-message-body` | — (in the reader: "Only the headers are stored" with **Download full message**) |
 | `smart-folders` | `editable` (`#true`/`#false`): offer "Save current search" and remove buttons (see [Customizing](customization.md#smart-folders-saved-searches)) |
 | `toolbar` | `toolbar`: the name of a `toolbar` definition (required) |
 | `status-bar` | `items`: any of `sync-progress`, `account-status`, `ops` (changes being saved), `send-status` (undo send), `folder-counts` |
@@ -258,6 +267,11 @@ Actions in the default layout:
 | `window.open`, `window.close` | Open a window by name (argument); close the topmost window |
 | `view.toggle` | Show or hide a pane; argument: its `id`, e.g. `"sidebar"` |
 | `sync.now` | Check for new mail |
+| `menu.context` | Open the context menu of the focused item (default keys `shift+f10` and `contextmenu`, the menu key) |
+| `junk.mark`, `junk.not-junk` | Mark the selected message as junk / not junk (trains the junk filter, moves the message) |
+| `snooze.open`, `snooze.list` | Snooze the selected message; show the snoozed messages |
+| `sync.download-message` | Download the full message when only its headers are stored |
+| `sync.folder-policy` | What a folder downloads (in a folder's menu: that folder; elsewhere the open folder) |
 
 ```kdl
 actions {
@@ -326,10 +340,24 @@ menu "context:message-list.row" {
 ```
 
 `"app"` is the application menu; `"context:<part>"` is the right-click menu
-of a part (see the part names in the [theme reference](theme-reference.md)).
-Defining a menu with an existing name replaces it. This version reads and
-checks menus but does not show them yet; the same actions are on the
-toolbars.
+of a part. Defining a menu with an existing name replaces it. Parts with a
+context menu:
+
+| Part | Where | Shortcuts shown from context |
+| --- | --- | --- |
+| `message-list.row` | A message in the list (it becomes the selected message) | `list`, then global |
+| `thread-view.message` | A message of the conversation above the reader | `reader` |
+| `message-view` | The shown message | `reader` |
+| `message-view.attachment` | An attachment of the shown message | `reader` |
+| `folder-tree.folder` | A folder (the folder is not opened; its actions use it) | global |
+| `composer` | The composer outside its text fields | `composer` |
+
+Text fields keep the usual Cut / Copy / Paste menu. Each entry shows the
+action's label and icon (or the item's `label` / `icon`) and the key bound
+to it. Separators at the start, at the end or twice in a row are dropped,
+and so are empty submenus. The menu opens on a right-click and, from the
+keyboard, with the action `menu.context` (Shift+F10 and the menu key by
+default); see [Accessibility](accessibility.md#context-menus) for its keys.
 
 ## Error messages
 

@@ -16,7 +16,7 @@ rule_id: RuleId,
  */
 placement: RulePlacement, 
 /**
- * Why it is `client` or `not-expressible` (e.g. `sieve-reason-body`
+ * Why it is `client` or `not-expressible` (e.g. `sieve-reason-query`
  * with the condition's position); empty for `server`.
  */
 reasons: Array<LocalizedMessage>, };
