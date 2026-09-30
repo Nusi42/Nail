@@ -228,6 +228,32 @@ impl PluginsCtl {
         lock(&self.catalogs).remove(id);
     }
 
+    /// What a plug-in's catalogs are cached by: its package hash, or its
+    /// dev folder with the host's start generation, so that every dev
+    /// reload (a changed locale file with the same manifest, too) reads
+    /// the catalogs again.
+    fn catalogs_key(&self, record: &PluginRecord) -> Option<String> {
+        match &record.source {
+            PluginPackageSource::Dev { folder } => Some(self.dev_key(&record.id, folder)),
+            _ => record.package_sha256.clone(),
+        }
+    }
+
+    fn dev_key(&self, id: &PluginId, folder: &str) -> String {
+        let generation = self
+            .existing_host()
+            .and_then(|host| host.generation(id))
+            .unwrap_or_default();
+        format!("{folder}#{generation}")
+    }
+
+    /// Whether the cached catalogs of a plug-in were loaded for `key`.
+    fn catalogs_current(&self, id: &PluginId, key: &str) -> bool {
+        lock(&self.catalogs)
+            .get(id)
+            .is_some_and(|(k, _)| k.as_deref() == Some(key))
+    }
+
     /// Resolves a `%fluent-id%` plug-in name in a host message's `plugin`
     /// argument (the host names plug-ins by their manifest's raw name).
     pub(crate) fn localize_plugin_arg(
@@ -360,9 +386,11 @@ impl Service {
             .await
             .ok();
         if let Some(catalogs) = catalogs {
-            self.inner
+            let key = self
+                .inner
                 .plugins
-                .set_catalogs(id, Some(folder.display().to_string()), catalogs);
+                .dev_key(id, &folder.display().to_string());
+            self.inner.plugins.set_catalogs(id, Some(key), catalogs);
         }
     }
 
@@ -385,7 +413,7 @@ impl Service {
     /// The plug-in's catalogs for its manifest texts (loaded from its
     /// package or folder when not cached).
     pub(crate) async fn plugin_catalogs(&self, record: &PluginRecord) -> Arc<PluginCatalogs> {
-        let key = record_key(record);
+        let key = self.inner.plugins.catalogs_key(record);
         if let Some(catalogs) = self
             .inner
             .plugins
@@ -439,7 +467,9 @@ impl Service {
     }
 
     /// After a dev reload the host may run a changed manifest: the store
-    /// follows it (grants of permissions it no longer declares go).
+    /// follows it (grants of permissions it no longer declares go). The
+    /// plug-in's catalogs are read again on every dev reload, also when
+    /// only a locale file changed.
     pub(crate) async fn sync_dev_manifests(&self) {
         let Some(host) = self.inner.plugins.existing_host().cloned() else {
             return;
@@ -448,16 +478,21 @@ impl Service {
             return;
         };
         for record in records {
-            if !matches!(record.source, PluginPackageSource::Dev { .. }) {
+            let PluginPackageSource::Dev { folder } = &record.source else {
                 continue;
-            }
+            };
             let Some(running) = host.manifest(&record.id) else {
                 continue;
             };
-            if running == record.manifest {
+            let changed = running != record.manifest;
+            let key = self.inner.plugins.dev_key(&record.id, folder);
+            if changed || !self.inner.plugins.catalogs_current(&record.id, &key) {
+                self.remember_dev_catalogs(&record.id, std::path::Path::new(folder), &running)
+                    .await;
+            }
+            if !changed {
                 continue;
             }
-            let id = record.id.clone();
             let result = self
                 .store()
                 .call(move |s| {
@@ -476,21 +511,11 @@ impl Service {
                 })
                 .await;
             match result {
-                Ok(_) => {
-                    self.inner.plugins.forget(&id);
-                    self.broadcast(Event::PluginsChanged);
-                }
+                Ok(_) => self.broadcast(Event::PluginsChanged),
                 Err(err) => tracing::warn!(%err, "cannot update a dev plug-in's manifest"),
             }
         }
         self.refresh_installed_plugins().await;
-    }
-}
-
-fn record_key(record: &PluginRecord) -> Option<String> {
-    match &record.source {
-        PluginPackageSource::Dev { folder } => Some(folder.clone()),
-        _ => record.package_sha256.clone(),
     }
 }
 
@@ -1058,7 +1083,16 @@ impl PluginServices for CoreServices {
         service.broadcast(event);
     }
 
-    fn log(&self, line: HostLogLine) {
+    fn log(&self, mut line: HostLogLine) {
+        // The host names plug-ins by their manifest's raw name
+        // (`%plugin-name%`); the stored line carries the resolved one.
+        if let (Ok(service), Some(message)) = (self.service(), line.localized.as_mut()) {
+            service.inner.plugins.localize_plugin_arg(
+                &line.plugin_id,
+                service.inner.locale.as_deref(),
+                message,
+            );
+        }
         enqueue_log(&self.logs, &self.dropped, line);
     }
 }

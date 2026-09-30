@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import AxeBuilder from "@axe-core/playwright";
@@ -258,14 +258,20 @@ function devConsole(folder: string, url: string): Console {
 }
 
 test("nail plugin dev loads a folder and reloads it on changes", async ({ page, nail }) => {
-  const manifest = (version: string) =>
-    commandManifest(
+  // Its name and command title come from its own locale file.
+  const manifest = (version: string) => {
+    const base = commandManifest(
       "dev-hello",
-      "Dev hello",
-      { id: "hello", title: "Say hello" },
+      "%plugin-name%",
+      { id: "hello", title: "%hello-title%" },
       ["notifications"],
       version,
     );
+    const contributes = base.contributes as Record<string, unknown>;
+    return { ...base, contributes: { ...contributes, locales: { en: "locales/en.ftl" } } };
+  };
+  const locale = (name: string, title: string) =>
+    [`plugin-name = ${name}`, `hello-title = ${title}`, ""].join("\n");
   const main = (greeting: string) => `export default {
     activate(ctx) {
       nail.log.info("activated: ${greeting}");
@@ -273,6 +279,9 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
     },
   };`;
   const folder = writePluginFolder({ manifest: manifest("1.0.0"), main: main("Hello one") });
+  mkdirSync(path.join(folder, "locales"));
+  const ftl = path.join(folder, "locales", "en.ftl");
+  writeFileSync(ftl, locale("Dev hello", "Say hello"));
   const dev = devConsole(folder, nail.url);
   try {
     await dev.waitFor("Loaded Dev hello 1.0.0");
@@ -299,12 +308,32 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
     writeFileSync(path.join(folder, "index.js"), main("Hello two"));
     await dev.waitFor("activated: Hello two");
     await dev.waitFor("changed; reloading");
+    // The host's lines name the plug-in by its resolved name.
+    await dev.waitFor("Dev hello is being reloaded.");
+    expect(dev.lines.filter((l) => l.includes("%plugin-name%"))).toEqual([]);
     await page.getByRole("button", { name: "Say hello" }).click();
     await expect(toasts.filter({ hasText: "Hello two" })).toBeVisible();
     const again = await openSettings(page, "Plug-ins");
     await expect(again.locator('[data-part="plugin-manager.plugin"]')).toContainText(
       "Dev hello 1.0.1",
     );
+    await closeDialog(page, "Settings");
+
+    // A change of only its locale file (same manifest, same version)
+    // reloads its texts too.
+    const reloads = dev.lines.filter((l) => l.includes("changed; reloading")).length;
+    writeFileSync(ftl, locale("Dev hello edited", "Say hello again"));
+    await expect
+      .poll(() => dev.lines.filter((l) => l.includes("changed; reloading")).length, {
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(reloads);
+    await expect(page.getByRole("button", { name: "Say hello again" })).toBeVisible();
+    const edited = await openSettings(page, "Plug-ins");
+    await expect(edited.locator('[data-part="plugin-manager.plugin"]')).toContainText(
+      "Dev hello edited 1.0.1",
+    );
+    expect(dev.lines.filter((l) => l.includes("%plugin-name%"))).toEqual([]);
   } finally {
     dev.child.kill();
   }

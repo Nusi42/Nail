@@ -21,8 +21,8 @@ use nail_api::plugins::{
 };
 use nail_api::security::SecuritySettings;
 use nail_api::{
-    ConfigFile, ErrorCode, Event, FolderRole, MessageId, PluginId, Request, Response, ToolbarItem,
-    UiContext,
+    ConfigFile, ErrorCode, Event, FolderRole, MessageArg, MessageId, PluginId, Request, Response,
+    ToolbarItem, UiContext,
 };
 use nail_core::demo::{demo_options, seed_demo};
 use nail_core::{Service, ServiceOptions};
@@ -685,7 +685,7 @@ async fn a_runaway_plugin_is_stopped_and_flagged_while_the_core_answers() {
     assert_eq!(localized.id, "plugin-stopped-cpu-budget");
     assert_eq!(
         localized.args["plugin"],
-        nail_api::MessageArg::from("Follow-up reminders")
+        MessageArg::from("Follow-up reminders")
     );
     let info = get(&f, "runaway").await;
     assert_eq!(info.state, PluginRunState::Crashed);
@@ -759,9 +759,13 @@ async fn dev_folders_load_and_reload() {
     assert!(matches!(loaded.source, PluginPackageSource::Dev { .. }));
     assert_eq!(loaded.manifest.name, "Follow-up reminders");
 
-    // A change reloads it; a new manifest version reaches the store.
+    // A change reloads it; a new manifest version reaches the store. The
+    // host's log line names the plug-in by its resolved name, not by the
+    // manifest's `%name%` (post-M2 verify finding).
     std::fs::write(folder.join("index.js"), DEV_JS_2).unwrap();
     write_manifest("1.0.1");
+    let reloading = wait_event(&mut events, "the host's reload line", reload_line).await;
+    assert_eq!(reloading, "Follow-up reminders");
     wait_event(&mut events, "the reloaded plug-in", |e| match e {
         Event::PluginLogLine { entry } if entry.message == "dev two" => Some(()),
         _ => None,
@@ -783,6 +787,56 @@ async fn dev_folders_load_and_reload() {
     })
     .await;
     assert_eq!(get(&f, "devplug").await.state, PluginRunState::Running);
+
+    // A change of only the plug-in's locale file (the manifest stays the
+    // same) reloads its texts too (post-M2 verify finding).
+    std::fs::write(
+        folder.join("locales/en.ftl"),
+        "name = Follow-up reminders, edited\nfollow-up = Follow up…\n",
+    )
+    .unwrap();
+    let reloading = wait_event(&mut events, "the host's reload line", reload_line).await;
+    assert!(
+        reloading.starts_with("Follow-up reminders"),
+        "resolved name: {reloading}"
+    );
+    wait_until("the edited plug-in name", || {
+        let service = f.service.clone();
+        async move {
+            match service
+                .handle(Request::GetPlugin {
+                    plugin_id: PluginId::new("devplug"),
+                })
+                .await
+            {
+                Response::Plugin { plugin } => {
+                    plugin.manifest.name == "Follow-up reminders, edited"
+                }
+                _ => false,
+            }
+        }
+    })
+    .await;
+    assert_eq!(get(&f, "devplug").await.manifest.version, "1.0.1");
+    wait_until("the reloaded plug-in running", || {
+        let f = &f;
+        async move { get(f, "devplug").await.state == PluginRunState::Running }
+    })
+    .await;
+}
+
+/// The `plugin` argument of the host's "is being reloaded" log line.
+fn reload_line(event: &Event) -> Option<String> {
+    match event {
+        Event::PluginLogLine { entry } => match entry.localized.as_deref() {
+            Some(m) if m.id == "plugin-stopped-reloaded" => match m.args.get("plugin") {
+                Some(MessageArg::Text(name)) => Some(name.clone()),
+                other => panic!("plug-in argument {other:?}"),
+            },
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

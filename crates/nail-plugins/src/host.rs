@@ -445,6 +445,12 @@ impl PluginHost {
             .map(|s| s.manifest.as_ref().clone())
     }
 
+    /// Which start of the plug-in its slot holds: every start (and every
+    /// dev reload) takes a new, larger number.
+    pub fn generation(&self, id: &PluginId) -> Option<u64> {
+        lock(&self.inner.slots).get(id).map(|s| s.generation)
+    }
+
     /// Starts a plug-in (replacing a running instance, reason
     /// `reloaded`) and waits until its `activate` settled.
     pub async fn start(&self, spec: PluginSpec) -> Result<(), ApiError> {
