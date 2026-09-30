@@ -133,10 +133,19 @@ pub trait PluginServices: Send + Sync + 'static {
 
     /// Messages matching a query of Nail's search language, newest first,
     /// only in `scope`.
+    ///
+    /// `body_scope` (within `scope`) is where the plug-in may read message
+    /// text (`mail.read.body`). Elsewhere the core must search header
+    /// fields only: free text matches sender, recipients and subject, and
+    /// `body:` / `filename:` terms match nothing there (no probing of
+    /// bodies through search). End-to-end encrypted messages must never be
+    /// found by text that exists only in their decrypted content (the core
+    /// leaves them out while its index holds decrypted text).
     fn mail_search(
         &self,
         query: String,
         scope: AccountScope,
+        body_scope: AccountScope,
         limit: u32,
     ) -> BoxFuture<'static, ServiceResult<Vec<PluginMessage>>>;
 

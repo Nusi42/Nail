@@ -666,6 +666,30 @@ async fn key_requests() {
     };
     assert_eq!(candidates.len(), 1);
     assert!(candidates[0].known.is_none());
+    // Typed addresses Nail refuses carry Nail's own text, never English as
+    // the `detail` of "The OpenPGP data is not valid" (M2d review).
+    for (email, id) in [
+        ("nobody", "pgp-problem-not-an-address"),
+        ("@example.org", "pgp-problem-not-an-address"),
+        ("a@münchen.de", "pgp-problem-unsupported-domain"),
+    ] {
+        match call(Request::LookupKeys {
+            email: email.into(),
+            sources: vec![KeyLookupSource::KeysOpenpgpOrg],
+        })
+        .await
+        {
+            Response::Error {
+                code: ErrorCode::InvalidRequest,
+                localized: Some(localized),
+                ..
+            } => {
+                assert_eq!(localized.id, id, "{email}");
+                assert!(!localized.args.contains_key("detail"), "{email}");
+            }
+            other => panic!("{email}: {other:?}"),
+        }
+    }
     let Response::Keys { keys } = call(Request::ListKeys {
         filter: KeyFilter::default(),
     })

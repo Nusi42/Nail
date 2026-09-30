@@ -19,7 +19,7 @@ use pgp::packet::{PublicKey, Signature, SignatureType, SubpacketData};
 use pgp::ser::Serialize;
 use pgp::types::{KeyDetails, PublicParams, Tag};
 
-use crate::error::{Error, Result};
+use crate::error::{Error, Problem, Result};
 
 /// Uppercase hex of bytes (fingerprints, key ids).
 pub(crate) fn hex_upper(bytes: &[u8]) -> String {
@@ -250,9 +250,7 @@ impl KeyInfo {
                 .filter(|s| s.verify_key(primary).is_ok()),
         );
         if users.is_empty() && direct.is_none() {
-            return Err(Error::Crypto(
-                "the key has no valid self-signature".to_owned(),
-            ));
+            return Err(Problem::NoSelfSignature.into());
         }
         // Primary user id first (the newest one flagged primary).
         let primary_index = users
@@ -695,9 +693,10 @@ pub fn bind_to_address(key: &SignedPublicKey, addr: &str) -> Result<SignedPublic
         })
         .collect();
     if users.is_empty() {
-        return Err(Error::Invalid(format!(
-            "the key has no valid user id for {addr}"
-        )));
+        return Err(Problem::NoUserIdFor {
+            address: addr.to_string(),
+        }
+        .into());
     }
     Ok(SignedPublicKey::new(
         primary.clone(),
@@ -887,7 +886,7 @@ mod tests {
         // A key without a user id for the address is refused.
         assert!(matches!(
             bind_to_address(&key, "other@evil.example"),
-            Err(Error::Invalid(_))
+            Err(Error::Problem(Problem::NoUserIdFor { .. }))
         ));
         // A user id whose self-signature does not verify does not count.
         let mut forged = key.clone();

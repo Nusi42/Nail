@@ -116,6 +116,25 @@ pub fn socket_url(url: &str) -> Option<String> {
     Some(parsed.to_string())
 }
 
+/// Opens the WebSocket of the Nail at `url`. Failures carry Nail's own
+/// text; only the network library's reason is an English `detail`.
+async fn connect(
+    url: &str,
+) -> anyhow::Result<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+> {
+    let socket = socket_url(url)
+        .localized(|| LocalizedMessage::new("cli-plugin-dev-not-http").arg("url", url))?;
+    match tokio_tungstenite::connect_async(socket.as_str()).await {
+        Ok((ws, _)) => Ok(ws),
+        Err(err) => Err(messages::error(
+            LocalizedMessage::new("cli-plugin-dev-connect")
+                .arg("url", url)
+                .arg("detail", err.to_string()),
+        )),
+    }
+}
+
 /// Every permission the manifest declares, for all accounts.
 pub fn declared_grants(manifest: &PluginManifest) -> Vec<PluginGrant> {
     manifest
@@ -162,18 +181,7 @@ async fn dev(args: PluginDevArgs) -> anyhow::Result<()> {
         .and_then(|bytes| PluginManifest::parse(&bytes).ok());
     let grants = manifest.as_ref().map(declared_grants).unwrap_or_default();
     let url = resolve_url(&args)?;
-    let socket = socket_url(&url).localized(|| {
-        LocalizedMessage::new("cli-plugin-dev-connect")
-            .arg("url", url.as_str())
-            .arg("detail", "not an http(s) URL")
-    })?;
-    let (mut ws, _) = tokio_tungstenite::connect_async(socket.as_str())
-        .await
-        .localized(|| {
-            LocalizedMessage::new("cli-plugin-dev-connect")
-                .arg("url", url.as_str())
-                .arg("detail", "no answer")
-        })?;
+    let mut ws = connect(&url).await?;
     let request = RpcRequest {
         id: 1,
         request: Request::LoadDevPlugin {
@@ -291,6 +299,37 @@ mod tests {
             Some("wss://nail.example:8443/api/ws")
         );
         assert_eq!(socket_url("ftp://x"), None);
+    }
+
+    /// M2d review: no English written by Nail as `detail`, and the real
+    /// reason instead of "no answer".
+    #[tokio::test]
+    async fn connect_failures_are_localized_with_the_library_reason() {
+        let catalog = Catalog::english();
+        let err = connect("ftp://127.0.0.1/").await.unwrap_err();
+        let text = messages::render_error(&err, &catalog);
+        assert_eq!(
+            text.lines().next().unwrap(),
+            catalog.render(
+                &LocalizedMessage::new("cli-plugin-dev-not-http").arg("url", "ftp://127.0.0.1/")
+            ),
+            "{text}"
+        );
+        // A port nothing listens on.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let url = format!("http://127.0.0.1:{port}/");
+        let err = connect(&url).await.unwrap_err();
+        let cli = err
+            .downcast_ref::<messages::CliError>()
+            .expect("a CliError");
+        assert_eq!(cli.message.id, "cli-plugin-dev-connect");
+        let detail = cli.message.args["detail"].to_string();
+        assert_ne!(detail, "no answer");
+        assert!(!detail.is_empty());
     }
 
     #[test]

@@ -70,10 +70,16 @@ config-plugin-panel-invalid = `{ $panel }` is not a plug-in panel (expected `plu
 # A widget written the pre-M2d way (`plugin.<id>.<name>`); `panel` is `<id>.<name>`.
 config-plugin-widget-renamed = `{ $node }` is not a widget: place plug-in panels as `plugin-panel "{ $panel }"`
 
+## Plug-in notifications shown by the operating system: the plug-in's
+## name comes first. `title` is the plug-in's own title.
+
+plugin-notification-os-title = { $plugin }: { $title }
+
 ## The `nail plugin` command
 
 cli-plugin-dev-no-nail = Nail is not running with its web UI here. Start `nail serve` (or pass --url with the address it printed, or --data-dir with its data directory).
 cli-plugin-dev-folder = Cannot use the folder { $folder }.
+cli-plugin-dev-not-http = { $url } is not an http:// or https:// address of Nail.
 # `detail` is the reason in English (network library text).
 cli-plugin-dev-connect = Cannot connect to Nail at { $url }: { $detail }
 cli-plugin-dev-closed = The connection to Nail closed.

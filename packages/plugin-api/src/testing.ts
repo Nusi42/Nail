@@ -273,6 +273,8 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
       },
       async search(query, searchOptions = {}) {
         need("mail.read");
+        // Like Nail: message text is searched only with `mail.read.body`.
+        if (/(^|[\s(-])(body|filename):/i.test(query)) need("mail.read.body");
         const words = query.toLowerCase().split(/\s+/).filter(Boolean);
         return [...messages.values()]
           .filter((m) => words.every((w) => m.subject.toLowerCase().includes(w)))

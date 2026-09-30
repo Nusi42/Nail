@@ -286,6 +286,10 @@ impl Inner {
             };
             let was_running = slot.tx.is_some();
             slot.alive.store(false, Ordering::SeqCst);
+            // Nothing the old runtime still does is allowed any more.
+            if let Ok(mut gate) = slot.gate.write() {
+                *gate = Gate::default();
+            }
             if let Some(tx) = slot.tx.take() {
                 let _ = tx.send(ThreadMsg::Stop);
             }

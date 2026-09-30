@@ -213,7 +213,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             let email = email.trim().to_ascii_lowercase();
             if !email.contains('@') {
-                return Err(ApiError::invalid_request(format!("not an address: {email:?}")).into());
+                // Nail's own text, never English as a `detail` (M2d review).
+                let problem = nail_pgp::Problem::NotAnAddress { address: email };
+                return Err(ApiError::from(nail_pgp::Error::from(problem)).into());
             }
             let sources = if sources.is_empty() {
                 settings.lookup_sources

@@ -25,7 +25,7 @@ use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::types::SigningKey;
 use rand::thread_rng;
 
-use crate::error::{Error, Result};
+use crate::error::{Problem, Result};
 use crate::key::KeyInfo;
 use crate::keyring::UnlockedKey;
 use crate::mime::{self, Entity, HeaderField};
@@ -97,7 +97,7 @@ fn add_param(field: &mut HeaderField, name: &str, value: &str) {
 pub fn protect_message(raw: &[u8], protection: &Protection<'_>) -> Result<Vec<u8>> {
     let encrypt = !protection.recipients.is_empty();
     if protection.signer.is_none() && !encrypt {
-        return Err(Error::Invalid("neither signing nor encrypting".into()));
+        return Err(Problem::NothingToProtect.into());
     }
     let entity = Entity::parse(raw);
     let mut outer: Vec<HeaderField> = Vec::new();
@@ -252,7 +252,7 @@ mod tests {
         };
         assert!(matches!(
             protect_message(b"Subject: x\r\n\r\nbody", &protection),
-            Err(Error::Invalid(_))
+            Err(crate::Error::Problem(Problem::NothingToProtect))
         ));
     }
 }

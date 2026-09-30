@@ -33,8 +33,12 @@ pub struct HostLimits {
     pub max_timers: usize,
     /// Longest timer delay.
     pub max_timer_delay: Duration,
-    /// Log lines one call may write (more are counted and dropped).
+    /// Log lines one call may cause (its own, refused API calls, host
+    /// lines; more are counted and dropped).
     pub max_log_lines_per_call: u32,
+    /// Log lines a plug-in may cause per minute (a burst of this many,
+    /// refilled evenly; more are counted and dropped).
+    pub max_log_lines_per_minute: u32,
     /// Notifications per minute.
     pub notifications_per_minute: usize,
     /// Largest `nail.http.fetch` request body (bytes).
@@ -63,6 +67,7 @@ impl Default for HostLimits {
             max_timers: 100,
             max_timer_delay: Duration::from_secs(24 * 60 * 60),
             max_log_lines_per_call: 200,
+            max_log_lines_per_minute: 600,
             notifications_per_minute: 20,
             http_max_request_bytes: 1024 * 1024,
             http_max_response_bytes: 5 * 1024 * 1024,

@@ -27,7 +27,7 @@ pub struct Fake {
     pub fetches: Mutex<Vec<HttpRequest>>,
     pub events: Mutex<Vec<Event>>,
     pub logs: Mutex<Vec<HostLogLine>>,
-    pub searches: Mutex<Vec<(String, AccountScope, u32)>>,
+    pub searches: Mutex<Vec<(String, AccountScope, AccountScope, u32)>>,
 }
 
 pub fn message(id: &str, account: &str, thread: &str, encrypted: bool) -> PluginMessage {
@@ -163,12 +163,13 @@ impl PluginServices for Fake {
         &self,
         query: String,
         scope: AccountScope,
+        body_scope: AccountScope,
         limit: u32,
     ) -> BoxFuture<'static, ServiceResult<Vec<PluginMessage>>> {
         self.searches
             .lock()
             .unwrap()
-            .push((query.clone(), scope, limit));
+            .push((query.clone(), scope, body_scope, limit));
         // Deliberately ignores the scope: the gate filters again.
         let found = self
             .messages

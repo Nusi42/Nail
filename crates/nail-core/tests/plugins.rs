@@ -19,6 +19,7 @@ use nail_api::plugins::{
     PluginCommandSurface, PluginGrant, PluginInfo, PluginPackageSource, PluginPermission,
     PluginUiNode,
 };
+use nail_api::security::SecuritySettings;
 use nail_api::{
     ConfigFile, ErrorCode, Event, FolderRole, MessageId, PluginId, Request, Response, ToolbarItem,
     UiContext,
@@ -913,10 +914,21 @@ async fn system_notifications_follow_the_notification_settings() {
     })
     .await;
     assert!(shown.spec.system);
-    // The OS notification names the plug-in.
+    // The OS notification names the plug-in first, in its title; the
+    // plug-in's line breaks cannot push that out of view (M2d review).
     let (title, body) = f.service.plugin_notification_texts(&shown);
-    assert_eq!(title, "Due today");
-    assert_eq!(body, "Call Ada\nfrom Follow-up reminders");
+    assert_eq!(title, "Follow-up reminders: Due today");
+    assert_eq!(body, "Call Ada");
+    let mut spoof = shown.clone();
+    spoof.spec.title = "Your session expired\n\n\n".into();
+    spoof.spec.body = Some("Sign in again\n\n\n\n\nreally".into());
+    let (title, body) = f.service.plugin_notification_texts(&spoof);
+    assert!(title.starts_with("Follow-up reminders: "), "{title}");
+    assert!(
+        !title.contains('\n') && !body.contains('\n'),
+        "{title} / {body}"
+    );
+    assert_eq!(body, "Sign in again really");
 
     // Notifications switched off: the toast stays, the OS one goes.
     let mut settings = f.service.store().notification_settings().unwrap();
@@ -934,4 +946,121 @@ async fn system_notifications_follow_the_notification_settings() {
     })
     .await;
     assert!(!quiet.spec.system);
+}
+
+const SEARCH_JS: &str = r#"
+export default {
+  activate(ctx) {
+    ctx.commands.register("follow-up", async () => {
+      const find = async (q) => {
+        try {
+          return (await nail.mail.search(q, { limit: 500 })).map((m) => m.subject);
+        } catch (e) {
+          return "ERR " + e.code;
+        }
+      };
+      nail.log.info("OUT " + JSON.stringify({
+        body: await find('body:aboard'),
+        filename: await find('filename:pdf'),
+        free: await find('aboard'),
+        subject: await find('Welcome'),
+        secret: await find('subject:secret'),
+      }));
+    });
+  },
+};
+"#;
+
+/// Runs the search command of `plugin` and returns what it found.
+async fn plugin_searches(
+    f: &Fixture,
+    events: &mut broadcast::Receiver<Event>,
+    plugin: &str,
+) -> Value {
+    f.service
+        .handle(Request::RunPluginCommand {
+            command: format!("plugin.{plugin}.follow-up"),
+            surface: PluginCommandSurface::Global,
+            context: UiContext::default(),
+            client_id: None,
+        })
+        .await;
+    let text = wait_event(events, "the search results", |e| match e {
+        Event::PluginLogLine { entry }
+            if entry.plugin_id.as_str() == plugin && entry.message.starts_with("OUT ") =>
+        {
+            Some(entry.message[4..].to_owned())
+        }
+        _ => None,
+    })
+    .await;
+    serde_json::from_str(&text).unwrap()
+}
+
+fn subjects(found: &Value) -> Vec<String> {
+    found
+        .as_array()
+        .unwrap_or_else(|| panic!("not a list: {found}"))
+        .iter()
+        .map(|s| s.as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// M2d review: `mail.read` alone must not let a plug-in probe message
+/// text through search, and encrypted mail is never found while the index
+/// holds its decrypted text.
+#[tokio::test(flavor = "multi_thread")]
+async fn search_needs_mail_read_body_for_text_and_hides_decrypted_mail() {
+    let f = setup();
+    let mut events = f.service.subscribe();
+    assert!(f.service.rebuild_search_index().unwrap() > 0);
+    let eml = "From: a@example.com\r\nTo: b@example.com\r\nSubject: secret\r\nMIME-Version: 1.0\r\nContent-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"b\"\r\n\r\n--b\r\nContent-Type: application/pgp-encrypted\r\n\r\nVersion: 1\r\n--b\r\nContent-Type: application/octet-stream\r\n\r\n-----BEGIN PGP MESSAGE-----\r\n\r\nhQEMA0000000000000AQf/abc=\r\n-----END PGP MESSAGE-----\r\n--b--\r\n";
+    let path = write(f.files.path(), "secret.eml", eml.as_bytes());
+    match f
+        .service
+        .handle(Request::ImportMessageFile {
+            path: path.display().to_string(),
+        })
+        .await
+    {
+        Response::MessageImported { .. } => {}
+        other => panic!("{other:?}"),
+    }
+    install(&f, "headers", &["mail.read"], SEARCH_JS).await;
+    install(&f, "bodies", &["mail.read", "mail.read.body"], SEARCH_JS).await;
+
+    let headers = plugin_searches(&f, &mut events, "headers").await;
+    // Message text needs `mail.read.body`: refused, and free text looks at
+    // header fields only ("aboard" is only in the welcome mail's body).
+    assert_eq!(headers["body"], "ERR forbidden", "{headers}");
+    assert_eq!(headers["filename"], "ERR forbidden", "{headers}");
+    assert_eq!(subjects(&headers["free"]), Vec::<String>::new());
+    assert!(subjects(&headers["subject"]).contains(&"Welcome to Nail".to_owned()));
+    // No decrypted text in the index: encrypted mail is found by headers.
+    assert_eq!(subjects(&headers["secret"]), ["secret"]);
+
+    let bodies = plugin_searches(&f, &mut events, "bodies").await;
+    assert_eq!(subjects(&bodies["body"]), ["Welcome to Nail"], "{bodies}");
+    assert_eq!(subjects(&bodies["free"]), ["Welcome to Nail"]);
+    assert_eq!(subjects(&bodies["secret"]), ["secret"]);
+
+    // Decrypted indexing on (any account): encrypted mail is never found.
+    match f
+        .service
+        .handle(Request::UpdateSecuritySettings {
+            settings: SecuritySettings {
+                index_decrypted: vec![nail_core::demo::DEMO_ACCOUNT_ID.into()],
+                ..SecuritySettings::default()
+            },
+        })
+        .await
+    {
+        Response::SecuritySettings { .. } => {}
+        other => panic!("{other:?}"),
+    }
+    for plugin in ["headers", "bodies"] {
+        let found = plugin_searches(&f, &mut events, plugin).await;
+        assert_eq!(subjects(&found["secret"]), Vec::<String>::new(), "{plugin}");
+        assert!(subjects(&found["subject"]).contains(&"Welcome to Nail".to_owned()));
+    }
 }

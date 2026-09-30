@@ -9,12 +9,12 @@ use nail_api::security::{
     AutocryptPreference, AutocryptRecommendation, DecryptionState, KeyAlgorithm, KeySource,
     RecipientKeyState, SecretProtection, SecretStorage, SignatureState, TrustDecision, TrustLevel,
 };
-use nail_pgp::Error;
 use nail_pgp::autocrypt::{
     AutocryptHeader, IncomingMessage, SetupMessageText, create_setup_message, import_setup,
     is_setup_message, new_passcode, process_incoming, recipient_status, recommend,
 };
 use nail_pgp::compose::{Protection, protect_message, with_header};
+use nail_pgp::{Error, Problem};
 use pretty_assertions::assert_eq;
 
 const DAY: i64 = 86_400;
@@ -464,7 +464,7 @@ fn gnupg_setup_message_imports_bobs_key() {
     // Not a setup message.
     assert!(matches!(
         import_setup(&ring, &fixture("signed-alice.eml"), passcode.trim()),
-        Err(Error::Invalid(_))
+        Err(Error::Problem(Problem::NotSetupMessage))
     ));
 }
 
@@ -526,7 +526,7 @@ fn setup_message_roundtrip_between_devices() {
             "123",
             &text
         ),
-        Err(Error::Invalid(_))
+        Err(Error::Problem(Problem::SetupCodeFormat))
     ));
 }
 

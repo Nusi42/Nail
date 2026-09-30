@@ -76,6 +76,18 @@ describe("test host permissions", () => {
     expect((await host.api.mail.thread("t1")).map((m) => m.id)).toEqual(["a", "c"]);
   });
 
+  it("searches message text only with mail.read.body", async () => {
+    const messages = [{ ...msg("a", "work", "2026-01-01"), subject: "Report" }];
+    const headers = createTestHost({ permissions: ["mail.read"], messages });
+    expect((await headers.api.mail.search("report")).map((m) => m.id)).toEqual(["a"]);
+    await expect(headers.api.mail.search("body:otp")).rejects.toMatchObject({ code: "forbidden" });
+    await expect(headers.api.mail.search("x -filename:pdf")).rejects.toMatchObject({
+      code: "forbidden",
+    });
+    const bodies = createTestHost({ permissions: ["mail.read", "mail.read.body"], messages });
+    await expect(bodies.api.mail.search("body:otp")).resolves.toEqual([]);
+  });
+
   it("allows network access only to declared https hosts", async () => {
     const host = createTestHost({
       permissions: ["network:api.example.com", "network:*.example.org"],

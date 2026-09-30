@@ -42,7 +42,7 @@ use pgp::types::{KeyDetails, Password, S2kParams, SecretParams, SigningKey, Stri
 use rand::{Rng, thread_rng};
 use zeroize::Zeroizing;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, Problem, Result};
 use crate::key::{self, KeyInfo, ParsedKey};
 
 /// Unix seconds now.
@@ -425,8 +425,10 @@ pub(crate) fn generate_secret(
         .map_err(Error::crypto)?;
     let mut secret = params.generate(thread_rng())?;
     if let Some(days) = expires_days.filter(|d| *d > 0) {
-        let seconds = u32::try_from(u64::from(days) * 86_400)
-            .map_err(|_| Error::Invalid(format!("expiry of {days} days is too far")))?;
+        let seconds =
+            u32::try_from(u64::from(days) * 86_400).map_err(|_| Problem::ExpiryTooFar {
+                days: u64::from(days),
+            })?;
         set_expiry(&mut secret, seconds)?;
     }
     Ok(secret)
@@ -493,7 +495,10 @@ impl<'a> Keyring<'a> {
     fn stored_openpgp(&self, key_id: &KeyId) -> Result<StoredKey> {
         let key = self.store.get_key(key_id)?;
         if key.data.technology != CryptoTechnology::OpenPgp {
-            return Err(Error::Invalid(format!("{key_id} is not an OpenPGP key")));
+            return Err(Problem::NotOpenPgpKey {
+                key: key_id.to_string(),
+            }
+            .into());
         }
         Ok(key)
     }
@@ -729,7 +734,10 @@ impl<'a> Keyring<'a> {
     ) -> Result<CryptoKey> {
         let email = email.trim();
         if key::email_of_user_id(email).is_none() {
-            return Err(Error::Invalid(format!("not an address: {email:?}")));
+            return Err(Problem::NotAnAddress {
+                address: email.to_owned(),
+            }
+            .into());
         }
         let name = name.trim();
         let user_id = if name.is_empty() {
@@ -742,7 +750,7 @@ impl<'a> Keyring<'a> {
             SecretProtection::Keychain => self.store_secret(&secret, KeySource::Generated)?,
             SecretProtection::Passphrase { passphrase } => {
                 if passphrase.is_empty() {
-                    return Err(Error::Invalid("the passphrase is empty".into()));
+                    return Err(Problem::EmptyPassphrase.into());
                 }
                 protect(&mut secret, &Password::from(passphrase.as_str()), true)?;
                 self.store_secret(&secret, KeySource::Generated)?
@@ -786,7 +794,10 @@ impl<'a> Keyring<'a> {
     ) -> Result<()> {
         let stored = self.stored_openpgp(key_id)?;
         let Some(secret) = &stored.data.secret else {
-            return Err(Error::Invalid(format!("{key_id} has no secret key")));
+            return Err(Problem::NoSecretKey {
+                key: key_id.to_string(),
+            }
+            .into());
         };
         if secret.storage != SecretStorage::Passphrase {
             return Ok(());
@@ -872,9 +883,7 @@ impl<'a> Keyring<'a> {
                 Ok(Some(Zeroizing::new(value)))
             }
             SecretStorage::Passphrase => Ok(self.unlocked.get(&stored.data.fingerprint)),
-            SecretStorage::WindowsStore => Err(Error::Unsupported(
-                "OpenPGP keys are never in the Windows store".into(),
-            )),
+            SecretStorage::WindowsStore => Err(Problem::WindowsStore.into()),
         }
     }
 
@@ -1058,6 +1067,7 @@ fn import_issue(error: &Error) -> LocalizedMessage {
         | Error::NotBase64(detail) => {
             LocalizedMessage::new("pgp-import-unusable").arg("detail", detail.as_str())
         }
+        Error::Problem(problem) => problem.localized(),
         Error::Secrets(_) => LocalizedMessage::new("pgp-import-keychain"),
         Error::Store(_) | Error::Locked { .. } | Error::BadPassphrase => {
             LocalizedMessage::new("pgp-import-store")
@@ -1245,7 +1255,7 @@ mod tests {
             .remove(0);
         assert!(matches!(
             ring.unlock(&bob.id, "x", None),
-            Err(Error::Invalid(_))
+            Err(Error::Problem(Problem::NoSecretKey { .. }))
         ));
     }
 
@@ -1324,7 +1334,7 @@ mod tests {
                 None,
                 &SecretProtection::Keychain
             ),
-            Err(Error::Invalid(_))
+            Err(Error::Problem(Problem::NotAnAddress { .. }))
         ));
         assert!(matches!(
             ring.generate(
@@ -1336,7 +1346,7 @@ mod tests {
                     passphrase: String::new()
                 }
             ),
-            Err(Error::Invalid(_))
+            Err(Error::Problem(Problem::EmptyPassphrase))
         ));
     }
 

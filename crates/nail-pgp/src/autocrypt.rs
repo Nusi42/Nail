@@ -27,7 +27,7 @@ use pgp::types::{Password, StringToKey};
 use rand::{Rng, thread_rng};
 use zeroize::Zeroizing;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, Problem, Result};
 use crate::key::{self, KeyInfo, ParsedKey};
 use crate::keyring::{Keyring, UnlockedKey, effective_trust, rfc3339};
 use crate::mime::{self, Entity};
@@ -64,9 +64,12 @@ impl AutocryptHeader {
             if attribute.is_empty() {
                 continue;
             }
-            let (name, val) = attribute
-                .split_once('=')
-                .ok_or_else(|| Error::Invalid(format!("bad Autocrypt attribute {attribute:?}")))?;
+            let (name, val) =
+                attribute
+                    .split_once('=')
+                    .ok_or_else(|| Problem::AutocryptAttribute {
+                        attribute: attribute.to_owned(),
+                    })?;
             let name = name.trim().to_ascii_lowercase();
             let val = val.trim();
             match name.as_str() {
@@ -83,23 +86,28 @@ impl AutocryptHeader {
                     keydata = Some(
                         base64::engine::general_purpose::STANDARD
                             .decode(compact)
-                            .map_err(|e| Error::Invalid(format!("bad Autocrypt keydata: {e}")))?,
+                            .map_err(|e| Problem::AutocryptKeydata {
+                                detail: e.to_string(),
+                            })?,
                     );
                 }
                 other if other.starts_with('_') => {}
                 other => {
-                    return Err(Error::Invalid(format!(
-                        "unknown critical Autocrypt attribute {other:?}"
-                    )));
+                    return Err(Problem::AutocryptCritical {
+                        attribute: other.to_owned(),
+                    }
+                    .into());
                 }
             }
         }
         let addr = addr
             .filter(|a| key::email_of_user_id(a).is_some())
-            .ok_or_else(|| Error::Invalid("Autocrypt header without addr".into()))?;
+            .ok_or(Problem::AutocryptMissing { attribute: "addr" })?;
         let keydata = keydata
             .filter(|k| !k.is_empty())
-            .ok_or_else(|| Error::Invalid("Autocrypt header without keydata".into()))?;
+            .ok_or(Problem::AutocryptMissing {
+                attribute: "keydata",
+            })?;
         Ok(Self {
             addr,
             prefer_encrypt: prefer,
@@ -152,14 +160,11 @@ impl AutocryptHeader {
         let (keys, issues) = key::parse_keys(&self.keydata);
         match keys.into_iter().next() {
             Some(ParsedKey::Public(k)) => Ok(*k),
-            Some(ParsedKey::Secret(_)) => Err(Error::Invalid(
-                "an Autocrypt header must not carry a secret key".into(),
-            )),
-            None => Err(Error::Crypto(
-                issues
-                    .first()
-                    .map_or_else(|| "no key in keydata".into(), |i| i.1.clone()),
-            )),
+            Some(ParsedKey::Secret(_)) => Err(Problem::AutocryptSecretKey.into()),
+            // rPGP's reason, or Nail's own text when there is none.
+            None => Err(issues.first().map_or(Problem::AutocryptNoKey.into(), |i| {
+                Error::Crypto(i.1.clone())
+            })),
         }
     }
 }
@@ -495,8 +500,7 @@ pub fn create_setup_message(
     passcode: &str,
     text: &SetupMessageText,
 ) -> Result<Vec<u8>> {
-    let passcode = normalize_passcode(passcode)
-        .ok_or_else(|| Error::Invalid("the passcode must be 36 digits".into()))?;
+    let passcode = normalize_passcode(passcode).ok_or(Problem::SetupCodeFormat)?;
     // Unprotected transferable secret key (the passcode protects it).
     let mut secret = key.secret.clone();
     let password = key.password();
@@ -622,11 +626,10 @@ pub fn import_setup_message(
     passcode: &str,
 ) -> Result<(SignedSecretKey, AutocryptPreference)> {
     if !is_setup_message(raw) {
-        return Err(Error::Invalid("not an Autocrypt setup message".into()));
+        return Err(Problem::NotSetupMessage.into());
     }
     let passcode = normalize_passcode(passcode).ok_or(Error::BadPassphrase)?;
-    let payload = setup_payload(raw)
-        .ok_or_else(|| Error::Invalid("the setup message has no encrypted key".into()))?;
+    let payload = setup_payload(raw).ok_or(Problem::SetupWithoutPayload)?;
     let (message, _) =
         Message::from_armor(BufReader::new(payload.as_bytes())).map_err(Error::crypto)?;
     let mut decrypted = message
@@ -651,9 +654,7 @@ pub fn import_setup_message(
     let (keys, _) = key::parse_keys(&plaintext);
     match keys.into_iter().next() {
         Some(ParsedKey::Secret(secret)) => Ok((*secret, prefer)),
-        _ => Err(Error::Crypto(
-            "the setup message holds no secret key".into(),
-        )),
+        _ => Err(Problem::SetupWithoutSecretKey.into()),
     }
 }
 

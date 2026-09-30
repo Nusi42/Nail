@@ -554,7 +554,12 @@ async fn mail_reads_follow_account_grants_and_never_expose_encrypted_bodies() {
         searches[0].1,
         nail_plugins::AccountScope::Only(vec!["work".into()])
     );
-    assert_eq!(searches[0].2, limits().max_search_results);
+    // Body text only where `mail.read.body` meets `mail.read`.
+    assert_eq!(
+        searches[0].2,
+        nail_plugins::AccountScope::Only(vec!["work".into()])
+    );
+    assert_eq!(searches[0].3, limits().max_search_results);
     assert!(fake.log_lines("reader").iter().any(|l| {
         l.localized.as_ref().is_some_and(|m| {
             m.id == "plugin-host-api-denied"

@@ -48,7 +48,7 @@ use crate::gate::{Denied, FetchInit, FetchRefusal, Gate};
 use crate::host::{DialogEntry, Inner};
 use crate::l10n;
 use crate::package::{PackageFiles, is_safe_path};
-use crate::services::{HostLogLine, HttpRequest};
+use crate::services::{AccountScope, HostLogLine, HttpRequest};
 use crate::tree;
 
 const PRELUDE: &str = include_str!("prelude.js");
@@ -160,19 +160,27 @@ pub(crate) struct Launch {
 }
 
 /// The CPU budget of the current turn, checked by the interrupt handler.
+/// A stopped plug-in (disabled, uninstalled, reloaded) is interrupted at
+/// once, whatever budget its turn has left (M2d review).
 struct Budget {
     epoch: Instant,
     /// Nanoseconds since `epoch`; 0 = no turn running.
     deadline: AtomicU64,
     fired: AtomicBool,
+    /// Cleared by the host when it stops the plug-in.
+    alive: Arc<AtomicBool>,
+    /// Set while `deactivate` runs (its own short budget, no API access).
+    deactivating: AtomicBool,
 }
 
 impl Budget {
-    fn new() -> Self {
+    fn new(alive: Arc<AtomicBool>) -> Self {
         Self {
             epoch: Instant::now(),
             deadline: AtomicU64::new(0),
             fired: AtomicBool::new(false),
+            alive,
+            deactivating: AtomicBool::new(false),
         }
     }
 
@@ -199,6 +207,9 @@ impl Budget {
 
     /// The interrupt handler: `true` stops the running code.
     fn check(&self) -> bool {
+        if !self.alive.load(Ordering::Relaxed) && !self.deactivating.load(Ordering::Relaxed) {
+            return true;
+        }
         let deadline = self.deadline.load(Ordering::Relaxed);
         if deadline != 0 && self.now() > deadline {
             self.fired.store(true, Ordering::SeqCst);
@@ -225,6 +236,43 @@ struct Timer {
     client: Option<String>,
 }
 
+/// A token bucket over every log line a plug-in causes (its own lines,
+/// refused calls, host lines about it): a burst of `per_minute` lines,
+/// refilled at `per_minute` per minute.
+struct LogRate {
+    tokens: f64,
+    last: Instant,
+}
+
+impl LogRate {
+    fn new(per_minute: u32) -> Self {
+        Self {
+            tokens: f64::from(per_minute),
+            last: Instant::now(),
+        }
+    }
+
+    /// The time one line takes to refill.
+    fn interval(per_minute: u32) -> Duration {
+        Duration::from_secs_f64(60.0 / f64::from(per_minute.max(1)))
+    }
+
+    /// Takes one line; `false` when the plug-in is over its rate.
+    fn take(&mut self, per_minute: u32) -> bool {
+        let now = Instant::now();
+        let capacity = f64::from(per_minute);
+        let refill = now.duration_since(self.last).as_secs_f64() * capacity / 60.0;
+        self.tokens = (self.tokens + refill).min(capacity);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// The thread's state, shared with the native `hostCall` function.
 struct State {
     id: PluginId,
@@ -249,6 +297,7 @@ struct State {
     activated: bool,
     logs_this_turn: u32,
     dropped_logs: u32,
+    log_rate: LogRate,
     notifications: VecDeque<Instant>,
 }
 
@@ -333,15 +382,39 @@ impl State {
         message: impl Into<String>,
         localized: Option<LocalizedMessage>,
     ) {
-        if source == PluginLogSource::Plugin {
-            self.logs_this_turn += 1;
-            if self.logs_this_turn > self.inner.limits.max_log_lines_per_call {
-                self.dropped_logs += 1;
-                return;
-            }
+        // Every line the plug-in causes counts: its own, refused calls
+        // (`api`) and host lines about what it did (M2d review: a loop of
+        // refused calls wrote tens of thousands of lines per turn).
+        self.logs_this_turn += 1;
+        let limits = &self.inner.limits;
+        if self.logs_this_turn > limits.max_log_lines_per_call
+            || !self.log_rate.take(limits.max_log_lines_per_minute)
+        {
+            self.dropped_logs = self.dropped_logs.saturating_add(1);
+            return;
         }
         self.inner
             .log(host_line(&self.id, level, source, message, localized));
+    }
+
+    /// At the end of a turn: one line saying how many were dropped, once
+    /// the rate allows it (until then the count grows).
+    fn log_dropped(&mut self) {
+        if self.dropped_logs == 0
+            || !self
+                .log_rate
+                .take(self.inner.limits.max_log_lines_per_minute)
+        {
+            return;
+        }
+        let dropped = std::mem::take(&mut self.dropped_logs);
+        self.inner.log(host_line(
+            &self.id,
+            PluginLogLevel::Warn,
+            PluginLogSource::Host,
+            format!("{dropped} log lines dropped"),
+            Some(LocalizedMessage::new(l10n::LOG_DROPPED).arg("count", u64::from(dropped))),
+        ));
     }
 
     fn deny(&mut self, denied: &Denied) -> Answer {
@@ -457,6 +530,11 @@ fn host_call(state: &Rc<RefCell<State>>, op: &str, payload: &str) -> String {
 }
 
 fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answer, ApiError> {
+    // A stopped plug-in (its `deactivate`, or code still running when it
+    // was stopped) may only log: no mail, storage, network or UI.
+    if !matches!(op, "log" | "fatal" | "clearTimer") {
+        s.require_alive()?;
+    }
     let services = Arc::clone(&s.inner.services);
     let plugin = s.id.clone();
     Ok(match op {
@@ -620,6 +698,11 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 Ok(scope) => scope,
                 Err(d) => return Ok(s.deny(&d)),
             };
+            // Where message text may be searched (`mail.read.body`).
+            let body_scope = s
+                .gate()
+                .body_scope(call, &s.expand())
+                .unwrap_or_else(|_| AccountScope::Only(Vec::new()));
             let query = str_field(payload, "query")?.to_owned();
             if query.len() > 2000 {
                 return Err(invalid("the query is too long"));
@@ -631,7 +714,9 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 .map_or(50, |l| u32::try_from(l).unwrap_or(max))
                 .clamp(1, max);
             s.spawn(call, payload, async move {
-                let found = services.mail_search(query, scope.clone(), limit).await?;
+                let found = services
+                    .mail_search(query, scope.clone(), body_scope, limit)
+                    .await?;
                 let found: Vec<_> = found
                     .into_iter()
                     .filter(|m| scope.contains(&m.account_id))
@@ -1120,18 +1205,19 @@ impl Drop for Sandbox {
 
 impl Sandbox {
     fn new(state: Rc<RefCell<State>>, info: String) -> Result<Self, String> {
-        let (limits, files, main) = {
+        let (limits, files, main, alive) = {
             let s = state.borrow();
             (
                 s.inner.limits.clone(),
                 s.files.clone(),
                 s.manifest.main.clone(),
+                Arc::clone(&s.alive),
             )
         };
         let rt = Runtime::new().map_err(|e| e.to_string())?;
         rt.set_memory_limit(limits.memory_bytes);
         rt.set_max_stack_size(limits.stack_bytes);
-        let budget = Arc::new(Budget::new());
+        let budget = Arc::new(Budget::new(alive));
         let b = Arc::clone(&budget);
         rt.set_interrupt_handler(Some(Box::new(move || b.check())));
         rt.set_loader(
@@ -1253,18 +1339,11 @@ impl Sandbox {
                 ),
             );
         }
-        let (fatal, dropped) = {
+        let fatal = {
             let mut s = self.state.borrow_mut();
-            (s.fatal.take(), std::mem::take(&mut s.dropped_logs))
+            s.log_dropped();
+            s.fatal.take()
         };
-        if dropped > 0 {
-            self.state.borrow_mut().log(
-                PluginLogLevel::Warn,
-                PluginLogSource::Host,
-                format!("{dropped} log lines dropped"),
-                Some(LocalizedMessage::new(l10n::LOG_DROPPED).arg("count", dropped)),
-            );
-        }
         if fired {
             return Err(Crash::cpu(budget));
         }
@@ -1282,6 +1361,20 @@ impl Sandbox {
         payload: serde_json::Value,
     ) -> Result<(), Crash> {
         self.turn(client, budget, Call::Dispatch(kind, payload.to_string()))
+    }
+
+    /// The plug-in was stopped: `deactivate` runs (short budget; the API
+    /// refuses everything but logging) and the thread ends. Whatever else
+    /// is still queued (resolved calls, timers, commands) never runs.
+    fn deactivate(&self, budget: Duration) -> ThreadEnd {
+        self.budget.deactivating.store(true, Ordering::SeqCst);
+        let _ = self.dispatch(
+            None,
+            budget.min(Duration::from_millis(250)),
+            "deactivate",
+            json!({}),
+        );
+        ThreadEnd::Requested
     }
 }
 
@@ -1330,6 +1423,7 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         activated: false,
         logs_this_turn: 0,
         dropped_logs: 0,
+        log_rate: LogRate::new(limits.max_log_lines_per_minute),
         notifications: VecDeque::new(),
     }));
     let mut activated = Some(activated);
@@ -1348,7 +1442,11 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
     if let Err(crash) = sandbox.turn(None, limits.activation_budget, Call::Load(main)) {
         return fail(&mut activated, crash);
     }
+    let stopped = || !state.borrow().alive.load(Ordering::SeqCst);
     loop {
+        if stopped() {
+            return sandbox.deactivate(limits.call_budget);
+        }
         if activated.is_some() && state.borrow().activated {
             inner.activated(&id, generation);
             if let Some(reply) = activated.take() {
@@ -1361,7 +1459,12 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
             limits.call_budget
         };
         let next_timer = state.borrow().timers.values().map(|t| t.due).min();
-        let message = match next_timer {
+        // Dropped log lines are reported once the rate allows a line, even
+        // when no further turn comes.
+        let flush = (state.borrow().dropped_logs > 0)
+            .then(|| Instant::now() + LogRate::interval(limits.max_log_lines_per_minute));
+        let wake = next_timer.into_iter().chain(flush).min();
+        let message = match wake {
             Some(due) => {
                 let now = Instant::now();
                 if due <= now {
@@ -1379,20 +1482,22 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
                 Err(_) => return ThreadEnd::Requested,
             },
         };
+        if stopped() {
+            return sandbox.deactivate(limits.call_budget);
+        }
         let outcome = match message {
-            None => fire_timers(&sandbox, &state, budget),
-            Some(ThreadMsg::Stop) => {
-                let _ = sandbox.dispatch(
-                    None,
-                    limits.call_budget.min(Duration::from_millis(250)),
-                    "deactivate",
-                    json!({}),
-                );
-                return ThreadEnd::Requested;
+            None => {
+                state.borrow_mut().log_dropped();
+                fire_timers(&sandbox, &state, budget)
             }
+            Some(ThreadMsg::Stop) => return sandbox.deactivate(limits.call_budget),
             Some(message) => handle(&sandbox, &state, message, budget),
         };
         if let Err(crash) = outcome {
+            // Interrupted because it was stopped: not a crash.
+            if stopped() {
+                return sandbox.deactivate(limits.call_budget);
+            }
             return fail(&mut activated, crash);
         }
     }
@@ -1616,7 +1721,7 @@ mod tests {
 
     #[test]
     fn budgets_fire_only_when_armed_and_late() {
-        let budget = Budget::new();
+        let budget = Budget::new(Arc::new(AtomicBool::new(true)));
         assert!(!budget.check());
         budget.arm(Duration::from_secs(60));
         assert!(!budget.check());
@@ -1626,6 +1731,34 @@ mod tests {
         assert!(budget.check());
         assert!(budget.disarm());
         assert!(!budget.check());
+    }
+
+    /// M2d review: a stopped plug-in is interrupted whatever budget is
+    /// left, except while its `deactivate` runs.
+    #[test]
+    fn a_stopped_plugin_is_interrupted_except_in_deactivate() {
+        let alive = Arc::new(AtomicBool::new(true));
+        let budget = Budget::new(Arc::clone(&alive));
+        budget.arm(Duration::from_secs(60));
+        assert!(!budget.check());
+        alive.store(false, Ordering::SeqCst);
+        assert!(budget.check());
+        assert!(!budget.fired(), "not a CPU budget crash");
+        budget.deactivating.store(true, Ordering::SeqCst);
+        assert!(!budget.check());
+    }
+
+    #[test]
+    fn the_log_rate_allows_a_burst_then_refills() {
+        let mut rate = LogRate::new(3);
+        assert!(rate.take(3));
+        assert!(rate.take(3));
+        assert!(rate.take(3));
+        assert!(!rate.take(3));
+        // 3 a minute = one every 20 s.
+        rate.last -= Duration::from_secs(21);
+        assert!(rate.take(3));
+        assert!(!rate.take(3));
     }
 
     #[test]

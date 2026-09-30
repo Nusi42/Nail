@@ -31,7 +31,7 @@ pub mod read;
 #[cfg(test)]
 mod testutil;
 
-pub use error::{Error, Result};
+pub use error::{Error, Problem, Result};
 
 use nail_api::security::CryptoTechnology;
 

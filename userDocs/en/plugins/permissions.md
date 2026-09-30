@@ -7,8 +7,8 @@ the error code `forbidden` and is written to the plug-in's log.
 
 | Permission | What it allows | API |
 | --- | --- | --- |
-| `mail.read` | Reading your accounts, folders and message headers: subject, sender, recipients, date, flags, tags. Not the message text. Can be limited to some accounts. | `nail.mail.get`, `nail.mail.search`, `nail.mail.thread` |
-| `mail.read.body` | Reading the text of messages too (plain text, cleaned-up HTML, attachment names and sizes, never attachment content). Needs `mail.read`. Never the content of end-to-end encrypted mail. Can be limited to some accounts. | `nail.mail.getBody` |
+| `mail.read` | Reading your accounts, folders and message headers: subject, sender, recipients, date, flags, tags. Not the message text: searches look at these header fields only. Can be limited to some accounts. | `nail.mail.get`, `nail.mail.search`, `nail.mail.thread` |
+| `mail.read.body` | Reading the text of messages too (plain text, cleaned-up HTML, attachment names and sizes, never attachment content), and searching it. Needs `mail.read`. Never the content of end-to-end encrypted mail: while you let Nail index decrypted mail for searching, plug-in searches leave encrypted mail out. Can be limited to some accounts. | `nail.mail.getBody`, `nail.mail.search` |
 | `calendar.read` | Reserved for calendars; it allows nothing yet. | — |
 | `ui.dialogs` | Showing dialogs. | `nail.ui.showDialog` |
 | `notifications` | Showing notifications, in Nail and (if the plug-in asks) as system notifications, which follow your quiet hours. | `nail.ui.notify` |

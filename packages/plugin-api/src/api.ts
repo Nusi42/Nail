@@ -73,6 +73,11 @@ export interface NailMailApi {
   /**
    * Messages matching a query of Nail's search language
    * (`from:ada has:attachment`), newest first, in the granted accounts.
+   * Message text is searched only where `mail.read.body` is granted:
+   * elsewhere free text matches sender, recipients and subject, and a
+   * query with `body:` or `filename:` rejects with `forbidden` when no
+   * account allows it. End-to-end encrypted mail is left out while Nail
+   * indexes its decrypted text.
    */
   search(query: string, options?: PluginMailSearchOptions): Promise<PluginMessage[]>;
   /** The messages of a thread, oldest first. */

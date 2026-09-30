@@ -101,7 +101,7 @@ The SDK's `nail` object (see `NailApi` for the host side).
 | --- | --- | --- |
 | `get` | `(id: MessageId) => Promise<PluginMessage>` | One message's headers. |
 | `getBody` | `(id: MessageId) => Promise<PluginMessageBody>` | One message's body. Always rejects with `forbidden` for end-to-end encrypted mail. |
-| `search` | `(query: string, options?: PluginMailSearchOptions) => Promise<PluginMessage[]>` | Messages matching a query of Nail's search language (`from:ada has:attachment`), newest first, in the granted accounts. |
+| `search` | `(query: string, options?: PluginMailSearchOptions) => Promise<PluginMessage[]>` | Messages matching a query of Nail's search language (`from:ada has:attachment`), newest first, in the granted accounts. Message text is searched only where `mail.read.body` is granted: elsewhere free text matches sender, recipients and subject, and a query with `body:` or `filename:` rejects with `forbidden` when no account allows it. End-to-end encrypted mail is left out while Nail indexes its decrypted text. |
 | `thread` | `(threadId: ThreadId) => Promise<PluginMessage[]>` | The messages of a thread, oldest first. |
 
 ### `PluginMailSearchOptions`

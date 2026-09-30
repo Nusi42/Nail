@@ -116,7 +116,8 @@ crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, a
 crates/nail-pgp        OpenPGP (rPGP): keyring (S2K secrets: passphrase or keychain:nail/openpgp/<FPR>),
                        PGP/MIME sign/encrypt/decrypt/verify, inline read, header protection, Autocrypt
                        L1, WKD + keys.openpgp.org via injected HttpClient (ADR 0030); Error::localized()
-                       (`pgp-*` in core-crypto.ftl), Error::NotBase64 (ADR 0054)
+                       (`pgp-*` in core-crypto.ftl), Error::NotBase64 (ADR 0054), Error::Problem
+                       (Nail's own `pgp-problem-*` texts; ADR 0056)
 crates/nail-smime      S/MIME (RustCrypto cms/x509-cert): sign/encrypt/verify/decrypt, chain validation
                        (TrustAnchors), PKCS#12, keyring, Windows cert store + CNG keys (ADR 0031)
 crates/nail-vault      encryption at rest: sealed format (XChaCha20-Poly1305), data key in the keychain,
@@ -295,6 +296,12 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `plugin_http.rs` (nail-proxy rules); placements go through `nail_config::placement_layout` and the
   merge dialog; `RunPluginCommand` / `PluginUiAction` answer `Done` at once. Core tests of plug-ins
   need `#[tokio::test(flavor = "multi_thread")]` (plug-in threads call back into the runtime).
+- M2d review fixes (ADR 0056): plug-in searches are header-only outside `mail.read.body`
+  (`PluginServices::mail_search` gets a `body_scope`) and drop encrypted mail while the index holds
+  decrypted text; a stopped plug-in is interrupted at once and its API refuses all but logging;
+  every log line a plug-in causes counts per call and per minute (`max_log_lines_per_minute`), the
+  core's log queue is bounded. `nail-pgp` texts Nail writes itself are `Error::Problem`
+  (`pgp-problem-*`); `detail` arguments stay library texts only.
 - M2d contract: ADR 0050 (`nail_api::plugins`: manifest, permissions `mail.read`, `mail.read.body`,
   `calendar.read` (placeholder), `ui.dialogs`, `notifications`, `storage`, `network:<host>`; component
   trees; plug-in admin / runtime requests and events; plug-in-facing JSON is camelCase, protocol

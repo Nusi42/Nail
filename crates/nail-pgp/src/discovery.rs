@@ -14,7 +14,7 @@ use nail_api::security::{
 };
 use sha1::Digest;
 
-use crate::error::{Error, Result};
+use crate::error::{Problem, Result};
 use crate::key::{self, KeyInfo};
 use crate::keyring::{Keyring, rfc3339, to_crypto_key};
 
@@ -90,13 +90,15 @@ fn split_address(email: &str) -> Result<(&str, String)> {
     let (local, domain) = email
         .rsplit_once('@')
         .filter(|(l, d)| !l.is_empty() && !d.is_empty())
-        .ok_or_else(|| Error::Invalid(format!("not an address: {email:?}")))?;
+        .ok_or_else(|| Problem::NotAnAddress {
+            address: email.to_owned(),
+        })?;
     let domain = domain.to_ascii_lowercase();
     if !domain
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
     {
-        return Err(Error::Invalid(format!("unsupported domain {domain:?}")));
+        return Err(Problem::UnsupportedDomain { domain }.into());
     }
     Ok((local, domain))
 }
@@ -264,7 +266,7 @@ pub fn import_candidate(
         .into_iter()
         .next()
         .map(|k| k.public())
-        .ok_or_else(|| Error::Crypto("the candidate holds no key".into()))?;
+        .ok_or(Problem::CandidateWithoutKey)?;
     let source = match candidate.source {
         KeyLookupSource::Wkd => KeySource::Wkd,
         KeyLookupSource::KeysOpenpgpOrg => KeySource::Keyserver,
@@ -337,6 +339,24 @@ mod tests {
 
     const NOW: i64 = 1_790_000_000;
     const BOTH: [KeyLookupSource; 2] = [KeyLookupSource::Wkd, KeyLookupSource::KeysOpenpgpOrg];
+
+    /// M2d review: these used to reach the UI as English `detail` text of
+    /// "The OpenPGP data is not valid".
+    #[test]
+    fn bad_addresses_are_problems_with_their_own_text() {
+        for (email, id) in [
+            ("@example.org", "pgp-problem-not-an-address"),
+            ("ada@", "pgp-problem-not-an-address"),
+            ("a@münchen.de", "pgp-problem-unsupported-domain"),
+        ] {
+            let err = wkd_urls(email).unwrap_err();
+            assert!(matches!(err, crate::Error::Problem(_)), "{email}: {err:?}");
+            let localized = err.localized().unwrap();
+            assert_eq!(localized.id, id, "{email}");
+            assert!(!localized.args.contains_key("detail"), "{email}");
+            assert!(keys_openpgp_org_url(email).is_err());
+        }
+    }
 
     #[test]
     fn zbase32_and_wkd_urls_match_the_draft_example() {

@@ -19,6 +19,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
+use nail_api::plugins::PluginPermission;
 use nail_api::plugins::admin::MAX_PACKAGE_BYTES;
 use nail_api::plugins::{
     PluginAttachment, PluginManifest, PluginMessage, PluginMessageBody, PluginPackageSource,
@@ -28,10 +29,12 @@ use nail_api::{
     AccountId, ApiError, ErrorCode, Event, LocalizedMessage, MessageArg, MessageId, MessageSummary,
     PluginId, Request, Response, SearchQuery, ThreadId,
 };
+use nail_plugins::gate::Denied;
 use nail_plugins::{
     AccountScope, BoxFuture, HostLimits, HostLogLine, HttpRequest, HttpResponse, PackageFiles,
     PackageStore, PluginCatalogs, PluginHost, PluginServices, PluginSpec, ServiceResult,
 };
+use nail_search::query::{Query, Term, TermKind, TextField};
 use nail_store::{PluginLogLine, PluginRecord};
 use serde_json::Value;
 
@@ -41,6 +44,125 @@ use crate::service::{Inner, Service, lock};
 
 /// Most messages one `nail.mail.search` returns.
 const MAX_SEARCH: u32 = 500;
+
+/// Most index hits one `nail.mail.search` looks at per account while it
+/// leaves out encrypted messages.
+const MAX_SEARCH_SCAN: u32 = 5000;
+
+/// Log lines waiting for the writer; more are dropped and counted.
+const LOG_QUEUE: usize = 4096;
+
+/// The query with free text limited to header fields (sender,
+/// recipients, subject), for accounts whose message text the plug-in may
+/// not read. `None` when it names message text itself (`body:`,
+/// `filename:`).
+fn header_only(query: &Query) -> Option<Query> {
+    Some(match query {
+        Query::All => Query::All,
+        Query::Term(term) => match &term.kind {
+            TermKind::Text {
+                field: TextField::Any,
+                value,
+                quoted,
+            } => Query::Or(
+                [
+                    TextField::From,
+                    TextField::To,
+                    TextField::Cc,
+                    TextField::Subject,
+                ]
+                .into_iter()
+                .map(|field| {
+                    Query::Term(Term {
+                        kind: TermKind::Text {
+                            field,
+                            value: value.clone(),
+                            quoted: *quoted,
+                        },
+                        span: term.span,
+                    })
+                })
+                .collect(),
+            ),
+            TermKind::Text {
+                field: TextField::Body | TextField::Filename,
+                ..
+            } => return None,
+            _ => query.clone(),
+        },
+        Query::Not(inner) => Query::Not(Box::new(header_only(inner)?)),
+        Query::And(items) => Query::And(items.iter().map(header_only).collect::<Option<_>>()?),
+        Query::Or(items) => Query::Or(items.iter().map(header_only).collect::<Option<_>>()?),
+    })
+}
+
+/// Up to `limit` hits of `text` in `account` (or everywhere), leaving out
+/// end-to-end encrypted messages when `hide_encrypted` (scanning further
+/// pages so that hidden hits do not shorten the answer).
+async fn search_part(
+    service: &Service,
+    text: &str,
+    account: Option<AccountId>,
+    limit: u32,
+    hide_encrypted: bool,
+) -> ServiceResult<Vec<MessageSummary>> {
+    let mut found = Vec::new();
+    let mut offset = 0u32;
+    loop {
+        let query = SearchQuery {
+            text: text.to_owned(),
+            account_id: account.clone(),
+            folder_id: None,
+            offset,
+            limit,
+            sort: nail_api::search::SearchSort::Date,
+        };
+        let (total, hits) = match service
+            .search_with(query, crate::search::ServerSearchMode::Off)
+            .await
+            .map_err(api)?
+        {
+            Response::SearchResults { total, hits, .. } => (total, hits),
+            Response::InvalidQuery { error } => {
+                return Err(ApiError::invalid_request(format!(
+                    "invalid search: {}",
+                    error.message
+                )));
+            }
+            _ => return Err(ApiError::internal("unexpected answer to Search")),
+        };
+        let returned = u32::try_from(hits.len()).unwrap_or(u32::MAX);
+        let messages: Vec<MessageSummary> = hits.into_iter().map(|h| h.message).collect();
+        if hide_encrypted {
+            let visible = service
+                .blocking(move |s| {
+                    let mut visible = Vec::with_capacity(messages.len());
+                    for m in messages {
+                        if !s.message_is_encrypted(&m.id)? {
+                            visible.push(m);
+                        }
+                    }
+                    Ok(visible)
+                })
+                .await
+                .map_err(api)?;
+            found.extend(visible);
+        } else {
+            found.extend(messages);
+        }
+        offset = offset.saturating_add(returned);
+        if !hide_encrypted
+            || found.len() >= limit as usize
+            || returned == 0
+            || offset >= total
+            || offset >= MAX_SEARCH_SCAN
+        {
+            break;
+        }
+    }
+    found.truncate(limit as usize);
+    Ok(found)
+}
 
 /// A plug-in's catalogs with what they were loaded from (package hash or
 /// dev folder).
@@ -396,17 +518,36 @@ pub(crate) fn plugin_message(summary: &MessageSummary, encrypted: bool) -> Plugi
 pub(crate) struct CoreServices {
     service: Weak<Inner>,
     handle: tokio::runtime::Handle,
-    /// Log lines in order to the writer task.
-    logs: tokio::sync::mpsc::UnboundedSender<HostLogLine>,
+    /// Log lines in order to the writer task (bounded: a flood of lines
+    /// is dropped and counted instead of growing without limit).
+    logs: tokio::sync::mpsc::Sender<HostLogLine>,
+    /// Lines dropped because the queue was full, per plug-in.
+    dropped: Arc<Mutex<HashMap<PluginId, u64>>>,
 }
 
 impl CoreServices {
     /// The services of `service` and the task that stores log lines.
     fn start(service: &Service, handle: tokio::runtime::Handle) -> Self {
-        let (logs, mut rx) = tokio::sync::mpsc::unbounded_channel::<HostLogLine>();
+        let (logs, mut rx) = tokio::sync::mpsc::channel::<HostLogLine>(LOG_QUEUE);
+        let dropped: Arc<Mutex<HashMap<PluginId, u64>>> = Arc::default();
+        let counted = Arc::clone(&dropped);
         let weak = Arc::downgrade(&service.inner);
         handle.spawn(async move {
-            while let Some(line) = rx.recv().await {
+            let mut pending: std::collections::VecDeque<HostLogLine> =
+                std::collections::VecDeque::new();
+            loop {
+                // What was dropped is reported (a host line per plug-in)
+                // as soon as the writer has room again.
+                if pending.is_empty() {
+                    pending.extend(dropped_lines(&counted));
+                }
+                let line = match pending.pop_front() {
+                    Some(line) => line,
+                    None => match rx.recv().await {
+                        Some(line) => line,
+                        None => break,
+                    },
+                };
                 let Some(inner) = weak.upgrade() else {
                     break;
                 };
@@ -438,6 +579,7 @@ impl CoreServices {
             service: Arc::downgrade(&service.inner),
             handle,
             logs,
+            dropped,
         }
     }
 
@@ -447,6 +589,42 @@ impl CoreServices {
             .map(|inner| Service { inner })
             .ok_or_else(|| ApiError::new(ErrorCode::Unavailable, "Nail is shutting down"))
     }
+}
+
+/// Queues a log line for the writer without blocking; a full queue drops
+/// it and counts it for its plug-in (M2d review: an unbounded queue let a
+/// flood of lines grow the core's memory).
+fn enqueue_log(
+    logs: &tokio::sync::mpsc::Sender<HostLogLine>,
+    dropped: &Mutex<HashMap<PluginId, u64>>,
+    line: HostLogLine,
+) {
+    use tokio::sync::mpsc::error::TrySendError;
+    if let Err(TrySendError::Full(line)) = logs.try_send(line) {
+        *lock(dropped).entry(line.plugin_id).or_default() += 1;
+    }
+}
+
+/// Host lines for log lines dropped because the writer queue was full.
+fn dropped_lines(dropped: &Mutex<HashMap<PluginId, u64>>) -> Vec<HostLogLine> {
+    let taken = std::mem::take(&mut *lock(dropped));
+    let at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or_default();
+    taken
+        .into_iter()
+        .map(|(plugin_id, count)| HostLogLine {
+            plugin_id,
+            at_ms,
+            level: nail_api::plugins::PluginLogLevel::Warn,
+            source: nail_api::plugins::PluginLogSource::Host,
+            message: format!("{count} log lines dropped"),
+            localized: Some(
+                LocalizedMessage::new(nail_plugins::l10n::LOG_DROPPED).arg("count", count),
+            ),
+        })
+        .collect()
 }
 
 fn api(err: crate::error::CoreError) -> ApiError {
@@ -602,42 +780,56 @@ impl PluginServices for CoreServices {
         &self,
         query: String,
         scope: AccountScope,
+        body_scope: AccountScope,
         limit: u32,
     ) -> BoxFuture<'static, ServiceResult<Vec<PluginMessage>>> {
         let service = self.service();
         Box::pin(async move {
             let service = service?;
             let limit = limit.clamp(1, MAX_SEARCH);
-            let accounts: Vec<Option<AccountId>> = match &scope {
-                AccountScope::All => vec![None],
-                AccountScope::Only(accounts) => accounts.iter().cloned().map(Some).collect(),
-            };
-            let mut summaries: Vec<MessageSummary> = Vec::new();
-            for account in accounts {
-                let query = SearchQuery {
-                    text: query.clone(),
-                    account_id: account,
-                    folder_id: None,
-                    offset: 0,
-                    limit,
-                    sort: nail_api::search::SearchSort::Date,
-                };
-                match service
-                    .search_with(query, crate::search::ServerSearchMode::Off)
-                    .await
-                    .map_err(api)?
-                {
-                    Response::SearchResults { hits, .. } => {
-                        summaries.extend(hits.into_iter().map(|h| h.message));
-                    }
-                    Response::InvalidQuery { error } => {
-                        return Err(ApiError::invalid_request(format!(
-                            "invalid search: {}",
-                            error.message
-                        )));
-                    }
-                    _ => return Err(ApiError::internal("unexpected answer to Search")),
+            let parsed = nail_search::parse_query(&query)
+                .map_err(|e| ApiError::invalid_request(format!("invalid search: {}", e.message)))?;
+            // Message text only where `mail.read.body` is granted; header
+            // fields elsewhere (M2d review: `body:` probing).
+            let headers = header_only(&parsed).map(|q| q.to_string());
+            let parts: Vec<(Option<AccountId>, String)> = match (&scope, &body_scope) {
+                (AccountScope::All, AccountScope::All) => vec![(None, query.clone())],
+                _ => {
+                    let accounts = match &scope {
+                        AccountScope::All => service.all_members().await.map_err(api)?,
+                        AccountScope::Only(accounts) => accounts.clone(),
+                    };
+                    accounts
+                        .into_iter()
+                        .filter_map(|account| {
+                            let text = if body_scope.contains(&account) {
+                                query.clone()
+                            } else {
+                                headers.clone()?
+                            };
+                            Some((Some(account), text))
+                        })
+                        .collect()
                 }
+            };
+            if parts.is_empty() && headers.is_none() {
+                return Err(
+                    Denied::new("nail.mail.search", PluginPermission::MailReadBody).to_api_error(),
+                );
+            }
+            // While the index holds decrypted text of encrypted mail, such
+            // mail is never found (like remote sessions without
+            // `encrypted`; ADR 0055: decrypted text never reaches a
+            // plug-in).
+            let hide_encrypted = !crate::security::security_settings(&service)
+                .await
+                .map_err(api)?
+                .index_decrypted
+                .is_empty();
+            let mut summaries: Vec<MessageSummary> = Vec::new();
+            for (account, text) in parts {
+                summaries
+                    .extend(search_part(&service, &text, account, limit, hide_encrypted).await?);
             }
             summaries.retain(|m| scope.contains(&m.account_id));
             summaries.sort_by(|a, b| b.date.cmp(&a.date));
@@ -867,7 +1059,7 @@ impl PluginServices for CoreServices {
     }
 
     fn log(&self, line: HostLogLine) {
-        let _ = self.logs.send(line);
+        enqueue_log(&self.logs, &self.dropped, line);
     }
 }
 
@@ -922,20 +1114,91 @@ impl Service {
     }
 
     /// Title and body of the OS notification for a plug-in's `system`
-    /// notification (desktop shell): its texts, and the body names the
-    /// plug-in ("from Follow-up"), so it cannot pose as Nail's own.
+    /// notification (desktop shell). The plug-in's name comes first, in
+    /// the title ("Follow-up: Due today"), and line breaks of the
+    /// plug-in's texts are collapsed, so that its text cannot push the
+    /// attribution out of view and pose as Nail's own (M2d review).
     pub fn plugin_notification_texts(
         &self,
         notification: &nail_api::plugins::PluginNotification,
     ) -> (String, String) {
-        let from = self.render_localized(
-            &LocalizedMessage::new("plugin-dialog-from")
-                .arg("plugin", self.plugin_display_name(&notification.plugin_id)),
+        let one_line = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let title = self.render_localized(
+            &LocalizedMessage::new("plugin-notification-os-title")
+                .arg("plugin", self.plugin_display_name(&notification.plugin_id))
+                .arg("title", one_line(&notification.spec.title)),
         );
-        let body = match &notification.spec.body {
-            Some(body) if !body.is_empty() => format!("{body}\n{from}"),
-            _ => from,
+        let body = notification
+            .spec
+            .body
+            .as_deref()
+            .map(one_line)
+            .unwrap_or_default();
+        (title, body)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rewrite(text: &str) -> Option<String> {
+        header_only(&nail_search::parse_query(text).unwrap()).map(|q| q.to_string())
+    }
+
+    #[test]
+    fn a_full_log_queue_drops_and_counts_lines() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(2);
+        let dropped = Mutex::new(HashMap::new());
+        let line = |plugin: &str| HostLogLine {
+            plugin_id: PluginId::new(plugin),
+            at_ms: 1,
+            level: nail_api::plugins::PluginLogLevel::Info,
+            source: nail_api::plugins::PluginLogSource::Api,
+            message: "x".into(),
+            localized: None,
         };
-        (notification.spec.title.clone(), body)
+        for _ in 0..5 {
+            enqueue_log(&tx, &dropped, line("a"));
+        }
+        enqueue_log(&tx, &dropped, line("b"));
+        assert_eq!(rx.try_recv().unwrap().plugin_id.as_str(), "a");
+        assert_eq!(rx.try_recv().unwrap().plugin_id.as_str(), "a");
+        assert!(rx.try_recv().is_err());
+        let mut reported = dropped_lines(&dropped);
+        reported.sort_by(|x, y| x.plugin_id.as_str().cmp(y.plugin_id.as_str()));
+        let counts: Vec<(String, String)> = reported
+            .iter()
+            .map(|l| {
+                let m = l.localized.as_ref().unwrap();
+                assert_eq!(m.id, nail_plugins::l10n::LOG_DROPPED);
+                (l.plugin_id.to_string(), m.args["count"].to_string())
+            })
+            .collect();
+        assert_eq!(counts, [("a".into(), "3".into()), ("b".into(), "1".into())]);
+        assert!(dropped_lines(&dropped).is_empty(), "counted once");
+    }
+
+    #[test]
+    fn header_only_queries_never_look_at_message_text() {
+        assert_eq!(
+            rewrite("invoice").as_deref(),
+            Some("from:invoice OR to:invoice OR cc:invoice OR subject:invoice")
+        );
+        assert_eq!(
+            rewrite("from:ada -\"due date\" is:unread").as_deref(),
+            Some(
+                "from:ada NOT (from:\"due date\" OR to:\"due date\" OR cc:\"due date\" OR subject:\"due date\") is:unread"
+            )
+        );
+        assert_eq!(rewrite("").as_deref(), Some(""));
+        assert_eq!(rewrite("body:otp"), None);
+        assert_eq!(rewrite("subject:x OR NOT filename:pdf"), None);
+        // The rewritten text parses again (OR groups are flattened).
+        let text = rewrite("a (b OR subject:c) tag:x").unwrap();
+        assert_eq!(
+            nail_search::parse_query(&text).unwrap().to_string(),
+            "(from:a OR to:a OR cc:a OR subject:a) (from:b OR to:b OR cc:b OR subject:b OR subject:c) tag:x"
+        );
     }
 }
