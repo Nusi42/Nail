@@ -83,11 +83,26 @@ pub trait JunkStore {
     fn untrain(&self, account: &AccountId, message_key: &str) -> Result<bool, Self::Error>;
 }
 
-/// The key a message is trained under: its `Message-ID` (so a copy in
-/// another folder is the same message), else `local:<id>`.
-pub fn message_key(rfc_message_id: Option<&str>, id: &MessageId) -> String {
+/// The key a message is trained under: its `Message-ID` plus a digest of
+/// its tokens (so a copy in another folder is the same message, while
+/// another message that reuses the `Message-ID` — the sender chooses it —
+/// is trained on its own and never untrains the first), else
+/// `local:<id>`.
+pub fn message_key(rfc_message_id: Option<&str>, id: &MessageId, tokens: &[String]) -> String {
+    use sha2::{Digest, Sha256};
     match rfc_message_id.map(str::trim).filter(|m| !m.is_empty()) {
-        Some(m) => m.trim_matches(|c| c == '<' || c == '>').to_owned(),
+        Some(m) => {
+            let mut unique: Vec<&str> = tokens.iter().map(String::as_str).collect();
+            unique.sort_unstable();
+            unique.dedup();
+            let mut hash = Sha256::new();
+            for token in unique {
+                hash.update(token.as_bytes());
+                hash.update([0]);
+            }
+            let digest = hex::encode(&hash.finalize()[..8]);
+            format!("{}#{digest}", m.trim_matches(|c| c == '<' || c == '>'))
+        }
         None => format!("local:{id}"),
     }
 }
@@ -877,9 +892,24 @@ mod tests {
 
     #[test]
     fn message_keys() {
-        assert_eq!(message_key(Some(" <a@b> "), &"m1".into()), "a@b");
-        assert_eq!(message_key(Some(""), &"m1".into()), "local:m1");
-        assert_eq!(message_key(None, &"m1".into()), "local:m1");
+        let t = kw(&["cheap", "pills", "cheap"]);
+        let key = message_key(Some(" <a@b> "), &"m1".into(), &t);
+        assert!(
+            key.starts_with("a@b#") && key.len() == "a@b#".len() + 16,
+            "{key}"
+        );
+        // A copy (same content, other id, token order) has the same key.
+        assert_eq!(
+            message_key(Some("<a@b>"), &"m2".into(), &kw(&["pills", "cheap"])),
+            key
+        );
+        // Another message reusing the Message-ID gets its own key.
+        assert_ne!(
+            message_key(Some("<a@b>"), &"m3".into(), &kw(&["meeting", "notes"])),
+            key
+        );
+        assert_eq!(message_key(Some(""), &"m1".into(), &t), "local:m1");
+        assert_eq!(message_key(None, &"m1".into(), &t), "local:m1");
     }
 
     fn kw(list: &[&str]) -> Vec<String> {

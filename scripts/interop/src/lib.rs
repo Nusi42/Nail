@@ -8,9 +8,10 @@
 //! * `NAIL_INTEROP_SERVERS`: `name=host:base[:feature…]`, comma-separated,
 //!   e.g. `dovecot=localhost:10000,stalwart=localhost:20000:smtp`. A server
 //!   listens on `base + 143` (IMAP, STARTTLS), `base + 993` (IMAPS),
-//!   `base + 110` (POP3, STLS), `base + 995` (POP3S) and, with the `smtp`
-//!   feature, `base + 587` (submission, STARTTLS) and `base + 465`
-//!   (submissions).
+//!   `base + 110` (POP3, STLS), `base + 995` (POP3S), with the `smtp`
+//!   feature `base + 587` (submission, STARTTLS) and `base + 465`
+//!   (submissions), and with the `sieve` feature `base + 4190`
+//!   (ManageSieve, STARTTLS; M2c).
 //! * `NAIL_INTEROP_CA`: PEM file of the CA that signed the servers'
 //!   certificates (trusted as the only root).
 //! * `NAIL_INTEROP_USER`, `NAIL_INTEROP_PASSWORD`: an account that exists on
@@ -31,6 +32,8 @@ pub struct Server {
     pub base: u16,
     /// Offers SMTP submission.
     pub smtp: bool,
+    /// Offers ManageSieve (RFC 5804).
+    pub sieve: bool,
 }
 
 impl Server {
@@ -57,6 +60,10 @@ impl Server {
     /// Submission over TLS.
     pub fn submissions_port(&self) -> u16 {
         self.base + 465
+    }
+    /// ManageSieve with STARTTLS.
+    pub fn sieve_port(&self) -> u16 {
+        self.base + 4190
     }
 }
 
@@ -102,18 +109,23 @@ pub fn parse_servers(spec: &str) -> Result<Vec<Server>, String> {
         if base.checked_add(995).is_none() {
             return Err(format!("{item:?}: port base too high"));
         }
-        let mut smtp = false;
+        let (mut smtp, mut sieve) = (false, false);
         for feature in parts {
             match feature {
                 "smtp" => smtp = true,
+                "sieve" => sieve = true,
                 other => return Err(format!("{item:?}: unknown feature {other:?}")),
             }
+        }
+        if sieve && base.checked_add(4190).is_none() {
+            return Err(format!("{item:?}: port base too high for ManageSieve"));
         }
         servers.push(Server {
             name: name.to_owned(),
             host,
             base,
             smtp,
+            sieve,
         });
     }
     if servers.is_empty() {
@@ -199,8 +211,10 @@ mod tests {
 
     #[test]
     fn servers_parse() {
-        let servers =
-            parse_servers("dovecot=localhost:10000, stalwart=127.0.0.1:20000:smtp").unwrap();
+        let servers = parse_servers(
+            "dovecot=localhost:10000:sieve, stalwart=127.0.0.1:20000:smtp:sieve, plain=h:30000",
+        )
+        .unwrap();
         assert_eq!(
             servers,
             [
@@ -208,19 +222,30 @@ mod tests {
                     name: "dovecot".into(),
                     host: "localhost".into(),
                     base: 10000,
-                    smtp: false
+                    smtp: false,
+                    sieve: true,
                 },
                 Server {
                     name: "stalwart".into(),
                     host: "127.0.0.1".into(),
                     base: 20000,
-                    smtp: true
+                    smtp: true,
+                    sieve: true,
+                },
+                Server {
+                    name: "plain".into(),
+                    host: "h".into(),
+                    base: 30000,
+                    smtp: false,
+                    sieve: false,
                 },
             ]
         );
         assert_eq!(servers[0].imaps_port(), 10993);
+        assert_eq!(servers[0].sieve_port(), 14190);
         assert_eq!(servers[1].submission_port(), 20587);
         assert_eq!(servers[1].pop3_port(), 20110);
+        assert_eq!(servers[1].sieve_port(), 24190);
     }
 
     #[test]
@@ -234,6 +259,7 @@ mod tests {
             "d=:1",
             "d=h:65000",
             "d=h:1:pop5",
+            "d=h:62000:sieve",
         ] {
             assert!(parse_servers(bad).is_err(), "{bad:?}");
         }

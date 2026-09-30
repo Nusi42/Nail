@@ -69,6 +69,18 @@ impl SearchSlot {
     }
 }
 
+/// Whether and where a search also asks the servers (IMAP `SEARCH` for
+/// messages without a local body, first page only).
+pub(crate) enum ServerSearchMode {
+    /// Local index only (MCP, later pages).
+    Off,
+    /// Every folder in scope.
+    All,
+    /// Only folders this accepts (a remote session's grant): no server of
+    /// an account outside the grant is contacted.
+    Only(Box<dyn Fn(&nail_api::Folder) -> bool + Send + Sync>),
+}
+
 /// The local time zone's offset from UTC in seconds (east positive).
 pub(crate) fn local_utc_offset() -> i32 {
     chrono::Local::now().offset().local_minus_utc()
@@ -109,8 +121,19 @@ impl Service {
     }
 
     /// `Search`: parse, scope (a virtual account or folder means its
-    /// members), run.
-    pub(crate) async fn search(&self, mut query: SearchQuery) -> Result<Response> {
+    /// members), run; on the first page also on the servers.
+    pub(crate) async fn search(&self, query: SearchQuery) -> Result<Response> {
+        self.search_with(query, ServerSearchMode::All).await
+    }
+
+    /// `Search` with a choice of server search. Server hits come on top of
+    /// the first page (at most `limit` of them, marked `from_server`, in
+    /// `total`); paging counts local hits only.
+    pub(crate) async fn search_with(
+        &self,
+        mut query: SearchQuery,
+        server_mode: ServerSearchMode,
+    ) -> Result<Response> {
         if self.inner.search.is_closed() {
             return Err(ApiError::new(
                 nail_api::ErrorCode::Unavailable,
@@ -147,6 +170,7 @@ impl Service {
         let index = self.inner.search.get();
         let store = self.inner.store.clone();
         let offset = query.offset;
+        let limit = query.limit;
         let text = query.text.clone();
         let sort = query.sort;
         let scope_for_server = scope.clone();
@@ -157,10 +181,23 @@ impl Service {
             Ok(mut results) => {
                 // Messages without a local body are searched on their
                 // server (first page only; M2c).
-                let server = match nail_search::parse_query(&text) {
-                    Ok(parsed) if offset == 0 && nail_search::imap::needs_server(&parsed) => {
-                        self.server_search(&parsed, &scope_for_server, &mut results.hits)
-                            .await
+                let filter = match server_mode {
+                    ServerSearchMode::Off => None,
+                    ServerSearchMode::All => Some(None),
+                    ServerSearchMode::Only(filter) => Some(Some(filter)),
+                };
+                let server = match (nail_search::parse_query(&text), filter) {
+                    (Ok(parsed), Some(filter))
+                        if offset == 0 && nail_search::imap::needs_server(&parsed) =>
+                    {
+                        self.server_search(
+                            &parsed,
+                            &scope_for_server,
+                            filter.as_deref(),
+                            limit as usize,
+                            &mut results.hits,
+                        )
+                        .await
                     }
                     _ => None,
                 };
@@ -191,6 +228,8 @@ impl Service {
         &self,
         query: &nail_search::Query,
         scope: &SearchScope,
+        filter: Option<&(dyn Fn(&nail_api::Folder) -> bool + Send + Sync)>,
+        cap: usize,
         hits: &mut Vec<nail_api::SearchHit>,
     ) -> Option<nail_api::search::ServerSearch> {
         let scope = scope.clone();
@@ -221,7 +260,11 @@ impl Service {
             })
             .await
             .ok()?;
-        if folders.is_empty() {
+        let folders: Vec<nail_api::Folder> = folders
+            .into_iter()
+            .filter(|f| filter.is_none_or(|allowed| allowed(f)))
+            .collect();
+        if folders.is_empty() || cap == 0 {
             return None;
         }
         let key = nail_search::imap::server_search(query, unix_now(), local_utc_offset());
@@ -234,6 +277,7 @@ impl Service {
                 .or_default()
                 .push(folder);
         }
+        let mut added = 0usize;
         for (account, folders) in by_account {
             info.accounts.push(account.clone());
             let Some(settings) = self.imap_settings(&account) else {
@@ -265,12 +309,16 @@ impl Service {
             }
             let known: std::collections::HashSet<nail_api::MessageId> =
                 hits.iter().map(|h| h.message.id.clone()).collect();
+            let room = cap.saturating_sub(added);
             let summaries = self
                 .inner
                 .store
                 .call(move |s| {
                     let mut out = Vec::new();
                     for (folder, uid) in found {
+                        if out.len() >= room {
+                            break;
+                        }
                         if let Some(m) = s.find_message_by_uid(&folder, uid)?
                             && m.summary.headers_only
                             && !known.contains(&m.summary.id)
@@ -282,10 +330,12 @@ impl Service {
                 })
                 .await
                 .unwrap_or_default();
+            added += summaries.len();
             info.hits += u32::try_from(summaries.len()).unwrap_or(u32::MAX);
             hits.extend(summaries.into_iter().map(|message| nail_api::SearchHit {
                 message,
                 score: 0.0,
+                from_server: true,
             }));
         }
         Some(info)

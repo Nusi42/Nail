@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
 import {
@@ -82,6 +83,11 @@ test("a second browser pairs with a code from the desktop", async ({ page }) => 
   const phone = await other.newPage();
   await phone.goto(remote.url);
   await expect(phone.getByRole("main", { name: "Sign in to Nail" })).toBeVisible();
+  // The themed login page (M2c) passes axe, colour contrast included.
+  const axe = await new AxeBuilder({ page: phone }).analyze();
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(", ")}`)).toEqual(
+    [],
+  );
   // The fingerprint to compare is the one the desktop shows.
   const status = await rpcOk(server, { type: "GetRemoteUiSettings" }, "RemoteUi");
   const fingerprint = (status.status as { certificate: { fingerprint_sha256: string } }).certificate

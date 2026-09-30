@@ -13,7 +13,7 @@ use nail_api::triage::{
     JunkSettings, JunkSource, JunkVerdict, NotificationOverride, NotificationScope,
     NotificationSettings,
 };
-use nail_api::{AccountId, ApiError, FolderId, MessageId};
+use nail_api::{AccountId, ApiError, FolderId, MessageId, RuleId};
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -101,6 +101,15 @@ pub enum TrainOutcome {
     Unchanged,
 }
 
+/// Trained messages per account whose tokens are kept (to move them to the
+/// other class or undo). Older ones keep their row without tokens.
+pub const JUNK_TRAINING_WITH_TOKENS: u32 = 1000;
+/// Trained messages remembered per account (the oldest rows go).
+pub const JUNK_TRAINING_ROWS: u32 = 20_000;
+/// Distinct tokens per account above which tokens seen in only one message
+/// are dropped (random-token spam would grow the table otherwise).
+pub const JUNK_TOKEN_LIMIT: u32 = 250_000;
+
 /// Token counts: `(junk, ham)` messages a hashed token occurred in.
 pub type TokenCounts = HashMap<String, (u32, u32)>;
 
@@ -138,6 +147,43 @@ pub struct SieveRecord {
     pub vacation: VacationSettings,
     /// The last failure, if the last attempt failed.
     pub last_error: Option<ApiError>,
+    /// Where the uploaded script lives (`None` = never uploaded, or
+    /// uploaded before schema v8).
+    pub location: Option<SieveLocation>,
+    /// The rules the uploaded script runs on the server (arrival rules
+    /// skip them). Kept after failed uploads: the script stays active.
+    pub server_rules: Vec<RuleId>,
+}
+
+/// Where Nail's script was uploaded: the ManageSieve endpoint and the
+/// script name in effect at the time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SieveLocation {
+    /// Server host.
+    pub host: String,
+    /// Server port.
+    pub port: u16,
+    /// Transport security.
+    pub tls: nail_api::accounts::TlsMode,
+    /// Name of Nail's script.
+    pub script_name: String,
+}
+
+/// A successful upload, as [`Store::record_sieve_upload`] records it.
+#[derive(Debug, Clone, Copy)]
+pub struct SieveUpload<'a> {
+    /// The uploaded script.
+    pub script: &'a str,
+    /// The server's Sieve extensions.
+    pub extensions: &'a [String],
+    /// The other scripts on the server.
+    pub other_scripts: &'a [String],
+    /// Where it was uploaded.
+    pub location: &'a SieveLocation,
+    /// The rules it runs on the server.
+    pub server_rules: &'a [RuleId],
+    /// When (Unix seconds).
+    pub now: i64,
 }
 
 /// SHA-256 (hex) of a Sieve script, as recorded by
@@ -153,6 +199,40 @@ struct StoredNotificationSettings {
     sound: bool,
     folders: nail_api::triage::NotifyFolders,
     quiet_hours: Option<nail_api::triage::QuietHours>,
+}
+
+/// Keeps an account's classifier storage bounded (review fix, ADR 0049):
+/// only the newest [`JUNK_TRAINING_WITH_TOKENS`] trained messages keep
+/// their tokens, only the newest [`JUNK_TRAINING_ROWS`] are remembered,
+/// and above [`JUNK_TOKEN_LIMIT`] distinct tokens the ones seen in a
+/// single message go. The counts of the other tokens stay.
+fn bound_junk_storage(tx: &rusqlite::Transaction<'_>, account: &AccountId) -> Result<()> {
+    tx.execute(
+        "UPDATE junk_training SET tokens = '[]'
+         WHERE account_id = ?1 AND tokens <> '[]' AND message_key NOT IN (
+             SELECT message_key FROM junk_training WHERE account_id = ?1
+             ORDER BY trained_at DESC, message_key LIMIT ?2)",
+        params![account.as_str(), JUNK_TRAINING_WITH_TOKENS],
+    )?;
+    tx.execute(
+        "DELETE FROM junk_training
+         WHERE account_id = ?1 AND message_key NOT IN (
+             SELECT message_key FROM junk_training WHERE account_id = ?1
+             ORDER BY trained_at DESC, message_key LIMIT ?2)",
+        params![account.as_str(), JUNK_TRAINING_ROWS],
+    )?;
+    let tokens: u32 = tx.query_row(
+        "SELECT COUNT(*) FROM junk_tokens WHERE account_id = ?1",
+        [account.as_str()],
+        |r| r.get(0),
+    )?;
+    if tokens > JUNK_TOKEN_LIMIT {
+        tx.execute(
+            "DELETE FROM junk_tokens WHERE account_id = ?1 AND junk + ham <= 1",
+            [account.as_str()],
+        )?;
+    }
+    Ok(())
 }
 
 impl Store {
@@ -320,6 +400,108 @@ impl Store {
         })
     }
 
+    /// Brings snoozed messages back atomically: removes their snooze
+    /// records and applies + queues the writes that return them (clear the
+    /// keyword, move back) in one transaction, so a crash or a failed write
+    /// never leaves a message in the hidden Snoozed folder without a
+    /// record. Returns the removed records and the queued operations.
+    pub fn wake_snoozed(
+        &self,
+        messages: &[MessageId],
+        operations: &[crate::queue::Operation],
+    ) -> Result<(Vec<SnoozeRecord>, Vec<crate::queue::Enqueued>)> {
+        self.with_tx(|tx| {
+            let mut removed = Vec::new();
+            for id in messages {
+                if let Some(record) = tx
+                    .query_row(
+                        &format!(
+                            "SELECT {SNOOZE_COLS} FROM snoozed_messages WHERE message_id = ?1"
+                        ),
+                        [id.as_str()],
+                        snooze_from_row,
+                    )
+                    .optional()?
+                {
+                    tx.execute(
+                        "DELETE FROM snoozed_messages WHERE message_id = ?1",
+                        [id.as_str()],
+                    )?;
+                    removed.push(record);
+                }
+            }
+            let queued = operations
+                .iter()
+                .map(|op| crate::queue::enqueue_in_tx(tx, op))
+                .collect::<Result<Vec<_>>>()?;
+            Ok((removed, queued))
+        })
+    }
+
+    /// Messages in `folder` (the hidden Snoozed folder) that no snooze
+    /// record covers and no queued operation is about: snoozes lost to a
+    /// crash of an older version or a resync without `Message-ID`. The core
+    /// returns them to the Inbox.
+    pub fn orphaned_in_folder(&self, folder: &FolderId) -> Result<Vec<MessageId>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare_cached(
+                "SELECT m.id FROM messages m
+                 WHERE m.folder_id = ?1
+                   AND NOT EXISTS (SELECT 1 FROM snoozed_messages s WHERE s.message_id = m.id)
+                   AND NOT EXISTS (SELECT 1 FROM op_queue q WHERE q.message_id = m.id
+                                   AND q.state IN ('pending', 'in_flight'))
+                 ORDER BY m.id",
+            )?;
+            let rows = stmt.query_map([folder.as_str()], |r| {
+                Ok(MessageId::from(r.get::<_, String>(0)?))
+            })?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        })
+    }
+
+    // --- Folder marks --------------------------------------------------------
+
+    /// Marks `folder` as Nail's hidden Snoozed folder of its account
+    /// (replacing an earlier mark of that account).
+    pub fn mark_snoozed_folder(&self, folder: &FolderId) -> Result<()> {
+        self.with_tx(|tx| {
+            let account = crate::mail::folder_account_in_tx(tx, folder)?;
+            tx.execute(
+                "DELETE FROM folder_marks WHERE account_id = ?1 AND kind = 'snoozed'",
+                [account.as_str()],
+            )?;
+            tx.execute(
+                "INSERT INTO folder_marks (folder_id, account_id, kind) VALUES (?1, ?2, 'snoozed')",
+                params![folder.as_str(), account.as_str()],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// The hidden Snoozed folder of an account, when Nail created one.
+    pub fn snoozed_folder_of(&self, account: &AccountId) -> Result<Option<FolderId>> {
+        self.with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT folder_id FROM folder_marks WHERE account_id = ?1 AND kind = 'snoozed'",
+                    [account.as_str()],
+                    |r| Ok(FolderId::from(r.get::<_, String>(0)?)),
+                )
+                .optional()?)
+        })
+    }
+
+    /// Whether `folder` is Nail's hidden Snoozed folder.
+    pub fn is_snoozed_folder(&self, folder: &FolderId) -> Result<bool> {
+        self.with_conn(|conn| {
+            Ok(conn.query_row(
+                "SELECT EXISTS (SELECT 1 FROM folder_marks WHERE folder_id = ?1 AND kind = 'snoozed')",
+                [folder.as_str()],
+                |r| r.get(0),
+            )?)
+        })
+    }
+
     /// Points a snooze at a message's new row (after a resync gave it a new
     /// id). Returns whether a snooze moved.
     pub fn rebind_snooze(&self, old: &MessageId, new: &MessageId) -> Result<bool> {
@@ -464,6 +646,7 @@ impl Store {
                     now
                 ],
             )?;
+            bound_junk_storage(tx, account)?;
             Ok(outcome)
         })
     }
@@ -700,7 +883,7 @@ impl Store {
             let row = conn
                 .query_row(
                     "SELECT script_hash, uploaded_at, extensions, other_scripts, vacation,
-                         last_error
+                         last_error, location, server_rules
                      FROM sieve_state WHERE account_id = ?1",
                     [account.as_str()],
                     |r| {
@@ -711,11 +894,14 @@ impl Store {
                             r.get::<_, String>(3)?,
                             r.get::<_, Option<String>>(4)?,
                             r.get::<_, Option<String>>(5)?,
+                            r.get::<_, Option<String>>(6)?,
+                            r.get::<_, String>(7)?,
                         ))
                     },
                 )
                 .optional()?;
-            let Some((hash, uploaded, ext, other, vacation, error)) = row else {
+            let Some((hash, uploaded, ext, other, vacation, error, location, server_rules)) = row
+            else {
                 return Ok(SieveRecord::default());
             };
             Ok(SieveRecord {
@@ -728,6 +914,8 @@ impl Store {
                     .transpose()?
                     .unwrap_or_default(),
                 last_error: error.map(|e| serde_json::from_str(&e)).transpose()?,
+                location: location.map(|l| serde_json::from_str(&l)).transpose()?,
+                server_rules: serde_json::from_str(&server_rules)?,
             })
         })
     }
@@ -767,25 +955,28 @@ impl Store {
         })
     }
 
-    /// Records a successful upload of `script` (clears the last error).
-    pub fn record_sieve_upload(
-        &self,
-        account: &AccountId,
-        script: &str,
-        extensions: &[String],
-        other_scripts: &[String],
-        now: i64,
-    ) -> Result<()> {
-        let hash = hash_sieve_script(script);
-        let ext = serde_json::to_string(extensions)?;
-        let other = serde_json::to_string(other_scripts)?;
+    /// Records a successful upload (clears the last error).
+    pub fn record_sieve_upload(&self, account: &AccountId, upload: &SieveUpload<'_>) -> Result<()> {
+        let hash = hash_sieve_script(upload.script);
+        let ext = serde_json::to_string(upload.extensions)?;
+        let other = serde_json::to_string(upload.other_scripts)?;
+        let location = serde_json::to_string(upload.location)?;
+        let rules = serde_json::to_string(upload.server_rules)?;
         self.with_tx(|tx| {
             Self::ensure_sieve_row(tx, account)?;
             tx.execute(
                 "UPDATE sieve_state SET script_hash = ?2, uploaded_at = ?3, extensions = ?4,
-                     other_scripts = ?5, last_error = NULL
+                     other_scripts = ?5, last_error = NULL, location = ?6, server_rules = ?7
                  WHERE account_id = ?1",
-                params![account.as_str(), hash, now, ext, other],
+                params![
+                    account.as_str(),
+                    hash,
+                    upload.now,
+                    ext,
+                    other,
+                    location,
+                    rules
+                ],
             )?;
             Ok(())
         })
@@ -797,7 +988,8 @@ impl Store {
     pub fn clear_sieve_upload(&self, account: &AccountId) -> Result<()> {
         self.with_conn(|conn| {
             conn.execute(
-                "UPDATE sieve_state SET script_hash = NULL, uploaded_at = NULL, last_error = NULL
+                "UPDATE sieve_state SET script_hash = NULL, uploaded_at = NULL, last_error = NULL,
+                     location = NULL, server_rules = '[]'
                  WHERE account_id = ?1",
                 [account.as_str()],
             )?;

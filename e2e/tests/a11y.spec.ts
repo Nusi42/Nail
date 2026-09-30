@@ -42,6 +42,19 @@ test("dark mode has no accessibility violations", async ({ page }) => {
   expect(await violations(page)).toEqual([]);
 });
 
+// The high-contrast mode (colour contrast is only checked in a browser).
+test("high-contrast mode has no accessibility violations", async ({ page }) => {
+  await page.goto("/?mode=high-contrast");
+  const rows = page.locator('[data-part="message-list.row"]');
+  await expect(rows.first()).toBeVisible();
+  expect(await violations(page), "main window").toEqual([]);
+  await rows.filter({ hasText: "Welcome to Nail" }).click();
+  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
+    "Welcome to Nail",
+  );
+  expect(await violations(page), "reader").toEqual([]);
+});
+
 test.describe("windows and dialogs of demo-multi", () => {
   let server: NailServer;
 
@@ -126,6 +139,19 @@ test.describe("windows and dialogs of demo-multi", () => {
     expect(await violations(page), "sync-folder").toEqual([]);
     await close("Folder synchronization");
 
+    // The message context menu and the move window (folder picker).
+    await page
+      .locator('[data-part="message-list.row"]')
+      .filter({ hasText: "Welcome to Nail" })
+      .click({ button: "right" });
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    expect(await violations(page), "message menu").toEqual([]);
+    await menu.getByRole("menuitem", { name: "Move to…" }).click();
+    await expect(page.getByRole("dialog", { name: "Move to folder" })).toBeVisible();
+    expect(await violations(page), "move").toEqual([]);
+    await close("Move to folder");
+
     // Every settings tab (M2c: server rules, vacation, junk, notifications,
     // synchronization, and the Customize editors).
     await toolbar.getByRole("button", { name: "Settings" }).click();
@@ -139,6 +165,15 @@ test.describe("windows and dialogs of demo-multi", () => {
       "Junk mail",
       "Notifications",
       "Synchronization",
+      "Keys and certificates",
+      "Signing and encryption",
+      "Data protection",
+      "Autocrypt",
+      "Remote access",
+      "Remote users",
+      "Devices",
+      "Security log",
+      "Privacy",
       "Customize",
       "Toolbars",
       "Keys",

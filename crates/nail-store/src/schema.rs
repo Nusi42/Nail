@@ -697,6 +697,39 @@ CREATE TABLE sieve_state (
 ) WITHOUT ROWID;
 "#;
 
+/// Schema v8 (M2c review fixes, ADR 0049):
+///
+/// * `sieve_state.location` — where the uploaded script lives (JSON:
+///   host, port, TLS mode, script name), so switching ManageSieve off or
+///   changing the host, port or script name removes Nail's script from the
+///   place it was uploaded to, not from the current settings' place.
+/// * `sieve_state.server_rules` — the rules the uploaded (and still active)
+///   script runs (JSON array of rule ids). Arrival rules skip them for the
+///   account's mail; it survives restarts and failed uploads (the script
+///   stays active on the server) and is cleared only when the script is
+///   removed.
+/// * `folder_marks` — folders Nail created for itself (`snoozed`: the
+///   hidden Snoozed folder). A user folder that happens to be called
+///   `Snoozed` is not marked and stays visible. Removed with the folder.
+///   Existing top-level `Snoozed` folders holding snoozed mail are marked.
+const V8: &str = r#"
+ALTER TABLE sieve_state ADD COLUMN location TEXT;
+ALTER TABLE sieve_state ADD COLUMN server_rules TEXT NOT NULL DEFAULT '[]';
+
+CREATE TABLE folder_marks (
+    folder_id  TEXT PRIMARY KEY NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('snoozed')),
+    UNIQUE (account_id, kind)
+) WITHOUT ROWID;
+
+INSERT OR IGNORE INTO folder_marks (folder_id, account_id, kind)
+    SELECT f.id, f.account_id, 'snoozed' FROM folders f
+    WHERE f.parent_id IS NULL AND f.path = 'Snoozed'
+      AND EXISTS (SELECT 1 FROM messages m JOIN snoozed_messages s ON s.message_id = m.id
+                  WHERE m.folder_id = f.id);
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -729,6 +762,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(V5),
     Migration::sql(V6),
     Migration::sql(V7),
+    Migration::sql(V8),
 ];
 
 /// The schema version this build creates and understands.
@@ -824,6 +858,7 @@ mod tests {
                 "crypto_trust",
                 "draft_attachments",
                 "drafts",
+                "folder_marks",
                 "folders",
                 "junk_settings",
                 "junk_tokens",
@@ -1019,6 +1054,37 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn v8_marks_snoozed_folders_holding_snoozed_mail_only() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate_to_version(&mut conn, 7).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (id, name, email, kind) VALUES ('a', 'A', 'a@x', 'imap');
+             INSERT INTO accounts (id, name, email, kind) VALUES ('b', 'B', 'b@x', 'imap');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('fa', 'a', 'Snoozed', 'Snoozed');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('fb', 'b', 'Snoozed', 'Snoozed');
+             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'a', 'fa', 'x');
+             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('n', 'b', 'fb', 'x');
+             INSERT INTO snoozed_messages (message_id, account_id, until, wake_folder_id, snoozed_at)
+                 VALUES ('m', 'a', 10, 'fa', 1);
+             INSERT INTO sieve_state (account_id, script_hash) VALUES ('a', NULL);",
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        let marked: Vec<String> = conn
+            .prepare("SELECT folder_id FROM folder_marks")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(marked, ["fa"], "the other Snoozed folder is the user's");
+        let rules: String = conn
+            .query_row("SELECT server_rules FROM sieve_state", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rules, "[]");
     }
 
     #[test]

@@ -57,7 +57,12 @@ export function ImportResult({ result }: { result: KeyImportResult }) {
         <ul data-part="security-import.issues" aria-label={t("security-import-issues")}>
           {result.issues.map((issue, i) => (
             <li key={i} data-part="security-import.issue" data-code={issue.code}>
-              {t("security-import-issue", { item: issue.item, message: issue.message })}
+              {t("security-import-issue", {
+                item: issue.item,
+                message: issue.localized
+                  ? t(issue.localized.id, issue.localized.args)
+                  : issue.message,
+              })}
             </li>
           ))}
         </ul>

@@ -5,8 +5,8 @@
 
 use nail_api::launch::{LaunchRequest, OPENED_FILES_ACCOUNT_ID};
 use nail_api::{
-    Account, AccountId, AccountKind, ApiError, Event, Folder, FolderRole, MessageId, Request,
-    Response,
+    Account, AccountId, AccountKind, ApiError, Event, Folder, FolderRole, LocalizedMessage,
+    MessageId, Request, Response,
 };
 
 use crate::error::Result;
@@ -59,26 +59,38 @@ fn import_message_file(
     service: &Service,
     path: &std::path::Path,
 ) -> Result<nail_api::MessageSummary> {
-    let size = std::fs::metadata(path)
-        .map_err(|err| ApiError::not_found(format!("{}: {err}", path.display())))?
-        .len();
+    let shown = path.display().to_string();
+    // The OS error text stays an English `detail` argument (library text).
+    let unreadable = |err: std::io::Error| {
+        ApiError::not_found(format!("{shown}: {err}")).with_localized(
+            LocalizedMessage::new("launch-error-unreadable")
+                .arg("path", shown.as_str())
+                .arg("detail", err.to_string()),
+        )
+    };
+    let size = std::fs::metadata(path).map_err(unreadable)?.len();
     if size == 0 || size > MAX_MESSAGE_FILE {
         return Err(ApiError::invalid_request(format!(
-            "{} is empty or larger than {MAX_MESSAGE_FILE} bytes",
-            path.display()
+            "{shown} is empty or larger than {MAX_MESSAGE_FILE} bytes"
         ))
+        .with_localized(
+            LocalizedMessage::new("launch-error-size")
+                .arg("path", shown.as_str())
+                .arg("max", MAX_MESSAGE_FILE),
+        )
         .into());
     }
-    let raw = std::fs::read(path)
-        .map_err(|err| ApiError::not_found(format!("{}: {err}", path.display())))?;
+    let raw = std::fs::read(path).map_err(unreadable)?;
     let parsed = nail_mime::parse_message(&raw);
     if parsed.headers.from.is_empty() && parsed.headers.subject.is_empty() && parsed.text.is_empty()
     {
-        return Err(ApiError::invalid_request(format!(
-            "{} is not an email message",
-            path.display()
-        ))
-        .into());
+        return Err(
+            ApiError::invalid_request(format!("{shown} is not an email message"))
+                .with_localized(
+                    LocalizedMessage::new("launch-error-not-mail").arg("path", shown.as_str()),
+                )
+                .into(),
+        );
     }
     let store = service.store();
     let locale = service.inner.locale.as_deref();
@@ -116,4 +128,15 @@ fn import_message_file(
         }],
     )?;
     Ok(store.get_message(&id)?.summary)
+}
+
+#[cfg(test)]
+mod catalog_tests {
+    /// Every `launch-error-*` id built here has an English text.
+    #[test]
+    fn launch_error_ids_are_in_the_catalog() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let missing = nail_config::l10n::missing_message_ids(&src, &["launch-error-"]);
+        assert!(missing.is_empty(), "{missing:#?}");
+    }
 }

@@ -74,6 +74,15 @@ export function createMcpMockState(): McpMockState {
     name,
     outcome,
     detail: outcome === "denied" ? "account `acc-personal` not granted" : null,
+    // The core's Fluent id for the detail (ADR 0046).
+    ...(outcome === "denied"
+      ? {
+          localized: {
+            id: "mcp-core-denied-account",
+            args: { account: "acc-personal" },
+          },
+        }
+      : {}),
   });
   return {
     clients: [demo],

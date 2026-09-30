@@ -3,15 +3,22 @@
 //! WP53).
 //!
 //! 1. `--url` connects there.
-//! 2. Otherwise the endpoint file of the data directory names the running
-//!    instance's server; when it answers, the bridge connects to it.
-//! 3. Otherwise (and unless `--no-start`) `nail mcp` takes the data
-//!    directory's single-instance lock ([`nail_store::DataDirLock`]), opens
-//!    the core headless (engines on, no UI), starts the MCP server on the
-//!    port of the MCP settings (or `--mcp-port`, else a free one), writes
-//!    the endpoint file and bridges to it. It stops when the MCP client
-//!    closes stdin. When another process holds the lock without an MCP
-//!    server, `nail mcp` says so instead of opening the data twice.
+//! 2. Otherwise the data directory's single-instance lock
+//!    ([`nail_store::DataDirLock`]) tells whether Nail runs — before the
+//!    endpoint file is trusted: a file left by a crashed instance could
+//!    name a port another local process listens on now, which would get
+//!    the client's token.
+//!    * The lock is free: nobody runs. A left-over endpoint file is
+//!      removed; unless `--no-start`, `nail mcp` keeps the lock, opens the
+//!      core headless (engines on, no UI), starts the MCP server on the
+//!      port of the MCP settings (or `--mcp-port`, else a free one), writes
+//!      the endpoint file and bridges to it. It stops when the MCP client
+//!      closes stdin.
+//!    * The lock is held: the holder's endpoint file (written by that
+//!      process) names its server; `nail mcp` waits a few seconds for it
+//!      (the holder may still be starting) and bridges to it. A holder
+//!      without an MCP server is reported instead of opening the data
+//!      twice.
 //!
 //! stdout carries only JSON-RPC messages; notices and errors go to stderr.
 
@@ -31,6 +38,8 @@ use crate::serve::{Dirs, resolve_dirs};
 
 /// How long probing a running instance's endpoint may take.
 const PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
+/// How long `nail mcp` waits for a starting instance's endpoint.
+pub const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
 
 /// Where the bridge connects.
 #[derive(Debug)]
@@ -66,38 +75,64 @@ pub fn loopback_reachable(url: &str) -> bool {
 }
 
 /// Decides where to connect (see the module docs). `reachable` probes an
-/// endpoint URL.
+/// endpoint URL; `wait` is how long a held lock's endpoint is waited for.
 pub fn choose_target(
     url: Option<&str>,
     data_dir: &Path,
     no_start: bool,
+    wait: Duration,
     reachable: impl Fn(&str) -> bool,
 ) -> anyhow::Result<Target> {
     if let Some(url) = url {
         return Ok(Target::Url(url.to_owned()));
     }
     let endpoint_file = endpoint_path(data_dir);
-    let endpoint = read_endpoint(&endpoint_file).ok();
-    if let Some(endpoint) = &endpoint
-        && reachable(&endpoint.url)
-    {
-        return Ok(Target::Url(endpoint.url.clone()));
-    }
-    if no_start {
-        return Err(BridgeError::NotRunning(match &endpoint {
-            Some(e) => format!("{} does not answer", e.url),
-            None => format!("no {}", endpoint_file.display()),
-        })
-        .into());
-    }
     match DataDirLock::acquire(data_dir, "mcp") {
-        Ok(lock) => Ok(Target::Start(lock)),
-        Err(LockError::Held(holder)) => Err(messages::error(match holder {
-            Some(h) => LocalizedMessage::new("cli-mcp-instance-without-mcp")
-                .arg("owner", h.owner.as_str())
-                .arg("pid", h.pid),
-            None => LocalizedMessage::new("cli-mcp-instance-without-mcp-unknown"),
-        })),
+        Ok(lock) => {
+            // Nobody runs: an endpoint file is a crashed instance's.
+            if endpoint_file.exists() {
+                let _ = std::fs::remove_file(&endpoint_file);
+            }
+            if no_start {
+                drop(lock);
+                return Err(BridgeError::NotRunning(format!(
+                    "no running instance for {}",
+                    data_dir.display()
+                ))
+                .into());
+            }
+            Ok(Target::Start(lock))
+        }
+        Err(LockError::Held(holder)) => {
+            let deadline = std::time::Instant::now() + wait;
+            loop {
+                // Only an endpoint of the lock holder counts (when it says
+                // who it is): an older file may name another process.
+                if let Ok(endpoint) = read_endpoint(&endpoint_file)
+                    && holder.as_ref().is_none_or(|h| h.pid == endpoint.pid)
+                    && reachable(&endpoint.url)
+                {
+                    return Ok(Target::Url(endpoint.url));
+                }
+                if std::time::Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200).min(wait));
+            }
+            if no_start {
+                return Err(BridgeError::NotRunning(format!(
+                    "{} does not answer",
+                    endpoint_file.display()
+                ))
+                .into());
+            }
+            Err(messages::error(match holder {
+                Some(h) => LocalizedMessage::new("cli-mcp-instance-without-mcp")
+                    .arg("owner", h.owner.as_str())
+                    .arg("pid", h.pid),
+                None => LocalizedMessage::new("cli-mcp-instance-without-mcp-unknown"),
+            }))
+        }
         Err(err) => Err(err.into()),
     }
 }
@@ -123,9 +158,13 @@ pub async fn run(args: McpArgs) -> anyhow::Result<()> {
         )?)
     };
     let data_dir = dirs.as_ref().map(|d| d.data.clone()).unwrap_or_default();
-    let target = choose_target(args.url.as_deref(), &data_dir, args.no_start, |url| {
-        loopback_reachable(url)
-    })?;
+    let target = choose_target(
+        args.url.as_deref(),
+        &data_dir,
+        args.no_start,
+        ENDPOINT_WAIT,
+        loopback_reachable,
+    )?;
     match (target, dirs) {
         (Target::Url(url), _) => {
             bridge::run(
@@ -193,15 +232,21 @@ mod tests {
     use nail_mcp::endpoint::{Endpoint, write_endpoint};
 
     fn write(dir: &Path, url: &str) {
+        write_as(dir, url, std::process::id());
+    }
+
+    fn write_as(dir: &Path, url: &str, pid: u32) {
         write_endpoint(
             &endpoint_path(dir),
             &Endpoint {
                 url: url.into(),
-                pid: 1,
+                pid,
             },
         )
         .unwrap();
     }
+
+    const NO_WAIT: Duration = Duration::ZERO;
 
     #[test]
     fn the_token_is_required() {
@@ -214,35 +259,80 @@ mod tests {
     }
 
     #[test]
-    fn a_url_or_a_live_endpoint_is_used_as_is() {
+    fn a_url_or_the_running_instances_endpoint_is_used_as_is() {
         let dir = tempfile::tempdir().unwrap();
-        match choose_target(Some("http://127.0.0.1:5/mcp"), dir.path(), false, |_| false) {
+        match choose_target(
+            Some("http://127.0.0.1:5/mcp"),
+            dir.path(),
+            false,
+            NO_WAIT,
+            |_| false,
+        ) {
             Ok(Target::Url(url)) => assert_eq!(url, "http://127.0.0.1:5/mcp"),
             other => panic!("{other:?}"),
         }
+        // A running instance (it holds the lock) wrote its endpoint.
+        let running = DataDirLock::acquire(dir.path(), "desktop").unwrap();
         write(dir.path(), "http://127.0.0.1:6/mcp");
-        match choose_target(None, dir.path(), false, |_| true) {
+        match choose_target(None, dir.path(), false, NO_WAIT, |_| true) {
             Ok(Target::Url(url)) => assert_eq!(url, "http://127.0.0.1:6/mcp"),
             other => panic!("{other:?}"),
         }
+        drop(running);
+    }
+
+    #[test]
+    fn a_stale_endpoint_is_never_used_even_when_something_answers() {
+        let dir = tempfile::tempdir().unwrap();
+        // A crashed instance left its file; another process now listens on
+        // that port (`reachable` says yes). The free lock shows nobody
+        // runs: the file goes, and `nail mcp` starts its own core.
+        write(dir.path(), "http://127.0.0.1:6/mcp");
+        let Ok(Target::Start(lock)) = choose_target(None, dir.path(), false, NO_WAIT, |_| true)
+        else {
+            panic!("expected a headless start");
+        };
+        assert!(!endpoint_path(dir.path()).exists(), "stale file removed");
+        drop(lock);
+        // A running instance with an endpoint file of another process.
+        let running = DataDirLock::acquire(dir.path(), "desktop").unwrap();
+        write_as(dir.path(), "http://127.0.0.1:7/mcp", std::process::id() + 1);
+        assert!(choose_target(None, dir.path(), false, NO_WAIT, |_| true).is_err());
+        drop(running);
+    }
+
+    #[test]
+    fn a_starting_instances_endpoint_is_waited_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let running = DataDirLock::acquire(dir.path(), "mcp").unwrap();
+        let path = dir.path().to_owned();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            write(&path, "http://127.0.0.1:8/mcp");
+        });
+        match choose_target(None, dir.path(), false, Duration::from_secs(10), |_| true) {
+            Ok(Target::Url(url)) => assert_eq!(url, "http://127.0.0.1:8/mcp"),
+            other => panic!("{other:?}"),
+        }
+        writer.join().unwrap();
+        drop(running);
     }
 
     #[test]
     fn nobody_running_starts_headless_once() {
         let dir = tempfile::tempdir().unwrap();
-        // A stale endpoint file of a crashed instance does not count.
-        write(dir.path(), "http://127.0.0.1:6/mcp");
-        let Ok(Target::Start(lock)) = choose_target(None, dir.path(), false, |_| false) else {
+        let Ok(Target::Start(lock)) = choose_target(None, dir.path(), false, NO_WAIT, |_| false)
+        else {
             panic!("expected a headless start");
         };
         assert_eq!(lock.info().owner, "mcp");
-        // A second `nail mcp` while the first starts: the lock is held.
-        let err = choose_target(None, dir.path(), false, |_| false).unwrap_err();
+        // A second `nail mcp` while the first runs without an endpoint.
+        let err = choose_target(None, dir.path(), false, NO_WAIT, |_| false).unwrap_err();
         let text = messages::render_error(&err, &nail_config::l10n::Catalog::english());
         assert!(text.contains("mcp") && text.contains("MCP"), "{text}");
         drop(lock);
         assert!(matches!(
-            choose_target(None, dir.path(), false, |_| false),
+            choose_target(None, dir.path(), false, NO_WAIT, |_| false),
             Ok(Target::Start(_))
         ));
     }
@@ -250,7 +340,7 @@ mod tests {
     #[test]
     fn no_start_only_connects() {
         let dir = tempfile::tempdir().unwrap();
-        let err = choose_target(None, dir.path(), true, |_| false).unwrap_err();
+        let err = choose_target(None, dir.path(), true, NO_WAIT, |_| false).unwrap_err();
         assert!(matches!(
             err.downcast_ref::<BridgeError>(),
             Some(BridgeError::NotRunning(_))

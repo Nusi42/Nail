@@ -12,4 +12,10 @@ message: MessageSummary,
 /**
  * Relevance score (higher is better; only comparable within one result).
  */
-score: number, };
+score: number, 
+/**
+ * Found only by the server-side search (M2c, first page only). Such
+ * hits come on top of the page: `offset` / `limit` count the local
+ * hits only, so the next page starts at `offset` + the local hits.
+ */
+from_server?: boolean, };

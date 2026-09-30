@@ -153,9 +153,14 @@ describe("mcp-clients", () => {
     expect(rows).toHaveLength(4); // header + 3 demo entries, newest first
     expect(rows[1]).toHaveAttribute("data-outcome", "denied");
     expect(within(rows[1] as HTMLElement).getByText("Denied")).toBeInTheDocument();
+    // The core's localized text, not its English diagnostic.
+    const detail = within(rows[1] as HTMLElement).getByText(
+      /refused: the account .acc-personal. is not granted/,
+    );
+    expect(detail).toHaveAttribute("data-part", "mcp-audit.detail");
     expect(
-      within(rows[1] as HTMLElement).getByText("account `acc-personal` not granted"),
-    ).toBeInTheDocument();
+      within(rows[1] as HTMLElement).queryByText("account `acc-personal` not granted"),
+    ).not.toBeInTheDocument();
     expect(requestsOf(env, "ListMcpAudit")).toContainEqual(
       expect.objectContaining({ client_id: "mcp-1", before: null }),
     );

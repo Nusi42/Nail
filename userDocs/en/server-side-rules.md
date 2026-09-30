@@ -20,7 +20,11 @@ Every rule shows one of three places:
 | **Nail** | The rule could run on the server, but right now Nail runs it. The rule shows why, for example: the rule is switched off, it also runs on a schedule or when sending, it only applies to folders other than the Inbox, the server lacks a feature the rule needs, or the new script is not uploaded yet. |
 | **Nail only** | The rule uses something the server cannot do. The rule shows which condition or action is the reason. |
 
-A rule never runs in both places, so nothing is moved or tagged twice.
+A rule never runs in both places, so nothing is moved, forwarded or tagged
+twice. While a changed script is not uploaded yet (or the server cannot be
+reached), the script already on the server keeps running: Nail leaves the
+rules of that script to the server until the new one is in place, also
+after a restart.
 
 The server only sees mail as it is **delivered to the Inbox**. A rule that
 should also act on mail in other folders, or on mail you already have,
@@ -82,6 +86,13 @@ your other scripts:
 - If a script with Nail's name already exists and Nail did not write it,
   Nail stops with a message instead of overwriting it. Pick another
   `script` name in the account's `sieve` node.
+- If you change the `script` name, the server (`host`, `port`) or remove
+  the `sieve` node, Nail first removes its script from where it put it
+  before, so an old copy never keeps running next to the new one. The same
+  happens when you remove the account. Nail's own old script is never
+  treated as "your" script.
 
-If the server rejects the script, the account shows the server's message
-and every rule keeps running in Nail until the next successful upload.
+If the server rejects the script, the account shows the server's message.
+The script that was uploaded before stays active on the server; its rules
+keep running there, and Nail runs the other rules, until the next
+successful upload.

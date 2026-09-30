@@ -28,6 +28,12 @@ pub trait CoreAccess: Send + Sync + 'static {
     fn blobs(&self) -> &BlobStore;
     /// Pushes an event to the connected UIs.
     fn emit(&self, event: Event);
+    /// Searches the local index only (no IMAP `SEARCH` on the servers):
+    /// MCP pages over local hits and never makes the core log in to a
+    /// server for a client. Defaults to `Search`, minus server hits.
+    fn search_local(&self, query: SearchQuery) -> impl Future<Output = Response> + Send {
+        self.handle(Request::Search { query })
+    }
     /// Whether the reader treats the message as end-to-end encrypted:
     /// exactly the messages whose content the core decrypts for
     /// `GetMessage` (their [`nail_api::security::SecurityStatus`] reports
@@ -195,17 +201,22 @@ impl<C: CoreAccess> McpData for CoreData<C> {
     }
 
     async fn search(&self, query: SearchQuery) -> DataResult<SearchOutcome> {
-        match self.0.handle(Request::Search { query }).await {
+        match self.0.search_local(query).await {
             Response::SearchResults {
                 offset,
                 total,
-                hits,
-                ..
-            } => Ok(SearchOutcome::Hits {
-                offset,
-                total,
-                hits,
-            }),
+                mut hits,
+                server,
+            } => {
+                // Paging counts local hits only.
+                hits.retain(|h| !h.from_server);
+                let extra = server.map_or(0, |s| s.hits);
+                Ok(SearchOutcome::Hits {
+                    offset,
+                    total: total.saturating_sub(extra),
+                    hits,
+                })
+            }
             Response::InvalidQuery { error } => Ok(SearchOutcome::Invalid(error)),
             other => Err(unexpected(other)),
         }

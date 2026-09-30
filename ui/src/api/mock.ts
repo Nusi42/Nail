@@ -246,7 +246,15 @@ export class MockTransport implements Transport, MockCore {
         const message = id === undefined ? undefined : d.messages.find((m) => m.id === id);
         return message
           ? { type: "MessageImported", message: structuredClone(message) }
-          : notFound(`file ${request.path}`);
+          : {
+              type: "Error",
+              code: "not_found",
+              message: `file ${request.path} not found`,
+              localized: {
+                id: "launch-error-unreadable",
+                args: { path: request.path, detail: "not found" },
+              },
+            };
       }
     }
   }

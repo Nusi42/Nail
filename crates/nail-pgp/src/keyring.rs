@@ -27,7 +27,7 @@ use nail_api::security::{
     KeyImportResult, KeySource, RecipientKey, RecipientKeyState, SecretProtection, SecretStorage,
     TrustDecision, TrustLevel,
 };
-use nail_api::{ErrorCode, KeyId};
+use nail_api::{ErrorCode, KeyId, LocalizedMessage};
 use nail_store::{KeyData, SecretKeyData, Store, StoredKey};
 use pgp::composed::{
     EncryptionCaps, KeyType, SecretKeyParamsBuilder, SignedPublicKey, SignedSecretKey,
@@ -657,8 +657,12 @@ impl<'a> Keyring<'a> {
                 .map(|(item, message)| KeyImportIssue {
                     item,
                     code: ErrorCode::Crypto,
+                    // rPGP's text stays an English `detail` argument.
+                    localized: Some(
+                        LocalizedMessage::new("security-import-issue-unreadable")
+                            .arg("detail", message.as_str()),
+                    ),
                     message,
-                    localized: None,
                 })
                 .collect(),
         };
@@ -667,7 +671,7 @@ impl<'a> Keyring<'a> {
                 item: "#1".into(),
                 code: ErrorCode::InvalidRequest,
                 message: "no OpenPGP key found".into(),
-                localized: None,
+                localized: Some(LocalizedMessage::new("security-import-issue-no-key")),
             });
         }
         let now = self.now();
@@ -694,7 +698,7 @@ impl<'a> Keyring<'a> {
                         item,
                         code: e.code(),
                         message: e.to_string(),
-                        localized: None,
+                        localized: Some(import_issue(&e)),
                     });
                 }
             }
@@ -1043,6 +1047,23 @@ fn hex_fingerprint(public: &SignedPublicKey) -> String {
     key::hex_upper(public.primary_key.fingerprint().as_bytes())
 }
 
+/// The user-facing text of a key that could not be stored on import
+/// (library details stay an English `detail` argument).
+fn import_issue(error: &Error) -> LocalizedMessage {
+    match error {
+        Error::Crypto(detail)
+        | Error::Invalid(detail)
+        | Error::Unsupported(detail)
+        | Error::NoKey(detail) => {
+            LocalizedMessage::new("security-import-issue-unusable").arg("detail", detail.as_str())
+        }
+        Error::Secrets(_) => LocalizedMessage::new("security-import-issue-keychain"),
+        Error::Store(_) | Error::Locked { .. } | Error::BadPassphrase => {
+            LocalizedMessage::new("security-import-issue-store")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1123,6 +1144,39 @@ mod tests {
         let result = ring.import("hello", KeyEncoding::Text).unwrap();
         assert!(result.keys.is_empty());
         assert_eq!(result.issues.len(), 1);
+        // Nail's own text goes to the UI as a Fluent id (ADR 0043).
+        let localized = result.issues[0].localized.as_ref().expect("localized");
+        assert!(
+            localized.id.starts_with("security-import-issue-"),
+            "{localized:?}"
+        );
+    }
+
+    #[test]
+    fn import_issues_are_localized_with_catalog_ids() {
+        let catalog = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../locales/en/security.ftl"),
+        )
+        .unwrap();
+        let has = |id: &str| catalog.lines().any(|l| l.starts_with(&format!("{id} =")));
+        let cases = [
+            import_issue(&Error::Crypto("bad self-signature".into())),
+            import_issue(&Error::Invalid("no user id".into())),
+            import_issue(&Error::Secrets(nail_api::engine::EngineError::permanent(
+                ErrorCode::Internal,
+                "keychain down",
+            ))),
+            import_issue(&Error::BadPassphrase),
+            LocalizedMessage::new("security-import-issue-unreadable"),
+            LocalizedMessage::new("security-import-issue-no-key"),
+        ];
+        for message in cases {
+            assert!(has(&message.id), "{} is not in security.ftl", message.id);
+        }
+        assert_eq!(
+            import_issue(&Error::Crypto("bad self-signature".into())).args["detail"],
+            "bad self-signature".into()
+        );
     }
 
     #[test]

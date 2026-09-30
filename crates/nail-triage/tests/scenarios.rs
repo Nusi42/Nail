@@ -74,7 +74,11 @@ fn marking_junk_trains_and_the_next_similar_message_lands_in_junk() {
     let mut receipts = Vec::new();
     for (i, (from, subject, text)) in spam.iter().enumerate() {
         let id = MessageId::from(format!("s{i}"));
-        let key = message_key(Some(&format!("<s{i}@x>")), &id);
+        let key = message_key(
+            Some(&format!("<s{i}@x>")),
+            &id,
+            &tokens(from, subject, text),
+        );
         receipts.push(
             classifier::train(
                 &store,
@@ -105,7 +109,7 @@ fn marking_junk_trains_and_the_next_similar_message_lands_in_junk() {
         )));
     }
     for (i, (from, subject, text)) in ham.iter().enumerate() {
-        let key = message_key(None, &MessageId::from(format!("h{i}")));
+        let key = message_key(None, &MessageId::from(format!("h{i}")), &[]);
         classifier::train(
             &store,
             &account,
@@ -212,6 +216,7 @@ fn snooze_hides_and_returns_at_the_wake_time_across_a_restart() {
     let n = notify::snooze_woke(
         &settings,
         Some(&"work".into()),
+        Some(&"inbox".into()),
         &[notify::WokeMessage {
             message_id: "m1".into(),
             sender: "Ada".into(),

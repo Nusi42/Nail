@@ -549,7 +549,15 @@ impl ImapExecutor<'_> {
         };
         let target = folder(self.service, target_id).await?;
         if target.account_id == from.account_id {
-            if crate::junk::is_snoozed_folder(&target) {
+            let snoozed = {
+                let target = target.clone();
+                self.service
+                    .store()
+                    .call(move |s| Ok(crate::junk::is_snoozed_folder(s, &target)))
+                    .await
+                    .unwrap_or(false)
+            };
+            if snoozed {
                 // The hidden Snoozed folder (M2c) is created by the first
                 // move into it.
                 let created = self.client.lock().await.create_folder(&target.path).await;

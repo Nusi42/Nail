@@ -1,6 +1,7 @@
 # ADR 0048: M2c integration — Sieve, triage, sync policies, localized core messages, M2b follow-ups
 
-Status: accepted · 2026-09-30 · M2c WP55
+Status: accepted · 2026-09-30 · M2c WP55 · review fixes in ADR 0049 (Sieve location and
+server rules in the store, atomic snooze wake, marked Snoozed folder, search paging)
 
 ## Context
 

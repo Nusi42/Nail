@@ -2291,6 +2291,8 @@ theme "default" mode="system" {
         color "$color.selection-fg"
         background-color "$color.selection"
     }
+    // The trust colour has too little contrast on the selection colour.
+    part "security-keys.key:selected security-trust" { color "inherit"; }
     part "security-keys.key[key-state=\"revoked\"]" { opacity "$opacity.muted"; }
     part "security-keys.key[key-state=\"expired\"]" { opacity "$opacity.muted"; }
     part "security-keys.key.fingerprint" { font-family "$font.mono"; font-size "$font-size.sm"; }

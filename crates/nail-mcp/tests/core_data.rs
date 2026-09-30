@@ -53,11 +53,27 @@ impl CoreAccess for FakeCore {
                     ..UiContext::default()
                 },
             },
+            // One local hit and one found only by the server search.
             Request::Search { query } => Response::SearchResults {
                 offset: query.offset,
-                total: 0,
-                hits: vec![],
-                server: None,
+                total: 7,
+                hits: vec![
+                    nail_api::SearchHit {
+                        message: common::summary("m1", "work", "inbox", "t1"),
+                        score: 1.0,
+                        from_server: false,
+                    },
+                    nail_api::SearchHit {
+                        message: common::summary("m9", "work", "lists", "t9"),
+                        score: 0.0,
+                        from_server: true,
+                    },
+                ],
+                server: Some(nail_api::search::ServerSearch {
+                    accounts: vec!["work".into()],
+                    hits: 1,
+                    failed: vec![],
+                }),
             },
             _ => Response::Done,
         }
@@ -180,14 +196,18 @@ async fn core_data_reads_through_requests_store_and_blobs() {
         limit: 5,
         sort: Default::default(),
     };
-    assert!(matches!(
-        data.search(query).await.unwrap(),
-        SearchOutcome::Hits {
-            offset: 3,
-            total: 0,
-            ..
-        }
-    ));
+    // MCP pages over local hits only: server hits and their count go.
+    let SearchOutcome::Hits {
+        offset,
+        total,
+        hits,
+    } = data.search(query).await.unwrap()
+    else {
+        panic!("no hits")
+    };
+    assert_eq!((offset, total), (3, 6));
+    assert_eq!(hits.len(), 1);
+    assert!(!hits[0].from_server);
 
     data.emit(Event::McpClientsChanged);
     assert_eq!(data.0.events.lock().unwrap().len(), 1);

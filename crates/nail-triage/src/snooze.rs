@@ -10,6 +10,14 @@
 //! writes that bring them back (clear the keyword, move to the wake folder
 //! — the Inbox when that folder is gone).
 //!
+//! * **Atomic wake**: `poll` / `unsnooze` do not touch the store. The
+//!   caller removes the records *together with* queuing the writes (the
+//!   core does both in one store transaction) or calls
+//!   [`SnoozeScheduler::commit`]; when that fails it calls
+//!   [`SnoozeScheduler::restore`]. A crash in between leaves the records,
+//!   so the messages are due again after the restart — never stranded in
+//!   the hidden folder without a record.
+//!
 //! * **Offline**: the wake time is local, so a message comes back on time
 //!   without a connection; the moves replay when the server is reachable.
 //! * **Restart**: [`SnoozeScheduler::load`] rebuilds the wheel from the
@@ -290,6 +298,8 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
         self.finish(due, folders)
     }
 
+    /// The plan for due entries. The records stay in the store until the
+    /// caller commits the plan (see the module docs).
     fn finish(
         &mut self,
         due: Vec<SnoozeEntry>,
@@ -299,13 +309,6 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
             return Ok(WakePlan::default());
         }
         let ids: Vec<MessageId> = due.iter().map(|e| e.message_id.clone()).collect();
-        if let Err(e) = self.store.remove(&ids) {
-            // Keep them scheduled; the next poll retries.
-            for entry in &due {
-                self.wheel.insert(entry.message_id.clone(), entry.until);
-            }
-            return Err(e);
-        }
         let mut plan = WakePlan::default();
         let mut moves: Vec<TriageOp> = Vec::new();
         for entry in due {
@@ -336,6 +339,35 @@ impl<S: SnoozeStore, C: Clock> SnoozeScheduler<S, C> {
         ops.extend(moves);
         plan.ops = group_ops(ops);
         Ok(plan)
+    }
+
+    /// Removes the records of a carried-out wake plan from the store (for
+    /// callers that do not remove them in the transaction that queues the
+    /// writes). On failure the messages are scheduled again.
+    pub fn commit(&mut self, plan: &WakePlan) -> Result<(), S::Error> {
+        if plan.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<MessageId> = plan
+            .woken
+            .iter()
+            .map(|w| w.entry.message_id.clone())
+            .collect();
+        if let Err(e) = self.store.remove(&ids) {
+            self.restore(&plan.woken);
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Schedules woken messages again: their writes could not be queued
+    /// (their records are still in the store). The next poll retries.
+    pub fn restore(&mut self, woken: &[WokenMessage]) {
+        for w in woken {
+            self.wheel.insert(w.entry.message_id.clone(), w.entry.until);
+            self.entries
+                .insert(w.entry.message_id.clone(), w.entry.clone());
+        }
     }
 
     /// Forgets snoozes of messages that are gone (deleted elsewhere),
@@ -588,6 +620,7 @@ mod tests {
         let plan = s.poll(&all_exist).unwrap();
         assert_eq!(plan.woken.len(), 1);
         assert!(!plan.woken[0].fell_back);
+        assert_eq!(store.len(), 1, "the record stays until the commit");
         assert_eq!(
             plan.ops,
             [
@@ -601,6 +634,7 @@ mod tests {
                 },
             ]
         );
+        s.commit(&plan).unwrap();
         assert!(store.is_empty());
         assert_eq!(s.next_wake(), None);
         assert!(s.poll(&all_exist).unwrap().is_empty(), "wakes once");
@@ -648,7 +682,28 @@ mod tests {
         assert_eq!(plan.woken.len(), 1);
         assert_eq!(plan.woken[0].entry.message_id.as_str(), "m1");
         assert_eq!(s.next_wake(), Some(T0 + 86_400));
+        s.commit(&plan).unwrap();
         assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn a_crash_before_the_commit_wakes_again_after_the_restart() {
+        let (mut s, store, clock) = setup();
+        s.snooze(&[req("m1", T0 + 60)]).unwrap();
+        clock.advance(Duration::seconds(61));
+        assert_eq!(s.poll(&all_exist).unwrap().woken.len(), 1);
+        // The writes were never queued: Nail stopped here.
+        drop(s);
+        let mut s = SnoozeScheduler::load(store.clone(), clock.clone()).unwrap();
+        let plan = s.poll(&all_exist).unwrap();
+        assert_eq!(plan.woken.len(), 1, "due again");
+        // Queuing failed this time: scheduled again, retried next poll.
+        s.restore(&plan.woken);
+        assert_eq!(s.next_wake(), Some(T0 + 60));
+        assert!(s.get(&"m1".into()).is_some());
+        let plan = s.poll(&all_exist).unwrap();
+        s.commit(&plan).unwrap();
+        assert!(store.is_empty());
     }
 
     #[test]
@@ -677,6 +732,7 @@ mod tests {
             .unsnooze(&["m1".into(), "unknown".into()], &all_exist)
             .unwrap();
         assert_eq!(plan.woken.len(), 1);
+        s.commit(&plan).unwrap();
         let forgotten = s.forget(&["m2".into(), "nope".into()]).unwrap();
         assert_eq!(forgotten.len(), 1);
         assert_eq!(store.len(), 1);
@@ -756,9 +812,12 @@ mod tests {
         assert!(matches!(err, SnoozeError::Store(_)));
         assert_eq!(err.to_string(), "snooze store: disk full");
         clock.advance(Duration::seconds(20));
-        assert!(s.poll(&all_exist).is_err());
+        let plan = s.poll(&all_exist).unwrap();
+        assert!(s.commit(&plan).is_err());
         assert_eq!(s.next_wake(), Some(T0 + 10), "retried at the next poll");
         s.store().fail.set(false);
-        assert_eq!(s.poll(&all_exist).unwrap().woken.len(), 1);
+        let plan = s.poll(&all_exist).unwrap();
+        assert_eq!(plan.woken.len(), 1);
+        s.commit(&plan).unwrap();
     }
 }

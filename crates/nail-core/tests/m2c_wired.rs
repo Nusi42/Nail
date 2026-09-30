@@ -323,6 +323,146 @@ async fn rules_and_vacation_run_on_the_sieve_server() {
     f.service.shutdown().await;
 }
 
+async fn update_work(service: &Service, change: impl FnOnce(&mut nail_api::AccountConfig)) {
+    let Response::AccountsConfig { config } = service.handle(Request::GetAccountsConfig).await
+    else {
+        panic!("no config")
+    };
+    let mut work = config.account(&MULTI_WORK_ID.into()).unwrap().clone();
+    change(&mut work);
+    assert!(matches!(
+        service
+            .handle(Request::UpdateAccount {
+                config: Box::new(work),
+                secrets: vec![],
+            })
+            .await,
+        Response::AccountSaved { .. }
+    ));
+}
+
+async fn set_vacation(service: &Service, body: Option<&str>) {
+    let settings = VacationSettings {
+        enabled: body.is_some(),
+        subject: "Away".into(),
+        body: body.unwrap_or("Back soon.").into(),
+        ..VacationSettings::default()
+    };
+    assert!(matches!(
+        service
+            .handle(Request::UpdateVacation {
+                account_id: MULTI_WORK_ID.into(),
+                settings,
+            })
+            .await,
+        Response::Vacation { .. }
+    ));
+}
+
+/// Review fixes (ADR 0049): server rules stay skipped while an upload
+/// fails (the old script is still active), a renamed script leaves its
+/// old place, and switching off / deleting the account removes the script
+/// under its recorded name.
+#[tokio::test]
+async fn the_server_script_is_tracked_across_failures_renames_and_deletion() {
+    let f = setup().await;
+    synced(&f).await;
+    set_sieve(&f.service, true).await;
+    let Response::RuleSaved { rule } = f
+        .service
+        .handle(Request::SaveRule {
+            rule: Box::new(subject_rule("Invoices", "old invoice")),
+            position: None,
+        })
+        .await
+    else {
+        panic!("rule not saved")
+    };
+    eventually("the rule runs on the server", || async {
+        let status = sieve_status(&f.service).await;
+        status.state == SieveState::InSync
+            && status
+                .rules
+                .iter()
+                .any(|r| r.rule_id == rule.id && r.placement == RulePlacement::Server)
+    })
+    .await;
+
+    // Uploads fail from now on; the uploaded script stays active.
+    f.demo
+        .sieve
+        .reject_scripts_containing("Gone fishing", "vacation replies are disabled");
+    set_vacation(&f.service, Some("Gone fishing.")).await;
+    eventually("the upload failed", || async {
+        sieve_status(&f.service).await.state == SieveState::Failed
+    })
+    .await;
+    deliver(&f, "Another old invoice", "Please pay.");
+    eventually("the message arrived", || async {
+        in_folder(&f.service, FolderRole::Inbox, "Another old invoice")
+            .await
+            .is_some()
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let arrived = in_folder(&f.service, FolderRole::Inbox, "Another old invoice")
+        .await
+        .expect("still in the Inbox: the server runs the rule");
+    assert!(!arrived.flags.flagged, "the client did not run it too");
+    set_vacation(&f.service, None).await;
+    eventually("in sync again", || async {
+        sieve_status(&f.service).await.state == SieveState::InSync
+    })
+    .await;
+
+    // A new script name: the old script goes, the new one is active and
+    // never includes the old one.
+    update_work(&f.service, |w| {
+        w.sieve.as_mut().unwrap().script_name = Some("nail-renamed".into());
+    })
+    .await;
+    eventually("the renamed script is active", || async {
+        f.demo.sieve.active().as_deref() == Some("nail-renamed")
+            && f.demo.sieve.script("nail").is_none()
+    })
+    .await;
+    let script = f.demo.sieve.script("nail-renamed").unwrap();
+    assert!(!script.contains("\"nail\""), "{script}");
+
+    // Removing the node switches off under the recorded name.
+    update_work(&f.service, |w| w.sieve = None).await;
+    eventually("the renamed script is removed", || async {
+        f.demo.sieve.script("nail-renamed").is_none()
+    })
+    .await;
+    assert_eq!(f.demo.sieve.active(), None);
+
+    // Deleting the account removes its script too.
+    update_work(&f.service, |w| {
+        w.sieve = Some(nail_api::sieve::ManageSieveConfig {
+            port: Some(f.demo.sieve.port()),
+            host: Some("127.0.0.1".into()),
+            tls: Some(nail_api::accounts::TlsMode::Plaintext),
+            ..nail_api::sieve::ManageSieveConfig::default()
+        });
+    })
+    .await;
+    eventually("uploaded again", || async {
+        f.demo.sieve.active().as_deref() == Some("nail")
+    })
+    .await;
+    assert!(matches!(
+        f.service
+            .handle(Request::RemoveAccount {
+                account_id: MULTI_WORK_ID.into(),
+            })
+            .await,
+        Response::Done
+    ));
+    assert_eq!(f.demo.sieve.script("nail"), None);
+    f.service.shutdown().await;
+}
+
 #[tokio::test]
 async fn marking_junk_trains_and_similar_mail_lands_in_junk() {
     let f = setup().await;
@@ -534,6 +674,231 @@ async fn snoozed_mail_hides_and_returns_at_the_wake_time() {
     f.service.shutdown().await;
 }
 
+/// Review fixes (ADR 0049): snoozes survive a restart (missed wake times
+/// are due at once), and each folder the mail returns to gets its own
+/// notification, so none names mail of another account or folder.
+#[tokio::test]
+async fn snoozes_survive_a_restart_and_notify_per_folder() {
+    let f = setup().await;
+    synced(&f).await;
+    let inbox = folder(&f.service, FolderRole::Inbox).await.unwrap();
+    let lists = folders(&f.service)
+        .await
+        .into_iter()
+        .find(|x| x.path == MULTI_HEADERS_ONLY_FOLDER)
+        .unwrap();
+    let a = messages(&f.service, &inbox.id).await.remove(0);
+    eventually("the other folder synced", || async {
+        !messages(&f.service, &lists.id).await.is_empty()
+    })
+    .await;
+    let b = messages(&f.service, &lists.id).await.remove(0);
+    let now = nail_triage::Clock::unix(&*f.demo.clock);
+    let until = chrono::DateTime::from_timestamp(now + 3600, 0)
+        .unwrap()
+        .to_rfc3339();
+    assert!(matches!(
+        f.service
+            .handle(Request::SnoozeMessages {
+                message_ids: vec![a.id.clone(), b.id.clone()],
+                until,
+                wake_folder_id: None,
+            })
+            .await,
+        Response::Queued { .. }
+    ));
+    f.service.shutdown().await;
+
+    // Nail is not running when the wake time passes.
+    f.demo.clock.advance(7200);
+    let options = f.demo.service_options(ServiceOptions::new(
+        f._data_dir.path(),
+        f._config_dir.path(),
+    ));
+    let service = Service::open(options).unwrap();
+    let mut events = service.subscribe();
+    eventually("both came back after the restart", || async {
+        messages(&service, &inbox.id)
+            .await
+            .iter()
+            .any(|m| m.id == a.id)
+            && messages(&service, &lists.id)
+                .await
+                .iter()
+                .any(|m| m.id == b.id)
+    })
+    .await;
+    let mut woke = Vec::new();
+    while woke.len() < 2 {
+        let n = next_notification(&mut events, TIMEOUT)
+            .await
+            .expect("a notification per folder");
+        if n.kind == NotificationKind::SnoozeWoke {
+            woke.push(n);
+        }
+    }
+    woke.sort_by_key(|n| n.folder_id.clone());
+    let mut expected = vec![
+        (Some(inbox.id.clone()), vec![a.id.clone()]),
+        (Some(lists.id.clone()), vec![b.id.clone()]),
+    ];
+    expected.sort();
+    let got: Vec<(Option<FolderId>, Vec<MessageId>)> = woke
+        .iter()
+        .map(|n| (n.folder_id.clone(), n.message_ids.clone()))
+        .collect();
+    assert_eq!(got, expected);
+    assert!(
+        woke.iter()
+            .all(|n| n.account_id.as_ref().map(AccountId::as_str) == Some(MULTI_WORK_ID))
+    );
+    service.shutdown().await;
+}
+
+/// Review fixes (ADR 0049): a folder of the user called `Snoozed` stays
+/// visible and is not used; Nail's own hidden folder gets another name;
+/// mail stranded there without a snooze comes back to the Inbox after a
+/// restart.
+#[tokio::test]
+async fn a_users_snoozed_folder_stays_visible_and_stranded_mail_returns() {
+    let demo = start_demo_multi().await.unwrap();
+    assert!(demo.work.store().add_mailbox("Snoozed", FolderRole::Other));
+    demo.control(
+        "imap-deliver",
+        &json!({
+            "mailbox": "Snoozed",
+            "raw": "From: Me <ada@work.example>\r\nSubject: My own snoozed note\r\n\
+                    Date: Wed, 30 Sep 2026 09:00:00 +0000\r\nMessage-ID: <note@work.example>\r\n\r\nmine\r\n",
+        }),
+    )
+    .unwrap();
+    let data_dir = tempfile::tempdir().unwrap();
+    let config_dir = tempfile::tempdir().unwrap();
+    demo.write_config(config_dir.path()).unwrap();
+    let open = |demo: &DemoMulti, data: &TempDir, config: &TempDir| {
+        Service::open(demo.service_options(ServiceOptions::new(data.path(), config.path())))
+            .unwrap()
+    };
+    let f = Fixture {
+        service: open(&demo, &data_dir, &config_dir),
+        demo,
+        _config_dir: config_dir,
+        _data_dir: data_dir,
+    };
+    synced(&f).await;
+    eventually(
+        "the user's Snoozed folder is listed with its mail",
+        || async {
+            match folders(&f.service)
+                .await
+                .into_iter()
+                .find(|x| x.path == "Snoozed")
+            {
+                Some(mine) => messages(&f.service, &mine.id)
+                    .await
+                    .iter()
+                    .any(|m| m.subject == "My own snoozed note"),
+                None => false,
+            }
+        },
+    )
+    .await;
+
+    let inbox = folder(&f.service, FolderRole::Inbox).await.unwrap();
+    let message = messages(&f.service, &inbox.id).await.remove(0);
+    let now = nail_triage::Clock::unix(&*f.demo.clock);
+    let until = chrono::DateTime::from_timestamp(now + 3600, 0)
+        .unwrap()
+        .to_rfc3339();
+    assert!(matches!(
+        f.service
+            .handle(Request::SnoozeMessages {
+                message_ids: vec![message.id.clone()],
+                until,
+                wake_folder_id: None,
+            })
+            .await,
+        Response::Queued { .. }
+    ));
+    let listed = folders(&f.service).await;
+    assert!(listed.iter().any(|x| x.path == "Snoozed"), "still visible");
+    assert!(!listed.iter().any(|x| x.path == "Nail Snoozed"), "hidden");
+    eventually(
+        "the snoozed message is in Nail's own folder on the server",
+        || async {
+            f.demo
+                .control("imap-messages", &json!({ "mailbox": "Nail Snoozed" }))
+                .ok()
+                .and_then(|v| v.as_array().map(Vec::len))
+                == Some(1)
+        },
+    )
+    .await;
+    let mine = f
+        .demo
+        .control("imap-messages", &json!({ "mailbox": "Snoozed" }))
+        .unwrap();
+    assert_eq!(
+        mine.as_array().unwrap().len(),
+        1,
+        "the user's folder is untouched"
+    );
+
+    // A message lands in Nail's hidden folder without a snooze (another
+    // client, or a snooze lost to a crash of an older version).
+    f.demo
+        .control(
+            "imap-deliver",
+            &json!({
+                "mailbox": "Nail Snoozed",
+                "raw": "From: Someone <someone@example.net>\r\nSubject: Stranded mail\r\n\
+                        Date: Wed, 30 Sep 2026 09:00:00 +0000\r\n\r\nlost\r\n",
+            }),
+        )
+        .unwrap();
+    let Response::Snoozed { messages: snoozed } = f
+        .service
+        .handle(Request::ListSnoozed { account_id: None })
+        .await
+    else {
+        panic!("no list")
+    };
+    let hidden = snoozed[0].message.folder_id.clone();
+    eventually(
+        "the stranded mail synced into the hidden folder",
+        || async {
+            f.service
+                .handle(Request::SyncNow {
+                    account_id: Some(MULTI_WORK_ID.into()),
+                })
+                .await;
+            messages(&f.service, &hidden).await.len() == 2
+        },
+    )
+    .await;
+    f.service.shutdown().await;
+
+    let service = open(&f.demo, &f._data_dir, &f._config_dir);
+    eventually("the stranded mail is back in the Inbox", || async {
+        messages(&service, &inbox.id)
+            .await
+            .iter()
+            .any(|m| m.subject == "Stranded mail")
+    })
+    .await;
+    let still: Vec<MessageId> = messages(&service, &hidden)
+        .await
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(
+        still,
+        std::slice::from_ref(&message.id),
+        "the real snooze stays"
+    );
+    service.shutdown().await;
+}
+
 #[tokio::test]
 async fn new_mail_notifies_except_in_quiet_hours() {
     let f = setup().await;
@@ -584,6 +949,108 @@ async fn new_mail_notifies_except_in_quiet_hours() {
             .is_none(),
         "quiet hours suppress it"
     );
+    f.service.shutdown().await;
+}
+
+async fn search_page(
+    service: &Service,
+    offset: u32,
+    limit: u32,
+) -> (
+    u32,
+    Vec<nail_api::SearchHit>,
+    Option<nail_api::search::ServerSearch>,
+) {
+    match service
+        .handle(Request::Search {
+            query: SearchQuery {
+                text: "platypus".into(),
+                account_id: None,
+                folder_id: None,
+                offset,
+                limit,
+                sort: Default::default(),
+            },
+        })
+        .await
+    {
+        Response::SearchResults {
+            total,
+            hits,
+            server,
+            ..
+        } => (total, hits, server),
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// Review fix (ADR 0049): server hits come on top of the first page, are
+/// marked, at most a page of them, and paging counts local hits only, so
+/// the second page does not skip local hits.
+#[tokio::test]
+async fn server_search_hits_do_not_shift_the_pages() {
+    let f = setup().await;
+    synced(&f).await;
+    for n in 0..3 {
+        deliver(
+            &f,
+            &format!("Local platypus {n}"),
+            "A platypus in the body.",
+        );
+    }
+    for n in 0..2 {
+        let raw = format!(
+            "From: List <list@example.net>\r\nSubject: Letter {n}\r\n\
+             Date: Wed, 30 Sep 2026 09:00:00 +0000\r\nMessage-ID: <letter{n}@example.net>\r\n\r\n\
+             More platypus news.\r\n"
+        );
+        f.demo
+            .control(
+                "imap-deliver",
+                &json!({ "mailbox": MULTI_HEADERS_ONLY_FOLDER, "raw": raw }),
+            )
+            .unwrap();
+    }
+    eventually("everything synced and indexed", || async {
+        f.service
+            .handle(Request::SyncNow {
+                account_id: Some(MULTI_WORK_ID.into()),
+            })
+            .await;
+        let (_, hits, _) = search_page(&f.service, 0, 50).await;
+        hits.iter().filter(|h| !h.from_server).count() == 3
+            && hits.iter().filter(|h| h.from_server).count() == 3
+    })
+    .await;
+
+    let (total, first, server) = search_page(&f.service, 0, 2).await;
+    let local: Vec<MessageId> = first
+        .iter()
+        .filter(|h| !h.from_server)
+        .map(|h| h.message.id.clone())
+        .collect();
+    let from_server = first.iter().filter(|h| h.from_server).count();
+    assert_eq!(local.len(), 2);
+    assert_eq!(from_server, 2, "at most a page of server hits");
+    assert_eq!(server.unwrap().hits, 2);
+    assert_eq!(total, 3 + 2, "local total plus the server hits shown");
+    assert!(
+        first
+            .iter()
+            .filter(|h| h.from_server)
+            .all(|h| h.message.headers_only)
+    );
+
+    // The next page starts after the local hits: the third local hit.
+    let (total, second, server) = search_page(&f.service, 2, 2).await;
+    assert!(
+        server.is_none(),
+        "the servers are asked on the first page only"
+    );
+    assert_eq!(total, 3);
+    assert_eq!(second.len(), 1);
+    assert!(!second[0].from_server);
+    assert!(!local.contains(&second[0].message.id));
     f.service.shutdown().await;
 }
 

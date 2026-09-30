@@ -85,6 +85,17 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
 pub struct McpCore(pub Service);
 
 impl CoreAccess for McpCore {
+    async fn search_local(&self, query: nail_api::SearchQuery) -> Response {
+        match self
+            .0
+            .search_with(query, crate::search::ServerSearchMode::Off)
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => ApiError::from(err).into(),
+        }
+    }
+
     fn handle(&self, request: Request) -> impl Future<Output = Response> + Send {
         let service = self.0.clone();
         async move { service.handle(request).await }

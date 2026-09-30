@@ -318,6 +318,13 @@ security-import-file = Key file
 security-import-summary = Imported: { $created } new, { $updated } updated.
 security-import-issues = Skipped
 security-import-issue = { $item }: { $message }
+# Why a key was skipped on import; `detail` is the OpenPGP library's reason
+# (English).
+security-import-issue-unreadable = this is not readable OpenPGP key data ({ $detail })
+security-import-issue-no-key = no OpenPGP key found
+security-import-issue-unusable = the key cannot be used ({ $detail })
+security-import-issue-keychain = the key could not be protected in the system keychain
+security-import-issue-store = the key could not be saved
 security-import-nothing = No key or certificate was found in this data.
 security-import-p12-title = Import { $name }
 security-import-p12-passphrase = Password of the file

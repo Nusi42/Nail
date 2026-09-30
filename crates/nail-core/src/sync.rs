@@ -421,7 +421,7 @@ async fn mirror_folders(
                 }
                 // The hidden Snoozed folder exists locally before the
                 // first queued move creates it on the server (M2c).
-                if crate::junk::is_snoozed_folder(folder) && folder.total > 0 {
+                if crate::junk::is_snoozed_folder(s, folder) && folder.total > 0 {
                     continue;
                 }
                 let hashes = s.folder_blob_hashes(&folder.id)?;
@@ -522,11 +522,18 @@ pub(crate) async fn sync_folder(
         }
         new_ids.extend(stored.new);
     }
+    let hidden = {
+        let folder = folder.clone();
+        store
+            .call(move |s| Ok(crate::junk::is_snoozed_folder(s, &folder)))
+            .await
+            .unwrap_or(false)
+    };
     if known.is_some()
         && !reset
         && !new_ids.is_empty()
         && matches!(folder.role, FolderRole::Inbox | FolderRole::Other)
-        && !crate::junk::is_snoozed_folder(folder)
+        && !hidden
     {
         // Arrival rules run on new mail (the rules task wakes on NewMail;
         // the inbox survives a restart).

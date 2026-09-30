@@ -83,6 +83,9 @@ describe("launch requests", () => {
     expect(notice).toHaveTextContent("Contacts cannot be imported yet");
     act(() => env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\missing.eml" }]));
     await waitFor(() => expect(notice).toHaveTextContent("The file could not be opened"));
+    // The core's localized reason, not its English diagnostic.
+    expect(notice).toHaveTextContent(/The file .?C:\\missing\.eml.? cannot be read/);
+    expect(notice).not.toHaveTextContent("file C:\\missing.eml not found");
     const user = userEvent.setup();
     await user.tab();
     expect(within(notice).getByRole("button", { name: "Dismiss" })).toHaveFocus();

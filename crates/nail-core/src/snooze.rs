@@ -10,6 +10,14 @@
 //! wake task sleeps until the next wake time, at most
 //! [`EngineTiming::snooze_poll`](crate::EngineTiming) so clock changes are
 //! noticed.
+//!
+//! Waking is atomic (ADR 0049): the snooze records are removed in the same
+//! store transaction that applies and queues the writes bringing the
+//! messages back ([`Store::wake_snoozed`]); when that fails they stay
+//! scheduled. Messages in the hidden folder that no record covers (a snooze
+//! lost to an older version, or a resync that renumbered a message without
+//! `Message-ID`) are returned to the Inbox: at the first poll after start
+//! and whenever a snooze had to be forgotten.
 
 use std::sync::{Arc, Mutex};
 
@@ -17,6 +25,7 @@ use nail_api::{ApiError, Event, FolderId, LocalizedMessage, MessageId, OpId};
 use nail_store::Store;
 use nail_triage::snooze::{SnoozeRequest, WakePlan};
 use nail_triage::{Clock, SnoozeEntry, SnoozeScheduler, SnoozeStore};
+use nail_triage::{FolderTarget, TriageOp};
 use tokio::sync::Notify;
 
 use crate::error::Result;
@@ -70,6 +79,8 @@ type Scheduler = SnoozeScheduler<StoreSnooze, Arc<dyn Clock>>;
 #[derive(Default)]
 pub(crate) struct SnoozeCtl {
     scheduler: Mutex<Option<Scheduler>>,
+    /// Look for messages stranded in the hidden folder at the next poll.
+    sweep: std::sync::atomic::AtomicBool,
     /// A snooze changed: the wake task recomputes its deadline.
     pub(crate) wake: Notify,
 }
@@ -89,6 +100,11 @@ impl Service {
                 Arc::clone(&self.inner.clock),
             )?;
             *guard = Some(loaded);
+            // First use after the start: sweep the hidden folders once.
+            self.inner
+                .snooze
+                .sweep
+                .store(true, std::sync::atomic::Ordering::Release);
         }
         let scheduler = guard.as_mut().expect("loaded above");
         work(scheduler)
@@ -161,13 +177,44 @@ impl Service {
         self.woke(plan, false).await
     }
 
-    /// Carries out a wake plan: the writes, `SnoozeChanged`, and (for
-    /// messages that came back on their own) a notification.
+    /// Carries out a wake plan: removes the records and queues the writes
+    /// in one transaction (scheduled again when that fails), then
+    /// `SnoozeChanged` and (for messages that came back on their own) a
+    /// notification.
     async fn woke(&self, plan: WakePlan, notify: bool) -> Result<Vec<OpId>> {
         if plan.is_empty() {
             return Ok(Vec::new());
         }
-        let op_ids = self.run_triage_ops(plan.ops).await?;
+        let ids: Vec<MessageId> = plan
+            .woken
+            .iter()
+            .map(|w| w.entry.message_id.clone())
+            .collect();
+        let committed = match self.triage_operations(plan.ops.clone()).await {
+            Ok(operations) => self
+                .inner
+                .store
+                .call(move |s| Ok(s.wake_snoozed(&ids, &operations)?.1))
+                .await
+                .map_err(crate::error::CoreError::from),
+            Err(err) => Err(err),
+        };
+        let queued = match committed {
+            Ok(queued) => queued,
+            Err(err) => {
+                let woken = plan.woken.clone();
+                self.blocking(move |service| {
+                    service.with_scheduler(|s| {
+                        s.restore(&woken);
+                        Ok(())
+                    })
+                })
+                .await?;
+                self.inner.snooze.wake.notify_one();
+                return Err(err);
+            }
+        };
+        let op_ids = self.announce_enqueued(&queued);
         self.broadcast(Event::SnoozeChanged);
         if notify {
             self.notify_snooze_woke(&plan.woken).await;
@@ -177,17 +224,81 @@ impl Service {
 
     /// Wakes the messages that are due; returns how many came back.
     pub(crate) async fn poll_snoozes(&self) -> Result<usize> {
-        let plan = self
+        let (plan, forgot) = self
             .blocking(|service| {
                 let store = service.store().clone();
                 service.with_scheduler(|s| {
-                    rebind_moved(&store, s)?;
-                    Ok(s.poll(&|f: &FolderId| store.get_folder(f).is_ok())?)
+                    let forgot = rebind_moved(&store, s)?;
+                    Ok((s.poll(&|f: &FolderId| store.get_folder(f).is_ok())?, forgot))
                 })
             })
             .await?;
         let count = plan.woken.len();
         self.woke(plan, true).await?;
+        if forgot {
+            self.inner
+                .snooze
+                .sweep
+                .store(true, std::sync::atomic::Ordering::Release);
+        }
+        let swept = if self
+            .inner
+            .snooze
+            .sweep
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            self.sweep_snoozed_folders().await?
+        } else {
+            0
+        };
+        Ok(count + swept)
+    }
+
+    /// Returns messages stranded in the hidden Snoozed folders (no snooze
+    /// record, no queued write) to their account's Inbox.
+    async fn sweep_snoozed_folders(&self) -> Result<usize> {
+        let orphans: Vec<(nail_api::AccountId, Vec<MessageId>)> = self
+            .inner
+            .store
+            .call(|s| {
+                let mut out = Vec::new();
+                for account in s.list_accounts()? {
+                    if let Some(folder) = s.snoozed_folder_of(&account.id)? {
+                        let lost = s.orphaned_in_folder(&folder)?;
+                        if !lost.is_empty() {
+                            out.push((account.id, lost));
+                        }
+                    }
+                }
+                Ok(out)
+            })
+            .await?;
+        let mut count = 0;
+        for (account, ids) in orphans {
+            tracing::warn!(
+                %account,
+                count = ids.len(),
+                "returning messages without a snooze from the Snoozed folder to the Inbox"
+            );
+            count += ids.len();
+            let ops = vec![
+                TriageOp::RemoveKeyword {
+                    message_ids: ids.clone(),
+                    keyword: nail_api::triage::SNOOZE_KEYWORD.to_owned(),
+                },
+                TriageOp::Move {
+                    message_ids: ids,
+                    to: FolderTarget::Role {
+                        account_id: account,
+                        role: nail_api::FolderRole::Inbox,
+                    },
+                },
+            ];
+            self.run_triage_ops(ops).await?;
+        }
+        if count > 0 {
+            self.broadcast(Event::SnoozeChanged);
+        }
         Ok(count)
     }
 
@@ -199,8 +310,10 @@ impl Service {
 }
 
 /// Snoozes whose message got a new id (a resync renumbered its folder)
-/// follow it by `Message-ID`; snoozes whose message is gone are forgotten.
-fn rebind_moved(store: &Store, scheduler: &mut Scheduler) -> Result<()> {
+/// follow it by `Message-ID`; snoozes whose message is gone are forgotten
+/// (returns whether any was: the hidden folders are swept then, since the
+/// message may sit there under a new id).
+fn rebind_moved(store: &Store, scheduler: &mut Scheduler) -> Result<bool> {
     let entries: Vec<SnoozeEntry> = scheduler.list().into_iter().cloned().collect();
     let mut gone = Vec::new();
     for entry in entries {
@@ -229,7 +342,7 @@ fn rebind_moved(store: &Store, scheduler: &mut Scheduler) -> Result<()> {
         );
         scheduler.forget(&gone)?;
     }
-    Ok(())
+    Ok(!gone.is_empty())
 }
 
 /// The wake task: sleeps until the next wake time (at most

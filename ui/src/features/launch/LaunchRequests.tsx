@@ -7,8 +7,8 @@
  * its targets). Never in a remote-UI session (desktop only).
  */
 import { useEffect, useState } from "react";
-import { NailError } from "../../api/client";
-import type { LaunchRequest } from "../../api/generated";
+import { errorMessageOf } from "../../api/client";
+import type { LaunchRequest, LocalizedMessage } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { ComposeContext } from "../../state/compose";
 import { useComposeContext } from "../../state/hooks";
@@ -19,6 +19,8 @@ import { remoteStore } from "../remote";
 export interface LaunchNotice {
   id: string;
   args?: Record<string, string>;
+  /** Why it failed: the core's localized message (its `reason`). */
+  reason?: LocalizedMessage;
 }
 
 /** Acts on one launch request; returns a notice to show, if any. */
@@ -42,8 +44,8 @@ export async function handleLaunch(
         ui.selectMessage(message.id);
         return null;
       } catch (error) {
-        const reason = error instanceof NailError ? error.message : String(error);
-        return { id: "launch-open-failed", args: { reason } };
+        // The core's localized reason (never its English diagnostic).
+        return { id: "launch-open-failed", reason: errorMessageOf(error) };
       }
     case "SubscribeCalendar":
     case "ImportCalendarFile":
@@ -94,7 +96,12 @@ export function LaunchRequests() {
   if (notice === null) return null;
   return (
     <div data-part="launch-notice" role="status" aria-label={t("launch-notice-label")}>
-      <p data-part="launch-notice.text">{t(notice.id, notice.args)}</p>
+      <p data-part="launch-notice.text">
+        {t(notice.id, {
+          ...notice.args,
+          ...(notice.reason ? { reason: t(notice.reason.id, notice.reason.args) } : {}),
+        })}
+      </p>
       <button type="button" data-part="form.button" onClick={() => setNotice(null)}>
         {t("launch-dismiss")}
       </button>

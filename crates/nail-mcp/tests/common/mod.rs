@@ -271,6 +271,7 @@ impl McpData for FakeData {
             .iter()
             .filter(|m| query.account_id.as_ref().is_none_or(|a| &m.account_id == a))
             .map(|m| SearchHit {
+                from_server: false,
                 message: m.clone(),
                 score: 1.0,
             })

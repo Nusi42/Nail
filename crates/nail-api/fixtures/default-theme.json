@@ -6164,6 +6164,24 @@
       "source": null
     },
     {
+      "selector": "security-trust",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "security-keys.key",
+          "states": [
+            "selected"
+          ],
+          "conditions": []
+        }
+      ],
+      "declarations": {
+        "color": "inherit"
+      },
+      "source": null
+    },
+    {
       "selector": "security-keys.key",
       "states": [],
       "conditions": [

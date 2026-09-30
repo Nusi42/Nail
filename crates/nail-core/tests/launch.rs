@@ -99,16 +99,17 @@ async fn an_opened_eml_file_is_imported_and_readable() {
             path: dir.path().join("gone.eml").display().to_string(),
         })
         .await;
-    assert!(
-        matches!(
-            missing,
-            Response::Error {
-                code: ErrorCode::NotFound,
-                ..
-            }
-        ),
-        "{missing:?}"
-    );
+    match &missing {
+        Response::Error {
+            code: ErrorCode::NotFound,
+            localized: Some(localized),
+            ..
+        } => {
+            assert_eq!(localized.id, "launch-error-unreadable");
+            assert!(localized.args.contains_key("path"));
+        }
+        other => panic!("{other:?}"),
+    }
     let empty = dir.path().join("empty.eml");
     std::fs::write(&empty, "").unwrap();
     let refused = service
@@ -116,14 +117,27 @@ async fn an_opened_eml_file_is_imported_and_readable() {
             path: empty.display().to_string(),
         })
         .await;
-    assert!(
-        matches!(
-            refused,
-            Response::Error {
-                code: ErrorCode::InvalidRequest,
-                ..
-            }
-        ),
-        "{refused:?}"
-    );
+    match &refused {
+        Response::Error {
+            code: ErrorCode::InvalidRequest,
+            localized: Some(localized),
+            ..
+        } => assert_eq!(localized.id, "launch-error-size"),
+        other => panic!("{other:?}"),
+    }
+    let text = dir.path().join("notes.eml");
+    std::fs::write(&text, b"\r\n\r\n").unwrap();
+    match service
+        .handle(Request::ImportMessageFile {
+            path: text.display().to_string(),
+        })
+        .await
+    {
+        Response::Error {
+            code: ErrorCode::InvalidRequest,
+            localized: Some(localized),
+            ..
+        } => assert_eq!(localized.id, "launch-error-not-mail"),
+        other => panic!("{other:?}"),
+    }
 }

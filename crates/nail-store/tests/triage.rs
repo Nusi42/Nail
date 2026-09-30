@@ -1,19 +1,21 @@
 //! Schema v7 (ADR 0043): body state, snooze, junk classifier data,
-//! notification settings and the Sieve state.
+//! notification settings and the Sieve state; v8 (ADR 0049): Sieve
+//! location and server rules, folder marks, atomic snooze wake.
 
 mod common;
 
 use common::{folder, message, seeded_store};
+use nail_api::accounts::TlsMode;
 use nail_api::sieve::{VacationIssue, VacationSettings};
 use nail_api::sync::BodyState;
 use nail_api::triage::{
     JunkSettings, JunkSource, JunkVerdict, NotificationOverride, NotificationScope,
     NotificationSettings, NotifyFolders, QuietHours, Weekday,
 };
-use nail_api::{AccountId, ApiError, ErrorCode, FolderId, FolderRole, MessageId};
+use nail_api::{AccountId, ApiError, ErrorCode, FolderId, FolderRole, MessageId, RuleId};
 use nail_store::{
-    Error, MCP_SETTINGS_KEY, MessageMeta, SieveRecord, SyncedMessage, TrainOutcome,
-    hash_junk_token, hash_sieve_script,
+    Error, FlagChange, MCP_SETTINGS_KEY, MessageMeta, Operation, SieveLocation, SieveRecord,
+    SieveUpload, SyncedMessage, TrainOutcome, hash_junk_token, hash_sieve_script,
 };
 use pretty_assertions::assert_eq;
 
@@ -143,6 +145,161 @@ fn snoozes_are_recorded_listed_and_woken() {
     store.snooze(&"m1".into(), T0 + 10, &inbox, T0).unwrap();
     store.delete_account(&a1()).unwrap();
     assert!(store.list_snoozed(None).unwrap().is_empty());
+}
+
+/// Review fix (ADR 0049): the classifier's storage stays bounded.
+#[test]
+fn junk_training_storage_is_bounded() {
+    let store = with_messages();
+    let account = a1();
+    let limit = nail_store::JUNK_TRAINING_WITH_TOKENS as usize;
+    for i in 0..limit + 5 {
+        let tokens = vec![format!("word{i}"), "shared".to_owned()];
+        store
+            .train_junk(&account, &format!("k{i:05}"), true, &tokens, T0 + i as i64)
+            .unwrap();
+    }
+    let stats = store.junk_stats(&account).unwrap();
+    assert_eq!(stats.trained_junk as usize, limit + 5, "rows are kept");
+    // The oldest rows lost their tokens: untraining them leaves the counts.
+    let before = store
+        .junk_token_counts(&account, &["word0".to_owned()])
+        .unwrap();
+    assert_eq!(before.get("word0"), Some(&(1, 0)));
+    assert!(store.untrain_junk(&account, "k00000").unwrap());
+    assert_eq!(
+        store
+            .junk_token_counts(&account, &["word0".to_owned()])
+            .unwrap(),
+        before
+    );
+    // The newest still move between classes.
+    let newest = format!("k{:05}", limit + 4);
+    let tokens = vec![format!("word{}", limit + 4), "shared".to_owned()];
+    assert_eq!(
+        store
+            .train_junk(&account, &newest, false, &tokens, T0 + 99_999)
+            .unwrap(),
+        TrainOutcome::Retrained
+    );
+
+    // Random-token spam: above the limit, tokens seen once go.
+    let flood: Vec<String> = (0..=nail_store::JUNK_TOKEN_LIMIT)
+        .map(|i| format!("rnd{i}"))
+        .collect();
+    store
+        .train_junk(&account, "flood", true, &flood, T0 + 100_000)
+        .unwrap();
+    let stats = store.junk_stats(&account).unwrap();
+    assert!(stats.tokens < 10, "{}", stats.tokens);
+    let shared = store
+        .junk_token_counts(&account, &["shared".to_owned()])
+        .unwrap();
+    assert!(!shared.is_empty(), "tokens of several messages stay");
+}
+
+#[test]
+fn waking_removes_records_and_queues_writes_in_one_transaction() {
+    let store = with_messages();
+    let inbox = FolderId::from("inbox");
+    store.snooze(&"m1".into(), T0 + 60, &inbox, T0).unwrap();
+    store.snooze(&"m2".into(), T0 + 60, &inbox, T0).unwrap();
+    let untag = |id: &str| Operation::UpdateFlags {
+        message_id: id.into(),
+        change: FlagChange {
+            remove_tags: vec!["$Snoozed".into()],
+            ..FlagChange::default()
+        },
+    };
+    // A write that fails (unknown message) keeps every record.
+    let err = store.wake_snoozed(&["m1".into()], &[untag("m1"), untag("ghost")]);
+    assert!(err.is_err());
+    assert_eq!(store.list_snoozed(None).unwrap().len(), 2);
+    assert!(
+        store
+            .pending_ops_for_message(&"m1".into())
+            .unwrap()
+            .is_empty()
+    );
+
+    let (removed, queued) = store.wake_snoozed(&["m1".into()], &[untag("m1")]).unwrap();
+    assert_eq!(removed.len(), 1);
+    assert_eq!(queued.len(), 1);
+    assert_eq!(store.list_snoozed(None).unwrap().len(), 1);
+}
+
+#[test]
+fn orphans_in_the_snoozed_folder_are_found() {
+    let store = with_messages();
+    store
+        .upsert_folder(&folder("snz", "a1", "Snoozed", None, FolderRole::Other))
+        .unwrap();
+    let snz = FolderId::from("snz");
+    for id in ["s1", "s2", "s3"] {
+        store
+            .upsert_message(&message(id, "a1", "snz", "2026-09-03T10:00:00Z"))
+            .unwrap();
+    }
+    // s1 has a snooze, s2 a queued write, s3 nothing: only s3 is lost.
+    store
+        .snooze(&"s1".into(), T0 + 60, &"inbox".into(), T0)
+        .unwrap();
+    store
+        .enqueue(&Operation::UpdateFlags {
+            message_id: "s2".into(),
+            change: FlagChange {
+                add_tags: vec!["$Snoozed".into()],
+                ..FlagChange::default()
+            },
+        })
+        .unwrap();
+    assert_eq!(
+        store.orphaned_in_folder(&snz).unwrap(),
+        [MessageId::from("s3")]
+    );
+}
+
+#[test]
+fn only_marked_folders_are_the_snoozed_folder() {
+    let store = with_messages();
+    store
+        .upsert_folder(&folder("mine", "a1", "Snoozed", None, FolderRole::Other))
+        .unwrap();
+    store
+        .upsert_folder(&folder(
+            "nails",
+            "a1",
+            "Nail Snoozed",
+            None,
+            FolderRole::Other,
+        ))
+        .unwrap();
+    assert_eq!(store.snoozed_folder_of(&a1()).unwrap(), None);
+    assert!(!store.is_snoozed_folder(&"mine".into()).unwrap());
+    store.mark_snoozed_folder(&"nails".into()).unwrap();
+    assert_eq!(
+        store.snoozed_folder_of(&a1()).unwrap(),
+        Some(FolderId::from("nails"))
+    );
+    assert!(store.is_snoozed_folder(&"nails".into()).unwrap());
+    assert!(!store.is_snoozed_folder(&"mine".into()).unwrap());
+    // A sync update of the folder keeps the mark; deleting it drops it.
+    store
+        .upsert_folder(&folder(
+            "nails",
+            "a1",
+            "Nail Snoozed",
+            None,
+            FolderRole::Other,
+        ))
+        .unwrap();
+    assert!(store.is_snoozed_folder(&"nails".into()).unwrap());
+    store.delete_folder(&"nails".into()).unwrap();
+    assert_eq!(store.snoozed_folder_of(&a1()).unwrap(), None);
+    assert!(matches!(
+        store.mark_snoozed_folder(&"ghost".into()),
+        Err(Error::NotFound { .. })
+    ));
 }
 
 #[test]
@@ -406,13 +563,23 @@ fn sieve_state_and_vacation() {
     let error = ApiError::new(ErrorCode::Network, "connection refused");
     store.record_sieve_error(&account, Some(&error)).unwrap();
     let script = "require [\"fileinto\"];\nkeep;\n";
+    let location = SieveLocation {
+        host: "sieve.example.org".into(),
+        port: 4190,
+        tls: TlsMode::Starttls,
+        script_name: "nail".into(),
+    };
     store
         .record_sieve_upload(
             &account,
-            script,
-            &["fileinto".into(), "vacation".into()],
-            &["roundcube".into()],
-            T0,
+            &SieveUpload {
+                script,
+                extensions: &["fileinto".into(), "vacation".into()],
+                other_scripts: &["roundcube".into()],
+                location: &location,
+                server_rules: &["lists".into()],
+                now: T0,
+            },
         )
         .unwrap();
     let record = store.sieve_record(&account).unwrap();
@@ -425,8 +592,17 @@ fn sieve_state_and_vacation() {
             other_scripts: vec!["roundcube".into()],
             vacation: vacation.clone(),
             last_error: None,
+            location: Some(location.clone()),
+            server_rules: vec!["lists".into()],
         }
     );
+    // A failed upload keeps what is known to run on the server.
+    store
+        .record_sieve_error(&account, Some(&ApiError::new(ErrorCode::Network, "down")))
+        .unwrap();
+    let failed = store.sieve_record(&account).unwrap();
+    assert_eq!(failed.server_rules, [RuleId::from("lists")]);
+    assert_eq!(failed.location, Some(location));
     store.record_sieve_error(&account, Some(&error)).unwrap();
     assert_eq!(
         store.sieve_record(&account).unwrap().last_error,
@@ -438,6 +614,7 @@ fn sieve_state_and_vacation() {
     store.clear_sieve_upload(&account).unwrap();
     let cleared = store.sieve_record(&account).unwrap();
     assert_eq!((cleared.script_hash, cleared.uploaded_at), (None, None));
+    assert_eq!((cleared.location, cleared.server_rules), (None, vec![]));
     assert_eq!(cleared.vacation, vacation);
     store.delete_account(&account).unwrap();
     assert_eq!(

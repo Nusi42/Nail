@@ -1,9 +1,8 @@
-//! Nail's IMAP, POP3 and SMTP engines against real servers (plan M2b
-//! WP44): Dovecot and Stalwart in the CI job "interop". Every test returns
-//! at once without `NAIL_INTEROP=1` (see `src/lib.rs` for the variables).
-//!
-//! ManageSieve is not covered yet: the client arrives with M2c (WP51); the
-//! CI job already exposes port 4190 of both servers for it.
+//! Nail's IMAP, POP3 and SMTP engines and the ManageSieve client against
+//! real servers (plan M2b WP44, M2c): Dovecot (Pigeonhole) and Stalwart in
+//! the CI job "interop". Every test returns at once without
+//! `NAIL_INTEROP=1` (see `src/lib.rs` for the variables); the ManageSieve
+//! tests run on servers with the `sieve` feature.
 
 use std::time::Duration;
 
@@ -334,5 +333,225 @@ async fn smtp_rejects_a_wrong_password() {
             "{}: {err:?}",
             server.name
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ManageSieve (M2c, ADR 0049)
+
+fn sieve_config(interop: &Interop, server: &Server) -> nail_sieve::SieveConfig {
+    nail_sieve::SieveConfig::new(&server.host)
+        .with_port(server.sieve_port())
+        .with_tls(TlsMode::Starttls)
+        .with_trust(nail_sieve::TlsTrust::CustomRoots(interop.roots.clone()))
+        .with_timeout(TIMEOUT)
+}
+
+async fn sieve(interop: &Interop, server: &Server) -> nail_sieve::SieveSession {
+    nail_sieve::SieveSession::login(
+        &sieve_config(interop, server),
+        &nail_sieve::SieveCredentials::password(&interop.user, &interop.password),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{} ManageSieve: {e}", server.name))
+}
+
+fn sieve_servers(interop: &Interop) -> Vec<Server> {
+    interop
+        .servers
+        .iter()
+        .filter(|s| s.sieve)
+        .cloned()
+        .collect()
+}
+
+/// A rule every server can run (`fileinto` + `imap4flags`, or kept by
+/// the client where an extension is missing).
+fn sieve_rules() -> Vec<nail_api::rules::Rule> {
+    use nail_api::rules::{Condition, FolderRef, Rule, RuleAction, RuleTrigger, TextMatch, TextOp};
+    vec![Rule {
+        id: "interop".into(),
+        name: "Interop".into(),
+        enabled: true,
+        triggers: vec![RuleTrigger::Arrival],
+        scope: vec![],
+        conditions: Condition::Subject {
+            matches: TextMatch {
+                op: TextOp::Contains,
+                value: "[interop]".into(),
+                case_sensitive: false,
+            },
+        },
+        actions: vec![
+            RuleAction::Move {
+                folder: FolderRef::Path {
+                    path: "Interop".into(),
+                    account_id: None,
+                },
+            },
+            RuleAction::Flag { flagged: true },
+        ],
+        source: None,
+    }]
+}
+
+async fn remove_if_present(session: &mut nail_sieve::SieveSession, name: &str) {
+    let scripts = session.list_scripts().await.unwrap();
+    if let Some(script) = scripts.iter().find(|s| s.name == name) {
+        if script.active {
+            session.set_active("").await.unwrap();
+        }
+        session.delete_script(name).await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn managesieve_login_capabilities_and_checkscript() {
+    let Some(interop) = from_env() else { return };
+    for server in sieve_servers(&interop) {
+        check_managesieve_basics(&interop, &server).await;
+    }
+}
+
+#[tokio::test]
+async fn managesieve_upload_keeps_the_users_script_and_switches_off() {
+    let Some(interop) = from_env() else { return };
+    for server in sieve_servers(&interop) {
+        check_managesieve_upload(&interop, &server).await;
+    }
+}
+
+/// The ManageSieve checks run offline too, against the in-process mock
+/// server with STARTTLS, so they are known to work before CI reaches real
+/// servers.
+#[tokio::test]
+async fn managesieve_checks_pass_against_the_mock_server() {
+    let mock = nail_testkit_net::MockSieveServer::start(nail_testkit_net::MockSieveConfig {
+        tls: nail_testkit::MockTls::StartTls,
+        username: "ada@example.org".into(),
+        password: "nail-interop".into(),
+        ..nail_testkit_net::MockSieveConfig::default()
+    })
+    .await
+    .unwrap();
+    let interop = Interop {
+        servers: vec![Server {
+            name: "mock".into(),
+            host: "127.0.0.1".into(),
+            base: mock.port() - 4190,
+            smtp: false,
+            sieve: true,
+        }],
+        roots: vec![mock.ca_der().unwrap().to_vec()],
+        user: "ada@example.org".into(),
+        password: "nail-interop".into(),
+    };
+    let server = interop.servers[0].clone();
+    check_managesieve_basics(&interop, &server).await;
+    check_managesieve_upload(&interop, &server).await;
+    assert!(mock.scripts().is_empty(), "{:?}", mock.scripts());
+}
+
+async fn check_managesieve_basics(interop: &Interop, server: &Server) {
+    {
+        let mut session = sieve(interop, server).await;
+        assert!(session.is_tls(), "{}: STARTTLS", server.name);
+        let caps = session.capabilities().clone();
+        assert!(caps.has_extension("fileinto"), "{}: {caps:?}", server.name);
+        let broken = session.check_script("if header :bogus { keep").await;
+        if caps.version.is_some() {
+            assert!(
+                matches!(broken, Err(nail_sieve::SieveError::ScriptRejected(_))),
+                "{}: {broken:?}",
+                server.name
+            );
+        }
+        session.logout().await.unwrap();
+
+        let wrong = nail_sieve::SieveSession::login(
+            &sieve_config(interop, server),
+            &nail_sieve::SieveCredentials::password(&interop.user, "wrong"),
+        )
+        .await;
+        assert!(
+            matches!(wrong, Err(nail_sieve::SieveError::AuthFailed(_))),
+            "{}: {wrong:?}",
+            server.name
+        );
+    }
+}
+
+async fn check_managesieve_upload(interop: &Interop, server: &Server) {
+    {
+        let mut session = sieve(interop, server).await;
+        let theirs = unique("user-rules");
+        let (ours, renamed) = (unique("nail"), unique("nail-renamed"));
+        session.put_script(&theirs, "keep;\r\n").await.unwrap();
+        session.set_active(&theirs).await.unwrap();
+
+        let folders = nail_sieve::FolderMap::new(Some('/'), &[]);
+        let options = || nail_sieve::CompileOptions {
+            account_id: "interop".into(),
+            account_aliases: vec![],
+            extensions: vec![],
+            folders: &folders,
+            own_addresses: vec![interop.user.clone()],
+            utc_offset_minutes: 0,
+            today: None,
+            max_redirects: None,
+            previous_active: None,
+        };
+        let vacation = nail_api::sieve::VacationSettings::default();
+        let report = nail_sieve::upload(&mut session, &ours, &sieve_rules(), &vacation, options())
+            .await
+            .unwrap_or_else(|e| panic!("{}: upload: {e}", server.name));
+        assert!(report.activated, "{}", server.name);
+        assert_eq!(report.previous_active.as_deref(), Some(theirs.as_str()));
+        let stored = session.get_script(&ours).await.unwrap();
+        assert!(nail_sieve::is_managed(&stored), "{}: {stored}", server.name);
+        assert_eq!(
+            nail_sieve::recorded_previous(&stored).as_deref(),
+            Some(theirs.as_str())
+        );
+        let back = nail_sieve::decompile(&stored).unwrap();
+        assert!(back.managed);
+        let active = session.list_scripts().await.unwrap();
+        assert!(
+            active.iter().any(|s| s.name == ours && s.active),
+            "{active:?}"
+        );
+
+        // A new script name: Nail's old script is never the user's.
+        let report =
+            nail_sieve::upload(&mut session, &renamed, &sieve_rules(), &vacation, options())
+                .await
+                .unwrap();
+        assert_eq!(report.replaced_managed.as_deref(), Some(ours.as_str()));
+        assert_eq!(report.previous_active.as_deref(), Some(theirs.as_str()));
+        let stored = session.get_script(&renamed).await.unwrap();
+        assert!(
+            !stored.contains(&format!("\"{ours}\"")),
+            "{}: {stored}",
+            server.name
+        );
+        remove_if_present(&mut session, &ours).await;
+
+        // Switching off gives the user's script back.
+        let restored = nail_sieve::remove(&mut session, &renamed).await.unwrap();
+        assert_eq!(
+            restored.as_deref(),
+            Some(theirs.as_str()),
+            "{}",
+            server.name
+        );
+        let scripts = session.list_scripts().await.unwrap();
+        assert!(
+            scripts.iter().any(|s| s.name == theirs && s.active),
+            "{scripts:?}"
+        );
+        assert!(!scripts.iter().any(|s| s.name == renamed));
+
+        remove_if_present(&mut session, &theirs).await;
+        session.logout().await.unwrap();
     }
 }

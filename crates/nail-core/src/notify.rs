@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use nail_api::triage::MailNotification;
-use nail_api::{Event, MessageId};
+use nail_api::{AccountId, Event, FolderId, MessageId};
 use nail_triage::notify::{self, Arrival, WokeMessage};
 use nail_triage::snooze::WokenMessage;
 use nail_triage::{Clock, NotificationBatcher};
@@ -44,6 +44,9 @@ impl NotifyCtl {
         self.sequence.fetch_add(1, Ordering::Relaxed) + 1
     }
 }
+
+/// The account and folder a woken message returned to.
+type WokeKey = (AccountId, FolderId);
 
 /// What the rules decided per message (`notify` actions).
 pub(crate) type RuleNotify = HashMap<MessageId, bool>;
@@ -122,10 +125,12 @@ impl Service {
         self.inner.notify.wake.notify_one();
     }
 
-    /// The notification for snoozed messages that came back on their own.
+    /// The notifications for snoozed messages that came back on their
+    /// own: one per account and folder they returned to, so no
+    /// notification carries mail of another account or folder (remote
+    /// sessions get only those their grant covers).
     pub(crate) async fn notify_snooze_woke(&self, woken: &[WokenMessage]) {
         let ids: Vec<MessageId> = woken.iter().map(|w| w.entry.message_id.clone()).collect();
-        let account = woken.first().map(|w| w.entry.account_id.clone());
         let loaded = self
             .inner
             .store
@@ -134,9 +139,16 @@ impl Service {
         let Ok((settings, summaries)) = loaded else {
             return;
         };
-        let messages: Vec<WokeMessage> = summaries
+        // In wake order (the summaries come back in any order).
+        let order: HashMap<&MessageId, usize> = woken
             .iter()
-            .map(|m| WokeMessage {
+            .enumerate()
+            .map(|(i, w)| (&w.entry.message_id, i))
+            .collect();
+        let mut groups: Vec<(WokeKey, Vec<(usize, WokeMessage)>)> = Vec::new();
+        for m in &summaries {
+            let key = (m.account_id.clone(), m.folder_id.clone());
+            let message = WokeMessage {
                 message_id: m.id.clone(),
                 sender: m
                     .from
@@ -144,17 +156,28 @@ impl Service {
                     .map(|a| a.name.clone().unwrap_or_else(|| a.email.clone()))
                     .unwrap_or_default(),
                 subject: m.subject.clone(),
-            })
-            .collect();
-        let sequence = self.inner.notify.next_sequence();
-        if let Some(notification) = notify::snooze_woke(
-            &settings,
-            account.as_ref(),
-            &messages,
-            &self.local_now(),
-            sequence,
-        ) {
-            self.request_notification(notification);
+            };
+            let rank = order.get(&m.id).copied().unwrap_or(usize::MAX);
+            match groups.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, list)) => list.push((rank, message)),
+                None => groups.push((key, vec![(rank, message)])),
+            }
+        }
+        let local = self.local_now();
+        for ((account, folder), mut list) in groups {
+            list.sort_by_key(|(rank, _)| *rank);
+            let messages: Vec<WokeMessage> = list.into_iter().map(|(_, m)| m).collect();
+            let sequence = self.inner.notify.next_sequence();
+            if let Some(notification) = notify::snooze_woke(
+                &settings,
+                Some(&account),
+                Some(&folder),
+                &messages,
+                &local,
+                sequence,
+            ) {
+                self.request_notification(notification);
+            }
         }
     }
 

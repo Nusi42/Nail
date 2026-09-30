@@ -41,7 +41,8 @@ pub struct SearchQuery {
 pub struct ServerSearch {
     /// Accounts asked.
     pub accounts: Vec<AccountId>,
-    /// Hits that came only from the server.
+    /// Hits that came only from the server (marked `from_server`, on top of
+    /// the page, at most the page size; included in `total`).
     pub hits: u32,
     /// Accounts that could not be asked (offline, error); their
     /// headers-only messages were matched on headers only.
@@ -66,6 +67,12 @@ pub struct SearchHit {
     pub message: MessageSummary,
     /// Relevance score (higher is better; only comparable within one result).
     pub score: f32,
+    /// Found only by the server-side search (M2c, first page only). Such
+    /// hits come on top of the page: `offset` / `limit` count the local
+    /// hits only, so the next page starts at `offset` + the local hits.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub from_server: bool,
 }
 
 /// Why a query does not parse. Offsets count UTF-16 code units, as

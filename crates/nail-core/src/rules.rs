@@ -906,19 +906,21 @@ impl Service {
         let mut per_account: HashMap<nail_api::AccountId, Option<RuleSet>> = HashMap::new();
         if cause == RuleRunCause::Arrival {
             for (_, summary) in &views {
-                per_account
-                    .entry(summary.account_id.clone())
-                    .or_insert_with(|| {
-                        let server = self.server_rules(&summary.account_id);
-                        (!server.is_empty()).then(|| {
-                            RuleSet::new(
-                                set.rules()
-                                    .iter()
-                                    .map(|r| r.rule().clone())
-                                    .filter(|r| !server.contains(&r.id)),
-                            )
-                        })
-                    });
+                if per_account.contains_key(&summary.account_id) {
+                    continue;
+                }
+                let server = self.server_rules(&summary.account_id).await;
+                per_account.insert(
+                    summary.account_id.clone(),
+                    (!server.is_empty()).then(|| {
+                        RuleSet::new(
+                            set.rules()
+                                .iter()
+                                .map(|r| r.rule().clone())
+                                .filter(|r| !server.contains(&r.id)),
+                        )
+                    }),
+                );
             }
         }
         let outcomes: Vec<MessageOutcome> = {

@@ -14,8 +14,9 @@ use nail_api::engine::{
 use nail_api::rules::{Condition, FolderRef, Rule, RuleAction, RuleTrigger, TextMatch, TextOp};
 use nail_api::sieve::{RulePlacement, VacationSettings};
 use nail_sieve::{
-    CompileOptions, FolderMap, SieveAuth, SieveConfig, SieveCredentials, SieveError, SieveSession,
-    TlsTrust, decompile, reasons, remove, to_crlf, upload,
+    CompileOptions, FolderMap, MANAGED_MARKER, PREVIOUS_MARKER, SieveAuth, SieveConfig,
+    SieveCredentials, SieveError, SieveSession, TlsTrust, decompile, reasons, remove, to_crlf,
+    upload,
 };
 use nail_testkit::MockTls;
 use nail_testkit_net::{MockPop3Config, MockPop3Server, MockSieveConfig, MockSieveServer};
@@ -498,6 +499,103 @@ async fn upload_preserves_the_users_scripts() {
     assert_eq!(server.active().as_deref(), Some("roundcube"));
     assert_eq!(server.script("nail"), None);
     assert_eq!(remove(&mut session, "nail").await.unwrap(), None);
+}
+
+#[tokio::test]
+async fn a_renamed_script_never_treats_nails_old_script_as_the_users() {
+    let (server, mut session) = plain_server(MockSieveConfig::default()).await;
+    server.set_script("roundcube", "keep;", true);
+    let folders = folders();
+    upload(
+        &mut session,
+        "nail",
+        &rules(),
+        &vacation(),
+        options(&folders),
+    )
+    .await
+    .unwrap();
+    assert_eq!(server.active().as_deref(), Some("nail"));
+
+    // The user picks another script name: the old Nail script is active.
+    let report = upload(
+        &mut session,
+        "nail-work",
+        &rules(),
+        &vacation(),
+        options(&folders),
+    )
+    .await
+    .unwrap();
+    assert!(report.activated);
+    assert_eq!(report.replaced_managed.as_deref(), Some("nail"));
+    assert_eq!(report.previous_active.as_deref(), Some("roundcube"));
+    assert_eq!(report.compiled.included.as_deref(), Some("roundcube"));
+    let stored = server.script("nail-work").unwrap();
+    assert!(!stored.contains("include :personal \"nail\""), "{stored}");
+    assert_eq!(server.active().as_deref(), Some("nail-work"));
+
+    // A later upload keeps the user's script as the previous one.
+    let report = upload(
+        &mut session,
+        "nail-work",
+        &rules(),
+        &vacation(),
+        options(&folders),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report.previous_active.as_deref(), Some("roundcube"));
+    assert_eq!(report.replaced_managed, None);
+
+    // Switching off brings the user's script back, not Nail's old one.
+    assert_eq!(
+        remove(&mut session, "nail-work").await.unwrap().as_deref(),
+        Some("roundcube")
+    );
+    assert_eq!(server.active().as_deref(), Some("roundcube"));
+}
+
+#[tokio::test]
+async fn a_recorded_previous_script_written_by_nail_is_followed() {
+    let (server, mut session) = plain_server(MockSieveConfig::default()).await;
+    server.set_script("mine", "keep;", false);
+    // An older Nail script that recorded the user's script, and the
+    // current one that (before the fix) recorded the older Nail script.
+    server.set_script(
+        "nail-old",
+        &format!("{MANAGED_MARKER}\n{PREVIOUS_MARKER}\"mine\"\nkeep;\n"),
+        false,
+    );
+    server.set_script(
+        "nail",
+        &format!("{MANAGED_MARKER}\n{PREVIOUS_MARKER}\"nail-old\"\nkeep;\n"),
+        true,
+    );
+    assert_eq!(
+        remove(&mut session, "nail").await.unwrap().as_deref(),
+        Some("mine")
+    );
+    assert_eq!(server.active().as_deref(), Some("mine"));
+
+    // A loop of Nail scripts ends with nothing active.
+    server.set_script(
+        "a",
+        &format!("{MANAGED_MARKER}\n{PREVIOUS_MARKER}\"b\"\nkeep;\n"),
+        false,
+    );
+    server.set_script(
+        "b",
+        &format!("{MANAGED_MARKER}\n{PREVIOUS_MARKER}\"a\"\nkeep;\n"),
+        false,
+    );
+    server.set_script(
+        "nail",
+        &format!("{MANAGED_MARKER}\n{PREVIOUS_MARKER}\"a\"\nkeep;\n"),
+        true,
+    );
+    assert_eq!(remove(&mut session, "nail").await.unwrap(), None);
+    assert_eq!(server.active(), None);
 }
 
 #[tokio::test]

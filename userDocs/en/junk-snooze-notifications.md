@@ -33,7 +33,10 @@ back to the Inbox. You can undo a mark, and the filter forgets what it
 learned from that mark.
 
 Nail does not store the text of your mail in its filter. It keeps only
-scrambled fingerprints of the words, and counts for each one.
+scrambled fingerprints of the words, and counts for each one. The filter
+does not grow without end: it remembers the words of your latest 1,000
+marks (so you can change your mind about them), and when it holds very many
+words it forgets the ones seen in only one message.
 
 ## Snooze
 
@@ -42,6 +45,13 @@ hidden folder called **Snoozed** on your server, and it gets a `$Snoozed`
 mark so other mail programs can recognize it. At the time you picked, Nail
 moves it back to the folder it came from. If that folder no longer exists,
 the message goes to the Inbox.
+
+- If you already have a folder called **Snoozed** (made by you or another
+  mail program), Nail leaves it alone and keeps showing it; its own hidden
+  folder is then called **Nail Snoozed**.
+- Mail that ends up in Nail's hidden folder without a wake-up time (for
+  example moved there by another program) comes back to the Inbox the next
+  time Nail starts, so nothing stays hidden for good.
 
 - Nail keeps the wake-up times on your computer. Snoozed mail comes back on
   time even without a connection. The move on the server happens when you
@@ -84,5 +94,5 @@ browser (remote access), Nail shows the browser's notifications once you
 allow them (**Allow notifications in this browser** in Settings →
 Notifications).
 
-When snoozed messages come back, you also get a notification, unless
-notifications are off or it is quiet time.
+When snoozed messages come back, you also get a notification (one per
+folder they return to), unless notifications are off or it is quiet time.

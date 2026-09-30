@@ -659,13 +659,39 @@ impl Service {
         let wanted = offset + limit + 1;
         let mut visible = Vec::new();
         let mut scanned: u32 = 0;
+        // The server search runs once, on the first page, only on folders
+        // the grant covers (no login to a server outside the grant).
+        let mut server = None;
+        let mut server_hits = Vec::new();
+        if offset == 0 {
+            let grant = access.clone();
+            let only =
+                crate::search::ServerSearchMode::Only(Box::new(move |f: &nail_api::Folder| {
+                    grant.allows_account(&f.account_id) && grant.allows_folder(&f.id)
+                }));
+            let probe = SearchQuery {
+                offset: 0,
+                limit: limit as u32,
+                ..query.clone()
+            };
+            if let Response::SearchResults {
+                hits, server: info, ..
+            } = self.search_with(probe, only).await?
+            {
+                server = info;
+                server_hits = hits.into_iter().filter(|h| h.from_server).collect();
+            }
+        }
         while scanned < RESTRICTED_SCAN && visible.len() < wanted {
             let page = SearchQuery {
                 offset: scanned,
                 limit: SCAN_PAGE,
                 ..query.clone()
             };
-            let (total, hits) = match self.search(page).await? {
+            let (total, hits) = match self
+                .search_with(page, crate::search::ServerSearchMode::Off)
+                .await?
+            {
                 Response::SearchResults { total, hits, .. } => (total, hits),
                 other => return Ok(other),
             };
@@ -684,18 +710,42 @@ impl Service {
                 break;
             }
         }
-        let total = u32::try_from(visible.len()).unwrap_or(u32::MAX);
+        let mut hidden_server = 0u32;
+        server_hits.retain(|h| {
+            let keep = message_allowed(access, &h.message);
+            hidden_server += u32::from(!keep);
+            keep
+        });
+        let mut server = server.map(|mut s| {
+            s.hits = s.hits.saturating_sub(hidden_server);
+            s
+        });
+        if hide_encrypted {
+            let mut kept = Vec::with_capacity(server_hits.len());
+            for hit in server_hits {
+                if self.encrypted(&hit.message.id).await? {
+                    if let Some(s) = server.as_mut() {
+                        s.hits = s.hits.saturating_sub(1);
+                    }
+                } else {
+                    kept.push(hit);
+                }
+            }
+            server_hits = kept;
+        }
+        let total = u32::try_from(visible.len() + server_hits.len()).unwrap_or(u32::MAX);
         let end = visible.len().min(offset + limit);
-        let hits = if offset < end {
+        let mut hits: Vec<nail_api::SearchHit> = if offset < end {
             visible.drain(offset..end).collect()
         } else {
             Vec::new()
         };
+        hits.extend(server_hits);
         Ok(Response::SearchResults {
             offset: query.offset,
             total,
             hits,
-            server: None,
+            server,
         })
     }
 
@@ -993,9 +1043,12 @@ impl Service {
                     .is_none_or(|a| access.allows_account(a));
                 let folder_ok = match &notification.folder_id {
                     Some(folder) => self.folder_allowed(&access, folder).await.unwrap_or(false),
-                    None => true,
+                    // Messages without a folder to check: full grants only.
+                    None => notification.message_ids.is_empty() || full(&access),
                 };
-                account_ok && folder_ok
+                let account_named =
+                    notification.account_id.is_some() || notification.message_ids.is_empty();
+                account_ok && folder_ok && (account_named || full(&access))
             }
             Event::McpSettingsChanged => admin,
         };

@@ -31,7 +31,9 @@ function Row({ entry }: { entry: McpAuditEntry }) {
       <td data-part="mcp-audit.outcome" data-outcome={entry.outcome}>
         {t(`mcp-audit-outcome-${entry.outcome}`)}
       </td>
-      <td data-part="mcp-audit.detail">{entry.detail ?? ""}</td>
+      <td data-part="mcp-audit.detail">
+        {entry.localized ? t(entry.localized.id, entry.localized.args) : (entry.detail ?? "")}
+      </td>
     </tr>
   );
 }

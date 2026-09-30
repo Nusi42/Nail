@@ -256,7 +256,11 @@ pub fn search(
         .into_iter()
         .map(|message| {
             let score = compiled.scores.get(&message.id).copied().unwrap_or(0.0);
-            SearchHit { message, score }
+            SearchHit {
+                message,
+                score,
+                from_server: false,
+            }
         })
         .collect();
     Ok(SearchResults { total, hits })

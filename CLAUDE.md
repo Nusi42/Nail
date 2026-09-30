@@ -47,7 +47,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        M2c: `sieve` node of an IMAP account, reset-toolbar / reset-key-binding
                        write-back, src/l10n.rs (fluent-bundle `Catalog` over every catalog, English
                        fallback; every ConfigError / rule issue carries a LocalizedMessage) (ADRs 0043, 0046)
-crates/nail-store      SQLite metadata (v6), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v8), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -60,7 +60,10 @@ crates/nail-store      SQLite metadata (v6), blob store, per-account operation q
                        v7: triage.rs — messages.body_state, snoozes, junk classifier (hashed
                        tokens; untrain_junk), notification overrides, Sieve state + vacation
                        (clear_sieve_upload) (ADR 0043); bodies.rs (headers-only merge, attach /
-                       detach bodies, fetch targets), lock.rs DataDirLock (ADR 0046)
+                       detach bodies, fetch targets), lock.rs DataDirLock (ADR 0046);
+                       v8: sieve_state.location / server_rules (SieveUpload), folder_marks
+                       (the hidden Snoozed folder), wake_snoozed (records + queue in one
+                       transaction), orphaned_in_folder, bounded junk training (ADR 0049)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
                        warnings) (ADR 0032); remote_content.rs: ProxyRewriter, parse_message_with
@@ -245,6 +248,16 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,
   desktop, headless `nail mcp`).
+- M2c review fixes (ADR 0049): the store records where Nail's Sieve script was uploaded and which
+  rules it runs (arrival rules skip them across restarts and failed uploads; renamed / moved /
+  switched-off / deleted-account scripts are removed from the recorded place); snooze wakes are
+  one store transaction (`Store::wake_snoozed`), stranded hidden-folder mail is swept to the
+  Inbox; the hidden Snoozed folder is the *marked* one (`folder_marks`; a user's `Snoozed` stays
+  visible, Nail's is then `Nail Snoozed`); wake notifications are per account and folder; server
+  search hits are `SearchHit.from_server`, capped at a page and not counted in paging
+  (`Service::search_with`, `ServerSearchMode`; MCP searches locally); `nail mcp` checks the
+  data-dir lock before trusting the endpoint file; `scripts/interop` has ManageSieve tests
+  (`sieve` server feature; offline also against the mock).
 - M2c integration (ADR 0048; packages ADRs 0044 Sieve, 0045 triage, 0046 engine polish, 0047 UI):
   Sieve uploads run from a core task (digest of the inputs; server rules are skipped on arrival);
   arrivals go security → junk → rules → notifications; snooze = `$Snoozed` + move to the hidden

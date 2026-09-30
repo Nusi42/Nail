@@ -12,7 +12,8 @@ export type ServerSearch = {
  */
 accounts: Array<AccountId>, 
 /**
- * Hits that came only from the server.
+ * Hits that came only from the server (marked `from_server`, on top of
+ * the page, at most the page size; included in `total`).
  */
 hits: number, 
 /**

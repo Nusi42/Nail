@@ -11,6 +11,8 @@ import type {
   MessageId,
   ResolvedLayout,
   ResolvedTheme,
+  SearchError,
+  SearchHit,
   ThreadId,
 } from "../api/generated";
 import { normalizeLayout, normalizeTheme } from "../api/normalize";
@@ -247,6 +249,26 @@ export interface SearchScope {
 }
 
 /** Search hits page by page; an invalid query resolves to its error. */
+/** One loaded page of search results. */
+export interface SearchPage {
+  offset: number;
+  total: number;
+  hits: SearchHit[];
+  error: SearchError | null;
+}
+
+/**
+ * The offset of the next search page, `undefined` at the end. Hits found
+ * only by the server search (`from_server`, first page) come on top of the
+ * page: the offset and the total count local hits only.
+ */
+export function nextSearchOffset(last: SearchPage): number | undefined {
+  const local = last.hits.filter((h) => h.from_server !== true).length;
+  const serverOnly = last.hits.length - local;
+  const next = last.offset + local;
+  return last.error === null && local > 0 && next < last.total - serverOnly ? next : undefined;
+}
+
 export function useSearch(scope: SearchScope | null, pageSize: number) {
   const client = useClient();
   return useInfiniteQuery({
@@ -278,10 +300,7 @@ export function useSearch(scope: SearchScope | null, pageSize: number) {
       return { offset: response.offset, total: response.total, hits: response.hits, error: null };
     },
     initialPageParam: 0,
-    getNextPageParam: (last) => {
-      const next = last.offset + last.hits.length;
-      return last.error === null && next < last.total && last.hits.length > 0 ? next : undefined;
-    },
+    getNextPageParam: nextSearchOffset,
     enabled: scope !== null && scope.text.trim() !== "",
   });
 }

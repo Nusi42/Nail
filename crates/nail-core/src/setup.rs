@@ -407,6 +407,9 @@ impl Service {
             .account(id)
             .cloned()
             .ok_or_else(|| ApiError::not_found(format!("account {id}")))?;
+        // Nail's Sieve script leaves the server while the login still
+        // exists (M2c review fix).
+        self.remove_sieve_before_delete(&config).await;
         self.inner
             .accounts
             .edit(|doc| doc.remove_account(id).map_err(edit_error))?;

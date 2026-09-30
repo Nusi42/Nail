@@ -87,7 +87,7 @@ pub(crate) fn junk_input(store: &Store, blobs: &BlobStore, id: &MessageId) -> Op
         account_id: stored.summary.account_id.clone(),
         folder_role: folder.role,
         keywords: stored.summary.tags.clone(),
-        key: classifier::message_key(rfc.as_deref(), id),
+        key: classifier::message_key(rfc.as_deref(), id, &tokens),
         tokens,
     })
 }
@@ -256,9 +256,15 @@ impl Service {
         if ops.is_empty() {
             return Ok(Vec::new());
         }
+        let operations = self.triage_operations(ops).await?;
+        self.enqueue(operations).await
+    }
+
+    /// The queue operations for planned triage writes (creates the hidden
+    /// Snoozed folder locally when an op needs it).
+    pub(crate) async fn triage_operations(&self, ops: Vec<TriageOp>) -> Result<Vec<Operation>> {
         debug_assert!(!ops.iter().any(TriageOp::targets_trash));
-        let operations = self
-            .blocking(move |service| {
+        self.blocking(move |service| {
                 let store = service.store();
                 let mut out = Vec::new();
                 for op in ops {
@@ -314,8 +320,7 @@ impl Service {
                 }
                 Ok(out)
             })
-            .await?;
-        self.enqueue(operations).await
+            .await
     }
 }
 
@@ -339,30 +344,57 @@ fn resolve_target(
     })
 }
 
-/// The hidden Snoozed folder of an account (created in the store when
-/// missing; hidden from `ListFolders`).
-pub(crate) fn snoozed_folder(store: &Store, account: &AccountId) -> nail_store::Result<FolderId> {
-    let name = nail_api::triage::SNOOZED_FOLDER_NAME;
-    if let Some(folder) = store.find_folder_by_path(account, name)? {
-        return Ok(folder.id);
-    }
-    let folder = nail_api::Folder {
-        id: crate::ids::folder_id(account, name),
-        account_id: account.clone(),
-        parent_id: None,
-        name: name.to_owned(),
-        path: name.to_owned(),
-        role: FolderRole::Other,
-        unread: 0,
-        total: 0,
-    };
-    store.upsert_folder(&folder)?;
-    Ok(folder.id)
+/// Names tried for the hidden Snoozed folder, in order: the first that no
+/// folder of the account has yet. A folder of the user that is already
+/// called `Snoozed` stays the user's (visible, never swept).
+fn snoozed_folder_names() -> impl Iterator<Item = String> {
+    let base = nail_api::triage::SNOOZED_FOLDER_NAME;
+    std::iter::once(base.to_owned())
+        .chain(std::iter::once(format!("Nail {base}")))
+        .chain((2..=99).map(move |n| format!("Nail {base} {n}")))
 }
 
-/// Whether a folder is the hidden Snoozed folder.
-pub(crate) fn is_snoozed_folder(folder: &nail_api::Folder) -> bool {
-    folder.parent_id.is_none() && folder.path == nail_api::triage::SNOOZED_FOLDER_NAME
+/// The hidden Snoozed folder of an account: the folder Nail marked as its
+/// own (store `folder_marks`), else a new top-level folder with the first
+/// free name (created in the store and marked; the first move into it
+/// creates it on the server). Hidden from `ListFolders`.
+pub(crate) fn snoozed_folder(store: &Store, account: &AccountId) -> nail_store::Result<FolderId> {
+    if let Some(id) = store.snoozed_folder_of(account)?
+        && store.get_folder(&id).is_ok()
+    {
+        return Ok(id);
+    }
+    for name in snoozed_folder_names() {
+        if store.find_folder_by_path(account, &name)?.is_some() {
+            continue;
+        }
+        let folder = nail_api::Folder {
+            id: crate::ids::folder_id(account, &name),
+            account_id: account.clone(),
+            parent_id: None,
+            name: name.clone(),
+            path: name,
+            role: FolderRole::Other,
+            unread: 0,
+            total: 0,
+        };
+        store.upsert_folder(&folder)?;
+        store.mark_snoozed_folder(&folder.id)?;
+        return Ok(folder.id);
+    }
+    Err(nail_store::Error::InvalidData(
+        "no free name for the Snoozed folder".to_owned(),
+    ))
+}
+
+/// Whether a folder is Nail's hidden Snoozed folder (marked by
+/// [`snoozed_folder`]; a user folder called `Snoozed` is not).
+pub(crate) fn is_snoozed_folder(store: &Store, folder: &nail_api::Folder) -> bool {
+    folder.parent_id.is_none()
+        && store
+            .is_snoozed_folder(&folder.id)
+            .inspect_err(|err| tracing::warn!(%err, "cannot read folder marks"))
+            .unwrap_or(false)
 }
 
 #[cfg(test)]

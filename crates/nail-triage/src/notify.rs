@@ -343,12 +343,16 @@ pub struct WokeMessage {
     pub subject: String,
 }
 
-/// The notification for snoozed messages that came back (oldest first in
-/// `messages`), `None` when notifications are off or it is quiet time.
-/// Snooze wake-ups ignore the folder selection: the user asked for them.
+/// The notification for snoozed messages of one account and folder that
+/// came back (oldest first in `messages`), `None` when notifications are
+/// off or it is quiet time. Snooze wake-ups ignore the folder selection:
+/// the user asked for them. The caller makes one per account and folder,
+/// so a notification never names mail of another account or folder (a
+/// remote session sees only the ones its grant covers).
 pub fn snooze_woke<Tz: TimeZone>(
     settings: &NotificationSettings,
     account: Option<&AccountId>,
+    folder: Option<&FolderId>,
     messages: &[WokeMessage],
     local: &DateTime<Tz>,
     sequence: u64,
@@ -374,10 +378,13 @@ pub fn snooze_woke<Tz: TimeZone>(
     );
     Some(MailNotification {
         id: format!("snooze-woke:{sequence}"),
-        tag: "snooze-woke".to_owned(),
+        tag: match folder {
+            Some(folder) => format!("snooze-woke:{folder}"),
+            None => "snooze-woke".to_owned(),
+        },
         kind: NotificationKind::SnoozeWoke,
         account_id: account.cloned(),
-        folder_id: None,
+        folder_id: folder.cloned(),
         message_ids: messages
             .iter()
             .rev()
@@ -726,18 +733,28 @@ mod tests {
                 subject: "New".into(),
             },
         ];
-        let n = snooze_woke(&s, Some(&"work".into()), &woke, &now, 7).unwrap();
+        let n = snooze_woke(
+            &s,
+            Some(&"work".into()),
+            Some(&"work-inbox".into()),
+            &woke,
+            &now,
+            7,
+        )
+        .unwrap();
         assert_eq!(n.kind, NotificationKind::SnoozeWoke);
         assert_eq!(n.id, "snooze-woke:7");
+        assert_eq!(n.tag, "snooze-woke:work-inbox");
+        assert_eq!(n.folder_id, Some(FolderId::from("work-inbox")));
         assert_eq!(
             n.message_ids,
             [MessageId::from("m2"), MessageId::from("m1")]
         );
         assert_eq!(n.title.args["count"], 2u32.into());
         assert_eq!(n.body.unwrap().args["sender"], "Bob".into());
-        assert!(snooze_woke(&s, None, &[], &now, 1).is_none());
+        assert!(snooze_woke(&s, None, None, &[], &now, 1).is_none());
         s.quiet_hours = Some(quiet("11:00", "13:00", &[]));
-        assert!(snooze_woke(&s, None, &woke, &now, 1).is_none());
+        assert!(snooze_woke(&s, None, None, &woke, &now, 1).is_none());
         // The test notification ignores quiet hours and the switch.
         s.enabled = false;
         let t = test_notification(&s, 3);

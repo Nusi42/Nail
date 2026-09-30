@@ -104,7 +104,7 @@ impl Service {
                     all.extend(
                         s.list_folders(member)?
                             .into_iter()
-                            .filter(|f| !crate::junk::is_snoozed_folder(f)),
+                            .filter(|f| !crate::junk::is_snoozed_folder(s, f)),
                     );
                 }
                 Ok(all)
@@ -124,9 +124,16 @@ impl Service {
             return Ok(folders.into_iter().map(|v| v.folder).collect());
         }
         let id = account.clone();
-        let mut folders = self.inner.store.call(move |s| s.list_folders(&id)).await?;
         // The hidden folder snoozed mail waits in (M2c).
-        folders.retain(|f| !crate::junk::is_snoozed_folder(f));
+        let folders = self
+            .inner
+            .store
+            .call(move |s| {
+                let mut folders = s.list_folders(&id)?;
+                folders.retain(|f| !crate::junk::is_snoozed_folder(s, f));
+                Ok(folders)
+            })
+            .await?;
         Ok(folders)
     }
 

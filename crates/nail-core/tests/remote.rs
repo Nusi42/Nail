@@ -1098,6 +1098,65 @@ async fn remote_sockets_get_only_the_events_their_grant_covers() {
             Some(mail)
         );
     }
+    // Notifications (M2c review fix): only for granted accounts and
+    // folders; one naming messages without an account or folder only for
+    // sessions that see everything.
+    let notification = |account: Option<AccountId>, folder: Option<nail_api::FolderId>| {
+        nail_api::Event::NotificationRequested {
+            notification: nail_api::triage::MailNotification {
+                id: "snooze-woke:1".into(),
+                tag: "snooze-woke".into(),
+                kind: nail_api::triage::NotificationKind::SnoozeWoke,
+                account_id: account,
+                folder_id: folder,
+                message_ids: vec![message.id.clone()],
+                title: nail_api::LocalizedMessage::new("notification-snooze-woke-title"),
+                body: None,
+                sound: false,
+            },
+        }
+    };
+    let granted_elsewhere = notification(Some(AccountId::new("somewhere-else")), None);
+    let here = notification(
+        Some(message.account_id.clone()),
+        Some(message.folder_id.clone()),
+    );
+    let anonymous = notification(None, None);
+    assert_eq!(service.remote_event(&narrow, here.clone()).await, None);
+    assert_eq!(service.remote_event(&narrow, anonymous.clone()).await, None);
+    assert_eq!(
+        service
+            .remote_event(&narrow, granted_elsewhere.clone())
+            .await,
+        None,
+        "messages without a folder to check"
+    );
+    assert_eq!(
+        service.remote_event(&reader, here.clone()).await,
+        Some(here)
+    );
+    assert_eq!(
+        service.remote_event(&reader, anonymous.clone()).await,
+        Some(anonymous)
+    );
+    let test = nail_api::Event::NotificationRequested {
+        notification: nail_api::triage::MailNotification {
+            id: "test:1".into(),
+            tag: "test".into(),
+            kind: nail_api::triage::NotificationKind::Test,
+            account_id: None,
+            folder_id: None,
+            message_ids: vec![],
+            title: nail_api::LocalizedMessage::new("notification-test-title"),
+            body: None,
+            sound: false,
+        },
+    };
+    assert_eq!(
+        service.remote_event(&narrow, test.clone()).await,
+        Some(test)
+    );
+
     // Only the session's own end.
     let ended = |session_id| nail_api::Event::RemoteSessionEnded {
         session_id,

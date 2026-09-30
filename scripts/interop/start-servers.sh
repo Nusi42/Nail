@@ -10,7 +10,7 @@
 #        Stalwart on 20000 + {143,993,110,995,587,465,4190}.
 # Then run the tests with (see scripts/interop/README.md):
 #   NAIL_INTEROP=1 NAIL_INTEROP_CA=<cert dir>/ca.pem \
-#   NAIL_INTEROP_SERVERS=dovecot=localhost:10000,stalwart=localhost:20000:smtp \
+#   NAIL_INTEROP_SERVERS=dovecot=localhost:10000:sieve,stalwart=localhost:20000:smtp:sieve \
 #   NAIL_INTEROP_USER=ada@example.org NAIL_INTEROP_PASSWORD=nail-interop \
 #   cargo test --manifest-path scripts/interop/Cargo.toml
 set -euo pipefail
@@ -49,6 +49,6 @@ wait_for() {
   echo "port $port is up"
 }
 
-for port in 10143 10993 10110 10995 20143 20993 20110 20995 20587 20465; do
+for port in 10143 10993 10110 10995 14190 20143 20993 20110 20995 20587 20465 24190; do
   wait_for "$port"
 done

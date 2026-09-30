@@ -15,9 +15,15 @@
 //!   [`SieveState`].
 //! * A rule placed `server` by the last successful upload is skipped by
 //!   the arrival rules for that account (manual runs still work), so a
-//!   rule never runs twice on a message.
-//! * Switching ManageSieve off (or removing the node) removes Nail's
-//!   script and re-activates the user's previous one.
+//!   rule never runs twice on a message. The store keeps that list
+//!   (`sieve_state.server_rules`) until the script is removed: after a
+//!   restart and after failed uploads the old script is still active on
+//!   the server, so its rules stay skipped.
+//! * The store also keeps where the script was uploaded (host, port, TLS,
+//!   script name). Switching ManageSieve off (or removing the node, or the
+//!   account) removes Nail's script from that place and re-activates the
+//!   user's previous one; a changed host, port or script name removes the
+//!   script from the old place before uploading to the new one.
 //! * Servers without the `date` extension get the vacation dates applied
 //!   by Nail: the script is recompiled on the day the compiler names.
 
@@ -37,7 +43,7 @@ use nail_sieve::{
     CompileOptions, CompiledScript, FolderMap, FolderResolver, SieveAuth, SieveConfig, SieveError,
     SieveSession, reasons,
 };
-use nail_store::SieveRecord;
+use nail_store::{SieveLocation, SieveRecord, SieveUpload};
 use sha2::{Digest, Sha256};
 use tokio::sync::Notify;
 
@@ -321,18 +327,20 @@ impl Service {
         self.inner.sieve.wake.notify_one();
     }
 
-    /// Server rules of an account that the arrival rules skip.
-    pub(crate) fn server_rules(&self, account: &AccountId) -> Vec<RuleId> {
-        lock(&self.inner.sieve.uploaded)
-            .get(account)
-            .map(|u| {
-                u.rules
-                    .iter()
-                    .filter(|r| r.placement == RulePlacement::Server)
-                    .map(|r| r.rule_id.clone())
-                    .collect()
-            })
-            .unwrap_or_default()
+    /// Rules of an account that its server runs (the arrival rules skip
+    /// them): those of the script known to be active there, as recorded
+    /// by the last successful upload. Survives restarts and failed
+    /// uploads, which leave that script active; empty once it is removed.
+    pub(crate) async fn server_rules(&self, account: &AccountId) -> Vec<RuleId> {
+        let id = account.clone();
+        match self.store().call(move |s| s.sieve_record(&id)).await {
+            Ok(record) if record.script_hash.is_some() => record.server_rules,
+            Ok(_) => Vec::new(),
+            Err(err) => {
+                tracing::warn!(%account, %err, "cannot read the Sieve state");
+                Vec::new()
+            }
+        }
     }
 
     /// Loads the compile inputs of an account.
@@ -461,27 +469,35 @@ impl Service {
     async fn sync_sieve_account(&self, account: &AccountConfig) -> bool {
         let id = account.id.clone();
         if !sieve_enabled(account) {
-            let had_script = {
+            let recorded = {
                 let lookup = id.clone();
                 self.store()
-                    .call(move |s| Ok(s.sieve_record(&lookup)?.script_hash.is_some()))
+                    .call(move |s| s.sieve_record(&lookup))
                     .await
-                    .unwrap_or(false)
+                    .ok()
             };
             lock(&self.inner.sieve.uploaded).remove(&id);
-            if had_script && account.enabled {
-                self.remove_sieve_script(account).await;
+            if let Some(record) = recorded
+                && record.script_hash.is_some()
+                && account.enabled
+            {
+                if !self.remove_sieve_script(account, record.location).await {
+                    let retry = self.triage_now()
+                        + i64::try_from(self.inner.timing.reconnect_max.as_secs()).unwrap_or(300);
+                    lock(&self.inner.sieve.retry_at).insert(id, retry);
+                }
                 return true;
             }
             return false;
         }
-        let inputs = match self.sieve_inputs(account).await {
-            Ok((inputs, _)) => inputs,
+        let (inputs, record) = match self.sieve_inputs(account).await {
+            Ok(loaded) => loaded,
             Err(err) => {
                 tracing::warn!(account = %id, %err, "cannot prepare the Sieve script");
                 return false;
             }
         };
+        let here = location(&inputs.endpoint, &inputs.script_name);
         let digest = inputs.digest();
         let forced = lock(&self.inner.sieve.uploading).contains(&id);
         let unchanged = lock(&self.inner.sieve.uploaded)
@@ -499,6 +515,15 @@ impl Service {
         self.broadcast(Event::SieveStatusChanged {
             account_id: id.clone(),
         });
+        // The host, port or script name changed since the last upload:
+        // Nail's script leaves the old place first (best effort; an old
+        // server that is gone for good must not block the new one).
+        if let Some(old) = record.location.filter(|old| *old != here)
+            && record.script_hash.is_some()
+        {
+            tracing::info!(account = %id, old = ?old, new = ?here, "the Sieve script moves");
+            self.remove_sieve_script(account, Some(old)).await;
+        }
         let outcome = self.upload_sieve(account, &inputs).await;
         lock(&self.inner.sieve.uploading).remove(&id);
         let now = self.triage_now();
@@ -517,11 +542,28 @@ impl Service {
                     report.extensions.clone(),
                     report.other_scripts.clone(),
                 );
+                let server_rules: Vec<RuleId> = report
+                    .compiled
+                    .rules
+                    .iter()
+                    .filter(|r| r.placement == RulePlacement::Server)
+                    .map(|r| r.rule_id.clone())
+                    .collect();
                 let account_id = id.clone();
                 if let Err(err) = self
                     .store()
                     .call(move |s| {
-                        s.record_sieve_upload(&account_id, &script, &extensions, &others, now)
+                        s.record_sieve_upload(
+                            &account_id,
+                            &SieveUpload {
+                                script: &script,
+                                extensions: &extensions,
+                                other_scripts: &others,
+                                location: &here,
+                                server_rules: &server_rules,
+                                now,
+                            },
+                        )
                     })
                     .await
                 {
@@ -621,35 +663,83 @@ impl Service {
         report
     }
 
-    /// Removes Nail's script (ManageSieve switched off).
-    async fn remove_sieve_script(&self, account: &AccountConfig) {
+    /// Removes Nail's script from where it was uploaded (`location`, as
+    /// recorded; the current settings for uploads recorded before schema
+    /// v8). Returns whether it is gone.
+    async fn remove_sieve_script(
+        &self,
+        account: &AccountConfig,
+        location: Option<SieveLocation>,
+    ) -> bool {
         let Some(server) = imap_server(account) else {
-            return;
+            return false;
         };
-        let sieve = account.sieve.clone().unwrap_or_default();
-        let endpoint = sieve.endpoint(server);
+        let (endpoint, script_name) = match location {
+            Some(at) => (
+                ServerEndpoint {
+                    host: at.host,
+                    port: at.port,
+                    tls: at.tls,
+                    auth: server.auth.clone(),
+                },
+                at.script_name,
+            ),
+            None => {
+                let sieve = account.sieve.clone().unwrap_or_default();
+                (
+                    sieve.endpoint(server),
+                    sieve.effective_script_name().to_owned(),
+                )
+            }
+        };
         let result = async {
             let mut session = self.sieve_login(account, &endpoint).await?;
-            let restored = nail_sieve::remove(&mut session, sieve.effective_script_name()).await;
+            let restored = nail_sieve::remove(&mut session, &script_name).await;
             let _ = session.logout().await;
             restored
         }
         .await;
-        match result {
+        let removed = match result {
             Ok(restored) => {
                 tracing::info!(account = %account.id, ?restored, "Sieve script removed");
                 let id = account.id.clone();
                 if let Err(err) = self.store().call(move |s| s.clear_sieve_upload(&id)).await {
                     tracing::warn!(%err, "cannot record the removed Sieve script");
                 }
+                true
             }
             Err(err) => {
-                tracing::warn!(account = %account.id, %err, "cannot remove the Sieve script")
+                tracing::warn!(account = %account.id, %err, "cannot remove the Sieve script");
+                false
             }
-        }
+        };
         self.broadcast(Event::SieveStatusChanged {
             account_id: account.id.clone(),
         });
+        removed
+    }
+
+    /// Before an account is deleted: removes Nail's script from its server
+    /// (bounded; a failure is logged and does not stop the deletion).
+    pub(crate) async fn remove_sieve_before_delete(&self, account: &AccountConfig) {
+        if !matches!(account.incoming, IncomingServer::Imap { .. }) {
+            return;
+        }
+        let id = account.id.clone();
+        let Ok(record) = self.store().call(move |s| s.sieve_record(&id)).await else {
+            return;
+        };
+        if record.script_hash.is_none() {
+            return;
+        }
+        let limit = std::time::Duration::from_secs(20);
+        if tokio::time::timeout(limit, self.remove_sieve_script(account, record.location))
+            .await
+            .is_err()
+        {
+            tracing::warn!(account = %account.id, "removing the Sieve script timed out");
+        }
+        lock(&self.inner.sieve.uploaded).remove(&account.id);
     }
 }
 
@@ -693,6 +783,16 @@ pub(crate) async fn run_sieve(service: Service) {
             () = tokio::time::sleep(tick) => {}
             () = service.inner.sieve.wake.notified() => {}
         }
+    }
+}
+
+/// Where an upload goes: the endpoint and the script name.
+fn location(endpoint: &ServerEndpoint, script_name: &str) -> SieveLocation {
+    SieveLocation {
+        host: endpoint.host.clone(),
+        port: endpoint.port,
+        tls: endpoint.tls,
+        script_name: script_name.to_owned(),
     }
 }
 
