@@ -74,8 +74,9 @@ pub use error::{ConfigError, ConfigErrorKind, issues, issues_event};
 pub use kdl_util::Located;
 pub use layout::{KeyDef, LayoutFile};
 pub use manager::{ConfigKind, ConfigManager, ConfigUpdate, ConfigWatcher, DEFAULT_DEBOUNCE};
-pub use merge::{MergeOutcome, preview_merge, resolve_merge};
+pub use merge::{MergeOutcome, preview_merge, preview_merge_with, resolve_merge};
 pub use open::{EDITOR_VARS, configured_editor, editor_command};
+pub use plugins::{InstalledPlugins, placement_layout};
 pub use schema::{layout_schema, theme_schema};
 pub use theme::{
     HtmlDarkModeSetting, IconDef, MessageDef, ModeSetting, PartDef, RawCssDef, ThemeFile, TokenDef,

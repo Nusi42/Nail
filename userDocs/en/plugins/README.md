@@ -6,26 +6,35 @@ them. Their buttons, menus and panels are ordinary lines in `layout.kdl`
 that you can move or delete, and your theme styles them like the rest of
 Nail.
 
-This section grows with the plug-in preview (milestone M2): getting started,
-writing a plug-in, the manifest, the API and the permissions.
+In this preview plug-ins can **read** mail (if you allow it), show dialogs
+and notifications, keep their own data and reach the web hosts they name.
+They cannot change, move, delete or send mail, and they never see the
+content of end-to-end encrypted messages.
 
-## Permissions
-
-A plug-in lists the permissions it needs; the install dialog shows them and
-you can revoke them later in the plug-in manager.
-
-| Permission | What it allows |
+| Page | What it covers |
 | --- | --- |
-| `mail.read` | Reading your accounts, folders, senders and subjects (not message text). Can be limited to some accounts. |
-| `mail.read.body` | Reading the text of messages too (never of end-to-end encrypted mail). Can be limited to some accounts. |
-| `calendar.read` | Reserved for calendars; it allows nothing yet. |
-| `ui.dialogs` | Showing dialogs. |
-| `notifications` | Showing notifications. |
-| `storage` | Keeping its own data on this device, within a size limit (5 MB). |
-| `network:<host>` | Connecting to that host (for example `network:api.example.com`, or `network:*.example.com` for its subdomains), through Nail. |
+| [Permissions](permissions.md) | What each permission allows, limiting mail access to accounts, revoking |
+| [Getting started](getting-started.md) | Writing a plug-in: the starter template, building, packing, installing, `nail plugin dev`, the "Follow up" example |
+| [Manifest reference](manifest.md) | `manifest.json`: id, version, permissions, commands, placements, keys, panels, settings, translations |
+| [API reference](api-reference.md) | `definePlugin`, the `nail` object (mail, dialogs, notifications, storage, HTTP, settings, log), errors, every type |
+| [Component reference](components.md) | The building blocks of dialogs and panels, JSX, the values inputs report |
 
-Plug-ins never get access to your files, other programs or the network
-beyond the hosts they list.
+## Installing a plug-in
+
+A plug-in comes as a `.nailplugin` file. Install it from the plug-in
+manager (from a file on this computer, or from an `https:` address).
+Before anything is installed Nail shows the plug-in's name, version, the
+package's fingerprint (SHA-256) and every permission it asks for; you grant
+all of them or limit mail access to some accounts. Nail then suggests where
+its buttons and panels go and shows the changes to `layout.kdl` before
+writing them.
+
+In the plug-in manager you can switch a plug-in off and on, change or
+revoke its permissions, read its log and uninstall it. Uninstalling removes
+its data; the lines it added to `layout.kdl` stay until you delete them.
+
+A plug-in that throws an error or runs too long is stopped and marked in
+the plug-in manager; Nail itself keeps running.
 
 ## Plug-in panels in `layout.kdl`
 
@@ -39,3 +48,18 @@ split "horizontal" sizes="240px 1fr 280px" {
     plugin-panel "follow-up.due"
 }
 ```
+
+Plug-in commands are actions named `plugin.<plugin-id>.<command>`, used like
+built-in actions in toolbars, menus and key bindings:
+
+```kdl
+toolbar "reader" { item "mail.reply"; item "mail.forward"; item "plugin.follow-up.follow-up" }
+```
+
+## Remote access
+
+Plug-ins run in the Nail that owns your mail. A browser connected through
+remote access uses that Nail's plug-ins, and only when the signed-in user
+may read every account; installing, switching and configuring plug-ins
+needs the administrator right. Plug-in folders for development can only be
+loaded on the desktop.

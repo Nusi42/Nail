@@ -16,6 +16,7 @@ import { useUi } from "../../state/uiStore";
 import { CheckField, NumberField, SelectField } from "../../widgets/forms";
 import { junkIssues } from "./model";
 import { triageKeys, useJunkStatus } from "./queries";
+import { DATE_TIME, formatDateTime } from "../../i18n/format";
 
 /** The junk verdict of the message in the reader. */
 export function JunkVerdictBar({ node }: WidgetProps) {
@@ -169,9 +170,7 @@ function SettingsEditor({
         <dd data-part="junk-settings.status.value">
           {last === null || Number.isNaN(last.getTime())
             ? t("junk-status-never")
-            : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
-                last,
-              )}
+            : formatDateTime(last, locale, DATE_TIME)}
         </dd>
       </dl>
       <fieldset data-part="form.section">

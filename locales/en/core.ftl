@@ -347,12 +347,6 @@ mcp-core-bridge-transport = The connection to Nail failed: { $detail }
 
 ## The core (nail-core): synchronization and other diagnostics shown in the UI
 
-# Opening a message file (.eml) failed; `detail` is the system's reason
-# (English), `max` the size limit in bytes.
-launch-error-unreadable = The file { $path } cannot be read ({ $detail }).
-launch-error-size = The file { $path } is empty or larger than { $max } bytes.
-launch-error-not-mail = The file { $path } is not an email message.
-
 # A sync pass finished but some folders failed; `folders` lists their paths.
 sync-error-folders =
     { $count ->

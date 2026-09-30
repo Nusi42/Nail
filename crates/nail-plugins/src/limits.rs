@@ -1,0 +1,74 @@
+//! The sandbox limits of every plug-in runtime.
+
+use std::time::Duration;
+
+/// Limits of a plug-in runtime and its API use. [`HostLimits::default`] is
+/// what Nail uses; tests shrink them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostLimits {
+    /// QuickJS heap per plug-in (bytes). Exceeding it stops the plug-in
+    /// (`memory-limit`).
+    pub memory_bytes: usize,
+    /// QuickJS stack per plug-in (bytes); deeper recursion throws a
+    /// `RangeError` the plug-in can catch.
+    pub stack_bytes: usize,
+    /// CPU time of the start: evaluating the module and the synchronous
+    /// part of `activate` (and every turn until `activate` settles).
+    pub activation_budget: Duration,
+    /// CPU time of one call into the plug-in: a command, a resolved API
+    /// call, a dialog result, a UI action, a panel render, a timer, with
+    /// the promise jobs it queues. Hooks (M4) get the same budget per hook
+    /// call. Exceeding it stops the plug-in (`cpu-budget`).
+    pub call_budget: Duration,
+    /// Wall-clock time until `activate` must have settled.
+    pub activation_timeout: Duration,
+    /// Wall-clock time a UI waits for a command to be taken or a panel to
+    /// render.
+    pub reply_timeout: Duration,
+    /// API calls a plug-in may have waiting at once.
+    pub max_pending_calls: usize,
+    /// Dialogs a plug-in may have open at once.
+    pub max_open_dialogs: usize,
+    /// Timers (`setTimeout`) a plug-in may have at once.
+    pub max_timers: usize,
+    /// Longest timer delay.
+    pub max_timer_delay: Duration,
+    /// Log lines one call may write (more are counted and dropped).
+    pub max_log_lines_per_call: u32,
+    /// Notifications per minute.
+    pub notifications_per_minute: usize,
+    /// Largest `nail.http.fetch` request body (bytes).
+    pub http_max_request_bytes: usize,
+    /// Largest `nail.http.fetch` response body (bytes).
+    pub http_max_response_bytes: u64,
+    /// `nail.http.fetch` time-out.
+    pub http_timeout: Duration,
+    /// Most results of `nail.mail.search`.
+    pub max_search_results: u32,
+    /// Modules a plug-in may load (its main module and its imports).
+    pub max_modules: usize,
+}
+
+impl Default for HostLimits {
+    fn default() -> Self {
+        Self {
+            memory_bytes: 64 * 1024 * 1024,
+            stack_bytes: 1024 * 1024,
+            activation_budget: Duration::from_secs(2),
+            call_budget: Duration::from_secs(1),
+            activation_timeout: Duration::from_secs(30),
+            reply_timeout: Duration::from_secs(10),
+            max_pending_calls: 64,
+            max_open_dialogs: 5,
+            max_timers: 100,
+            max_timer_delay: Duration::from_secs(24 * 60 * 60),
+            max_log_lines_per_call: 200,
+            notifications_per_minute: 20,
+            http_max_request_bytes: 1024 * 1024,
+            http_max_response_bytes: 5 * 1024 * 1024,
+            http_timeout: Duration::from_secs(30),
+            max_search_results: 500,
+            max_modules: 500,
+        }
+    }
+}

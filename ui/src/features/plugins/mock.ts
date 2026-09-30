@@ -2,12 +2,12 @@
  * The mock core's answers to the M2d plug-in requests (ADR 0050), used by
  * `MockTransport` (`../../api/mock.ts` routes exactly these requests here).
  *
- * Mirrors the core at the contract stage: the administration of installed
- * plug-ins (listing, enabling, grants, settings, logs, uninstalling) works
- * on `data.features.plugins`; everything that needs the plug-in host
- * (installing, dev folders, placements, running commands, dialogs,
- * panels) answers `unsupported`. WP62 extends this mock with the host's
- * behaviour for its UI tests.
+ * The administration of installed plug-ins (listing, enabling, grants,
+ * settings, logs, uninstalling) works on `data.features.plugins` like the
+ * core's store. The plug-in host is simulated by `./mockHost.ts` (packages
+ * to preview and install, commands, dialogs, notifications, panels, the
+ * permission gate); with `host: null` everything that needs the host
+ * answers `unsupported`, as the core did before WP64.
  */
 import type {
   JsonValue,
@@ -19,6 +19,7 @@ import type {
   Response,
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { answerHost, createMockHost, type MockHost } from "./mockHost";
 
 /** The requests this feature answers. */
 export const PLUGINS_REQUESTS = [
@@ -44,8 +45,26 @@ export const PLUGINS_REQUESTS = [
 
 export type PluginsRequest = Extract<Request, { type: (typeof PLUGINS_REQUESTS)[number] }>;
 
+/** The requests that need the plug-in host. */
+export const HOST_REQUESTS = [
+  "PreviewPluginInstall",
+  "InstallPlugin",
+  "LoadDevPlugin",
+  "PreviewPluginPlacements",
+  "RunPluginCommand",
+  "RespondPluginDialog",
+  "PluginUiAction",
+  "GetPluginPanel",
+] as const satisfies readonly PluginsRequest["type"][];
+
+export type HostRequest = Extract<Request, { type: (typeof HOST_REQUESTS)[number] }>;
+
 export function isPluginsRequest(request: Request): request is PluginsRequest {
   return (PLUGINS_REQUESTS as readonly string[]).includes(request.type);
+}
+
+function isHostRequest(request: PluginsRequest): request is HostRequest {
+  return (HOST_REQUESTS as readonly string[]).includes(request.type);
 }
 
 /** The mock's plug-ins (tests put installed plug-ins here). */
@@ -54,10 +73,14 @@ export interface PluginsMockState {
   logs: PluginLogEntry[];
   /** Values the user changed, per plug-in id. */
   settings: Record<string, Record<string, JsonValue>>;
+  /** The simulated plug-in host; `null` = requests needing it are `unsupported`. */
+  host: MockHost | null;
+  /** Next log sequence number. */
+  nextSeq: number;
 }
 
 export function createPluginsMockState(): PluginsMockState {
-  return { plugins: [], logs: [], settings: {} };
+  return { plugins: [], logs: [], settings: {}, host: createMockHost(), nextSeq: 1 };
 }
 
 /** The value a setting has until the user changes it (like the core). */
@@ -95,7 +118,8 @@ export function acceptsSetting(def: PluginSettingDef, value: JsonValue): boolean
   }
 }
 
-function settingsOf(state: PluginsMockState, plugin: PluginInfo): Record<string, JsonValue> {
+/** Every setting's current value (defaults filled in). */
+export function settingsOf(state: PluginsMockState, plugin: PluginInfo): Record<string, JsonValue> {
   const values: Record<string, JsonValue> = {};
   const changed = state.settings[plugin.id] ?? {};
   for (const def of plugin.manifest.contributes?.settings ?? []) {
@@ -104,12 +128,15 @@ function settingsOf(state: PluginsMockState, plugin: PluginInfo): Record<string,
   return values;
 }
 
-function stateOf(plugin: PluginInfo): PluginInfo["state"] {
+/** The run state of a plug-in (running only with a host). */
+export function stateOf(state: PluginsMockState, plugin: PluginInfo): PluginInfo["state"] {
   if (!plugin.enabled) return "disabled";
-  return plugin.error === null ? "stopped" : "crashed";
+  if (plugin.error !== null) return "crashed";
+  return state.host ? "running" : "stopped";
 }
 
-function checkGrants(plugin: PluginInfo, grants: PluginGrant[]): string | null {
+/** The problem with `grants` for `plugin` (like `nail_store::check_plugin_grants`). */
+export function checkGrants(plugin: PluginInfo, grants: PluginGrant[]): string | null {
   const declared = plugin.manifest.permissions ?? [];
   const seen = new Set<string>();
   for (const grant of grants) {
@@ -126,15 +153,46 @@ function checkGrants(plugin: PluginInfo, grants: PluginGrant[]): string | null {
   return null;
 }
 
+/** Appends a log line and announces it (`PluginLogLine`). */
+export function appendLog(
+  core: MockCore,
+  pluginId: string,
+  level: PluginLogEntry["level"],
+  source: PluginLogEntry["source"],
+  message: string,
+): PluginLogEntry {
+  const state = core.data.features.plugins;
+  const entry: PluginLogEntry = {
+    seq: state.nextSeq++,
+    plugin_id: pluginId,
+    at: new Date().toISOString(),
+    level,
+    source,
+    message,
+  };
+  state.logs.push(entry);
+  core.emit({ type: "PluginLogLine", entry: structuredClone(entry) });
+  return entry;
+}
+
 export function answerPlugins(core: MockCore, request: PluginsRequest): Response {
   const state = core.data.features.plugins;
   const find = (id: string) => state.plugins.find((p) => p.id === id);
   const notFound = (id: string) => errorResponse("not_found", `plug-in not found: ${id}`);
   const changed = (plugin: PluginInfo): Response => {
-    plugin.state = stateOf(plugin);
+    plugin.state = stateOf(state, plugin);
     core.emit({ type: "PluginsChanged" });
     return { type: "Plugin", plugin: structuredClone(plugin) };
   };
+  if (isHostRequest(request)) {
+    if (!state.host) {
+      return errorResponse(
+        "unsupported",
+        `${request.type} needs the plug-in host (M2d WP61 / WP64)`,
+      );
+    }
+    return answerHost(core, state.host, request);
+  }
   switch (request.type) {
     case "ListPlugins":
       return {
@@ -155,11 +213,14 @@ export function answerPlugins(core: MockCore, request: PluginsRequest): Response
       if (plugin.enabled) {
         plugin.error = null;
         delete plugin.localized;
+      } else if (state.host) {
+        state.host.stopped(core, plugin.id, "disabled");
       }
       return changed(plugin);
     }
     case "UninstallPlugin": {
       if (!find(request.plugin_id)) return notFound(request.plugin_id);
+      state.host?.stopped(core, request.plugin_id, "uninstalled");
       state.plugins = state.plugins.filter((p) => p.id !== request.plugin_id);
       state.logs = state.logs.filter((l) => l.plugin_id !== request.plugin_id);
       state.settings = Object.fromEntries(
@@ -223,17 +284,5 @@ export function answerPlugins(core: MockCore, request: PluginsRequest): Response
         values: settingsOf(state, plugin),
       };
     }
-    case "PreviewPluginInstall":
-    case "InstallPlugin":
-    case "LoadDevPlugin":
-    case "PreviewPluginPlacements":
-    case "RunPluginCommand":
-    case "RespondPluginDialog":
-    case "PluginUiAction":
-    case "GetPluginPanel":
-      return errorResponse(
-        "unsupported",
-        `${request.type} needs the plug-in host (M2d WP61 / WP64)`,
-      );
   }
 }

@@ -2952,4 +2952,340 @@ theme "default" mode="system" {
         color "$color.fg-muted"
     }
     part "composer.editor-loading:failed" { color "$color.danger"; }
+
+    // ---- Plug-ins (M2d): dialogs, trees, notifications, panels, install, manager ----
+    // Every plug-in element has a generic part (`plugin.button`) and the
+    // attribute `plugin="<id>"`; `plugin.<id>.<part>` styles one plug-in.
+
+    part "plugin.dialog.backdrop" {
+        padding "$space.xl"
+        background-color "$color.scrim"
+    }
+    part "plugin.dialog" {
+        width "min(560px, 100%)"
+        border "$border.thin"
+        border-radius "$radius.lg"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "plugin.dialog[size=\"small\"]" { width "min(400px, 100%)"; }
+    part "plugin.dialog[size=\"large\"]" { width "min(900px, 100%)"; }
+    part "plugin.dialog.header" {
+        gap "$space.sm"
+        padding "$space.sm" "$space.lg"
+        border-bottom "$border.thin"
+        background-color "$color.bg-subtle"
+    }
+    part "plugin.dialog.title" {
+        font-size "$font-size.lg"
+        font-weight "$font-weight.bold"
+    }
+    part "plugin.dialog.plugin" {
+        color "$color.fg-muted"
+        font-size "$font-size.sm"
+    }
+    part "plugin.dialog.close" {
+        padding "$space.xs"
+        border "none"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "plugin.dialog.close.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+    part "plugin.dialog.body" {
+        gap "$space.md"
+        padding "$space.lg"
+    }
+    part "plugin.dialog.buttons" {
+        gap "$space.sm"
+        padding "$space.sm" "$space.lg" "$space.lg"
+    }
+    part "plugin.dialog.error" { color "$color.danger"; }
+    part "plugin.tree" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "plugin.stack" { gap "$space.sm"; }
+    part "plugin.field" { gap "$space.xs"; }
+    part "plugin.field.label" {
+        font-size "$font-size.sm"
+        color "$color.fg-muted"
+    }
+    part "plugin.field.error" {
+        color "$color.danger"
+        font-size "$font-size.sm"
+    }
+    part "plugin.input" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "plugin.textarea" {
+        min-height 96
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "plugin.select" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "plugin.date" {
+        padding "$space.xs" "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "plugin.field[state=\"invalid\"] plugin.input" { border-color "$color.danger"; }
+    part "plugin.field[state=\"invalid\"] plugin.textarea" { border-color "$color.danger"; }
+    part "plugin.field[state=\"invalid\"] plugin.date" { border-color "$color.danger"; }
+    part "plugin.text[appearance=\"heading\"]" {
+        margin 0
+        font-size "$font-size.lg"
+        font-weight "$font-weight.bold"
+    }
+    part "plugin.text[appearance=\"muted\"]" { color "$color.fg-muted"; }
+    part "plugin.text[appearance=\"strong\"]" { font-weight "$font-weight.bold"; }
+    part "plugin.text[appearance=\"error\"]" { color "$color.danger"; }
+    part "plugin.markdown.code" {
+        font-family "$font.mono"
+        font-size "$font-size.sm"
+    }
+    part "plugin.markdown.code-block" {
+        padding "$space.sm"
+        border-radius "$radius.sm"
+        font-family "$font.mono"
+        font-size "$font-size.sm"
+        background-color "$color.bg-subtle"
+    }
+    part "plugin.markdown.link" { color "$color.accent"; }
+    part "plugin.table" { border-collapse "collapse"; }
+    part "plugin.table.header" {
+        padding "$space.xs" "$space.sm"
+        border-bottom "$border.thin"
+        text-align "left"
+        color "$color.fg-muted"
+    }
+    part "plugin.table.cell" { padding "$space.xs" "$space.sm"; }
+    part "plugin.message-list.from" { color "$color.fg-muted"; }
+    part "plugin.message-list.date" {
+        color "$color.fg-muted"
+        font-size "$font-size.sm"
+    }
+    part "plugin.button" {
+        display "inline-flex"
+        align-items "center"
+        gap "$space.xs"
+        padding "$space.xs" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg-subtle"
+    }
+    part "plugin.button:hover" { background-color "$color.bg-raised"; }
+    part "plugin.button:focus-visible" {
+        outline "2px solid $color.focus-ring"
+        outline-offset 1
+    }
+    part "plugin.button:disabled" { opacity "$opacity.disabled"; }
+    part "plugin.button[variant=\"primary\"]" {
+        border-color "$color.accent"
+        color "$color.accent-fg"
+        background-color "$color.accent"
+    }
+    part "plugin.button[variant=\"danger\"]" {
+        border-color "$color.danger"
+        color "$color.danger"
+    }
+    part "plugin.button.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+    part "plugin.dialog.button" {
+        padding "$space.xs" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        color "$color.fg"
+        background-color "$color.bg-subtle"
+    }
+    part "plugin.dialog.button[variant=\"primary\"]" {
+        border-color "$color.accent"
+        color "$color.accent-fg"
+        background-color "$color.accent"
+    }
+    part "plugin.notifications.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        margin 0
+        padding 0
+    }
+    part "plugin.notification" {
+        display "flex"
+        gap "$space.sm"
+        padding "$space.sm" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+        color "$color.fg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "plugin.notification[level=\"error\"]" { border-color "$color.danger"; }
+    part "plugin.notification[level=\"warning\"]" { border-color "$color.warning"; }
+    part "plugin.notification[level=\"success\"]" { border-color "$color.success"; }
+    part "plugin.notification.plugin" {
+        color "$color.fg-muted"
+        font-size "$font-size.sm"
+    }
+    part "plugin.notification.title" { font-weight "$font-weight.bold"; }
+    part "plugin.notification.dismiss" {
+        border "none"
+        color "$color.fg"
+        background-color "transparent"
+    }
+    part "plugin.notification.dismiss.icon" {
+        width "$size.icon"
+        height "$size.icon"
+    }
+    part "plugin.panel.error" { color "$color.danger"; }
+    part "plugin-panel" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+        overflow "auto"
+    }
+    part "plugin-panel.missing" { color "$color.fg-muted"; }
+
+    part "plugin-install" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+    }
+    part "plugin-install.heading" {
+        margin 0
+        font-size "$font-size.lg"
+    }
+    part "plugin-install.actions" { gap "$space.sm"; }
+    part "plugin-install.status" { color "$color.fg-muted"; }
+    part "plugin-manager" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+        overflow "auto"
+    }
+    part "plugin-manager.toolbar" { gap "$space.sm"; }
+    part "plugin-manager.list" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        margin 0
+        padding 0
+    }
+    part "plugin-manager.plugin" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+    }
+    part "plugin-manager.header" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+    }
+    part "plugin-manager.name" { font-weight "$font-weight.bold"; }
+    part "plugin-manager.state" {
+        color "$color.fg-muted"
+        font-size "$font-size.sm"
+    }
+    part "plugin-manager.source" {
+        color "$color.fg-muted"
+        font-size "$font-size.sm"
+    }
+    part "plugin-manager.crash" { color "$color.danger"; }
+    part "plugin-manager.error" { color "$color.danger"; }
+    part "plugin-manager.actions" { gap "$space.sm"; }
+    part "plugin-manager.empty" { color "$color.fg-muted"; }
+    part "plugin-permissions" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "plugin-permissions.item" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        padding "$space.sm"
+        border "$border.thin"
+        border-radius "$radius.sm"
+    }
+    part "plugin-permissions.label" { font-weight "$font-weight.bold"; }
+    part "plugin-permissions.hint" {
+        color "$color.fg-muted"
+        font-size "$font-size.sm"
+    }
+    part "plugin-permissions.error" { color "$color.danger"; }
+    part "plugin-settings" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "plugin-settings.error" { color "$color.danger"; }
+    part "plugin-logs" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        min-height 0
+    }
+    part "plugin-logs.list" {
+        max-height 320
+        margin 0
+        padding 0
+        overflow "auto"
+        font-family "$font.mono"
+        font-size "$font-size.sm"
+    }
+    part "plugin-logs.entry" {
+        display "flex"
+        gap "$space.sm"
+    }
+    part "plugin-logs.time" { color "$color.fg-muted"; }
+    part "plugin-logs.entry[level=\"warn\"]" { color "$color.warning"; }
+    part "plugin-logs.entry[level=\"error\"]" { color "$color.danger"; }
+    part "plugin-logs.error" { color "$color.danger"; }
+    part "plugin-placements" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+    }
+    part "plugin-placements.items" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.xs"
+        margin 0
+        padding 0
+    }
+    part "plugin-placements.text" {
+        font-family "$font.mono"
+        font-size "$font-size.sm"
+    }
+    part "plugin-placements.conflict" { color "$color.warning"; }
+    part "plugin-placements.error" { color "$color.danger"; }
+    part "plugin-placements.actions" { gap "$space.sm"; }
 }

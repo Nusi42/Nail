@@ -11,6 +11,7 @@ import { useUi } from "../state/uiStore";
 import { useReaderCss } from "../theme/ThemeProvider";
 import { proxyBase, readerDocument } from "../theme/reader";
 import { setSrcdoc } from "../theme/trustedHtml";
+import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** Header fields the widget can show (`headers` option). */
 export const HEADER_FIELDS = ["from", "to", "cc", "reply-to", "date"] as const;
@@ -37,10 +38,7 @@ function headerValue(message: MessageBody, field: HeaderField, locale: string): 
       return formatAddresses(h.reply_to);
     case "date": {
       if (!h.date) return "";
-      const date = new Date(h.date);
-      return Number.isNaN(date.getTime())
-        ? h.date
-        : new Intl.DateTimeFormat(locale, { dateStyle: "full", timeStyle: "short" }).format(date);
+      return formatDateTime(h.date, locale, FULL_DATE_TIME);
     }
   }
 }

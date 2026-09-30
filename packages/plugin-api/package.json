@@ -2,11 +2,46 @@
   "name": "@nail/plugin-api",
   "private": true,
   "version": "0.1.0",
-  "description": "Types and the JSX runtime for Nail plug-ins (preview)",
+  "description": "Types, the nail API, the JSX runtime and packaging tools for Nail plug-ins (preview)",
   "license": "UNLICENSED",
   "type": "module",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts",
+    "./testing": "./src/testing.ts",
+    "./globals": {
+      "types": "./src/globals.d.ts"
+    },
+    "./tools": {
+      "types": "./tools/index.d.mts",
+      "default": "./tools/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "nail-plugin": "./tools/cli.mjs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "lint": "tsc -p . && tsc -p tsconfig.sandbox.json && prettier --check .",
+    "docs": "node scripts/gen-docs.mjs",
+    "docs:check": "node scripts/gen-docs.mjs --check"
+  },
+  "peerDependencies": {
+    "esbuild": ">=0.25"
+  },
+  "peerDependenciesMeta": {
+    "esbuild": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
   }
 }

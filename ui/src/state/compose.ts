@@ -10,6 +10,7 @@ import { displayName, formatAddressList, parseAddressList } from "./addresses";
 import type { WriteContext } from "./mailOps";
 import { queryKeys } from "./queries";
 import type { ComposerState } from "./uiStore";
+import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** Name of the layout window that holds the composer. */
 export const COMPOSER_WINDOW = "composer";
@@ -111,12 +112,7 @@ function withPrefix(subject: string, prefix: string): string {
 
 function formatDate(ctx: ComposeContext, date: string | null): string {
   if (!date) return "";
-  const parsed = new Date(date);
-  return Number.isNaN(parsed.getTime())
-    ? date
-    : new Intl.DateTimeFormat(ctx.locale, { dateStyle: "medium", timeStyle: "short" }).format(
-        parsed,
-      );
+  return formatDateTime(date, ctx.locale, DATE_TIME);
 }
 
 function quote(text: string): string {

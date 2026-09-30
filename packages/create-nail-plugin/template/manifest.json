@@ -1,0 +1,21 @@
+{
+  "id": "__PLUGIN_ID__",
+  "name": "__PLUGIN_NAME__",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "main": "dist/index.js",
+  "description": "%plugin-description%",
+  "permissions": ["ui.dialogs", "notifications"],
+  "contributes": {
+    "commands": [
+      {
+        "id": "hello",
+        "title": "%hello-title%",
+        "description": "%hello-description%",
+        "contexts": ["list", "reader", "global"]
+      }
+    ],
+    "placements": [{ "toolbar": "reader", "command": "hello" }],
+    "locales": { "en": "locales/en.ftl" }
+  }
+}

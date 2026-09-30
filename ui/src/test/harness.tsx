@@ -16,6 +16,7 @@ import type { Catalogs } from "../i18n/localizer";
 import { LayoutContext } from "../layout/LayoutContext";
 import { DialogRegistryContext } from "../layout/dialogRegistry";
 import { WidgetRegistryContext, type WidgetNode } from "../layout/widgetRegistry";
+import { usePluginLayout } from "../features/plugins";
 import { appRegistry } from "../features/registry";
 import { ClientContext } from "../state/queries";
 import { UiStoreContext, createUiStore, type UiState, type UiStore } from "../state/uiStore";
@@ -50,6 +51,17 @@ export interface ProvidersProps {
   children: ReactNode;
 }
 
+/** The layout with plug-in command actions, as the app resolves it. */
+function PluginLayout({
+  layout,
+  children,
+}: {
+  layout: ResolvedLayout;
+  children: (layout: ResolvedLayout) => ReactNode;
+}) {
+  return <>{children(usePluginLayout(layout))}</>;
+}
+
 export function Providers({
   env,
   theme,
@@ -65,15 +77,19 @@ export function Providers({
         <ClientContext.Provider value={env.client}>
           <I18nProvider locale={locale} {...(catalogs ? { catalogs } : {})}>
             <ThemeProvider theme={theme ?? env.transport.data.theme}>
-              <LayoutContext.Provider value={resolvedLayout}>
-                <DialogRegistryContext.Provider value={appRegistry.dialogs}>
-                  <ActionsProvider layout={resolvedLayout} handlers={appRegistry.actions}>
-                    <WidgetRegistryContext.Provider value={appRegistry.widgets}>
-                      {children}
-                    </WidgetRegistryContext.Provider>
-                  </ActionsProvider>
-                </DialogRegistryContext.Provider>
-              </LayoutContext.Provider>
+              <PluginLayout layout={resolvedLayout}>
+                {(withPlugins) => (
+                  <LayoutContext.Provider value={withPlugins}>
+                    <DialogRegistryContext.Provider value={appRegistry.dialogs}>
+                      <ActionsProvider layout={withPlugins} handlers={appRegistry.actions}>
+                        <WidgetRegistryContext.Provider value={appRegistry.widgets}>
+                          {children}
+                        </WidgetRegistryContext.Provider>
+                      </ActionsProvider>
+                    </DialogRegistryContext.Provider>
+                  </LayoutContext.Provider>
+                )}
+              </PluginLayout>
             </ThemeProvider>
           </I18nProvider>
         </ClientContext.Provider>

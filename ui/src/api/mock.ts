@@ -253,7 +253,7 @@ export class MockTransport implements Transport, MockCore {
               code: "not_found",
               message: `file ${request.path} not found`,
               localized: {
-                id: "launch-error-unreadable",
+                id: "message-file-unreadable",
                 args: { path: request.path, detail: "not found" },
               },
             };

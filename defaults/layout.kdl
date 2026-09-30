@@ -130,6 +130,8 @@ layout "default" {
             notification-settings id="notification-settings" label="@notification.settings.tab"
             // What each folder downloads (full, headers only, recent days).
             sync-folder-policies id="sync-policies" label="@sync.settings.tab"
+            // Installed plug-ins: on / off, permissions, settings, logs, placements.
+            plugin-manager id="plugin-manager" label="@plugin.manager.tab"
             stack id="customize" label="@settings.tab.customize" sizes="auto auto 1fr" {
                 toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 config-errors id="settings-config-errors"
@@ -191,6 +193,9 @@ layout "default" {
         action "snooze.list"      label="@snooze.action.list"      icon="snooze"
         action "sync.download-message" label="@sync.action.download-message" icon="download"
         action "sync.folder-policy" label="@sync.action.folder-policy" icon="sync"
+        action "plugins.manage"   label="@plugin.action.manage"
+        action "plugins.install"  label="@plugin.action.install"
+        action "plugins.load-dev" label="@plugin.action.load-dev"
     }
 
     keys context="list" {

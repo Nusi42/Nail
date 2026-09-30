@@ -82,7 +82,50 @@ impl ConfigManager {
     ) -> Result<ConfigMergePreview, ApiError> {
         mergeable(file)?;
         let mine = self.read_file(file)?;
-        Ok(merge::preview_merge(file, mine.as_deref(), incoming)?)
+        let installed = self.installed_plugins();
+        Ok(merge::preview_merge_with(
+            file,
+            mine.as_deref(),
+            incoming,
+            &installed,
+        )?)
+    }
+
+    /// Tells the merge preview which plug-in commands and panels are
+    /// installed (the core calls this whenever plug-ins change).
+    pub fn set_installed_plugins(&self, installed: crate::plugins::InstalledPlugins) {
+        *self
+            .inner
+            .plugins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = installed;
+    }
+
+    /// What [`Self::set_installed_plugins`] last set.
+    pub fn installed_plugins(&self) -> crate::plugins::InstalledPlugins {
+        self.inner
+            .plugins
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The user's `layout.kdl` with a plug-in's suggested placements added
+    /// ([`crate::placement_layout`]) and its merge preview; `None` when
+    /// nothing would change.
+    pub fn preview_placements(
+        &self,
+        plugin: &nail_api::PluginId,
+        manifest: &nail_api::plugins::PluginManifest,
+    ) -> Result<Option<(String, ConfigMergePreview)>, ApiError> {
+        let file = ConfigFile::Layout;
+        let mine = self.read_file(file)?;
+        let Some(incoming) = crate::plugins::placement_layout(mine.as_deref(), plugin, manifest)?
+        else {
+            return Ok(None);
+        };
+        let preview = self.preview_merge(file, &incoming)?;
+        Ok(Some((incoming, preview)))
     }
 
     /// Resolves a merge for the live preview without writing it.

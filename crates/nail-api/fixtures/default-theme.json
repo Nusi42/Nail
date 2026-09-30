@@ -8923,6 +8923,1178 @@
         "color": "var(--nail-color-danger)"
       },
       "source": null
+    },
+    {
+      "selector": "plugin.dialog.backdrop",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xl)",
+        "background-color": "var(--nail-color-scrim)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "min(560px, 100%)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-lg)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog",
+      "states": [],
+      "conditions": [
+        {
+          "key": "size",
+          "value": "small"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "width": "min(400px, 100%)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog",
+      "states": [],
+      "conditions": [
+        {
+          "key": "size",
+          "value": "large"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "width": "min(900px, 100%)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm) var(--nail-space-lg)",
+        "border-bottom": "var(--nail-border-thin)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-lg)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.plugin",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.close",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs)",
+        "border": "none",
+        "color": "var(--nail-color-fg)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.close.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.body",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.buttons",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm) var(--nail-space-lg) var(--nail-space-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.tree",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.stack",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.field",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.field.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.field.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.textarea",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "min-height": "96px",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.select",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "plugin.field",
+          "states": [],
+          "conditions": [
+            {
+              "key": "state",
+              "value": "invalid"
+            }
+          ]
+        }
+      ],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.textarea",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "plugin.field",
+          "states": [],
+          "conditions": [
+            {
+              "key": "state",
+              "value": "invalid"
+            }
+          ]
+        }
+      ],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "plugin.field",
+          "states": [],
+          "conditions": [
+            {
+              "key": "state",
+              "value": "invalid"
+            }
+          ]
+        }
+      ],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.text",
+      "states": [],
+      "conditions": [
+        {
+          "key": "appearance",
+          "value": "heading"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-lg)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.text",
+      "states": [],
+      "conditions": [
+        {
+          "key": "appearance",
+          "value": "muted"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.text",
+      "states": [],
+      "conditions": [
+        {
+          "key": "appearance",
+          "value": "strong"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.text",
+      "states": [],
+      "conditions": [
+        {
+          "key": "appearance",
+          "value": "error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.markdown.code",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.markdown.code-block",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-family": "var(--nail-font-mono)",
+        "font-size": "var(--nail-font-size-sm)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.markdown.link",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.table",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border-collapse": "collapse"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.table.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border-bottom": "var(--nail-border-thin)",
+        "text-align": "left",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.table.cell",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.message-list.from",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.message-list.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button",
+      "states": [
+        "hover"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)",
+        "outline-offset": "1px"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button",
+      "states": [
+        "disabled"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "opacity": "var(--nail-opacity-disabled)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button",
+      "states": [],
+      "conditions": [
+        {
+          "key": "variant",
+          "value": "primary"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-accent)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button",
+      "states": [],
+      "conditions": [
+        {
+          "key": "variant",
+          "value": "danger"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)",
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.button.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.dialog.button",
+      "states": [],
+      "conditions": [
+        {
+          "key": "variant",
+          "value": "primary"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-accent)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notifications.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm) var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "warning"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "success"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification.plugin",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification.dismiss",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border": "none",
+        "color": "var(--nail-color-fg)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.notification.dismiss.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin.panel.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-panel",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-md)",
+        "overflow": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-panel.missing",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-install",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-install.heading",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-install.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-install.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-lg)",
+        "overflow": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.plugin",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.source",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.crash",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-manager.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-permissions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-permissions.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-permissions.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-permissions.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-permissions.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-settings",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-settings.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "min-height": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "max-height": "320px",
+        "margin": "0",
+        "padding": "0",
+        "overflow": "auto",
+        "font-family": "var(--nail-font-mono)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs.entry",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs.time",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs.entry",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "warn"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs.entry",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-logs.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-placements",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-placements.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-placements.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-placements.conflict",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-placements.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "plugin-placements.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
     }
   ],
   "icons": {

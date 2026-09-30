@@ -156,7 +156,7 @@ layout "All" {
             text id="hello" label="Hello" text="@app.name"
             stack sizes="auto 1fr" {
                 toolbar toolbar="main"
-                plugin.acme.weather city="Berlin" days=3
+                plugin-panel "acme.weather"
             }
         }
     }
@@ -209,8 +209,8 @@ layout "All" {
     assert!(!*resizable);
     let w = widgets(&bp.root);
     assert_eq!(w[0].1["text"], json!("@app.name"));
-    assert_eq!(w[2].0, "plugin.acme.weather");
-    assert_eq!(w[2].1["days"], json!(3));
+    assert_eq!(w[2].0, "plugin-panel");
+    assert_eq!(w[2].1["panel"], json!("acme.weather"));
 
     assert_eq!(l.actions["mail.reply"].label.as_deref(), Some("Reply!"));
     let alias = &l.actions["goto.inbox"];
@@ -341,6 +341,12 @@ fn node_errors() {
     let check =
         |node: &str, column: u32, needle: &str| assert_error(&wrap(node), 3, column, needle);
     check("sidebar", 5, "unknown widget or container `sidebar`");
+    // The pre-M2d placeholder for plug-in widgets points to `plugin-panel`.
+    check(
+        "plugin.acme.weather",
+        5,
+        "place plug-in panels as `plugin-panel \"acme.weather\"`",
+    );
     check(
         "grid { spacer; }",
         5,

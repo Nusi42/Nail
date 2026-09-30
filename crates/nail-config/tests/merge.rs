@@ -263,7 +263,7 @@ const THEIR_LAYOUT: &str = r#"layout "Theirs" extends="default" {
     window "outbox" {
         stack {
             outbox id="outbox"
-            plugin.stats.chart
+            plugin-panel "stats.chart"
         }
     }
     keys context="list" {
@@ -309,6 +309,30 @@ fn a_layout_preview_flags_conflicts() {
     assert_eq!(
         kinds(MergeSection::Toolbars, "reader"),
         [MergeConflictKind::DropsPluginItems]
+    );
+}
+
+#[test]
+fn installed_plugin_items_are_not_flagged() {
+    let mut installed = nail_config::InstalledPlugins::default();
+    installed.actions.insert("plugin.quick.act".to_owned());
+    installed.panels.insert("stats.chart".to_owned());
+    let preview = nail_config::preview_merge_with(
+        ConfigFile::Layout,
+        Some(MY_LAYOUT),
+        THEIR_LAYOUT,
+        &installed,
+    )
+    .unwrap();
+    assert!(
+        item(&preview, MergeSection::Keys, "list: q")
+            .conflicts
+            .is_empty()
+    );
+    assert!(
+        item(&preview, MergeSection::Windows, "outbox")
+            .conflicts
+            .is_empty()
     );
 }
 

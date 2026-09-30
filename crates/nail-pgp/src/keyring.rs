@@ -640,7 +640,7 @@ impl<'a> Keyring<'a> {
             KeyEncoding::Text => data.as_bytes().to_vec(),
             KeyEncoding::Base64 => base64::engine::general_purpose::STANDARD
                 .decode(data.trim())
-                .map_err(|e| Error::Invalid(format!("not base64: {e}")))?,
+                .map_err(|e| Error::NotBase64(e.to_string()))?,
         };
         self.import_bytes(&bytes, KeySource::Imported)
     }
@@ -659,7 +659,7 @@ impl<'a> Keyring<'a> {
                     code: ErrorCode::Crypto,
                     // rPGP's text stays an English `detail` argument.
                     localized: Some(
-                        LocalizedMessage::new("security-import-issue-unreadable")
+                        LocalizedMessage::new("pgp-import-unreadable")
                             .arg("detail", message.as_str()),
                     ),
                     message,
@@ -671,7 +671,7 @@ impl<'a> Keyring<'a> {
                 item: "#1".into(),
                 code: ErrorCode::InvalidRequest,
                 message: "no OpenPGP key found".into(),
-                localized: Some(LocalizedMessage::new("security-import-issue-no-key")),
+                localized: Some(LocalizedMessage::new("pgp-import-no-key")),
             });
         }
         let now = self.now();
@@ -1054,12 +1054,13 @@ fn import_issue(error: &Error) -> LocalizedMessage {
         Error::Crypto(detail)
         | Error::Invalid(detail)
         | Error::Unsupported(detail)
-        | Error::NoKey(detail) => {
-            LocalizedMessage::new("security-import-issue-unusable").arg("detail", detail.as_str())
+        | Error::NoKey(detail)
+        | Error::NotBase64(detail) => {
+            LocalizedMessage::new("pgp-import-unusable").arg("detail", detail.as_str())
         }
-        Error::Secrets(_) => LocalizedMessage::new("security-import-issue-keychain"),
+        Error::Secrets(_) => LocalizedMessage::new("pgp-import-keychain"),
         Error::Store(_) | Error::Locked { .. } | Error::BadPassphrase => {
-            LocalizedMessage::new("security-import-issue-store")
+            LocalizedMessage::new("pgp-import-store")
         }
     }
 }
@@ -1137,27 +1138,25 @@ mod tests {
         let data = base64::engine::general_purpose::STANDARD.encode(binary);
         let result = ring.import(&data, KeyEncoding::Base64).unwrap();
         assert_eq!(result.created, 1);
-        assert!(matches!(
-            ring.import("***", KeyEncoding::Base64),
-            Err(Error::Invalid(_))
-        ));
+        let refused = ring.import("***", KeyEncoding::Base64).unwrap_err();
+        assert!(matches!(refused, Error::NotBase64(_)), "{refused:?}");
+        let api: nail_api::ApiError = refused.into();
+        assert_eq!(api.code, ErrorCode::InvalidRequest);
+        assert_eq!(
+            api.localized.map(|l| l.id).as_deref(),
+            Some("pgp-import-not-base64")
+        );
         let result = ring.import("hello", KeyEncoding::Text).unwrap();
         assert!(result.keys.is_empty());
         assert_eq!(result.issues.len(), 1);
         // Nail's own text goes to the UI as a Fluent id (ADR 0043).
         let localized = result.issues[0].localized.as_ref().expect("localized");
-        assert!(
-            localized.id.starts_with("security-import-issue-"),
-            "{localized:?}"
-        );
+        assert!(localized.id.starts_with("pgp-import-"), "{localized:?}");
     }
 
     #[test]
     fn import_issues_are_localized_with_catalog_ids() {
-        let catalog = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../locales/en/security.ftl"),
-        )
-        .unwrap();
+        let catalog = crate::testutil::crypto_catalog();
         let has = |id: &str| catalog.lines().any(|l| l.starts_with(&format!("{id} =")));
         let cases = [
             import_issue(&Error::Crypto("bad self-signature".into())),
@@ -1167,11 +1166,11 @@ mod tests {
                 "keychain down",
             ))),
             import_issue(&Error::BadPassphrase),
-            LocalizedMessage::new("security-import-issue-unreadable"),
-            LocalizedMessage::new("security-import-issue-no-key"),
+            LocalizedMessage::new("pgp-import-unreadable"),
+            LocalizedMessage::new("pgp-import-no-key"),
         ];
         for message in cases {
-            assert!(has(&message.id), "{} is not in security.ftl", message.id);
+            assert!(has(&message.id), "{} is not in core-crypto.ftl", message.id);
         }
         assert_eq!(
             import_issue(&Error::Crypto("bad self-signature".into())).args["detail"],

@@ -759,6 +759,15 @@
               "source": null
             },
             {
+              "type": "widget",
+              "id": "plugin-manager",
+              "label": "@plugin.manager.tab",
+              "kind": "plugin-manager",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
               "type": "stack",
               "id": "customize",
               "label": "@settings.tab.customize",
@@ -1114,6 +1123,24 @@
     "sync.folder-policy": {
       "label": "@sync.action.folder-policy",
       "icon": "sync",
+      "alias_of": null,
+      "args": []
+    },
+    "plugins.manage": {
+      "label": "@plugin.action.manage",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "plugins.install": {
+      "label": "@plugin.action.install",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "plugins.load-dev": {
+      "label": "@plugin.action.load-dev",
+      "icon": null,
       "alias_of": null,
       "args": []
     }

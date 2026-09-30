@@ -2,8 +2,8 @@
 //! as `plugin-panel "<plugin>.<panel>"`. Rendered by
 //! `ui/src/features/plugins/`.
 //!
-//! Slot created by WP60 with the panel widget; WP62 adds the plug-in
-//! manager and install widgets here.
+//! Slot created by WP60 with the panel widget; the plug-in manager
+//! widget came with the integration (WP64).
 
 use super::{OptionType, WidgetSpec, widget};
 
@@ -18,6 +18,9 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
         &["panel"],
         false,
     ),
+    // The plug-in manager (install, enable / disable, grants, settings,
+    // logs, placements; ADR 0052). Also the dialog `plugin-manager`.
+    widget("plugin-manager", &[], &[], false),
 ];
 
 /// Prefixes every widget kind of this feature starts with.

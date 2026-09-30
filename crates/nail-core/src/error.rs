@@ -79,6 +79,7 @@ impl CoreError {
             Self::Api(err) => err.localized.as_deref().cloned(),
             Self::Engine(err) => err.localized.as_deref().cloned(),
             Self::Config(err) => Some((*err.localized).clone()),
+            Self::Pgp(err) => err.localized(),
             _ => None,
         }
     }
@@ -120,6 +121,7 @@ impl From<CoreError> for ApiError {
         match err {
             CoreError::Api(api) => api,
             CoreError::Config(config) => config.into(),
+            CoreError::Pgp(err) => err.into(),
             other => ApiError::new(other.code(), other.to_string()),
         }
     }

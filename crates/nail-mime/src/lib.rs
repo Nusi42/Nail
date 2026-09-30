@@ -19,6 +19,7 @@ pub mod auth_results;
 mod domain;
 pub mod links;
 mod markdown;
+pub mod message_file;
 pub mod remote_content;
 mod sanitize;
 mod text;
@@ -34,6 +35,9 @@ use nail_api::{
     MessageSummary,
 };
 
+pub use message_file::{
+    MAX_MESSAGE_FILE, MessageFile, MessageFileError, check_message_bytes, read_message_file,
+};
 pub use remote_content::ProxyRewriter;
 pub use sanitize::{SanitizedHtml, sanitize_html, sanitize_html_with};
 pub use text::{PREVIEW_CHARS, preview_text};

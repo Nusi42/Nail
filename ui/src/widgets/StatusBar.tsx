@@ -6,6 +6,7 @@ import { cancelRichSend } from "../features/composer/flows";
 import { useComposeContext } from "../state/hooks";
 import { useAccounts, useAccountStatuses, useClient, useFolders } from "../state/queries";
 import { useUi } from "../state/uiStore";
+import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** How long "Message sent" stays in the status bar. */
 export const SENT_NOTICE_MS = 5000;
@@ -176,11 +177,8 @@ function SendStatusItem() {
     case "scheduled":
       undo = true;
       if (seconds > COUNTDOWN_LIMIT_SECS) {
-        const date = new Date(entry.send_at);
         text = t("status-send-scheduled", {
-          time: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
-            date,
-          ),
+          time: formatDateTime(entry.send_at, locale, DATE_TIME),
         });
       } else {
         text = t("status-send-countdown", { seconds });

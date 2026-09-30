@@ -26,6 +26,13 @@ hex.workspace = true
 url.workspace = true
 # Hot reload of dev plug-ins (`nail plugin dev`).
 notify-debouncer-mini.workspace = true
+# Package assets inlined into `image` nodes as `data:` URIs.
+base64.workspace = true
+# Unguessable dialog ids.
+rand.workspace = true
+# `%fluent-id%` texts of manifests from the plug-in's own catalogs.
+fluent-bundle.workspace = true
+unic-langid.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

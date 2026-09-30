@@ -11,6 +11,7 @@
  * as own properties only, and pipes come from a fixed table. Unknown pipes,
  * wrong arguments and syntax errors are rejected at compile time.
  */
+import { formatRelative, formatShortDate } from "../i18n/format";
 
 /** A value flowing through pipes. */
 export type TemplateValue =
@@ -271,43 +272,9 @@ function toDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-const RELATIVE_STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ["second", 60],
-  ["minute", 60],
-  ["hour", 24],
-  ["day", 7],
-  ["week", 4.35],
-  ["month", 12],
-  ["year", Number.POSITIVE_INFINITY],
-];
-
-/** "5 minutes ago", "yesterday", "in 2 days", … */
-export function formatRelative(date: Date, now: number, locale: string): string {
-  const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-  let amount = (date.getTime() - now) / 1000;
-  if (Math.abs(amount) < 45) {
-    return format.format(0, "second");
-  }
-  for (const [unit, size] of RELATIVE_STEPS) {
-    if (Math.abs(amount) < size) {
-      return format.format(Math.round(amount), unit);
-    }
-    amount /= size;
-  }
-  return format.format(Math.round(amount), "year");
-}
-
-/** Short date: time for today, day + month this year, else a numeric date. */
-export function formatShortDate(date: Date, now: number, locale: string): string {
-  const today = new Date(now);
-  if (date.toDateString() === today.toDateString()) {
-    return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(date);
-  }
-  if (date.getFullYear() === today.getFullYear()) {
-    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).format(date);
-  }
-  return new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(date);
-}
+// The `relative` and `date` pipes format in the context's locale (the UI
+// locale, i18n/format.ts).
+export { formatRelative, formatShortDate };
 
 /** Part suffix for a field path: `from.name` → `from`, `has_attachments` → `has-attachments`. */
 export function fieldPart(path: readonly string[]): string {

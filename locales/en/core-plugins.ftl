@@ -67,7 +67,37 @@ plugin-settings-invalid = These settings have invalid values: { $keys }
 ## Configuration (layout.kdl)
 
 config-plugin-panel-invalid = `{ $panel }` is not a plug-in panel (expected `plugin-panel "<plugin>.<panel>"`)
+# A widget written the pre-M2d way (`plugin.<id>.<name>`); `panel` is `<id>.<name>`.
+config-plugin-widget-renamed = `{ $node }` is not a widget: place plug-in panels as `plugin-panel "{ $panel }"`
 
 ## The `nail plugin` command
 
 cli-plugin-dev-unavailable = Plug-in development is not available yet in this version of Nail ({ $folder }).
+
+## The plug-in host's own log lines (WP61; shown in the plug-in manager and by `nail plugin dev`)
+
+plugin-host-started = { $plugin } { $version } started.
+plugin-host-start-failed = { $plugin } could not start: { $detail }
+plugin-host-reloading = Files of { $plugin } changed; reloading.
+plugin-host-reload-invalid = { $plugin } was not reloaded because its manifest has problems.
+plugin-host-api-denied = The plug-in called { $call } without the permission { $permission }.
+plugin-host-unhandled-rejection = An error was not handled: { $detail }
+plugin-host-log-dropped = { $count ->
+    [one] One log line was dropped because the plug-in wrote too many.
+   *[other] { $count } log lines were dropped because the plug-in wrote too many.
+}
+
+## Plug-in packages (.nailplugin) and folders ($path = the file, $detail = more detail)
+
+plugin-package-too-large = The plug-in package is too large.
+plugin-package-not-a-zip = The file is not a plug-in package.
+plugin-package-too-many-files = The plug-in package contains too many files.
+plugin-package-unsafe-path = The plug-in package contains a file with an unsafe name: { $path }
+plugin-package-duplicate-path = The plug-in package contains { $path } twice.
+plugin-package-link = The plug-in package contains a link, which is not allowed: { $path }
+plugin-package-encrypted = The plug-in package contains an encrypted file: { $path }
+plugin-package-compression = The plug-in package uses an unsupported compression for { $path }.
+plugin-package-no-manifest = The plug-in package has no manifest.json.
+plugin-package-unreadable = The plug-in package cannot be read. { $detail }
+plugin-package-hash-mismatch = The plug-in package changed after it was checked. Check it again before installing.
+plugin-package-missing-file = The plug-in file { $path } is missing.

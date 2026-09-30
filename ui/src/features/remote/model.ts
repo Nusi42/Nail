@@ -20,6 +20,7 @@ import type {
   RemoteUiState,
   SessionEndReason,
 } from "../../api/generated";
+import { DATE_TIME, formatDateTime } from "../../i18n/format";
 
 /** `McpScope::ALL`: the order scopes are kept in. */
 export const SCOPE_ORDER: readonly McpScope[] = [
@@ -336,10 +337,7 @@ export function formatPairingCode(code: string): string {
 /** A date-time (the raw string when it does not parse). */
 export function formatTime(iso: string | null, locale: string): string {
   if (iso === null) return "";
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return formatDateTime(iso, locale, DATE_TIME);
 }
 
 /** Whole seconds from `now` until `iso` (0 when past or invalid). */

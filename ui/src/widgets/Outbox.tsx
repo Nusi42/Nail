@@ -7,6 +7,7 @@ import { displayName } from "../state/addresses";
 import { cancelRichSend, openRichDraft } from "../features/composer/flows";
 import { useComposeContext } from "../state/hooks";
 import { queryKeys, useDrafts, useOutbox } from "../state/queries";
+import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** Entries the user can still take back (edit) or send at once. */
 export function canTakeBack(entry: OutboxEntry): boolean {
@@ -59,12 +60,7 @@ export function Outbox({ node }: WidgetProps) {
       await ctx.queryClient.invalidateQueries({ queryKey: queryKeys.outbox });
     });
 
-  const format = (iso: string) => {
-    const date = new Date(iso);
-    return Number.isNaN(date.getTime())
-      ? iso
-      : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
-  };
+  const format = (iso: string) => formatDateTime(iso, locale, DATE_TIME);
 
   const entries = outbox.data ?? [];
   return (

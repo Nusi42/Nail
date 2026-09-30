@@ -115,9 +115,9 @@ pub(crate) struct LayoutEditor {
 /// Where a `window "<name>"` node is: `body[top]`, or the `inner`-th child
 /// of the breakpoint `body[top]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Site {
-    top: usize,
-    inner: Option<usize>,
+pub(crate) struct Site {
+    pub(crate) top: usize,
+    pub(crate) inner: Option<usize>,
 }
 
 impl LayoutEditor {
@@ -222,7 +222,7 @@ impl LayoutEditor {
 
     // --- windows -----------------------------------------------------------
 
-    fn window_sites(body: &KdlDocument, name: &str) -> Vec<Site> {
+    pub(crate) fn window_sites(body: &KdlDocument, name: &str) -> Vec<Site> {
         let mut sites = Vec::new();
         for (top, node) in body.nodes().iter().enumerate() {
             match node.name().value() {
@@ -270,7 +270,7 @@ impl LayoutEditor {
     }
 
     /// Copies the default definitions of a window into a sparse file.
-    fn copy_default_window(&mut self, name: &str) -> Result<(), EditError> {
+    pub(crate) fn copy_default_window(&mut self, name: &str) -> Result<(), EditError> {
         if !self.sparse {
             return Err(invalid(msg("config-edit-no-window").arg("name", name)));
         }
@@ -359,7 +359,11 @@ impl LayoutEditor {
 
     /// `(block path, index)` of every top-level `<kind> "<name>"` node and
     /// those inside `<kind>s { … }` blocks: `None` = the body itself.
-    fn named_sites(body: &KdlDocument, kind: &str, name: &str) -> Vec<(Option<usize>, usize)> {
+    pub(crate) fn named_sites(
+        body: &KdlDocument,
+        kind: &str,
+        name: &str,
+    ) -> Vec<(Option<usize>, usize)> {
         let plural = format!("{kind}s");
         let mut sites = Vec::new();
         for (top, node) in body.nodes().iter().enumerate() {
@@ -382,7 +386,11 @@ impl LayoutEditor {
         sites
     }
 
-    fn set_toolbar(&mut self, name: &str, items: &[ToolbarItem]) -> Result<(), EditError> {
+    pub(crate) fn set_toolbar(
+        &mut self,
+        name: &str,
+        items: &[ToolbarItem],
+    ) -> Result<(), EditError> {
         if !is_kebab(name) {
             return Err(invalid(
                 msg("config-toolbar-name-invalid").arg("name", name),

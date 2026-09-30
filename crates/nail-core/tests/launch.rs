@@ -105,7 +105,7 @@ async fn an_opened_eml_file_is_imported_and_readable() {
             localized: Some(localized),
             ..
         } => {
-            assert_eq!(localized.id, "launch-error-unreadable");
+            assert_eq!(localized.id, "message-file-unreadable");
             assert!(localized.args.contains_key("path"));
         }
         other => panic!("{other:?}"),
@@ -122,7 +122,7 @@ async fn an_opened_eml_file_is_imported_and_readable() {
             code: ErrorCode::InvalidRequest,
             localized: Some(localized),
             ..
-        } => assert_eq!(localized.id, "launch-error-size"),
+        } => assert_eq!(localized.id, "message-file-size"),
         other => panic!("{other:?}"),
     }
     let text = dir.path().join("notes.eml");
@@ -137,7 +137,7 @@ async fn an_opened_eml_file_is_imported_and_readable() {
             code: ErrorCode::InvalidRequest,
             localized: Some(localized),
             ..
-        } => assert_eq!(localized.id, "launch-error-not-mail"),
+        } => assert_eq!(localized.id, "message-file-not-mail"),
         other => panic!("{other:?}"),
     }
 }

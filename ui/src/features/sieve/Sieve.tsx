@@ -31,6 +31,7 @@ import {
 } from "../../widgets/forms";
 import { useRules } from "../rules/api";
 import { manageSieveIssues, parseAddressList, vacationIssues } from "./model";
+import { DATE_TIME, formatDateTime } from "../../i18n/format";
 
 export const sieveKeys = {
   status: ["sieve", "status"] as const,
@@ -63,10 +64,7 @@ function Messages({ items, part }: { items: readonly LocalizedMessage[]; part: s
 
 function formatTime(value: string | null, locale: string): string | null {
   if (value === null) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return formatDateTime(value, locale, DATE_TIME);
 }
 
 /** The ManageSieve switch and connection settings of one account. */

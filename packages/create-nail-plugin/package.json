@@ -4,5 +4,30 @@
   "version": "0.1.0",
   "description": "Starter template for Nail plug-ins (npm create nail-plugin)",
   "license": "UNLICENSED",
-  "type": "module"
+  "type": "module",
+  "bin": {
+    "create-nail-plugin": "./index.mjs"
+  },
+  "exports": {
+    ".": "./scaffold.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "scaffold.mjs",
+    "template"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "lint": "tsc -p . && prettier --check ."
+  },
+  "dependencies": {
+    "@nail/plugin-api": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.2"
+  }
 }

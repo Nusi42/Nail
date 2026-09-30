@@ -1,41 +1,59 @@
-//! The plug-in host (plan M2d WP61; contract ADR 0050): one sandboxed
-//! QuickJS runtime per plug-in, the permission gate in front of the Client
-//! API, the preview API bindings (`nail.*`) and `.nailplugin` packages.
+//! The plug-in host (plan M2d WP61; contract ADR 0050, host decisions ADR
+//! 0051): one sandboxed QuickJS runtime per plug-in, the permission
+//! gate in front of the core, the preview API (`nail.*`), `.nailplugin`
+//! packages and dev reload.
 //!
-//! **Stub (WP60).** WP61 fills this crate against `nail_api::plugins`.
-//! Expected shape (WP61 decides the details and records them in its ADR):
-//!
-//! * `runtime` — a QuickJS runtime per plug-in (`rquickjs`): a memory
-//!   limit, an interrupt handler enforcing a CPU time budget per call
-//!   (an endless loop is stopped and the plug-in flagged
-//!   `PluginStopReason::CpuBudget`), no filesystem, process or socket
-//!   access (no `std` / `os` modules; only the bundled entry module is
-//!   loaded). Uncaught errors stop the plug-in (`PluginStopReason::Error`).
-//! * `gate` — every API call checks the plug-in's grants
-//!   (`nail_api::plugins::PluginGrant`): `mail.read` (headers, per
-//!   account), `mail.read.body` (never decrypted end-to-end mail),
-//!   `ui.dialogs`, `notifications`, `storage`, `network:<domain>`
-//!   (`PluginPermission::allows_host`). A denied call rejects with an
-//!   error whose code is `forbidden` and is logged (`PluginLogSource::Api`).
-//! * `api` — the bindings: `nail.mail` (read; `PluginMessage`,
-//!   `PluginMessageBody`), `nail.ui.showDialog` (`PluginDialogSpec` →
-//!   `PluginDialogResult`), `nail.ui.notify`, `nail.commands.register` /
-//!   `ctx.commands.register` (`PluginCommandContext`), panels
-//!   (`PluginUiNode` trees, `nail_api::plugins::validate_tree`),
-//!   `nail.storage` (quota), `nail.http.fetch` (declared domains only,
-//!   through the core), `nail.settings`, `nail.log` / `console`.
-//!   The host talks to the core through a trait (implemented by
-//!   `nail-core`, WP64), so this crate never depends on the store or the
-//!   core.
-//! * `package` — `.nailplugin` archives (zip: `manifest.json`, the bundled
-//!   JS, assets, locales; `nail_api::plugins::admin::MAX_PACKAGE_BYTES`,
-//!   no paths outside the package), SHA-256 of the package, unpacking to
-//!   `<data-dir>/plugins/<id>/`.
-//! * `dev` — dev folders (`nail plugin dev <folder>`): load unpacked,
-//!   reload on change (`notify-debouncer-mini`), log lines as
-//!   `PluginLogLine` events.
+//! * [`PluginHost`] ([`host`]) starts, stops and reloads plug-ins and
+//!   forwards the runtime requests (commands, dialog answers, UI actions,
+//!   panels). Each plug-in runs on **its own thread** with its own QuickJS
+//!   runtime (`runtime.rs`): a memory limit, an interrupt-based CPU budget
+//!   per call ([`HostLimits`]), no filesystem, process or socket access
+//!   (QuickJS's `std` / `os` modules are never loaded; the module loader
+//!   serves only the plug-in's own files). An uncaught error, an exceeded
+//!   budget or exhausted memory stops that plug-in and flags it
+//!   (`PluginStopped`, state `crashed`); the others keep running.
+//! * [`gate`]: every API call is checked against the grants
+//!   (`mail.read` per account, `mail.read.body` never for end-to-end
+//!   encrypted mail, `ui.dialogs`, `notifications`, `storage`,
+//!   `network:<host>`); refusals fail with `forbidden` and are logged.
+//! * [`PluginServices`] ([`services`]): what the core implements (mail
+//!   reads, storage, HTTP, events, log lines); this crate never touches
+//!   the store or the network itself.
+//! * The API a plug-in sees is built by `prelude.js`: `nail.mail` (`get`,
+//!   `getBody`, `search`, `thread`), `nail.ui` (`registerCommand`,
+//!   `registerPanel`, `showDialog`, `notify`, `updatePanel`),
+//!   `nail.commands.register`, `nail.storage`, `nail.http.fetch`,
+//!   `nail.settings`, `nail.log`, `console`, `setTimeout` /
+//!   `clearTimeout`, `queueMicrotask`. The entry module's default export
+//!   (or its named `activate`) is started with a context
+//!   (`ctx.commands.register`, `ctx.panels.register`, `ctx.settings`).
+//! * [`package`]: `.nailplugin` archives (checked for traversal, links,
+//!   size and zip bombs), installed packages kept packed and verified by
+//!   hash, dev folders.
+//! * [`dev`]: the dev folder watcher behind `nail plugin dev`.
+//! * [`l10n`]: the host's Fluent ids and the plug-ins' own catalogs
+//!   (`%fluent-id%` manifest texts).
+//! * [`tree`]: component trees on their way to the UI.
 
 #![warn(missing_docs)]
+
+pub mod dev;
+pub mod gate;
+pub mod host;
+pub mod l10n;
+pub mod limits;
+pub mod package;
+pub(crate) mod runtime;
+pub mod services;
+pub mod tree;
+
+pub use host::{DevLoadError, PluginHost, PluginSpec, effective_settings};
+pub use l10n::PluginCatalogs;
+pub use limits::HostLimits;
+pub use package::{PackageError, PackageErrorKind, PackageFiles, PackageStore, PluginPackage};
+pub use services::{
+    AccountScope, BoxFuture, HostLogLine, HttpRequest, HttpResponse, PluginServices, ServiceResult,
+};
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

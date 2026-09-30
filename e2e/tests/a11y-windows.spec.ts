@@ -1,0 +1,248 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { startNail, type NailServer } from "../support/nail";
+import { createUser, rpcOk } from "../support/remote";
+
+/**
+ * M2c carry-over (WP65): axe on every window, every settings tab and every
+ * dialog of `nail serve --seed demo-multi`, in the default theme, the
+ * high-contrast theme and dark mode.
+ *
+ * The sweep checks its own coverage: every window of the resolved layout,
+ * every feature dialog listed in {@link FEATURE_DIALOGS} and every tab of
+ * the settings window's `tabs` nodes must have been scanned, so a new
+ * window or tab fails here until it is reachable and clean.
+ */
+
+const MODES = [
+  { name: "default theme", query: "" },
+  { name: "high-contrast theme", query: "?mode=high-contrast" },
+  { name: "dark mode", query: "?mode=dark" },
+] as const;
+
+/**
+ * Dialogs features register by name (`window.open "<name>"`) that are not
+ * layout windows. M2d's plug-in dialogs (`plugin-install`,
+ * `plugin-manager`) join this list with the plug-in integration (WP64).
+ */
+const FEATURE_DIALOGS = [
+  "config-merge",
+  "config-errors",
+  "remote-pair",
+  "security-autocrypt-import",
+  "snooze",
+  "sync-folder",
+] as const;
+
+/** A layout node as `GetConfig` returns it (only what the sweep reads). */
+interface LayoutNode {
+  type: string;
+  children?: LayoutNode[];
+}
+
+/** Number of tabs of all `tabs` nodes under `node`. */
+function tabCount(node: LayoutNode): number {
+  const own = node.type === "tabs" ? (node.children?.length ?? 0) : 0;
+  return own + (node.children ?? []).reduce((sum, child) => sum + tabCount(child), 0);
+}
+
+/**
+ * Every axe violation, whatever its impact. The composer's preview frame is
+ * left out: it shows the outgoing mail in a sandbox without scripts that
+ * axe cannot enter (as in a11y.spec.ts).
+ */
+async function violations(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .exclude('[data-part="composer.preview.frame"]')
+    .analyze();
+  return results.violations.map((v) => ({
+    id: v.id,
+    impact: v.impact,
+    help: v.help,
+    targets: v.nodes.map((n) => n.target.join(" ")),
+  }));
+}
+
+class Sweep {
+  readonly windows = new Set<string>();
+  readonly tabs: string[] = [];
+
+  constructor(
+    readonly page: Page,
+    readonly mode: string,
+  ) {}
+
+  /** Scans the page; failures are collected (soft) with what was open. */
+  async scan(what: string) {
+    expect.soft(await violations(this.page), `${this.mode}: ${what}`).toEqual([]);
+  }
+
+  window(name: string): Locator {
+    return this.page.locator(`[data-part="window"][data-window="${name}"]`);
+  }
+
+  /** Waits for window `name`, scans it and records it. */
+  async scanWindow(name: string, what = name) {
+    await expect(this.window(name)).toBeVisible();
+    await this.scan(what);
+    this.windows.add(name);
+  }
+
+  async close(name: string) {
+    await this.window(name).locator('[data-part="window.close"]').click();
+    await expect(this.window(name)).toBeHidden();
+  }
+
+  /** Scans every tab of the first tab list in `container`, recursively. */
+  async scanTabs(container: Locator, path: string[] = []) {
+    const tablist = container.getByRole("tablist").first();
+    const names = await tablist
+      .getByRole("tab")
+      .evaluateAll((tabs) => tabs.map((tab) => tab.textContent?.trim() ?? ""));
+    expect(names.length, `${path.join(" › ")} has tabs`).toBeGreaterThan(0);
+    for (const name of names) {
+      const tab = tablist.getByRole("tab", { name, exact: true });
+      await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+      const where = [...path, name];
+      await this.scan(`settings › ${where.join(" › ")}`);
+      this.tabs.push(where.join(" › "));
+      const panel = container.getByRole("tabpanel", { name, exact: true });
+      if ((await panel.getByRole("tablist").count()) > 0) {
+        await this.scanTabs(panel, where);
+      }
+    }
+  }
+}
+
+// Fail a missing control fast instead of after the whole test budget.
+test.use({ actionTimeout: 20_000 });
+
+for (const mode of MODES) {
+  test.describe(`every window, settings tab and dialog (${mode.name})`, () => {
+    let server: NailServer;
+
+    test.beforeEach(async () => {
+      server = await startNail({ seed: "demo-multi" });
+      // A remote user, so "Pair a device" can be opened.
+      await createUser(server, "ada");
+    });
+
+    test.afterEach(async () => {
+      await server.stop();
+    });
+
+    test("has no accessibility violations", async ({ page }) => {
+      test.setTimeout(300_000);
+      const config = await rpcOk(server, { type: "GetConfig" }, "Config");
+      const layout = config.layout as {
+        windows: Record<string, { root: LayoutNode }[]>;
+      };
+      const sweep = new Sweep(page, mode.name);
+
+      await page.goto(new URL(mode.query, server.url).toString());
+      const rows = page.locator('[data-part="message-list.row"]');
+      await expect(rows).toHaveCount(17);
+      await sweep.scan("main window");
+      sweep.windows.add("main");
+      const toolbar = page.getByRole("toolbar", { name: "Main toolbar" });
+
+      // The reader with a message open.
+      await rows.filter({ hasText: "Welcome to Nail" }).click();
+      await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
+        "Welcome to Nail",
+      );
+      await sweep.scan("reader");
+
+      // The composer in each mode (with its security panel).
+      await toolbar.getByRole("button", { name: "New message" }).click();
+      const composer = sweep.window("composer");
+      await sweep.scanWindow("composer", "composer (plain text)");
+      await composer.getByRole("radio", { name: "HTML" }).click();
+      await expect(composer.locator('[data-part="composer.html.content"]')).toBeVisible();
+      await sweep.scan("composer (HTML)");
+      await composer.getByRole("radio", { name: "Markdown" }).click();
+      await expect(composer.locator('[data-part="composer.markdown.content"]')).toBeVisible();
+      await sweep.scan("composer (Markdown)");
+      await composer.getByRole("button", { name: "Discard" }).click();
+      await expect(composer).toBeHidden();
+
+      // Windows of the main toolbar.
+      await toolbar.getByRole("button", { name: "Outbox" }).click();
+      await sweep.scanWindow("outbox");
+      await sweep.close("outbox");
+
+      await toolbar.getByRole("button", { name: "Filter rules" }).click();
+      await sweep.scanWindow("rules", "rules (list)");
+      await sweep.window("rules").getByRole("button", { name: "New rule" }).click();
+      await expect(sweep.window("rules").getByRole("form", { name: "Rule" })).toBeVisible();
+      await sweep.scan("rules (editor)");
+      await sweep.close("rules");
+
+      await toolbar.getByRole("button", { name: "Add account" }).click();
+      await sweep.scanWindow("account-setup");
+      await sweep.close("account-setup");
+
+      await toolbar.getByRole("button", { name: "Snoozed messages" }).click();
+      await sweep.scanWindow("snoozed");
+      await sweep.close("snoozed");
+
+      // Dialogs of the selected message.
+      await rows.filter({ hasText: "Welcome to Nail" }).click();
+      const actions = page.getByRole("toolbar", { name: "Message actions" });
+      await actions.getByRole("button", { name: "Snooze…" }).click();
+      await sweep.scanWindow("snooze");
+      await sweep.close("snooze");
+      await actions.getByRole("button", { name: "Import Autocrypt setup message" }).click();
+      await sweep.scanWindow("security-autocrypt-import");
+      await sweep.close("security-autocrypt-import");
+
+      // Context menus, the move window and a folder's sync dialog.
+      await rows.filter({ hasText: "Welcome to Nail" }).click({ button: "right" });
+      const menu = page.getByRole("menu");
+      await expect(menu).toBeVisible();
+      await sweep.scan("message context menu");
+      await menu.getByRole("menuitem", { name: "Move to…" }).click();
+      await sweep.scanWindow("move");
+      await sweep.close("move");
+      await page.getByRole("treeitem", { name: /^INBOX/ }).click({ button: "right" });
+      await expect(page.getByRole("menu")).toBeVisible();
+      await sweep.scan("folder context menu");
+      await page.getByRole("menu").getByRole("menuitem", { name: "Synchronization…" }).click();
+      await sweep.scanWindow("sync-folder");
+      await sweep.close("sync-folder");
+
+      // Every settings tab, nested ones included.
+      await toolbar.getByRole("button", { name: "Settings" }).click();
+      const settings = sweep.window("settings");
+      await expect(settings).toBeVisible();
+      sweep.windows.add("settings");
+      await sweep.scanTabs(settings);
+
+      // Dialogs opened from settings tabs, stacked over the settings window.
+      const top = settings.getByRole("tablist").first();
+      await top.getByRole("tab", { name: "Devices", exact: true }).click();
+      await settings.getByRole("button", { name: "Pair a device" }).click();
+      await sweep.scanWindow("remote-pair");
+      await sweep.close("remote-pair");
+      await top.getByRole("tab", { name: "Customize", exact: true }).click();
+      const customize = page.getByRole("toolbar", { name: "Customization" });
+      await customize.getByRole("button", { name: "Apply a theme or layout…" }).click();
+      await sweep.scanWindow("config-merge");
+      await sweep.close("config-merge");
+      await customize.getByRole("button", { name: "Configuration errors" }).click();
+      await sweep.scanWindow("config-errors");
+      await sweep.close("config-errors");
+      await sweep.close("settings");
+
+      // Coverage: every layout window, feature dialog and settings tab.
+      const expectedWindows = [...Object.keys(layout.windows), ...FEATURE_DIALOGS].sort();
+      expect([...sweep.windows].sort(), "windows and dialogs scanned").toEqual(expectedWindows);
+      const settingsRoot = layout.windows.settings?.[0]?.root;
+      expect(settingsRoot, "the layout has a settings window").toBeDefined();
+      expect(sweep.tabs.length, `settings tabs scanned: ${sweep.tabs.join(", ")}`).toBe(
+        tabCount(settingsRoot as LayoutNode),
+      );
+    });
+  });
+}

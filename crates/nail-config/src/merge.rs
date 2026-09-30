@@ -38,6 +38,7 @@ use crate::kdl_edit::{
     Style, first_arg, remove_node, remove_prop, replace_rendered, set_first_arg, set_prop,
 };
 use crate::l10n::msg;
+use crate::plugins::InstalledPlugins;
 use crate::render;
 use crate::theme::ThemeFile;
 use crate::write_back::{EditError, LayoutEditor, NEW_LAYOUT};
@@ -66,7 +67,18 @@ pub fn preview_merge(
     mine: Option<&str>,
     incoming: &str,
 ) -> Result<ConfigMergePreview, EditError> {
-    let plan = match Plan::build(file, mine, incoming)? {
+    preview_merge_with(file, mine, incoming, &InstalledPlugins::default())
+}
+
+/// [`preview_merge`] knowing the installed plug-ins: their commands and
+/// panels are not flagged as missing.
+pub fn preview_merge_with(
+    file: ConfigFile,
+    mine: Option<&str>,
+    incoming: &str,
+    installed: &InstalledPlugins,
+) -> Result<ConfigMergePreview, EditError> {
+    let plan = match Plan::build(file, mine, incoming, installed)? {
         Ok(plan) => plan,
         Err(errors) => {
             return Ok(ConfigMergePreview {
@@ -114,14 +126,15 @@ pub fn resolve_merge(
     choices: &[MergeChoice],
     default: MergeTake,
 ) -> Result<MergeOutcome, EditError> {
-    let plan = Plan::build(file, mine, incoming)?.map_err(|errors| {
-        EditError::Invalid(
-            msg("config-merge-incoming-invalid")
-                .arg("file", file.file_name())
-                .arg("count", errors.len())
-                .arg("error", errors[0].to_string()),
-        )
-    })?;
+    let plan =
+        Plan::build(file, mine, incoming, &InstalledPlugins::default())?.map_err(|errors| {
+            EditError::Invalid(
+                msg("config-merge-incoming-invalid")
+                    .arg("file", file.file_name())
+                    .arg("count", errors.len())
+                    .arg("error", errors[0].to_string()),
+            )
+        })?;
     let text = plan.merged_text(mine, incoming, choices, default)?;
     let name = file.file_name();
     let invalid = |errors: Vec<ConfigError>| EditError::Config(errors);
@@ -442,10 +455,11 @@ impl Plan {
         file: ConfigFile,
         mine: Option<&str>,
         incoming: &str,
+        installed: &InstalledPlugins,
     ) -> Result<Result<Self, Vec<ConfigError>>, EditError> {
         match file {
             ConfigFile::Theme => Self::build_theme(mine, incoming),
-            ConfigFile::Layout => Self::build_layout(mine, incoming),
+            ConfigFile::Layout => Self::build_layout(mine, incoming, installed),
             other => Err(EditError::Invalid(
                 msg("config-merge-unsupported").arg("file", other.file_name()),
             )),
@@ -543,6 +557,7 @@ impl Plan {
     fn build_layout(
         mine: Option<&str>,
         incoming: &str,
+        installed: &InstalledPlugins,
     ) -> Result<Result<Self, Vec<ConfigError>>, EditError> {
         let mine_text = mine.unwrap_or(NEW_LAYOUT);
         let mine_resolved = parse_layout_all(mine_text, LAYOUT_FILE).map_err(EditError::Config)?;
@@ -571,8 +586,8 @@ impl Plan {
             .into_keys()
             .collect();
 
-        // Actions the app knows: the defaults', the user's, and aliases the
-        // incoming file defines. Plug-in actions are never installed (M1).
+        // Actions the app knows: the defaults', the user's, aliases the
+        // incoming file defines, and the commands of installed plug-ins.
         let mut known: HashSet<String> = default_layout.actions.keys().cloned().collect();
         known.extend(mine_resolved.actions.keys().cloned());
         known.extend(
@@ -582,7 +597,13 @@ impl Plan {
                 .filter(|(_, def)| def.alias_of.is_some())
                 .map(|(id, _)| id.clone()),
         );
-        let is_known = |action: &str| !action.starts_with("plugin.") && known.contains(action);
+        let is_known = |action: &str| {
+            if action.starts_with("plugin.") {
+                installed.actions.contains(action)
+            } else {
+                known.contains(action)
+            }
+        };
 
         let mut items = plan_items(&mine_items, &theirs_items, &explicit);
         for item in &mut items {
@@ -599,26 +620,31 @@ impl Plan {
             }
             match &item.item {
                 Item::Window(name) => {
-                    let theirs_kinds = theirs_model
+                    let theirs_panels = theirs_model
                         .windows
                         .get(name)
-                        .map(|bps| widget_kinds(bps.iter().map(|b| &b.root)))
+                        .map(|bps| plugin_panels(bps.iter().map(|b| &b.root)))
                         .unwrap_or_default();
-                    for kind in theirs_kinds.iter().filter(|k| k.starts_with("plugin.")) {
+                    for panel in theirs_panels
+                        .iter()
+                        .filter(|p| !installed.panels.contains(*p))
+                    {
                         conflicts.push(conflict(
                             MergeConflictKind::UnknownWidget,
-                            msg("config-merge-widget-missing").arg("widget", kind.as_str()),
+                            msg("config-merge-widget-missing").arg("widget", panel_label(panel)),
                         ));
                     }
-                    let mine_kinds = mine_model
+                    let mine_panels = mine_model
                         .windows
                         .get(name)
-                        .map(|bps| widget_kinds(bps.iter().map(|b| &b.root)))
+                        .map(|bps| plugin_panels(bps.iter().map(|b| &b.root)))
                         .unwrap_or_default();
-                    let dropped: Vec<&String> = mine_kinds
+                    let dropped_labels: Vec<String> = mine_panels
                         .iter()
-                        .filter(|k| k.starts_with("plugin.") && !theirs_kinds.contains(k))
+                        .filter(|p| !theirs_panels.contains(p))
+                        .map(|p| panel_label(p))
                         .collect();
+                    let dropped: Vec<&String> = dropped_labels.iter().collect();
                     if item.change() != MergeChange::Unchanged && !dropped.is_empty() {
                         conflicts.push(dropped_conflict(&dropped));
                     }
@@ -650,7 +676,7 @@ impl Plan {
                 }
                 Item::Action(id) => {
                     if let Some(def) = theirs_model.actions.get(id) {
-                        if id.starts_with("plugin.") {
+                        if id.starts_with("plugin.") && !installed.actions.contains(id) {
                             conflicts.push(unknown_action(id));
                         }
                         if let Some(target) = &def.alias_of
@@ -810,12 +836,15 @@ fn token_refs(text: &str) -> Vec<(String, String)> {
     refs
 }
 
-fn widget_kinds<'a>(roots: impl Iterator<Item = &'a LayoutNode>) -> Vec<String> {
+/// The plug-in panels (`<plugin>.<panel>`) placed in a window.
+fn plugin_panels<'a>(roots: impl Iterator<Item = &'a LayoutNode>) -> Vec<String> {
     fn walk(node: &LayoutNode, out: &mut Vec<String>) {
-        if let LayoutNode::Widget { kind, .. } = node
-            && !out.contains(kind)
+        if let LayoutNode::Widget { kind, options, .. } = node
+            && kind == nail_api::plugins::PLUGIN_PANEL_WIDGET
+            && let Some(panel) = options.get("panel").and_then(|v| v.as_str())
+            && !out.iter().any(|p| p == panel)
         {
-            out.push(kind.clone());
+            out.push(panel.to_owned());
         }
         for child in node.children() {
             walk(child, out);
@@ -826,6 +855,11 @@ fn widget_kinds<'a>(roots: impl Iterator<Item = &'a LayoutNode>) -> Vec<String> 
         walk(root, &mut out);
     }
     out
+}
+
+/// How a plug-in panel is named in conflicts: its layout line.
+fn panel_label(panel: &str) -> String {
+    format!("{} \"{panel}\"", nail_api::plugins::PLUGIN_PANEL_WIDGET)
 }
 
 fn toolbar_actions(items: &[ToolbarItem]) -> Vec<String> {

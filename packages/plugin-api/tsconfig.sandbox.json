@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["@nail/plugin-api/globals"],
+    "allowJs": false,
+    "checkJs": false
+  },
+  "include": [],
+  "files": ["src/index.ts", "src/jsx-runtime.ts", "src/jsx-dev-runtime.ts", "src/testing.ts"]
+}

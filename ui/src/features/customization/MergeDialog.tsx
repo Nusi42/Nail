@@ -28,6 +28,7 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import { queryKeys, useClient, type AppConfig } from "../../state/queries";
 import { chooseAll, choiceList, differs, summarize, takeOf, type Choices } from "./merge";
 import { MERGE_FILES } from "./names";
+import { DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
 
 /** Delay before the live preview follows a change of choices (ms). */
 export const PREVIEW_DELAY_MS = 150;
@@ -79,10 +80,7 @@ export class LivePreview {
 }
 
 function formatTime(iso: string, locale: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(date);
+  return formatDateTime(iso, locale, DATE_TIME_SECONDS);
 }
 
 function Backups({ file, client }: { file: ConfigFile; client: NailClient }) {

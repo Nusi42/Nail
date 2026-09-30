@@ -21,6 +21,7 @@ import type {
   TrustDecision,
   TrustLevel,
 } from "../../api/generated";
+import { DATE_ONLY, DATE_TIME, formatDateTime as formatInLocale } from "../../i18n/format";
 
 // ---------------------------------------------------------------------------
 // Constants (also the source of runtime-built message ids)
@@ -455,10 +456,5 @@ export function exportHref(mime: string, encoding: "text" | "base64", data: stri
 
 /** A date for display, or the raw value when it does not parse. */
 export function formatDateTime(iso: string, locale: string, withTime = true): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(
-    locale,
-    withTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" },
-  ).format(date);
+  return formatInLocale(iso, locale, withTime ? DATE_TIME : DATE_ONLY);
 }

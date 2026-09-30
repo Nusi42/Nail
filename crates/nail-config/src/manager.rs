@@ -124,6 +124,8 @@ pub(crate) struct Inner {
     state: Mutex<State>,
     /// Serializes writes to the config files (write-back, merge, revert).
     pub(crate) writing: Mutex<()>,
+    /// The installed plug-ins' commands and panels (merge conflicts).
+    pub(crate) plugins: Mutex<crate::plugins::InstalledPlugins>,
 }
 
 #[derive(Debug)]
@@ -162,6 +164,7 @@ impl ConfigManager {
                     errors: [Vec::new(), Vec::new()],
                 }),
                 writing: Mutex::new(()),
+                plugins: Mutex::new(crate::plugins::InstalledPlugins::default()),
             }),
         };
         for kind in ConfigKind::ALL {

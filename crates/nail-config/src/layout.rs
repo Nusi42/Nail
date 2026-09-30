@@ -513,10 +513,20 @@ impl LayoutReader<'_, '_> {
         let src = self.src;
         let kind = k::name(node);
         let spec = widgets::find(kind);
-        let is_plugin = kind
-            .strip_prefix("plugin.")
-            .is_some_and(|rest| rest.split('.').count() >= 2 && is_dotted_kebab(rest));
-        if spec.is_none() && !is_plugin {
+        // The pre-M2d placeholder `plugin.<id>.<name>` is written
+        // `plugin-panel "<id>.<name>"` now (ADR 0052).
+        if let Some(rest) = kind.strip_prefix("plugin.")
+            && rest.split('.').count() >= 2
+            && is_dotted_kebab(rest)
+        {
+            return Err(src.node_err(
+                node,
+                msg("config-plugin-widget-renamed")
+                    .arg("node", kind)
+                    .arg("panel", rest),
+            ));
+        }
+        if spec.is_none() {
             return Err(src.node_err(
                 node,
                 msg("config-widget-unknown")

@@ -15,6 +15,7 @@
  * Everything is validated defensively: a rule with an unsafe selector piece or
  * value is dropped with a warning instead of corrupting the sheet.
  */
+import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
   AncestorSelector,
   MessageDisplay,
@@ -72,7 +73,9 @@ export function elementSelector(
   states: readonly string[],
   conditions: readonly PartCondition[],
 ): string {
-  let selector = `[data-part=${cssString(checkIdent("part name", part, PART_RE))}]`;
+  const name = checkIdent("part name", part, PART_RE);
+  // `plugin.<id>.<part>` styles one plug-in's generic part (ADR 0052).
+  let selector = pluginPartSelector(name) ?? `[data-part=${cssString(name)}]`;
   for (const state of states) {
     checkIdent("state", state, IDENT_RE);
     selector += PSEUDO_STATES.has(state) ? `:${state}` : `[data-state~=${cssString(state)}]`;
@@ -223,7 +226,8 @@ ${[
 /* Reduced motion (M2c): the OS setting stops animations and transitions. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
-}`;
+}
+${PLUGIN_BASE_CSS}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {

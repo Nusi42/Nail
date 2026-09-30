@@ -7,9 +7,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ActionsProvider } from "./actions/ActionsProvider";
 import type { NailClient } from "./api/client";
 import { errorMessageIdOf } from "./api/client";
-import type { AccountStatus, ThemeMode } from "./api/generated";
+import type { AccountStatus, ResolvedLayout, ThemeMode } from "./api/generated";
 import { normalizeLayout, normalizeTheme } from "./api/normalize";
 import { createClient, selectTransportKind } from "./api/select";
+import { usePluginLayout } from "./features/plugins";
 import { remoteStore } from "./features/remote";
 import { ReauthPrompt, RemoteLoginPage, checkRemoteGate, type GateState } from "./RemoteGate";
 import { appRegistry } from "./features/registry";
@@ -338,6 +339,21 @@ function FeatureEffects() {
   );
 }
 
+/**
+ * The resolved layout with an action for every installed plug-in command
+ * (`plugin.<id>.<command>`, ADR 0052), so toolbars, menus and keys
+ * reach them.
+ */
+function PluginLayout({
+  layout,
+  children,
+}: {
+  layout: ResolvedLayout;
+  children: (layout: ResolvedLayout) => ReactNode;
+}) {
+  return <>{children(usePluginLayout(layout))}</>;
+}
+
 function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: string }) {
   const config = useConfig();
   const localeOverride = useUi((s) => s.localeOverride);
@@ -350,25 +366,29 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
     <I18nProvider locale={locale}>
       {config.data ? (
         <ThemeProvider theme={config.data.theme} modeOverride={modeOverride}>
-          <LayoutContext.Provider value={config.data.layout}>
-            <DialogRegistryContext.Provider value={appRegistry.dialogs}>
-              <ActionsProvider layout={config.data.layout} handlers={appRegistry.actions}>
-                <WidgetRegistryContext.Provider value={widgets}>
-                  <main
-                    data-part="app"
-                    data-layout={config.data.layout.name}
-                    data-theme={config.data.theme.name}
-                  >
-                    <WindowView layout={config.data.layout} name={windowName} />
-                    <WindowLayer layout={config.data.layout} />
-                    {/* Inside the landmark: context menus open from here. */}
-                    <FeatureEffects />
-                  </main>
-                  <ReauthPrompt />
-                </WidgetRegistryContext.Provider>
-              </ActionsProvider>
-            </DialogRegistryContext.Provider>
-          </LayoutContext.Provider>
+          <PluginLayout layout={config.data.layout}>
+            {(layout) => (
+              <LayoutContext.Provider value={layout}>
+                <DialogRegistryContext.Provider value={appRegistry.dialogs}>
+                  <ActionsProvider layout={layout} handlers={appRegistry.actions}>
+                    <WidgetRegistryContext.Provider value={widgets}>
+                      <main
+                        data-part="app"
+                        data-layout={layout.name}
+                        data-theme={config.data.theme.name}
+                      >
+                        <WindowView layout={layout} name={windowName} />
+                        <WindowLayer layout={layout} />
+                        {/* Inside the landmark: context menus open from here. */}
+                        <FeatureEffects />
+                      </main>
+                      <ReauthPrompt />
+                    </WidgetRegistryContext.Provider>
+                  </ActionsProvider>
+                </DialogRegistryContext.Provider>
+              </LayoutContext.Provider>
+            )}
+          </PluginLayout>
         </ThemeProvider>
       ) : (
         <BootTheme modeOverride={modeOverride}>

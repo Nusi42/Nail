@@ -26,6 +26,7 @@ import {
 } from "./model";
 import { snooze, unsnooze, useSnoozed } from "./queries";
 import { useTriage } from "./store";
+import { formatDateTime } from "../../i18n/format";
 
 /** Name of the snooze picker dialog and of the snoozed-list window. */
 export const SNOOZE_DIALOG = "snooze";
@@ -36,13 +37,13 @@ function useWriteContext() {
 }
 
 function formatTime(date: Date, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
+  return formatDateTime(date, locale, {
     weekday: "short",
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
+  });
 }
 
 /** Whether a wake time has already passed. */

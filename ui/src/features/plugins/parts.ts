@@ -1,0 +1,140 @@
+/**
+ * Theme parts of plug-in UI (ADR 0050, "every element themeable").
+ *
+ * Every element a plug-in tree produces carries a generic part
+ * (`data-part="plugin.button"`) and the plug-in's id (`data-plugin=
+ * "follow-up"`); input nodes also carry their id (`data-id="due"`). A theme
+ * styles all plug-ins through the generic parts, one plug-in with a
+ * condition (`part "plugin.button[plugin=\"follow-up\"]"`), and — once the
+ * theme compiler maps them (`pluginPartSelector`) — with the namespaced
+ * names of the design, `plugin.<id>.<part>` (`plugin.follow-up.button`).
+ */
+
+/** The generic parts plug-in elements carry. */
+export const PLUGIN_PARTS = [
+  "plugin.tree",
+  "plugin.stack",
+  "plugin.text",
+  "plugin.markdown",
+  "plugin.markdown.heading",
+  "plugin.markdown.paragraph",
+  "plugin.markdown.list",
+  "plugin.markdown.item",
+  "plugin.markdown.quote",
+  "plugin.markdown.code",
+  "plugin.markdown.code-block",
+  "plugin.markdown.rule",
+  "plugin.markdown.link",
+  "plugin.markdown.confirm",
+  "plugin.markdown.confirm.text",
+  "plugin.markdown.confirm.button",
+  "plugin.field",
+  "plugin.field.label",
+  "plugin.field.error",
+  "plugin.input",
+  "plugin.textarea",
+  "plugin.select",
+  "plugin.checkbox",
+  "plugin.date",
+  "plugin.contact-picker",
+  "plugin.contact-picker.list",
+  "plugin.contact-picker.contact",
+  "plugin.contact-picker.remove",
+  "plugin.contact-picker.input",
+  "plugin.folder-picker",
+  "plugin.message-list",
+  "plugin.message-list.row",
+  "plugin.message-list.choice",
+  "plugin.message-list.subject",
+  "plugin.message-list.from",
+  "plugin.message-list.date",
+  "plugin.table",
+  "plugin.table.header",
+  "plugin.table.row",
+  "plugin.table.cell",
+  "plugin.table.choice",
+  "plugin.button",
+  "plugin.button.icon",
+  "plugin.button.label",
+  "plugin.progress",
+  "plugin.progress.label",
+  "plugin.image",
+  "plugin.dialog",
+  "plugin.dialog.backdrop",
+  "plugin.dialog.header",
+  "plugin.dialog.title",
+  "plugin.dialog.plugin",
+  "plugin.dialog.close",
+  "plugin.dialog.close.icon",
+  "plugin.dialog.body",
+  "plugin.dialog.error",
+  "plugin.dialog.buttons",
+  "plugin.dialog.button",
+  "plugin.panel",
+  "plugin.panel.error",
+  "plugin.notifications",
+  "plugin.notifications.list",
+  "plugin.notification",
+  "plugin.notification.content",
+  "plugin.notification.plugin",
+  "plugin.notification.title",
+  "plugin.notification.body",
+  "plugin.notification.dismiss",
+  "plugin.notification.dismiss.icon",
+] as const;
+
+export type PluginPart = (typeof PLUGIN_PARTS)[number];
+
+const GENERIC = new Set<string>(PLUGIN_PARTS);
+
+/** Attributes of one plug-in element: its part, plug-in and optional id. */
+export function partAttrs(
+  part: PluginPart,
+  plugin: string,
+  id?: string,
+): { "data-part": PluginPart; "data-plugin": string; "data-id"?: string } {
+  return id === undefined
+    ? { "data-part": part, "data-plugin": plugin }
+    : { "data-part": part, "data-plugin": plugin, "data-id": id };
+}
+
+/**
+ * The CSS selector of a namespaced part name for the theme compiler:
+ * `plugin.<id>.<part>` → `[data-part="plugin.<part>"][data-plugin="<id>"]`.
+ * `null` when `part` is not such a name (generic parts are left alone).
+ */
+export function pluginPartSelector(part: string): string | null {
+  if (GENERIC.has(part) || !part.startsWith("plugin.")) return null;
+  const rest = part.slice("plugin.".length);
+  const dot = rest.indexOf(".");
+  if (dot <= 0) return null;
+  const plugin = rest.slice(0, dot);
+  const generic = `plugin.${rest.slice(dot + 1)}`;
+  if (!GENERIC.has(generic) || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(plugin)) return null;
+  return `[data-part="${generic}"][data-plugin="${plugin}"]`;
+}
+
+/**
+ * Structural CSS of the plug-in UI for the theme compiler's base rules
+ * (`BASE_CSS` in `src/theme/compile.ts`; themes may override any of it):
+ * where dialogs, the backdrop and notifications sit, stack directions, and
+ * lists without bullets. Colours, spacing and fonts come from `theme.kdl`.
+ */
+export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog.backdrop"] { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 200; }
+[data-part="plugin.dialog"] { display: flex; flex-direction: column; max-width: 100%; max-height: 100%; min-height: 0; overflow: hidden; }
+[data-part="plugin.dialog"]:not([data-modal]) { position: fixed; right: 16px; bottom: 16px; max-height: calc(100% - 32px); z-index: 150; }
+[data-part="plugin.dialog.header"] { display: flex; align-items: center; flex: 0 0 auto; }
+[data-part="plugin.dialog.title"] { flex: 1 1 auto; margin: 0; font: inherit; }
+[data-part="plugin.dialog.body"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; }
+[data-part="plugin.dialog.buttons"] { display: flex; justify-content: flex-end; flex-wrap: wrap; }
+[data-part="plugin.stack"] { display: flex; flex-direction: column; min-width: 0; }
+[data-part="plugin.stack"][data-direction="horizontal"] { flex-direction: row; flex-wrap: wrap; align-items: center; }
+[data-part="plugin.field"] { display: flex; flex-direction: column; }
+[data-part="plugin.text"], [data-part="plugin.markdown.code-block"], [data-part="plugin-placements.text"] { white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-part="plugin.image"] { max-width: 100%; height: auto; }
+[data-part="plugin.notifications"] { position: fixed; right: 16px; bottom: 16px; z-index: 300; max-width: min(420px, calc(100% - 32px)); }
+[data-part="plugin.notification"] { display: flex; align-items: flex-start; }
+[data-part="plugin.notification.content"] { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+[data-part="plugin-panel"] { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+[data-part="plugin.notifications.list"], [data-part="plugin.message-list"], [data-part="plugin.contact-picker.list"], [data-part="plugin-permissions"], [data-part="plugin-permissions.account-list"], [data-part="plugin-manager.list"], [data-part="plugin-placements.items"], [data-part="plugin-placements.conflicts"], [data-part="plugin-logs.list"], [data-part="plugin-install.issue-list"], [data-part="plugin-install.contributions"] { list-style: none; margin: 0; padding: 0; }
+`;

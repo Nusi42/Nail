@@ -6,13 +6,11 @@ import { errorMessageIdOf } from "../../api/client";
 import type { McpAuditEntry, McpClientId } from "../../api/generated";
 import { useLocale, useT } from "../../i18n/I18nProvider";
 import { useMcpAudit } from "./queries";
+import { SHORT_DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
 
 /** A date-time for the log (the raw string when it does not parse). */
 export function formatAuditTime(iso: string, locale: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "medium" }).format(date);
+  return formatDateTime(iso, locale, SHORT_DATE_TIME_SECONDS);
 }
 
 function Row({ entry }: { entry: McpAuditEntry }) {

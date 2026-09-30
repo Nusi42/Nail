@@ -40,6 +40,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/composer.ftl"),
     ),
     (
+        "core-crypto.ftl",
+        include_str!("../../../locales/en/core-crypto.ftl"),
+    ),
+    (
         "core-plugins.ftl",
         include_str!("../../../locales/en/core-plugins.ftl"),
     ),
@@ -87,6 +91,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "composer.ftl",
         include_str!("../../../locales/de/composer.ftl"),
+    ),
+    (
+        "core-crypto.ftl",
+        include_str!("../../../locales/de/core-crypto.ftl"),
     ),
     (
         "core-plugins.ftl",

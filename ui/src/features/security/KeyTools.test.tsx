@@ -15,14 +15,14 @@ describe("ImportResult", () => {
               item: "#1",
               code: "invalid_request",
               message: "no OpenPGP key found",
-              localized: { id: "security-import-issue-no-key" },
+              localized: { id: "pgp-import-no-key" },
             },
             {
               item: "#2",
               code: "crypto",
               message: "openpgp: bad signature",
               localized: {
-                id: "security-import-issue-unusable",
+                id: "pgp-import-unusable",
                 args: { detail: "bad signature" },
               },
             },
