@@ -31,7 +31,10 @@ function SyncItem() {
     });
     state = "error";
   } else if (syncError) {
-    text = t("status-sync-failed", { reason: t(errorMessageId(syncError.code)) });
+    const reason = syncError.localized
+      ? t(syncError.localized.id, syncError.localized.args)
+      : t(errorMessageId(syncError.code));
+    text = t("status-sync-failed", { reason });
     state = "error";
   } else if (sync && sync.done < sync.total) {
     text = t("status-syncing", { done: sync.done, total: sync.total });

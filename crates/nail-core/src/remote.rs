@@ -19,6 +19,7 @@
 //! `MessageBody::remote_content` and, for allowed messages, rewrites
 //! remote references to `nail-proxy:` URLs ([`decorate_remote_content`]).
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use nail_api::engine::SecretStore;
@@ -27,7 +28,8 @@ use nail_api::remote::{
     internet_mode_lock,
 };
 use nail_api::remote_content::{
-    RemoteContentInfo, RemoteContentScope, normalize_allow_value, sender_domain,
+    ONCE_ALLOW_SECS, RemoteContentAllow, RemoteContentInfo, RemoteContentScope,
+    normalize_allow_value, sender_domain,
 };
 use nail_api::{ApiError, ErrorCode, Event, MessageId, RemoteSessionId, Request, Response};
 use nail_proxy::{Check, Fetcher, Proxy, ProxyKey, Signer, TargetCheck};
@@ -71,6 +73,35 @@ pub(crate) struct RemoteState {
     status: Mutex<Option<RemoteUiStatus>>,
     /// The running remote UI's sandbox origin (mail documents).
     sandbox_origin: Mutex<Option<String>>,
+    /// "Load once" allowances: message → expiry (Unix seconds); never
+    /// stored.
+    pub(crate) once: OnceAllows,
+}
+
+/// The "load once" allowances (M2b follow-up), shared with the proxy's
+/// check.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct OnceAllows(Arc<Mutex<HashMap<MessageId, i64>>>);
+
+impl OnceAllows {
+    /// Allows `message` until `now + ONCE_ALLOW_SECS`.
+    pub(crate) fn allow(&self, message: &MessageId, now: i64) {
+        let mut map = lock(&self.0);
+        map.retain(|_, expires| *expires > now);
+        map.insert(message.clone(), now + ONCE_ALLOW_SECS);
+    }
+
+    /// Whether `message` is allowed once at `now`.
+    pub(crate) fn allows(&self, message: &MessageId, now: i64) -> bool {
+        lock(&self.0)
+            .get(message)
+            .is_some_and(|expires| *expires > now)
+    }
+
+    /// Ends the allowance of `message`; whether there was one.
+    pub(crate) fn remove(&self, message: &MessageId) -> bool {
+        lock(&self.0).remove(message).is_some()
+    }
 }
 
 /// Broadcasts `nail-remote-auth`'s events like the core's own.
@@ -84,13 +115,17 @@ impl EventSink for BroadcastSink {
 }
 
 /// The proxy's second opinion: the message's remote content is still
-/// allowed (an entry may have been removed since the token was minted).
-struct AllowCheck(Store);
+/// allowed (an entry may have been removed since the token was minted, a
+/// "load once" may have lapsed).
+struct AllowCheck(Store, OnceAllows);
 
 impl TargetCheck for AllowCheck {
     fn allows<'a>(&'a self, message_id: &'a str, _url: &'a url::Url) -> Check<'a> {
         let id = MessageId::from(message_id);
         Box::pin(async move {
+            if self.1.allows(&id, unix_now()) {
+                return true;
+            }
             self.0
                 .call(move |s| {
                     let message = s.get_message(&id)?;
@@ -135,6 +170,7 @@ impl RemoteState {
             host: Mutex::new(None),
             status: Mutex::new(None),
             sandbox_origin: Mutex::new(None),
+            once: OnceAllows::default(),
         }
     }
 
@@ -163,10 +199,9 @@ impl RemoteState {
                         None
                     }
                 })?;
-                Some(Arc::new(
-                    Proxy::new(signer, fetcher)
-                        .with_check(Arc::new(AllowCheck(self.store.clone()))),
-                ))
+                Some(Arc::new(Proxy::new(signer, fetcher).with_check(Arc::new(
+                    AllowCheck(self.store.clone(), self.once.clone()),
+                ))))
             })
             .clone()
     }
@@ -215,15 +250,19 @@ impl Service {
         lock(&self.inner.remote.sandbox_origin).clone()
     }
 
-    /// A render token URL for `message` on the sandbox origin, when the
-    /// remote UI runs with one.
-    pub(crate) fn remote_render_url(&self, message: &MessageId) -> Option<String> {
+    /// A render token URL for `message` on the sandbox origin, bound to the
+    /// remote session `session`, when the remote UI runs with one.
+    pub(crate) fn remote_render_url(
+        &self,
+        message: &MessageId,
+        session: &RemoteSessionId,
+    ) -> Option<String> {
         let origin = self.remote_sandbox_origin()?;
         let token = self
             .inner
             .remote
             .signer()?
-            .sign_render(message.as_str())
+            .sign_render_for(message.as_str(), session.as_str())
             .ok()?;
         Some(format!(
             "{origin}{}{token}",
@@ -258,7 +297,15 @@ pub(crate) fn remote_rewriter(
             tracing::warn!(%err, "cannot read the remote-content allow-lists");
             None
         }
-    };
+    }
+    .or_else(|| {
+        service
+            .inner
+            .remote
+            .once
+            .allows(id, unix_now())
+            .then_some(RemoteContentScope::Once)
+    });
     // The key is only needed (and read) once content is allowed.
     let rewriter = allowed_by
         .and_then(|_| service.inner.remote.signer().cloned())
@@ -436,6 +483,22 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 limit.min(MAX_AUDIT_PAGE),
             )?,
         }),
+        Request::AllowRemoteContent {
+            message_id,
+            scope: RemoteContentScope::Once,
+        } => {
+            let message = store.get_message(&message_id)?;
+            service.inner.remote.once.allow(&message_id, now);
+            service.broadcast(Event::RemoteContentPolicyChanged);
+            Ok(Response::RemoteContentAllowed {
+                entry: RemoteContentAllow {
+                    scope: RemoteContentScope::Once,
+                    value: message_id.to_string(),
+                    label: Some(message.summary.subject),
+                    created_at: crate::rules::rfc3339(now),
+                },
+            })
+        }
         Request::AllowRemoteContent { message_id, scope } => {
             let message = store.get_message(&message_id)?;
             let sender = message.summary.from.as_ref().map(|a| a.email.clone());
@@ -448,6 +511,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     None,
                 ),
                 RemoteContentScope::Domain => (sender.and_then(|s| sender_domain(&s)), None),
+                RemoteContentScope::Once => unreachable!("handled above"),
             };
             let value = value.ok_or_else(|| {
                 ApiError::invalid_request(format!("message {message_id} has no usable sender"))
@@ -459,6 +523,20 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
         Request::ListRemoteContentAllows => Ok(Response::RemoteContentAllows {
             entries: store.list_remote_content_allows()?,
         }),
+        Request::RemoveRemoteContentAllow {
+            scope: RemoteContentScope::Once,
+            value,
+        } => {
+            if service
+                .inner
+                .remote
+                .once
+                .remove(&MessageId::new(value.as_str()))
+            {
+                service.broadcast(Event::RemoteContentPolicyChanged);
+            }
+            Ok(Response::Done)
+        }
         Request::RemoveRemoteContentAllow { scope, value } => {
             if store.remove_remote_content_allow(scope, &value)? {
                 service.broadcast(Event::RemoteContentPolicyChanged);

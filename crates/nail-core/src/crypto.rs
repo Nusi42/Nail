@@ -387,6 +387,18 @@ impl Service {
     /// `GetMessage`: the body as the reader shows it (see the module docs).
     pub(crate) async fn message_body(&self, id: MessageId) -> Result<MessageBody> {
         self.inner.vault.check()?;
+        // A message synced without its body gets it now (M2c); offline, the
+        // reader shows the headers and offers the download again.
+        let state = {
+            let id = id.clone();
+            self.store().call(move |s| s.body_state(&id)).await
+        };
+        if matches!(state, Ok(nail_api::sync::BodyState::HeadersOnly)) {
+            let (_, failed) = self.fetch_bodies(vec![id.clone()]).await?;
+            if !failed.is_empty() {
+                tracing::info!(message = %id, "the body could not be fetched; showing the headers");
+            }
+        }
         let (body, keys_changed) = self
             .blocking(move |service| {
                 let store = service.store();
@@ -422,6 +434,8 @@ impl Service {
                 let trusted = service.trusted_authserv_ids(&stored.summary.account_id);
                 body.auth_results = nail_mime::auth_results::auth_results_of_raw(&raw, &trusted);
                 body.warnings = nail_mime::links::message_warnings(&body);
+                // The junk verdict (M2c): server, classifier or the user.
+                body.junk = store.junk_verdict(&id).ok().flatten();
                 // Only the findings are cached, never decrypted content.
                 let record = MessageSecurityRecord {
                     message_id: id.clone(),

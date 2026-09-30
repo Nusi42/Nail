@@ -231,13 +231,13 @@ pub(crate) async fn run(
                 service.set_status(
                     &account.id,
                     state_for_error(code),
-                    Some((code, err.to_string())),
+                    Some((code, err.to_string(), err.localized())),
                 );
                 service.broadcast(Event::SyncFailed {
                     account_id: account.id.clone(),
                     code,
                     message: err.to_string(),
-                    localized: None,
+                    localized: err.localized(),
                 });
                 let delay = backoff;
                 backoff = (backoff * 2).min(timing.reconnect_max);

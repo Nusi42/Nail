@@ -101,6 +101,8 @@ export interface RemoteMockState {
   pairing: PairingCode[];
   audit: RemoteAuditEntry[];
   allows: RemoteContentAllow[];
+  /** "Load once" allowances (message ids), never listed (like the core's). */
+  once: string[];
   /** The served certificate (self-signed), regenerated on request. */
   certificate: RemoteCertificateInfo;
   secrets: RemoteMockSecrets;
@@ -133,6 +135,7 @@ export function defaultRemoteUiSettings(): RemoteUiSettings {
     session_idle_minutes: 30,
     session_max_hours: 12,
     reauth_minutes: 5,
+    audit_retention_days: 90,
   };
 }
 
@@ -171,6 +174,7 @@ export function createRemoteMockState(): RemoteMockState {
     pairing: [],
     audit: [],
     allows: [],
+    once: [],
     certificate: mockCertificate(),
     secrets: { passwords: {}, totp: {}, pairingCodes: {}, credentials: {} },
     failures: {},
@@ -311,6 +315,7 @@ export function remoteContentAllowedBy(
   if (has("message", messageId)) return "message";
   if (has("sender", sender)) return "sender";
   if (has("domain", domain)) return "domain";
+  if (s.once.includes(messageId)) return "once";
   return null;
 }
 
@@ -701,6 +706,22 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       return { type: "RemoteAudit", entries: structuredClone(entries) };
     }
     case "AllowRemoteContent": {
+      if (request.scope === "once") {
+        const message = core.data.messages.find((m) => m.id === request.message_id);
+        if (message === undefined)
+          return errorResponse("not_found", `message ${request.message_id}`);
+        if (!s.once.includes(request.message_id)) s.once.push(request.message_id);
+        core.emit({ type: "RemoteContentPolicyChanged" });
+        return {
+          type: "RemoteContentAllowed",
+          entry: {
+            scope: "once",
+            value: request.message_id,
+            label: message.subject,
+            created_at: now(),
+          },
+        };
+      }
       const found = allowValue(core, request.message_id, request.scope);
       if ("error" in found) return found.error;
       const entry: RemoteContentAllow = {
@@ -724,6 +745,12 @@ export function answerRemote(core: MockCore, request: RemoteRequest): Response {
       return { type: "RemoteContentAllows", entries: structuredClone(entries) };
     }
     case "RemoveRemoteContentAllow": {
+      if (request.scope === "once") {
+        const before = s.once.length;
+        s.once = s.once.filter((id) => id !== request.value);
+        if (s.once.length !== before) core.emit({ type: "RemoteContentPolicyChanged" });
+        return { type: "Done" };
+      }
       const value = request.value.trim().toLowerCase();
       const before = s.allows.length;
       s.allows = s.allows.filter(

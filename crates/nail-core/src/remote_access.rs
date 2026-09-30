@@ -97,7 +97,7 @@ impl Service {
             }
             Request::GetMessage { id } => {
                 let mut message = self.message_body(id.clone()).await?;
-                message.render_url = self.remote_render_url(&id);
+                message.render_url = self.remote_render_url(&id, &ctx.session.id);
                 Response::Message {
                     message: Box::new(message),
                 }
@@ -303,7 +303,10 @@ impl Service {
                     .await
             }
             Request::RemoveRemoteContentAllow { scope, value } => {
-                if *scope != RemoteContentScope::Message {
+                if !matches!(
+                    scope,
+                    RemoteContentScope::Message | RemoteContentScope::Once
+                ) {
                     return Ok(());
                 }
                 match self.find_message(&MessageId::new(value.as_str())).await? {

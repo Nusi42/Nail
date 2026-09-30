@@ -230,7 +230,11 @@ function useCoreEvents(): void {
           break;
         case "SyncFailed":
           ui().setSync(null);
-          ui().setSyncError({ accountId: event.account_id, code: event.code });
+          ui().setSyncError({
+            accountId: event.account_id,
+            code: event.code,
+            localized: event.localized ?? null,
+          });
           break;
         case "SyncProgress":
           ui().setSync({ accountId: event.account_id, done: event.done, total: event.total });
@@ -357,8 +361,9 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
                   >
                     <WindowView layout={config.data.layout} name={windowName} />
                     <WindowLayer layout={config.data.layout} />
+                    {/* Inside the landmark: context menus open from here. */}
+                    <FeatureEffects />
                   </main>
-                  <FeatureEffects />
                   <ReauthPrompt />
                 </WidgetRegistryContext.Provider>
               </ActionsProvider>

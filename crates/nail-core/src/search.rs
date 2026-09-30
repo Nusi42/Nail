@@ -147,18 +147,148 @@ impl Service {
         let index = self.inner.search.get();
         let store = self.inner.store.clone();
         let offset = query.offset;
+        let text = query.text.clone();
+        let sort = query.sort;
+        let scope_for_server = scope.clone();
         let outcome =
             tokio::task::spawn_blocking(move || run_request(&index, &store, &query, &scope, &ctx))
                 .await??;
         Ok(match outcome {
-            Ok(results) => Response::SearchResults {
-                offset,
-                total: results.total,
-                hits: results.hits,
-                server: None,
-            },
+            Ok(mut results) => {
+                // Messages without a local body are searched on their
+                // server (first page only; M2c).
+                let server = match nail_search::parse_query(&text) {
+                    Ok(parsed) if offset == 0 && nail_search::imap::needs_server(&parsed) => {
+                        self.server_search(&parsed, &scope_for_server, &mut results.hits)
+                            .await
+                    }
+                    _ => None,
+                };
+                if let Some(server) = &server {
+                    results.total += server.hits;
+                    if sort == nail_api::search::SearchSort::Date {
+                        results
+                            .hits
+                            .sort_by(|a, b| b.message.date.cmp(&a.message.date));
+                    }
+                }
+                Response::SearchResults {
+                    offset,
+                    total: results.total,
+                    hits: results.hits,
+                    server,
+                }
+            }
             Err(error) => Response::InvalidQuery { error },
         })
+    }
+
+    /// The IMAP `SEARCH` fallback: in every folder in scope that holds
+    /// messages without a local body, asks the server and adds the
+    /// headers-only messages it finds (not found locally already).
+    /// `None` when no folder in scope has such messages.
+    async fn server_search(
+        &self,
+        query: &nail_search::Query,
+        scope: &SearchScope,
+        hits: &mut Vec<nail_api::SearchHit>,
+    ) -> Option<nail_api::search::ServerSearch> {
+        let scope = scope.clone();
+        let folders = self
+            .inner
+            .store
+            .call(move |s| {
+                let accounts = match &scope.accounts {
+                    Some(accounts) => accounts.clone(),
+                    None => s.list_accounts()?.into_iter().map(|a| a.id).collect(),
+                };
+                let mut out = Vec::new();
+                for account in accounts {
+                    for folder in s.list_folders(&account)? {
+                        if scope
+                            .folders
+                            .as_ref()
+                            .is_some_and(|f| !f.contains(&folder.id))
+                        {
+                            continue;
+                        }
+                        if s.headers_only_count(&folder.id)? > 0 {
+                            out.push(folder);
+                        }
+                    }
+                }
+                Ok(out)
+            })
+            .await
+            .ok()?;
+        if folders.is_empty() {
+            return None;
+        }
+        let key = nail_search::imap::server_search(query, unix_now(), local_utc_offset());
+        let mut info = nail_api::search::ServerSearch::default();
+        let mut by_account: std::collections::BTreeMap<nail_api::AccountId, Vec<nail_api::Folder>> =
+            std::collections::BTreeMap::new();
+        for folder in folders {
+            by_account
+                .entry(folder.account_id.clone())
+                .or_default()
+                .push(folder);
+        }
+        for (account, folders) in by_account {
+            info.accounts.push(account.clone());
+            let Some(settings) = self.imap_settings(&account) else {
+                info.failed.push(account);
+                continue;
+            };
+            let mut client = match crate::sync::connect(&settings).await {
+                Ok(client) => client,
+                Err(err) => {
+                    tracing::info!(%account, %err, "server search: cannot connect");
+                    info.failed.push(account);
+                    continue;
+                }
+            };
+            let mut found: Vec<(nail_api::FolderId, u32)> = Vec::new();
+            let mut failed = false;
+            for folder in &folders {
+                match client.search_messages(&folder.path, &key.key).await {
+                    Ok(uids) => found.extend(uids.into_iter().map(|u| (folder.id.clone(), u))),
+                    Err(err) => {
+                        tracing::info!(%account, folder = %folder.path, %err, "server search failed");
+                        failed = true;
+                    }
+                }
+            }
+            let _ = client.logout().await;
+            if failed {
+                info.failed.push(account.clone());
+            }
+            let known: std::collections::HashSet<nail_api::MessageId> =
+                hits.iter().map(|h| h.message.id.clone()).collect();
+            let summaries = self
+                .inner
+                .store
+                .call(move |s| {
+                    let mut out = Vec::new();
+                    for (folder, uid) in found {
+                        if let Some(m) = s.find_message_by_uid(&folder, uid)?
+                            && m.summary.headers_only
+                            && !known.contains(&m.summary.id)
+                        {
+                            out.push(m.summary);
+                        }
+                    }
+                    Ok(out)
+                })
+                .await
+                .unwrap_or_default();
+            info.hits += u32::try_from(summaries.len()).unwrap_or(u32::MAX);
+            hits.extend(summaries.into_iter().map(|message| nail_api::SearchHit {
+                message,
+                score: 0.0,
+            }));
+        }
+        Some(info)
     }
 }
 

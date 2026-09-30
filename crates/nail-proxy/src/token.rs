@@ -8,8 +8,11 @@
 //! tag  = HMAC-SHA-256(per-install key, "nail-proxy\0" | body)
 //! ```
 //!
-//! The payload is the original resource URL for [`Purpose::Resource`] and
-//! empty for [`Purpose::Render`] (the sandbox origin's mail documents).
+//! The payload is the original resource URL for [`Purpose::Resource`] and,
+//! for [`Purpose::Render`] (the sandbox origin's mail documents), the id of
+//! the remote session the token was minted for (M2b follow-up: a render
+//! token works only together with that session's cookie; empty for tokens
+//! bound to nothing, which the sandbox refuses).
 //! Only the holder of the key — the core — can mint a token, and it mints
 //! them only for URLs found in a message it renders, so the proxy never
 //! fetches a URL a client chose: it is not an open proxy. Tags are compared
@@ -33,6 +36,8 @@ const DOMAIN: &[u8] = b"nail-proxy\0";
 const TAG_LEN: usize = 32;
 /// Longest message id a token carries.
 pub const MAX_MESSAGE_ID_LEN: usize = 512;
+/// Longest session id a render token carries.
+pub const MAX_SESSION_ID_LEN: usize = 128;
 /// Longest token accepted (URL + message id + overhead, base64).
 pub const MAX_TOKEN_LEN: usize = 6 * 1024;
 
@@ -108,6 +113,9 @@ pub struct Grant {
     /// The remote resource ([`Purpose::Resource`] only), already checked
     /// against the URL rules.
     pub url: Option<Url>,
+    /// The remote session a render token belongs to ([`Purpose::Render`]
+    /// only; `None` = bound to no session).
+    pub session: Option<String>,
     /// Expiry (Unix seconds).
     pub expires: u64,
 }
@@ -185,7 +193,8 @@ impl Signer {
         move |url| self.proxy_url(message_id, url).ok()
     }
 
-    /// A token for loading `message_id`'s HTML on the sandbox origin.
+    /// A token for loading `message_id`'s HTML on the sandbox origin, bound
+    /// to no session (the sandbox refuses it; tests of the token format).
     pub fn sign_render(&self, message_id: &str) -> Result<String, SignError> {
         self.sign_render_at(message_id, now_unix())
     }
@@ -194,6 +203,27 @@ impl Signer {
     pub fn sign_render_at(&self, message_id: &str, now: u64) -> Result<String, SignError> {
         let expires = now.saturating_add(self.render_ttl.as_secs());
         self.sign(Purpose::Render, message_id, "", expires)
+    }
+
+    /// A token for loading `message_id`'s HTML on the sandbox origin within
+    /// the remote session `session` (its id, not its token): the sandbox
+    /// serves it only to a request carrying that session's cookie.
+    pub fn sign_render_for(&self, message_id: &str, session: &str) -> Result<String, SignError> {
+        self.sign_render_for_at(message_id, session, now_unix())
+    }
+
+    /// [`Self::sign_render_for`] at a given time (tests).
+    pub fn sign_render_for_at(
+        &self,
+        message_id: &str,
+        session: &str,
+        now: u64,
+    ) -> Result<String, SignError> {
+        if session.is_empty() || session.len() > MAX_SESSION_ID_LEN {
+            return Err(SignError::MessageId);
+        }
+        let expires = now.saturating_add(self.render_ttl.as_secs());
+        self.sign(Purpose::Render, message_id, session, expires)
     }
 
     fn sign(
@@ -265,22 +295,26 @@ impl Signer {
         if parsed.expires <= now {
             return Err(TokenError::Expired);
         }
-        let url = match purpose {
+        let (url, session) = match purpose {
             Purpose::Resource => {
                 // Re-checked: the rules may be stricter than when it was signed.
-                Some(policy::parse_target(&parsed.payload).map_err(|_| TokenError::Invalid)?)
+                (
+                    Some(policy::parse_target(&parsed.payload).map_err(|_| TokenError::Invalid)?),
+                    None,
+                )
             }
             Purpose::Render => {
-                if !parsed.payload.is_empty() {
+                if parsed.payload.len() > MAX_SESSION_ID_LEN {
                     return Err(TokenError::Invalid);
                 }
-                None
+                (None, (!parsed.payload.is_empty()).then_some(parsed.payload))
             }
         };
         Ok(Grant {
             purpose,
             message_id: parsed.message_id,
             url,
+            session,
             expires: parsed.expires,
         })
     }
@@ -432,6 +466,16 @@ mod tests {
         );
         let grant = s.verify_at(&render, Purpose::Render, NOW).unwrap();
         assert_eq!((grant.message_id.as_str(), grant.url), ("m-1", None));
+        assert_eq!(grant.session, None);
+        // Bound to a session (M2b follow-up).
+        let bound = s.sign_render_for_at("m-1", "rsess-7", NOW).unwrap();
+        let grant = s.verify_at(&bound, Purpose::Render, NOW).unwrap();
+        assert_eq!(grant.session.as_deref(), Some("rsess-7"));
+        assert!(s.sign_render_for_at("m-1", "", NOW).is_err());
+        assert!(
+            s.sign_render_for_at("m-1", &"x".repeat(MAX_SESSION_ID_LEN + 1), NOW)
+                .is_err()
+        );
     }
 
     #[test]

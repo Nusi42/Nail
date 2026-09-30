@@ -66,12 +66,14 @@ describe("remote content bar", () => {
         .map((b) => b.textContent),
     ).toEqual([
       "Load for this message",
+      "Load once",
       `Always load from ${sender}`,
       `Always load from ${domain}`,
     ]);
 
     await user.tab();
     expect(within(toolbar).getByRole("button", { name: "Load for this message" })).toHaveFocus();
+    await user.tab();
     await user.tab();
     await user.keyboard("{Enter}");
 
@@ -101,6 +103,19 @@ describe("remote content bar", () => {
     await waitFor(() => expect(bar).toHaveAttribute("data-scope", "domain"));
     expect(env.transport.data.features.remote.allows.map((a) => a.scope)).toEqual(["domain"]);
     expect(message.id).toBeTruthy();
+  });
+
+  it("loads once without remembering it", async () => {
+    const { env, message, bar, user } = await open();
+    await user.click(within(bar).getByRole("button", { name: "Load once" }));
+    await waitFor(() => expect(bar).toHaveAttribute("data-scope", "once"));
+    expect(bar).toHaveTextContent("Remote content is loaded this time only.");
+    expect(env.transport.data.features.remote.allows).toEqual([]);
+    await user.click(within(bar).getByRole("button", { name: "Block again" }));
+    await waitFor(() => expect(bar).toHaveAttribute("data-state", "blocked"));
+    expect(requestsOf(env, "RemoveRemoteContentAllow")).toEqual([
+      { type: "RemoveRemoteContentAllow", scope: "once", value: message.id },
+    ]);
   });
 
   it("works with a core that only says content was blocked", async () => {

@@ -19,6 +19,8 @@
 #![warn(missing_docs)]
 
 mod accounts;
+mod bodies;
+mod clock;
 mod composer;
 mod context;
 mod creds;
@@ -31,9 +33,11 @@ mod error;
 mod ids;
 mod imap_engine;
 mod ingest;
+mod junk;
 mod launch;
 mod mail;
 mod mcp;
+mod notify;
 mod oauth;
 mod outbox;
 pub mod paths;
@@ -48,6 +52,7 @@ mod security;
 mod service;
 mod setup;
 mod sieve;
+mod snooze;
 mod strings;
 mod sync;
 mod sync_policy;
@@ -56,10 +61,13 @@ mod vault;
 mod virtuals;
 mod watch;
 
+pub use clock::AdjustableClock;
 pub use error::{CoreError, Result};
 pub use mcp::{McpCore, McpRunning, mcp_endpoint_path};
+pub use nail_store::DataDirLock;
 pub use remote::RemoteUiCommand;
 pub use service::{
-    EVENT_CAPACITY, EngineTiming, HISTORY_RETENTION_DAYS, MAX_PAGE_SIZE, Service, ServiceOptions,
+    EVENT_CAPACITY, EngineTiming, HISTORY_PURGE_INTERVAL, HISTORY_RETENTION_DAYS, MAX_PAGE_SIZE,
+    Service, ServiceOptions,
 };
 pub use sync::{FolderSyncFailure, ImapAccount, SyncReport};

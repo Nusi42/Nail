@@ -80,6 +80,8 @@ export function allowValueFor(
       return view.sender;
     case "domain":
       return view.domain;
+    case "once":
+      return messageId;
   }
 }
 
@@ -178,6 +180,15 @@ export function RemoteContentBar({ message }: { message: MessageBody }) {
               onClick={() => void allow("message")}
             >
               {t("remote-content-allow-message")}
+            </button>
+            <button
+              type="button"
+              data-part="form.button"
+              data-action="allow-once"
+              disabled={busy}
+              onClick={() => void allow("once")}
+            >
+              {t("remote-content-allow-once")}
             </button>
             {view.sender !== null && (
               <button

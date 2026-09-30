@@ -1,6 +1,7 @@
-//! Wave M2c contract (ADR 0043): what the core serves before the packages
-//! are wired (settings, status, lists, sync policies, MCP settings, rules
-//! from messages) and what still answers `unsupported`.
+//! Wave M2c (ADR 0043, wiring ADR 0048) on a store without servers:
+//! settings, status, lists, sync policies, MCP settings, rules from
+//! messages, and the local side of junk marks and snoozes. The server side
+//! is tested against the mock servers in `m2c_wired.rs`.
 
 use std::time::Duration;
 
@@ -62,11 +63,18 @@ fn error(response: Response) -> (ErrorCode, Option<String>) {
     }
 }
 
+/// The next event, skipping the progress of queued writes (local replays
+/// of marks and snoozes finish asynchronously).
 async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
-    tokio::time::timeout(Duration::from_secs(10), rx.recv())
-        .await
-        .expect("no event within 10 s")
-        .unwrap()
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(10), rx.recv())
+            .await
+            .expect("no event within 10 s")
+            .unwrap();
+        if !matches!(event, Event::OpStatus { .. } | Event::MailChanged { .. }) {
+            return event;
+        }
+    }
 }
 
 async fn demo_message(service: &Service) -> MessageId {
@@ -106,7 +114,8 @@ async fn sieve_status_and_vacation() {
     };
     assert_eq!(accounts.len(), 1);
     assert_eq!(accounts[0].account_id, work());
-    assert_eq!(accounts[0].state, SieveState::Pending);
+    // The account is disabled: nothing is uploaded.
+    assert_eq!(accounts[0].state, SieveState::Disabled);
     assert_eq!(accounts[0].script_name, "nail");
 
     assert_eq!(
@@ -162,10 +171,18 @@ async fn sieve_status_and_vacation() {
         }
     );
 
-    // Not wired yet, or not possible for the account.
+    // The preview compiles the vacation reply into the script.
+    let Response::SieveScript { script, .. } = s
+        .handle(Request::PreviewSieveScript { account_id: work() })
+        .await
+    else {
+        panic!("no preview");
+    };
+    assert!(script.contains("Back on Monday."), "{script}");
+
+    // Not possible for the account.
     for request in [
         Request::SyncSieve { account_id: work() },
-        Request::PreviewSieveScript { account_id: work() },
         Request::GetVacation {
             account_id: "home".into(),
         },
@@ -240,23 +257,57 @@ async fn junk_snooze_and_notifications() {
         Event::JunkStatusChanged { account_id: work() }
     );
 
+    // A local account: marks and snoozes are local queue writes.
     let message = demo_message(s).await;
-    for request in [
-        Request::MarkJunk {
+    assert!(matches!(
+        s.handle(Request::MarkJunk {
             message_ids: vec![message.clone()],
             junk: true,
-        },
-        Request::SnoozeMessages {
+        })
+        .await,
+        Response::Queued { .. }
+    ));
+    let Response::Message { message: body } = s
+        .handle(Request::GetMessage {
+            id: message.clone(),
+        })
+        .await
+    else {
+        panic!("no message");
+    };
+    assert!(body.junk.is_some_and(|v| v.junk));
+    let until = (chrono::Utc::now() + chrono::Duration::days(30)).to_rfc3339();
+    let snoozed = s
+        .handle(Request::SnoozeMessages {
             message_ids: vec![message.clone()],
-            until: "2099-01-01T00:00:00Z".into(),
+            until,
             wake_folder_id: None,
-        },
-        Request::UnsnoozeMessages {
+        })
+        .await;
+    assert!(matches!(snoozed, Response::Queued { .. }), "{snoozed:?}");
+    let Response::Snoozed { messages } = s.handle(Request::ListSnoozed { account_id: None }).await
+    else {
+        panic!("no list");
+    };
+    assert_eq!(messages.len(), 1);
+    assert!(matches!(
+        s.handle(Request::UnsnoozeMessages {
             message_ids: vec![message.clone()],
-        },
-    ] {
-        assert_eq!(error(s.handle(request).await).0, ErrorCode::Unsupported);
-    }
+        })
+        .await,
+        Response::Queued { .. }
+    ));
+    assert_eq!(
+        error(
+            s.handle(Request::MarkJunk {
+                message_ids: vec!["gone".into()],
+                junk: false,
+            })
+            .await
+        )
+        .0,
+        ErrorCode::NotFound
+    );
     assert_eq!(
         s.handle(Request::ListSnoozed { account_id: None }).await,
         Response::Snoozed { messages: vec![] }
@@ -283,6 +334,8 @@ async fn junk_snooze_and_notifications() {
         }),
         ..NotificationSettings::default()
     };
+    // Fresh events: the marks and snoozes above broadcast their own.
+    let mut events = s.subscribe();
     assert_eq!(
         s.handle(Request::UpdateNotificationSettings {
             settings: quiet.clone()
@@ -389,7 +442,7 @@ async fn folder_sync_policies_write_accounts_kdl() {
     assert_eq!(policy.bodies, BodyPolicy::Full);
     assert!(!policy.on_demand);
 
-    // Bodies: stored ones count as fetched until on-demand fetching is wired.
+    // Bodies: stored ones count as fetched, unknown ones as failed.
     let message = demo_message(s).await;
     assert_eq!(
         s.handle(Request::FetchMessageBodies {

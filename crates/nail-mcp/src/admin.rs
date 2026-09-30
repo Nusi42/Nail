@@ -109,11 +109,19 @@ pub async fn handle(
             limit,
         } => {
             let limit = limit.clamp(1, MAX_AUDIT_PAGE);
-            Ok(Response::McpAudit {
-                entries: store
-                    .call(move |s| s.list_mcp_audit(client_id.as_ref(), before, limit))
-                    .await?,
-            })
+            let mut entries = store
+                .call(move |s| s.list_mcp_audit(client_id.as_ref(), before, limit))
+                .await?;
+            // The store keeps the English detail; the UI gets its text.
+            for entry in &mut entries {
+                if entry.localized.is_none() {
+                    entry.localized = entry
+                        .detail
+                        .as_deref()
+                        .and_then(crate::messages::audit_detail);
+                }
+            }
+            Ok(Response::McpAudit { entries })
         }
         Request::GetMcpServerInfo => Ok(Response::McpServer {
             info: server.unwrap_or(McpServerInfo {
@@ -264,6 +272,38 @@ mod tests {
             panic!("audit expected");
         };
         assert_eq!(entries.len(), 1, "a zero limit still returns a page");
+        assert_eq!(entries[0].localized, None);
+
+        // Refused connections carry the text of their English detail.
+        store
+            .append_mcp_audit(&McpAuditRecord {
+                client_id: None,
+                client_name: String::new(),
+                at: 2,
+                kind: McpCallKind::Tool,
+                name: "connect".into(),
+                outcome: McpOutcome::Denied,
+                detail: Some(crate::messages::DETAIL_REFUSED_TOKEN.into()),
+            })
+            .unwrap();
+        let Response::McpAudit { entries } = handle(
+            &store,
+            None,
+            Request::ListMcpAudit {
+                client_id: None,
+                before: None,
+                limit: 10,
+            },
+            emit,
+        )
+        .await
+        .unwrap() else {
+            panic!("audit expected");
+        };
+        assert_eq!(
+            entries[0].localized.as_ref().map(|l| l.id.as_str()),
+            Some("mcp-core-token-refused")
+        );
 
         assert_eq!(
             handle(

@@ -220,6 +220,20 @@ fn junk_training_counts_each_message_once_and_moves_between_classes() {
     let stats = store.junk_stats(&account).unwrap();
     assert_eq!((stats.trained_junk, stats.trained_ham), (0, 2));
 
+    // Undoing a first training forgets the message and its token counts.
+    assert!(store.untrain_junk(&account, "ham1@x").unwrap());
+    assert!(
+        !store.untrain_junk(&account, "ham1@x").unwrap(),
+        "only once"
+    );
+    let counts = store
+        .junk_token_counts(&account, &tokens(&["viagra", "cheap", "meeting"]))
+        .unwrap();
+    assert_eq!(counts["cheap"], (0, 1));
+    assert!(!counts.contains_key("meeting"), "tokens at 0/0 are dropped");
+    let stats = store.junk_stats(&account).unwrap();
+    assert_eq!((stats.trained_junk, stats.trained_ham), (0, 1));
+
     // Words are never stored in clear.
     assert_eq!(hash_junk_token("viagra").len(), 16);
     assert_ne!(hash_junk_token("viagra"), hash_junk_token("Viagra"));
@@ -420,6 +434,11 @@ fn sieve_state_and_vacation() {
     );
     store.record_sieve_error(&account, None).unwrap();
     assert_eq!(store.sieve_record(&account).unwrap().last_error, None);
+    // Switching ManageSieve off forgets the upload, not the vacation reply.
+    store.clear_sieve_upload(&account).unwrap();
+    let cleared = store.sieve_record(&account).unwrap();
+    assert_eq!((cleared.script_hash, cleared.uploaded_at), (None, None));
+    assert_eq!(cleared.vacation, vacation);
     store.delete_account(&account).unwrap();
     assert_eq!(
         store.sieve_record(&account).unwrap(),

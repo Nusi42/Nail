@@ -509,6 +509,16 @@ async fn the_remote_ui_host_receives_settings_and_reports_status() {
         Response::Message { message } => {
             let url = message.render_url.unwrap();
             assert!(url.starts_with("https://nail.local:50000/render/"), "{url}");
+            // The token is bound to the reader's session (M2b follow-up).
+            let token = url.rsplit('/').next().unwrap();
+            let grant = f
+                .service
+                .remote_proxy()
+                .unwrap()
+                .signer()
+                .verify(token, nail_proxy::Purpose::Render)
+                .unwrap();
+            assert_eq!(grant.session.as_deref(), Some(ctx.session.id.as_str()));
         }
         other => panic!("{other:?}"),
     }
@@ -1211,4 +1221,109 @@ async fn m2c_requests_respect_the_grant() {
         Response::NotificationSettings { settings } => assert_eq!(settings.overrides.len(), 1),
         other => panic!("{other:?}"),
     }
+}
+
+/// M2b follow-up: "load once" allows a message's remote content for this
+/// viewing only; it is never stored in the allow-lists.
+#[tokio::test]
+async fn remote_content_can_be_loaded_once() {
+    let f = setup();
+    let message = remote_message(&f).await;
+    let allowed = request(
+        &f,
+        Request::AllowRemoteContent {
+            message_id: message.id.clone(),
+            scope: RemoteContentScope::Once,
+        },
+    )
+    .await;
+    let Response::RemoteContentAllowed { entry } = allowed else {
+        panic!("{allowed:?}")
+    };
+    assert_eq!(entry.scope, RemoteContentScope::Once);
+    let shown = body(&f, &message.id).await;
+    assert_eq!(
+        shown.remote_content.unwrap().allowed_by,
+        Some(RemoteContentScope::Once)
+    );
+    assert!(!shown.remote_content_blocked);
+    let tokens = proxy_tokens(&shown.sanitized_html.unwrap());
+    assert!(!tokens.is_empty());
+    let proxy = f.service.remote_proxy().unwrap();
+    // The proxy's check lets it through (the fetch itself fails offline).
+    assert_eq!(proxy.serve(&tokens[0]).await.unwrap_err().status(), 502);
+    assert!(
+        f.service
+            .store()
+            .list_remote_content_allows()
+            .unwrap()
+            .is_empty(),
+        "not remembered"
+    );
+    request(
+        &f,
+        Request::RemoveRemoteContentAllow {
+            scope: RemoteContentScope::Once,
+            value: message.id.to_string(),
+        },
+    )
+    .await;
+    assert!(body(&f, &message.id).await.remote_content_blocked);
+    assert_eq!(proxy.serve(&tokens[0]).await.unwrap_err().status(), 403);
+}
+
+/// M2b follow-up: the remote security log is kept as long as its setting
+/// says (purged at start and daily).
+#[tokio::test]
+async fn the_remote_audit_log_follows_its_retention_setting() {
+    use nail_api::remote::{RemoteAuditKind, RemoteAuditOutcome};
+    let f = setup();
+    let now = 2_000_000_000;
+    for age_days in [2, 20] {
+        f.service
+            .store()
+            .append_remote_audit(&nail_store::RemoteAuditRecord {
+                at: now - age_days * 86_400,
+                kind: RemoteAuditKind::Login,
+                outcome: RemoteAuditOutcome::Failure,
+                user_id: None,
+                user_name: Some("ada".into()),
+                device_id: None,
+                session_id: None,
+                ip: None,
+                user_agent: None,
+                method: None,
+                name: None,
+                error: None,
+                detail: None,
+            })
+            .unwrap();
+    }
+    let count = |f: &Fixture| {
+        f.service
+            .store()
+            .list_remote_audit(None, None, 100)
+            .unwrap()
+            .len()
+    };
+    f.service.purge_history(now).await.unwrap();
+    assert_eq!(count(&f), 2, "the default keeps 90 days");
+    let settings = RemoteUiSettings {
+        audit_retention_days: 7,
+        ..RemoteUiSettings::default()
+    };
+    assert!(matches!(
+        request(&f, Request::UpdateRemoteUiSettings { settings }).await,
+        Response::RemoteUi { .. }
+    ));
+    f.service.purge_history(now).await.unwrap();
+    assert_eq!(count(&f), 1, "entries older than 7 days are gone");
+    let invalid = RemoteUiSettings {
+        audit_retention_days: 0,
+        ..RemoteUiSettings::default()
+    };
+    assert!(matches!(
+        request(&f, Request::UpdateRemoteUiSettings { settings: invalid }).await,
+        Response::Error { .. }
+    ));
 }

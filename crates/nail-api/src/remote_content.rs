@@ -45,10 +45,19 @@ pub enum RemoteContentScope {
     /// Every message from one domain (lowercase, the `From` address's
     /// domain exactly; subdomains are separate entries).
     Domain,
+    /// One message, this time only (M2b follow-up, ADR 0048): not stored
+    /// in the allow-lists; lapses after [`ONCE_ALLOW_SECS`] or when Nail
+    /// restarts. The value is the message id.
+    Once,
 }
 
+/// How long a [`RemoteContentScope::Once`] allowance lasts (long enough to
+/// read the message; the reader asks again afterwards).
+pub const ONCE_ALLOW_SECS: i64 = 15 * 60;
+
 impl RemoteContentScope {
-    /// All scopes, most specific first (the order the core checks them).
+    /// The stored scopes, most specific first (the order the core checks
+    /// them); [`Self::Once`] is never stored.
     pub const ALL: [RemoteContentScope; 3] = [Self::Message, Self::Sender, Self::Domain];
 }
 
@@ -87,7 +96,9 @@ pub struct RemoteContentInfo {
 pub fn normalize_allow_value(scope: RemoteContentScope, value: &str) -> Option<String> {
     let value = value.trim();
     match scope {
-        RemoteContentScope::Message => (!value.is_empty()).then(|| value.to_owned()),
+        RemoteContentScope::Message | RemoteContentScope::Once => {
+            (!value.is_empty()).then(|| value.to_owned())
+        }
         RemoteContentScope::Sender => {
             let (local, domain) = value.rsplit_once('@')?;
             let domain = normalize_domain(domain)?;

@@ -337,6 +337,13 @@ function SettingsForm({
           min={1}
           onChange={(v) => change({ reauth_minutes: v ?? 0 })}
         />
+        <NumberField
+          labelId="remote-settings-audit-retention"
+          name="audit-retention"
+          value={draft.audit_retention_days}
+          min={1}
+          onChange={(v) => change({ audit_retention_days: v ?? 0 })}
+        />
       </fieldset>
       {shown.length > 0 && (
         <ul data-part="remote-settings.issues" aria-label={t("remote-settings-issues")}>

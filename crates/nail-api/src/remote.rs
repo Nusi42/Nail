@@ -152,6 +152,9 @@ pub struct RemoteUiSettings {
     /// A re-authentication is valid for sensitive actions for this many
     /// minutes.
     pub reauth_minutes: u32,
+    /// Entries of the remote-access security log are kept this many days
+    /// (1–3650; purged daily). M2b follow-up.
+    pub audit_retention_days: u32,
 }
 
 impl Default for RemoteUiSettings {
@@ -168,9 +171,15 @@ impl Default for RemoteUiSettings {
             session_idle_minutes: 30,
             session_max_hours: 12,
             reauth_minutes: 5,
+            audit_retention_days: DEFAULT_AUDIT_RETENTION_DAYS,
         }
     }
 }
+
+/// Default of [`RemoteUiSettings::audit_retention_days`].
+pub const DEFAULT_AUDIT_RETENTION_DAYS: u32 = 90;
+/// Largest [`RemoteUiSettings::audit_retention_days`] (ten years).
+pub const MAX_AUDIT_RETENTION_DAYS: u32 = 3650;
 
 /// Something wrong with [`RemoteUiSettings`]; the core answers
 /// `invalid_request` (or `forbidden` for internet mode) and names it in
@@ -199,6 +208,9 @@ pub enum RemoteUiSettingsIssue {
     InvalidHostName,
     /// A session limit is 0, or the idle limit exceeds the maximum age.
     InvalidSessionLimits,
+    /// `audit_retention_days` is 0 or more than
+    /// [`MAX_AUDIT_RETENTION_DAYS`].
+    InvalidAuditRetention,
 }
 
 impl RemoteUiSettingsIssue {
@@ -266,6 +278,9 @@ impl RemoteUiSettings {
             || u64::from(self.session_idle_minutes) > u64::from(self.session_max_hours) * 60
         {
             issues.push(I::InvalidSessionLimits);
+        }
+        if self.audit_retention_days == 0 || self.audit_retention_days > MAX_AUDIT_RETENTION_DAYS {
+            issues.push(I::InvalidAuditRetention);
         }
         issues
     }
@@ -1271,6 +1286,7 @@ mod tests {
             allowed_networks: vec!["10.0.0.0/8".into(), "10.0.0.0/33".into()],
             session_idle_minutes: 24 * 60,
             session_max_hours: 12,
+            audit_retention_days: 0,
             ..RemoteUiSettings::default()
         };
         assert_eq!(
@@ -1280,7 +1296,8 @@ mod tests {
                 I::InvalidPort,
                 I::InvalidNetwork,
                 I::InvalidHostName,
-                I::InvalidSessionLimits
+                I::InvalidSessionLimits,
+                I::InvalidAuditRetention
             ]
         );
         assert_eq!(I::InvalidPort.error_code(), ErrorCode::InvalidRequest);

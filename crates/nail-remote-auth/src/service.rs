@@ -385,6 +385,31 @@ impl RemoteAuth {
         true
     }
 
+    /// The id of the live session the cookies name (session and device
+    /// cookie together), without touching or rotating it: for the sandbox
+    /// origin, which checks that a render token is used by the session it
+    /// was minted for. `None` when there is none.
+    pub fn session_id_of(&self, cookies: &Cookies) -> Option<RemoteSessionId> {
+        let token = cookies.session.as_deref().filter(|t| is_token_shaped(t))?;
+        let now = self.now();
+        let session = self
+            .inner
+            .store
+            .remote_session_by_token(&hash_remote_secret(token), now)
+            .ok()
+            .flatten()?;
+        let device = self.device_of(cookies)?;
+        if device.id != session.device_id || device.user_id != session.user_id {
+            return None;
+        }
+        let settings = self.settings();
+        let last_seen = parse_rfc3339(&session.last_seen_at).unwrap_or_default();
+        let created = parse_rfc3339(&session.created_at).unwrap_or_default();
+        let live = last_seen + i64::from(settings.session_idle_minutes) * 60 > now
+            && created + i64::from(settings.session_max_hours) * 3600 > now;
+        live.then_some(session.id)
+    }
+
     /// Resolves the session of a request: the session cookie must name a
     /// valid session, sent together with the cookie of the device the
     /// session belongs to; idle and absolute limits are applied; the

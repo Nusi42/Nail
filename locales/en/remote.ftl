@@ -159,6 +159,7 @@ remote-settings-networks-hint = One network per line, for example 192.168.1.0/24
 remote-settings-sessions = Sessions
 remote-settings-idle = Sign out after this many idle minutes
 remote-settings-max-hours = Sign out after this many hours at the latest
+remote-settings-audit-retention = Keep the security log for this many days
 remote-settings-reauth = Ask again for sensitive changes after this many minutes
 remote-settings-issues = Problems
 remote-settings-save = Save
@@ -175,6 +176,7 @@ remote-issue-invalid-network = Each allowed network must look like 192.168.1.0/2
 remote-issue-public-network = Allowed networks must be local networks (such as 192.168.1.0/24) while internet mode is locked.
 remote-issue-invalid-host-name = The host name is not valid (letters, digits and dashes; not an IP address).
 remote-issue-invalid-session-limits = Session limits must be at least 1, and the idle limit cannot be longer than the maximum.
+remote-issue-invalid-audit-retention = Keep the security log for 1 to 3650 days.
 
 remote-status-title = Status
 remote-state-stopped = Not running.
@@ -398,6 +400,9 @@ remote-content-allowed-domain = Remote content is loaded because you allowed { $
 remote-content-block-message = Block again
 remote-content-block-sender = Stop loading from this sender
 remote-content-block-domain = Stop loading from this domain
+remote-content-allow-once = Load once
+remote-content-allowed-once = Remote content is loaded this time only.
+remote-content-block-once = Block again
 
 ## Privacy settings (allow-lists)
 

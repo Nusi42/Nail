@@ -49,7 +49,9 @@ You do not need to set anything up for this.
 Mail can contain hostile HTML. In the browser UI a message is shown from a
 **separate address** (the same computer, another port) that has no access
 to the app, your session or other messages. The message view runs no
-scripts and cannot send forms.
+scripts and cannot send forms. The address of a shown message works only
+for your own signed-in session, and only for an hour: a copied link is
+useless in another browser.
 
 ## Remote content (pictures, fonts, styles)
 

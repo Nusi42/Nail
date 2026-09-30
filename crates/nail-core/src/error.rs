@@ -72,6 +72,17 @@ impl CoreError {
         }
     }
 
+    /// The user-facing text of the error when its producer gave one
+    /// (ADR 0043); the UI falls back to the text of [`Self::code`].
+    pub fn localized(&self) -> Option<nail_api::LocalizedMessage> {
+        match self {
+            Self::Api(err) => err.localized.as_deref().cloned(),
+            Self::Engine(err) => err.localized.as_deref().cloned(),
+            Self::Config(err) => Some((*err.localized).clone()),
+            _ => None,
+        }
+    }
+
     /// Whether trying again later (e.g. after reconnecting) may succeed.
     pub fn is_transient(&self) -> bool {
         match self {

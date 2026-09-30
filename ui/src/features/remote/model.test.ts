@@ -122,6 +122,11 @@ describe("settingsIssues", () => {
     expect(settingsIssues(with_({ session_idle_minutes: 61, session_max_hours: 1 }))).toEqual([
       "invalid-session-limits",
     ]);
+    expect(settingsIssues(with_({ audit_retention_days: 0 }))).toEqual(["invalid-audit-retention"]);
+    expect(settingsIssues(with_({ audit_retention_days: 3651 }))).toEqual([
+      "invalid-audit-retention",
+    ]);
+    expect(settingsIssues(with_({ audit_retention_days: 365 }))).toEqual([]);
   });
 
   it("tells local networks from public ones like the core", () => {

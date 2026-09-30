@@ -1592,6 +1592,11 @@ impl Store {
         label: Option<&str>,
         at: i64,
     ) -> Result<RemoteContentAllow> {
+        if scope == RemoteContentScope::Once {
+            return Err(Error::InvalidData(
+                "a load-once allowance is not stored".to_owned(),
+            ));
+        }
         let value = normalize_allow_value(scope, value).ok_or_else(|| {
             Error::InvalidData(format!("not a usable remote-content {scope:?} entry"))
         })?;
@@ -1641,6 +1646,9 @@ impl Store {
         scope: RemoteContentScope,
         value: &str,
     ) -> Result<bool> {
+        if scope == RemoteContentScope::Once {
+            return Ok(false);
+        }
         let Some(value) = normalize_allow_value(scope, value) else {
             return Ok(false);
         };

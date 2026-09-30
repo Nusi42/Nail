@@ -151,11 +151,11 @@ impl Service {
         &self,
         account: &AccountId,
         state: AccountState,
-        error: Option<(ErrorCode, String)>,
+        error: Option<(ErrorCode, String, Option<nail_api::LocalizedMessage>)>,
     ) {
-        let (error, message) = match error {
-            Some((code, message)) => (Some(code), Some(message)),
-            None => (None, None),
+        let (error, message, localized) = match error {
+            Some((code, message, localized)) => (Some(code), Some(message), localized),
+            None => (None, None, None),
         };
         let status = {
             let mut statuses = lock(&self.inner.engines.statuses);
@@ -171,7 +171,7 @@ impl Service {
                 since: now_rfc3339(),
                 error,
                 message,
-                localized: None,
+                localized,
             };
             statuses.insert(account.clone(), status.clone());
             status

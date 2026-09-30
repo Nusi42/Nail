@@ -41,6 +41,7 @@ pub mod cert;
 mod guard;
 pub mod headers;
 mod http;
+pub mod proxy_limit;
 pub mod remote_ui;
 pub mod sandbox;
 pub mod tls;

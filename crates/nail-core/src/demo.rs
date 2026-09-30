@@ -42,7 +42,7 @@ use nail_testkit::{
 };
 use nail_testkit_net::{
     DnsZone, MockDnsServer, MockHttpServer, MockPop3Config, MockPop3Server, MockResponse,
-    MockSmtpConfig, MockSmtpServer, Pop3Message,
+    MockSieveConfig, MockSieveServer, MockSmtpConfig, MockSmtpServer, Pop3Message,
 };
 use serde_json::{Value, json};
 
@@ -70,6 +70,21 @@ pub const MULTI_IMAGES_HOST: &str = "images.nail.example";
 /// A made-up host of demo-multi that resolves to a private address (the
 /// proxy refuses it).
 pub const MULTI_PRIVATE_HOST: &str = "private.nail.example";
+
+/// The folder of the "work" account synced headers only (M2c): its bodies
+/// are fetched when a message is opened.
+pub const MULTI_HEADERS_ONLY_FOLDER: &str = "Newsletters";
+
+/// The message waiting in [`MULTI_HEADERS_ONLY_FOLDER`]; its body holds a
+/// word found only by the server search (`platypus`).
+pub const MULTI_NEWSLETTER: &str = "From: Nature Weekly <news@nature.example>
+To: ada@work.example
+Subject: This week in nature
+Date: Tue, 29 Sep 2026 07:00:00 +0000
+Message-ID: <weekly-39@nature.example>
+
+This week: the platypus lays eggs and glows under ultraviolet light.
+";
 
 /// A 1×1 PNG (the demo image).
 const PIXEL_PNG: &[u8] = &[
@@ -315,6 +330,11 @@ pub struct DemoMulti {
     pub http: MockHttpServer,
     /// DNS answers (SRV / MX; empty zone).
     pub dns: MockDnsServer,
+    /// ManageSieve server of the "work" account (M2c).
+    pub sieve: MockSieveServer,
+    /// The clock snooze, quiet hours and notifications see; moved by the
+    /// `clock-set` / `clock-advance` controls (M2c).
+    pub clock: Arc<crate::AdjustableClock>,
     /// The in-memory keychain with the accounts' passwords.
     pub secrets: Arc<MemorySecretStore>,
     /// Discovery pointed at the mocks.
@@ -332,6 +352,15 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     work_store.add_mailbox("Drafts", FolderRole::Drafts);
     work_store.add_mailbox("Trash", FolderRole::Trash);
     work_store.append("INBOX", MULTI_LIST_MESSAGE.as_bytes(), &[] as &[&str]);
+    // M2c: a Junk folder, and a folder synced headers only (its bodies are
+    // fetched on demand; the server search finds words of its bodies).
+    work_store.add_mailbox("Junk", FolderRole::Junk);
+    work_store.add_mailbox(MULTI_HEADERS_ONLY_FOLDER, FolderRole::Other);
+    work_store.append(
+        MULTI_HEADERS_ONLY_FOLDER,
+        crlf(MULTI_NEWSLETTER).as_bytes(),
+        &[] as &[&str],
+    );
     let work = MockImapServer::start(
         MockImapConfig {
             username: MULTI_WORK_EMAIL.to_owned(),
@@ -399,6 +428,14 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         },
         new_store,
     )
+    .await
+    .map_err(io_error)?;
+
+    let sieve = MockSieveServer::start(MockSieveConfig {
+        username: MULTI_WORK_EMAIL.to_owned(),
+        password: MULTI_WORK_PASSWORD.to_owned(),
+        ..MockSieveConfig::default()
+    })
     .await
     .map_err(io_error)?;
 
@@ -470,6 +507,8 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         new_imap,
         http,
         dns,
+        sieve,
+        clock: Arc::new(crate::AdjustableClock::new()),
         secrets,
         discoverer: Arc::new(discoverer),
         pop3_counter: AtomicU32::new(0),
@@ -484,6 +523,7 @@ impl DemoMulti {
     /// `accounts.kdl` for the two demo accounts.
     pub fn accounts_kdl(&self) -> String {
         let (imap, pop3, smtp) = (self.work.port(), self.home.port(), self.smtp.port());
+        let sieve = self.sieve.port();
         format!(
             r#"{MULTI_CONFIG_MARKER}
 undo-send-delay 5
@@ -491,6 +531,10 @@ undo-send-delay 5
 account "{MULTI_WORK_ID}" email="{MULTI_WORK_EMAIL}" name="Work" {{
     imap host="127.0.0.1" port={imap} tls="plaintext"
     smtp host="127.0.0.1" port={smtp} tls="plaintext"
+    sieve host="127.0.0.1" port={sieve} tls="plaintext" enabled=#false
+    sync {{
+        folder path="{MULTI_HEADERS_ONLY_FOLDER}" bodies="headers-only"
+    }}
     identity "{MULTI_WORK_EMAIL}" name="Ada Lovelace" {{
         crypto prefer-encrypt="mutual"
     }}
@@ -527,6 +571,7 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
         options.discoverer = Some(Arc::clone(&self.discoverer));
         options.timing = crate::EngineTiming::fast();
         options.open_browser = false;
+        options.clock = Some(Arc::clone(&self.clock) as Arc<dyn nail_triage::Clock>);
         demo_options(options)
     }
 
@@ -606,6 +651,11 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     /// * `smtp-messages` → `[{from, to, data}]`
     /// * `remote-content` → `{images, private, requests}`: base URLs of the
     ///   made-up image hosts and the paths the image host was asked for
+    /// * `sieve-scripts` → `{active, scripts: [{name, active, content}],
+    ///   uploads}` of the ManageSieve server (M2c)
+    /// * `clock` → `{now}`; `clock-set {at}` (Unix seconds);
+    ///   `clock-advance {seconds}`: the clock of snooze, quiet hours and
+    ///   notifications (M2c)
     ///
     /// `account` defaults to the IMAP account `work` (`new` is the
     /// discoverable one), `mailbox` to `INBOX`.
@@ -713,6 +763,33 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
                     "private": format!("http://{MULTI_PRIVATE_HOST}:{port}"),
                     "requests": requests,
                 }))
+            }
+            "sieve-scripts" => Ok(json!({
+                "active": self.sieve.active(),
+                "uploads": self.sieve.uploads().len(),
+                "scripts": self
+                    .sieve
+                    .scripts()
+                    .into_iter()
+                    .map(|s| json!({ "name": s.name, "active": s.active, "content": s.content }))
+                    .collect::<Vec<_>>(),
+            })),
+            "clock" => Ok(json!({ "now": nail_triage::Clock::unix(&*self.clock) })),
+            "clock-set" => {
+                let at = args
+                    .get("at")
+                    .and_then(Value::as_i64)
+                    .ok_or("at (Unix seconds) is required")?;
+                self.clock.set(at);
+                Ok(json!({ "now": nail_triage::Clock::unix(&*self.clock) }))
+            }
+            "clock-advance" => {
+                let seconds = args
+                    .get("seconds")
+                    .and_then(Value::as_i64)
+                    .ok_or("seconds is required")?;
+                self.clock.advance(seconds);
+                Ok(json!({ "now": nail_triage::Clock::unix(&*self.clock) }))
             }
             other => Err(format!("unknown control command {other:?}")),
         }

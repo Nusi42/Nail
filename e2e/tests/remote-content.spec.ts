@@ -87,3 +87,39 @@ test("remote images load through the proxy after allowing the sender; private ta
   expect((await page.request.get(`${server.url}api/proxy/forged.token`)).status()).toBe(404);
   expect(requested.requests).not.toContain("/pixel.png");
 });
+
+test("remote content can be loaded once without remembering the sender", async ({ page }) => {
+  const hosts = await control<RemoteHosts>(server, "remote-content");
+  const raw = [
+    "From: Tea Club <hello@tea.example>",
+    "To: ada@work.example",
+    "Subject: Our autumn blends",
+    "Message-ID: <blends@tea.example>",
+    "Date: Tue, 29 Sep 2026 09:30:00 +0000",
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=utf-8",
+    "",
+    `<p>Blends</p><img alt="logo" src="${hosts.images}/logo.png">`,
+    "",
+  ].join("\n");
+  await control(server, "imap-deliver", { raw });
+  await page.goto(server.url);
+  const row = page.locator('[data-part="message-list.row"]', { hasText: "Our autumn blends" });
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await row.click();
+  const bar = page.getByRole("region", { name: "Remote content" });
+  await bar.getByRole("button", { name: "Load once" }).click();
+  await expect(bar).toContainText("Remote content is loaded this time only.");
+  const logo = page.frameLocator('iframe[data-part="message-view.body"]').getByAltText("logo");
+  await expect
+    .poll(() => logo.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
+    .toBe(1);
+  // Nothing was added to the allow-lists (Settings → Privacy).
+  await page
+    .getByRole("toolbar", { name: "Main toolbar" })
+    .getByRole("button", { name: "Settings" })
+    .click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("tab", { name: "Privacy", exact: true }).click();
+  await expect(settings.getByText("hello@tea.example")).toHaveCount(0);
+});

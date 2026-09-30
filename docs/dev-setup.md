@@ -114,7 +114,7 @@ npx -w e2e playwright install chromium   # once per machine
 How it works:
 
 - `e2e/playwright.config.ts` starts one shared server
-  (`nail serve --seed demo --port <free port> --data-dir <tmp> --config-dir <tmp>`)
+  (`nail serve --seed demo --port <free port> --data-dir <tmp> --config-dir <tmp> --ui-dir <repo>/ui/dist`)
   for the read-only scenarios. The runner picks the free port once and
   hands it to the workers in `NAIL_E2E_PORT`; set it yourself to pin one.
 - Scenarios that edit `theme.kdl` / `layout.kdl`, use another locale or
@@ -126,7 +126,10 @@ How it works:
   `serverMessages()` from `e2e/support/nail.ts`.
 - The binary is found through `cargo metadata` (the target directory lives
   outside the repository). `NAIL_BIN` selects another binary, `NAIL_LOG`
-  (e.g. `info`) shows server logs.
+  (e.g. `info`) shows server logs. Every server gets `--ui-dir
+  <repo>/ui/dist` explicitly: building `nail-app` copies Tauri's resources
+  into `target/debug/ui`, which `nail serve` would otherwise prefer (a
+  stale bundle after a UI rebuild).
 - The desktop smoke test (`e2e/tests/desktop.spec.ts`) starts the real
   `nail-app.exe --seed demo` with
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<free port>`
@@ -153,7 +156,7 @@ How it works:
 | `e2e/tests/mailops.spec.ts` | `--seed demo-multi`: flag / archive / delete reach the mock IMAP server, a server-side flag change arrives through IDLE, writes made offline replay after reconnecting |
 | `e2e/tests/search-threads.spec.ts` | `--seed demo-multi`: the query language (fields, quotes, OR / NOT, error position), the thread view across folders |
 | `e2e/tests/send.spec.ts` | `--seed demo-multi`: a plain-text mail cancelled by undo send, then sent to the mock SMTP server, with the Sent copy on the IMAP server; a Sent copy queued while IMAP is offline and filed once it is back |
-| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, every settings tab and the merge dialog; any violation, whatever its impact, fails |
+| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, the snoozed list, the snooze picker, a folder's context menu and sync dialog, every settings tab (incl. Server rules, Vacation reply, Junk mail, Notifications, Synchronization and the Customize editors) and the merge dialog; any violation, whatever its impact, fails |
 | `e2e/tests/composer.spec.ts` | `--seed demo-multi`: HTML and Markdown mails (bold text, Markdown source part, attachment, core-rendered preview) with their MIME parts as the mock SMTP server received them; reply quoting in HTML (blockquote) and Markdown (`>`); drafts autosaved to the server's Drafts folder, continued from the outbox after a reload, removed after sending |
 | `e2e/tests/rules.spec.ts` | `--seed demo-multi`: an arrival rule (entered in the text view) moves and flags new mail on the IMAP server and its run is undone as one unit; the test-rule preview with "why it matches"; a rule created from a message and written to `rules.kdl` |
 | `e2e/tests/mcp.spec.ts` | an MCP client created in the settings is denied until "Read mail" is granted, then reads `nail://accounts` and finds messages with `search_messages` over Streamable HTTP (`e2e/support/mcp.ts`); the activity log shows both |
@@ -161,7 +164,8 @@ How it works:
 | `e2e/tests/security.spec.ts` | `--seed demo-multi` (both accounts have an OpenPGP key and an S/MIME certificate of the test CA): a signed + encrypted OpenPGP mail from Work to Home with `Subject: ...` on the mock SMTP server, read in Home with a verified badge; a tampered signature shows as invalid; an S/MIME sign + encrypt round trip with a valid chain; Autocrypt turns encryption on after one message (`autocrypt-alice.eml`); the sender badge from a trusted `Authentication-Results` (`authserv-id "mx.nail.example"`) and a look-alike link warning; encryption at rest on and off with mail and search intact; an MCP client reads an encrypted message only with the "Encrypted messages" grant |
 | `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server; a second app started with a `mailto:` link opens the composer with its fields |
 | `e2e/tests/remote.spec.ts` | the remote UI (turned on over the local WebSocket: TLS with a self-signed certificate, host name `localhost`) in a second browser context: pairing with a code from the desktop's dialog (fingerprint, used code refused, Trusted Types block an injected script), passkey registration and login with a CDP virtual authenticator, password + TOTP (a used code refused), password guessing slowed down (backoff, audit), session revoke on the desktop logs the browser out, internet mode locked in the settings and in the core, the local UI's CSP blocking an inline script (`e2e/support/remote.ts`: `rpc`, `enableRemoteUi`, `totp`, `trustingBrowser`) |
-| `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed |
+| `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed; "Load once" loads without adding an allow-list entry |
+| `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 
 ### Generated files and snapshots
 
@@ -195,14 +199,14 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 | --- | --- |
 | `--seed demo` | Load the demo mail corpus as a local account (no network). Every seeded run keeps secrets in memory, trusts only the corpus' S/MIME test root and looks up no keys online |
 | `--seed demo-imap` | Serve the demo corpus from an in-process mock IMAP server and sync it like a real account |
-| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"` |
+| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"` |
 | `--port 0` | Use a free port; the URL is the only line printed on stdout |
 | `--data-dir DIR` | Store location (default `%LOCALAPPDATA%\Nail`; with `--seed`, a temporary directory) |
 | `--config-dir DIR` | `theme.kdl` / `layout.kdl` location (default `%APPDATA%\Nail`; with `--seed`, a temporary directory) |
 | `--ui-dir DIR` | UI bundle (default `$NAIL_UI_DIR`, `ui/` next to the binary, or the repository's `ui/dist`) |
 | `--locale de` | UI language override |
 | `--no-watch` | Do not watch the config files |
-| `--mcp-port PORT` | Port of the MCP server on 127.0.0.1 (default 0: a free one, written to `<data-dir>/mcp-endpoint.json`) |
+| `--mcp-port PORT` | Port of the MCP server on 127.0.0.1 (default: the MCP settings' fixed port, else a free one; written to `<data-dir>/mcp-endpoint.json`) |
 | `--no-mcp` | Do not start the MCP server |
 | `-v`, `-vv` | More logging; `NAIL_LOG=nail_core=debug` sets the filter precisely |
 
@@ -241,7 +245,12 @@ NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]
 
 It finds the server through `<data-dir>/mcp-endpoint.json` (or `--url`),
 checks that the token belongs to `--client`, and forwards stdio to the
-loopback HTTP endpoint. Tokens come from Settings → MCP clients.
+loopback HTTP endpoint. Tokens come from Settings → MCP clients. When no
+Nail runs on the data directory, `nail mcp` starts one without a window
+(`--config-dir`, `--mcp-port`; `--no-start` refuses instead) for as long as
+the client is connected. One process per data directory: `nail serve`,
+the desktop app and a headless `nail mcp` take `nail.lock`
+(`DataDirLock`); the desktop app shows who holds it and exits.
 
 #### Test controls (`--seed demo-multi` only)
 
@@ -260,6 +269,10 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `pop3-state` | – | `{uids, deleted}` of the POP3 server |
 | `smtp-messages` | – | What the SMTP server received: `{from, to, data}` |
 | `remote-content` | – | `{images, private, requests}`: base URLs of the made-up image hosts (`images.nail.example` → the mock HTTP server, `private.nail.example` → a private address the proxy refuses) and the paths the image host was asked for |
+| `sieve-scripts` | – | `{active, uploads, scripts: [{name, active, content}]}` of the mock ManageSieve server (M2c) |
+| `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications), Unix seconds |
+| `clock-set` | `at` | Sets that clock to `at` (Unix seconds); it keeps running |
+| `clock-advance` | `seconds` | Moves that clock forward (or back, negative) |
 
 For UI work with hot module reloading, run `npm run dev` (Vite on
 `http://localhost:5173`). Add `?mock=1` to use the in-memory mock core. Add
@@ -390,3 +403,15 @@ For M2c:
   patches, MCP port setting, `RuleFromMessage`, store v7, the `nail-sieve` / `nail-triage`
   stubs, slots). Fluent texts built in Rust live in `locales/<lang>/core*.ftl`;
   `cargo test -p nail-api --test catalog` checks that every id the contract names exists.
+- **0044:** `nail-sieve` — the Sieve compiler (placement + localized reasons), the
+  parse / decompile round-trip harness, the ManageSieve client, upload / remove of the
+  managed script; `nail-testkit-net`'s `MockSieveServer` + `validate_script`
+- **0045:** `nail-triage` — tokenizer, junk classifier, snooze scheduler, notification policy
+- **0046:** engine polish — localized Rust messages (`nail_config::l10n`), body sync policies,
+  IMAP search keys, Markdown bodies, fixed MCP port, headless `nail mcp`, `DataDirLock`
+- **0047:** UI polish — context menus, Customize editors, triage / Sieve / sync UI, lazy
+  editors (vendor / catalogs chunks in `ui/vite.config.ts`), axe in Vitest
+  (`ui/src/a11y.test.tsx`), `defaults/themes/` example themes
+- **0048:** M2c integration (Sieve upload task, junk / snooze / notifications in the core,
+  headers-only sync + on-demand bodies + server search, replay connection, localized
+  messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)

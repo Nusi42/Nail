@@ -134,6 +134,7 @@ export const ISSUES: readonly RemoteUiSettingsIssue[] = [
   "public-network",
   "invalid-host-name",
   "invalid-session-limits",
+  "invalid-audit-retention",
 ];
 
 export const UI_STATES: readonly RemoteUiState[] = ["stopped", "starting", "running", "failed"];
@@ -294,6 +295,12 @@ export function settingsIssues(settings: RemoteUiSettings): RemoteUiSettingsIssu
   if (idle <= 0 || max <= 0 || reauth <= 0 || idle > max * 60) {
     issues.push("invalid-session-limits");
   }
+  if (
+    settings.audit_retention_days < 1 ||
+    settings.audit_retention_days > MAX_AUDIT_RETENTION_DAYS
+  ) {
+    issues.push("invalid-audit-retention");
+  }
   return issues;
 }
 
@@ -387,6 +394,8 @@ export const AUDIT_KINDS: readonly RemoteAuditKind[] = [
 ];
 export const AUDIT_OUTCOMES: readonly RemoteAuditOutcome[] = ["success", "failure", "denied"];
 export const CONTENT_SCOPES: readonly RemoteContentScope[] = ["message", "sender", "domain"];
+/** Longest security-log retention the core accepts (`MAX_AUDIT_RETENTION_DAYS`). */
+export const MAX_AUDIT_RETENTION_DAYS = 3650;
 export const PAIRING_STATES = ["pending", "used", "expired", "cancelled"] as const;
 /** Lifetimes offered for a pairing code, in minutes. */
 export const PAIRING_TTLS: readonly number[] = [5, 10, 30];

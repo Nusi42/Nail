@@ -22,8 +22,13 @@ pub(crate) struct IncomingMessage {
     pub keywords: Vec<String>,
     /// Server receive date (RFC 3339), used when the `Date` header is missing.
     pub internal_date: Option<String>,
-    /// Raw RFC 5322 bytes.
+    /// Raw RFC 5322 bytes (only the header block when `headers_only`).
     pub raw: Vec<u8>,
+    /// Only the header block was fetched (sync policy `headers-only` /
+    /// `recent`; the body is fetched on demand).
+    pub headers_only: bool,
+    /// The full message's size (`RFC822.SIZE`), when known.
+    pub size: Option<u64>,
 }
 
 /// What [`ingest`] wrote.
@@ -97,12 +102,21 @@ pub(crate) fn ingest(
     let mut rows = Vec::with_capacity(messages.len());
     let mut addresses: Vec<(MessageId, Vec<Address>)> = Vec::new();
     let mut docs = Vec::with_capacity(messages.len());
+    let mut keeps_body: Vec<MessageId> = Vec::new();
     for message in messages {
         let blob_hash = blobs.put(&message.raw)?;
         let parsed = nail_mime::parse_message(&message.raw);
         let id = resolve_id(store, folder, uid_validity, message, &parsed)?;
         if store.get_message(&id).is_err() {
             report.new.push(id.clone());
+        } else if message.headers_only
+            && store
+                .body_state(&id)
+                .is_ok_and(|s| s != nail_api::sync::BodyState::HeadersOnly)
+        {
+            // A resync with headers only keeps a downloaded body (and its
+            // index entry).
+            keeps_body.push(id.clone());
         }
         let mut summary = parsed.to_summary(
             SummaryIds {
@@ -140,10 +154,36 @@ pub(crate) fn ingest(
                 blob_hash: Some(blob_hash),
                 thread_key: thread_key(&parsed),
             },
-            meta: Some(meta_of(&parsed, message.raw.len())),
+            meta: Some(meta_of(
+                &parsed,
+                message
+                    .size
+                    .filter(|_| message.headers_only)
+                    .map_or(message.raw.len(), |s| {
+                        usize::try_from(s).unwrap_or(usize::MAX)
+                    }),
+            )),
         });
     }
-    let merged = store.merge_messages(&rows)?;
+    let mut merged = nail_store::MergeReport::default();
+    for (headers_only, state) in [
+        (false, nail_api::sync::BodyState::Synced),
+        (true, nail_api::sync::BodyState::HeadersOnly),
+    ] {
+        let group: Vec<SyncedMessage> = rows
+            .iter()
+            .zip(messages)
+            .filter(|(_, m)| m.headers_only == headers_only)
+            .map(|(r, _)| r.clone())
+            .collect();
+        if group.is_empty() {
+            continue;
+        }
+        let part = store.merge_with_body_state(&group, state)?;
+        merged.written += part.written;
+        merged.kept_local.extend(part.kept_local);
+        merged.skipped.extend(part.skipped);
+    }
     // Blob garbage collection (after folder deletions) may have removed a
     // blob between `put` and the row that references it; store it again.
     for (message, row) in messages.iter().zip(&rows) {
@@ -170,7 +210,9 @@ pub(crate) fn ingest(
         tracing::debug!(%err, "cannot record addresses");
     }
     if let Some(index) = index {
-        docs.retain(|d| report.stored.contains(&d.message_id));
+        docs.retain(|d| {
+            report.stored.contains(&d.message_id) && !keeps_body.contains(&d.message_id)
+        });
         if let Err(err) = index.add(&docs) {
             tracing::warn!(%err, "cannot index new messages");
         }

@@ -1,6 +1,6 @@
 # Nail — Implementation Plan
 
-Status: 2026-09-29 · Source of truth for *what* to build: [`design.md`](design.md). This file says *how* and *in which order*.
+Source of truth for *what* to build: [`design.md`](design.md). This file says *how* and *in which order*.
 
 ## 1. Ground rules (apply to every work package)
 
@@ -298,16 +298,18 @@ Wire the remote UI with auth into `nail serve` and the desktop app; migrate exis
 - **Throttle window**: 7 days because the store resets a count after the window from the *first* failure; a v7 change (window from the last failure) would allow hours.
 - **Passkeys** are discoverable-only (no `allowCredentials` for non-resident security keys); `credProtect` is requested, not enforced by the browser (ADR 0041).
 - **Login page** is unstyled (runs before the theme); serve the default theme without a session.
-- **Render tokens** are bearer capabilities for one message for an hour (bind them to the session). Events on remote sockets are filtered per grant since the review fixes (ADR 0042).
+- **Render tokens** are bearer capabilities for one message for an hour. *Done in M2c (ADR 0048): bound to the remote session.* Events on remote sockets are filtered per grant since the review fixes (ADR 0042).
 - **Remote grants narrowed to some accounts** see no address suggestions (collected addresses are not per account), no rules (rules span every account, like MCP) and a search `total` that counts only the hits found for the page (ADR 0042).
-- **Remote content**: no "load once" scope; no per-session proxy rate limit; the `TargetCheck` re-reads the allow-lists but not whether the message still references the URL.
+- **Remote content**: the `TargetCheck` re-reads the allow-lists but not whether the message still references the URL. *Done in M2c (ADR 0048): a "load once" scope and a proxy rate limit (per session, or per client address on the sandbox origin).*
 - **CSRF key** is per process: browsers fetch a new token after a restart (handled by the UI).
-- **Audit growth**: remote audit entries are purged after 90 days with the other history.
+- **Audit growth**: remote audit entries are purged after 90 days with the other history. *Done in M2c (ADR 0048): a retention setting (`audit_retention_days`) and a daily purge.*
 - **Installer / CI**: first runs of `deny` (advisories) and `interop` (pin Stalwart / Dovecot images afterwards); offline WebView2 variant, German installer strings, tray and hidden autostart, per-machine MSI (M4), signing.
 - **Launch requests**: `webcal:`, `.ics` and `.vcf` answer "not supported yet" until M3; `in-reply-to` of `mailto:` is ignored; a "Choose Nail in Default apps" button (`ms-settings:defaultapps?registeredAppUser=Nail`) is not built.
 - **ACME** is wired but untested end to end (needs the network and port 80; internet mode stays locked).
 
 ### Wave M2c — Server-side rules and polish
+
+**Status:** WP50–WP55 done (ADRs 0043–0048); automated suites green (`cargo test --workspace` 1713 tests, Vitest 764, Playwright 64 scenarios incl. `m2c.spec.ts`, the extended `a11y.spec.ts`, `remote-content.spec.ts` and the desktop smoke test; clippy / fmt / ESLint / tsc / Prettier clean; `cargo deny` not run offline). The M2b follow-ups on render tokens, "load once", the proxy rate limit and audit retention are closed. Next: reviews, fixes and an independent verify; interop runs against real ManageSieve servers.
 
 #### WP50 — Contract (sequential)
 Sieve upload status per rule (server / client / not expressible), vacation settings, junk training requests and classifier status, snooze (until time, wake folder), notification settings (per account / folder / rule, quiet hours), sync policy per folder (full / headers-only / recent N days) and on-demand body fetch, UI context-menu model, toolbar / key / column edit requests, fixed MCP port setting, localized core messages (error codes + Fluent ids + args instead of English text), `RuleFromMessage` request.
@@ -315,18 +317,32 @@ Sieve upload status per rule (server / client / not expressible), vacation setti
 
 #### WP51 — Sieve and vacation (parallel)
 Compile Sieve-expressible rules to Sieve (RFC 5228 + fileinto, imap4flags, vacation, regex, variables where supported) with a round-trip test harness; ManageSieve client (RFC 5804: STARTTLS, AUTHENTICATE PLAIN / XOAUTH2, PUTSCRIPT, SETACTIVE, CHECKSCRIPT, capability-aware); mock ManageSieve server in `nail-testkit-net`; vacation replies via Sieve `vacation`.
+*Done (ADR 0044):* `nail-sieve` compiler with per-rule placement and localized reasons (`core-sieve.ftl`), POSIX ERE translation, parser + decompiler round-trip harness, ManageSieve client (STARTTLS without plaintext fallback, PLAIN / XOAUTH2 / OAUTHBEARER, every RFC 5804 command), one managed script per account that never overwrites the user's scripts (previous script recorded and included), vacation with dates via `date` or applied by Nail; `MockSieveServer` + `validate_script`.
 
 #### WP52 — Spam, snooze, notifications (parallel)
 Local Bayesian classifier per account (tokenizer over headers + text, trained by "junk / not junk", honours server Junk flags, never auto-deletes); snooze via IMAP keyword + a hidden "Snoozed" folder with local wake timers (works offline, survives restart); new-mail notifications (Tauri notification plugin on desktop, Web Notifications in the remote UI) with per-account / folder / rule settings and quiet hours, which also makes the rules `notify` / `suppress` actions real.
+*Done (ADR 0045):* `nail-triage` (pure logic): tokenizer, Robinson / Fisher classifier with an unsure band and undo, arrival and mark plans that never delete, timer wheel, snooze scheduler (restart catch-up, rebinding by Message-ID), DST-safe local times, notification policy with quiet hours and burst batching; every write returned as a `TriageOp`.
 
 #### WP53 — Engine polish (parallel)
 Sync policy `bodies` (headers-only / recent N days) with on-demand body fetch; IMAP `SEARCH` fallback merged into search results for messages without local bodies; a separate replay connection per IMAP account; `text/markdown` alternatives treated as body alternatives in `nail-mime`; Rust-built user-facing strings (config errors, MCP hints, CLI output where user-facing) turned into codes + Fluent ids; fixed MCP port setting; headless `nail mcp` start with a single-instance lock on the data directory; `RuleFromMessage` using the full headers (List-Id).
+*Done (ADR 0046):* `nail_config::l10n` (fluent-bundle over every catalog) and localized `ConfigError` / rule issues / MCP / CLI texts; `BodyFetch`, `fetch_body`, `SearchKey` + `search_messages` in `nail-proto-imap`; store body-state accessors and `DataDirLock`; `nail_search::imap` (query → IMAP key); Markdown alternatives; `configured_port`; headless `nail mcp` (`--config-dir`, `--no-start`, `--mcp-port`); `rule_from_message` in `suggest.rs`.
 
 #### WP54 — UI polish and accessibility (parallel)
 Right-click context menus rendered from `layout.kdl`; toolbar-order, key-binding and column-order editors in the Customize tab (using the existing write-back); lazy-loaded TipTap / CodeMirror; inline images in reopened HTML drafts; UI for vacation, junk, snooze, notifications, sync policy; accessibility pass (axe on every window and dialog, full keyboard navigation, focus management, screen-reader labels, a high-contrast theme shipped as an example theme, reduced motion).
+*Done (ADR 0047):* `features/menus` (right-click, Shift+F10 / menu key through `menu.context`), Customize editors (`toolbar-editor`, `key-binding-editor`, `column-editor`), triage / Sieve / sync features and widgets, lazy editor chunks (main chunk ~474 kB), inline images via `GetDraftAttachment`, themed login page, axe in Vitest, `defaults/themes/high-contrast.kdl`, reduced motion.
 
 #### WP55 — Integration (sequential)
 Wire all of the above; **Playwright:** a rule shows as "server" and its Sieve script lands on the mock ManageSieve server; vacation reply script uploaded; marking junk trains the classifier and the next similar message lands in Junk; snooze hides a message and it returns at the wake time (clock controlled); a new-mail notification fires and quiet hours suppress it; headers-only folder fetches the body on open; server-side search finds a message without a local body; right-click menu on a message works; rebinding a key writes `layout.kdl` and works; axe clean on every window.
+*Done (ADR 0048):* Sieve upload task (digest of inputs, server rules skipped on arrival, removal when switched off, recompile for vacation dates), junk on arrival and `MarkJunk` (`Store::untrain_junk`), snooze scheduler + wake task + hidden Snoozed folder (created by the first move), notification policy + batching (`NotificationRequested`; OS notifications in the desktop shell, Web Notifications in the browser), headers-only sync + on-demand bodies + trimmed aged bodies, server search fallback, a separate replay connection, localized core messages end to end, desktop MCP port from the settings + data-dir lock, `GetDraftAttachment`, M2b follow-ups (session-bound render tokens, "load once", proxy rate limit, audit retention); an adjustable clock and demo-multi controls (`clock-*`, `sieve-scripts`) for the Playwright scenarios (`m2c.spec.ts`, extended `a11y.spec.ts`, `remote-content.spec.ts`). Status: integrated, all suites green; reviews and verify pending.
+
+#### M2c follow-ups (deviations and deferrals)
+- **Sieve**: interop runs against Dovecot Pigeonhole and Stalwart (the mock does not execute scripts; `:regex` and capability re-issue after login may differ); the upload state is in memory (an account shows `pending` after a restart until the start-up upload); `include :personal` names are written without the `${` escape; a dedicated reason for non-ASCII case-insensitive regexes; per-rule placement badges in the rule manager.
+- **Junk**: unsure verdicts are stored as `junk: false` with a score; `ham_cutoff` is not a user setting; no NFKC normalization of tokens.
+- **Notifications**: quiet hours use the OS time zone (the remote UI may want a per-user zone); the WebView2 behaviour of `contextmenu` after Shift+F10 and OS notification look on the installed app belong to the desktop smoke test.
+- **Sync**: the server search does not filter inexact hits (`has:attachment`, `filename:`) locally; replay and sync stay sequenced in one loop (the replay connection only keeps the main connection's mailbox).
+- **Localized messages**: library texts (KDL parser, OS errors, regex errors, search parser) stay English `detail` arguments; MCP audit entries map English details back (a v8 column would be cleaner); headless `nail mcp` does not read the Windows UI language; German catalogs are empty.
+- **Remote**: the proxy limit is per session on the app origin but per client address on the sandbox origin; "load once" lapses after 15 minutes.
+- **UI**: `folder-tree.account` has no page element; the application menu (`menu "app"`) is unused in the web UI; forwards of HTML mail with inline images do not load previews yet.
 
 ### Wave M2d — Plug-in preview
 

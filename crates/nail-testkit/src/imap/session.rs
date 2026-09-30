@@ -1238,13 +1238,9 @@ impl Session {
                 continue;
             };
             let seq = seq_number(index);
-            let matches = criteria.iter().all(|criterion| match criterion {
-                Criterion::All => true,
-                Criterion::Flag(flag, wanted) => message.has_flag(flag) == *wanted,
-                Criterion::Uid(set) => set.contains(message.uid, max_uid),
-                Criterion::Seq(set) => set.contains(seq, max_seq),
-                Criterion::Header(field, value) => header_contains(&message.raw, field, value),
-            });
+            let matches = criteria
+                .iter()
+                .all(|criterion| criterion.matches(message, seq, max_uid, max_seq));
             if matches {
                 hits.push(if uid { message.uid } else { seq });
             }
@@ -1578,8 +1574,54 @@ enum Criterion {
     Uid(SequenceSet),
     Seq(SequenceSet),
     /// `HEADER <field> <string>`: the field contains the string (ASCII
-    /// case-insensitive, RFC 3501).
+    /// case-insensitive, RFC 3501); also `SUBJECT`, `FROM`, `TO`, `CC`.
     Header(String, String),
+    /// `TEXT <string>`: header or body contains it.
+    Text(String),
+    /// `BODY <string>`: the body contains it.
+    Body(String),
+    /// `OR <key> <key>`.
+    Or(Box<Criterion>, Box<Criterion>),
+    /// `NOT <key>`.
+    Not(Box<Criterion>),
+    /// A parenthesized list: all of them.
+    And(Vec<Criterion>),
+}
+
+impl Criterion {
+    fn matches(&self, message: &StoredMessage, seq: u32, max_uid: u32, max_seq: u32) -> bool {
+        match self {
+            Criterion::All => true,
+            Criterion::Flag(flag, wanted) => message.has_flag(flag) == *wanted,
+            Criterion::Uid(set) => set.contains(message.uid, max_uid),
+            Criterion::Seq(set) => set.contains(seq, max_seq),
+            Criterion::Header(field, value) => header_contains(&message.raw, field, value),
+            Criterion::Text(value) => contains_ci(&message.raw, value),
+            Criterion::Body(value) => {
+                let split = message
+                    .raw
+                    .windows(4)
+                    .position(|w| w == b"\r\n\r\n")
+                    .map_or(message.raw.len(), |p| p + 4);
+                contains_ci(&message.raw[split..], value)
+            }
+            Criterion::Or(a, b) => {
+                a.matches(message, seq, max_uid, max_seq)
+                    || b.matches(message, seq, max_uid, max_seq)
+            }
+            Criterion::Not(a) => !a.matches(message, seq, max_uid, max_seq),
+            Criterion::And(all) => all
+                .iter()
+                .all(|c| c.matches(message, seq, max_uid, max_seq)),
+        }
+    }
+}
+
+/// Whether `raw` contains `value` (ASCII case-insensitive).
+fn contains_ci(raw: &[u8], value: &str) -> bool {
+    String::from_utf8_lossy(raw)
+        .to_lowercase()
+        .contains(&value.to_lowercase())
 }
 
 /// Whether a header field of `raw` contains `value` (ASCII case-insensitive;
@@ -1603,51 +1645,81 @@ fn header_contains(raw: &[u8], field: &str, value: &str) -> bool {
 
 fn parse_search(args: &[Token]) -> Result<Vec<Criterion>, String> {
     let mut criteria = Vec::new();
-    let mut iter = args.iter();
-    while let Some(token) = iter.next() {
-        let key = token
-            .as_text()
-            .ok_or("unsupported search key")?
-            .to_ascii_uppercase();
-        let criterion = match key.as_str() {
-            "ALL" => Criterion::All,
-            "SEEN" => Criterion::Flag("\\Seen", true),
-            "UNSEEN" => Criterion::Flag("\\Seen", false),
-            "DELETED" => Criterion::Flag("\\Deleted", true),
-            "UNDELETED" => Criterion::Flag("\\Deleted", false),
-            "FLAGGED" => Criterion::Flag("\\Flagged", true),
-            "UNFLAGGED" => Criterion::Flag("\\Flagged", false),
-            "ANSWERED" => Criterion::Flag("\\Answered", true),
-            "UNANSWERED" => Criterion::Flag("\\Answered", false),
-            "UID" => {
-                let set = iter
-                    .next()
-                    .and_then(Token::as_text)
-                    .ok_or("UID needs a set")?;
-                Criterion::Uid(SequenceSet::parse(&set).ok_or("invalid UID set")?)
-            }
-            "HEADER" => {
-                let field = iter
-                    .next()
-                    .and_then(Token::as_text)
-                    .ok_or("HEADER needs a field name")?;
-                let value = iter
-                    .next()
-                    .and_then(Token::as_text)
-                    .ok_or("HEADER needs a string")?;
-                Criterion::Header(field, value)
-            }
-            _ => match SequenceSet::parse(&key) {
-                Some(set) => Criterion::Seq(set),
-                None => return Err(format!("unsupported search key {key}")),
-            },
-        };
-        criteria.push(criterion);
+    let mut iter = args.iter().peekable();
+    // `CHARSET <name>` (UTF-8 and US-ASCII are what the mock knows).
+    if iter
+        .peek()
+        .and_then(|t| t.as_text())
+        .is_some_and(|t| t.eq_ignore_ascii_case("CHARSET"))
+    {
+        iter.next();
+        let charset = iter.next().and_then(Token::as_text).unwrap_or_default();
+        if !charset.eq_ignore_ascii_case("UTF-8") && !charset.eq_ignore_ascii_case("US-ASCII") {
+            return Err(format!(
+                "[BADCHARSET (UTF-8)] unsupported charset {charset}"
+            ));
+        }
+    }
+    while iter.peek().is_some() {
+        criteria.push(parse_key(&mut iter)?);
     }
     if criteria.is_empty() {
         return Err("search criteria required".to_owned());
     }
     Ok(criteria)
+}
+
+fn parse_key<'a>(iter: &mut impl Iterator<Item = &'a Token>) -> Result<Criterion, String> {
+    let token = iter.next().ok_or("search key expected")?;
+    if let Token::List(items) = token {
+        let mut inner = items.iter();
+        let mut all = Vec::new();
+        while let Some(first) = inner.next() {
+            let mut chained = std::iter::once(first).chain(&mut inner);
+            all.push(parse_key(&mut chained)?);
+        }
+        return Ok(Criterion::And(all));
+    }
+    let key = token
+        .as_text()
+        .ok_or("unsupported search key")?
+        .to_ascii_uppercase();
+    let mut text = |what: &str| -> Result<String, String> {
+        iter.next()
+            .and_then(Token::as_text)
+            .ok_or_else(|| format!("{what} needs a string"))
+    };
+    Ok(match key.as_str() {
+        "ALL" => Criterion::All,
+        "SEEN" => Criterion::Flag("\\Seen", true),
+        "UNSEEN" => Criterion::Flag("\\Seen", false),
+        "DELETED" => Criterion::Flag("\\Deleted", true),
+        "UNDELETED" => Criterion::Flag("\\Deleted", false),
+        "FLAGGED" => Criterion::Flag("\\Flagged", true),
+        "UNFLAGGED" => Criterion::Flag("\\Flagged", false),
+        "ANSWERED" => Criterion::Flag("\\Answered", true),
+        "UNANSWERED" => Criterion::Flag("\\Answered", false),
+        "UID" => Criterion::Uid(SequenceSet::parse(&text("UID")?).ok_or("invalid UID set")?),
+        "HEADER" => {
+            let field = text("HEADER")?;
+            Criterion::Header(field, text("HEADER")?)
+        }
+        "SUBJECT" | "FROM" | "TO" | "CC" => {
+            Criterion::Header(key.to_ascii_lowercase(), text(&key)?)
+        }
+        "TEXT" => Criterion::Text(text("TEXT")?),
+        "BODY" => Criterion::Body(text("BODY")?),
+        "OR" => {
+            let a = parse_key(iter)?;
+            let b = parse_key(iter)?;
+            Criterion::Or(Box::new(a), Box::new(b))
+        }
+        "NOT" => Criterion::Not(Box::new(parse_key(iter)?)),
+        _ => match SequenceSet::parse(&key) {
+            Some(set) => Criterion::Seq(set),
+            None => return Err(format!("unsupported search key {key}")),
+        },
+    })
 }
 
 fn push_fetch_item(out: &mut Vec<u8>, item: FetchItem, message: &StoredMessage) {
@@ -1758,7 +1830,33 @@ mod tests {
         let tokens = command::tokenize(b"1:3 DELETED UNFLAGGED").unwrap();
         assert_eq!(parse_search(&tokens).unwrap().len(), 3);
         assert!(parse_search(&[]).is_err());
-        assert!(parse_search(&command::tokenize(b"FROM x").unwrap()).is_err());
+        assert!(parse_search(&command::tokenize(b"KEYWORD x").unwrap()).is_err());
+        // Text keys, OR / NOT and lists (the server search fallback, M2c).
+        let tokens =
+            command::tokenize(b"CHARSET UTF-8 OR TEXT \"platypus\" (FROM x NOT BODY y)").unwrap();
+        assert_eq!(parse_search(&tokens).unwrap().len(), 1);
+        assert!(parse_search(&command::tokenize(b"CHARSET KOI8-R TEXT x").unwrap()).is_err());
+        let message = StoredMessage {
+            uid: 7,
+            flags: Vec::new(),
+            internal_date: String::new(),
+            modseq: 1,
+            raw: b"From: Nature <n@x>\r\nSubject: Weekly\r\n\r\nThe platypus glows.\r\n"
+                .to_vec()
+                .into(),
+        };
+        let matches = |text: &[u8]| {
+            parse_search(&command::tokenize(text).unwrap())
+                .unwrap()
+                .iter()
+                .all(|c| c.matches(&message, 1, 7, 1))
+        };
+        assert!(matches(b"TEXT PLATYPUS"));
+        assert!(matches(b"BODY platypus FROM nature"));
+        assert!(!matches(b"BODY weekly"));
+        assert!(matches(b"OR SUBJECT nothing SUBJECT weekly"));
+        assert!(!matches(b"NOT TEXT platypus"));
+        assert!(matches(b"(SUBJECT weekly TEXT glows)"));
     }
 
     #[test]

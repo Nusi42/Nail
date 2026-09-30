@@ -196,7 +196,11 @@ function ItemRow({ item, take, onTake }: ItemProps) {
               <span data-part="merge-dialog.conflict.kind">
                 {t(`merge-conflict-${conflict.kind}`)}
               </span>
-              <span data-part="merge-dialog.conflict.detail">{conflict.message}</span>
+              <span data-part="merge-dialog.conflict.detail">
+                {conflict.localized
+                  ? t(conflict.localized.id, conflict.localized.args)
+                  : conflict.message}
+              </span>
             </li>
           ))}
         </ul>

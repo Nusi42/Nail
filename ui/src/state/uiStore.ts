@@ -14,6 +14,7 @@ import type {
   DraftId,
   ErrorCode,
   FolderId,
+  LocalizedMessage,
   IdentityId,
   MessageId,
   OpId,
@@ -32,6 +33,8 @@ export interface SyncState {
 export interface SyncErrorState {
   accountId: AccountId;
   code: ErrorCode;
+  /** The core's text for the failure (Fluent id + arguments), if it sent one. */
+  localized?: LocalizedMessage | null;
 }
 
 export interface ConfigErrorState {

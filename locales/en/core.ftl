@@ -344,3 +344,12 @@ mcp-core-bridge-not-running = Nail is not running or its MCP server is off ({ $d
 mcp-core-bridge-token-refused = The MCP client token was refused (unknown or revoked); create a new client in Nail.
 mcp-core-bridge-wrong-client = The token belongs to the MCP client “{ $actual }”, not “{ $expected }”.
 mcp-core-bridge-transport = The connection to Nail failed: { $detail }
+
+## The core (nail-core): synchronization and other diagnostics shown in the UI
+
+# A sync pass finished but some folders failed; `folders` lists their paths.
+sync-error-folders =
+    { $count ->
+        [one] The folder { $folders } could not be synchronized.
+       *[other] { $count } folders could not be synchronized: { $folders }
+    }

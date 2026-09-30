@@ -152,7 +152,11 @@ function TextView({
         <ul data-part="rules.text.errors" role="alert">
           {errors.map((e, i) => (
             <li key={i} data-part="rules.text.error">
-              {t("rules-text-error", { line: e.line, column: e.column, message: e.message })}
+              {t("rules-text-error", {
+                line: e.line,
+                column: e.column,
+                message: e.localized ? t(e.localized.id, e.localized.args) : e.message,
+              })}
             </li>
           ))}
         </ul>

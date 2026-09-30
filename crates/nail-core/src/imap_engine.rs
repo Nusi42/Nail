@@ -4,7 +4,8 @@
 //! loop:
 //!   connect (status connecting → online, or offline / auth-error and a
 //!            backoff that doubles up to EngineTiming::reconnect_max)
-//!   session on the connection:
+//!   session on the connection (plus a second one for replaying writes,
+//!   opened lazily; M2c):
 //!     replay queued writes, full pass (sync.rs)
 //!     a MailboxWatcher (own connection, IDLE or NOOP polling) per folder
 //!       whose sync policy asks for it (INBOX by default)
@@ -95,13 +96,13 @@ pub(crate) async fn run(
         service.set_status(
             &account.id,
             state_for_error(code),
-            Some((code, err.to_string())),
+            Some((code, err.to_string(), err.localized())),
         );
         service.broadcast(nail_api::Event::SyncFailed {
             account_id: account.id.clone(),
             code,
             message: err.to_string(),
-            localized: None,
+            localized: err.localized(),
         });
         if !pause(backoff, &signals, &mut stop).await {
             break;
@@ -111,26 +112,82 @@ pub(crate) async fn run(
     tracing::info!(account = %account.id, "engine stopped");
 }
 
+/// The connections of a session: the main one (sync passes) and the
+/// replay connection for queued writes (M2c), so replaying never changes
+/// the main connection's selected mailbox. When the replay connection
+/// cannot be opened, writes replay on the main one.
+struct Conns<'a> {
+    main: tokio::sync::Mutex<ImapClient>,
+    replay: std::sync::Mutex<Option<Arc<tokio::sync::Mutex<ImapClient>>>>,
+    settings: &'a ImapSettings,
+}
+
+impl Conns<'_> {
+    /// The replay connection, (re)opened when missing or broken.
+    async fn replay_client(&self) -> Option<Arc<tokio::sync::Mutex<ImapClient>>> {
+        let current = crate::service::lock(&self.replay).clone();
+        if let Some(client) = current
+            && !client.lock().await.is_broken()
+        {
+            return Some(client);
+        }
+        match connect(self.settings).await {
+            Ok(client) => {
+                let client = Arc::new(tokio::sync::Mutex::new(client));
+                *crate::service::lock(&self.replay) = Some(Arc::clone(&client));
+                Some(client)
+            }
+            Err(err) => {
+                tracing::debug!(%err, "no replay connection; replaying on the main one");
+                *crate::service::lock(&self.replay) = None;
+                None
+            }
+        }
+    }
+}
+
 /// Replays queued writes, then runs a full pass.
-async fn full_cycle(
-    service: &Service,
-    account: &AccountConfig,
-    client: &tokio::sync::Mutex<ImapClient>,
-) -> Result<()> {
-    replay(service, account, client).await?;
+async fn full_cycle(service: &Service, account: &AccountConfig, conns: &Conns<'_>) -> Result<()> {
+    replay(service, account, conns).await?;
+    let client = &conns.main;
     let result = {
         let mut guard = client.lock().await;
         run_pass(&service.sync_ctx(), &account.id, &mut guard, &account.sync).await
     };
     report_pass(&service.sync_ctx(), &account.id, &result);
+    // The folders are known now: the Sieve script can name them (uploaded
+    // only when its inputs changed).
+    if result.is_ok() {
+        service.queue_sieve(Some(&account.id));
+    }
     result.map(drop)
 }
 
-async fn replay(
-    service: &Service,
-    account: &AccountConfig,
-    client: &tokio::sync::Mutex<ImapClient>,
-) -> Result<()> {
+async fn replay(service: &Service, account: &AccountConfig, conns: &Conns<'_>) -> Result<()> {
+    let pending = {
+        let id = account.id.clone();
+        service
+            .store()
+            .call(move |s| Ok(s.accounts_with_pending_ops()?.contains(&id)))
+            .await?
+    };
+    if !pending {
+        return Ok(());
+    }
+    if let Some(client) = conns.replay_client().await {
+        let executor = ImapExecutor {
+            service,
+            client: &client,
+        };
+        replay_account(service, &account.id, &executor).await?;
+        if client.lock().await.is_broken() {
+            // Deferred writes retry after the session reconnects (as when
+            // they replayed on the main connection).
+            return Err(nail_proto_imap::ImapError::ConnectionLost.into());
+        }
+        return Ok(());
+    }
+    let client = &conns.main;
     let executor = ImapExecutor { service, client };
     replay_account(service, &account.id, &executor).await?;
     if client.lock().await.is_broken() {
@@ -143,9 +200,10 @@ async fn replay(
 async fn folder_changed(
     service: &Service,
     account: &AccountConfig,
-    client: &tokio::sync::Mutex<ImapClient>,
+    conns: &Conns<'_>,
     path: &str,
 ) -> Result<()> {
+    let client = &conns.main;
     let found = {
         let account = account.id.clone();
         let path = path.to_owned();
@@ -156,12 +214,13 @@ async fn folder_changed(
     };
     match found {
         Some(folder) => {
+            let bodies = account.sync.effective(&folder.path, folder.role).bodies;
             let mut guard = client.lock().await;
-            sync_folder(&service.sync_ctx(), &mut guard, &folder).await?;
+            sync_folder(&service.sync_ctx(), &mut guard, &folder, &bodies).await?;
         }
-        None => return full_cycle(service, account, client).await,
+        None => return full_cycle(service, account, conns).await,
     }
-    replay(service, account, client).await
+    replay(service, account, conns).await
 }
 
 async fn session(
@@ -173,8 +232,48 @@ async fn session(
     stop: &mut watch::Receiver<bool>,
     poll: Duration,
 ) -> SessionEnd {
-    let client = tokio::sync::Mutex::new(client);
-    if let Err(err) = full_cycle(service, account, &client).await {
+    let conns = Conns {
+        main: tokio::sync::Mutex::new(client),
+        replay: std::sync::Mutex::new(None),
+        settings,
+    };
+    let end = session_loop(service, account, settings, &conns, signals, stop, poll).await;
+    conns.close_and(end).await
+}
+
+impl Conns<'_> {
+    /// Closes the replay connection; a stopped session logs out of the
+    /// main one too.
+    async fn close_and(self, end: SessionEnd) -> SessionEnd {
+        let main = {
+            let replay = crate::service::lock(&self.replay).take();
+            if let Some(replay) = replay
+                && let Ok(client) = Arc::try_unwrap(replay)
+            {
+                let _ = tokio::time::timeout(Duration::from_secs(2), client.into_inner().logout())
+                    .await;
+            }
+            self.main
+        };
+        if matches!(end, SessionEnd::Stopped) {
+            let client = main.into_inner();
+            let _ = tokio::time::timeout(Duration::from_secs(2), client.logout()).await;
+        }
+        end
+    }
+}
+
+async fn session_loop(
+    service: &Service,
+    account: &AccountConfig,
+    settings: &ImapSettings,
+    conns: &Conns<'_>,
+    signals: &Signals,
+    stop: &mut watch::Receiver<bool>,
+    poll: Duration,
+) -> SessionEnd {
+    let client = &conns.main;
+    if let Err(err) = full_cycle(service, account, conns).await {
         return SessionEnd::Failed(err);
     }
     let (events_tx, mut events) = mpsc::channel(64);
@@ -188,7 +287,7 @@ async fn session(
             () = stopped(stop) => break SessionEnd::Stopped,
             Some((path, event)) = events.recv() => match event {
                 WatchEvent::Connected { .. } | WatchEvent::Changed(_) => {
-                    folder_changed(service, account, &client, &path).await
+                    folder_changed(service, account, conns, &path).await
                 }
                 WatchEvent::Disconnected { error, .. } => {
                     // The server may be gone: check the main connection so
@@ -197,9 +296,9 @@ async fn session(
                     client.lock().await.noop().await.map_err(CoreError::from)
                 }
             },
-            () = signals.replay.notified() => replay(service, account, &client).await,
-            () = signals.sync.notified() => full_cycle(service, account, &client).await,
-            _ = timer.tick() => full_cycle(service, account, &client).await,
+            () = signals.replay.notified() => replay(service, account, conns).await,
+            () = signals.sync.notified() => full_cycle(service, account, conns).await,
+            _ = timer.tick() => full_cycle(service, account, conns).await,
         };
         if let Err(err) = step {
             let broken = client.lock().await.is_broken();
@@ -213,10 +312,6 @@ async fn session(
         }
     };
     watchers.stop().await;
-    if matches!(end, SessionEnd::Stopped) {
-        let client = client.into_inner();
-        let _ = tokio::time::timeout(Duration::from_secs(2), client.logout()).await;
-    }
     end
 }
 

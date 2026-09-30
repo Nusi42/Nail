@@ -84,7 +84,21 @@ pub fn router_with_control(
 pub(crate) fn proxy_routes<S: Clone + Send + Sync + 'static>(proxy: Arc<Proxy>) -> Router<S> {
     Router::new()
         .route("/api/proxy/{token}", get(proxy_resource))
-        .with_state(proxy)
+        .with_state((proxy, Arc::new(crate::proxy_limit::RateLimiter::default())))
+}
+
+/// The rate-limit key of a proxy request: its remote session, else the
+/// client address (the sandbox origin's documents send no cookies).
+fn limit_key(extensions: &axum::http::Extensions) -> String {
+    if let Some(ctx) = extensions.get::<nail_remote_auth::RemoteSessionCtx>() {
+        return format!("session:{}", ctx.session.id);
+    }
+    extensions
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map_or_else(
+            || "client:unknown".to_owned(),
+            |info| format!("client:{}", info.0.ip()),
+        )
 }
 
 pub(crate) fn app_router(service: Service, config: AppConfig) -> Router {
@@ -161,7 +175,21 @@ async fn peer_socket_addr(mut request: axum::extract::Request) -> axum::extract:
 }
 
 /// `GET /api/proxy/{token}`: a remote resource through the proxy.
-async fn proxy_resource(State(proxy): State<Arc<Proxy>>, Path(token): Path<String>) -> Response {
+async fn proxy_resource(
+    State((proxy, limiter)): State<(Arc<Proxy>, Arc<crate::proxy_limit::RateLimiter>)>,
+    Path(token): Path<String>,
+    request: axum::extract::Request,
+) -> Response {
+    if !limiter.allow(&limit_key(request.extensions())) {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [
+                (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+                (header::RETRY_AFTER, HeaderValue::from_static("60")),
+            ],
+        )
+            .into_response();
+    }
     match proxy.serve(&token).await {
         Ok(resource) => {
             let mut response = (

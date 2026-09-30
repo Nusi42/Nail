@@ -90,6 +90,8 @@ export function runtimeIds(): string[] {
       `remote-content-block-${s}`,
       `remote-allows-scope-${s}`,
     ]),
+    "remote-content-allowed-once",
+    "remote-content-block-once",
     `window-${PAIR_DIALOG}`,
     ...LAYOUT_LABELS,
   ];

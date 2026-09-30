@@ -107,7 +107,12 @@ stops when the agent disconnects. Only one Nail uses a data folder at a
 time: while this headless Nail runs, a second `nail mcp` connects to it,
 and `nail serve` on the same folder refuses to start. If another
 Nail runs on the folder with its MCP server turned off, `nail mcp` says so
-instead of opening your data a second time.
+instead of opening your data a second time. The same holds the other way
+round: while a headless Nail (or `nail serve`) uses the data folder, the
+desktop app does not start and says which Nail program has it.
+
+The desktop app also uses the fixed port of the MCP settings, and moves to
+a new one as soon as you change the setting.
 
 Options:
 

@@ -121,6 +121,8 @@ impl Service {
             .load(std::sync::atomic::Ordering::Relaxed)
         {
             self.reconcile_engines();
+            // Sieve settings, identities or the login may have changed.
+            self.queue_sieve(None);
         }
         self.broadcast(Event::AccountsChanged);
         Ok(())

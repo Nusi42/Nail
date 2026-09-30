@@ -98,6 +98,10 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
     dataDir,
     "--config-dir",
     configDir,
+    // The freshly built bundle, never a stale `ui` folder beside the binary
+    // (Tauri copies its resources into the target directory).
+    "--ui-dir",
+    path.join(repoRoot, "ui", "dist"),
   ];
   if (options.locale) args.push("--locale", options.locale);
   const child: ChildProcess = spawn(nailBinary(), args, {

@@ -56,4 +56,9 @@ session_max_hours: number,
  * A re-authentication is valid for sensitive actions for this many
  * minutes.
  */
-reauth_minutes: number, };
+reauth_minutes: number, 
+/**
+ * Entries of the remote-access security log are kept this many days
+ * (1–3650; purged daily). M2b follow-up.
+ */
+audit_retention_days: number, };

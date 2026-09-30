@@ -55,6 +55,17 @@ downloaded appear as soon as they are stored.
 
 `AND`, `OR` and `NOT` are written in capitals.
 
+## Mail without a downloaded body
+
+Folders synchronized "headers only" (or older mail under "only recent
+messages in full", see [What to synchronize](accounts-reference.md#what-to-synchronize-sync))
+keep only the header lines on this device. When a search looks for words
+in the text, Nail also asks the mail server (IMAP `SEARCH`) about these
+messages and adds what it finds to the results. This needs a connection;
+offline, such messages are matched by their headers only. The server
+compares plain words, so a few kinds of searches (attachments, file names)
+may find a little more there than Nail would.
+
 ## Hints and mistakes
 
 While the search bar has focus, it lists the fields you can use; the list

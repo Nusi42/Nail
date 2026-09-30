@@ -130,7 +130,10 @@ sessions and why they ended.
 
 **Security log** records every sign-in, failed sign-in, pairing, lockout
 and change to remote access, newest first, with the address and browser.
-Filter by user; *Load older entries* goes further back.
+Filter by user; *Load older entries* goes further back. Entries are kept
+for 90 days by default; **Keep the security log for this many days**
+(Settings → Remote access, 1 to 3650) changes that. Older entries are
+removed when Nail starts and once a day.
 
 ## Remote content in messages
 
@@ -140,12 +143,16 @@ shows a bar above the message:
 
 - **Load for this message** — this message only (it stays allowed when
   you open it again).
+- **Load once** — this message, this time only: nothing is remembered,
+  and after about 15 minutes (or a restart of Nail) the content is blocked
+  again.
 - **Always load from** *sender* — every message from this address.
 - **Always load from** *domain* — every message from this domain (for
   example `shop.example`; `news.shop.example` is a separate domain).
 
 Allowed content is fetched **by Nail**, not by your browser, so the sender
-never sees your address. The bar then says why the content is shown and
+never sees your address. In a remote browser, Nail fetches at most 300
+files a minute for one session; more wait. The bar then says why the content is shown and
 offers to block it again.
 
 **Settings → Privacy** lists everything you allowed — messages, senders

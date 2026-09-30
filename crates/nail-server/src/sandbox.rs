@@ -6,7 +6,9 @@
 //! only two capability routes:
 //!
 //! * `GET /render/<token>`: a message's sanitized HTML, for a render token
-//!   the core signed ([`nail_proxy::Purpose::Render`]). The response's
+//!   the core signed ([`nail_proxy::Purpose::Render`]) for a remote
+//!   session; the request must carry that session's cookies (browsers send
+//!   the app's cookies to the same host on another port). The response's
 //!   CSP carries `sandbox` without `allow-scripts` or `allow-same-origin`:
 //!   the document runs no script and gets an **opaque** origin, so its
 //!   requests are cross-site and carry no `SameSite` cookies; it may be
@@ -14,9 +16,10 @@
 //!   URLs in the HTML point to this origin's proxy route.
 //! * `GET /api/proxy/<token>`: the remote-content proxy.
 //!
-//! No WebSocket, no blobs, no login, no UI bundle; cookies sent to it
-//! (browsers scope cookies by host, not port) are never read. `Host` is
-//! checked as on the app origin (DNS rebinding).
+//! No WebSocket, no blobs, no login, no UI bundle; cookies sent to it are
+//! only compared with the session a render token names (never touched,
+//! rotated or set). `Host` is checked as on the app origin (DNS
+//! rebinding).
 
 use std::future::Future;
 use std::pin::Pin;
@@ -46,6 +49,10 @@ pub trait MailSource: Send + Sync + 'static {
     /// The sanitized HTML of `message_id`, `None` for text-only or unknown
     /// messages.
     fn sanitized_html<'a>(&'a self, message_id: &'a str) -> HtmlLookup<'a>;
+
+    /// Whether the request's cookies belong to the live remote session
+    /// `session_id` (the session a render token was minted for).
+    fn session_matches(&self, session_id: &str, headers: &HeaderMap) -> bool;
 }
 
 impl MailSource for Service {
@@ -59,6 +66,13 @@ impl MailSource for Service {
                 _ => None,
             }
         })
+    }
+
+    fn session_matches(&self, session_id: &str, headers: &HeaderMap) -> bool {
+        let cookies = nail_remote_auth::Cookies::from_headers(headers);
+        self.remote_auth()
+            .session_id_of(&cookies)
+            .is_some_and(|id| id.as_str() == session_id)
     }
 }
 
@@ -122,6 +136,15 @@ async fn render(
     let Ok(grant) = state.proxy.signer().verify(&token, Purpose::Render) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    // Bound to the session it was minted for (M2b follow-up): a leaked
+    // render URL is useless without that session's cookies.
+    let bound = grant
+        .session
+        .as_deref()
+        .is_some_and(|session| state.source.session_matches(session, &headers));
+    if !bound {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     let Some(html) = state.source.sanitized_html(&grant.message_id).await else {
         return StatusCode::NOT_FOUND.into_response();
     };

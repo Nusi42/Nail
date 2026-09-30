@@ -138,7 +138,7 @@ pub struct CompileOptions<'a> {
     /// [`COMMON_EXTENSIONS`] before the first connection.
     pub extensions: Vec<String>,
     /// Mailbox names of the account's folders.
-    pub folders: &'a dyn FolderResolver,
+    pub folders: &'a (dyn FolderResolver + Sync),
     /// The account's own addresses (identities) for the vacation reply's
     /// `:addresses`.
     pub own_addresses: Vec<String>,

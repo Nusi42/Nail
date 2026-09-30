@@ -79,5 +79,10 @@ change, quiet hours still end at 07:00 on your clock.
 seconds, you get one notification ("5 new messages in Work") instead of
 five. It shows the newest message's sender and subject if previews are on.
 
+**Where they appear:** the desktop app shows Windows notifications. In a
+browser (remote access), Nail shows the browser's notifications once you
+allow them (**Allow notifications in this browser** in Settings →
+Notifications).
+
 When snoozed messages come back, you also get a notification, unless
 notifications are off or it is quiet time.

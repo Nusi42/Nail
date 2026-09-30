@@ -46,7 +46,9 @@ function ConfigErrorList({ hideWhenValid, nodeId, label: nodeLabel }: ListProps)
           <ol data-part="config-errors.list">
             {issues.map((issue, index) => (
               <li key={index} data-part="config-errors.item">
-                <span data-part="config-errors.item.message">{issue.message}</span>
+                <span data-part="config-errors.item.message">
+                  {issue.localized ? t(issue.localized.id, issue.localized.args) : issue.message}
+                </span>
                 <SourceLink
                   part="config-errors.item.source"
                   file={file}

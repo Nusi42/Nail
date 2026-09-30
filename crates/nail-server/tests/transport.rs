@@ -424,6 +424,15 @@ impl MailSource for StubSource {
             .then(|| r#"<p>Hello</p><img src="nail-proxy:TOKEN" alt="logo">"#.to_owned());
         Box::pin(async move { html })
     }
+
+    /// Session `s-1` is the one whose cookie is `abc`.
+    fn session_matches(&self, session_id: &str, headers: &axum::http::HeaderMap) -> bool {
+        session_id == "s-1"
+            && headers.get_all("cookie").iter().any(|v| {
+                v.to_str()
+                    .is_ok_and(|v| v.contains("__Host-nail-session=abc"))
+            })
+    }
 }
 
 struct Rig {
@@ -499,7 +508,7 @@ async fn mail_html_is_served_only_on_the_sandbox_origin() {
     );
     assert!(csp.contains("require-trusted-types-for 'script'"));
 
-    let token = rig.signer.sign_render("m-html").unwrap();
+    let token = rig.signer.sign_render_for("m-html", "s-1").unwrap();
     let doc = get(
         sandbox,
         &format!("/render/{token}"),
@@ -532,8 +541,47 @@ async fn mail_html_is_served_only_on_the_sandbox_origin() {
     assert_eq!(doc.header("x-content-type-options"), Some("nosniff"));
     assert_eq!(doc.header("set-cookie"), None);
 
+    // Bound to its session (M2b follow-up): without that session's
+    // cookie, for another session, or bound to none — 404.
+    assert_eq!(
+        get(sandbox, &format!("/render/{token}"), &[]).await.status,
+        404
+    );
+    assert_eq!(
+        get(
+            sandbox,
+            &format!("/render/{token}"),
+            &[("Cookie", "__Host-nail-session=other")]
+        )
+        .await
+        .status,
+        404
+    );
+    let elsewhere = rig.signer.sign_render_for("m-html", "s-2").unwrap();
+    assert_eq!(
+        get(
+            sandbox,
+            &format!("/render/{elsewhere}"),
+            &[("Cookie", "__Host-nail-session=abc")]
+        )
+        .await
+        .status,
+        404
+    );
+    let unbound = rig.signer.sign_render("m-html").unwrap();
+    assert_eq!(
+        get(
+            sandbox,
+            &format!("/render/{unbound}"),
+            &[("Cookie", "__Host-nail-session=abc")]
+        )
+        .await
+        .status,
+        404
+    );
+
     // Tokens: other messages, other purposes, forgeries — all 404.
-    let other = rig.signer.sign_render("m-unknown").unwrap();
+    let other = rig.signer.sign_render_for("m-unknown", "s-1").unwrap();
     assert_eq!(
         get(sandbox, &format!("/render/{other}"), &[]).await.status,
         404
@@ -772,19 +820,28 @@ async fn the_service_is_the_default_mail_source() {
     let rig = rig(None).await;
     let sandbox = rig.server.sandbox_addr().unwrap();
     // Unknown message: nothing to render.
-    let token = rig.signer.sign_render("no-such-message").unwrap();
+    let token = rig
+        .signer
+        .sign_render_for("no-such-message", "rsess-1")
+        .unwrap();
     assert_eq!(
         get(sandbox, &format!("/render/{token}"), &[]).await.status,
         404
     );
-    // A demo message with HTML renders through the service.
+    // A demo message with HTML, but no live remote session behind the
+    // token: the service refuses it (the session binding is tested with
+    // real sessions in nail-core's remote tests).
     let id = demo_html_message(&rig._f.service)
         .await
         .expect("the demo corpus has an HTML message");
-    let token = rig.signer.sign_render(&id).unwrap();
-    let r = get(sandbox, &format!("/render/{token}"), &[]).await;
-    assert_eq!(r.status, 200);
-    assert!(String::from_utf8_lossy(&r.body).starts_with("<!doctype html>"));
+    let token = rig.signer.sign_render_for(&id, "rsess-1").unwrap();
+    let r = get(
+        sandbox,
+        &format!("/render/{token}"),
+        &[("Cookie", "__Host-nail-session=abc")],
+    )
+    .await;
+    assert_eq!(r.status, 404);
 }
 
 /// The id of a seeded demo message that has an HTML body, if any.

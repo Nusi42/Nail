@@ -204,12 +204,22 @@ fn check_rule(rule: &Rule) -> Result<()> {
     if issues.is_empty() {
         return Ok(());
     }
+    Err(issues_error(&issues).into())
+}
+
+/// Rule issues as one `invalid_request`: every English diagnostic, and
+/// the first issue's text for the UI (ADR 0043).
+fn issues_error(issues: &[nail_rules::RuleIssue]) -> ApiError {
     let text = issues
         .iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join("; ");
-    Err(ApiError::invalid_request(text).into())
+    let error = ApiError::invalid_request(text);
+    match issues.first() {
+        Some(first) => error.with_localized(first.localized.clone()),
+        None => error,
+    }
 }
 
 pub(crate) fn rfc3339(at: i64) -> String {
@@ -399,7 +409,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                         line,
                         column,
                         message: issue.to_string(),
-                        localized: None,
+                        localized: Some(issue.localized.clone()),
                     })
                     .collect();
                 Response::RuleParsed {
@@ -463,6 +473,8 @@ impl Service {
     fn edit_rules<R>(&self, edit: impl FnOnce(&mut RulesDocument) -> Result<R>) -> Result<R> {
         let out = self.inner.rules.edit(edit)?;
         self.broadcast(Event::RulesChanged);
+        // Server-side rules follow (M2c).
+        self.queue_sieve(None);
         let ids: Vec<RuleId> = self.inner.rules.rules().into_iter().map(|r| r.id).collect();
         let store = self.inner.store.clone();
         std::thread::spawn(move || {
@@ -483,6 +495,7 @@ impl Service {
                     self.broadcast(nail_config::issues_event(RULES_FILE, &[]));
                 }
                 self.broadcast(Event::RulesChanged);
+                self.queue_sieve(None);
             }
             RulesReload::Invalid => {
                 let errors = self.inner.rules.errors();
@@ -579,15 +592,7 @@ impl Service {
     ) -> Result<Response> {
         check_rule(&rule)?;
         let ids = self.candidate_messages(folder_id, &rule).await?;
-        let compiled = CompiledRule::new(rule).map_err(|issues| {
-            ApiError::invalid_request(
-                issues
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            )
-        })?;
+        let compiled = CompiledRule::new(rule).map_err(|issues| issues_error(&issues))?;
         let (views, mailbox) = self.load_views(ids).await?;
         let env = Env {
             now: unix_now(),
@@ -639,13 +644,7 @@ impl Service {
         let set = self.inner.rules.set();
         let Some(compiled) = set.get(rule_id) else {
             return Err(match set.broken().iter().find(|(id, _)| id == rule_id) {
-                Some((_, issues)) => ApiError::invalid_request(
-                    issues
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join("; "),
-                ),
+                Some((_, issues)) => issues_error(issues),
                 None => ApiError::not_found(format!("rule {rule_id}")),
             }
             .into());
@@ -866,12 +865,19 @@ impl Service {
         }
         // Autocrypt and decrypted indexing of new mail (M2a) come first.
         self.secure_arrivals(ids.clone()).await;
+        // Junk (M2c): the server's flags and the classifier; mail filed as
+        // junk does not notify unless a rule says so.
+        let junk = self.classify_arrivals(ids.clone()).await;
         let set = self.inner.rules.set();
         let has_arrival = set.rules().iter().any(|r| r.runs_on(RuleRunCause::Arrival));
-        if has_arrival {
+        let rule_notify = if has_arrival {
             self.process_messages(&set, RuleRunCause::Arrival, ids.clone())
-                .await;
-        }
+                .await
+        } else {
+            HashMap::new()
+        };
+        // New-mail notifications (M2c) after the rules' `notify` actions.
+        self.notify_arrivals(&ids, &rule_notify, &junk).await;
         let done = ids.len();
         self.inner
             .store
@@ -880,16 +886,41 @@ impl Service {
         Ok(done)
     }
 
-    /// Every rule `cause` triggers, in order, on each message.
-    async fn process_messages(&self, set: &RuleSet, cause: RuleRunCause, ids: Vec<MessageId>) {
+    /// Every rule `cause` triggers, in order, on each message. On arrival
+    /// the rules an account's server runs (Sieve, M2c) are left out for
+    /// that account's mail. Returns the rules' `notify` choices.
+    async fn process_messages(
+        &self,
+        set: &RuleSet,
+        cause: RuleRunCause,
+        ids: Vec<MessageId>,
+    ) -> HashMap<MessageId, bool> {
         let loaded = self.load_views(ids).await;
         let (views, mailbox) = match loaded {
             Ok(loaded) => loaded,
             Err(err) => {
                 tracing::warn!(%err, "cannot load messages for rules");
-                return;
+                return HashMap::new();
             }
         };
+        let mut per_account: HashMap<nail_api::AccountId, Option<RuleSet>> = HashMap::new();
+        if cause == RuleRunCause::Arrival {
+            for (_, summary) in &views {
+                per_account
+                    .entry(summary.account_id.clone())
+                    .or_insert_with(|| {
+                        let server = self.server_rules(&summary.account_id);
+                        (!server.is_empty()).then(|| {
+                            RuleSet::new(
+                                set.rules()
+                                    .iter()
+                                    .map(|r| r.rule().clone())
+                                    .filter(|r| !server.contains(&r.id)),
+                            )
+                        })
+                    });
+            }
+        }
         let outcomes: Vec<MessageOutcome> = {
             let env = Env {
                 now: unix_now(),
@@ -898,16 +929,30 @@ impl Service {
             };
             views
                 .iter()
-                .map(|(data, _)| set.process(cause, data, &env))
-                .filter(|o| !o.applied.is_empty())
+                .map(|(data, summary)| {
+                    let set = per_account
+                        .get(&summary.account_id)
+                        .and_then(Option::as_ref)
+                        .unwrap_or(set);
+                    set.process(cause, data, &env)
+                })
                 .collect()
         };
+        let notify: HashMap<MessageId, bool> = outcomes
+            .iter()
+            .filter_map(|o| o.notify.map(|n| (o.message_id.clone(), n)))
+            .collect();
+        let outcomes: Vec<MessageOutcome> = outcomes
+            .into_iter()
+            .filter(|o| !o.applied.is_empty())
+            .collect();
         if outcomes.is_empty() {
-            return;
+            return notify;
         }
         let mut runs = HashMap::new();
         self.execute_outcomes(cause, &outcomes, &mut runs).await;
         self.finish_runs(runs).await;
+        notify
     }
 
     /// On-send rules on the Sent copy of a message.

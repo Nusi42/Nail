@@ -4,14 +4,13 @@
 //!
 //! The policy lives in `accounts.kdl`; `SetFolderSyncPolicy` edits the
 //! account's `sync` block through [`Service::save_account`] (which also
-//! reloads the engines and announces `AccountsChanged`). The engines honour
-//! `headers-only` / `recent` and fetch bodies on demand once WP53 / WP55
-//! wire it; until then `FetchMessageBodies` reports stored bodies as
-//! fetched and headers-only ones as failed.
+//! reloads the engines and announces `AccountsChanged`). The IMAP engines
+//! honour `headers-only` / `recent` (`sync.rs`); bodies are fetched on
+//! demand (`bodies.rs`).
 
 use nail_api::accounts::{AccountConfig, FolderMatch, FolderPolicy, IncomingServer};
-use nail_api::sync::{BodyState, FolderSyncPolicy};
-use nail_api::{ApiError, Folder, MessageId, Request, Response};
+use nail_api::sync::FolderSyncPolicy;
+use nail_api::{ApiError, Folder, Request, Response};
 
 use crate::error::Result;
 use crate::service::Service;
@@ -65,20 +64,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
         }
         Request::FetchMessageBodies { message_ids } => {
-            let (fetched, failed) = service
-                .store()
-                .call(move |s| {
-                    let mut fetched: Vec<MessageId> = Vec::new();
-                    let mut failed: Vec<MessageId> = Vec::new();
-                    for id in message_ids {
-                        match s.body_state(&id) {
-                            Ok(BodyState::Synced | BodyState::OnDemand) => fetched.push(id),
-                            Ok(BodyState::HeadersOnly) | Err(_) => failed.push(id),
-                        }
-                    }
-                    Ok((fetched, failed))
-                })
-                .await?;
+            let (fetched, failed) = service.fetch_bodies(message_ids).await?;
             Response::BodiesFetched { fetched, failed }
         }
         other => {

@@ -58,6 +58,9 @@ export default defineConfig({
       `--port ${port}`,
       `--data-dir ${quote(process.env.NAIL_E2E_DATA)}`,
       `--config-dir ${quote(process.env.NAIL_E2E_CONFIG)}`,
+      // Always the freshly built bundle (a `ui` folder beside the binary,
+      // e.g. Tauri's resource copy in the target directory, may be stale).
+      `--ui-dir ${quote(path.join(repoRoot, "ui", "dist"))}`,
     ].join(" "),
     cwd: repoRoot,
     url: `http://127.0.0.1:${port}/`,

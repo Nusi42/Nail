@@ -38,10 +38,10 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use nail_api::accounts::SyncPolicy;
+use nail_api::accounts::{BodyPolicy, SyncPolicy};
 use nail_api::{AccountId, ApiError, ErrorCode, Event, Folder, FolderId, FolderRole};
 use nail_proto_imap::{
-    CredentialProvider, Credentials, FetchedMessage, ImapClient, ImapConfig, ImapError,
+    BodyFetch, CredentialProvider, Credentials, FetchedMessage, ImapClient, ImapConfig, ImapError,
     MessageFlags, RemoteFolder, ResyncState, Secret, SyncState,
 };
 use nail_store::{BlobStore, FolderSyncState, Store};
@@ -271,7 +271,11 @@ pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<Sy
                     paths.join(", "),
                     first.message
                 ),
-                localized: None,
+                localized: Some(
+                    nail_api::LocalizedMessage::new("sync-error-folders")
+                        .arg("count", paths.len())
+                        .arg("folders", paths.join(", ")),
+                ),
             });
         }
         Ok(report) => tracing::info!(%account, ?report, "sync finished"),
@@ -281,7 +285,7 @@ pub(crate) fn report_pass(ctx: &SyncCtx, account: &AccountId, result: &Result<Sy
                 account_id: account.clone(),
                 code: err.code(),
                 message: err.to_string(),
-                localized: None,
+                localized: err.localized(),
             });
         }
     }
@@ -333,7 +337,8 @@ pub(crate) async fn run_pass(
             .get(&remote_folder.path)
             .cloned()
             .ok_or_else(|| ApiError::internal(format!("folder {} vanished", remote_folder.path)))?;
-        match sync_folder(ctx, client, &folder).await {
+        let bodies = policy.effective(&folder.path, folder.role).bodies;
+        match sync_folder(ctx, client, &folder, &bodies).await {
             Ok(outcome) => {
                 report.new_messages = report.new_messages.saturating_add(outcome.new_messages);
                 report.flag_changes = report.flag_changes.saturating_add(outcome.flag_changes);
@@ -414,6 +419,11 @@ async fn mirror_folders(
                 if paths.contains(folder.path.as_str()) {
                     continue;
                 }
+                // The hidden Snoozed folder exists locally before the
+                // first queued move creates it on the server (M2c).
+                if crate::junk::is_snoozed_folder(folder) && folder.total > 0 {
+                    continue;
+                }
                 let hashes = s.folder_blob_hashes(&folder.id)?;
                 let gone: Vec<_> = s
                     .folder_uids(&folder.id)?
@@ -444,7 +454,10 @@ pub(crate) async fn sync_folder(
     ctx: &SyncCtx,
     client: &mut ImapClient,
     folder: &Folder,
+    bodies: &BodyPolicy,
 ) -> Result<FolderOutcome> {
+    let now = crate::engine::unix_now();
+    let fetch = BodyFetch::from_policy(bodies, now);
     let store = &ctx.store;
     let stored_state = {
         let id = folder.id.clone();
@@ -472,7 +485,7 @@ pub(crate) async fn sync_folder(
     let mut new_ids = Vec::new();
     for (index, batch) in plan.batches.iter().enumerate() {
         let messages: Vec<IncomingMessage> = client
-            .fetch_batch(batch)
+            .fetch_batch_with(batch, fetch)
             .await?
             .into_iter()
             // A message marked \Deleted is on its way out (e.g. a move
@@ -513,6 +526,7 @@ pub(crate) async fn sync_folder(
         && !reset
         && !new_ids.is_empty()
         && matches!(folder.role, FolderRole::Inbox | FolderRole::Other)
+        && !crate::junk::is_snoozed_folder(folder)
     {
         // Arrival rules run on new mail (the rules task wakes on NewMail;
         // the inbox survives a restart).
@@ -559,7 +573,59 @@ pub(crate) async fn sync_folder(
             .call(move |s| s.set_folder_sync_state(&id, &state))
             .await?;
     }
+    if let BodyPolicy::Recent { days } = bodies {
+        let cutoff = now - i64::from(*days) * 86_400;
+        trim_bodies(ctx, folder, cutoff).await?;
+    }
     Ok(outcome)
+}
+
+/// Drops the stored bodies of messages that aged out of a "recent N days"
+/// policy (dated before `cutoff`): they keep their header block and are
+/// fetched again on demand. Their search entries keep the body text.
+async fn trim_bodies(ctx: &SyncCtx, folder: &Folder, cutoff: i64) -> Result<()> {
+    let folder_id = folder.id.clone();
+    let blobs = ctx.blobs.clone();
+    let trimmed = ctx
+        .store
+        .call(move |s| {
+            let mut trimmed = 0usize;
+            loop {
+                let batch = s.bodies_before(&folder_id, cutoff, 200)?;
+                if batch.is_empty() {
+                    break;
+                }
+                let mut gone = Vec::new();
+                for body in &batch {
+                    let raw = blobs.get(&body.blob_hash)?;
+                    let headers = blobs.put(header_block(&raw))?;
+                    gone.extend(s.detach_body(&body.message_id, &headers)?);
+                    trimmed += 1;
+                }
+                s.remove_unreferenced_blobs(&blobs, &gone)?;
+            }
+            Ok(trimmed)
+        })
+        .await?;
+    if trimmed > 0 {
+        tracing::info!(folder = %folder.path, trimmed, "bodies older than the sync policy dropped");
+        ctx.emit(Event::MailChanged {
+            folder_ids: vec![folder.id.clone()],
+        });
+    }
+    Ok(())
+}
+
+/// The header block of a raw message (up to and including the empty
+/// line), or everything when there is no body.
+pub(crate) fn header_block(raw: &[u8]) -> &[u8] {
+    if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+        return &raw[..i + 4];
+    }
+    if let Some(i) = raw.windows(2).position(|w| w == b"\n\n") {
+        return &raw[..i + 2];
+    }
+    raw
 }
 
 /// Drops a folder's messages and restarts its checkpoint under a new
@@ -745,5 +811,7 @@ fn incoming(message: FetchedMessage) -> IncomingMessage {
         keywords: message.keywords,
         internal_date: message.internal_date,
         raw: message.raw,
+        headers_only: message.headers_only,
+        size: message.size.map(u64::from),
     }
 }

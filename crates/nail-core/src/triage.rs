@@ -5,16 +5,13 @@
 //! `TestNotification`.
 //!
 //! [`Service::dispatch`](crate::service::Service) routes exactly these
-//! requests here (one match arm). Settings, status and lists are served
-//! from the store now. Training and classifying (`nail-triage`, WP52),
-//! snoozing (hidden folder, keyword, wake timer) and the notification
-//! policy on arrival are wired by WP55: until then `MarkJunk`,
-//! `SnoozeMessages` and `UnsnoozeMessages` answer `unsupported`.
+//! requests here (one match arm). Settings, status and lists come from the
+//! store; training and classifying live in `junk.rs`, snoozing in
+//! `snooze.rs`, the notification policy in `notify.rs` (ADR 0048).
 
-use nail_api::triage::{JunkStatus, MailNotification, NotificationKind, SnoozedMessage};
+use nail_api::triage::{JunkStatus, SnoozedMessage};
 use nail_api::{AccountId, ApiError, Event, LocalizedMessage, Request, Response};
 
-use crate::engine::unix_now;
 use crate::error::Result;
 use crate::rules::rfc3339;
 use crate::service::Service;
@@ -22,17 +19,21 @@ use crate::service::Service;
 /// Handles one of this module's requests.
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
     Ok(match request {
-        Request::MarkJunk { .. } => {
-            return Err(ApiError::unsupported(
-                "junk training is not wired yet (nail-triage, WP55)",
-            )
-            .into());
-        }
-        Request::SnoozeMessages { .. } | Request::UnsnoozeMessages { .. } => {
-            return Err(
-                ApiError::unsupported("snoozing is not wired yet (nail-triage, WP55)").into(),
-            );
-        }
+        Request::MarkJunk { message_ids, junk } => Response::Queued {
+            op_ids: service.mark_junk(message_ids, junk).await?,
+        },
+        Request::SnoozeMessages {
+            message_ids,
+            until,
+            wake_folder_id,
+        } => Response::Queued {
+            op_ids: service
+                .snooze_messages(message_ids, &until, wake_folder_id)
+                .await?,
+        },
+        Request::UnsnoozeMessages { message_ids } => Response::Queued {
+            op_ids: service.unsnooze_messages(message_ids).await?,
+        },
         Request::GetJunkStatus { account_id } => junk_status(service, account_id).await?,
         Request::UpdateJunkSettings {
             account_id,
@@ -119,10 +120,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             Response::NotificationSettings { settings }
         }
         Request::TestNotification => {
-            let settings = service.store().call(|s| s.notification_settings()).await?;
-            service.broadcast(Event::NotificationRequested {
-                notification: test_notification(unix_now(), settings.sound),
-            });
+            service.test_notification().await?;
             Response::Done
         }
         other => {
@@ -133,21 +131,6 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             .into());
         }
     })
-}
-
-/// The notification [`Request::TestNotification`] pushes.
-pub(crate) fn test_notification(now: i64, sound: bool) -> MailNotification {
-    MailNotification {
-        id: format!("test-{now}"),
-        tag: "test".to_owned(),
-        kind: NotificationKind::Test,
-        account_id: None,
-        folder_id: None,
-        message_ids: Vec::new(),
-        title: LocalizedMessage::new("notification-test-title"),
-        body: Some(LocalizedMessage::new("notification-test-body")),
-        sound,
-    }
 }
 
 /// The real accounts behind an account id (itself, or a virtual
@@ -190,17 +173,4 @@ async fn junk_status(service: &Service, account_id: AccountId) -> Result<Respons
             last_trained_at: stats.last_trained_at.map(rfc3339),
         },
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_notification_is_localized() {
-        let n = test_notification(5, false);
-        assert_eq!(n.kind, NotificationKind::Test);
-        assert!(n.title.is_valid() && n.body.as_ref().is_some_and(|b| b.is_valid()));
-        assert!(!n.sound && n.message_ids.is_empty());
-    }
 }

@@ -45,7 +45,8 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
                        M2c: `sieve` node of an IMAP account, reset-toolbar / reset-key-binding
-                       write-back, src/l10n.rs (fluent-bundle, WP53) (ADR 0043)
+                       write-back, src/l10n.rs (fluent-bundle `Catalog` over every catalog, English
+                       fallback; every ConfigError / rule issue carries a LocalizedMessage) (ADRs 0043, 0046)
 crates/nail-store      SQLite metadata (v6), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -57,28 +58,40 @@ crates/nail-store      SQLite metadata (v6), blob store, per-account operation q
                        passkeys, devices, sessions (token hashes, rotation), pairing codes,
                        throttle, remote audit, remote-content allow-lists (ADR 0036);
                        v7: triage.rs — messages.body_state, snoozes, junk classifier (hashed
-                       tokens), notification overrides, Sieve state + vacation (ADR 0043)
+                       tokens; untrain_junk), notification overrides, Sieve state + vacation
+                       (clear_sieve_upload) (ADR 0043); bodies.rs (headers-only merge, attach /
+                       detach bodies, fetch targets), lock.rs DataDirLock (ADR 0046)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
                        warnings) (ADR 0032); remote_content.rs: ProxyRewriter, parse_message_with
-                       (remote references counted, rewritten to nail-proxy: URLs; ADR 0041)
-crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018)
+                       (remote references counted, rewritten to nail-proxy: URLs; ADR 0041);
+                       markdown.rs: text/markdown alternatives as bodies (comrak; ADR 0046)
+crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAuth2, COMPRESS; ADR 0018);
+                       bodies.rs (BodyFetch, fetch_batch_with, fetch_body), search.rs (SearchKey,
+                       search_messages) (ADR 0046)
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
 crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
 crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
 crates/nail-search     Tantivy index + query language parser (ADR 0016); open_with(DirectoryWrapper)
-                       for the sealed index, IndexPolicy (decrypted indexing opt-in) (ADR 0032)
-crates/nail-testkit    mock IMAP server, .eml corpus, demo seed; corpus/crypto/{pgp,smime}: end-to-end
+                       for the sealed index, IndexPolicy (decrypted indexing opt-in) (ADR 0032);
+                       imap.rs: query → IMAP SEARCH key (needs_server, server_search) (ADR 0046)
+crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .eml corpus, demo seed;
+                       corpus/crypto/{pgp,smime}: end-to-end
                        test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
                        smime/ada-{work,home}.p12 are the demo-multi certificates)
-crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers; managesieve.rs (M2c WP51)
-crates/nail-sieve      rules + vacation → Sieve, ManageSieve client (M2c WP51; ADR 0043)
-crates/nail-triage     pure logic: junk classifier, snooze scheduler, notification policy (M2c WP52)
+crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers; managesieve.rs:
+                       MockSieveServer + validate_script (ADR 0044)
+crates/nail-sieve      compiler (rules + vacation → one Sieve script, placement + localized reasons),
+                       parse / decompile round-trip harness, ManageSieve client (SieveSession,
+                       SieveAuth), upload / remove of the managed script (ADR 0044)
+crates/nail-triage     pure logic: tokenizer, junk classifier, snooze scheduler (timer wheel),
+                       notification policy + batcher, local times; writes as TriageOp (ADR 0045)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
-                       CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025)
+                       CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025);
+                       messages.rs (localized texts), configured_port (ADR 0046)
 crates/nail-pgp        OpenPGP (rPGP): keyring (S2K secrets: passphrase or keychain:nail/openpgp/<FPR>),
                        PGP/MIME sign/encrypt/decrypt/verify, inline read, header protection, Autocrypt
                        L1, WKD + keys.openpgp.org via injected HttpClient (ADR 0030)
@@ -105,21 +118,34 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        RemoteUiCommand host link), remote_access.rs (handle_remote: authorize, grant
                        narrowing, encrypted gate, render_url), launch.rs (launch requests,
                        ImportMessageFile) (ADRs 0036, 0041);
-                       M2c: sieve.rs, triage.rs, sync_policy.rs (store-backed parts served,
-                       the rest `unsupported` until WP55), MCP settings, RuleFromMessage (ADR 0043)
+                       M2c (ADR 0048): sieve.rs (upload task, placements, vacation), junk.rs
+                       (classifier on the store, MarkJunk, arrivals, TriageOp → queue), snooze.rs
+                       (scheduler + wake task, hidden Snoozed folder), notify.rs (policy +
+                       batching → NotificationRequested), bodies.rs (on-demand fetch), headers-only
+                       sync in sync.rs / ingest.rs, server search in search.rs, replay connection
+                       in imap_engine.rs, clock.rs AdjustableClock (ServiceOptions::clock),
+                       paths::lock_data_dir, strings.rs over nail_config::l10n
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
-                       sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041)
-crates/nail-cli        `nail` binary
-app/src-tauri          Tauri 2 desktop shell (starts the MCP server and the remote-UI host; main
-                       window created in code; nail-proxy protocol; single instance); launch.rs,
+                       sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
+                       M2c: render tokens bound to the session (sandbox.rs), proxy_limit.rs (ADR 0048)
+crates/nail-cli        `nail` binary; messages.rs (localized stderr), headless `nail mcp`
+                       (`--config-dir`, `--no-start`, `--mcp-port`), serve holds the data-dir lock
+app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the settings' port and
+                       restarts it on change, and the remote-UI host; data-dir lock; OS notifications
+                       for NotificationRequested; main window created in code; nail-proxy protocol;
+                       single instance); launch.rs,
                        portable.rs, setup_helper.rs; installer/ (NSIS template copy + hooks; ADR 0040)
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
-                       M2a: security/; M2b: remote/, launch/; M2c: sieve/, triage/, sync/,
-                       menus/ (resolve.ts)); RemoteGate.tsx (login gate),
-                       api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc)
+                       M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
+                       triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
+                       (context menus, resolve.ts), customization/Editors.tsx); RemoteGate.tsx
+                       (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
+                       theme/BootTheme.tsx (themed boot / login pages), src/a11y.test.tsx (axe in
+                       Vitest); vite.config.ts splits vendor / catalogs chunks, TipTap / CodeMirror
+                       load lazily
 e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts)
-defaults/              shipped theme.kdl + layout.kdl
+defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c)
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
@@ -157,6 +183,7 @@ cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus 
 cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts (test controls at /api/test/…)
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist (temp dirs)
 NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]   # stdio bridge to the running app's MCP server
+nail mcp --client <name> [--config-dir DIR] [--mcp-port N] [--no-start]   # starts a headless Nail when none runs
 npm run tauri dev                          # desktop app with Vite hot reload
 ```
 
@@ -214,9 +241,20 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `nail-testkit-net/src/managesieve.rs`, `locales/*/core{,-sieve,-triage}.ftl`). The core serves
   the store-backed requests; `SyncSieve`, `PreviewSieveScript`, `MarkJunk`, `(Un)SnoozeMessages`
   answer `unsupported` until WP55. `nail-api/tests/catalog.rs` checks contract Fluent ids.
-- `nail serve` and the desktop app start the MCP server (`--mcp-port`, `--no-mcp` for serve); the
-  endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded runs never open an editor
-  (`open_editor`).
+- `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
+  `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
+  runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,
+  desktop, headless `nail mcp`).
+- M2c integration (ADR 0048; packages ADRs 0044 Sieve, 0045 triage, 0046 engine polish, 0047 UI):
+  Sieve uploads run from a core task (digest of the inputs; server rules are skipped on arrival);
+  arrivals go security → junk → rules → notifications; snooze = `$Snoozed` + move to the hidden
+  `Snoozed` folder (created by the first move) + local wake timers; triage time comes from
+  `ServiceOptions::clock`. `--seed demo-multi` adds a mock ManageSieve server (the `sieve` node
+  starts switched off: the mock stores but does not run scripts), a Junk folder, a headers-only
+  folder `Newsletters`, and test controls `sieve-scripts`, `clock`, `clock-set {at}`,
+  `clock-advance {seconds}`.
+- E2E: the harness passes `--ui-dir <repo>/ui/dist` to `nail serve`, because building `nail-app`
+  copies Tauri's resources into `target/debug/ui`, which `nail serve` would prefer (stale bundle).
 - Python on Windows writes CRLF in text mode: when scripting file edits, write with `newline=''`
   (the repo is LF, `.gitattributes`); the `nail-compose` golden `.eml` files are CRLF on purpose.
 - `tauri-build` static VC runtime is limited to release builds (ADR 0004), otherwise workspace doctests fail to link.

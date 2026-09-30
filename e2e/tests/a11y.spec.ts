@@ -99,10 +99,51 @@ test.describe("windows and dialogs of demo-multi", () => {
     expect(await violations(page)).toEqual([]);
     await close("Add account");
 
-    // Every settings tab.
+    // M2c: the snoozed list, the snooze picker and a folder's sync dialog.
+    await toolbar.getByRole("button", { name: "Snoozed messages" }).click();
+    await expect(page.getByRole("dialog", { name: "Snoozed messages" })).toBeVisible();
+    expect(await violations(page), "snoozed").toEqual([]);
+    await close("Snoozed messages");
+    await page
+      .locator('[data-part="message-list.row"]')
+      .filter({ hasText: "Welcome to Nail" })
+      .click();
+    await page
+      .getByRole("toolbar", { name: "Message actions" })
+      .getByRole("button", { name: "Snooze…" })
+      .click();
+    await expect(page.getByRole("dialog", { name: "Snooze" })).toBeVisible();
+    expect(await violations(page), "snooze").toEqual([]);
+    await page
+      .getByRole("dialog", { name: "Snooze" })
+      .getByRole("button", { name: "Cancel" })
+      .click();
+    await page.getByRole("treeitem", { name: /^INBOX/ }).click({ button: "right" });
+    await expect(page.getByRole("menu")).toBeVisible();
+    expect(await violations(page), "folder menu").toEqual([]);
+    await page.getByRole("menu").getByRole("menuitem", { name: "Synchronization…" }).click();
+    await expect(page.getByRole("dialog", { name: "Folder synchronization" })).toBeVisible();
+    expect(await violations(page), "sync-folder").toEqual([]);
+    await close("Folder synchronization");
+
+    // Every settings tab (M2c: server rules, vacation, junk, notifications,
+    // synchronization, and the Customize editors).
     await toolbar.getByRole("button", { name: "Settings" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });
-    for (const tab of ["Accounts", "Virtual accounts", "MCP clients", "Customize"]) {
+    for (const tab of [
+      "Accounts",
+      "Virtual accounts",
+      "MCP clients",
+      "Server rules",
+      "Vacation reply",
+      "Junk mail",
+      "Notifications",
+      "Synchronization",
+      "Customize",
+      "Toolbars",
+      "Keys",
+      "Columns",
+    ]) {
       await settings.getByRole("tab", { name: tab, exact: true }).click();
       await expect(settings.getByRole("tab", { name: tab, exact: true })).toHaveAttribute(
         "aria-selected",
@@ -110,6 +151,7 @@ test.describe("windows and dialogs of demo-multi", () => {
       );
       expect(await violations(page), tab).toEqual([]);
     }
+    await settings.getByRole("tab", { name: "Customize", exact: true }).click();
     // The merge dialog, opened from the Customize tab.
     await settings.getByRole("button", { name: "Apply a theme or layout…", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Apply a theme or layout" })).toBeVisible();

@@ -190,11 +190,18 @@ impl AppArgs {
     }
 }
 
-/// Things the app keeps alive for its lifetime: the MCP server and the
-/// temporary directory of a demo run.
+/// The app's MCP server, restarted when its settings change (M2c: a fixed
+/// port in the settings).
+pub type McpSlot = std::sync::Arc<tokio::sync::Mutex<Option<nail_core::McpRunning>>>;
+
+/// Things the app keeps alive for its lifetime: the MCP server, the lock on
+/// the data directory and the temporary directory of a demo run.
 pub struct Running {
     /// The MCP server, if it started.
-    pub mcp: Option<nail_core::McpRunning>,
+    pub mcp: McpSlot,
+    /// The single-instance lock of the data directory (a headless
+    /// `nail mcp` or `nail serve` cannot open the same data meanwhile).
+    pub _lock: nail_core::DataDirLock,
     /// The temporary directory of a seeded run.
     pub temp: Option<tempfile::TempDir>,
     /// The remote UI (stopped when the app exits).
@@ -329,14 +336,16 @@ pub fn open_service(args: &AppArgs) -> Result<Service, Box<dyn std::error::Error
     open_service_in(args, None)
 }
 
-/// Starts the MCP server (ADR 0025) for the service; agents find it through
+/// Starts the MCP server (ADR 0025) for the service on the port of the
+/// MCP settings (any free port when none is set); agents find it through
 /// `<data-dir>/mcp-endpoint.json`. A failure is logged, not fatal.
 pub async fn start_mcp(
     service: &Service,
     data_dir: &std::path::Path,
 ) -> Option<nail_core::McpRunning> {
+    let port = service.mcp_port().await;
     match service
-        .start_mcp_server(0, Some(nail_core::mcp_endpoint_path(data_dir)))
+        .start_mcp_server(port, Some(nail_core::mcp_endpoint_path(data_dir)))
         .await
     {
         Ok(running) => {
@@ -344,8 +353,97 @@ pub async fn start_mcp(
             Some(running)
         }
         Err(err) => {
-            tracing::warn!(%err, "cannot start the MCP server");
+            tracing::warn!(%err, port, "cannot start the MCP server");
             None
+        }
+    }
+}
+
+/// Restarts the MCP server when its settings change (`McpSettingsChanged`).
+async fn restart_mcp_on_change(service: Service, slot: McpSlot, data_dir: std::path::PathBuf) {
+    let mut events = service.subscribe();
+    loop {
+        match events.recv().await {
+            Ok(Event::McpSettingsChanged) => {
+                let mut running = slot.lock().await;
+                if let Some(old) = running.take() {
+                    old.shutdown().await;
+                }
+                *running = start_mcp(&service, &data_dir).await;
+            }
+            Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+            Err(broadcast::error::RecvError::Closed) => break,
+        }
+    }
+}
+
+/// The texts of an OS notification for a core `NotificationRequested`
+/// (M2c): title and body rendered in the app's language.
+pub fn notification_texts(
+    service: &Service,
+    notification: &nail_api::triage::MailNotification,
+) -> (String, Option<String>) {
+    (
+        service.render_localized(&notification.title),
+        notification
+            .body
+            .as_ref()
+            .map(|b| service.render_localized(b)),
+    )
+}
+
+fn show_notification(
+    app: &AppHandle,
+    service: &Service,
+    notification: &nail_api::triage::MailNotification,
+) {
+    use tauri_plugin_notification::NotificationExt;
+    let (title, body) = notification_texts(service, notification);
+    let mut builder = app.notification().builder().title(title);
+    if let Some(body) = body {
+        builder = builder.body(body);
+    }
+    if notification.sound {
+        builder = builder.sound("Default");
+    }
+    if let Err(err) = builder.show() {
+        tracing::warn!(%err, "cannot show a notification");
+    }
+}
+
+/// Shows the core's notification requests as OS notifications (the web
+/// content gets no notification permission).
+async fn show_notifications(app: AppHandle, service: Service) {
+    let mut events = service.subscribe();
+    loop {
+        match events.recv().await {
+            Ok(Event::NotificationRequested { notification }) => {
+                show_notification(&app, &service, &notification);
+            }
+            Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+            Err(broadcast::error::RecvError::Closed) => break,
+        }
+    }
+}
+
+/// Tells the user why the app does not start (another Nail process holds
+/// the data directory).
+#[allow(unsafe_code)] // One MessageBoxW call.
+fn refuse_start(message: &str) {
+    tracing::error!("{message}");
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+        use windows::core::HSTRING;
+        // SAFETY: a modal message box without an owner window; both
+        // strings live until it returns.
+        unsafe {
+            MessageBoxW(
+                None,
+                &HSTRING::from(message),
+                &HSTRING::from("Nail"),
+                MB_OK | MB_ICONERROR,
+            );
         }
     }
 }
@@ -417,10 +515,27 @@ pub fn run() {
             // watcher can apply changes).
             let temp = args.demo_dir()?;
             let base = args.base_dir(temp.as_ref().map(tempfile::TempDir::path), portable::root());
+            let data_dir = args.service_options_in(base.as_deref())?.data_dir;
+            // One Nail per data directory (M2c): a headless `nail mcp` or a
+            // `nail serve` on the same data refuses to start while the app
+            // runs, and the app while one of them runs.
+            let lock = match paths::lock_data_dir(&data_dir, "desktop", args.locale.as_deref()) {
+                Ok(lock) => lock,
+                Err(message) => {
+                    refuse_start(&message);
+                    std::process::exit(1);
+                }
+            };
             let service =
                 tauri::async_runtime::block_on(async { open_service_in(&args, base.as_deref()) })?;
-            let data_dir = args.service_options_in(base.as_deref())?.data_dir;
-            let mcp = tauri::async_runtime::block_on(start_mcp(&service, &data_dir));
+            let mcp: McpSlot = std::sync::Arc::new(tokio::sync::Mutex::new(
+                tauri::async_runtime::block_on(start_mcp(&service, &data_dir)),
+            ));
+            tauri::async_runtime::spawn(restart_mcp_on_change(
+                service.clone(),
+                std::sync::Arc::clone(&mcp),
+                data_dir.clone(),
+            ));
             // The window is created here (not from the config) so that a
             // seeded run keeps its WebView2 profile in the temporary
             // directory too, apart from the real one (and a portable run
@@ -457,9 +572,11 @@ pub fn run() {
             });
             app.manage(Running {
                 mcp,
+                _lock: lock,
                 temp,
                 _remote_ui: remote_ui,
             });
+            tauri::async_runtime::spawn(show_notifications(app.handle().clone(), service.clone()));
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(forward_events(
                 service.clone(),
@@ -635,6 +752,98 @@ mod tests {
         assert_eq!(info.url.as_deref(), Some(running.url().as_str()));
         running.shutdown().await;
         service.shutdown().await;
+    }
+
+    /// M2c: the MCP server uses the port of the settings and restarts on
+    /// the new one when they change.
+    #[tokio::test]
+    async fn the_mcp_server_follows_its_port_setting() {
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let args = AppArgs {
+            data_dir: Some(data.path().into()),
+            config_dir: Some(config.path().into()),
+            seed: Some("demo".into()),
+            ..AppArgs::default()
+        };
+        let service = open_service(&args).unwrap();
+        let free = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let (response, _) = call(
+            &service,
+            Request::UpdateMcpSettings {
+                settings: nail_api::McpSettings { port: Some(free) },
+            },
+        )
+        .await;
+        assert!(
+            matches!(response, Response::McpSettings { .. }),
+            "{response:?}"
+        );
+        let slot: McpSlot = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+        let task = tokio::spawn(restart_mcp_on_change(
+            service.clone(),
+            std::sync::Arc::clone(&slot),
+            data.path().to_path_buf(),
+        ));
+        tokio::task::yield_now().await;
+        service.broadcast(Event::McpSettingsChanged);
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if slot.lock().await.is_some() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let url = slot.lock().await.as_ref().unwrap().url();
+        assert!(url.contains(&format!(":{free}")), "{url}");
+        task.abort();
+        if let Some(running) = slot.lock().await.take() {
+            running.shutdown().await;
+        }
+        service.shutdown().await;
+    }
+
+    /// M2c: OS notifications show the core's texts in the app's language.
+    #[test]
+    fn notification_texts_are_rendered() {
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let args = AppArgs {
+            data_dir: Some(data.path().into()),
+            config_dir: Some(config.path().into()),
+            seed: Some("demo".into()),
+            ..AppArgs::default()
+        };
+        let service = open_service(&args).unwrap();
+        let notification = nail_api::triage::MailNotification {
+            id: "n".into(),
+            tag: "t".into(),
+            kind: nail_api::triage::NotificationKind::NewMail,
+            account_id: None,
+            folder_id: None,
+            message_ids: Vec::new(),
+            title: nail_api::LocalizedMessage::new("notification-new-mail-title")
+                .arg("count", 2u64)
+                .arg("account", "Work"),
+            body: Some(
+                nail_api::LocalizedMessage::new("notification-new-mail-body")
+                    .arg("sender", "Bob")
+                    .arg("subject", "Lunch"),
+            ),
+            sound: false,
+        };
+        let (title, body) = notification_texts(&service, &notification);
+        assert!(!title.contains("notification-"), "{title}");
+        assert!(title.contains("Work"), "{title}");
+        let body = body.unwrap();
+        assert!(body.contains("Bob") && body.contains("Lunch"), "{body}");
     }
 
     /// Regression: a lagging forwarder only logged the loss, so the UI

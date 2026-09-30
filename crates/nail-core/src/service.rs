@@ -32,8 +32,13 @@ pub const EVENT_CAPACITY: usize = 256;
 pub const MAX_PAGE_SIZE: u32 = 1000;
 
 /// Days the MCP activity log and the rule-run history are kept; older
-/// entries are removed when the engines start.
+/// entries are removed when the engines start and then daily. (The remote
+/// security log follows its own setting,
+/// `RemoteUiSettings::audit_retention_days`.)
 pub const HISTORY_RETENTION_DAYS: i64 = 90;
+
+/// How often old history is purged while the core runs.
+pub const HISTORY_PURGE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Timing of the background engines (reconnects, send retries). The
 /// defaults suit real servers; tests and demos shorten them.
@@ -58,6 +63,14 @@ pub struct EngineTiming {
     pub draft_upload: Duration,
     /// How often scheduled rules (`schedule`, `older-than`) are checked.
     pub rule_tick: Duration,
+    /// Longest sleep of the snooze wake task (so clock changes are
+    /// noticed).
+    pub snooze_poll: Duration,
+    /// A burst of new mail becomes one notification this long after its
+    /// last message…
+    pub notification_quiet: Duration,
+    /// …and at the latest this long after its first.
+    pub notification_max_delay: Duration,
 }
 
 impl Default for EngineTiming {
@@ -70,6 +83,9 @@ impl Default for EngineTiming {
             healthy_after: Duration::from_secs(60),
             draft_upload: Duration::from_secs(5),
             rule_tick: Duration::from_secs(60),
+            snooze_poll: Duration::from_secs(60),
+            notification_quiet: Duration::from_secs(3),
+            notification_max_delay: Duration::from_secs(15),
         }
     }
 }
@@ -85,6 +101,9 @@ impl EngineTiming {
             healthy_after: Duration::from_secs(5),
             draft_upload: Duration::from_millis(300),
             rule_tick: Duration::from_secs(1),
+            snooze_poll: Duration::from_secs(1),
+            notification_quiet: Duration::from_secs(1),
+            notification_max_delay: Duration::from_secs(3),
         }
     }
 }
@@ -126,6 +145,10 @@ pub struct ServiceOptions {
     /// (rustls, platform verifier, system DNS). Seeded runs pass one that
     /// reaches only their mock servers.
     pub proxy_fetcher: Option<nail_proxy::Fetcher>,
+    /// The time snooze, quiet hours and notification batching see; `None`
+    /// = the system clock. Seeded demo runs pass an
+    /// [`AdjustableClock`](crate::AdjustableClock) the tests move.
+    pub clock: Option<Arc<dyn nail_triage::Clock>>,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -143,6 +166,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("fixed_trust_anchors", &self.trust_anchors.is_some())
             .field("key_lookup_mock", &self.key_lookup.is_some())
             .field("proxy_fetcher", &self.proxy_fetcher.is_some())
+            .field("custom_clock", &self.clock.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -165,6 +189,7 @@ impl ServiceOptions {
             trust_anchors: None,
             key_lookup: None,
             proxy_fetcher: None,
+            clock: None,
         }
     }
 }
@@ -218,6 +243,14 @@ pub(crate) struct Inner {
     pub(crate) remote: crate::remote::RemoteState,
     /// Launch requests waiting for the UI (M2b).
     pub(crate) launches: Mutex<Vec<nail_api::LaunchRequest>>,
+    /// The time the triage logic sees (M2c).
+    pub(crate) clock: Arc<dyn nail_triage::Clock>,
+    /// Sieve uploads (M2c).
+    pub(crate) sieve: crate::sieve::SieveCtl,
+    /// The snooze scheduler (M2c).
+    pub(crate) snooze: crate::snooze::SnoozeCtl,
+    /// New-mail notification batching (M2c).
+    pub(crate) notify: crate::notify::NotifyCtl,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -363,6 +396,13 @@ impl Service {
                 vault,
                 remote,
                 launches: Mutex::new(Vec::new()),
+                clock: options
+                    .clock
+                    .clone()
+                    .unwrap_or_else(|| Arc::new(nail_triage::SystemClock)),
+                sieve: crate::sieve::SieveCtl::default(),
+                snooze: crate::snooze::SnoozeCtl::default(),
+                notify: crate::notify::NotifyCtl::new(&options.timing),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -387,28 +427,41 @@ impl Service {
         background.push(tokio::spawn(crate::search::run_committer(self.clone())));
         background.push(tokio::spawn(crate::search::run_maintenance(self.clone())));
         background.push(tokio::spawn(crate::rules::run_rules(self.clone())));
+        // M2c: snooze wake-ups, notification batches, Sieve uploads.
+        background.push(tokio::spawn(crate::snooze::run_snoozes(self.clone())));
+        background.push(tokio::spawn(crate::notify::run_notifications(self.clone())));
+        background.push(tokio::spawn(crate::sieve::run_sieve(self.clone())));
         // An interrupted switch of encryption at rest resumes (ADR 0032).
         background.push(tokio::spawn(crate::vault::resume_migration(self.clone())));
         let service = self.clone();
         background.push(tokio::spawn(async move {
-            if let Err(err) = service.purge_history(crate::engine::unix_now()).await {
-                tracing::warn!(%err, "cannot purge old history");
+            // At start, then daily (M2b follow-up: the remote security log
+            // is kept as long as its setting says).
+            loop {
+                if let Err(err) = service.purge_history(crate::engine::unix_now()).await {
+                    tracing::warn!(%err, "cannot purge old history");
+                }
+                tokio::time::sleep(HISTORY_PURGE_INTERVAL).await;
             }
         }));
     }
 
-    /// Removes MCP audit entries, finished rule runs and remote-UI audit
-    /// entries older than [`HISTORY_RETENTION_DAYS`] before `now` (Unix
-    /// seconds), and remote-content allows of messages that no longer
-    /// exist. Returns how many MCP entries and rule runs were removed.
+    /// Removes MCP audit entries and finished rule runs older than
+    /// [`HISTORY_RETENTION_DAYS`] before `now` (Unix seconds), remote-UI
+    /// audit entries older than the remote settings'
+    /// `audit_retention_days`, and remote-content allows of messages that
+    /// no longer exist. Returns how many MCP entries and rule runs were
+    /// removed.
     pub async fn purge_history(&self, now: i64) -> Result<(usize, usize)> {
         let before = now - HISTORY_RETENTION_DAYS * 86_400;
+        let remote_before =
+            now - i64::from(self.remote_ui_settings().audit_retention_days.max(1)) * 86_400;
         Ok(self
             .inner
             .store
             .call(move |s| {
                 let purged = (s.purge_mcp_audit(before)?, s.purge_rule_runs(before)?);
-                s.purge_remote_audit(before)?;
+                s.purge_remote_audit(remote_before)?;
                 s.purge_stale_remote_content_allows()?;
                 Ok(purged)
             })
@@ -538,6 +591,24 @@ impl Service {
     /// The search index (replaced while encryption at rest converts it).
     pub fn search_index(&self) -> Arc<SearchIndex> {
         self.inner.search.get()
+    }
+
+    /// A localized message in the service's language (English fallback
+    /// per key): for texts the shells show themselves, such as OS
+    /// notifications.
+    pub fn render_localized(&self, message: &nail_api::LocalizedMessage) -> String {
+        crate::strings::render(self.inner.locale.as_deref(), message)
+    }
+
+    /// The MCP server port the settings ask for (0 = any free port).
+    pub async fn mcp_port(&self) -> u16 {
+        self.inner
+            .store
+            .call(|s| s.mcp_settings())
+            .await
+            .ok()
+            .and_then(|s| s.port)
+            .unwrap_or(0)
     }
 
     /// The secret storage (keychain, or the store given in the options).

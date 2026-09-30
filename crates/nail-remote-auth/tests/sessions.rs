@@ -284,3 +284,26 @@ async fn sessions_record_activity_and_the_client() {
     let stored = h.store.get_remote_session(&ctx.session.id).unwrap();
     assert_eq!(stored.last_seen_at, ctx.session.last_seen_at);
 }
+
+/// M2b follow-up: the sandbox origin checks which session a render token
+/// belongs to without touching or rotating it.
+#[tokio::test]
+async fn the_session_of_cookies_is_found_without_touching_it() {
+    let h = Harness::new();
+    let ada = h.user("ada", false).await;
+    let phone = h.paired(&ada, "192.0.2.10").await;
+    let laptop = h.paired(&ada, "192.0.2.11").await;
+    let ctx = phone.clone().resolve(&h).unwrap();
+    assert_eq!(h.auth.session_id_of(&phone.cookies()), Some(ctx.session.id));
+    // Another device's cookie with this session, or none: no session.
+    let mut mixed = phone.clone();
+    mixed.device = laptop.device.clone();
+    assert_eq!(h.auth.session_id_of(&mixed.cookies()), None);
+    let mut stolen = phone.clone();
+    stolen.device = None;
+    assert_eq!(h.auth.session_id_of(&stolen.cookies()), None);
+    assert_eq!(
+        h.auth.session_id_of(&Browser::new("192.0.2.1").cookies()),
+        None
+    );
+}

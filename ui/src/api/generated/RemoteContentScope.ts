@@ -3,4 +3,4 @@
 /**
  * What an allow-list entry covers.
  */
-export type RemoteContentScope = "message" | "sender" | "domain";
+export type RemoteContentScope = "message" | "sender" | "domain" | "once";

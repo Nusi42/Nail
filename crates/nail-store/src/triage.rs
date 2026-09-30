@@ -468,6 +468,44 @@ impl Store {
         })
     }
 
+    /// Forgets the training of one message (undoing a first "Mark as junk /
+    /// not junk"): removes its training row and lowers each of its tokens'
+    /// counts of that class by one (never below zero), dropping tokens left
+    /// at 0 / 0, in one transaction. Returns whether it was trained.
+    pub fn untrain_junk(&self, account: &AccountId, message_key: &str) -> Result<bool> {
+        self.with_tx(|tx| {
+            let previous: Option<(bool, String)> = tx
+                .query_row(
+                    "SELECT junk, tokens FROM junk_training
+                     WHERE account_id = ?1 AND message_key = ?2",
+                    params![account.as_str(), message_key],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            let Some((was_junk, old)) = previous else {
+                return Ok(false);
+            };
+            let old: Vec<String> = serde_json::from_str(&old)?;
+            let column = if was_junk { "junk" } else { "ham" };
+            let mut stmt = tx.prepare_cached(&format!(
+                "UPDATE junk_tokens SET {column} = MAX({column} - 1, 0)
+                 WHERE account_id = ?1 AND token = ?2"
+            ))?;
+            for token in old.iter().filter(|t| is_token_hash(t)) {
+                stmt.execute(params![account.as_str(), token])?;
+            }
+            tx.execute(
+                "DELETE FROM junk_tokens WHERE account_id = ?1 AND junk = 0 AND ham = 0",
+                [account.as_str()],
+            )?;
+            tx.execute(
+                "DELETE FROM junk_training WHERE account_id = ?1 AND message_key = ?2",
+                params![account.as_str(), message_key],
+            )?;
+            Ok(true)
+        })
+    }
+
     /// The classifier's counters for an account.
     pub fn junk_stats(&self, account: &AccountId) -> Result<JunkStats> {
         self.with_conn(|conn| {
@@ -748,6 +786,20 @@ impl Store {
                      other_scripts = ?5, last_error = NULL
                  WHERE account_id = ?1",
                 params![account.as_str(), hash, now, ext, other],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Forgets the recorded upload (Nail's script was removed from the
+    /// server, or ManageSieve was switched off); keeps the vacation
+    /// settings.
+    pub fn clear_sieve_upload(&self, account: &AccountId) -> Result<()> {
+        self.with_conn(|conn| {
+            conn.execute(
+                "UPDATE sieve_state SET script_hash = NULL, uploaded_at = NULL, last_error = NULL
+                 WHERE account_id = ?1",
+                [account.as_str()],
             )?;
             Ok(())
         })

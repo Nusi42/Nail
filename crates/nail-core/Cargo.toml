@@ -37,6 +37,9 @@ nail-vault.workspace = true
 # M2b: remote-UI authentication and the remote-content proxy (ADRs 0037, 0038).
 nail-remote-auth.workspace = true
 nail-proxy.workspace = true
+# M2c: Sieve / ManageSieve and the junk, snooze and notification logic (ADRs 0044, 0045).
+nail-sieve.workspace = true
+nail-triage.workspace = true
 url.workspace = true
 nail-testkit = { workspace = true, optional = true }
 nail-testkit-net = { workspace = true, optional = true }

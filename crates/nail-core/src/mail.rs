@@ -101,7 +101,11 @@ impl Service {
             .call(move |s| {
                 let mut all = Vec::new();
                 for member in &members {
-                    all.extend(s.list_folders(member)?);
+                    all.extend(
+                        s.list_folders(member)?
+                            .into_iter()
+                            .filter(|f| !crate::junk::is_snoozed_folder(f)),
+                    );
                 }
                 Ok(all)
             })
@@ -120,7 +124,10 @@ impl Service {
             return Ok(folders.into_iter().map(|v| v.folder).collect());
         }
         let id = account.clone();
-        Ok(self.inner.store.call(move |s| s.list_folders(&id)).await?)
+        let mut folders = self.inner.store.call(move |s| s.list_folders(&id)).await?;
+        // The hidden folder snoozed mail waits in (M2c).
+        folders.retain(|f| !crate::junk::is_snoozed_folder(f));
+        Ok(folders)
     }
 
     /// The real folders behind a folder id. Fails with `not_found` for an
