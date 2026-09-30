@@ -38,6 +38,8 @@ const quote = (s: string) => `"${s}"`;
 
 export default defineConfig({
   testDir: "./tests",
+  // Builds the "Follow up" example plug-in for plugins.spec.ts (M2d).
+  globalSetup: "./support/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

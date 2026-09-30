@@ -135,6 +135,14 @@ choose a language when you start it, for example `nail serve --locale de`,
 or by adding `?lang=de` to the address in the browser. Any text that has no
 translation yet is shown in English.
 
+Dates and times ("yesterday", "5 minutes ago", "5 Mar 2031, 14:30") are
+written the way Nail's language writes them, not the way your browser
+would: with Nail set to German in an English browser you see German dates,
+and in a browser language Nail does not have yet (for example French) the
+dates are English like the rest of Nail. Date fields you type into (for
+example the snooze or the "send later" time) come from the browser or
+Windows and follow their language.
+
 ## Where Nail keeps your data
 
 | Folder | Contents |

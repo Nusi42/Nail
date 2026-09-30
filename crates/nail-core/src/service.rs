@@ -149,6 +149,9 @@ pub struct ServiceOptions {
     /// = the system clock. Seeded demo runs pass an
     /// [`AdjustableClock`](crate::AdjustableClock) the tests move.
     pub clock: Option<Arc<dyn nail_triage::Clock>>,
+    /// Limits of the plug-in sandbox (M2d): CPU budget per call, memory,
+    /// pending calls, … (`HostLimits::default()`).
+    pub plugin_limits: nail_plugins::HostLimits,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -167,6 +170,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("key_lookup_mock", &self.key_lookup.is_some())
             .field("proxy_fetcher", &self.proxy_fetcher.is_some())
             .field("custom_clock", &self.clock.is_some())
+            .field("plugin_limits", &self.plugin_limits)
             .finish_non_exhaustive()
     }
 }
@@ -190,6 +194,7 @@ impl ServiceOptions {
             key_lookup: None,
             proxy_fetcher: None,
             clock: None,
+            plugin_limits: nail_plugins::HostLimits::default(),
         }
     }
 }
@@ -251,6 +256,8 @@ pub(crate) struct Inner {
     pub(crate) snooze: crate::snooze::SnoozeCtl,
     /// New-mail notification batching (M2c).
     pub(crate) notify: crate::notify::NotifyCtl,
+    /// The plug-in host, packages and catalogs (M2d).
+    pub(crate) plugins: crate::plugin_host::PluginsCtl,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -403,6 +410,10 @@ impl Service {
                 sieve: crate::sieve::SieveCtl::default(),
                 snooze: crate::snooze::SnoozeCtl::default(),
                 notify: crate::notify::NotifyCtl::new(&options.timing),
+                plugins: crate::plugin_host::PluginsCtl::new(
+                    (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
+                    options.plugin_limits.clone(),
+                ),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -433,6 +444,11 @@ impl Service {
         background.push(tokio::spawn(crate::sieve::run_sieve(self.clone())));
         // An interrupted switch of encryption at rest resumes (ADR 0032).
         background.push(tokio::spawn(crate::vault::resume_migration(self.clone())));
+        // M2d: the enabled plug-ins.
+        let plugins = self.clone();
+        background.push(tokio::spawn(async move {
+            plugins.start_enabled_plugins().await;
+        }));
         let service = self.clone();
         background.push(tokio::spawn(async move {
             // At start, then daily (M2b follow-up: the remote security log
@@ -475,6 +491,7 @@ impl Service {
         for task in tasks {
             task.abort();
         }
+        crate::plugin_host::shutdown(self);
         self.inner.engines.stop_all().await;
     }
 

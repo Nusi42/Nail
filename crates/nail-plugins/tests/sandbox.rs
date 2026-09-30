@@ -267,6 +267,37 @@ async fn unhandled_rejections_are_logged_not_fatal() {
     );
 }
 
+/// A call that fails at once (a denied permission) and is awaited inside
+/// `try` is handled: no "unhandled rejection" line.
+#[tokio::test(flavor = "multi_thread")]
+async fn awaited_immediate_rejections_are_not_reported() {
+    let fake = Fake::new();
+    let host = host(&fake);
+    let js = r#"
+      export default {
+        async activate() {
+          try { await nail.storage.get("x"); } catch (e) { nail.log.info("CAUGHT " + e.code); }
+        },
+      };
+    "#;
+    host.start(spec("careful", &[], js)).await.unwrap();
+    wait_for("the caught error", || {
+        fake.log_lines("careful")
+            .iter()
+            .any(|l| l.message == "CAUGHT forbidden")
+            .then_some(())
+    })
+    .await;
+    assert!(
+        !fake.log_lines("careful").iter().any(|l| l
+            .localized
+            .as_ref()
+            .is_some_and(|m| m.id == "plugin-host-unhandled-rejection")),
+        "{:#?}",
+        fake.log_lines("careful")
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn plugins_have_no_host_access() {
     let fake = Fake::new();

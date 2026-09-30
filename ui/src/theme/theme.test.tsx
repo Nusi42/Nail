@@ -91,6 +91,30 @@ describe("theme compiler", () => {
     expect(out.css).toContain('[data-part="text"] {\n  text-wrap: balance;\n}');
   });
 
+  it("styles plug-in parts: base rules, defaults and one plug-in's parts", () => {
+    // Structural base rules of the plug-in UI and the default theme's styles.
+    expect(css).toContain('[data-part="plugin.dialog.backdrop"] { position: fixed;');
+    expect(css).toContain('[data-part="plugin.button"][data-variant~="primary"] {');
+    // `plugin.<id>.<part>` is one plug-in's generic part.
+    expect(
+      ruleSelector({
+        selector: "plugin.follow-up.button",
+        states: [],
+        conditions: [],
+        ancestors: [],
+      }),
+    ).toBe('[data-part="plugin.button"][data-plugin="follow-up"]');
+    // Plug-in widgets outside the generic set keep their own part.
+    expect(
+      ruleSelector({
+        selector: "plugin-manager.plugin",
+        states: [],
+        conditions: [],
+        ancestors: [],
+      }),
+    ).toBe('[data-part="plugin-manager.plugin"]');
+  });
+
   it("validates values", () => {
     expect(isSafeValue("0 1px 3px rgb(0 0 0 / 0.12)")).toBe(true);
     expect(isSafeValue('"Segoe UI", sans-serif')).toBe(true);

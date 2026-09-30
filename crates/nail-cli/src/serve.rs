@@ -227,6 +227,14 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     // desktop's settings start, restart and stop it (ADR 0041).
     let remote_ui = RemoteUiHost::start(service.clone(), RemoteUiOptions::new(ui_dir));
     let url = server.url();
+    // `nail plugin dev` finds this Nail through the data directory.
+    let _endpoint = match crate::plugin::UiEndpoint::write(&data_dir, &url) {
+        Ok(endpoint) => Some(endpoint),
+        Err(err) => {
+            tracing::warn!(%err, "cannot write the UI endpoint file");
+            None
+        }
+    };
     // The URL is the only thing written to stdout, so scripts (and the
     // Playwright harness) can read it.
     {

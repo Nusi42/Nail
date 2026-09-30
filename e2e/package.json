@@ -10,8 +10,10 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@nail/plugin-api": "*",
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
     "prettier": "^3.9.9",
     "typescript": "~6.0.3"
   }

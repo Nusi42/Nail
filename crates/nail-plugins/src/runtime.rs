@@ -1098,10 +1098,24 @@ enum Call {
 struct Sandbox {
     load: Persistent<Function<'static>>,
     dispatch: Persistent<Function<'static>>,
+    /// Promises rejected without a handler during the current turn; a
+    /// handler attached before the turn ends (an `await` of a call that
+    /// failed at once) takes them off again. What is left is logged.
+    rejections: Rejections,
     ctx: Context,
     rt: Runtime,
     budget: Arc<Budget>,
     state: Rc<RefCell<State>>,
+}
+
+/// Rejected promises of the current turn with their reason's text.
+type Rejections = Rc<RefCell<Vec<(Persistent<Value<'static>>, String)>>>;
+
+impl Drop for Sandbox {
+    fn drop(&mut self) {
+        // Saved values must go before their runtime.
+        self.rejections.borrow_mut().clear();
+    }
 }
 
 impl Sandbox {
@@ -1129,26 +1143,26 @@ impl Sandbox {
             },
         );
         let tracked = Rc::clone(&state);
+        let rejections: Rejections = Rc::new(RefCell::new(Vec::new()));
+        let pending = Rc::clone(&rejections);
         rt.set_host_promise_rejection_tracker(Some(Box::new(
-            move |ctx, _promise, reason, handled| {
+            move |ctx, promise, reason, handled| {
+                let Ok(mut pending) = pending.try_borrow_mut() else {
+                    return;
+                };
                 if handled {
+                    pending.retain(|(saved, _)| {
+                        saved.clone().restore(&ctx).map_or(true, |p| p != promise)
+                    });
                     return;
                 }
                 let text = describe(&ctx, reason);
-                if let Ok(mut s) = tracked.try_borrow_mut() {
-                    if text.contains("out of memory") {
-                        s.fatal.get_or_insert(text.clone());
-                    }
-                    s.log(
-                        PluginLogLevel::Error,
-                        PluginLogSource::Host,
-                        format!("unhandled promise rejection: {text}"),
-                        Some(
-                            LocalizedMessage::new(l10n::UNHANDLED_REJECTION)
-                                .arg("detail", cut(&text, 500)),
-                        ),
-                    );
+                if text.contains("out of memory")
+                    && let Ok(mut s) = tracked.try_borrow_mut()
+                {
+                    s.fatal.get_or_insert(text.clone());
                 }
+                pending.push((Persistent::save(&ctx, promise), text));
             },
         )));
         let ctx = Context::full(&rt).map_err(|e| e.to_string())?;
@@ -1173,6 +1187,7 @@ impl Sandbox {
         Ok(Self {
             load,
             dispatch,
+            rejections,
             ctx,
             rt,
             budget,
@@ -1221,6 +1236,23 @@ impl Sandbox {
             }
         }
         let fired = self.budget.disarm();
+        // Rejections still unhandled after the turn: logged, not a crash.
+        let unhandled: Vec<String> = self
+            .rejections
+            .borrow_mut()
+            .drain(..)
+            .map(|(_, text)| text)
+            .collect();
+        for text in unhandled {
+            self.state.borrow_mut().log(
+                PluginLogLevel::Error,
+                PluginLogSource::Host,
+                format!("unhandled promise rejection: {text}"),
+                Some(
+                    LocalizedMessage::new(l10n::UNHANDLED_REJECTION).arg("detail", cut(&text, 500)),
+                ),
+            );
+        }
         let (fatal, dropped) = {
             let mut s = self.state.borrow_mut();
             (s.fatal.take(), std::mem::take(&mut s.dropped_logs))

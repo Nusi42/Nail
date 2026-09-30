@@ -72,7 +72,16 @@ config-plugin-widget-renamed = `{ $node }` is not a widget: place plug-in panels
 
 ## The `nail plugin` command
 
-cli-plugin-dev-unavailable = Plug-in development is not available yet in this version of Nail ({ $folder }).
+cli-plugin-dev-no-nail = Nail is not running with its web UI here. Start `nail serve` (or pass --url with the address it printed, or --data-dir with its data directory).
+cli-plugin-dev-folder = Cannot use the folder { $folder }.
+# `detail` is the reason in English (network library text).
+cli-plugin-dev-connect = Cannot connect to Nail at { $url }: { $detail }
+cli-plugin-dev-closed = The connection to Nail closed.
+# `detail` is Nail's reason (already in the user's language).
+cli-plugin-dev-refused = Nail did not load the plug-in: { $detail }
+cli-plugin-dev-loaded = Loaded { $plugin } { $version } from { $folder }. Changes reload it; press Ctrl+C to close this console (the plug-in stays loaded).
+# One console line: `level` (debug, info, warn, error), `source` (plugin, host, api) and the text.
+cli-plugin-dev-line = [{ $level }] { $source }: { $text }
 
 ## The plug-in host's own log lines (WP61; shown in the plug-in manager and by `nail plugin dev`)
 

@@ -101,16 +101,60 @@ npm run watch            # in one terminal: rebuild on every change
 nail plugin dev .        # in another: load the folder into the running Nail
 ```
 
-Nail reloads the plug-in whenever `dist/index.js` or `manifest.json`
-changes, and the terminal shows its log, errors and API calls (`console.log`
-and `nail.log.*` write there). Dev loading works only in the desktop app.
+`nail plugin dev` loads the folder into the Nail that runs with its web UI
+(`nail serve`): it finds it through the data directory, or pass
+`--data-dir <dir>` or `--url <the address nail serve printed>`. Every
+permission the manifest declares is granted, for all accounts. Nail
+reloads the plug-in whenever a file in the folder changes (`node_modules`
+and folders starting with `.` are ignored; a manifest with problems is
+reported and the plug-in stays stopped until it is fixed), and the
+terminal shows its log, errors and every API call with its outcome
+(`console.log` and `nail.log.*` write there). Ctrl+C closes the console;
+the plug-in stays loaded. In the desktop app, use **Load a development
+folder…** in Settings → Plug-ins instead and read the log there.
 
 ## 4. Install the package
 
-Install `dist/<id>.nailplugin` from the plug-in manager ("Install from
-file"). Nail shows the permissions and the package's SHA-256 fingerprint
+Install `dist/<id>.nailplugin` from Settings → Plug-ins ("Install a
+plug-in…"). Nail shows the permissions and the package's SHA-256 fingerprint
 (`npm run package` prints it too), then suggests where the plug-in's buttons
 and panels go in `layout.kdl`.
+
+## The sandbox and its limits
+
+A plug-in runs in its own QuickJS runtime inside Nail. It has the
+JavaScript language, `nail`, `console`, `setTimeout` / `clearTimeout` and
+`queueMicrotask` — no Node.js or browser APIs, no files, processes or
+sockets. Imports work only relative to the plug-in's own files
+(`./util.js`); bundle everything else (the template's esbuild build does).
+
+| Limit | Value |
+| --- | --- |
+| CPU time per call (a command, a dialog answer, a panel render, a timer, a resolved API call) | 1 s |
+| CPU time while starting (`activate`) / time for `activate` to finish | 2 s / 30 s |
+| Memory | 64 MiB (deep recursion throws a `RangeError` you can catch) |
+| Pending API calls | 64 |
+| Open dialogs | 5 |
+| Timers | 100 |
+| Notifications | 20 per minute |
+| Log lines | 200 per call |
+| `nail.http.fetch` | 1 MiB request body, 5 MiB response, text bodies |
+
+**Crashes.** A plug-in that exceeds its CPU time or memory, or whose
+command, panel, dialog action, timer or `activate` throws (or returns a
+rejected promise), is stopped at once and marked in the plug-in manager
+until the user turns it on again. A rejected promise nobody handles is
+only logged. Catch the errors you expect: every refused call rejects with a
+`NailError` whose `code` says why (`forbidden`, `not_found`, `too_large`,
+`rate_limited`, …).
+
+**`nail.http.fetch`** reaches only the hosts of the plug-in's `network:`
+permissions, over `https:` on the standard port (`http:` and other ports
+only for `127.0.0.1` when the permission names that address). Nail makes
+the request: redirects are checked against the same hosts, host names
+never lead to local or private network addresses, and the headers `Host`,
+`Cookie`, `Content-Length`, connection headers and `Proxy-*` are refused.
+Methods: GET, HEAD, POST, PUT, PATCH, DELETE.
 
 ## Testing a plug-in
 

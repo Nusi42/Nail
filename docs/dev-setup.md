@@ -143,6 +143,10 @@ How it works:
   config and WebView2 profile in a temporary directory. The test always
   runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`,
   which the CI workflow sets after `npm run build:desktop` (ADR 0028).
+- The global setup (`e2e/support/global-setup.ts`) builds the "Follow up"
+  example plug-in once (esbuild + `@nail/plugin-api/tools`' `packPlugin`,
+  `e2e/support/plugins.ts`) into `%LOCALAPPDATA%\nail-build\e2e\plugins\`
+  and hands the package path to the workers (`NAIL_E2E_FOLLOW_UP`).
 - Traces, screenshots and the CI HTML report go to
   `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
   `NAIL_BUILD_DIR` overrides the base), not into the repository.
@@ -165,6 +169,8 @@ How it works:
 | `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server; a second app started with a `mailto:` link opens the composer with its fields |
 | `e2e/tests/remote.spec.ts` | the remote UI (turned on over the local WebSocket: TLS with a self-signed certificate, host name `localhost`) in a second browser context: pairing with a code from the desktop's dialog (fingerprint, used code refused, Trusted Types block an injected script), passkey registration and login with a CDP virtual authenticator, password + TOTP (a used code refused), password guessing slowed down (backoff, audit), session revoke on the desktop logs the browser out, internet mode locked in the settings and in the core, the local UI's CSP blocking an inline script (`e2e/support/remote.ts`: `rpc`, `enableRemoteUi`, `totp`, `trustingBrowser`) |
 | `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed; "Load once" loads without adding an allow-list entry |
+| `e2e/tests/plugins.spec.ts` | M2d plug-ins (private `--seed demo` each): the example installed through Settings → Plug-ins with its permissions, placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, stored reminder, notification; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
+| `e2e/tests/a11y-windows.spec.ts` | axe on every layout window, settings tab (nested ones too) and feature dialog (incl. the plug-in install dialog) in default, high-contrast and dark mode against `--seed demo-multi`; checks its own coverage against the layout |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 
 ### Generated files and snapshots
@@ -176,6 +182,7 @@ regenerate it with the matching command:
 | --- | --- |
 | `ui/src/api/generated/` (TypeScript types from `nail-api`) | `npm run gen:api` |
 | `packages/plugin-api/src/generated/` (plug-in-facing TypeScript types from `nail-api`, M2d) | `npm run gen:api` |
+| Reference sections of `userDocs/en/plugins/api-reference.md` and `components.md` (from the SDK types and `ui.rs` doc comments) | `npm run docs -w packages/plugin-api` |
 | `crates/nail-config/schema/*.schema.json` | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema` |
 | `crates/nail-mime/tests/snapshots/` (insta) | `INSTA_UPDATE=always cargo test -p nail-mime --test corpus`, or `cargo insta review` |
 | `crates/nail-api/fixtures/default-{theme,layout}.json` (after changing `defaults/*.kdl`) | `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults`, then `npx prettier --write crates/nail-api/fixtures` |
@@ -252,6 +259,25 @@ Nail runs on the data directory, `nail mcp` starts one without a window
 the client is connected. One process per data directory: `nail serve`,
 the desktop app and a headless `nail mcp` take `nail.lock`
 (`DataDirLock`); the desktop app shows who holds it and exits.
+
+#### Plug-ins and `nail plugin dev`
+
+Plug-ins run inside the core (ADR 0055): installed packages are kept in
+`<data-dir>/plugins/<id>.nailplugin` and verified by hash at every start.
+To develop one:
+
+```sh
+node packages/create-nail-plugin/index.mjs <dir> [--id ID] [--name NAME] [--sdk PATH]
+npm run package --prefix examples/follow-up    # build + pack the example (examples/follow-up/dist, gitignored)
+nail plugin dev <folder> [--url URL | --data-dir DIR]
+```
+
+`nail serve` writes `<data-dir>/ui-endpoint.json` with its URL;
+`nail plugin dev` finds it there (or takes `--url`), loads the folder with
+every declared permission over the local WebSocket (`LoadDevPlugin`),
+reloads it on changes and prints its log (host lines, its own lines, API
+calls) until Ctrl+C. The desktop app has no such endpoint: use "Load a
+development folder…" in Settings → Plug-ins there.
 
 #### Test controls (`--seed demo-multi` only)
 

@@ -145,3 +145,11 @@ server, and nothing returns after a further restart.
 - `security-import-issue-{unreadable,no-key,unusable,keychain,store}` in
   `security.ftl` are no longer produced; they go when `KeyTools.test.tsx`
   moves to the `pgp-import-*` ids.
+
+**Integration (WP64, ADR 0055):** all of the above is done — `core-crypto.ftl`
+is embedded, `CoreError::Pgp` carries `nail_pgp::Error::localized()`,
+`ImportMessageFile` uses `nail_mime::read_message_file` (`message-file-*`;
+`launch-error-*` removed from `core.ftl`), the old
+`security-import-issue-*` ids are gone, and `features/plugins/` formats
+dates through `i18n/format.ts` (the exception in `format.test.tsx` is
+removed).

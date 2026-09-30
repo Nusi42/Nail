@@ -23,6 +23,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 open.workspace = true
 tempfile.workspace = true
+# `nail plugin dev` talks to the running `nail serve` over its WebSocket (M2d).
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

@@ -4263,6 +4263,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "futures-util",
  "nail-api",
  "nail-config",
  "nail-core",
@@ -4274,8 +4275,10 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-tungstenite 0.30.0",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -4330,6 +4333,7 @@ dependencies = [
  "nail-mcp",
  "nail-mime",
  "nail-pgp",
+ "nail-plugins",
  "nail-proto-imap",
  "nail-proto-pop3",
  "nail-proto-smtp",
@@ -4349,6 +4353,7 @@ dependencies = [
  "pretty_assertions",
  "reqwest",
  "rmcp",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.11.0",

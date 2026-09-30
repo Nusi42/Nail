@@ -28,6 +28,7 @@ const MODES = [
 const FEATURE_DIALOGS = [
   "config-merge",
   "config-errors",
+  "plugin-install",
   "remote-pair",
   "security-autocrypt-import",
   "snooze",
@@ -233,6 +234,11 @@ for (const mode of MODES) {
       await customize.getByRole("button", { name: "Configuration errors" }).click();
       await sweep.scanWindow("config-errors");
       await sweep.close("config-errors");
+      // The plug-in install dialog (M2d), from the Plug-ins tab.
+      await top.getByRole("tab", { name: "Plug-ins", exact: true }).click();
+      await settings.getByRole("button", { name: "Install a plug-in…" }).click();
+      await sweep.scanWindow("plugin-install");
+      await sweep.close("plugin-install");
       await sweep.close("settings");
 
       // Coverage: every layout window, feature dialog and settings tab.

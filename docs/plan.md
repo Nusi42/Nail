@@ -217,6 +217,7 @@ Recorded by the M1b review (ADR 0028); each becomes an M2 work item unless noted
 ## 7. Milestone M2 — Security, remote UI, server-side rules, polish, plug-in preview (detailed)
 
 **Automated gate:** all suites green, including the Playwright scenarios listed per wave and the new CI jobs (installer build, desktop smoke test, real-server interop).
+*Status: passed locally* with the M2d integration — `cargo test --workspace`, clippy / fmt, Vitest, ESLint / tsc / Prettier and the full Playwright suite (incl. the desktop smoke test and every wave's scenarios) green on Windows. Still to see green: the CI jobs on GitHub (installer, desktop smoke with `NAIL_E2E_DESKTOP=1`, `deny` with advisories) and the interop job against real Dovecot / Stalwart servers (offline runs against the mocks pass). The human gates below stay open.
 **Human gates:** (1) a security review of crypto, the HTML sandbox and the remote UI (the design's M2 gate; the agents' security reviews prepare it, a human signs it off); (2) an external penetration test before the remote UI's internet mode can be unlocked — that stays locked in M2.
 
 **Scope decisions for M2**
@@ -347,6 +348,8 @@ Wire all of the above; **Playwright:** a rule shows as "server" and its Sieve sc
 
 ### Wave M2d — Plug-in preview
 
+**Status:** WP60–WP65 done (ADRs 0050–0055). The plug-in preview runs end to end: packages previewed and installed with the approved hash (kept packed in `<data-dir>/plugins`, verified at every start), one sandboxed QuickJS runtime per plug-in inside the core behind the permission gate, commands in toolbars / menus / keys, dialogs, notifications (OS ones on the desktop, respecting quiet hours), panels, storage, HTTP through the core, placements written to `layout.kdl` through the merge flow, the plug-in manager, `nail plugin dev` with hot reload; M2c carry-overs (turn-bounded UI tests, dates in the UI locale, localized crypto / message-file texts, the a11y sweep, snooze restarts). Suites green (`cargo test --workspace` 1893, Vitest 877 + SDK 49 + template/example 21, Playwright 72 scenarios incl. `plugins.spec.ts`, `a11y-windows.spec.ts` and the desktop smoke test). Next: the two reviews, fixes, an independent verify.
+
 #### WP60 — Contract (sequential)
 Plug-in manifest (id, name, version, apiVersion, main, permissions, contributes: commands, placements, keys, settings schema, locales), permission names for the preview (`mail.read`, `mail.read.body`, `calendar.read` placeholder, `ui.dialogs`, `notifications`, `storage`, `network:<domains>`), declarative UI component set (text, markdown, input, textarea, select, checkbox, date, contact picker, folder picker, message list, table, button, progress, image) as typed trees, plug-in admin requests (install from file/URL, enable, disable, uninstall, list, grants, logs).
 
@@ -355,14 +358,38 @@ Plug-in manifest (id, name, version, apiVersion, main, permissions, contributes:
 #### WP61 — Plug-in host (parallel)
 `nail-plugins`: one QuickJS runtime per plug-in via `rquickjs` (memory limit, interrupt-based CPU budget, no filesystem / process / sockets), permission gate in front of the Client API, API bindings for the preview (`nail.mail` read, `nail.ui.showDialog` / `notify` / `registerCommand`, `nail.storage`, `nail.http.fetch` restricted to declared domains through the core, `nail.settings`, `nail.log`), `.nailplugin` archive format (manifest.json + bundled JS + assets + locales), install / uninstall / enable, `nail plugin dev <folder>` with hot reload and a log console. Tests for isolation, limits and denied permissions.
 
+*Done (ADR 0051):* `PluginHost` (thread + runtime per plug-in, CPU budget per turn, 64 MiB heap, crash isolation), the gate (`mail.read` per account and re-filtered, `mail.read.body` never for encrypted mail, `network:` rules), `prelude.js`, packages kept packed and hash-checked, dev reload, plug-in catalogs.
+
 #### WP62 — Plug-in UI (parallel)
 React renderer for the declarative component set (all parts themeable, e.g. `plugin.<id>.*`), plug-in dialogs (modal and non-modal, returning values), toolbar / menu / key placements, plug-in panels as layout widgets (`plugin-panel "<id>.<name>"`), install dialog showing permissions, plug-in manager (enable/disable, grants, logs), placements proposed on install through the merge dialog.
+
+*Done (ADR 0052):* tree renderer (no plug-in HTML; Markdown parsed into elements), modal / non-modal dialogs per `client_id`, plug-in commands as layout actions (`usePluginLayout`), `plugin-panel`, toasts, install dialog with Allow / Deny and account limits, placements step, plug-in manager, mock host.
 
 #### WP63 — SDK and example (parallel)
 `@nail/plugin-api` TypeScript package (types generated from the Rust contract, a tiny JSX runtime producing the component trees), a starter template package (`npm create nail-plugin` equivalent inside the repo: `packages/create-nail-plugin`), the design's "Follow up" example plug-in (adapted to read-only: a button + dialog that stores a reminder in plug-in storage and shows a notification), `userDocs/en/plugins/` (getting started, API reference generated from the types, manifest reference, permissions).
 
+*Done (ADR 0053):* `@nail/plugin-api` (generated types, `nail` wrapper, `definePlugin`, JSX runtime, `createTestHost`, `checkManifest` / `packPlugin` / `nail-plugin`), `create-nail-plugin`, the "Follow up" example, `userDocs/en/plugins/` (reference sections generated).
+
+#### WP65 — M2c carry-overs (parallel)
+Deterministic full-app UI tests (turn-bounded waits), dates in the UI locale everywhere (`i18n/format.ts`), localized OpenPGP and message-file texts (`core-crypto.ftl`), an axe sweep of every window / tab / dialog in three modes, snooze across restarts.
+
+*Done (ADR 0054).*
+
 #### WP64 — Integration (sequential)
 Wire host + UI + SDK; **Playwright:** install the example plug-in (permissions dialog), its toolbar button appears in the reader, clicking opens its dialog, submitting stores data and shows a notification, the placement is written to `layout.kdl`; a plug-in without `mail.read.body` gets a permission error; a runaway plug-in (infinite loop) is stopped and flagged while the UI stays responsive; `nail plugin dev` hot reload works.
+
+*Done (ADR 0055):* `nail-core` `plugin_host.rs` (one host, `PluginServices` over store / search, never decrypted bodies, ordered log writer, crash errors recorded, quiet hours for `system` notifications, dev manifests followed), `plugin_http.rs` (SSRF-safe fetch, also for URL installs), every plug-in request (commands / UI actions answer `Done` at once); `nail-config` placement writer + installed plug-ins in merge conflicts, `plugin-manager` widget, pre-M2d `plugin.<id>.<name>` refused; defaults (Plug-ins settings tab, actions, plug-in theme parts); `nail plugin dev` over `nail serve`'s WebSocket (`ui-endpoint.json`); OS notifications for `system` plug-in notifications; host fix: rejections awaited in the same turn are not logged as unhandled. Playwright `e2e/tests/plugins.spec.ts` (all scenarios above; the example is built by the global setup outside the repo) and the install dialog in `a11y-windows.spec.ts`.
+
+#### M2d follow-ups (deviations and deferrals)
+- **`nail plugin dev`** reaches only `nail serve` (its `ui-endpoint.json` / `--url`); the desktop app loads development folders from the plug-in manager (no local endpoint for the CLI yet).
+- **Host limits**: the CPU budget is per turn; an async chain that yields between turns can use many budgets; no cumulative quota or wall-clock limit for promises left pending (only `activate` has 30 s). Events of a runtime being stopped can still arrive for up to one budget.
+- **API gaps**: `nail.http.fetch` bodies are UTF-8 text (no binary / streaming); no runtime API for a plug-in's own catalogs (`nail.l10n`), so the example's run-time texts are English literals; `Cc` only in `nail.mail.get` (lists and searches carry none); `nail.mail.search` is local-index only.
+- **Panel actions**: values sent by panel buttons are not filtered against the last rendered panel tree (dialog values are).
+- **Routing**: plug-in dialog / notification events are broadcast to every connected UI (full-grant remote sessions included) and filtered by `client_id` in the UI, not in the transport.
+- **Packages** stay packed and are read into memory (≤ 20 MiB per plug-in) instead of being unpacked (ADR 0051 deviation from the stub's sketch).
+- **SDK**: `@nail/plugin-api` is private (scaffolds outside the repo use a `file:` path); `src/api.ts` mirrors `prelude.js` by hand; `checkManifest` / `checkTree` cover the main rules only (the host stays authoritative).
+- **UI**: Markdown in plug-in trees is a CommonMark subset (no tables or nested lists); the merge dialog cannot start from a given text, so the placements step reuses its requests; how `window.open` of Markdown links behaves in the Tauri webview is unverified; native date inputs follow the browser / OS language.
+- **Tests**: the full-app suites other than `App.flows.test.tsx` still use 1 s `findBy*` waits; `cargo deny` advisories need the network (not run).
 
 ### Carried items not in M2
 PKCS#11 smartcards (M4), revocation checking for S/MIME (later), DNSSEC-validated SRV and a public-suffix list for discovery (later), atomic cross-account moves (later; current behaviour can duplicate, never loses).

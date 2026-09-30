@@ -111,6 +111,8 @@ fn store_error_code(err: &nail_store::Error) -> ErrorCode {
         ErrorCode::Locked
     } else if matches!(err, nail_store::Error::Crypto(_)) {
         ErrorCode::Crypto
+    } else if matches!(err, nail_store::Error::QuotaExceeded { .. }) {
+        ErrorCode::TooLarge
     } else {
         ErrorCode::Internal
     }

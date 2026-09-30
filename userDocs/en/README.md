@@ -21,6 +21,7 @@ Guides and references for people using Nail.
 | [Secure connections and remote content](remote-connections.md) | HTTPS and the certificate fingerprint, allowed networks, what the browser is told, mail shown from a separate address, how remote images are fetched through Nail |
 | [Connecting AI agents (MCP)](mcp.md) | MCP clients, tokens, permissions, configuring agents (HTTP and `nail mcp`), resources and tools, the activity log, safety |
 | [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, editing toolbars, shortcuts and list columns, right-click menus, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
+| [Plug-ins](plugins/README.md) | Installing and managing plug-ins, permissions, placing and styling them; writing plug-ins: getting started, the sandbox, manifest, API and component references |
 | [Installing Nail on Windows](installing.md) | Installer options, Default apps, silent install, uninstall and your data, the portable version |
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |

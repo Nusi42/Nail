@@ -392,6 +392,18 @@ pub fn notification_texts(
     )
 }
 
+fn show_plugin_notification(
+    app: &AppHandle,
+    service: &Service,
+    notification: &nail_api::plugins::PluginNotification,
+) {
+    use tauri_plugin_notification::NotificationExt;
+    let (title, body) = service.plugin_notification_texts(notification);
+    if let Err(err) = app.notification().builder().title(title).body(body).show() {
+        tracing::warn!(%err, "cannot show a plug-in notification");
+    }
+}
+
 fn show_notification(
     app: &AppHandle,
     service: &Service,
@@ -419,6 +431,11 @@ async fn show_notifications(app: AppHandle, service: Service) {
         match events.recv().await {
             Ok(Event::NotificationRequested { notification }) => {
                 show_notification(&app, &service, &notification);
+            }
+            // M2d: plug-in notifications that ask for the OS (the core
+            // already applied the notification switch and quiet hours).
+            Ok(Event::PluginNotification { notification }) if notification.spec.system => {
+                show_plugin_notification(&app, &service, &notification);
             }
             Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
             Err(broadcast::error::RecvError::Closed) => break,

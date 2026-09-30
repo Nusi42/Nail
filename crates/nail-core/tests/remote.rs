@@ -1445,10 +1445,11 @@ async fn plugins_need_full_grants_remotely() {
         Response::Plugins { plugins } => assert_eq!(plugins.len(), 1),
         other => panic!("{other:?}"),
     }
-    // Allowed through; the host answers once it is wired in (WP64).
+    // Allowed through; the host has not loaded it (its dev folder does
+    // not exist).
     assert_eq!(
         error_code(&service.handle_remote(&full, run()).await),
-        Some(ErrorCode::Unsupported)
+        Some(ErrorCode::NotFound)
     );
     for request in [
         Request::EnablePlugin {

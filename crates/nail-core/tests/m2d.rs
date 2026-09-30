@@ -1,7 +1,7 @@
-//! Wave M2d contract stage (ADR 0050): the store-backed plug-in
-//! administration served by the core before the plug-in host is wired in
-//! (listing, enabling, grants, settings, logs, uninstalling), and the
-//! requests that answer `unsupported` until WP64.
+//! Wave M2d (ADR 0050, integration ADR 0055): the store-backed plug-in
+//! administration (listing, enabling, grants, settings, logs,
+//! uninstalling) and the host requests' answers without a running
+//! plug-in. `tests/plugins.rs` runs real packages.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -92,7 +92,7 @@ async fn next_event(rx: &mut broadcast::Receiver<Event>) -> Event {
         .unwrap()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn plugins_are_listed_enabled_and_uninstalled() {
     let f = setup();
     assert_eq!(
@@ -120,8 +120,13 @@ async fn plugins_are_listed_enabled_and_uninstalled() {
     match enabled {
         Response::Plugin { plugin } => {
             assert!(plugin.enabled);
-            // No host yet: enabled but not running.
-            assert_eq!(plugin.state, PluginRunState::Stopped);
+            // Its package is missing (installed straight into the store):
+            // the start failed and is recorded.
+            assert_eq!(plugin.state, PluginRunState::Crashed);
+            assert_eq!(
+                plugin.localized.map(|l| l.id).as_deref(),
+                Some("plugin-package-missing-file")
+            );
         }
         other => panic!("{other:?}"),
     }
@@ -317,36 +322,87 @@ async fn logs_are_listed_and_cleared() {
     );
 }
 
-#[tokio::test]
-async fn host_requests_are_unsupported_until_the_integration() {
+#[tokio::test(flavor = "multi_thread")]
+async fn host_requests_without_a_running_plugin() {
     let f = setup();
     install(&f);
-    for request in [
-        Request::PreviewPluginInstall {
-            source: PluginPackageSource::File {
-                path: "C:/x.nailplugin".into(),
+    for (request, code) in [
+        (
+            Request::PreviewPluginInstall {
+                source: PluginPackageSource::File {
+                    path: "C:/no/such/x.nailplugin".into(),
+                },
             },
-        },
-        Request::LoadDevPlugin {
-            folder: "C:/dev/x".into(),
-            grants: vec![],
-        },
-        Request::PreviewPluginPlacements { plugin_id: id() },
-        Request::RunPluginCommand {
-            command: "plugin.follow-up.remind".into(),
-            surface: PluginCommandSurface::Reader,
-            context: UiContext::default(),
-            client_id: Some("ui-1".into()),
-        },
-        Request::GetPluginPanel {
-            panel: "follow-up.due".into(),
-            context: UiContext::default(),
-            client_id: None,
-        },
+            ErrorCode::NotFound,
+        ),
+        (
+            Request::PreviewPluginInstall {
+                source: PluginPackageSource::Dev {
+                    folder: "C:/dev/x".into(),
+                },
+            },
+            ErrorCode::InvalidRequest,
+        ),
+        (
+            Request::LoadDevPlugin {
+                folder: "C:/no/such/folder".into(),
+                grants: vec![],
+            },
+            ErrorCode::InvalidRequest,
+        ),
+        (
+            Request::RunPluginCommand {
+                command: "plugin.follow-up.remind".into(),
+                surface: PluginCommandSurface::Reader,
+                context: UiContext::default(),
+                client_id: Some("ui-1".into()),
+            },
+            ErrorCode::NotFound,
+        ),
+        (
+            Request::RunPluginCommand {
+                command: "mail.reply".into(),
+                surface: PluginCommandSurface::Reader,
+                context: UiContext::default(),
+                client_id: None,
+            },
+            ErrorCode::NotFound,
+        ),
+        (
+            Request::GetPluginPanel {
+                panel: "follow-up.due".into(),
+                context: UiContext::default(),
+                client_id: None,
+            },
+            ErrorCode::NotFound,
+        ),
+        (
+            Request::RespondPluginDialog {
+                dialog_id: "pd-unknown".into(),
+                button: None,
+                values: BTreeMap::new(),
+            },
+            ErrorCode::NotFound,
+        ),
     ] {
         assert_eq!(
-            error(f.service.handle(request).await).0,
-            ErrorCode::Unsupported
+            error(f.service.handle(request.clone()).await).0,
+            code,
+            "{request:?}"
         );
+    }
+    // Nothing to place: an empty proposal.
+    match f
+        .service
+        .handle(Request::PreviewPluginPlacements { plugin_id: id() })
+        .await
+    {
+        Response::PluginPlacements {
+            incoming, preview, ..
+        } => {
+            assert_eq!(incoming, "");
+            assert!(preview.sections.is_empty());
+        }
+        other => panic!("{other:?}"),
     }
 }
