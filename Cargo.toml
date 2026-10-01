@@ -184,6 +184,10 @@ aes-kw = { version = "0.2.1", features = ["alloc"] }
 pbkdf2 = "0.12.2"
 # Windows certificate store (CryptoAPI / CNG); only on Windows targets.
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+# Network interfaces (GetAdaptersAddresses) for the remote UI's LAN address,
+# without opening a socket (ADR 0057). MIT / Apache-2.0; already in the lock
+# through hickory-resolver. Windows only.
+ipconfig = { version = "0.3.4", default-features = false }
 # Encryption at rest: XChaCha20-Poly1305 for blobs and index files.
 chacha20poly1305 = "0.10.1"
 # Link safety in nail-mime: IDNA / punycode and UTS #39 confusables.

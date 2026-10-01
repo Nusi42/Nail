@@ -18,6 +18,12 @@ url.workspace = true
 hickory-resolver.workspace = true
 quick-xml.workspace = true
 
+# SRV / MX lookups through the OS resolver (DnsQuery_W): Nail opens no DNS
+# sockets of its own on Windows (ADR 0057). hickory-resolver stays for the
+# loopback mock DNS server (tests, seeds) and as the non-Windows fallback.
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_NetworkManagement_Dns"] }
+
 [dev-dependencies]
 nail-testkit-net.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

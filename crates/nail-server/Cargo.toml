@@ -37,6 +37,11 @@ chrono.workspace = true
 ipnet.workspace = true
 url.workspace = true
 
+# The LAN address for the remote UI's host names from the network
+# interfaces, no socket (ADR 0057).
+[target.'cfg(windows)'.dependencies]
+ipconfig.workspace = true
+
 [dev-dependencies]
 nail-core = { workspace = true, features = ["demo"] }
 tempfile.workspace = true

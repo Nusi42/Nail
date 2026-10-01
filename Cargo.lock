@@ -4379,6 +4379,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "windows",
 ]
 
 [[package]]
@@ -4604,6 +4605,7 @@ dependencies = [
  "hex",
  "http-body-util",
  "instant-acme",
+ "ipconfig",
  "ipnet",
  "nail-api",
  "nail-core",

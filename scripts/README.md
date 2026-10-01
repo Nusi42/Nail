@@ -9,6 +9,7 @@ build output into the repository (it lives in OneDrive): output goes to
 | `build-installer.mjs` | NSIS installer, portable zip, SBOMs, checksums → `<build dir>/dist` (Windows) |
 | `installer-smoke.ps1` | install → launch → uninstall of that installer in a temp directory, per user |
 | `sbom.mjs` | CycloneDX SBOMs only (Rust crates from `cargo metadata`, UI packages from `package-lock.json`) |
+| `check-socket-binds.mjs` | fails on sockets bound to unspecified / non-loopback addresses outside the allowlist in `lib/socket-binds.mjs` (ADR 0057; first step of `npm test`) |
 | `lib/*.mjs` | the scripts' pure helpers; tests in `test/` |
 | `interop/` | engine tests against real Dovecot / Stalwart servers (own crate; see its README) |
 

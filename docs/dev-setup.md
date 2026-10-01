@@ -53,7 +53,8 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Rust unit and integration tests | `cargo test --workspace` |
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust formatting | `cargo fmt --all --check` |
-| UI unit tests (Vitest), incl. the lint-rule self-test, then the `test` scripts of `packages/*` | `npm test` |
+| Socket-bind check (ADR 0057), then UI unit tests (Vitest) incl. the lint-rule self-test, then the `test` scripts of `packages/*` | `npm test` |
+| Socket-bind check only | `npm run check:sockets` |
 | ESLint, TypeScript, Prettier (ui and e2e) | `npm run lint` |
 | Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
 | Playwright only (already built) | `npm run e2e:only` |
@@ -96,6 +97,29 @@ No GPL / LGPL / AGPL dependency, no OpenSSL and no aws-lc (TLS uses
 bans `openssl-sys` / `aws-lc-*` and allows only crates.io: run
 `cargo deny check` after adding a crate (CI runs it too). It records the
 RUSTSEC-2023-0071 exception (`rsa` 0.9, ADR 0034).
+
+### Sockets and the Windows firewall (ADR 0057)
+
+Nail and its tests never open a socket on a non-loopback or unspecified
+address, so Windows Defender Firewall never asks to "allow this app". The
+one exception is the remote UI when the user enables it on a non-loopback
+address. DNS lookups go through the OS resolver (`DnsQuery_W`), the mock
+DNS server is asked from `127.0.0.1`, and every mock server and test
+listener binds `127.0.0.1`. `npm test` runs `scripts/check-socket-binds.mjs`,
+which fails on new binds to `0.0.0.0` / `[::]` (allowlist with reasons in
+`scripts/lib/socket-binds.mjs`).
+
+Builds before this rule left firewall rules for hashed test binaries
+(`discover-<hash>.exe`, `engines-<hash>.exe`) and `nail.exe` under
+`%LOCALAPPDATA%\nail-build`. To remove those inbound rules, run in an
+**elevated** PowerShell as the same user (it only touches rules whose
+program lies under that folder):
+
+```powershell
+Get-NetFirewallApplicationFilter | Where-Object { $_.Program -like "$env:LOCALAPPDATA\nail-build\*" } | Get-NetFirewallRule | Where-Object Direction -eq Inbound | Remove-NetFirewallRule
+```
+
+Leave out `| Remove-NetFirewallRule` first to see what would go.
 
 ### End-to-end tests (Playwright)
 

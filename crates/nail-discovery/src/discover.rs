@@ -12,9 +12,8 @@ use url::Url;
 use crate::autoconfig::parse_client_config;
 use crate::autodiscover::{Answer, parse_response, request_body};
 use crate::email::{Email, base_domain};
-use crate::net::{
-    DnsLookup, HickoryDns, HostProbe, HttpFetch, NetError, ReqwestFetch, SrvRecord, TcpProbe,
-};
+use crate::net::{DnsLookup, HostProbe, HttpFetch, NetError, ReqwestFetch, SrvRecord, TcpProbe};
+use crate::system_dns::SystemDns;
 
 /// Mozilla's ISP database.
 pub const ISPDB_BASE: &str = "https://autoconfig.thunderbird.net/v1.1/";
@@ -74,9 +73,9 @@ impl Discoverer {
     }
 
     /// Real network access: `http` (e.g. `nail_auth::http_client()`), the
-    /// system's DNS resolver and TCP probes.
+    /// operating system's DNS resolver ([`SystemDns`]) and TCP probes.
     pub fn system(http: reqwest::Client) -> Result<Self, DiscoveryError> {
-        let dns = HickoryDns::system().map_err(|e| DiscoveryError::Setup(e.0))?;
+        let dns = SystemDns::new().map_err(|e| DiscoveryError::Setup(e.0))?;
         Ok(Self::new(
             Arc::new(ReqwestFetch::new(http)),
             Arc::new(dns),

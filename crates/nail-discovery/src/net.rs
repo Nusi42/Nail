@@ -206,7 +206,10 @@ fn host(name: &hickory_resolver::proto::rr::Name) -> String {
 }
 
 impl HickoryDns {
-    /// The system's resolver configuration.
+    /// The system's resolver configuration. Not on Windows: hickory binds
+    /// its UDP sockets to the unspecified address, which the firewall
+    /// prompts for; Windows uses [`crate::SystemDns`] (ADR 0057).
+    #[cfg(not(windows))]
     pub fn system() -> Result<Self, NetError> {
         let resolver = Resolver::builder_tokio()
             .map_err(|e| NetError(e.to_string()))?
@@ -215,12 +218,12 @@ impl HickoryDns {
         Ok(Self { resolver })
     }
 
-    /// A resolver asking only the name server at `addr` over UDP (tests,
-    /// end-to-end runs with `nail_testkit_net::MockDnsServer`).
+    /// A resolver asking only the loopback name server at `addr` over UDP
+    /// (tests, end-to-end runs with `nail_testkit_net::MockDnsServer`). Its
+    /// sockets bind the same loopback address, never the unspecified one
+    /// (ADR 0057); any other name server is refused.
     pub fn with_name_server(addr: SocketAddr, timeout: Duration) -> Result<Self, NetError> {
-        let mut connection = ConnectionConfig::new(ProtocolConfig::Udp);
-        connection.port = addr.port();
-        let server = NameServerConfig::new(addr.ip(), true, vec![connection]);
+        let server = loopback_name_server(addr)?;
         let mut builder = Resolver::builder_with_config(
             ResolverConfig::from_name_servers(vec![server]),
             TokioRuntimeProvider::default(),
@@ -243,6 +246,21 @@ impl HickoryDns {
             Err(e) => Err(NetError(e.to_string())),
         }
     }
+}
+
+/// The configuration of a loopback name server: UDP from a random port of
+/// the same loopback address (`127.0.0.1:0` / `[::1]:0`). Without an explicit
+/// `bind_addr` hickory binds `0.0.0.0:0` / `[::]:0`.
+fn loopback_name_server(addr: SocketAddr) -> Result<NameServerConfig, NetError> {
+    if !addr.ip().is_loopback() {
+        return Err(NetError(format!(
+            "{addr} is not a loopback name server (only mock servers are asked directly)"
+        )));
+    }
+    let mut connection = ConnectionConfig::new(ProtocolConfig::Udp);
+    connection.port = addr.port();
+    connection.bind_addr = Some(SocketAddr::new(addr.ip(), 0));
+    Ok(NameServerConfig::new(addr.ip(), true, vec![connection]))
 }
 
 impl DnsLookup for HickoryDns {
@@ -374,6 +392,38 @@ mod tests {
         assert_eq!(host.as_deref(), Some("autoconfig.example.org"));
         let direct = ReqwestFetch::new(nail_auth::http_client().unwrap());
         assert_eq!(direct.target(&url), (url.clone(), None));
+    }
+
+    #[test]
+    fn mock_name_servers_are_asked_from_loopback_only() {
+        for (server, bind) in [("127.0.0.1:5353", "127.0.0.1:0"), ("[::1]:53", "[::1]:0")] {
+            let config = loopback_name_server(server.parse().unwrap()).unwrap();
+            assert_eq!(config.connections.len(), 1);
+            let connection = &config.connections[0];
+            assert_eq!(connection.protocol, ProtocolConfig::Udp);
+            let bind_addr = connection.bind_addr.unwrap();
+            assert_eq!(bind_addr, bind.parse().unwrap());
+            assert!(bind_addr.ip().is_loopback() && !bind_addr.ip().is_unspecified());
+        }
+        for remote in [
+            "192.0.2.53:53",
+            "0.0.0.0:53",
+            "[::]:53",
+            "[2001:db8::53]:53",
+        ] {
+            assert!(
+                loopback_name_server(remote.parse().unwrap()).is_err(),
+                "{remote}"
+            );
+            assert!(
+                HickoryDns::with_name_server(remote.parse().unwrap(), Duration::from_secs(1))
+                    .is_err()
+            );
+        }
+        assert!(
+            HickoryDns::with_name_server("127.0.0.1:53".parse().unwrap(), Duration::from_secs(1))
+                .is_ok()
+        );
     }
 
     #[tokio::test]

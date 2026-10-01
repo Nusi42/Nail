@@ -15,6 +15,7 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - **Everything themeable.** React components never use inline styles or literal class names. They emit `data-part` attributes; styling comes only from the compiled theme (`theme.kdl`). Structure comes only from `layout.kdl`.
 - **The core owns data.** The UI talks only to `NailClient`; business logic lives in Rust. Every write goes through the operation queue.
 - **Windows first.** macOS, Linux and mobile come later.
+- **No non-loopback sockets.** Never open sockets on non-loopback/unspecified addresses (TCP or UDP), except the user-enabled remote UI listener; use the OS DNS API; tests bind 127.0.0.1 (ADR 0057; `scripts/check-socket-binds.mjs` runs in `npm test`).
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
 
@@ -88,7 +89,8 @@ crates/nail-proto-imap IMAP client (IDLE/watcher, CONDSTORE/QRESYNC, writes, OAu
 crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
 crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
-crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017)
+crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017); system_dns.rs SystemDns
+                       (DnsQuery_W on Windows, no DNS sockets; mock DNS bound to loopback; ADR 0057)
 crates/nail-search     Tantivy index + query language parser (ADR 0016); open_with(DirectoryWrapper)
                        for the sealed index, IndexPolicy (decrypted indexing opt-in) (ADR 0032);
                        imap.rs: query → IMAP SEARCH key (needs_server, server_search) (ADR 0046)
@@ -156,6 +158,7 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
+                       lan.rs: LAN address from the interfaces, no socket (ADR 0057);
                        M2c: render tokens bound to the session (sandbox.rs), proxy_limit.rs (ADR 0048)
 crates/nail-cli        `nail` binary; messages.rs (localized stderr), headless `nail mcp`
                        (`--config-dir`, `--no-start`, `--mcp-port`), serve holds the data-dir lock;
@@ -191,7 +194,7 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); every file is embedded in nail-config l10n.rs
-scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, test/ (node:test);
+scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
 ```
 
@@ -206,7 +209,8 @@ cargo test                                 # default members = all crates except
 cargo test --workspace                     # incl. the Tauri shell (after npm run build)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
-npm test                                   # Vitest (ui), incl. the lint-rule self-test; then packages/* `test`
+npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`
+npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built

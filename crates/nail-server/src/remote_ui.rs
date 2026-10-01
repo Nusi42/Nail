@@ -173,7 +173,9 @@ impl Running {
         let host = primary_host(settings, options);
         let mut host_names: Vec<String> = host.iter().cloned().collect();
         if ip.is_unspecified() {
-            if let Some(lan) = lan_address(ip) {
+            // Only here, for a running listener on every address: read from
+            // the network interfaces, no socket (ADR 0057).
+            if let Some(lan) = crate::lan::lan_address(ip) {
                 host_names.push(lan.to_string());
             }
         } else if !ip.is_loopback() {
@@ -295,18 +297,4 @@ async fn make_identity(
     .await
     .map_err(internal)?
     .map_err(internal)
-}
-
-/// This machine's address on the LAN (the source address of a route to a
-/// documentation address; a UDP `connect` sends nothing).
-fn lan_address(bind: IpAddr) -> Option<IpAddr> {
-    let (local, probe): (SocketAddr, SocketAddr) = if bind.is_ipv4() {
-        ("0.0.0.0:0".parse().ok()?, "192.0.2.1:9".parse().ok()?)
-    } else {
-        ("[::]:0".parse().ok()?, "[2001:db8::1]:9".parse().ok()?)
-    };
-    let socket = std::net::UdpSocket::bind(local).ok()?;
-    socket.connect(probe).ok()?;
-    let ip = socket.local_addr().ok()?.ip();
-    (!ip.is_unspecified() && !ip.is_loopback()).then_some(ip)
 }
