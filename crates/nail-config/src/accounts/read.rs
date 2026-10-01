@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use kdl::{KdlEntry, KdlNode, KdlValue};
+use nail_api::accounts::SspiPackage;
 use nail_api::accounts::{
     AccountConfig, AccountsConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMapping,
     FolderMatch, FolderPolicy, FolderSource, Identity, IdentityRule, ImapOptions, IncomingServer,
@@ -11,6 +12,7 @@ use nail_api::accounts::{
     SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode,
     VirtualAccountConfig, default_port,
 };
+use nail_api::exchange::{ExchangeConfigIssue, ExchangeEngine, ExchangeOptions, GRAPH_HOST};
 use nail_api::gmail::{GMAIL_API_HOST, GmailOptions};
 use nail_api::pim::source::{MIN_REFRESH_MINUTES, is_valid_pim_source_id};
 use nail_api::pim::{
@@ -428,6 +430,26 @@ impl Reader<'_, '_> {
                         options: self.gmail_options(child)?,
                     });
                 }
+                // M3c (ADR 0072): Exchange through Graph or EWS.
+                "exchange" => {
+                    if incoming.is_some() {
+                        return Err(self.src.node_err(child, msg("config-account-one-incoming")));
+                    }
+                    let (server, provider) = self.server(child, &email)?;
+                    let options = self.exchange_options(child)?;
+                    if let Some(issue) = options.issues(&server).into_iter().next() {
+                        let mut message = msg(issue.message_id());
+                        if issue == ExchangeConfigIssue::InvalidUrl {
+                            message = message.arg(
+                                "found",
+                                format!("{:?}", options.url.as_deref().unwrap_or("")),
+                            );
+                        }
+                        return Err(self.src.node_err(child, message));
+                    }
+                    providers.extend(provider);
+                    incoming = Some(IncomingServer::Exchange { server, options });
+                }
                 other => {
                     return Err(self.src.node_err(
                         child,
@@ -436,7 +458,7 @@ impl Reader<'_, '_> {
                             .arg("parent", "account")
                             .arg(
                                 "expected",
-                                "imap, pop3, gmail, smtp, identity, sync, sieve, authserv-id",
+                                "imap, pop3, gmail, exchange, smtp, identity, sync, sieve, authserv-id",
                             ),
                     ));
                 }
@@ -457,7 +479,12 @@ impl Reader<'_, '_> {
             && outgoing.is_some()
             && let Some(child) = children(node).iter().find(|c| name(c) == "smtp")
         {
-            return Err(self.src.node_err(child, msg("config-gmail-no-smtp")));
+            let id = if matches!(incoming, IncomingServer::Exchange { .. }) {
+                "config-exchange-no-smtp"
+            } else {
+                "config-gmail-no-smtp"
+            };
+            return Err(self.src.node_err(child, msg(id)));
         }
         if identities.is_empty() {
             identities.push(Identity {
@@ -604,6 +631,10 @@ impl Reader<'_, '_> {
             "imap" => MailProtocol::Imap,
             "pop3" => MailProtocol::Pop3,
             "gmail" => MailProtocol::Gmail,
+            "exchange" => match prop_str(self.src, node, "engine")? {
+                Some(("ews", _)) => MailProtocol::Ews,
+                _ => MailProtocol::Graph,
+            },
             _ => MailProtocol::Smtp,
         };
         let allowed: &[&str] = match protocol {
@@ -626,6 +657,17 @@ impl Reader<'_, '_> {
             ],
             MailProtocol::Smtp => &["host", "port", "tls", "dsn"],
             MailProtocol::Gmail => &["host", "port", "tls", "poll-interval", "max-poll-interval"],
+            MailProtocol::Graph | MailProtocol::Ews => &[
+                "engine",
+                "host",
+                "port",
+                "tls",
+                "url",
+                "poll-interval",
+                "max-poll-interval",
+                "streaming",
+                "server-rules",
+            ],
         };
         self.check_props(node, allowed)?;
         self.check_unique_props(node)?;
@@ -647,6 +689,16 @@ impl Reader<'_, '_> {
             }
             // The Gmail API has one host (M3b).
             None if protocol == MailProtocol::Gmail => GMAIL_API_HOST.to_owned(),
+            // Graph has one host; EWS takes the host of its `url` (M3c).
+            None if protocol == MailProtocol::Graph => GRAPH_HOST.to_owned(),
+            None if protocol == MailProtocol::Ews => {
+                match prop_str(self.src, node, "url")?.and_then(|(u, _)| url_host(u)) {
+                    Some(host) => host,
+                    None => {
+                        return Err(self.src.node_err(node, msg("config-exchange-needs-host")));
+                    }
+                }
+            }
             None => {
                 return Err(self.src.node_err(
                     node,
@@ -800,6 +852,44 @@ impl Reader<'_, '_> {
                     None,
                 )
             }
+            // Windows integrated sign-in: Exchange only (M3c).
+            "windows" => {
+                if !matches!(protocol, MailProtocol::Ews | MailProtocol::Graph) {
+                    return Err(self
+                        .src
+                        .entry_err(method_entry, msg("config-auth-windows-needs-exchange")));
+                }
+                self.check_props(node, &["username", "secret", "package"])?;
+                let package = match prop_str(self.src, node, "package")? {
+                    None => None,
+                    Some((text, entry)) => Some(SspiPackage::parse(text).ok_or_else(|| {
+                        self.src.entry_err(
+                            entry,
+                            msg("config-sspi-package-invalid").arg("found", format!("{text:?}")),
+                        )
+                    })?),
+                };
+                let username = self.prop_nonempty(node, "username")?;
+                let secret = self.prop_secret(node, "secret")?;
+                if username.is_none()
+                    && let Some(entry) = node.entry("secret")
+                {
+                    return Err(self.src.entry_err(
+                        entry,
+                        msg("config-needs-property")
+                            .arg("node", "auth")
+                            .arg("key", "username"),
+                    ));
+                }
+                (
+                    AuthConfig::Windows {
+                        username,
+                        secret,
+                        package,
+                    },
+                    None,
+                )
+            }
             "none" => {
                 self.check_props(node, &[])?;
                 (AuthConfig::None, None)
@@ -840,6 +930,41 @@ impl Reader<'_, '_> {
                 GmailOptions::MIN_POLL_INTERVAL_SECS,
                 86_400,
             )?,
+        })
+    }
+
+    /// The options of an `exchange` node (M3c; the server / auth rules
+    /// are [`ExchangeOptions::issues`]).
+    fn exchange_options(&self, node: &KdlNode) -> Result<ExchangeOptions, ConfigError> {
+        let engine = match prop_str(self.src, node, "engine")? {
+            None => ExchangeEngine::Graph,
+            Some((text, entry)) => ExchangeEngine::parse(text).ok_or_else(|| {
+                self.src.entry_err(
+                    entry,
+                    msg("config-expected-one-of")
+                        .arg("what", "`engine`")
+                        .arg("choices", "\"graph\", \"ews\"")
+                        .arg("found", format!("{text:?}")),
+                )
+            })?,
+        };
+        Ok(ExchangeOptions {
+            engine,
+            url: prop_str(self.src, node, "url")?.map(|(u, _)| u.to_owned()),
+            poll_interval_secs: self.prop_u32_range(
+                node,
+                "poll-interval",
+                ExchangeOptions::MIN_POLL_INTERVAL_SECS,
+                86_400,
+            )?,
+            max_poll_interval_secs: self.prop_u32_range(
+                node,
+                "max-poll-interval",
+                ExchangeOptions::MIN_POLL_INTERVAL_SECS,
+                86_400,
+            )?,
+            streaming: self.prop_bool(node, "streaming")?,
+            server_rules: self.prop_bool(node, "server-rules")?,
         })
     }
 
@@ -1693,6 +1818,19 @@ fn parse_role(text: &str) -> Option<FolderRole> {
         "trash" => FolderRole::Trash,
         _ => return None,
     })
+}
+
+/// The host of an `http(s)://` URL (`exchange url=…`, M3c).
+fn url_host(url: &str) -> Option<String> {
+    let rest = url.split_once("://")?.1;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = if let Some(v6) = host.strip_prefix('[') {
+        format!("[{}]", v6.split(']').next()?)
+    } else {
+        host.split(':').next()?.to_owned()
+    };
+    (!host.is_empty()).then_some(host)
 }
 
 /// Whether `host` is a loopback host (`localhost`, `127.0.0.1`, `::1`):

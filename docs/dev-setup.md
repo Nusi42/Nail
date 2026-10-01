@@ -488,6 +488,18 @@ For M2c:
   headers-only sync + on-demand bodies + server search, replay connection, localized
   messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)
 
+For M3c:
+
+- **0072:** the M3c contract (Exchange accounts as an `exchange` node in `accounts.kdl` with
+  `engine="graph"` (Exchange Online) or `"ews"` (on-premises), `auth "windows"` (SSPI Negotiate /
+  Kerberos / NTLM); shared / delegate mailboxes, categories ↔ tags with colours, Focused Inbox,
+  inbox rules, automatic replies, rooms, To Do; the engine seams `nail_api::exchange::engine` and
+  PIM item shapes `nail_api::exchange::pim`; store v12 (a rebuild step with foreign keys off);
+  the `nail-proto-graph` / `nail-proto-ews` stubs (mock Graph / EWS servers:
+  `--features testing`) and `nail-exchange` (SSPI, Autodiscover, mapping; mock Autodiscover:
+  `--features testing`); slots). Texts built in Rust: `locales/<lang>/core-exchange.ftl`,
+  `core-graph.ftl`, `core-ews.ftl`; UI: `exchange.ftl`.
+
 For M3b:
 
 - **0065:** the M3b contract (invitations and scheduling: iTIP methods, the invitation card on

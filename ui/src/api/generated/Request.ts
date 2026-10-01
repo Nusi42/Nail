@@ -4,6 +4,7 @@ import type { AccountId } from "./AccountId";
 import type { Address } from "./Address";
 import type { AddressBookId } from "./AddressBookId";
 import type { AddressBookSettings } from "./AddressBookSettings";
+import type { AutomaticRepliesSettings } from "./AutomaticRepliesSettings";
 import type { BodyPolicy } from "./BodyPolicy";
 import type { CalendarComponent } from "./CalendarComponent";
 import type { CalendarId } from "./CalendarId";
@@ -22,11 +23,15 @@ import type { DraftId } from "./DraftId";
 import type { EditScope } from "./EditScope";
 import type { EventFields } from "./EventFields";
 import type { EventId } from "./EventId";
+import type { ExchangeCategoryId } from "./ExchangeCategoryId";
+import type { ExchangeCategorySettings } from "./ExchangeCategorySettings";
+import type { ExchangeMailboxSettings } from "./ExchangeMailboxSettings";
 import type { FlagChange } from "./FlagChange";
 import type { FolderId } from "./FolderId";
 import type { GmailLabelId } from "./GmailLabelId";
 import type { GmailLabelSettings } from "./GmailLabelSettings";
 import type { IdentityId } from "./IdentityId";
+import type { InferenceClassification } from "./InferenceClassification";
 import type { InvitationResponse } from "./InvitationResponse";
 import type { InvitationTarget } from "./InvitationTarget";
 import type { JunkSettings } from "./JunkSettings";
@@ -1660,4 +1665,152 @@ account_id: AccountId,
 /**
  * The label.
  */
-label_id: GmailLabelId, };
+label_id: GmailLabelId, } | { "type": "GetExchangeStatus", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, } | { "type": "ListExchangeMailboxes", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, } | { "type": "AddExchangeMailbox", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The mailbox and what to show.
+ */
+settings: ExchangeMailboxSettings, } | { "type": "UpdateExchangeMailbox", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The new settings.
+ */
+settings: ExchangeMailboxSettings, } | { "type": "RemoveExchangeMailbox", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The mailbox's address.
+ */
+address: string, } | { "type": "ListExchangeCategories", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, } | { "type": "CreateExchangeCategory", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * Name and colour.
+ */
+settings: ExchangeCategorySettings, } | { "type": "UpdateExchangeCategory", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The category.
+ */
+category_id: ExchangeCategoryId, 
+/**
+ * The new settings.
+ */
+settings: ExchangeCategorySettings, } | { "type": "DeleteExchangeCategory", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The category.
+ */
+category_id: ExchangeCategoryId, } | { "type": "ClassifyFocused", 
+/**
+ * The messages.
+ */
+message_ids: Array<MessageId>, 
+/**
+ * Where to.
+ */
+classification: InferenceClassification, 
+/**
+ * Also for future mail from the same senders.
+ */
+always: boolean, } | { "type": "GetAutomaticReplies", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, } | { "type": "SetAutomaticReplies", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The new settings.
+ */
+settings: AutomaticRepliesSettings, } | { "type": "GetExchangeRules", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, } | { "type": "SyncExchangeRules", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, } | { "type": "SetExchangeInboxRuleEnabled", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The server rule.
+ */
+server_rule_id: string, 
+/**
+ * On or off.
+ */
+enabled: boolean, } | { "type": "DeleteExchangeInboxRule", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The server rule.
+ */
+server_rule_id: string, } | { "type": "ListRoomLists", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * Ask the server instead of the cache.
+ */
+refresh: boolean, } | { "type": "FindRooms", 
+/**
+ * The Exchange account.
+ */
+account_id: AccountId, 
+/**
+ * The room list's address; `null` = every room.
+ */
+room_list: string | null, 
+/**
+ * Range start (RFC 3339 UTC).
+ */
+from: string, 
+/**
+ * Range end (RFC 3339 UTC).
+ */
+to: string, 
+/**
+ * Only rooms with at least this many seats.
+ */
+min_capacity: number | null, 
+/**
+ * Ask the server for the room list instead of the cache.
+ */
+refresh: boolean, };

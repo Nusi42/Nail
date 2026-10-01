@@ -754,7 +754,9 @@ impl Service {
                 config: crate::creds::imap_config(server, options),
                 credentials: Arc::new(self.endpoint_credentials(&config.id, &server.auth)),
             }),
-            IncomingServer::Pop3 { .. } | IncomingServer::Gmail { .. } => None,
+            IncomingServer::Pop3 { .. }
+            | IncomingServer::Gmail { .. }
+            | IncomingServer::Exchange { .. } => None,
         }
     }
 

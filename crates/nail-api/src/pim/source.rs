@@ -8,6 +8,11 @@
 //! * **ICS subscriptions** (`https:` / `webcal:` feeds) are read-only
 //!   calendars refreshed periodically.
 //! * **CalDAV** and **CardDAV** servers sync both ways.
+//! * **Exchange** (M3c, ADR 0072): one source per Exchange account
+//!   (`exchange:<account>`, [`crate::exchange::exchange_pim_source_id`]),
+//!   not configured anywhere — it comes and goes with the account; its
+//!   calendars, address books and task lists (Microsoft To Do lists
+//!   through Graph) sync with the account's engine.
 //!
 //! Subscriptions and DAV servers are configured in `accounts.kdl`
 //! ([`PimSourceConfig`], top-level `calendar-subscription`, `caldav` and
@@ -47,23 +52,29 @@ pub enum PimSourceKind {
     Caldav,
     /// A CardDAV server (address books).
     Carddav,
+    /// The calendars, contacts and tasks of an Exchange account (M3c).
+    Exchange,
 }
 
 impl PimSourceKind {
     /// Whether the source holds calendars / task lists.
     pub fn has_calendars(self) -> bool {
-        matches!(self, Self::Local | Self::Ics | Self::Caldav)
+        matches!(
+            self,
+            Self::Local | Self::Ics | Self::Caldav | Self::Exchange
+        )
     }
 
     /// Whether the source holds address books.
     pub fn has_address_books(self) -> bool {
-        matches!(self, Self::Local | Self::Carddav)
+        matches!(self, Self::Local | Self::Carddav | Self::Exchange)
     }
 
-    /// Node name in `accounts.kdl`, `None` for the built-in local source.
+    /// Node name in `accounts.kdl`, `None` for the built-in local source
+    /// and Exchange accounts' sources (they follow the account).
     pub fn node_name(self) -> Option<&'static str> {
         match self {
-            Self::Local => None,
+            Self::Local | Self::Exchange => None,
             Self::Ics => Some("calendar-subscription"),
             Self::Caldav => Some("caldav"),
             Self::Carddav => Some("carddav"),

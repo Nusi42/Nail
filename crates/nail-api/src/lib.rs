@@ -51,6 +51,13 @@
 //!   thread ids, categories, label management). [`engine`] gains the
 //!   provider-neutral [`engine::MailApiEngine`], [`engine::AdaptivePoll`]
 //!   and [`engine::FreeBusyProvider`].
+//! * M3c (ADR 0072): [`exchange`] — Microsoft Exchange accounts (Graph for
+//!   Exchange Online, EWS for on-premises; Windows integrated sign-in),
+//!   shared mailboxes and delegate access, categories ↔ tags with colours,
+//!   Focused Inbox, server-side inbox rules, automatic replies, rooms and
+//!   room lists, Microsoft To Do lists, Exchange sync state; the engine
+//!   seams in [`exchange::engine`] and the provider-neutral PIM item shapes
+//!   in [`exchange::pim`].
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -74,6 +81,7 @@ pub mod customize;
 pub mod domain;
 pub mod engine;
 pub mod error;
+pub mod exchange;
 pub mod gmail;
 pub mod ids;
 pub mod launch;
@@ -120,13 +128,17 @@ pub use domain::{
     MessageHeaders, MessageLocation, MessageSummary, ThreadSummary,
 };
 pub use error::{ApiError, ErrorCode};
+pub use exchange::{
+    AutomaticReplies, AutomaticRepliesSettings, ExchangeCategory, ExchangeEngine, ExchangeMailbox,
+    ExchangeMessageInfo, ExchangeOptions, ExchangeStatus, InferenceClassification, Room, RoomList,
+};
 pub use gmail::{GmailCategory, GmailLabel, GmailLabelSettings, GmailMessageInfo, GmailOptions};
 pub use ids::{
     AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
-    EventId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId,
-    OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId,
-    RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId,
-    ThreadId,
+    EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId,
+    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId,
+    ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId,
+    TaskId, ThreadId,
 };
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
@@ -262,6 +274,20 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     GmailCategory::export_all(&cfg)?;
     GmailMessageInfo::export_all(&cfg)?;
     GmailOptions::export_all(&cfg)?;
+    // M3c: Exchange types the UI names but that are reachable only through
+    // optional fields, or not at all (issues, warnings, options, colours,
+    // roles, the auth package).
+    exchange::ExchangeConfigIssue::export_all(&cfg)?;
+    exchange::ExchangeWarning::export_all(&cfg)?;
+    exchange::ExchangeMailboxIssue::export_all(&cfg)?;
+    exchange::ExchangeCategoryIssue::export_all(&cfg)?;
+    exchange::oof::AutomaticRepliesIssue::export_all(&cfg)?;
+    exchange::ExchangeWellKnownFolder::export_all(&cfg)?;
+    exchange::ExchangeCollectionInfo::export_all(&cfg)?;
+    exchange::CategoryColor::export_all(&cfg)?;
+    ExchangeMessageInfo::export_all(&cfg)?;
+    ExchangeOptions::export_all(&cfg)?;
+    accounts::SspiPackage::export_all(&cfg)?;
 
     write_index(out_dir)
 }

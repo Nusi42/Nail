@@ -147,6 +147,10 @@ struct AccountSchema {
     /// `gmail { auth "oauth2" provider="google" }`: the Gmail API (M3b;
     /// sends through the API, so no `smtp`).
     gmail: Option<GmailSchema>,
+    /// `exchange engine="graph"|"ews" … { auth … }`: Microsoft Exchange
+    /// (M3c; mail, calendars, contacts and tasks; sends through Exchange,
+    /// so no `smtp`).
+    exchange: Option<ExchangeSchema>,
     /// `smtp host=… { auth … }`: outgoing server.
     smtp: Option<SmtpSchema>,
     /// `identity "<address>" … { bcc …; signature … }`: sending identities,
@@ -267,6 +271,52 @@ struct GmailSchema {
     auth: Option<AuthSchema>,
 }
 
+/// Which Exchange protocol an account speaks.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum ExchangeEngineSchema {
+    /// Microsoft Graph, for Exchange Online / Microsoft 365 (default).
+    Graph,
+    /// Exchange Web Services, for Exchange Server on-premises.
+    Ews,
+}
+
+/// `exchange engine=… host=… port=… tls=… url=… poll-interval=…
+/// max-poll-interval=… streaming=… server-rules=…`.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct ExchangeSchema {
+    /// graph (default) or ews.
+    engine: Option<ExchangeEngineSchema>,
+    /// Host (default graph.microsoft.com for Graph; EWS: the Exchange
+    /// server, or the host of `url`).
+    host: Option<String>,
+    /// Port (default 443).
+    #[schemars(range(min = 1, max = 65535))]
+    port: Option<u32>,
+    /// Transport security (default implicit; plaintext only for localhost
+    /// test servers; no starttls).
+    tls: Option<TlsSchema>,
+    /// EWS only: the endpoint Autodiscover found (default
+    /// https://<host>/EWS/Exchange.asmx).
+    url: Option<String>,
+    /// Shortest seconds between change polls (default 30).
+    #[schemars(range(min = 10, max = 86400))]
+    poll_interval: Option<u32>,
+    /// Longest seconds between change polls when nothing changes
+    /// (default 300).
+    #[schemars(range(min = 10, max = 86400))]
+    max_poll_interval: Option<u32>,
+    /// EWS only: push through streaming notifications (default `#true`).
+    streaming: Option<bool>,
+    /// Place Nail rules as Exchange inbox rules where possible (default
+    /// `#true`).
+    server_rules: Option<bool>,
+    /// How to log in: Graph `auth "oauth2" provider="microsoft"`; EWS also
+    /// `auth "windows"` or `auth "password"` (Basic over TLS).
+    auth: Option<AuthSchema>,
+}
+
 /// `smtp host=… port=… tls=… dsn=…`.
 #[derive(JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -317,6 +367,18 @@ enum AuthSchema {
         /// Keychain reference of the PEM certificate and key (default
         /// `keychain:nail/<account>/client-certificate`).
         secret: Option<SecretRefSchema>,
+    },
+    /// `auth "windows" username=… secret=… package=…`: Windows sign-in
+    /// (Exchange only; Negotiate / Kerberos / NTLM through SSPI).
+    Windows {
+        /// `DOMAIN\user` or `user@domain` (default: the signed-in Windows
+        /// user, no secret).
+        username: Option<String>,
+        /// Keychain reference of the password of `username` (default
+        /// `keychain:nail/<account>/password`).
+        secret: Option<SecretRefSchema>,
+        /// negotiate (default), kerberos or ntlm.
+        package: Option<String>,
     },
     /// `auth "none"`.
     None,

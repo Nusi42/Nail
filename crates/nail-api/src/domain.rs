@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::exchange::ExchangeMessageInfo;
 use crate::gmail::GmailMessageInfo;
 use crate::ids::{AccountId, FolderId, MessageId, ThreadId};
 use crate::remote_content::RemoteContentInfo;
@@ -25,7 +26,7 @@ pub enum AccountKind {
     /// Gmail via the Gmail API (M3b; a Gmail address configured with
     /// `imap` stays an IMAP account).
     Gmail,
-    /// Microsoft Exchange via Graph or EWS (M3).
+    /// Microsoft Exchange via Graph or EWS (M3c).
     Exchange,
     /// Local folders only, no server.
     Local,
@@ -166,6 +167,11 @@ pub struct MessageSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub gmail: Option<GmailMessageInfo>,
+    /// Exchange item id, conversation, Focused Inbox and mailbox (M3c,
+    /// Exchange accounts only); absent elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exchange: Option<ExchangeMessageInfo>,
 }
 
 /// Where a copy of a message lives.
@@ -363,6 +369,7 @@ mod tests {
             duplicates: vec![],
             headers_only: false,
             gmail: None,
+            exchange: None,
         };
         let json = serde_json::to_value(&summary).unwrap();
         assert_eq!(

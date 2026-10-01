@@ -3,4 +3,4 @@
 /**
  * The kind of a source.
  */
-export type PimSourceKind = "local" | "ics" | "caldav" | "carddav";
+export type PimSourceKind = "local" | "ics" | "caldav" | "carddav" | "exchange";

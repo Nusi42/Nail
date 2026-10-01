@@ -74,6 +74,8 @@ pub fn remote_message(message: &Message, labels: &LabelTable) -> RemoteMessage {
         size: message.size_estimate,
         raw: message.raw_bytes().ok().flatten(),
         gmail: Some(info),
+        change_key: None,
+        exchange: None,
     }
 }
 
@@ -91,6 +93,8 @@ pub fn remote_change(
         flags: Some(flags_for_labels(label_ids)),
         tags: Some(labels.tags_for(label_ids)),
         gmail: Some(message_info(id, thread_id, label_ids)),
+        change_key: None,
+        exchange: None,
     }
 }
 

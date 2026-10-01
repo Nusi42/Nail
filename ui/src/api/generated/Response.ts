@@ -7,6 +7,7 @@ import type { AccountTestResult } from "./AccountTestResult";
 import type { AccountsConfig } from "./AccountsConfig";
 import type { Address } from "./Address";
 import type { AddressBook } from "./AddressBook";
+import type { AutomaticReplies } from "./AutomaticReplies";
 import type { Calendar } from "./Calendar";
 import type { CalendarEvent } from "./CalendarEvent";
 import type { ConfigBackup } from "./ConfigBackup";
@@ -26,6 +27,10 @@ import type { DuplicateGroup } from "./DuplicateGroup";
 import type { ErrorCode } from "./ErrorCode";
 import type { EventFields } from "./EventFields";
 import type { EventInstance } from "./EventInstance";
+import type { ExchangeCategory } from "./ExchangeCategory";
+import type { ExchangeMailbox } from "./ExchangeMailbox";
+import type { ExchangeRulesStatus } from "./ExchangeRulesStatus";
+import type { ExchangeStatus } from "./ExchangeStatus";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { FolderSyncPolicy } from "./FolderSyncPolicy";
@@ -77,6 +82,8 @@ import type { RemoteUiStatus } from "./RemoteUiStatus";
 import type { RemoteUser } from "./RemoteUser";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
+import type { RoomAvailability } from "./RoomAvailability";
+import type { RoomList } from "./RoomList";
 import type { Rule } from "./Rule";
 import type { RuleMatch } from "./RuleMatch";
 import type { RuleRun } from "./RuleRun";
@@ -863,7 +870,75 @@ label: GmailLabel,
 /**
  * The queued label operations.
  */
-op_ids: Array<OpId>, } | { "type": "Reminders", 
+op_ids: Array<OpId>, } | { "type": "ExchangeStatus", 
+/**
+ * The state.
+ */
+status: ExchangeStatus, } | { "type": "ExchangeMailboxes", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * The mailboxes, by name (hidden automapped ones left out).
+ */
+mailboxes: Array<ExchangeMailbox>, } | { "type": "ExchangeMailboxSaved", 
+/**
+ * The mailbox.
+ */
+mailbox: ExchangeMailbox, } | { "type": "ExchangeCategories", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * The master list, by name.
+ */
+categories: Array<ExchangeCategory>, } | { "type": "ExchangeCategorySaved", 
+/**
+ * The category.
+ */
+category: ExchangeCategory, 
+/**
+ * The queued operations.
+ */
+op_ids: Array<OpId>, } | { "type": "AutomaticReplies", 
+/**
+ * The replies.
+ */
+replies: AutomaticReplies, 
+/**
+ * The queued operations (empty for `Get…`).
+ */
+op_ids: Array<OpId>, } | { "type": "ExchangeRules", 
+/**
+ * The rules.
+ */
+status: ExchangeRulesStatus, } | { "type": "RoomLists", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * The room lists, by name.
+ */
+lists: Array<RoomList>, } | { "type": "Rooms", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * Range start.
+ */
+from: string, 
+/**
+ * Range end.
+ */
+to: string, 
+/**
+ * The rooms, free ones first, then by name.
+ */
+rooms: Array<RoomAvailability>, } | { "type": "Reminders", 
 /**
  * Fired and snoozed reminders (and pending ones up to `until`),
  * by fire time.

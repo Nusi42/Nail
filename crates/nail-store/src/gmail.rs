@@ -788,6 +788,7 @@ mod tests {
                     duplicates: vec![],
                     headers_only: false,
                     gmail: None,
+                    exchange: None,
                 }))
                 .unwrap();
         }

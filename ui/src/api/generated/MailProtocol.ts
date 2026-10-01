@@ -3,4 +3,4 @@
 /**
  * A mail protocol, for port defaults and discovery results.
  */
-export type MailProtocol = "imap" | "pop3" | "smtp" | "gmail";
+export type MailProtocol = "imap" | "pop3" | "smtp" | "gmail" | "graph" | "ews";

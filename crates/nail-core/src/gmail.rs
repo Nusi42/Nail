@@ -738,6 +738,8 @@ async fn store_messages(
                 flags: Some(m.flags),
                 tags: Some(m.tags.clone()),
                 gmail: m.gmail.clone(),
+                change_key: m.change_key.clone(),
+                exchange: m.exchange.clone(),
             };
             if !apply_change(service, account, &change).await? {
                 fresh.push(m.clone());

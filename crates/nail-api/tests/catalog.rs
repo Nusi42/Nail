@@ -7,6 +7,11 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use nail_api::ErrorCode;
+use nail_api::exchange::oof::AutomaticRepliesIssue;
+use nail_api::exchange::{
+    CategoryColor, ExchangeCategoryIssue, ExchangeConfigIssue, ExchangeEngine,
+    ExchangeMailboxIssue, ExchangeMailboxState, ExchangeWarning, InferenceClassification,
+};
 use nail_api::gmail::{GmailCategory, GmailLabelIssue};
 use nail_api::mcp::McpSettingsIssue;
 use nail_api::pim::PimIssue;
@@ -116,6 +121,55 @@ fn contract_message_ids_exist_in_english() {
             .map(|i| i.message_id().to_owned()),
     );
     wanted.extend(GmailCategory::ALL.iter().map(|c| c.message_id()));
+    // M3c (ADR 0072): Exchange configuration problems, warnings, mailbox /
+    // category / automatic-reply problems, Focused Inbox, engine and
+    // colour names.
+    wanted.extend(
+        ExchangeConfigIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(
+        ExchangeWarning::ALL
+            .iter()
+            .map(|w| w.message_id().to_owned()),
+    );
+    wanted.extend(
+        ExchangeMailboxIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(ExchangeMailboxState::ALL.iter().map(|s| s.message_id()));
+    wanted.extend(
+        ExchangeCategoryIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(CategoryColor::ALL.iter().map(|c| c.message_id()));
+    wanted.extend(
+        AutomaticRepliesIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(
+        InferenceClassification::ALL
+            .iter()
+            .map(|c| c.message_id().to_owned()),
+    );
+    wanted.extend(
+        ExchangeEngine::ALL
+            .iter()
+            .map(|e| e.message_id().to_owned()),
+    );
+    wanted.extend(
+        [
+            "config-exchange-needs-host",
+            "config-exchange-no-smtp",
+            "config-auth-windows-needs-exchange",
+            "config-sspi-package-invalid",
+        ]
+        .map(str::to_owned),
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -151,6 +205,10 @@ fn german_catalogs_are_the_same_files() {
         "core-gmail.ftl",
         "scheduling.ftl",
         "gmail.ftl",
+        "core-exchange.ftl",
+        "core-graph.ftl",
+        "core-ews.ftl",
+        "exchange.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

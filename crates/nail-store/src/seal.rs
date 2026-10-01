@@ -270,6 +270,18 @@ pub const SEALED_COLUMNS: &[SealedColumn] = &[
         column: "data",
         key: "id",
     },
+    // Exchange automatic replies and the Exchange operation queue (M3c,
+    // ADR 0072): out-of-office texts.
+    SealedColumn {
+        table: "exchange_automatic_replies",
+        column: "settings",
+        key: "account_id",
+    },
+    SealedColumn {
+        table: "exchange_ops",
+        column: "payload",
+        key: "id",
+    },
 ];
 
 /// Progress of the sealed columns: how many values are sealed and how many

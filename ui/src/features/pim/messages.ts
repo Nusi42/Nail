@@ -63,7 +63,13 @@ export const SOURCE_STATES: readonly PimSourceState[] = [
   "disabled",
 ];
 
-export const SOURCE_KINDS_ALL: readonly PimSourceKind[] = ["local", "ics", "caldav", "carddav"];
+export const SOURCE_KINDS_ALL: readonly PimSourceKind[] = [
+  "local",
+  "ics",
+  "caldav",
+  "carddav",
+  "exchange",
+];
 export const SYNC_STATES: readonly PimItemSync[] = ["synced", "pending", "conflict"];
 export const DUPLICATE_REASONS: readonly DuplicateReason[] = ["email", "phone", "name"];
 export const PARTSTATS = [

@@ -34,6 +34,11 @@ pub struct ProviderSpec {
 
 /// The mail scopes of a built-in provider for the given protocols. Unknown
 /// providers have none (their scopes come from the configuration).
+///
+/// Microsoft issues tokens per resource: Graph scopes (M3c) and the
+/// Outlook IMAP / POP / SMTP / EWS scopes cannot be asked for in one
+/// sign-in, so an Exchange account signs in for its engine's protocol
+/// only (`[MailProtocol::Graph]` or `[MailProtocol::Ews]`).
 pub fn mail_scopes(provider: &str, protocols: &[MailProtocol]) -> Vec<String> {
     let mut scopes: Vec<String> = Vec::new();
     match provider {
@@ -41,11 +46,21 @@ pub fn mail_scopes(provider: &str, protocols: &[MailProtocol]) -> Vec<String> {
         GOOGLE => scopes.push(nail_api::gmail::GMAIL_SCOPE.to_owned()),
         MICROSOFT => {
             for protocol in protocols {
-                // The Gmail API is Google's only (M3c adds Graph scopes).
+                // The Gmail API is Google's only.
                 let scope = match protocol {
                     MailProtocol::Imap => "https://outlook.office.com/IMAP.AccessAsUser.All",
                     MailProtocol::Pop3 => "https://outlook.office.com/POP.AccessAsUser.All",
                     MailProtocol::Smtp => "https://outlook.office.com/SMTP.Send",
+                    MailProtocol::Ews => nail_api::exchange::EWS_OAUTH_SCOPE,
+                    MailProtocol::Graph => {
+                        scopes.extend(
+                            nail_api::exchange::GRAPH_SCOPES
+                                .iter()
+                                .filter(|s| **s != "offline_access")
+                                .map(|s| (*s).to_owned()),
+                        );
+                        continue;
+                    }
                     MailProtocol::Gmail => continue,
                 };
                 scopes.push(scope.to_owned());
@@ -97,6 +112,7 @@ pub fn provider_for_host(host: &str) -> Option<&'static str> {
     if under("gmail.com") || under("googlemail.com") || under("google.com") {
         Some(GOOGLE)
     } else if under("office365.com")
+        || under("graph.microsoft.com")
         || under("outlook.com")
         || under("hotmail.com")
         || under("live.com")
@@ -266,6 +282,19 @@ mod tests {
             mail_scopes(MICROSOFT, &[MailProtocol::Gmail]),
             ["offline_access"]
         );
+        // M3c: Exchange through Graph or EWS.
+        let graph = mail_scopes(MICROSOFT, &[MailProtocol::Graph]);
+        assert!(graph.contains(&"https://graph.microsoft.com/Mail.ReadWrite".to_owned()));
+        assert!(graph.contains(&"https://graph.microsoft.com/Tasks.ReadWrite".to_owned()));
+        assert_eq!(graph.last().map(String::as_str), Some("offline_access"));
+        assert_eq!(graph.iter().filter(|s| *s == "offline_access").count(), 1);
+        assert_eq!(
+            mail_scopes(MICROSOFT, &[MailProtocol::Ews]),
+            [
+                "https://outlook.office365.com/EWS.AccessAsUser.All",
+                "offline_access"
+            ]
+        );
         let ms = builtin(MICROSOFT).unwrap();
         assert!(
             ms.scopes
@@ -313,6 +342,7 @@ mod tests {
         assert_eq!(provider_for_host("SMTP.Gmail.com."), Some(GOOGLE));
         assert_eq!(provider_for_host("outlook.office365.com"), Some(MICROSOFT));
         assert_eq!(provider_for_host("smtp-mail.outlook.com"), Some(MICROSOFT));
+        assert_eq!(provider_for_host("graph.microsoft.com"), Some(MICROSOFT));
         assert_eq!(provider_for_host("notgmail.com"), None);
         assert_eq!(provider_for_host("imap.example.org"), None);
     }

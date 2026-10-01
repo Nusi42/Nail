@@ -116,6 +116,7 @@ fn seed() -> DataDir {
             duplicates: Vec::new(),
             headers_only: false,
             gmail: None,
+            exchange: None,
         });
         m.blob_hash = Some(hash.clone());
         store.upsert_message(&m).unwrap();

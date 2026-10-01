@@ -10,15 +10,18 @@
 //! | [`SecretStore`] | `nail-auth` (OS keychain), [`MemorySecretStore`] (tests) | `nail-core` account manager, `nail-auth` token cache |
 //! | [`OutgoingTransport`] | `nail-proto-smtp` (later: Graph, Gmail API) | `nail-core` outbox |
 //! | [`AccessTokenProvider`] | `nail-auth` | `nail-core` when connecting IMAP / SMTP with OAuth2 |
-//! | [`MailApiEngine`] (M3b) | `nail-proto-gmail` (M3c: Graph, EWS) | `nail-core` sync loop and op replay of API accounts |
-//! | [`FreeBusyProvider`] (M3b) | `nail-dav` (schedule outbox; M3c: Exchange) | `nail-core` free/busy queries |
+//! | [`MailApiEngine`] (M3b) | `nail-proto-gmail` | `nail-core` sync loop and op replay of API accounts |
+//! | [`FreeBusyProvider`] (M3b) | `nail-dav` (schedule outbox), the Exchange engines (M3c) | `nail-core` free/busy queries |
+//! | [`crate::exchange::engine::ExchangeEngine`] (M3c) | `nail-proto-graph`, `nail-proto-ews` | `nail-core` Exchange accounts (per-folder deltas, PIM, settings) |
+//! | [`crate::exchange::engine::NegotiateAuth`] (M3c) | `nail-exchange` (SSPI) | `nail-proto-ews` (Windows integrated sign-in) |
 //!
 //! # API engines (M3b, ADR 0065)
 //!
 //! IMAP engines are driven by `nail-core` directly (folders, UIDs,
 //! UIDVALIDITY, IDLE). Mail servers reached through a REST API (Gmail; in
-//! M3c Microsoft Graph and EWS) instead implement the provider-neutral
-//! [`MailApiEngine`]: messages have an opaque **remote id** (stored in
+//! M3c Microsoft Graph and EWS, through the per-folder
+//! [`crate::exchange::engine::ExchangeMailEngine`]) instead implement the
+//! provider-neutral [`MailApiEngine`]: messages have an opaque **remote id** (stored in
 //! `messages.remote_id`, kept across moves), a sync **cursor** (Gmail
 //! `historyId`, Graph delta link, EWS sync state) replaces UIDs and MODSEQs,
 //! a cursor the server no longer knows ([`DeltaOutcome::CursorExpired`])
@@ -41,6 +44,7 @@ use std::sync::{Mutex, PoisonError};
 use crate::accounts::SecretRef;
 use crate::domain::{Flags, FolderRole};
 use crate::error::{ApiError, ErrorCode};
+use crate::exchange::ExchangeMessageInfo;
 use crate::gmail::GmailMessageInfo;
 use crate::localized::LocalizedMessage;
 use crate::ops::FlagChange;
@@ -296,6 +300,11 @@ pub struct RemoteMessage {
     pub raw: Option<Vec<u8>>,
     /// Gmail-specific data (labels, category).
     pub gmail: Option<GmailMessageInfo>,
+    /// The server's version of the item (EWS `ChangeKey`, Graph
+    /// `changeKey`; M3c), stored with the remote id.
+    pub change_key: Option<String>,
+    /// Exchange-specific data (conversation, Focused Inbox, mailbox; M3c).
+    pub exchange: Option<ExchangeMessageInfo>,
 }
 
 /// A metadata change of a known message.
@@ -311,6 +320,10 @@ pub struct RemoteMessageChange {
     pub tags: Option<Vec<String>>,
     /// Gmail data now, when labels changed.
     pub gmail: Option<GmailMessageInfo>,
+    /// The item's version now (M3c).
+    pub change_key: Option<String>,
+    /// Exchange data now, when it changed (M3c).
+    pub exchange: Option<ExchangeMessageInfo>,
 }
 
 /// One page of a full listing ([`MailApiEngine::full_sync_page`]).
@@ -502,7 +515,7 @@ impl AdaptivePoll {
 // Free/busy (M3b)
 
 /// Answers free/busy questions for attendees (CalDAV schedule outbox, RFC
-/// 6638; M3c: Exchange availability). One instance serves one source /
+/// 6638; M3c: Exchange availability of people and rooms). One instance serves one source /
 /// account.
 pub trait FreeBusyProvider: Send + Sync + fmt::Debug {
     /// Busy periods of each attendee the provider can answer for, in the

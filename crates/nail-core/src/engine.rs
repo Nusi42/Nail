@@ -253,6 +253,11 @@ impl Service {
                     IncomingServer::Gmail { .. } => {
                         tokio::spawn(crate::gmail::run(service, config, task_signals, stop_rx))
                     }
+                    // M3c: the Graph / EWS engines (WP91, WP92) are wired by
+                    // WP95.
+                    IncomingServer::Exchange { .. } => {
+                        tokio::spawn(crate::exchange::run(service, config, task_signals, stop_rx))
+                    }
                 };
                 tracing::info!(account = %account.id, "engine started");
                 running.insert(

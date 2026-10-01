@@ -83,6 +83,17 @@
             "null"
           ]
         },
+        "exchange": {
+          "description": "`exchange engine=\"graph\"|\"ews\" … { auth … }`: Microsoft Exchange\n(M3c; mail, calendars, contacts and tasks; sends through Exchange,\nso no `smtp`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExchangeSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "gmail": {
           "description": "`gmail { auth \"oauth2\" provider=\"google\" }`: the Gmail API (M3b;\nsends through the API, so no `smtp`).",
           "anyOf": [
@@ -280,6 +291,44 @@
             },
             "username": {
               "description": "Authorization identity, if needed.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "method"
+          ]
+        },
+        {
+          "description": "`auth \"windows\" username=… secret=… package=…`: Windows sign-in\n(Exchange only; Negotiate / Kerberos / NTLM through SSPI).",
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "windows"
+            },
+            "package": {
+              "description": "negotiate (default), kerberos or ntlm.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "secret": {
+              "description": "Keychain reference of the password of `username` (default\n`keychain:nail/<account>/password`).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SecretRefSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "username": {
+              "description": "`DOMAIN\\user` or `user@domain` (default: the signed-in Windows\nuser, no secret).",
               "type": [
                 "string",
                 "null"
@@ -525,6 +574,118 @@
         },
         "url": {
           "description": "Server URL, https: (http: only for localhost). Required without\n`account`; default: discovered from the account's email domain.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ExchangeEngineSchema": {
+      "description": "Which Exchange protocol an account speaks.",
+      "oneOf": [
+        {
+          "description": "Microsoft Graph, for Exchange Online / Microsoft 365 (default).",
+          "type": "string",
+          "const": "graph"
+        },
+        {
+          "description": "Exchange Web Services, for Exchange Server on-premises.",
+          "type": "string",
+          "const": "ews"
+        }
+      ]
+    },
+    "ExchangeSchema": {
+      "description": "`exchange engine=… host=… port=… tls=… url=… poll-interval=…\nmax-poll-interval=… streaming=… server-rules=…`.",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "How to log in: Graph `auth \"oauth2\" provider=\"microsoft\"`; EWS also\n`auth \"windows\"` or `auth \"password\"` (Basic over TLS).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "engine": {
+          "description": "graph (default) or ews.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExchangeEngineSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "description": "Host (default graph.microsoft.com for Graph; EWS: the Exchange\nserver, or the host of `url`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max-poll-interval": {
+          "description": "Longest seconds between change polls when nothing changes\n(default 300).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 10
+        },
+        "poll-interval": {
+          "description": "Shortest seconds between change polls (default 30).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 10
+        },
+        "port": {
+          "description": "Port (default 443).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "server-rules": {
+          "description": "Place Nail rules as Exchange inbox rules where possible (default\n`#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "streaming": {
+          "description": "EWS only: push through streaming notifications (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "tls": {
+          "description": "Transport security (default implicit; plaintext only for localhost\ntest servers; no starttls).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TlsSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "url": {
+          "description": "EWS only: the endpoint Autodiscover found (default\nhttps://<host>/EWS/Exchange.asmx).",
           "type": [
             "string",
             "null"

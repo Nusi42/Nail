@@ -224,6 +224,8 @@ export function defaultPort(protocol: MailProtocol, tls: TlsMode): number {
     case "smtp":
       return implicit ? 465 : 587;
     case "gmail":
+    case "graph":
+    case "ews":
       return implicit ? 443 : 80;
   }
 }
@@ -248,13 +250,17 @@ export function withTls(
 /** Login name of an auth config (empty for `none`). */
 export function usernameOf(auth: AuthConfig): string {
   if (auth.method === "password" || auth.method === "oauth2") return auth.username;
-  if (auth.method === "client-certificate") return auth.username ?? "";
+  if (auth.method === "client-certificate" || auth.method === "windows") {
+    return auth.username ?? "";
+  }
   return "";
 }
 
 function withUsername(auth: AuthConfig, username: string): AuthConfig {
   if (auth.method === "password" || auth.method === "oauth2") return { ...auth, username };
-  if (auth.method === "client-certificate") return { ...auth, username: username || null };
+  if (auth.method === "client-certificate" || auth.method === "windows") {
+    return { ...auth, username: username || null };
+  }
   return auth;
 }
 
@@ -371,9 +377,24 @@ const GMAIL_PROTOCOL_CHOICES: readonly Choice[] = [
   { value: "gmail", label: "server-protocol-gmail" },
 ];
 
+/** The mail protocol of an incoming server (an Exchange account's engine, M3c). */
+export function mailProtocolOf(incoming: IncomingServer): MailProtocol {
+  if (incoming.protocol === "exchange") {
+    return incoming.options.engine === "ews" ? "ews" : "graph";
+  }
+  return incoming.protocol;
+}
+
+/** An Exchange account stays one too (M3c; its engine is an account option). */
+const EXCHANGE_PROTOCOL_CHOICES: readonly Choice[] = [
+  { value: "exchange", label: "server-protocol-exchange" },
+];
+
 /** The protocol choices for an incoming server. */
 export function protocolChoices(incoming: IncomingServer): readonly Choice[] {
-  return incoming.protocol === "gmail" ? GMAIL_PROTOCOL_CHOICES : MAIL_PROTOCOL_CHOICES;
+  if (incoming.protocol === "gmail") return GMAIL_PROTOCOL_CHOICES;
+  if (incoming.protocol === "exchange") return EXCHANGE_PROTOCOL_CHOICES;
+  return MAIL_PROTOCOL_CHOICES;
 }
 
 /** Editor for the incoming server (protocol + endpoint). */
@@ -399,7 +420,7 @@ export function IncomingFields({
       />
       <EndpointFields
         name="incoming"
-        protocol={incoming.protocol}
+        protocol={mailProtocolOf(incoming)}
         server={incoming.server}
         onChange={(server) => onChange({ ...incoming, server } as IncomingServer)}
       />

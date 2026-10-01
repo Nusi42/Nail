@@ -1782,3 +1782,76 @@ async fn remote_scheduling_mail_needs_the_send_scope() {
         Some(ErrorCode::Forbidden)
     );
 }
+
+/// M3c contract (ADR 0072): Exchange requests need their account in the
+/// grant (Focused Inbox moves: their messages), and administration where
+/// they change account settings; Exchange events follow the account.
+#[tokio::test]
+async fn remote_exchange_requests_follow_grants() {
+    use nail_api::exchange::{
+        AutomaticRepliesSettings, ExchangeArea, ExchangeCategorySettings, InferenceClassification,
+    };
+    let f = setup();
+    let service = &f.service;
+    let message = demo_messages(&f)[0].clone();
+    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let full = remote_session(&f, "full", RemoteAccessPreset::Full.grant()).await;
+    let status = Request::GetExchangeStatus {
+        account_id: message.account_id.clone(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, status.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // Granted: the request reaches the core (unsupported until WP95).
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, status).await),
+        Some(ErrorCode::Unsupported)
+    );
+    // Categories and Focused Inbox need `organize`.
+    let category = Request::CreateExchangeCategory {
+        account_id: message.account_id.clone(),
+        settings: ExchangeCategorySettings::named("Red"),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, category.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        error_code(&service.handle_remote(&full, category).await),
+        Some(ErrorCode::Unsupported)
+    );
+    let focus = Request::ClassifyFocused {
+        message_ids: vec![message.id.clone()],
+        classification: InferenceClassification::Other,
+        always: false,
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, focus.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        error_code(&service.handle_remote(&full, focus).await),
+        Some(ErrorCode::Unsupported)
+    );
+    // Automatic replies are administration.
+    let oof = Request::SetAutomaticReplies {
+        account_id: message.account_id.clone(),
+        settings: AutomaticRepliesSettings::default(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, oof).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // Events follow the account.
+    let changed = nail_api::Event::ExchangeChanged {
+        account_id: message.account_id.clone(),
+        areas: vec![ExchangeArea::Categories],
+    };
+    assert_eq!(service.remote_event(&narrow, changed.clone()).await, None);
+    assert_eq!(
+        service.remote_event(&reader, changed.clone()).await,
+        Some(changed)
+    );
+}

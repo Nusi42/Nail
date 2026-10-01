@@ -8,6 +8,7 @@ server-protocol = Protocol
 server-protocol-imap = IMAP
 server-protocol-pop3 = POP3
 server-protocol-gmail = Gmail API
+server-protocol-exchange = Microsoft Exchange
 server-host = Server
 server-port = Port
 server-tls = Security

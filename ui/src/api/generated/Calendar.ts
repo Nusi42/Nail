@@ -3,6 +3,7 @@ import type { AccountId } from "./AccountId";
 import type { CalendarComponent } from "./CalendarComponent";
 import type { CalendarId } from "./CalendarId";
 import type { CalendarSettings } from "./CalendarSettings";
+import type { ExchangeCollectionInfo } from "./ExchangeCollectionInfo";
 import type { PimSourceId } from "./PimSourceId";
 
 /**
@@ -38,4 +39,9 @@ read_only: boolean,
 /**
  * The calendar's own zone (CalDAV `calendar-timezone`), `null` = none.
  */
-timezone: string | null, };
+timezone: string | null, 
+/**
+ * Exchange data (M3c: the shared / delegate mailbox, a special role,
+ * Microsoft To Do lists); absent for other sources.
+ */
+exchange?: ExchangeCollectionInfo, };

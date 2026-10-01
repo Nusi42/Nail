@@ -9,13 +9,15 @@
 //! (ADR 0043), [`plugins`] those of M2d (plug-in panels; WP62, ADR 0050),
 //! [`pim`] those of M3a (calendars, contacts, tasks; WP74, ADR 0058),
 //! [`scheduling`] and [`gmail`] those of M3b (invitations, free/busy,
-//! Gmail labels and categories; WP84, ADR 0065). The
+//! Gmail labels and categories; WP84, ADR 0065), [`exchange`] those of M3c
+//! (Focused Inbox, automatic replies; WP94, ADR 0072). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
 mod composer;
 mod core;
 mod customization;
+mod exchange;
 mod gmail;
 mod mcp;
 mod pim;
@@ -68,9 +70,8 @@ pub(crate) const fn widget(
 }
 
 /// A widget that is not implemented yet (any options are accepted): the
-/// slots of a wave's contract until its UI package types them (M3b: the
-/// scheduling and Gmail widgets, WP84). Unused between waves; the next
-/// contract (M3c) uses it for its slots.
+/// slots of a wave's contract until its UI package types them (M3c: the
+/// Exchange widgets, WP94). Unused between waves.
 #[allow(dead_code)]
 pub(crate) const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
     WidgetSpec {
@@ -97,6 +98,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     pim::WIDGETS,
     scheduling::WIDGETS,
     gmail::WIDGETS,
+    exchange::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

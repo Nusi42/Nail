@@ -21,6 +21,7 @@ import {
   isComposerRequest,
 } from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
+import { answerExchange, isExchangeRequest } from "../features/exchange/mock";
 import { answerGmail, isGmailRequest } from "../features/gmail/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerPim, isPimRequest } from "../features/pim/mock";
@@ -124,6 +125,7 @@ export class MockTransport implements Transport, MockCore {
     if (isPimRequest(request)) return answerPim(this, request);
     if (isSchedulingRequest(request)) return answerScheduling(this, request);
     if (isGmailRequest(request)) return answerGmail(this, request);
+    if (isExchangeRequest(request)) return answerExchange(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };

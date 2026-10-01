@@ -80,13 +80,23 @@ config-oauth-provider-id-invalid = invalid provider id "{ $id }": use lowercase 
 config-oauth-provider-needs-client-id = oauth-provider "{ $id }" needs client-id="…"
 config-oauth-provider-needs-urls = oauth-provider "{ $id }" is not built in and needs auth-url="…" and token-url="…"
 config-oauth-needs-provider = `auth "oauth2"` needs provider="google", "microsoft" or the id of an `oauth-provider`
-config-auth-method-unknown = unknown auth method { $found } (expected "password", "oauth2", "client-certificate" or "none")
+config-auth-method-unknown = unknown auth method { $found } (expected "password", "oauth2", "windows", "client-certificate" or "none")
 config-authserv-id-empty = `authserv-id` needs at least one server id
 config-authserv-id-invalid = { $found } is not a server id like "mx.example.net"
 config-sieve-needs-imap = `sieve` (ManageSieve) needs an IMAP account
 config-gmail-needs-oauth2 = a `gmail` account signs in with `auth "oauth2"`
 config-gmail-no-smtp = a `gmail` account sends through the Gmail API; remove the `smtp` node
 config-gmail-plaintext-needs-loopback = `tls="plaintext"` is only allowed for local test servers (localhost)
+config-exchange-graph-needs-oauth2 = an `exchange` account with engine="graph" signs in with `auth "oauth2"` provider="microsoft"
+config-exchange-unsupported-auth = an `exchange` account with engine="ews" signs in with `auth "windows"`, `auth "password"` (Basic over TLS) or `auth "oauth2"`
+config-exchange-plaintext-needs-loopback = `tls="plaintext"` is only allowed for local test servers (localhost)
+config-exchange-starttls = Exchange speaks HTTPS: use tls="implicit" (or "plaintext" for local test servers)
+config-exchange-ews-only-option = `url` and `streaming` only apply with engine="ews"
+config-exchange-invalid-url = `url` must be an https:// address of the EWS endpoint, found { $found }
+config-exchange-needs-host = an `exchange` account with engine="ews" needs host="…" or url="…"
+config-exchange-no-smtp = an `exchange` account sends through Exchange; remove the `smtp` node
+config-auth-windows-needs-exchange = `auth "windows"` (Windows sign-in) only works for `exchange` accounts
+config-sspi-package-invalid = `package` must be "negotiate", "kerberos" or "ntlm", found { $found }
 config-sieve-script-invalid = `script` must be 1 to 128 characters without control characters or slashes, found { $found }
 config-needs-leave-on-server = `{ $key }` only applies with leave-on-server=#true
 config-bcc-empty = `bcc` needs at least one address

@@ -223,7 +223,9 @@ fn sieve_enabled(account: &AccountConfig) -> bool {
 fn imap_server(account: &AccountConfig) -> Option<&ServerEndpoint> {
     match &account.incoming {
         IncomingServer::Imap { server, .. } => Some(server),
-        IncomingServer::Pop3 { .. } | IncomingServer::Gmail { .. } => None,
+        IncomingServer::Pop3 { .. }
+        | IncomingServer::Gmail { .. }
+        | IncomingServer::Exchange { .. } => None,
     }
 }
 

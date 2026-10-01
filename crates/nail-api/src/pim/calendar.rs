@@ -59,6 +59,11 @@ pub struct Calendar {
     pub read_only: bool,
     /// The calendar's own zone (CalDAV `calendar-timezone`), `null` = none.
     pub timezone: Option<String>,
+    /// Exchange data (M3c: the shared / delegate mailbox, a special role,
+    /// Microsoft To Do lists); absent for other sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exchange: Option<crate::exchange::ExchangeCollectionInfo>,
 }
 
 impl Calendar {
@@ -1115,6 +1120,7 @@ mod tests {
             components: vec![CalendarComponent::Event, CalendarComponent::Task],
             read_only: false,
             timezone: None,
+            exchange: None,
         };
         assert!(calendar.has_events() && calendar.has_tasks());
         assert_eq!(

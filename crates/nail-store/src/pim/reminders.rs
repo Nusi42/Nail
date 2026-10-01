@@ -598,6 +598,7 @@ mod tests {
                         components: vec![nail_api::pim::CalendarComponent::Event],
                         read_only: false,
                         timezone: None,
+                        exchange: None,
                     },
                     None,
                 )

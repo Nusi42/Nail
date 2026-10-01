@@ -30,6 +30,7 @@ mod customize;
 pub mod demo;
 mod engine;
 mod error;
+mod exchange;
 mod gmail;
 mod ids;
 mod imap_engine;

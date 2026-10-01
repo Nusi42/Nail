@@ -189,6 +189,7 @@ fn ensure_local_collections(store: &Store, locale: Option<&str>) -> Result<bool>
                 components: vec![CalendarComponent::Event],
                 read_only: false,
                 timezone: None,
+                exchange: None,
             },
             None,
         )?;
@@ -206,6 +207,7 @@ fn ensure_local_collections(store: &Store, locale: Option<&str>) -> Result<bool>
                 components: vec![CalendarComponent::Task],
                 read_only: false,
                 timezone: None,
+                exchange: None,
             },
             None,
         )?;
@@ -221,6 +223,7 @@ fn ensure_local_collections(store: &Store, locale: Option<&str>) -> Result<bool>
                 settings: AddressBookSettings::named(text("pim-address-book-default-name")),
                 read_only: false,
                 role: None,
+                exchange: None,
             },
             None,
         )?;
@@ -614,6 +617,7 @@ impl Service {
             components,
             read_only: false,
             timezone: None,
+            exchange: None,
         };
         let saved = calendar.clone();
         let ops = self
@@ -712,6 +716,7 @@ impl Service {
             settings,
             read_only: false,
             role: None,
+            exchange: None,
         };
         let saved = book.clone();
         let ops = self

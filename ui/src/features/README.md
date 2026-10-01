@@ -2,7 +2,7 @@
 
 Parallel work packages each own one directory here, so no two packages edit
 the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036; M2c: ADR 0043;
-M2d: ADR 0050; M3a: ADR 0058; M3b: ADR 0065):
+M2d: ADR 0050; M3a: ADR 0058; M3b: ADR 0065; M3c: ADR 0072):
 
 | Directory        | Work package | Owns                                                                                                                                                                                                                         |
 | ---------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,6 +21,7 @@ M2d: ADR 0050; M3a: ADR 0058; M3b: ADR 0065):
 | `pim/`           | M3a WP74     | calendar views + `calendar-list`, lazy editor dialogs (`lazyDialogs.ts`), contacts, groups, merge, tasks, reminder toasts, import / sources (launch files and `webcal:` links), `parts.ts` `PIM_BASE_CSS`                    |
 | `scheduling/`    | M3b WP84     | invitation card, answers / counter-proposals, organizer updates and cancellations, attendee picker with free/busy; mounts `InvitationCard` (reader), `AttendeePicker` + `MeetingPanel` (event editor), `SCHEDULING_BASE_CSS` |
 | `gmail/`         | M3b WP84     | Gmail labels (management, label views), categories as a filter; mounts `MessageLabels` (reader), `GMAIL_BASE_CSS`                                                                                                            |
+| `exchange/`      | M3c WP94     | shared mailboxes / delegate folders in the folder tree, room finder (event editor), automatic replies editor, Exchange rule placement badges, Focused Inbox, categories with colours, To Do lists in the task widget         |
 
 ## Files of a slot
 

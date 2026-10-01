@@ -4445,6 +4445,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-exchange"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "chrono-tz",
+ "nail-api",
+ "nail-auth",
+ "nail-discovery",
+ "nail-exchange",
+ "nail-ical",
+ "pretty_assertions",
+ "quick-xml",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+ "windows",
+]
+
+[[package]]
 name = "nail-ical"
 version = "0.1.0"
 dependencies = [
@@ -4565,6 +4590,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-proto-ews"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "nail-api",
+ "nail-auth",
+ "nail-proto-ews",
+ "pretty_assertions",
+ "quick-xml",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "nail-proto-gmail"
 version = "0.1.0"
 dependencies = [
@@ -4575,6 +4621,26 @@ dependencies = [
  "nail-api",
  "nail-auth",
  "nail-proto-gmail",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "nail-proto-graph"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "nail-api",
+ "nail-auth",
+ "nail-proto-graph",
  "pretty_assertions",
  "reqwest",
  "serde",

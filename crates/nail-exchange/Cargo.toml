@@ -1,0 +1,56 @@
+[package]
+name = "nail-exchange"
+description = "Nail's Exchange common layer: Autodiscover (POX + v2 JSON) with engine choice, Windows sign-in (SSPI Negotiate / Kerberos / NTLM), and the mapping between Exchange and Nail models (categories, Focused Inbox, rules, OOF, To Do, events, contacts, rooms); plus a loopback mock Autodiscover server (feature `testing`)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# The mock Autodiscover server (`nail_exchange::testing`): loopback only
+# (ADR 0057). Used by this crate's tests, the core's tests and the
+# demo-multi seed (WP95).
+testing = ["dep:axum"]
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+# Autodiscover over HTTPS (TLS from nail-auth, ring) and SRV
+# (`_autodiscover._tcp`) through the OS resolver (nail-discovery's
+# SystemDns; no DNS sockets, ADR 0057).
+reqwest.workspace = true
+nail-auth.workspace = true
+nail-discovery.workspace = true
+url.workspace = true
+# Autodiscover POX XML (MIT; the workspace's XML library).
+quick-xml.workspace = true
+# Autodiscover v2 JSON, Graph-shaped fixtures.
+serde.workspace = true
+serde_json.workspace = true
+# The mapping layer: zones (Windows names → IANA), recurrence, times.
+nail-ical.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+base64.workspace = true
+# The mock server (feature `testing`); MIT, already in the workspace.
+axum = { workspace = true, optional = true }
+
+# Windows sign-in: SSPI (secur32) through the `windows` crate (MIT /
+# Apache-2.0, already in the workspace for the certificate store); no NTLM
+# implementation of our own (plan "Scope decisions for M3").
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Security_Authentication_Identity",
+    "Win32_Security_Credentials",
+] }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+nail-exchange = { path = ".", features = ["testing"] }
+
+[lints]
+workspace = true

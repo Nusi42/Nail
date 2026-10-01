@@ -130,6 +130,7 @@ fn calendar(id: &str, source: &str, read_only: bool) -> Calendar {
         components: vec![CalendarComponent::Event, CalendarComponent::Task],
         read_only,
         timezone: None,
+        exchange: None,
     }
 }
 
@@ -141,6 +142,7 @@ fn book(id: &str, source: &str) -> AddressBook {
         settings: AddressBookSettings::named(id),
         read_only: false,
         role: None,
+        exchange: None,
     }
 }
 

@@ -84,8 +84,8 @@ Inside the account:
 
 | Node | Meaning |
 | --- | --- |
-| `imap`, `pop3` or `gmail` | The incoming server (exactly one) |
-| `smtp` | The outgoing server (optional; without it the account only receives; not with `gmail`) |
+| `imap`, `pop3`, `gmail` or `exchange` | The incoming server (exactly one) |
+| `smtp` | The outgoing server (optional; without it the account only receives; not with `gmail` or `exchange`) |
 | `identity` | A sending identity (any number; the first is the default) |
 | `sync` | Which folders to synchronize and how much to download |
 | `authserv-id` | Which receiving servers' sender checks to trust (see below) |
@@ -207,6 +207,62 @@ account "personal" email="ada@gmail.example" {
 A Gmail address set up with `imap` and `smtp` keeps working as an IMAP
 account.
 
+### Microsoft Exchange (`exchange`)
+
+An `exchange` node connects to Microsoft Exchange. Mail, calendars,
+contacts and tasks all come over this one connection, and Nail sends
+through it too, so an Exchange account has no `smtp` node. `engine`
+chooses how Nail talks to the server:
+
+- `engine="graph"` (the default) — **Exchange Online / Microsoft 365**
+  through Microsoft Graph. Sign in with your Microsoft work or school
+  account: `auth "oauth2" provider="microsoft"`. Microsoft To Do lists
+  appear as task lists.
+- `engine="ews"` — **Exchange Server in your organization** (2016, 2019,
+  Subscription Edition) through Exchange Web Services. Give the server's
+  `host` (or the `url` that account setup found). Sign in with
+  `auth "windows"` (your Windows sign-in, see below), `auth "password"`
+  (sent only over an encrypted connection) or `auth "oauth2"` for hybrid
+  setups.
+
+Microsoft is retiring Exchange Web Services in Exchange Online. An account
+that uses `engine="ews"` with Exchange Online shows a warning: switch it to
+`engine="graph"`.
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `engine` | `"graph"` or `"ews"` | `"graph"` |
+| `host` | The Exchange server (EWS) | `graph.microsoft.com` for Graph; for EWS the host of `url` |
+| `url` | EWS only: the address of the EWS service | `https://<host>/EWS/Exchange.asmx` |
+| `poll-interval` | Shortest time in seconds between checks for changes (at least 10) | 30 |
+| `max-poll-interval` | Longest time in seconds between checks when nothing changes | 300 |
+| `streaming` | EWS only: let the server announce changes at once | `#true` |
+| `server-rules` | Run Nail rules as Exchange inbox rules where Exchange can express them | `#true` |
+| `port`, `tls` | Only for test servers on your own computer | 443, `"implicit"` |
+
+Exchange categories become tags in Nail, with the category colours.
+Focused Inbox shows as **Focused** and **Other**, and the search
+`focus:other` finds mail sorted into Other. Out-of-office replies and
+server-side rules use Exchange's own (instead of Sieve). Shared mailboxes
+and mailboxes you have delegate access to appear as extra folders under
+the account; meeting rooms can be found and booked from the event editor.
+**Add account** asks Exchange's Autodiscover service which engine to use
+and proposes IMAP + SMTP as a fallback when the server offers them.
+
+```kdl
+account "work" email="ada@contoso.example" {
+    exchange {
+        auth "oauth2" provider="microsoft"
+    }
+}
+
+account "office" email="ada@corp.example" {
+    exchange engine="ews" host="mail.corp.example" {
+        auth "windows"
+    }
+}
+```
+
 ```kdl
 account "home" email="ada@home.example" {
     pop3 host="pop.home.example" leave-on-server=#true delete-after-days=14
@@ -224,6 +280,7 @@ password, using the account's `email` as the user name.
 | Password | `auth "password" username="ada" secret="keychain:nail/work/password"` | `mechanism=` may force `"plain"`, `"login"`, `"scram-sha-256"` or, for POP3, `"apop"` |
 | OAuth2 | `auth "oauth2" provider="google"` | For Gmail and Microsoft 365 / Outlook.com. `provider` is `"google"`, `"microsoft"` or an `oauth-provider` from this file. `mechanism=` may force `"xoauth2"` or `"oauthbearer"` |
 | Client certificate | `auth "client-certificate" secret="keychain:nail/work/client-certificate"` | The keychain entry holds the certificate and its key |
+| Windows sign-in | `auth "windows"` | Exchange servers in your organization (`engine="ews"`) only. Without `username` Nail signs in as you are signed in to Windows (Kerberos, or NTLM where Kerberos is not available) and stores no password. With `username="CORP\ada"` it uses that account and its password from the keychain. `package=` may force `"kerberos"` or `"ntlm"` (default `"negotiate"`) |
 | None | `auth "none"` | For an outgoing relay that needs no sign-in |
 
 `username` defaults to the account's `email`. `secret` defaults to

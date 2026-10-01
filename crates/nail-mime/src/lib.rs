@@ -106,6 +106,7 @@ impl ParsedMessage {
             duplicates: Vec::new(),
             headers_only: false,
             gmail: None,
+            exchange: None,
         }
     }
 

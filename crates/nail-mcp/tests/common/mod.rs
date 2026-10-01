@@ -52,6 +52,7 @@ pub fn summary(id: &str, account: &str, folder: &str, thread: &str) -> MessageSu
         duplicates: vec![],
         headers_only: false,
         gmail: None,
+        exchange: None,
     }
 }
 

@@ -577,6 +577,28 @@ impl Service {
             | Request::CreateGmailLabel { account_id, .. }
             | Request::UpdateGmailLabel { account_id, .. }
             | Request::DeleteGmailLabel { account_id, .. } => check_account(access, account_id),
+            // M3c Exchange: the account must be granted; Focused Inbox
+            // moves need their messages.
+            Request::GetExchangeStatus { account_id }
+            | Request::ListExchangeMailboxes { account_id }
+            | Request::AddExchangeMailbox { account_id, .. }
+            | Request::UpdateExchangeMailbox { account_id, .. }
+            | Request::RemoveExchangeMailbox { account_id, .. }
+            | Request::ListExchangeCategories { account_id }
+            | Request::CreateExchangeCategory { account_id, .. }
+            | Request::UpdateExchangeCategory { account_id, .. }
+            | Request::DeleteExchangeCategory { account_id, .. }
+            | Request::GetAutomaticReplies { account_id }
+            | Request::SetAutomaticReplies { account_id, .. }
+            | Request::GetExchangeRules { account_id }
+            | Request::SyncExchangeRules { account_id }
+            | Request::SetExchangeInboxRuleEnabled { account_id, .. }
+            | Request::DeleteExchangeInboxRule { account_id, .. }
+            | Request::ListRoomLists { account_id, .. }
+            | Request::FindRooms { account_id, .. } => check_account(access, account_id),
+            Request::ClassifyFocused { message_ids, .. } => {
+                self.check_messages(access, message_ids).await
+            }
         }
     }
 
@@ -1239,6 +1261,8 @@ impl Service {
             // (full grants); Gmail labels follow their account.
             Event::InvitationsChanged { .. } | Event::SchedulingSettingsChanged => full(&access),
             Event::GmailLabelsChanged { account_id } => access.allows_account(account_id),
+            // M3c: Exchange state follows its account.
+            Event::ExchangeChanged { account_id, .. } => access.allows_account(account_id),
         };
         allowed.then_some(event)
     }

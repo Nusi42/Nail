@@ -3,6 +3,7 @@ import type { AccountId } from "./AccountId";
 import type { AddressBookId } from "./AddressBookId";
 import type { AddressBookRole } from "./AddressBookRole";
 import type { AddressBookSettings } from "./AddressBookSettings";
+import type { ExchangeCollectionInfo } from "./ExchangeCollectionInfo";
 import type { PimSourceId } from "./PimSourceId";
 
 /**
@@ -32,4 +33,9 @@ read_only: boolean,
 /**
  * A special role, if any.
  */
-role: AddressBookRole | null, };
+role: AddressBookRole | null, 
+/**
+ * Exchange data (M3c: the shared / delegate mailbox, a special
+ * role); absent for other sources.
+ */
+exchange?: ExchangeCollectionInfo, };

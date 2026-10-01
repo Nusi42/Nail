@@ -41,7 +41,8 @@ pub(crate) fn sync_store_accounts(
             IncomingServer::Pop3 { .. } => pop3_folders(&account.id),
             // M3b: Gmail's folders follow from the labels (fixed set).
             IncomingServer::Gmail { .. } => crate::gmail::gmail_folders(&account.id),
-            IncomingServer::Imap { .. } => Vec::new(),
+            // M3c: Exchange folders come from the server's hierarchy.
+            IncomingServer::Imap { .. } | IncomingServer::Exchange { .. } => Vec::new(),
         };
         for folder in local_folders {
             store.upsert_folder(&folder)?;
@@ -247,6 +248,12 @@ impl Service {
             IncomingServer::Gmail { server, .. } => test_result(
                 crate::gmail::test_gmail(server, incoming_creds.login(false).await).await,
             ),
+            // M3c: the Graph / EWS test (sign-in + mailbox info) comes with
+            // the engines (WP95).
+            IncomingServer::Exchange { .. } => test_result(Err(EngineError::permanent(
+                ErrorCode::Unsupported,
+                "testing Exchange accounts is not wired yet (M3c WP95)",
+            ))),
         };
         let outgoing = match (&config.outgoing, outgoing_server) {
             (Some(OutgoingServer::Smtp { .. }), Some(server)) => {

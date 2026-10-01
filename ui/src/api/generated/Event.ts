@@ -5,6 +5,7 @@ import type { AddressBookId } from "./AddressBookId";
 import type { CalendarId } from "./CalendarId";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ErrorCode } from "./ErrorCode";
+import type { ExchangeArea } from "./ExchangeArea";
 import type { FolderId } from "./FolderId";
 import type { LocalizedMessage } from "./LocalizedMessage";
 import type { MailNotification } from "./MailNotification";
@@ -284,4 +285,12 @@ message_ids: Array<MessageId>, } | { "type": "SchedulingSettingsChanged" } | { "
 /**
  * The account.
  */
-account_id: AccountId, };
+account_id: AccountId, } | { "type": "ExchangeChanged", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * What changed.
+ */
+areas: Array<ExchangeArea>, };

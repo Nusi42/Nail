@@ -61,6 +61,7 @@ pub fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessa
         duplicates: Vec::new(),
         headers_only: false,
         gmail: None,
+        exchange: None,
     })
 }
 

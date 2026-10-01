@@ -57,6 +57,14 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        LabelChange mapping, categories, labels, MessageSummary.gmail); engine.rs:
                        MailApiEngine, AdaptivePoll, FreeBusyProvider, EngineError::retry_after_secs (ADR 0065);
                        WP85: AutomaticMail::Itip (prepared iMIP mail), DiscoverySource::Provider (ADR 0070)
+                       M3c: exchange (IncomingServer::Exchange + ExchangeOptions engine graph / ews,
+                       AuthConfig::Windows + SspiPackage, MailProtocol graph / ews, shared / delegate
+                       mailboxes, categories + CategoryColor, Focused Inbox on MessageSummary.exchange,
+                       rules.rs inbox rules, oof.rs automatic replies, rooms, Calendar / AddressBook
+                       `.exchange`, PimSourceKind::Exchange `exchange:<account>`, status, ExchangeChanged);
+                       exchange/engine.rs ExchangeEngine (mail per folder + settings + directory + PIM +
+                       free/busy + sending) and NegotiateAuth; exchange/pim.rs provider-neutral Exchange
+                       item shapes (ADR 0072)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -72,8 +80,10 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        schema; upsert/remove_pim_source), widgets/pim.rs (typed options of the PIM widgets
                        incl. `calendar-list`) (ADRs 0058, 0062);
                        M3b: account `gmail` node (oauth2 only, no smtp, plaintext only on loopback),
-                       widgets/{scheduling,gmail}.rs (WP84 slots) (ADR 0065)
-crates/nail-store      SQLite metadata (v11), blob store, per-account operation queue with sync-side
+                       widgets/{scheduling,gmail}.rs (WP84 slots) (ADR 0065);
+                       M3c: account `exchange` node (engine, host / url, polling, streaming, server-rules;
+                       `auth "windows"` only there), widgets/exchange.rs (WP94 slot) (ADR 0072)
+crates/nail-store      SQLite metadata (v12), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -103,7 +113,12 @@ crates/nail-store      SQLite metadata (v11), blob store, per-account operation 
                        moves forward only, received / sent iTIP messages, settings), gmail.rs (history id,
                        labels ↔ tags / folders, per-message labels + category, label op queue); summaries
                        carry `gmail` (attach_tags), MessageFilter::GmailCategory (ADR 0070);
-                       src/pim/freebusy.rs (WP83 slot)
+                       src/pim/freebusy.rs (WP83 slot);
+                       v12 (ADR 0072): pim_sources rebuilt (kind exchange + account_id; schema.rs
+                       Migration::rebuild runs a step with foreign keys off + foreign_key_check), exchange.rs
+                       (cursors per folder / mailbox / PIM collection, remote ids + change keys, mailboxes,
+                       categories, automatic replies + exchange_ops payload sealed, rules, rooms, the Exchange
+                       operation queue); Calendar / AddressBook `.exchange` read from exchange_pim_collections
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -173,6 +188,11 @@ crates/nail-proto-gmail Gmail API engine (WP82, ADR 0067): client.rs (GmailClien
                        mapping, engine.rs GmailEngine (MailApiEngine + OutgoingTransport, for_account), poll.rs
                        PollTimer, labels::LABEL_PALETTE; feature `testing` = MockGmailServer (in-memory Gmail,
                        injected errors, quota, request log) + fixtures/ (DEMO_MAILBOX, recorded responses)
+crates/nail-proto-graph Microsoft Graph engine (M3c WP91 slot; stub: api_base, mailbox_path); feature `testing` =
+                       MockGraphServer (loopback) (ADR 0072)
+crates/nail-proto-ews  EWS engine (M3c WP92 slot; stub: SOAP envelope); feature `testing` = MockEwsServer (loopback)
+crates/nail-exchange   Exchange common layer (M3c WP93 slot): Autodiscover, sspi.rs (SSPI via the `windows` crate;
+                       stub: package_info), mapping Exchange ↔ Nail; feature `testing` = MockAutodiscoverServer
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -233,7 +253,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        CalDAV outbox, schedule inbox per CalDAV pass), gmail.rs (Gmail engine loop: labels,
                        full listing with resume / merge, history deltas, PollTimer; GmailExecutor replay; label
                        queue; sending through the API; TestAccount); pim/engine.rs stores RFC 6638 scheduling
-                       info with the DAV discovery (`source_scheduling`)
+                       info with the DAV discovery (`source_scheduling`);
+                       M3c contract: exchange.rs (every Exchange request `unsupported`, engine stub) (ADR 0072)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -257,7 +278,7 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        @internationalized/date + react-aria-components for the date / time picker;
                        ADRs 0058, 0062); M3b: scheduling/ (InvitationCard, AttendeePicker, MeetingPanel,
                        free/busy timeline), gmail/ (label list / editor, category tabs, MessageLabels)
-                       (ADR 0069));
+                       (ADR 0069)); M3c: exchange/ (WP94 slot; ADR 0072);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -281,6 +302,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
+                       M3c: core-exchange.ftl (WP93 + contract ids), core-graph.ftl (WP91), core-ews.ftl
+                       (WP92), exchange.ftl (WP94);
                        every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
@@ -440,6 +463,19 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `nail-config/src/widgets/{scheduling,gmail}.rs`, `ui/src/features/{scheduling,gmail}/`,
   `locales/*/{scheduling,gmail,core-scheduling,core-gmail}.ftl`). The core answers every M3b
   request `unsupported` until WP85; a Gmail account's engine reports `unsupported`.
+- M3c contract: ADR 0072 (`nail_api::exchange`: `exchange` account node with engine Graph (Exchange
+  Online, OAuth2) / EWS (on-premises: `auth "windows"` = SSPI Negotiate / Kerberos / NTLM, Basic over TLS,
+  OAuth2 hybrid); IMAP fallback = a normal IMAP account; shared / delegate mailboxes as store data
+  (automapped ones hide on removal) and `@<mailbox>/…` folder trees; categories = tags (case-insensitive) with
+  Outlook colours; Focused Inbox `focus:`; inbox rules with `RulePlacement`; automatic replies as plain text;
+  rooms / room lists; To Do lists as task lists of the account's `exchange:<account>` PIM source; 18 requests,
+  1 event `ExchangeChanged {areas}`; engine seams `ExchangeEngine` / `NegotiateAuth` and provider-neutral PIM
+  shapes in `nail_api::exchange::{engine,pim}`; store v12 with APIs; stub crates `nail-proto-graph`,
+  `nail-proto-ews` (mocks: feature `testing`), `nail-exchange`; slots `ui/src/features/exchange/`,
+  `nail-config/src/widgets/exchange.rs`, `locales/*/{exchange,core-exchange,core-graph,core-ews}.ftl`). The core
+  answers every M3c request `unsupported` until WP95; an Exchange account's engine reports `unsupported`.
+  Microsoft tokens are per resource: Graph scopes (`nail_auth::mail_scopes(microsoft, [Graph])`) and Outlook
+  IMAP / EWS scopes are separate sign-ins.
 - M3b integration (ADR 0070; packages ADRs 0066 `nail-itip`, 0067 `nail-proto-gmail`, 0068 CalDAV scheduling,
   0069 UI): iTIP mail is recorded and applied on arrival per `SchedulingSettings` (never junk or spoofed);
   answers and organizer mail leave through the outbox as `AutomaticMail::Itip` (prepared MIME as the draft's

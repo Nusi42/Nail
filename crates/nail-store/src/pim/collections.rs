@@ -100,6 +100,7 @@ pub(crate) fn source_kind_str(kind: PimSourceKind) -> &'static str {
         PimSourceKind::Ics => "ics",
         PimSourceKind::Caldav => "caldav",
         PimSourceKind::Carddav => "carddav",
+        PimSourceKind::Exchange => "exchange",
     }
 }
 
@@ -108,6 +109,7 @@ fn parse_source_kind(text: &str) -> PimSourceKind {
         "ics" => PimSourceKind::Ics,
         "caldav" => PimSourceKind::Caldav,
         "carddav" => PimSourceKind::Carddav,
+        "exchange" => PimSourceKind::Exchange,
         _ => PimSourceKind::Local,
     }
 }
@@ -154,8 +156,11 @@ fn opt_json_col<T: serde::de::DeserializeOwned>(
     .transpose()
 }
 
-const COLLECTION_COLS: &str =
-    "c.id, c.source_id, c.settings, c.components, c.read_only, c.timezone, c.role, c.kind";
+/// Column 8 is the collection's Exchange data as JSON
+/// (M3c; `crate::exchange::collection_info_from_json` reads it).
+const COLLECTION_COLS: &str = "c.id, c.source_id, c.settings, c.components, c.read_only, \
+     c.timezone, c.role, c.kind, (SELECT json_object('mailbox', x.mailbox, 'role', x.role, \
+     'todo', x.todo) FROM exchange_pim_collections x WHERE x.collection_id = c.id)";
 
 fn calendar_from_row(row: &Row<'_>) -> rusqlite::Result<Calendar> {
     Ok(Calendar {
@@ -166,6 +171,7 @@ fn calendar_from_row(row: &Row<'_>) -> rusqlite::Result<Calendar> {
         components: json_col(row, 3)?,
         read_only: row.get(4)?,
         timezone: row.get(5)?,
+        exchange: crate::exchange::collection_info_from_json(row.get(8)?),
     })
 }
 
@@ -180,6 +186,7 @@ fn address_book_from_row(row: &Row<'_>) -> rusqlite::Result<AddressBook> {
         role: role
             .filter(|r| r == "collected")
             .map(|_| AddressBookRole::Collected),
+        exchange: crate::exchange::collection_info_from_json(row.get(8)?),
     })
 }
 
@@ -674,6 +681,7 @@ impl Store {
             settings,
             read_only: false,
             role: Some(AddressBookRole::Collected),
+            exchange: None,
         };
         self.save_address_book(&book, None)?;
         Ok(book)
@@ -709,6 +717,7 @@ mod tests {
             components: vec![CalendarComponent::Task, CalendarComponent::Event],
             read_only: false,
             timezone: None,
+            exchange: None,
         }
     }
 
@@ -834,6 +843,7 @@ mod tests {
             settings: AddressBookSettings::named("People"),
             read_only: false,
             role: None,
+            exchange: None,
         };
         store.save_address_book(&book, None).unwrap();
         let collected = store.ensure_collected_book("Collected").unwrap();

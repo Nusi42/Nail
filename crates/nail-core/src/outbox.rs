@@ -284,6 +284,14 @@ impl Service {
         if let IncomingServer::Gmail { .. } = &account.incoming {
             return Ok(Arc::new(crate::gmail::engine_for(self, account)?));
         }
+        if let IncomingServer::Exchange { .. } = &account.incoming {
+            // M3c: sending through the Graph / EWS engine is wired by WP95.
+            return Err(ApiError::unsupported(format!(
+                "sending from Exchange account {} is not wired yet (M3c WP95)",
+                account.id
+            ))
+            .into());
+        }
         Ok(Arc::new(self.smtp_transport(account)?))
     }
 
@@ -510,8 +518,11 @@ impl Service {
                 self.enqueue(vec![op]).await?;
             }
             // POP3 has no server folder; Gmail files sent mail itself
-            // (`messages.send` labels it SENT; M3b).
-            IncomingServer::Pop3 { .. } | IncomingServer::Gmail { .. } => {
+            // (`messages.send` labels it SENT; M3b), so does Exchange
+            // (Sent Items; M3c).
+            IncomingServer::Pop3 { .. }
+            | IncomingServer::Gmail { .. }
+            | IncomingServer::Exchange { .. } => {
                 self.broadcast(Event::MailChanged {
                     folder_ids: vec![folder.id.clone()],
                 });

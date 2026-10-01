@@ -187,6 +187,15 @@ fn render_auth(auth: &AuthConfig, depth: usize, indent: &str) -> String {
             .arg("client-certificate")
             .prop_opt("username", username.as_deref())
             .prop_opt("secret", secret.as_ref().map(|s| s.as_str())),
+        AuthConfig::Windows {
+            username,
+            secret,
+            package,
+        } => Line::new("auth")
+            .arg("windows")
+            .prop_opt("username", username.as_deref())
+            .prop_opt("secret", secret.as_ref().map(|s| s.as_str()))
+            .prop_opt("package", package.map(|p| p.as_str())),
         AuthConfig::None => Line::new("auth").arg("none"),
     };
     line.finish(depth, indent, &[])
@@ -224,6 +233,19 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
             let line = endpoint_line("gmail", server)
                 .num_opt("poll-interval", options.poll_interval_secs)
                 .num_opt("max-poll-interval", options.max_poll_interval_secs);
+            children.push(line.finish(1, indent, &[render_auth(&server.auth, 2, indent)]));
+        }
+        IncomingServer::Exchange { server, options } => {
+            let line = Line::new("exchange")
+                .prop("engine", options.engine.as_str())
+                .prop("host", &server.host)
+                .num("port", server.port)
+                .prop("tls", tls_name(server.tls))
+                .prop_opt("url", options.url.as_deref())
+                .num_opt("poll-interval", options.poll_interval_secs)
+                .num_opt("max-poll-interval", options.max_poll_interval_secs)
+                .bool_opt("streaming", options.streaming)
+                .bool_opt("server-rules", options.server_rules);
             children.push(line.finish(1, indent, &[render_auth(&server.auth, 2, indent)]));
         }
     }
@@ -690,10 +712,16 @@ fn is_default_prop(node: &KdlNode, key: &str, value: &KdlValue, ctx: &Ctx<'_>) -
         "pop3" => Some(MailProtocol::Pop3),
         "smtp" => Some(MailProtocol::Smtp),
         "gmail" => Some(MailProtocol::Gmail),
+        "exchange" => Some(MailProtocol::Graph),
         _ => None,
     };
     match (node.name().value(), key) {
         ("gmail", "host") => value.as_string() == Some(nail_api::gmail::GMAIL_API_HOST),
+        ("exchange", "host") => {
+            str_prop(node, "engine") != Some("ews")
+                && value.as_string() == Some(nail_api::exchange::GRAPH_HOST)
+        }
+        ("exchange", "engine") => value.as_string() == Some("graph"),
         (_, "tls") if protocol.is_some() => value.as_string() == Some("implicit"),
         (_, "port") if protocol.is_some() => {
             let tls = match str_prop(node, "tls") {

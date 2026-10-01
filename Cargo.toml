@@ -28,6 +28,9 @@ members = [
     "crates/nail-dav",
     "crates/nail-itip",
     "crates/nail-proto-gmail",
+    "crates/nail-proto-graph",
+    "crates/nail-proto-ews",
+    "crates/nail-exchange",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -64,6 +67,9 @@ default-members = [
     "crates/nail-dav",
     "crates/nail-itip",
     "crates/nail-proto-gmail",
+    "crates/nail-proto-graph",
+    "crates/nail-proto-ews",
+    "crates/nail-exchange",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -106,6 +112,9 @@ nail-ical = { path = "crates/nail-ical" }
 nail-dav = { path = "crates/nail-dav" }
 nail-itip = { path = "crates/nail-itip" }
 nail-proto-gmail = { path = "crates/nail-proto-gmail" }
+nail-proto-graph = { path = "crates/nail-proto-graph" }
+nail-proto-ews = { path = "crates/nail-proto-ews" }
+nail-exchange = { path = "crates/nail-exchange" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -268,6 +277,18 @@ iana-time-zone = "0.1.65"
 # CalDAV scheduling and free/busy (WP83) extend nail-dav and
 # nail-testkit-net with their existing quick-xml / axum. Ask before adding
 # more (licences: no GPL / LGPL / AGPL, no OpenSSL / aws-lc).
+
+# M3c (ADR 0072). Microsoft Exchange needs no new third-party crate:
+# nail-proto-graph (WP91) uses the workspace reqwest (TLS from nail-auth,
+# ring), serde_json, base64, chrono and, for its loopback mock Graph server
+# (feature `testing`), axum; nail-proto-ews (WP92) the same plus quick-xml
+# for SOAP (no `serialize` feature needed; a crate may enable it);
+# nail-exchange (WP93) quick-xml / serde_json for Autodiscover, nail-ical /
+# chrono-tz for the mapping, nail-discovery's SystemDns for SRV, and the
+# `windows` crate above with the SSPI features
+# (`Win32_Security_Authentication_Identity`, `Win32_Security_Credentials`,
+# enabled in its own manifest) for Negotiate / Kerberos / NTLM. Ask before
+# adding more (licences: no GPL / LGPL / AGPL, no OpenSSL / aws-lc).
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

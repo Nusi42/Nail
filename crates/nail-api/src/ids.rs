@@ -205,6 +205,12 @@ string_id!(
     /// is still queued (M3b, [`crate::gmail::GmailLabel`]).
     GmailLabelId
 );
+string_id!(
+    /// The server's id of an Exchange category (Graph `outlookCategory`
+    /// id, EWS category GUID), or a temporary `local-…` id while its
+    /// creation is queued (M3c, [`crate::exchange::ExchangeCategory`]).
+    ExchangeCategoryId
+);
 
 impl PimSourceId {
     /// Id of the built-in local source (local calendars, task lists and

@@ -1197,12 +1197,239 @@ CREATE TABLE gmail_label_ops (
 CREATE INDEX gmail_label_ops_state ON gmail_label_ops(account_id, state, id);
 "#;
 
+/// Schema v12 (M3c, ADR 0072): Exchange accounts.
+///
+/// * `pim_sources` is rebuilt (SQLite cannot change a `CHECK`): `kind`
+///   also takes `exchange`, and a new `account_id` ties an Exchange
+///   account's PIM source to the account (deleting the account deletes
+///   the source and its collections). Runs with foreign keys off
+///   ([`Migration::foreign_keys_off`]), checked before commit.
+/// * `exchange_sync` — per account: engine, folder-hierarchy cursor per
+///   mailbox is in `exchange_mailbox_sync`; server version, EWS streaming
+///   subscription, throttling, the rules state, last sync.
+/// * `exchange_mailbox_sync` — the folder-hierarchy cursor (Graph
+///   `mailFolders/delta` link, EWS `SyncFolderHierarchy` state) per
+///   mailbox (`''` = the account's own).
+/// * `exchange_folders` — per mail folder: mailbox, remote id, change key,
+///   parent, well-known name and the items cursor (Graph
+///   `messages/delta` link, EWS `SyncFolderItems` state) plus an
+///   interrupted first sync.
+/// * `exchange_items` — per message: mailbox, change key, conversation id,
+///   Focused Inbox classification (the remote id is `messages.remote_id`).
+/// * `exchange_pim_collections` / `exchange_pim_items` — the same for
+///   calendars, contact folders and task lists (cursor per collection;
+///   remote id + change key per item).
+/// * `exchange_mailboxes` — shared / delegate mailboxes (what is shown,
+///   automapped / hidden, reachability, root folder).
+/// * `exchange_categories` — the master category list (id ↔ name = Nail
+///   tag, colour, local sync state).
+/// * `exchange_automatic_replies` — the out-of-office settings (sealed).
+/// * `exchange_rules` — the server's inbox rules and which Nail rule each
+///   was placed from.
+/// * `exchange_rooms` — cached room lists and rooms.
+/// * `exchange_ops` — the Exchange operation queue (categories, automatic
+///   replies, inbox rules, Focused Inbox); payloads sealed.
+const V12: &str = r#"
+CREATE TABLE pim_sources_v12 (
+    id           TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 128),
+    kind         TEXT NOT NULL
+                 CHECK (kind IN ('local', 'ics', 'caldav', 'carddav', 'exchange')),
+    -- The Exchange account of an `exchange` source.
+    account_id   TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+    discovery    TEXT,
+    state        TEXT NOT NULL DEFAULT 'idle'
+                 CHECK (state IN ('idle', 'syncing', 'offline', 'auth-error', 'error', 'disabled')),
+    last_sync_at INTEGER,
+    last_error   TEXT,
+    created_at   INTEGER NOT NULL,
+    CHECK ((kind = 'exchange') = (account_id IS NOT NULL))
+) WITHOUT ROWID;
+INSERT INTO pim_sources_v12 (id, kind, discovery, state, last_sync_at, last_error, created_at)
+    SELECT id, kind, discovery, state, last_sync_at, last_error, created_at FROM pim_sources;
+DROP TABLE pim_sources;
+ALTER TABLE pim_sources_v12 RENAME TO pim_sources;
+CREATE UNIQUE INDEX pim_sources_account ON pim_sources(account_id) WHERE account_id IS NOT NULL;
+
+CREATE TABLE exchange_sync (
+    account_id      TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    engine          TEXT NOT NULL CHECK (engine IN ('graph', 'ews')),
+    server_version  TEXT,
+    -- EWS streaming subscription (resumable with its watermark).
+    subscription_id TEXT,
+    watermark       TEXT,
+    -- Unix seconds.
+    throttled_until INTEGER,
+    rules_state     TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (rules_state IN ('disabled', 'pending', 'syncing', 'in-sync', 'failed')),
+    rules_synced_at INTEGER,
+    -- JSON (nail_api::ApiError) of the last rules failure.
+    rules_error     TEXT,
+    last_sync_at    INTEGER
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_mailbox_sync (
+    account_id       TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- Lowercase address; '' = the account's own mailbox.
+    mailbox          TEXT NOT NULL DEFAULT '',
+    hierarchy_cursor TEXT,
+    last_sync_at     INTEGER,
+    PRIMARY KEY (account_id, mailbox)
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_folders (
+    folder_id        TEXT PRIMARY KEY NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+    account_id       TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    mailbox          TEXT NOT NULL DEFAULT '',
+    remote_id        TEXT NOT NULL,
+    change_key       TEXT,
+    parent_remote_id TEXT,
+    -- nail_api ExchangeWellKnownFolder (kebab-case).
+    well_known       TEXT,
+    -- Items cursor; NULL = a full sync is needed.
+    cursor           TEXT,
+    -- An interrupted first sync (Graph next link / EWS state mid-pass).
+    full_sync_page   TEXT,
+    last_sync_at     INTEGER,
+    UNIQUE (account_id, mailbox, remote_id)
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_items (
+    message_id      TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    mailbox         TEXT NOT NULL DEFAULT '',
+    change_key      TEXT,
+    conversation_id TEXT,
+    inference       TEXT CHECK (inference IS NULL OR inference IN ('focused', 'other'))
+) WITHOUT ROWID;
+CREATE INDEX exchange_items_inference ON exchange_items(account_id, inference)
+    WHERE inference IS NOT NULL;
+CREATE INDEX exchange_items_conversation ON exchange_items(account_id, conversation_id)
+    WHERE conversation_id IS NOT NULL;
+
+CREATE TABLE exchange_pim_collections (
+    collection_id TEXT PRIMARY KEY NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
+    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    mailbox       TEXT NOT NULL DEFAULT '',
+    remote_id     TEXT NOT NULL,
+    change_key    TEXT,
+    role          TEXT CHECK (role IS NULL OR role IN
+                  ('default-calendar', 'default-contacts', 'default-tasks', 'flagged-emails')),
+    todo          INTEGER NOT NULL DEFAULT 0 CHECK (todo IN (0, 1)),
+    cursor        TEXT,
+    last_sync_at  INTEGER,
+    UNIQUE (account_id, mailbox, remote_id)
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_pim_items (
+    object_id     INTEGER PRIMARY KEY REFERENCES pim_objects(id) ON DELETE CASCADE,
+    collection_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
+    remote_id     TEXT NOT NULL,
+    change_key    TEXT,
+    UNIQUE (collection_id, remote_id)
+);
+
+CREATE TABLE exchange_mailboxes (
+    account_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- Lowercase.
+    address        TEXT NOT NULL,
+    name           TEXT,
+    kind           TEXT NOT NULL CHECK (kind IN ('shared', 'delegate')),
+    origin         TEXT NOT NULL DEFAULT 'user' CHECK (origin IN ('user', 'automapped')),
+    mail           INTEGER NOT NULL DEFAULT 1 CHECK (mail IN (0, 1)),
+    calendar       INTEGER NOT NULL DEFAULT 1 CHECK (calendar IN (0, 1)),
+    contacts       INTEGER NOT NULL DEFAULT 0 CHECK (contacts IN (0, 1)),
+    tasks          INTEGER NOT NULL DEFAULT 0 CHECK (tasks IN (0, 1)),
+    -- An automapped mailbox the user removed.
+    hidden         INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
+    state          TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (state IN ('pending', 'synced', 'access-denied', 'not-found', 'error')),
+    root_folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
+    -- JSON (nail_api::ApiError) of the last failure.
+    last_error     TEXT,
+    created_at     INTEGER NOT NULL,
+    PRIMARY KEY (account_id, address)
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_categories (
+    account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    category_id TEXT NOT NULL,
+    -- Also the Nail tag.
+    name        TEXT NOT NULL,
+    -- nail_api CategoryColor (`none`, `preset0` … `preset24`).
+    color       TEXT NOT NULL DEFAULT 'none',
+    sync        TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending')),
+    PRIMARY KEY (account_id, category_id)
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX exchange_categories_name
+    ON exchange_categories(account_id, name COLLATE NOCASE);
+
+CREATE TABLE exchange_automatic_replies (
+    account_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- JSON (nail_api AutomaticRepliesSettings); sealed at rest.
+    settings   TEXT NOT NULL,
+    sync       TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending')),
+    -- Unix seconds of the last read from the server.
+    fetched_at INTEGER
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_rules (
+    account_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    server_rule_id TEXT NOT NULL,
+    -- The Nail rule it was placed from (rules.kdl id); NULL = the user's.
+    rule_id        TEXT,
+    -- Digest of the placed Nail rule (placed again when it changes).
+    digest         TEXT,
+    sequence       INTEGER NOT NULL DEFAULT 0,
+    -- JSON (nail_api ExchangeInboxRule).
+    data           TEXT NOT NULL,
+    PRIMARY KEY (account_id, server_rule_id)
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX exchange_rules_rule ON exchange_rules(account_id, rule_id)
+    WHERE rule_id IS NOT NULL;
+
+CREATE TABLE exchange_rooms (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('room-list', 'room')),
+    -- The room list a room was listed from; '' = all rooms / the lists.
+    room_list  TEXT NOT NULL DEFAULT '',
+    address    TEXT NOT NULL,
+    -- JSON (nail_api RoomList / Room).
+    data       TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, kind, room_list, address)
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_ops (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL CHECK (kind IN ('create-category', 'update-category',
+               'delete-category', 'set-automatic-replies', 'set-rule-enabled', 'delete-rule',
+               'classify')),
+    -- The category / server rule id, or NULL.
+    target     TEXT,
+    -- JSON (nail_store::exchange::ExchangeOp); sealed at rest.
+    payload    TEXT NOT NULL,
+    state      TEXT NOT NULL DEFAULT 'pending'
+               CHECK (state IN ('pending', 'done', 'failed')),
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX exchange_ops_state ON exchange_ops(account_id, state, id);
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
 pub(crate) struct Migration {
     pub sql: &'static str,
     pub backfill: Option<fn(&Transaction<'_>) -> Result<()>>,
+    /// The step rebuilds a table other tables reference (SQLite's
+    /// "12-step" table change): foreign keys are switched off around its
+    /// transaction (a `DROP TABLE` would otherwise cascade) and
+    /// `PRAGMA foreign_key_check` must come back empty before the commit.
+    pub foreign_keys_off: bool,
 }
 
 impl Migration {
@@ -1210,6 +1437,17 @@ impl Migration {
         Self {
             sql,
             backfill: None,
+            foreign_keys_off: false,
+        }
+    }
+
+    /// A step that rebuilds a referenced table (see
+    /// [`Self::foreign_keys_off`]).
+    pub(crate) const fn rebuild(sql: &'static str) -> Self {
+        Self {
+            sql,
+            backfill: None,
+            foreign_keys_off: true,
         }
     }
 }
@@ -1220,11 +1458,13 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration {
         sql: V2,
         backfill: Some(crate::thread::backfill_v2),
+        foreign_keys_off: false,
     },
     Migration::sql(V3),
     Migration {
         sql: V4,
         backfill: Some(crate::compose::backfill_v4),
+        foreign_keys_off: false,
     },
     Migration::sql(V5),
     Migration::sql(V6),
@@ -1233,6 +1473,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(V9),
     Migration::sql(V10),
     Migration::sql(V11),
+    Migration::rebuild(V12),
 ];
 
 /// The schema version this build creates and understands.
@@ -1270,6 +1511,39 @@ pub(crate) fn migrate_to_version(conn: &mut Connection, target: u32) -> Result<u
 pub(crate) fn migrate_with(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> {
     let supported = u32::try_from(migrations.len()).unwrap_or(u32::MAX);
     loop {
+        // A step that rebuilds a referenced table runs with foreign keys
+        // off; the pragma is a no-op inside a transaction, so it is set
+        // before (and restored after) the step's transaction.
+        let peek = current_version(conn)?;
+        let rebuild = migrations
+            .get(peek as usize)
+            .is_some_and(|m| m.foreign_keys_off);
+        let restore_fks = if rebuild {
+            let on: bool = conn.query_row("PRAGMA foreign_keys", [], |r| r.get(0))?;
+            conn.pragma_update(None, "foreign_keys", false)?;
+            on
+        } else {
+            false
+        };
+        let step_result = migrate_step(conn, migrations, supported);
+        if restore_fks {
+            conn.pragma_update(None, "foreign_keys", true)?;
+        }
+        match step_result? {
+            Some(version) => return Ok(version),
+            None => continue,
+        }
+    }
+}
+
+/// Applies the next migration in its own transaction; `Some(version)` when
+/// the database is already at `supported`.
+fn migrate_step(
+    conn: &mut Connection,
+    migrations: &[Migration],
+    supported: u32,
+) -> Result<Option<u32>> {
+    {
         // Re-read the version inside the write transaction so two processes
         // opening the same fresh database cannot both apply a migration.
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -1282,7 +1556,7 @@ pub(crate) fn migrate_with(conn: &mut Connection, migrations: &[Migration]) -> R
         }
         if version == supported {
             tx.commit()?;
-            return Ok(version);
+            return Ok(Some(version));
         }
         let next = version + 1;
         tracing::info!(from = version, to = next, "migrating store schema");
@@ -1291,8 +1565,20 @@ pub(crate) fn migrate_with(conn: &mut Connection, migrations: &[Migration]) -> R
         if let Some(backfill) = step.backfill {
             backfill(&tx)?;
         }
+        if step.foreign_keys_off {
+            let broken: i64 =
+                tx.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| {
+                    r.get(0)
+                })?;
+            if broken > 0 {
+                return Err(Error::InvalidData(format!(
+                    "schema step {next} left {broken} broken references"
+                )));
+            }
+        }
         tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [next])?;
         tx.commit()?;
+        Ok(None)
     }
 }
 
@@ -1328,6 +1614,18 @@ mod tests {
                 "crypto_trust",
                 "draft_attachments",
                 "drafts",
+                "exchange_automatic_replies",
+                "exchange_categories",
+                "exchange_folders",
+                "exchange_items",
+                "exchange_mailbox_sync",
+                "exchange_mailboxes",
+                "exchange_ops",
+                "exchange_pim_collections",
+                "exchange_pim_items",
+                "exchange_rooms",
+                "exchange_rules",
+                "exchange_sync",
                 "folder_marks",
                 "folders",
                 "gmail_label_ops",
@@ -1437,6 +1735,7 @@ mod tests {
         let steps = [Migration {
             sql: "CREATE TABLE a (x INTEGER)",
             backfill: Some(fill),
+            foreign_keys_off: false,
         }];
         migrate_with(&mut conn, &steps).unwrap();
         let x: i64 = conn.query_row("SELECT x FROM a", [], |r| r.get(0)).unwrap();
@@ -1446,6 +1745,7 @@ mod tests {
         let steps = [Migration {
             sql: "CREATE TABLE b (x INTEGER)",
             backfill: Some(broken),
+            foreign_keys_off: false,
         }];
         assert!(migrate_with(&mut conn, &steps).is_err());
         assert_eq!(current_version(&conn).unwrap(), 0);
@@ -1638,6 +1938,117 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM gmail_labels", [], |r| r.get(0))
             .unwrap();
         assert_eq!(labels, 0);
+    }
+
+    #[test]
+    fn v12_rebuilds_pim_sources_and_adds_exchange_tables() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        migrate_to_version(&mut conn, 11).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (id, name, email, kind) VALUES ('x', 'X', 'x@x', 'exchange');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('fi', 'x', 'Inbox', 'Inbox');
+             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'x', 'fi', 'x');
+             INSERT INTO pim_sources (id, kind, created_at) VALUES ('dav', 'caldav', 1);
+             INSERT INTO pim_collections (id, source_id, kind, settings)
+                 VALUES ('c1', 'dav', 'calendar', '{}');",
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        // The rebuild kept every source and collection, and foreign keys
+        // are on again.
+        let fk: bool = conn
+            .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+            .unwrap();
+        assert!(fk);
+        let collections: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pim_collections", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(collections, 1);
+        let sources: Vec<String> = conn
+            .prepare("SELECT id FROM pim_sources ORDER BY id")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(sources, ["dav", "local"]);
+        // Exchange sources need their account (and only they have one).
+        assert!(
+            conn.execute(
+                "INSERT INTO pim_sources (id, kind, created_at) VALUES ('exchange:x', 'exchange', 1)",
+                []
+            )
+            .is_err()
+        );
+        conn.execute_batch(
+            "INSERT INTO pim_sources (id, kind, account_id, created_at)
+                 VALUES ('exchange:x', 'exchange', 'x', 1);
+             INSERT INTO pim_collections (id, source_id, kind, settings)
+                 VALUES ('xc', 'exchange:x', 'calendar', '{}');
+             INSERT INTO exchange_pim_collections (collection_id, account_id, remote_id)
+                 VALUES ('xc', 'x', 'AQMk');
+             INSERT INTO exchange_folders (folder_id, account_id, remote_id)
+                 VALUES ('fi', 'x', 'AAMk');
+             INSERT INTO exchange_items (message_id, account_id, inference)
+                 VALUES ('m', 'x', 'focused');",
+        )
+        .unwrap();
+        assert!(
+            conn.execute(
+                "INSERT INTO pim_sources (id, kind, account_id, created_at)
+                 VALUES ('dav2', 'caldav', 'x', 1)",
+                []
+            )
+            .is_err()
+        );
+        assert!(
+            conn.execute("UPDATE exchange_items SET inference = 'primary'", [])
+                .is_err()
+        );
+        // Deleting the account removes its source, collections and rows.
+        conn.execute("DELETE FROM accounts WHERE id = 'x'", [])
+            .unwrap();
+        let left: i64 = conn
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM pim_sources WHERE kind = 'exchange')
+                     + (SELECT COUNT(*) FROM pim_collections WHERE id = 'xc')
+                     + (SELECT COUNT(*) FROM exchange_pim_collections)
+                     + (SELECT COUNT(*) FROM exchange_folders)
+                     + (SELECT COUNT(*) FROM exchange_items)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+
+    #[test]
+    fn rebuild_steps_refuse_broken_references() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        let steps = [
+            Migration::sql(
+                "CREATE TABLE p (id TEXT PRIMARY KEY);
+                 CREATE TABLE c (p TEXT REFERENCES p(id) ON DELETE CASCADE);
+                 INSERT INTO p VALUES ('a'); INSERT INTO c VALUES ('a');",
+            ),
+            // Drops the referenced row without the cascade (foreign keys
+            // are off): the check refuses the step.
+            Migration::rebuild(
+                "CREATE TABLE p2 (id TEXT PRIMARY KEY); DROP TABLE p; ALTER TABLE p2 RENAME TO p;",
+            ),
+        ];
+        assert!(migrate_with(&mut conn, &steps).is_err());
+        assert_eq!(current_version(&conn).unwrap(), 1);
+        let kept: i64 = conn
+            .query_row("SELECT COUNT(*) FROM c", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kept, 1, "nothing cascaded");
+        let fk: bool = conn
+            .query_row("PRAGMA foreign_keys", [], |r| r.get(0))
+            .unwrap();
+        assert!(fk, "foreign keys are restored after a failed step");
     }
 
     #[test]

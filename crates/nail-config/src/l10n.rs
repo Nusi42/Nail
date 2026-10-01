@@ -48,8 +48,20 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/core-dav.ftl"),
     ),
     (
+        "core-ews.ftl",
+        include_str!("../../../locales/en/core-ews.ftl"),
+    ),
+    (
+        "core-exchange.ftl",
+        include_str!("../../../locales/en/core-exchange.ftl"),
+    ),
+    (
         "core-gmail.ftl",
         include_str!("../../../locales/en/core-gmail.ftl"),
+    ),
+    (
+        "core-graph.ftl",
+        include_str!("../../../locales/en/core-graph.ftl"),
     ),
     (
         "core-ical.ftl",
@@ -79,6 +91,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     (
         "customization.ftl",
         include_str!("../../../locales/en/customization.ftl"),
+    ),
+    (
+        "exchange.ftl",
+        include_str!("../../../locales/en/exchange.ftl"),
     ),
     ("gmail.ftl", include_str!("../../../locales/en/gmail.ftl")),
     ("itip.ftl", include_str!("../../../locales/en/itip.ftl")),
@@ -128,8 +144,20 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/core-dav.ftl"),
     ),
     (
+        "core-ews.ftl",
+        include_str!("../../../locales/de/core-ews.ftl"),
+    ),
+    (
+        "core-exchange.ftl",
+        include_str!("../../../locales/de/core-exchange.ftl"),
+    ),
+    (
         "core-gmail.ftl",
         include_str!("../../../locales/de/core-gmail.ftl"),
+    ),
+    (
+        "core-graph.ftl",
+        include_str!("../../../locales/de/core-graph.ftl"),
     ),
     (
         "core-ical.ftl",
@@ -159,6 +187,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "customization.ftl",
         include_str!("../../../locales/de/customization.ftl"),
+    ),
+    (
+        "exchange.ftl",
+        include_str!("../../../locales/de/exchange.ftl"),
     ),
     ("gmail.ftl", include_str!("../../../locales/de/gmail.ftl")),
     ("itip.ftl", include_str!("../../../locales/de/itip.ftl")),

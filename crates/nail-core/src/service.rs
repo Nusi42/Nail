@@ -1175,6 +1175,25 @@ impl Service {
             | Request::CreateGmailLabel { .. }
             | Request::UpdateGmailLabel { .. }
             | Request::DeleteGmailLabel { .. }) => crate::gmail::handle(self, request).await?,
+            // M3c Exchange (ADR 0072): one arm, wired by WP95.
+            request @ (Request::GetExchangeStatus { .. }
+            | Request::ListExchangeMailboxes { .. }
+            | Request::AddExchangeMailbox { .. }
+            | Request::UpdateExchangeMailbox { .. }
+            | Request::RemoveExchangeMailbox { .. }
+            | Request::ListExchangeCategories { .. }
+            | Request::CreateExchangeCategory { .. }
+            | Request::UpdateExchangeCategory { .. }
+            | Request::DeleteExchangeCategory { .. }
+            | Request::ClassifyFocused { .. }
+            | Request::GetAutomaticReplies { .. }
+            | Request::SetAutomaticReplies { .. }
+            | Request::GetExchangeRules { .. }
+            | Request::SyncExchangeRules { .. }
+            | Request::SetExchangeInboxRuleEnabled { .. }
+            | Request::DeleteExchangeInboxRule { .. }
+            | Request::ListRoomLists { .. }
+            | Request::FindRooms { .. }) => crate::exchange::handle(self, request).await?,
         })
     }
 }

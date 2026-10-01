@@ -496,7 +496,9 @@ pub(crate) async fn sync_once(service: &Service, config: &PimSourceConfig) -> Re
             }
             Ok(changes)
         }
-        PimSourceKind::Local => Ok(SyncChanges::default()),
+        // M3c: Exchange sources sync with their account's engine (WP95),
+        // never as a configured source.
+        PimSourceKind::Local | PimSourceKind::Exchange => Ok(SyncChanges::default()),
     }
 }
 
@@ -719,6 +721,7 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
             components,
             read_only: true,
             timezone: feed_meta.time_zone.clone(),
+            exchange: None,
         };
         service
             .inner
@@ -846,6 +849,12 @@ pub(crate) async fn dav_client(
         }
         AuthConfig::ClientCertificate { .. } => {
             return Err(ApiError::unsupported("client certificates are not supported yet").into());
+        }
+        AuthConfig::Windows { .. } => {
+            return Err(ApiError::unsupported(
+                "Windows sign-in only works for Exchange (EWS) accounts",
+            )
+            .into());
         }
     };
     DavClient::new(dav_auth).map_err(dav_error)
@@ -1198,6 +1207,10 @@ pub(crate) async fn test_source(
                 localized: None,
             })
         }
+        PimSourceKind::Exchange => Err(ApiError::invalid_request(
+            "Exchange sources follow their account and are not tested on their own",
+        )
+        .into()),
         PimSourceKind::Local => Ok(PimSourceTestResult {
             ok: true,
             discovered_url: None,
@@ -1270,6 +1283,7 @@ async fn sync_dav(
                                 components,
                                 read_only: collection.read_only,
                                 timezone: before.and_then(|c| c.timezone),
+                                exchange: None,
                             },
                             Some(&href),
                         )?;
@@ -1292,6 +1306,7 @@ async fn sync_dav(
                                 settings,
                                 read_only: collection.read_only,
                                 role: None,
+                                exchange: None,
                             },
                             Some(&href),
                         )?;

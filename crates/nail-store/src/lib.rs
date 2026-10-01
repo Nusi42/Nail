@@ -82,6 +82,7 @@ mod bodies;
 mod compose;
 mod crypto;
 mod error;
+pub mod exchange;
 mod filter;
 pub mod gmail;
 pub mod lock;

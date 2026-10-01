@@ -381,6 +381,30 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::CreateGmailLabel { .. } => ("CreateGmailLabel", Scope(S::Organize)),
         Request::UpdateGmailLabel { .. } => ("UpdateGmailLabel", Scope(S::Organize)),
         Request::DeleteGmailLabel { .. } => ("DeleteGmailLabel", Scope(S::Organize)),
+
+        // --- Exchange (M3c, ADR 0072): status, lists and rooms are reads;
+        // other mailboxes are account configuration (`admin`); categories
+        // and Focused Inbox like tags (`organize`); server rules like
+        // Sieve and automatic replies like the vacation reply (`admin`;
+        // the core also needs the account). ---
+        Request::GetExchangeStatus { .. } => ("GetExchangeStatus", Scope(S::Read)),
+        Request::ListExchangeMailboxes { .. } => ("ListExchangeMailboxes", Scope(S::Read)),
+        Request::AddExchangeMailbox { .. } => ("AddExchangeMailbox", Admin),
+        Request::UpdateExchangeMailbox { .. } => ("UpdateExchangeMailbox", Admin),
+        Request::RemoveExchangeMailbox { .. } => ("RemoveExchangeMailbox", Admin),
+        Request::ListExchangeCategories { .. } => ("ListExchangeCategories", Scope(S::Read)),
+        Request::CreateExchangeCategory { .. } => ("CreateExchangeCategory", Scope(S::Organize)),
+        Request::UpdateExchangeCategory { .. } => ("UpdateExchangeCategory", Scope(S::Organize)),
+        Request::DeleteExchangeCategory { .. } => ("DeleteExchangeCategory", Scope(S::Organize)),
+        Request::ClassifyFocused { .. } => ("ClassifyFocused", Scope(S::Organize)),
+        Request::GetAutomaticReplies { .. } => ("GetAutomaticReplies", Scope(S::Read)),
+        Request::SetAutomaticReplies { .. } => ("SetAutomaticReplies", Admin),
+        Request::GetExchangeRules { .. } => ("GetExchangeRules", Scope(S::Read)),
+        Request::SyncExchangeRules { .. } => ("SyncExchangeRules", Admin),
+        Request::SetExchangeInboxRuleEnabled { .. } => ("SetExchangeInboxRuleEnabled", Admin),
+        Request::DeleteExchangeInboxRule { .. } => ("DeleteExchangeInboxRule", Admin),
+        Request::ListRoomLists { .. } => ("ListRoomLists", Scope(S::Read)),
+        Request::FindRooms { .. } => ("FindRooms", Scope(S::Read)),
     };
     RequestAccess { name, access }
 }
@@ -744,5 +768,65 @@ mod m3b_tests {
         });
         assert_eq!(label.access, Access::Scope(McpScope::Organize));
         assert_eq!(label.name, "CreateGmailLabel");
+    }
+}
+
+#[cfg(test)]
+mod m3c_tests {
+    use super::*;
+    use nail_api::exchange::{
+        AutomaticRepliesSettings, ExchangeCategorySettings, ExchangeMailboxSettings,
+        InferenceClassification,
+    };
+
+    #[test]
+    fn exchange_access() {
+        let status = required_access(&Request::GetExchangeStatus {
+            account_id: "work".into(),
+        });
+        assert_eq!(status.access, Access::Scope(McpScope::Read));
+        assert!(!status.audited());
+        let rooms = required_access(&Request::FindRooms {
+            account_id: "work".into(),
+            room_list: None,
+            from: "2026-10-05T08:00:00Z".into(),
+            to: "2026-10-05T09:00:00Z".into(),
+            min_capacity: None,
+            refresh: false,
+        });
+        assert_eq!(rooms.access, Access::Scope(McpScope::Read));
+        let mailbox = required_access(&Request::AddExchangeMailbox {
+            account_id: "work".into(),
+            settings: ExchangeMailboxSettings::shared("support@contoso.example"),
+        });
+        assert_eq!(mailbox.access, Access::Admin);
+        let category = required_access(&Request::CreateExchangeCategory {
+            account_id: "work".into(),
+            settings: ExchangeCategorySettings::named("Red"),
+        });
+        assert_eq!(category.access, Access::Scope(McpScope::Organize));
+        assert!(category.audited());
+        let focus = required_access(&Request::ClassifyFocused {
+            message_ids: vec!["m1".into()],
+            classification: InferenceClassification::Other,
+            always: false,
+        });
+        assert_eq!(focus.access, Access::Scope(McpScope::Organize));
+        let oof = required_access(&Request::SetAutomaticReplies {
+            account_id: "work".into(),
+            settings: AutomaticRepliesSettings::default(),
+        });
+        assert_eq!(
+            (oof.name, oof.access),
+            ("SetAutomaticReplies", Access::Admin)
+        );
+        assert_eq!(
+            required_access(&Request::DeleteExchangeInboxRule {
+                account_id: "work".into(),
+                server_rule_id: "r1".into()
+            })
+            .access,
+            Access::Admin
+        );
     }
 }

@@ -364,6 +364,7 @@ pim-source-kind-local = Local
 pim-source-kind-ics = Subscription (ICS / webcal)
 pim-source-kind-caldav = CalDAV server
 pim-source-kind-carddav = CardDAV server
+pim-source-kind-exchange = Exchange account
 pim-source-synced = Last synced { $time }
 pim-source-sync = Sync now
 pim-source-sync-label = Sync { $name } now

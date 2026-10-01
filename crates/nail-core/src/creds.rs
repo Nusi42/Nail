@@ -156,6 +156,13 @@ impl EndpointCredentials {
                 ErrorCode::Unsupported,
                 "client certificates are not supported yet",
             )),
+            // M3c: Windows sign-in is SSPI Negotiate over HTTP, done by the
+            // EWS engine through `nail-exchange` (WP93 / WP95), never a
+            // SASL login.
+            AuthConfig::Windows { .. } => Err(EngineError::permanent(
+                ErrorCode::Unsupported,
+                "Windows sign-in only works for Exchange (EWS) accounts",
+            )),
         }
     }
 }

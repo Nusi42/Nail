@@ -164,6 +164,7 @@ fn fixture() -> Fixture {
             duplicates: vec![],
             headers_only: false,
             gmail: None,
+            exchange: None,
         };
         synced.push(SyncedMessage {
             message: StoredMessage::new(summary),

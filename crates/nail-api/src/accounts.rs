@@ -141,11 +141,12 @@ impl AccountConfig {
             IncomingServer::Imap { .. } => crate::domain::AccountKind::Imap,
             IncomingServer::Pop3 { .. } => crate::domain::AccountKind::Pop3,
             IncomingServer::Gmail { .. } => crate::domain::AccountKind::Gmail,
+            IncomingServer::Exchange { .. } => crate::domain::AccountKind::Exchange,
         }
     }
 
     /// Whether the account can send: an outgoing server, or an API account
-    /// that sends through its API (Gmail `messages.send`).
+    /// that sends through its API (Gmail `messages.send`, Exchange).
     pub fn can_send(&self) -> bool {
         self.outgoing.is_some() || self.incoming.sends_itself()
     }
@@ -188,15 +189,32 @@ pub enum IncomingServer {
         #[serde(default)]
         options: crate::gmail::GmailOptions,
     },
+    /// Microsoft Exchange (M3c, ADR 0072): Graph for Exchange Online, EWS
+    /// for Exchange Server on-premises
+    /// ([`crate::exchange::ExchangeOptions::engine`]); mail, calendars,
+    /// contacts and tasks over one protocol, sending through it too (no
+    /// `outgoing` server). `server` is the Graph host
+    /// ([`crate::exchange::GRAPH_HOST`]) or the Exchange server (EWS),
+    /// port 443, implicit TLS (plain `http` only for loopback test
+    /// servers); auth `oauth2` (Graph, EWS hybrid), `windows` (EWS:
+    /// Negotiate / Kerberos / NTLM) or `password` (EWS: Basic over TLS).
+    Exchange {
+        /// Host, security and login.
+        server: ServerEndpoint,
+        /// Exchange-specific settings.
+        #[serde(default)]
+        options: crate::exchange::ExchangeOptions,
+    },
 }
 
 impl IncomingServer {
     /// The server endpoint, whatever the protocol.
     pub fn server(&self) -> &ServerEndpoint {
         match self {
-            Self::Imap { server, .. } | Self::Pop3 { server, .. } | Self::Gmail { server, .. } => {
-                server
-            }
+            Self::Imap { server, .. }
+            | Self::Pop3 { server, .. }
+            | Self::Gmail { server, .. }
+            | Self::Exchange { server, .. } => server,
         }
     }
 
@@ -206,13 +224,17 @@ impl IncomingServer {
             Self::Imap { .. } => MailProtocol::Imap,
             Self::Pop3 { .. } => MailProtocol::Pop3,
             Self::Gmail { .. } => MailProtocol::Gmail,
+            Self::Exchange { options, .. } => match options.engine {
+                crate::exchange::ExchangeEngine::Graph => MailProtocol::Graph,
+                crate::exchange::ExchangeEngine::Ews => MailProtocol::Ews,
+            },
         }
     }
 
     /// Whether this side also sends (API accounts): then the account has
     /// no `outgoing` server.
     pub fn sends_itself(&self) -> bool {
-        matches!(self, Self::Gmail { .. })
+        matches!(self, Self::Gmail { .. } | Self::Exchange { .. })
     }
 }
 
@@ -280,6 +302,10 @@ pub enum MailProtocol {
     Smtp,
     /// The Gmail REST API (HTTPS; M3b).
     Gmail,
+    /// Microsoft Graph (HTTPS; M3c, Exchange Online).
+    Graph,
+    /// Exchange Web Services (HTTPS; M3c, Exchange on-premises).
+    Ews,
 }
 
 /// The standard port of `protocol` with `tls`.
@@ -291,8 +317,8 @@ pub fn default_port(protocol: MailProtocol, tls: TlsMode) -> u16 {
         (MailProtocol::Pop3, _) => 110,
         (MailProtocol::Smtp, TlsMode::Implicit) => 465,
         (MailProtocol::Smtp, _) => 587,
-        (MailProtocol::Gmail, TlsMode::Implicit) => 443,
-        (MailProtocol::Gmail, _) => 80,
+        (MailProtocol::Gmail | MailProtocol::Graph | MailProtocol::Ews, TlsMode::Implicit) => 443,
+        (MailProtocol::Gmail | MailProtocol::Graph | MailProtocol::Ews, _) => 80,
     }
 }
 
@@ -336,9 +362,64 @@ pub enum AuthConfig {
         /// ([`SecretKind::ClientCertificate`]).
         secret: Option<SecretRef>,
     },
+    /// Windows integrated sign-in (M3c, Exchange EWS only): HTTP
+    /// Negotiate (Kerberos, falling back to NTLM) through SSPI. Without a
+    /// `username` Nail signs in as the signed-in Windows user (no secret
+    /// stored); with one, the password comes from the keychain.
+    #[serde(rename = "windows")]
+    Windows {
+        /// `DOMAIN\user` or `user@domain`; `null` = the signed-in Windows
+        /// user.
+        username: Option<String>,
+        /// Where the password of `username` is stored. `null` = the
+        /// account's default reference ([`SecretKind::Password`]).
+        secret: Option<SecretRef>,
+        /// The SSPI package; `null` = Negotiate.
+        package: Option<SspiPackage>,
+    },
     /// No authentication (e.g. an SMTP relay on the local network).
     #[serde(rename = "none")]
     None,
+}
+
+/// The SSPI security package of [`AuthConfig::Windows`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum SspiPackage {
+    /// SPNEGO: Kerberos, else NTLM (the default).
+    #[default]
+    Negotiate,
+    /// Kerberos only.
+    Kerberos,
+    /// NTLM only.
+    Ntlm,
+}
+
+impl SspiPackage {
+    /// The SSPI package name (`Negotiate`, `Kerberos`, `NTLM`).
+    pub fn sspi_name(self) -> &'static str {
+        match self {
+            Self::Negotiate => "Negotiate",
+            Self::Kerberos => "Kerberos",
+            Self::Ntlm => "NTLM",
+        }
+    }
+
+    /// The name in `accounts.kdl` (`negotiate`, `kerberos`, `ntlm`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Negotiate => "negotiate",
+            Self::Kerberos => "kerberos",
+            Self::Ntlm => "ntlm",
+        }
+    }
+
+    /// The package of a name.
+    pub fn parse(name: &str) -> Option<Self> {
+        [Self::Negotiate, Self::Kerberos, Self::Ntlm]
+            .into_iter()
+            .find(|p| p.as_str() == name)
+    }
 }
 
 impl AuthConfig {
@@ -348,6 +429,8 @@ impl AuthConfig {
             Self::Password { .. } => Some(SecretKind::Password),
             Self::OAuth2 { .. } => Some(SecretKind::OAuth2),
             Self::ClientCertificate { .. } => Some(SecretKind::ClientCertificate),
+            // The signed-in Windows user needs no stored secret.
+            Self::Windows { username, .. } => username.as_ref().map(|_| SecretKind::Password),
             Self::None => None,
         }
     }
@@ -357,7 +440,8 @@ impl AuthConfig {
         match self {
             Self::Password { secret, .. }
             | Self::OAuth2 { secret, .. }
-            | Self::ClientCertificate { secret, .. } => secret.as_ref(),
+            | Self::ClientCertificate { secret, .. }
+            | Self::Windows { secret, .. } => secret.as_ref(),
             Self::None => None,
         }
     }
@@ -1197,6 +1281,55 @@ mod tests {
             "keychain:nail/home/password"
         );
         assert_eq!(AuthConfig::None.secret_ref(&"home".into()), None);
+    }
+
+    #[test]
+    fn exchange_accounts_and_windows_auth() {
+        let integrated = AuthConfig::Windows {
+            username: None,
+            secret: None,
+            package: None,
+        };
+        assert_eq!(integrated.secret_kind(), None);
+        assert_eq!(integrated.secret_ref(&"work".into()), None);
+        let explicit = AuthConfig::Windows {
+            username: Some("CONTOSO\\ada".into()),
+            secret: None,
+            package: Some(SspiPackage::Ntlm),
+        };
+        assert_eq!(
+            explicit.secret_ref(&"work".into()).unwrap().as_str(),
+            "keychain:nail/work/password"
+        );
+        assert_eq!(
+            serde_json::to_value(&explicit).unwrap(),
+            json!({"method": "windows", "username": "CONTOSO\\ada", "secret": null, "package": "ntlm"})
+        );
+        assert_eq!(SspiPackage::parse("kerberos"), Some(SspiPackage::Kerberos));
+        assert_eq!(SspiPackage::Ntlm.sspi_name(), "NTLM");
+        let mut account = sample();
+        account.outgoing = None;
+        account.incoming = IncomingServer::Exchange {
+            server: ServerEndpoint {
+                host: "mail.contoso.example".into(),
+                port: 443,
+                tls: TlsMode::Implicit,
+                auth: integrated,
+            },
+            options: crate::exchange::ExchangeOptions::for_engine(
+                crate::exchange::ExchangeEngine::Ews,
+            ),
+        };
+        assert_eq!(account.kind(), crate::AccountKind::Exchange);
+        assert_eq!(account.incoming.protocol(), MailProtocol::Ews);
+        assert!(account.can_send() && account.incoming.sends_itself());
+        let value = serde_json::to_value(&account).unwrap();
+        assert_eq!(value["incoming"]["protocol"], json!("exchange"));
+        assert_eq!(value["incoming"]["options"]["engine"], json!("ews"));
+        let back: AccountConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(back, account);
+        assert_eq!(default_port(MailProtocol::Graph, TlsMode::Implicit), 443);
+        assert_eq!(default_port(MailProtocol::Ews, TlsMode::Plaintext), 80);
     }
 
     #[test]

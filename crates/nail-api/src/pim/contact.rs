@@ -105,6 +105,11 @@ pub struct AddressBook {
     pub read_only: bool,
     /// A special role, if any.
     pub role: Option<AddressBookRole>,
+    /// Exchange data (M3c: the shared / delegate mailbox, a special
+    /// role); absent for other sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exchange: Option<crate::exchange::ExchangeCollectionInfo>,
 }
 
 /// vCard version of a contact.

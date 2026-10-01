@@ -35,13 +35,19 @@ use crate::customize::{
 };
 use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
+use crate::exchange::rules::ExchangeRulesStatus;
+use crate::exchange::{
+    AutomaticReplies, AutomaticRepliesSettings, ExchangeArea, ExchangeCategory,
+    ExchangeCategorySettings, ExchangeMailbox, ExchangeMailboxSettings, ExchangeStatus,
+    InferenceClassification, RoomAvailability, RoomList,
+};
 use crate::gmail::{GmailLabel, GmailLabelSettings};
 use crate::ids::{
     AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
-    EventId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId,
-    OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId,
-    RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId,
-    ThreadId,
+    EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId,
+    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId,
+    ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId,
+    TaskId, ThreadId,
 };
 use crate::launch::LaunchRequest;
 use crate::localized::LocalizedMessage;
@@ -2041,6 +2047,179 @@ pub enum Request {
         /// The label.
         label_id: GmailLabelId,
     },
+
+    // --- Exchange accounts (M3c WP90, ADR 0072) ---
+    // Every request below answers `invalid_request` for accounts that are
+    // not Exchange accounts.
+    /// The Exchange-specific state of an account (engine, server version,
+    /// push, throttling, warnings). Answered with
+    /// [`Response::ExchangeStatus`].
+    GetExchangeStatus {
+        /// The Exchange account.
+        account_id: AccountId,
+    },
+    /// The shared and delegate mailboxes of an account. Answered with
+    /// [`Response::ExchangeMailboxes`].
+    ListExchangeMailboxes {
+        /// The Exchange account.
+        account_id: AccountId,
+    },
+    /// Open another mailbox under the account (its folder tree, and its
+    /// calendar / contacts / tasks as chosen); the engine checks access
+    /// on the next sync. Answered with [`Response::ExchangeMailboxSaved`]
+    /// (state `pending`), followed by [`Event::ExchangeChanged`];
+    /// `invalid_request` with an `exchange-mailbox-issue-*` id.
+    AddExchangeMailbox {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The mailbox and what to show.
+        settings: ExchangeMailboxSettings,
+    },
+    /// Change what of a mailbox is shown (`settings.address` names it).
+    /// Answered with [`Response::ExchangeMailboxSaved`].
+    UpdateExchangeMailbox {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The new settings.
+        settings: ExchangeMailboxSettings,
+    },
+    /// Stop showing a mailbox (its local folders and collections go; an
+    /// automapped one is hidden, not deleted). Answered with
+    /// [`Response::Done`].
+    RemoveExchangeMailbox {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The mailbox's address.
+        address: String,
+    },
+    /// The account's master category list (with message counts of their
+    /// tags). Answered with [`Response::ExchangeCategories`].
+    ListExchangeCategories {
+        /// The Exchange account.
+        account_id: AccountId,
+    },
+    /// Add a category (queued; it has a `local-…` id until the server
+    /// assigned one). Answered with [`Response::ExchangeCategorySaved`],
+    /// followed by [`Event::ExchangeChanged`]; `invalid_request` with an
+    /// `exchange-category-issue-*` id.
+    CreateExchangeCategory {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// Name and colour.
+        settings: ExchangeCategorySettings,
+    },
+    /// Rename / recolour a category (renaming renames its tag on every
+    /// message, through the mail queue). Answered with
+    /// [`Response::ExchangeCategorySaved`].
+    UpdateExchangeCategory {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The category.
+        category_id: ExchangeCategoryId,
+        /// The new settings.
+        settings: ExchangeCategorySettings,
+    },
+    /// Remove a category from the master list (its tag stays on messages,
+    /// like Outlook). Answered with [`Response::Queued`].
+    DeleteExchangeCategory {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The category.
+        category_id: ExchangeCategoryId,
+    },
+    /// Move inbox messages between Focused and Other (applied locally,
+    /// queued for the server); `always` also adds an override for their
+    /// senders. Answered with [`Response::Queued`]; `invalid_request` for
+    /// messages of other accounts.
+    ClassifyFocused {
+        /// The messages.
+        message_ids: Vec<MessageId>,
+        /// Where to.
+        classification: InferenceClassification,
+        /// Also for future mail from the same senders.
+        #[serde(default)]
+        always: bool,
+    },
+    /// The automatic replies (out of office). Answered with
+    /// [`Response::AutomaticReplies`] (no op ids).
+    GetAutomaticReplies {
+        /// The Exchange account.
+        account_id: AccountId,
+    },
+    /// Replace the automatic replies (queued). Answered with
+    /// [`Response::AutomaticReplies`] (`sync` = `pending`), followed by
+    /// [`Event::ExchangeChanged`]; `invalid_request` with an
+    /// `exchange-oof-issue-*` id.
+    SetAutomaticReplies {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The new settings.
+        settings: AutomaticRepliesSettings,
+    },
+    /// Where each Nail rule runs for the account and every inbox rule on
+    /// the server. Answered with [`Response::ExchangeRules`].
+    GetExchangeRules {
+        /// The Exchange account.
+        account_id: AccountId,
+    },
+    /// Write the placed rules now and re-read the server's (e.g. after a
+    /// failure). Answered with [`Response::ExchangeRules`] (usually
+    /// `syncing`); the outcome arrives as [`Event::ExchangeChanged`].
+    SyncExchangeRules {
+        /// The Exchange account.
+        account_id: AccountId,
+    },
+    /// Switch an inbox rule on or off (queued). Answered with
+    /// [`Response::Queued`].
+    SetExchangeInboxRuleEnabled {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The server rule.
+        server_rule_id: String,
+        /// On or off.
+        enabled: bool,
+    },
+    /// Delete an inbox rule (queued; a rule Nail placed is placed again on
+    /// the next sync unless its Nail rule changes). Answered with
+    /// [`Response::Queued`].
+    DeleteExchangeInboxRule {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The server rule.
+        server_rule_id: String,
+    },
+    /// The organization's room lists (cached; `refresh` asks the server).
+    /// Answered with [`Response::RoomLists`]; `forbidden` with
+    /// `exchange-warning-rooms-need-consent` when the tenant did not grant
+    /// the permission.
+    ListRoomLists {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// Ask the server instead of the cache.
+        #[serde(default)]
+        refresh: bool,
+    },
+    /// Rooms (of a room list, or all) with their availability in a range
+    /// (free/busy through the account). Answered with
+    /// [`Response::Rooms`]; `invalid_request` with a `freebusy-issue-*`
+    /// id for a bad range.
+    FindRooms {
+        /// The Exchange account.
+        account_id: AccountId,
+        /// The room list's address; `null` = every room.
+        #[serde(default)]
+        room_list: Option<String>,
+        /// Range start (RFC 3339 UTC).
+        from: String,
+        /// Range end (RFC 3339 UTC).
+        to: String,
+        /// Only rooms with at least this many seats.
+        #[serde(default)]
+        min_capacity: Option<u32>,
+        /// Ask the server for the room list instead of the cache.
+        #[serde(default)]
+        refresh: bool,
+    },
 }
 
 fn default_true() -> bool {
@@ -2850,6 +3029,71 @@ pub enum Response {
         /// The queued label operations.
         op_ids: Vec<OpId>,
     },
+    /// Answer to [`Request::GetExchangeStatus`].
+    ExchangeStatus {
+        /// The state.
+        status: Box<ExchangeStatus>,
+    },
+    /// Answer to [`Request::ListExchangeMailboxes`].
+    ExchangeMailboxes {
+        /// The account.
+        account_id: AccountId,
+        /// The mailboxes, by name (hidden automapped ones left out).
+        mailboxes: Vec<ExchangeMailbox>,
+    },
+    /// Answer to [`Request::AddExchangeMailbox`] and
+    /// [`Request::UpdateExchangeMailbox`].
+    ExchangeMailboxSaved {
+        /// The mailbox.
+        mailbox: Box<ExchangeMailbox>,
+    },
+    /// Answer to [`Request::ListExchangeCategories`].
+    ExchangeCategories {
+        /// The account.
+        account_id: AccountId,
+        /// The master list, by name.
+        categories: Vec<ExchangeCategory>,
+    },
+    /// Answer to [`Request::CreateExchangeCategory`] and
+    /// [`Request::UpdateExchangeCategory`].
+    ExchangeCategorySaved {
+        /// The category.
+        category: Box<ExchangeCategory>,
+        /// The queued operations.
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::GetAutomaticReplies`] and
+    /// [`Request::SetAutomaticReplies`].
+    AutomaticReplies {
+        /// The replies.
+        replies: Box<AutomaticReplies>,
+        /// The queued operations (empty for `Get…`).
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::GetExchangeRules`] and
+    /// [`Request::SyncExchangeRules`].
+    ExchangeRules {
+        /// The rules.
+        status: Box<ExchangeRulesStatus>,
+    },
+    /// Answer to [`Request::ListRoomLists`].
+    RoomLists {
+        /// The account.
+        account_id: AccountId,
+        /// The room lists, by name.
+        lists: Vec<RoomList>,
+    },
+    /// Answer to [`Request::FindRooms`].
+    Rooms {
+        /// The account.
+        account_id: AccountId,
+        /// Range start.
+        from: String,
+        /// Range end.
+        to: String,
+        /// The rooms, free ones first, then by name.
+        rooms: Vec<RoomAvailability>,
+    },
     /// Answer to [`Request::ListReminders`].
     Reminders {
         /// Fired and snoozed reminders (and pending ones up to `until`),
@@ -3220,6 +3464,14 @@ pub enum Event {
     GmailLabelsChanged {
         /// The account.
         account_id: AccountId,
+    },
+    /// Exchange state of an account changed (locally or by sync):
+    /// clients refetch the requests of the named areas (M3c).
+    ExchangeChanged {
+        /// The account.
+        account_id: AccountId,
+        /// What changed.
+        areas: Vec<ExchangeArea>,
     },
 }
 
@@ -4072,5 +4324,63 @@ mod tests {
         };
         let value = serde_json::to_value(&free).unwrap();
         assert_eq!(serde_json::from_value::<Response>(value).unwrap(), free);
+    }
+
+    #[test]
+    fn m3c_requests_responses_and_events_serialize() {
+        let classify = Request::ClassifyFocused {
+            message_ids: vec!["m1".into()],
+            classification: InferenceClassification::Other,
+            always: true,
+        };
+        assert_eq!(
+            serde_json::to_value(&classify).unwrap(),
+            json!({"type": "ClassifyFocused", "message_ids": ["m1"], "classification": "other", "always": true})
+        );
+        let parsed: Request = serde_json::from_value(json!({
+            "type": "FindRooms", "account_id": "work",
+            "from": "2026-10-05T08:00:00Z", "to": "2026-10-05T09:00:00Z"
+        }))
+        .unwrap();
+        let Request::FindRooms {
+            room_list,
+            min_capacity,
+            refresh,
+            ..
+        } = parsed
+        else {
+            panic!("FindRooms");
+        };
+        assert_eq!((room_list, min_capacity, refresh), (None, None, false));
+        let add = Request::AddExchangeMailbox {
+            account_id: "work".into(),
+            settings: ExchangeMailboxSettings::shared("support@contoso.example"),
+        };
+        let value = serde_json::to_value(&add).unwrap();
+        assert_eq!(value["settings"]["kind"], json!("shared"));
+        assert_eq!(serde_json::from_value::<Request>(value).unwrap(), add);
+        let set = Request::SetAutomaticReplies {
+            account_id: "work".into(),
+            settings: AutomaticRepliesSettings::default(),
+        };
+        let value = serde_json::to_value(&set).unwrap();
+        assert_eq!(value["settings"]["status"], json!("disabled"));
+        let changed = Event::ExchangeChanged {
+            account_id: "work".into(),
+            areas: vec![ExchangeArea::Categories, ExchangeArea::Rules],
+        };
+        assert_eq!(
+            serde_json::to_value(&changed).unwrap(),
+            json!({"type": "ExchangeChanged", "account_id": "work", "areas": ["categories", "rules"]})
+        );
+        let lists = Response::RoomLists {
+            account_id: "work".into(),
+            lists: vec![RoomList {
+                address: "building1@contoso.example".into(),
+                name: "Building 1".into(),
+            }],
+        };
+        let value = serde_json::to_value(&lists).unwrap();
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), lists);
     }
 }
