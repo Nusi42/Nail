@@ -972,6 +972,10 @@ pub enum DiscoverySource {
     Autodiscover,
     /// Common host names (`imap.<domain>`, `mail.<domain>`, …) that answered.
     Guess,
+    /// Built into Nail for a known provider's API (M3b: Gmail through the
+    /// Gmail API for `gmail.com`, `googlemail.com` and domains whose mail
+    /// Google hosts).
+    Provider,
 }
 
 /// Result of [`crate::Request::TestAccount`].

@@ -489,7 +489,12 @@ pub(crate) async fn sync_once(service: &Service, config: &PimSourceConfig) -> Re
         PimSourceKind::Caldav | PimSourceKind::Carddav => {
             let client = dav_client(service, config, None).await?;
             replay_dav(service, config, &client).await?;
-            sync_dav(service, config, &client).await
+            let changes = sync_dav(service, config, &client).await?;
+            // M3b: the schedule inbox (RFC 6638), pulled with every pass.
+            if config.kind() == PimSourceKind::Caldav {
+                crate::scheduling::process_schedule_inbox(service, config, &client).await;
+            }
+            Ok(changes)
         }
         PimSourceKind::Local => Ok(SyncChanges::default()),
     }
@@ -874,6 +879,114 @@ struct StoredDiscovery {
     context_url: String,
     principal: String,
     home_sets: Vec<String>,
+    /// RFC 6638 scheduling of a CalDAV principal (M3b); `None` = not
+    /// asked yet.
+    #[serde(default)]
+    scheduling: Option<StoredScheduling>,
+}
+
+/// What a CalDAV source offers for scheduling (M3b, from
+/// `nail_dav::discover_scheduling`), stored with its discovery.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct StoredScheduling {
+    /// `schedule-inbox-URL`.
+    pub inbox: Option<String>,
+    /// `schedule-outbox-URL`.
+    pub outbox: Option<String>,
+    /// The calendar user's addresses.
+    pub addresses: Vec<String>,
+    /// The server schedules itself (`calendar-auto-schedule`).
+    pub auto_schedule: bool,
+    /// `schedule-default-calendar-URL`.
+    pub default_calendar: Option<String>,
+}
+
+impl StoredScheduling {
+    fn of(info: &nail_dav::SchedulingInfo) -> Self {
+        Self {
+            inbox: info.inbox.as_ref().map(Url::to_string),
+            outbox: info.outbox.as_ref().map(Url::to_string),
+            addresses: info.addresses.clone(),
+            auto_schedule: info.auto_schedule,
+            default_calendar: info.default_calendar.as_ref().map(Url::to_string),
+        }
+    }
+
+    /// The `nail-dav` form for the free/busy provider and the inbox.
+    pub(crate) fn info(&self, principal: &str) -> Option<nail_dav::SchedulingInfo> {
+        Some(nail_dav::SchedulingInfo {
+            principal: Url::parse(principal).ok()?,
+            inbox: self.inbox.as_deref().and_then(|u| Url::parse(u).ok()),
+            outbox: self.outbox.as_deref().and_then(|u| Url::parse(u).ok()),
+            addresses: self.addresses.clone(),
+            user_type: nail_api::pim::calendar::AttendeeKind::Individual,
+            display_name: None,
+            auto_schedule: self.auto_schedule,
+            default_calendar: self
+                .default_calendar
+                .as_deref()
+                .and_then(|u| Url::parse(u).ok()),
+        })
+    }
+}
+
+/// The scheduling information of a CalDAV source, as stored by its last
+/// sync (`None` = not a CalDAV source, not discovered yet, or no
+/// scheduling).
+pub(crate) async fn source_scheduling(
+    service: &Service,
+    source: &PimSourceId,
+) -> Option<nail_dav::SchedulingInfo> {
+    let id = source.clone();
+    let stored: StoredDiscovery = service
+        .inner
+        .store
+        .call(move |s| Ok(s.pim_source(&id)?.and_then(|r| r.discovery)))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value(v).ok())?;
+    let scheduling = stored.scheduling?;
+    (scheduling.inbox.is_some() || scheduling.outbox.is_some())
+        .then(|| scheduling.info(&stored.principal))
+        .flatten()
+}
+
+/// Asks the principal about scheduling once (RFC 6638) and stores the
+/// answer with the discovery; a server without scheduling is stored as
+/// such, other failures are asked again on the next pass.
+async fn ensure_scheduling(
+    service: &Service,
+    config: &PimSourceConfig,
+    client: &DavClient,
+    found: &mut StoredDiscovery,
+) {
+    if config.kind() != PimSourceKind::Caldav || found.scheduling.is_some() {
+        return;
+    }
+    let Ok(principal) = Url::parse(&found.principal) else {
+        return;
+    };
+    let home = found.home_sets.first().and_then(|h| Url::parse(h).ok());
+    found.scheduling = match nail_dav::discover_scheduling(client, &principal, home.as_ref()).await
+    {
+        Ok(info) => Some(StoredScheduling::of(&info)),
+        Err(DavError::NoScheduling) => Some(StoredScheduling::default()),
+        Err(err) => {
+            tracing::debug!(source = %config.id, error = %err, "scheduling discovery failed");
+            return;
+        }
+    };
+    let value = serde_json::to_value(&*found).ok();
+    let id = config.id.clone();
+    if let Err(err) = service
+        .inner
+        .store
+        .call(move |s| s.set_pim_source_discovery(&id, value.as_ref()))
+        .await
+    {
+        tracing::debug!(%err, "cannot store the scheduling discovery");
+    }
 }
 
 /// The source's collections on the server (discovering first when needed).
@@ -890,7 +1003,8 @@ async fn server_collections(
         .await?
         .and_then(|v| serde_json::from_value(v).ok());
     let kind = dav_service(config);
-    if let Some(found) = stored {
+    if let Some(mut found) = stored {
+        ensure_scheduling(service, config, client, &mut found).await;
         let homes: Vec<Url> = found
             .home_sets
             .iter()
@@ -920,11 +1034,13 @@ async fn server_collections(
     )
     .await
     .map_err(dav_error)?;
-    let found = StoredDiscovery {
+    let mut found = StoredDiscovery {
         context_url: discovery.context_url.to_string(),
         principal: discovery.principal.to_string(),
         home_sets: discovery.home_sets.iter().map(Url::to_string).collect(),
+        scheduling: None,
     };
+    ensure_scheduling(service, config, client, &mut found).await;
     let value = serde_json::to_value(&found).ok();
     let id = config.id.clone();
     service

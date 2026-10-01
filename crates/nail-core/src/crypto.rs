@@ -457,6 +457,12 @@ impl Service {
         if keys_changed {
             self.broadcast(Event::KeysChanged);
         }
+        // The invitation card (M3b); a broken iTIP part only loses the card.
+        let mut body = body;
+        match self.invitation(&body.id).await {
+            Ok(card) => body.invitation = card.map(Box::new),
+            Err(err) => tracing::debug!(message = %body.id, %err, "no invitation card"),
+        }
         Ok(body)
     }
 

@@ -16,7 +16,8 @@
 //!   `filename:` (attachment names), `has:attachment`, `is:` (`unread`,
 //!   `read`, `flagged`, `unflagged`, `answered`, `unanswered`, `draft`;
 //!   aliases `seen` = read, `starred` = flagged, `replied` = answered),
-//!   `tag:`, `account:`, `folder:`, `before:` / `after:` (a day
+//!   `tag:`, `account:`, `folder:`, `category:` (Gmail inbox category, M3b),
+//!   `before:` / `after:` (a day
 //!   `2026-09-01` or a relative age `7d`: `h` hours, `d` days, `w` weeks,
 //!   `m` months of 30 days, `y` years of 365 days), and `size>` / `size>=`
 //!   / `size<` / `size<=` with an optional unit (`k`, `m`, `g`, 1024-based;
@@ -89,6 +90,9 @@ pub enum TermKind {
     HasAttachment,
     /// `tag:` (case-insensitive).
     Tag(Value),
+    /// `category:` — a Gmail inbox category (`primary`, `social`,
+    /// `promotions`, `updates`, `forums`; case-insensitive; M3b).
+    Category(Value),
     /// `account:` — an account's id, name or address, or a virtual account.
     Account(Value),
     /// `folder:` — a folder's name, path or role.
@@ -491,6 +495,7 @@ impl<'a> Lexer<'a> {
                 | "has"
                 | "is"
                 | "tag"
+                | "category"
                 | "account"
                 | "folder"
                 | "before"
@@ -552,6 +557,7 @@ impl<'a> Lexer<'a> {
                     .ok_or_else(|| invalid(format!("unknown flag {value:?}")))?,
             ),
             "tag" => TermKind::Tag(v()),
+            "category" => TermKind::Category(v()),
             "account" => TermKind::Account(v()),
             "folder" => TermKind::Folder(v()),
             "before" | "after" => {
@@ -958,6 +964,10 @@ impl fmt::Display for Term {
                 f.write_str("tag:")?;
                 write_value(f, &v.text, v.quoted)
             }
+            TermKind::Category(v) => {
+                f.write_str("category:")?;
+                write_value(f, &v.text, v.quoted)
+            }
             TermKind::Account(v) => {
                 f.write_str("account:")?;
                 write_value(f, &v.text, v.quoted)
@@ -1350,6 +1360,7 @@ mod tests {
             "before:2026-09-01 after:7d size>=1024",
             r#""AND" "-x" "from:y" "a\"b""#,
             "tag:\"two words\" folder:INBOX account:work",
+            "category:social -category:promotions",
         ] {
             let q = p(s);
             let printed = q.to_string();
@@ -1357,5 +1368,11 @@ mod tests {
         }
         assert_eq!(p("a AND (b)").to_string(), "a b");
         assert_eq!(p("-a").to_string(), "NOT a");
+    }
+
+    #[test]
+    fn gmail_categories_are_a_field() {
+        let q = p("CATEGORY:Social");
+        assert_eq!(q.to_string(), "category:Social");
     }
 }

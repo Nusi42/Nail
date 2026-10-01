@@ -40,8 +40,12 @@ use crate::service::Service;
 /// Attempts before a temporarily failing send is given up.
 pub(crate) const MAX_SEND_ATTEMPTS: u32 = 5;
 
-/// Providers that file submitted mail in Sent themselves.
+/// Providers that file submitted mail in Sent themselves (and API
+/// accounts that send through their API, like Gmail; M3b).
 fn saves_sent_automatically(account: &AccountConfig) -> bool {
+    if account.incoming.sends_itself() {
+        return true;
+    }
     let hosts = [
         Some(account.incoming.server().host.as_str()),
         account.outgoing.as_ref().map(|o| o.server().host.as_str()),
@@ -224,7 +228,7 @@ impl Service {
                 .call(move |s| s.save_draft(&updated))
                 .await?;
         }
-        if account.outgoing.is_none() {
+        if !account.can_send() {
             return Err(ApiError::invalid_request(format!(
                 "account {} has no outgoing server",
                 account.id
@@ -274,8 +278,17 @@ impl Service {
         Ok(draft)
     }
 
-    /// The transport of an account's outgoing server.
-    pub(crate) fn transport(&self, account: &AccountConfig) -> Result<SmtpTransport> {
+    /// The transport of an account's outgoing server: SMTP, or the Gmail
+    /// API for Gmail accounts (M3b; `messages.send`).
+    pub(crate) fn transport(&self, account: &AccountConfig) -> Result<Arc<dyn OutgoingTransport>> {
+        if let IncomingServer::Gmail { .. } = &account.incoming {
+            return Ok(Arc::new(crate::gmail::engine_for(self, account)?));
+        }
+        Ok(Arc::new(self.smtp_transport(account)?))
+    }
+
+    /// The SMTP transport of an account's outgoing server.
+    fn smtp_transport(&self, account: &AccountConfig) -> Result<SmtpTransport> {
         let Some(OutgoingServer::Smtp { server, options }) = &account.outgoing else {
             return Err(ApiError::invalid_request(format!(
                 "account {} has no outgoing server",
@@ -353,16 +366,20 @@ impl Service {
                 self.redirect_message(&draft, &identity, message_id, seed)
                     .await
             }
-            Some(AutomaticMail::AutocryptSetup) => self.prepared_message(&draft, &identity).await,
+            Some(AutomaticMail::AutocryptSetup | AutomaticMail::Itip) => {
+                self.prepared_message(&draft, &identity).await
+            }
             _ => self.build_draft_message(&draft, &identity, seed).await,
         }
         .map_err(EngineError::from)?;
-        // The Autocrypt header, signing and encryption (M2a). Redirects and
-        // setup messages go out unchanged.
+        // The Autocrypt header, signing and encryption (M2a). Redirects,
+        // setup messages and iMIP mail (M3b) go out unchanged.
         let messages = if draft.automatic.as_ref().is_some_and(|a| {
             matches!(
                 a,
-                AutomaticMail::Redirect { .. } | AutomaticMail::AutocryptSetup
+                AutomaticMail::Redirect { .. }
+                    | AutomaticMail::AutocryptSetup
+                    | AutomaticMail::Itip
             )
         }) {
             vec![message]

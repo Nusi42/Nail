@@ -3,10 +3,13 @@
 //! * `nail serve --seed demo`: the `nail-testkit` corpus as a local account;
 //! * `--seed demo-imap`: the corpus on a mock IMAP server, synced like a
 //!   real account;
-//! * `--seed demo-multi` ([`start_demo_multi`]): two configured accounts
-//!   (IMAP "work" with IDLE, POP3 "home"), one SMTP server for both, and a
-//!   third IMAP server plus autoconfig / DNS mocks for setting up a new
-//!   account by discovery. Secrets live in memory, never in the OS
+//! * `--seed demo-multi` ([`start_demo_multi`]): three configured accounts
+//!   (IMAP "work" with IDLE, POP3 "home", and — switched off until enabled
+//!   in the settings — Gmail API "gmail" on the mock Gmail server with a
+//!   mock OAuth2 authorization server; M3b), one SMTP
+//!   server for the first two, a third IMAP server plus autoconfig / DNS
+//!   mocks for setting up a new account by discovery, and a mock CalDAV /
+//!   CardDAV server with a second principal (`bob`, free/busy; M3b). Secrets live in memory, never in the OS
 //!   keychain. [`DemoMulti::control`] offers the test controls the
 //!   Playwright suite uses (deliver mail, change flags, go offline, read
 //!   what SMTP received).
@@ -35,15 +38,16 @@ use nail_api::security::{KeyAlgorithm, SecretProtection};
 use nail_api::{Account, AccountId, AccountKind, Folder, FolderRole, SecretRef};
 use nail_discovery::{Discoverer, HickoryDns, ReqwestFetch, TcpProbe};
 use nail_pgp::discovery::{HttpClient, HttpResponse};
+use nail_proto_gmail::testing::MockGmailServer;
 use nail_proto_imap::{Credentials, ImapConfig, Security};
 use nail_store::{BlobStore, Store};
 use nail_testkit::{
     CryptoFixtures, MailStore, MockImapConfig, MockImapServer, crypto_fixture, demo_corpus,
 };
 use nail_testkit_net::{
-    DnsZone, MockDavConfig, MockDavServer, MockDnsServer, MockHttpServer, MockPop3Config,
-    MockPop3Server, MockResponse, MockSieveConfig, MockSieveServer, MockSmtpConfig, MockSmtpServer,
-    Pop3Message,
+    DnsZone, MockDavConfig, MockDavServer, MockDavUser, MockDnsServer, MockHttpServer,
+    MockOAuthConfig, MockOAuthServer, MockPop3Config, MockPop3Server, MockResponse,
+    MockSieveConfig, MockSieveServer, MockSmtpConfig, MockSmtpServer, Pop3Message,
 };
 use serde_json::{Value, json};
 
@@ -325,6 +329,20 @@ pub const MULTI_CARDDAV_ID: &str = "work-contacts";
 pub const MULTI_HOLIDAYS_ID: &str = "holidays";
 /// User name of the mock CalDAV / CardDAV server.
 pub const MULTI_DAV_USER: &str = "ada";
+/// The second principal of the mock CalDAV server (M3b): another person
+/// whose free/busy the demo can ask for.
+pub const MULTI_DAV_OTHER_USER: &str = "bob";
+/// Address of [`MULTI_DAV_OTHER_USER`].
+pub const MULTI_DAV_OTHER_EMAIL: &str = "bob@example.org";
+/// Id of the Gmail API account of `--seed demo-multi` (M3b).
+pub const MULTI_GMAIL_ID: &str = "gmail";
+/// Address of the Gmail account (the mock Gmail server's demo mailbox).
+pub const MULTI_GMAIL_EMAIL: &str = "ada@gmail.example";
+/// The OAuth2 provider of the demo Gmail account (the mock authorization
+/// server; no Google sign-in in demos).
+pub const MULTI_GMAIL_PROVIDER: &str = "demo-google";
+/// The refresh token the demo keychain holds for the Gmail account.
+const MULTI_GMAIL_REFRESH_TOKEN: &str = "demo-gmail-refresh";
 /// Password of the mock CalDAV / CardDAV server.
 pub const MULTI_DAV_PASSWORD: &str = "dav-secret";
 
@@ -367,6 +385,20 @@ fn dav_event(uid: &str, title: &str, days: i64, hour: u32, weekly: bool) -> Stri
     )
 }
 
+/// A meeting the work identity organizes, with the second DAV principal
+/// invited (M3b: the organizer panel, the cancel dialog).
+fn dav_meeting(uid: &str, title: &str, days: i64, hour: u32) -> String {
+    dav_event(uid, title, days, hour, false).replace(
+        "END:VEVENT",
+        &format!(
+            "ORGANIZER;CN=Ada Lovelace:mailto:{MULTI_WORK_EMAIL}\r\n\
+             ATTENDEE;CN=Ada Lovelace;PARTSTAT=ACCEPTED:mailto:{MULTI_WORK_EMAIL}\r\n\
+             ATTENDEE;CN=Bob;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{MULTI_DAV_OTHER_EMAIL}\r\n\
+             END:VEVENT"
+        ),
+    )
+}
+
 /// A demo vCard 3.0.
 fn dav_card(uid: &str, name: &str, email: &str) -> String {
     format!(
@@ -393,8 +425,13 @@ pub struct DemoMulti {
     /// ManageSieve server of the "work" account (M2c).
     pub sieve: MockSieveServer,
     /// CalDAV / CardDAV server of the PIM sources (M3a), with sample
-    /// events and contacts.
+    /// events and contacts; the second principal `bob` has busy time
+    /// (M3b free/busy).
     pub dav: MockDavServer,
+    /// The Gmail API server of the "gmail" account (M3b).
+    pub gmail: MockGmailServer,
+    /// The OAuth2 authorization server of the Gmail account (M3b).
+    pub oauth: MockOAuthServer,
     /// The clock snooze, quiet hours and notifications see; moved by the
     /// `clock-set` / `clock-advance` controls (M2c).
     pub clock: Arc<crate::AdjustableClock>,
@@ -555,10 +592,37 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     let dav = MockDavServer::start(MockDavConfig {
         username: MULTI_DAV_USER.to_owned(),
         password: MULTI_DAV_PASSWORD.to_owned(),
+        // M3b: the work identity is the calendar user (free/busy
+        // organizer), and a second person to ask about.
+        email: MULTI_WORK_EMAIL.to_owned(),
+        users: vec![MockDavUser::new(MULTI_DAV_OTHER_USER)],
         ..MockDavConfig::default()
     })
     .await
     .map_err(io_error)?;
+    let bob = dav.user_calendar_path(MULTI_DAV_OTHER_USER, "personal");
+    for (name, data) in [
+        (
+            "bob-workshop.ics",
+            dav_event("bob-workshop@nail.example", "Workshop", 1, 10, false),
+        ),
+        (
+            "bob-dentist.ics",
+            dav_event("bob-dentist@nail.example", "Dentist", 1, 14, false),
+        ),
+    ] {
+        dav.put_object(&bob, name, &data);
+    }
+    // M3b: the Gmail account (mock Gmail API + mock sign-in).
+    let gmail = MockGmailServer::start_demo().await.map_err(io_error)?;
+    let oauth = MockOAuthServer::start(MockOAuthConfig::default())
+        .await
+        .map_err(io_error)?;
+    oauth.add_refresh_token(
+        MULTI_GMAIL_REFRESH_TOKEN,
+        MULTI_GMAIL_EMAIL,
+        "https://mail.google.com/",
+    );
     let personal = dav.calendar_path("personal");
     for (name, data) in [
         (
@@ -568,6 +632,10 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         (
             "quarterly-review.ics",
             dav_event("review@nail.example", "Quarterly review", 1, 14, false),
+        ),
+        (
+            "project-kickoff.ics",
+            dav_meeting("kickoff@nail.example", "Project kickoff", 2, 15),
         ),
     ] {
         dav.put_object(&personal, name, &data);
@@ -636,6 +704,12 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
             )
             .map_err(io_error)?;
     }
+    secrets
+        .set(
+            &SecretRef::default_for(&AccountId::new(MULTI_GMAIL_ID), SecretKind::OAuth2),
+            MULTI_GMAIL_REFRESH_TOKEN,
+        )
+        .map_err(io_error)?;
     Ok(DemoMulti {
         work,
         home,
@@ -645,6 +719,8 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         dns,
         sieve,
         dav,
+        gmail,
+        oauth,
         clock: Arc::new(crate::AdjustableClock::new()),
         secrets,
         discoverer: Arc::new(discoverer),
@@ -662,6 +738,8 @@ impl DemoMulti {
         let (imap, pop3, smtp) = (self.work.port(), self.home.port(), self.smtp.port());
         let sieve = self.sieve.port();
         let (dav, http) = (self.dav.addr().port(), self.http.addr().port());
+        let gmail = self.gmail.addr().port();
+        let (oauth_auth, oauth_token) = (self.oauth.authorize_url(), self.oauth.token_url());
         format!(
             r##"{MULTI_CONFIG_MARKER}
 undo-send-delay 5
@@ -697,6 +775,19 @@ carddav "{MULTI_CARDDAV_ID}" name="Work contacts" url="http://127.0.0.1:{dav}/" 
 }}
 
 calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.1:{http}/holidays.ics" color="#d33"
+
+oauth-provider "{MULTI_GMAIL_PROVIDER}" client-id="nail-test-client" auth-url="{oauth_auth}" token-url="{oauth_token}" {{
+    scopes "https://mail.google.com/"
+}}
+
+// Switched off at first (the other demos count the unified inbox);
+// Settings → Accounts → "Synchronize this account" turns it on.
+account "{MULTI_GMAIL_ID}" email="{MULTI_GMAIL_EMAIL}" name="Gmail" enabled=#false {{
+    gmail host="127.0.0.1" port={gmail} tls="plaintext" poll-interval=10 max-poll-interval=10 {{
+        auth "oauth2" provider="{MULTI_GMAIL_PROVIDER}"
+    }}
+    identity "{MULTI_GMAIL_EMAIL}" name="Ada Lovelace"
+}}
 "##
         )
     }
@@ -787,6 +878,26 @@ calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.
         }
     }
 
+    /// The mock Gmail id of the message named by `id` or by a `subject`
+    /// it contains.
+    fn gmail_message_id(&self, args: &Value) -> std::result::Result<String, String> {
+        if let Some(id) = args.get("id").and_then(Value::as_str) {
+            return Ok(id.to_owned());
+        }
+        let subject = args
+            .get("subject")
+            .and_then(Value::as_str)
+            .ok_or("id or subject is required")?;
+        self.gmail
+            .with_mailbox(|m| {
+                m.message_ids().into_iter().find(|id| {
+                    m.message(id)
+                        .is_some_and(|msg| subject_of(&msg.raw).contains(subject))
+                })
+            })
+            .ok_or_else(|| format!("no Gmail message {subject:?}"))
+    }
+
     fn imap(&self, account: &str) -> std::result::Result<&MockImapServer, String> {
         match account {
             MULTI_WORK_ID => Ok(&self.work),
@@ -817,6 +928,13 @@ calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.
     ///   `{etag}` and `dav-delete {collection?, name}` change it as another
     ///   client would (M3a)
     /// * `feeds` → `{holidays, town}`: URLs of the demo ICS feeds (M3a)
+    /// * `gmail-deliver {raw, labels?}` → `{id}` (default labels `INBOX`,
+    ///   `UNREAD`); `gmail-message {id?, subject?}` → `{id, labels}`;
+    ///   `gmail-labels` → `[{id, name}]`; `gmail-sent` → `[data]`;
+    ///   `gmail-modify {id?, subject?, add?, remove?}`: the mock Gmail
+    ///   server of the "gmail" account (M3b)
+    /// * `dav-user-put {user?, name, data}` → `{etag}`: an event in the
+    ///   `personal` calendar of the second principal (`bob`, M3b)
     /// * `clock` → `{now}`; `clock-set {at}` (Unix seconds);
     ///   `clock-advance {seconds}`: the clock of snooze, quiet hours and
     ///   notifications (M2c)
@@ -966,6 +1084,67 @@ calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.
                 let path = self.dav_path(text("collection").unwrap_or("personal"))?;
                 let name = text("name").ok_or("name is required")?;
                 Ok(json!({ "deleted": self.dav.delete_object(&path, name) }))
+            }
+            "gmail-deliver" => {
+                let raw = text("raw").ok_or("raw is required")?;
+                let labels: Vec<String> = args
+                    .get("labels")
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|l| l.as_str().map(str::to_owned))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| vec!["INBOX".to_owned(), "UNREAD".to_owned()]);
+                let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
+                Ok(json!({ "id": self.gmail.deliver(crlf(raw).as_bytes(), &labels) }))
+            }
+            "gmail-message" => {
+                let id = self.gmail_message_id(args)?;
+                Ok(json!({ "id": id, "labels": self.gmail.labels_of(&id) }))
+            }
+            "gmail-modify" => {
+                let id = self.gmail_message_id(args)?;
+                let list = |key: &str| -> Vec<String> {
+                    args.get(key)
+                        .and_then(Value::as_array)
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|l| l.as_str().map(str::to_owned))
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                };
+                let (add, remove) = (list("add"), list("remove"));
+                let add: Vec<&str> = add.iter().map(String::as_str).collect();
+                let remove: Vec<&str> = remove.iter().map(String::as_str).collect();
+                self.gmail.modify(&id, &add, &remove);
+                Ok(json!({ "id": id, "labels": self.gmail.labels_of(&id) }))
+            }
+            "gmail-labels" => Ok(Value::Array(
+                self.gmail
+                    .labels()
+                    .into_iter()
+                    .map(|l| json!({ "id": l.id, "name": l.name }))
+                    .collect(),
+            )),
+            "gmail-sent" => Ok(Value::Array(
+                self.gmail
+                    .sent()
+                    .iter()
+                    .map(|raw| json!(String::from_utf8_lossy(raw)))
+                    .collect(),
+            )),
+            "dav-user-put" => {
+                let user = text("user").unwrap_or(MULTI_DAV_OTHER_USER);
+                let name = text("name").ok_or("name is required")?;
+                let data = text("data").ok_or("data is required")?;
+                let path = self.dav.user_calendar_path(user, "personal");
+                let etag = self
+                    .dav
+                    .put_object(&path, name, &crlf(data))
+                    .ok_or_else(|| format!("no calendar of {user}"))?;
+                Ok(json!({ "etag": etag }))
             }
             "feeds" => {
                 let base = self.http.base_url();

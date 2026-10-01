@@ -43,6 +43,7 @@ setup-source-ispdb = Mozilla's provider database
 setup-source-srv = DNS records of the domain
 setup-source-autodiscover = Microsoft Autodiscover
 setup-source-guess = Common server names (please check)
+setup-source-provider = Gmail through the Gmail API (built into Nail)
 setup-warning-insecure-source = Received without encryption: anyone on your network could have changed it.
 setup-warning-foreign-hosts = The servers are not part of your address's domain.
 setup-warning-check = These settings could not be verified. Only continue if you know these are your provider's servers; otherwise your password goes to someone else.

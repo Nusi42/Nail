@@ -203,6 +203,8 @@ How it works:
 | `e2e/tests/plugins.spec.ts` | M2d plug-ins (private `--seed demo` each): the example installed through Settings → Plug-ins with its permissions, placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, stored reminder, notification; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
 | `e2e/tests/a11y-windows.spec.ts` | axe on every layout window, settings tab (nested ones too) and feature dialog (incl. the plug-in install dialog) in default, high-contrast and dark mode against `--seed demo-multi`; checks its own coverage against the layout |
 | `e2e/tests/pim.spec.ts` | `--seed demo-multi` (M3a): a weekly event edited "this and following" (two series); an event created in the CalDAV calendar reaches the mock CalDAV server and another client's event (`dav-put`) appears after "Sync"; the ICS subscription's holiday is read-only and a second feed is added from the sources dialog; a reminder fires at the controlled clock time (`clock-set`) and is dismissed; a contact created in the CardDAV book reaches the server and is suggested in the composer; duplicate contacts (local + CardDAV) merged into one linked person; a task with a subtask completed; an `.ics` given with `--launch` previewed and imported; an MCP client lists events only after a grant |
+| `e2e/tests/scheduling.spec.ts` | `--seed demo-multi` (M3b): an iMIP invitation (delivered with `imap-deliver`) is added on arrival and accepted from the reader's card, the `REPLY` reaches the mock SMTP server and the event is in the calendar; an organizer's update moves the event and the cancellation is removed with "Remove from calendar"; a meeting created in the event editor is sent ("Send invitations"), Grace's `COUNTER` is accepted from the card and the updated `REQUEST` goes out; the attendee picker shows `bob`'s busy blocks from the mock CalDAV server's outbox |
+| `e2e/tests/gmail.spec.ts` | `--seed demo-multi` (M3b): the Gmail account switched on in the settings syncs (four inbox conversations, chat skipped), category tabs filter the inbox, a label applied with "Labels…" reaches the mock Gmail server, archive removes `INBOX`, mail is sent through the API (`gmail-sent`), a message delivered on the server (`gmail-deliver`) arrives by history polling |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 
 ### Generated files and snapshots
@@ -239,7 +241,7 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 | --- | --- |
 | `--seed demo` | Load the demo mail corpus as a local account (no network). Every seeded run keeps secrets in memory, trusts only the corpus' S/MIME test root and looks up no keys online |
 | `--seed demo-imap` | Serve the demo corpus from an in-process mock IMAP server and sync it like a real account |
-| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"`. M3a: a mock CalDAV / CardDAV server (sources `work-calendars` / `work-contacts`, user `ada`, password `dav-secret` in the memory keychain) with sample events ("Team sync" weekly, "Quarterly review" tomorrow) and contacts (Grace Hopper, Charles Babbage), and the ICS subscription `holidays` on the mock HTTP server |
+| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"`. M3a: a mock CalDAV / CardDAV server (sources `work-calendars` / `work-contacts`, user `ada`, password `dav-secret` in the memory keychain) with sample events ("Team sync" weekly, "Quarterly review" tomorrow) and contacts (Grace Hopper, Charles Babbage), and the ICS subscription `holidays` on the mock HTTP server. M3b: the mock CalDAV server's user address is `ada@work.example`, a second principal `bob` (`bob@example.org`, busy tomorrow 10:00 and 14:00 UTC) answers free/busy through the schedule outbox, "Project kickoff" (in two days) is a meeting the work identity organizes with bob invited; a Gmail API account "Gmail" (`ada@gmail.example`, mock Gmail server with the demo mailbox, signed in through a mock OAuth2 server, polls every 10 s) is configured but **switched off** (`enabled=#false`) so the other suites keep their counts — Settings → Accounts → Gmail → "Synchronize this account" turns it on |
 | `--port 0` | Use a free port; the URL is the only line printed on stdout |
 | `--data-dir DIR` | Store location (default `%LOCALAPPDATA%\Nail`; with `--seed`, a temporary directory) |
 | `--config-dir DIR` | `theme.kdl` / `layout.kdl` location (default `%APPDATA%\Nail`; with `--seed`, a temporary directory) |
@@ -333,6 +335,12 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `dav-objects` | `collection?` | `[{name, etag, data}]` of the mock CalDAV / CardDAV server: `personal` (default), `tasks`, `holidays` (read-only) or `contacts` (M3a) |
 | `dav-put` | `collection?`, `name`, `data` | Stores an iCalendar / vCard object as another client would; `{etag}` |
 | `dav-delete` | `collection?`, `name` | Deletes an object as another client would |
+| `dav-user-put` | `user?`, `name`, `data` | Stores an event in the `personal` calendar of another principal (`bob` by default; free/busy, M3b) |
+| `gmail-deliver` | `raw`, `labels?` | New message on the mock Gmail server (labels `INBOX`, `UNREAD` by default); `{id}` (M3b) |
+| `gmail-message` | `id?` or `subject?` | `{id, labels}` of a Gmail message (by id or a subject it contains) |
+| `gmail-modify` | `id?` / `subject?`, `add?`, `remove?` | Changes a message's labels on the server (history polling picks it up) |
+| `gmail-labels` | – | `[{id, name}]` of the mock Gmail account |
+| `gmail-sent` | – | Raw texts of what Nail sent through `messages.send` |
 | `feeds` | – | `{holidays, town}`: URLs of the demo ICS feeds (`holidays` is configured, `town` is for adding a subscription) |
 | `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications, reminders), Unix seconds |
 | `clock-set` | `at` | Sets that clock to `at` (Unix seconds); it keeps running |
@@ -488,6 +496,15 @@ For M3b:
   categories, label management; `MailApiEngine` / `AdaptivePoll` / `FreeBusyProvider`; store v11;
   the `nail-itip` / `nail-proto-gmail` stubs (mock Gmail server: `--features testing`); slots).
   Texts built in Rust: `locales/<lang>/core-scheduling.ftl`, `core-gmail.ftl`.
+- **0066:** `nail-itip` — iTIP / iMIP (cards, applying, building, iMIP mail, conflicts,
+  RFC 6638 delivery); texts in `locales/<lang>/itip.ftl`
+- **0067:** `nail-proto-gmail` — the Gmail API engine and the mock Gmail server
+- **0068:** CalDAV scheduling and free/busy in `nail-dav`; the scheduling mock DAV server
+- **0069:** the invitations / scheduling / Gmail UI (`ui/src/features/{scheduling,gmail}/`)
+- **0070:** M3b integration (`nail-core/src/scheduling.rs`, `gmail.rs`: cards, arrival
+  processing, iMIP through the outbox as prepared mail, server scheduling, free/busy, the
+  Gmail engine loop / replay / label queue / sending, Gmail discovery, `category:`;
+  demo-multi Gmail account + DAV principals)
 
 For M3a:
 

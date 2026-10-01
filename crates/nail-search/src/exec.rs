@@ -158,6 +158,7 @@ impl Compiler<'_> {
             },
             TermKind::HasAttachment => MessageFilter::HasAttachments(true),
             TermKind::Tag(v) => MessageFilter::Tag(v.text.clone()),
+            TermKind::Category(v) => MessageFilter::GmailCategory(v.text.clone()),
             TermKind::Account(v) => {
                 if v.text.eq_ignore_ascii_case(AccountId::ALL) {
                     return MessageFilter::All;

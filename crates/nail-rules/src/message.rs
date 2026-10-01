@@ -47,6 +47,10 @@ pub trait MessageView {
     fn flags(&self) -> Flags;
     /// Tags (IMAP keywords).
     fn tags(&self) -> Vec<String>;
+    /// The Gmail inbox category (`social`, …; M3b), if any.
+    fn gmail_category(&self) -> Option<String> {
+        None
+    }
 }
 
 /// A message held in memory.
@@ -84,6 +88,8 @@ pub struct MessageData {
     pub flags: Flags,
     /// Tags.
     pub tags: Vec<String>,
+    /// The Gmail inbox category (M3b; `None` outside Gmail accounts).
+    pub gmail_category: Option<String>,
 }
 
 impl MessageData {
@@ -110,6 +116,7 @@ impl MessageData {
             date: 0,
             flags: Flags::default(),
             tags: Vec::new(),
+            gmail_category: None,
         }
     }
 }
@@ -172,6 +179,10 @@ impl MessageView for MessageData {
 
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
+    }
+
+    fn gmail_category(&self) -> Option<String> {
+        self.gmail_category.clone()
     }
 }
 

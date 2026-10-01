@@ -215,6 +215,15 @@ impl MockOAuthServer {
             .map(|t| t.user.clone())
     }
 
+    /// Accepts `refresh_token` for `user` from now on, as if a sign-in had
+    /// issued it (demo accounts and tests that start signed in; M3b).
+    pub fn add_refresh_token(&self, refresh_token: &str, user: &str, scope: &str) {
+        lock(&self.inner.refresh).insert(
+            refresh_token.to_owned(),
+            (user.to_owned(), scope.to_owned()),
+        );
+    }
+
     /// Invalidates every refresh token (as if the user revoked access).
     pub fn revoke_all(&self) {
         lock(&self.inner.refresh).clear();
@@ -584,5 +593,36 @@ mod tests {
         assert!(reused.contains("invalid_grant"), "{reused}");
         assert!(server.issued().is_empty());
         assert_eq!(server.token_requests().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn seeded_refresh_tokens_are_accepted() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let server = MockOAuthServer::start(MockOAuthConfig::default())
+            .await
+            .unwrap();
+        server.add_refresh_token("seeded-1", "ada@gmail.example", "mail");
+        let refresh = |token: &str| {
+            let addr = server.addr();
+            let body = format!(
+                "grant_type=refresh_token&refresh_token={token}&client_id=nail-test-client"
+            );
+            async move {
+                let mut tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+                let req = format!(
+                    "POST /token HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                tcp.write_all(req.as_bytes()).await.unwrap();
+                let mut out = String::new();
+                tcp.read_to_string(&mut out).await.unwrap();
+                out
+            }
+        };
+        let ok = refresh("seeded-1").await;
+        assert!(ok.contains("access_token"), "{ok}");
+        assert_eq!(server.issued()[0].user, "ada@gmail.example");
+        let unknown = refresh("other").await;
+        assert!(unknown.contains("invalid_grant"), "{unknown}");
     }
 }

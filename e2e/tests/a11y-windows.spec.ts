@@ -42,6 +42,13 @@ const FEATURE_DIALOGS = [
   "pim-task-editor",
   "pim-import",
   "pim-sources",
+  // M3b: invitations / scheduling and Gmail labels.
+  "scheduling-cancel-meeting",
+  "scheduling-settings",
+  "scheduling-find-time",
+  "gmail-label-editor",
+  "gmail-label-delete",
+  "gmail-apply-labels",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -211,6 +218,21 @@ for (const mode of MODES) {
       await teamSync.click();
       await sweep.scanWindow("pim-event-editor");
       await sweep.close("pim-event-editor");
+      // M3b: a meeting the user organizes (the editor's meeting panel and
+      // the cancel dialog).
+      await calendar
+        .getByRole("button", { name: /^Project kickoff,/ })
+        .first()
+        .click();
+      const meeting = sweep
+        .window("pim-event-editor")
+        .getByRole("region", { name: "Meeting: Project kickoff" });
+      await expect(meeting).toBeVisible();
+      await sweep.scan("event editor (meeting)");
+      await meeting.getByRole("button", { name: "Cancel meeting…" }).click();
+      await sweep.scanWindow("scheduling-cancel-meeting");
+      await sweep.close("scheduling-cancel-meeting");
+      await sweep.close("pim-event-editor");
       await teamSync.focus();
       await page.keyboard.press("Delete");
       await sweep.scanWindow("pim-edit-scope");
@@ -221,6 +243,8 @@ for (const mode of MODES) {
         ["New contact", "pim-contact-editor"],
         ["Import calendar or contacts", "pim-import"],
         ["Calendars and address books", "pim-sources"],
+        ["Find a time", "scheduling-find-time"],
+        ["Invitation settings", "scheduling-settings"],
       ] as const) {
         await calendarActions.getByRole("button", { name: button, exact: true }).click();
         await sweep.scanWindow(name);
@@ -296,7 +320,41 @@ for (const mode of MODES) {
       await settings.getByRole("button", { name: "Install a plug-in…" }).click();
       await sweep.scanWindow("plugin-install");
       await sweep.close("plugin-install");
+      // M3b: the demo Gmail account, switched on here (labels, categories,
+      // the label dialogs).
+      await top.getByRole("tab", { name: "Accounts", exact: true }).click();
+      await settings.getByRole("button", { name: /^Gmail/ }).click();
+      await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
+      await settings.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(settings.getByText("Settings saved.")).toBeVisible();
       await sweep.close("settings");
+      const gmail = page
+        .locator('[data-part="account-switcher.item"]')
+        .filter({ hasText: "Gmail" });
+      await expect(gmail).toHaveAttribute("data-status", "online", { timeout: 30_000 });
+      await gmail.click();
+      await expect(rows).toHaveCount(4, { timeout: 30_000 });
+      const labelList = page.locator('[data-part="label-list"]');
+      await expect(
+        labelList.getByRole("button", { name: "Edit label Work/Projects" }),
+      ).toBeVisible();
+      await sweep.scan("Gmail account (labels, categories)");
+      await labelList.getByRole("button", { name: "New label" }).click();
+      await sweep.scanWindow("gmail-label-editor", "gmail-label-editor (new)");
+      await sweep.close("gmail-label-editor");
+      await labelList.getByRole("button", { name: "Edit label Work/Projects" }).click();
+      await sweep.scanWindow("gmail-label-editor", "gmail-label-editor (existing)");
+      await sweep.close("gmail-label-editor");
+      await labelList.getByRole("button", { name: "Delete label Work/Projects" }).click();
+      await sweep.scanWindow("gmail-label-delete");
+      await sweep.close("gmail-label-delete");
+      await rows.filter({ hasText: "Lunch on Friday?" }).click();
+      const invitationReader = page.locator('[data-part="message-view.header.subject"]');
+      await expect(invitationReader).toContainText("Lunch on Friday?");
+      await sweep.scan("reader (Gmail message with labels)");
+      await actions.getByRole("button", { name: "Labels…" }).click();
+      await sweep.scanWindow("gmail-apply-labels");
+      await sweep.close("gmail-apply-labels");
 
       // Coverage: every layout window, feature dialog and settings tab.
       const expectedWindows = [...Object.keys(layout.windows), ...FEATURE_DIALOGS].sort();

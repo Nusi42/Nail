@@ -262,6 +262,35 @@ fn retag_in_tx(
     Ok(())
 }
 
+/// A message's Gmail data on a connection (summaries attach it).
+pub(crate) fn gmail_info_in(
+    conn: &rusqlite::Connection,
+    id: &MessageId,
+) -> Result<Option<GmailMessageInfo>> {
+    let row: Option<(Option<String>, String, String, Option<String>)> = conn
+        .prepare_cached(
+            "SELECT m.remote_id, g.gmail_thread_id, g.label_ids, g.category
+             FROM gmail_messages g JOIN messages m ON m.id = g.message_id
+             WHERE g.message_id = ?1",
+        )?
+        .query_row([id.as_str()], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })
+        .optional()?;
+    row.map(|(gmail_id, thread_id, labels, category)| {
+        Ok(GmailMessageInfo {
+            gmail_id: gmail_id.unwrap_or_default(),
+            thread_id,
+            label_ids: serde_json::from_str(&labels)?,
+            category: category
+                .as_deref()
+                .map(enum_parse::<GmailCategory>)
+                .transpose()?,
+        })
+    })
+    .transpose()
+}
+
 impl Store {
     // --- Remote ids ------------------------------------------------------
 
@@ -516,29 +545,7 @@ impl Store {
 
     /// A message's Gmail data.
     pub fn gmail_message(&self, id: &MessageId) -> Result<Option<GmailMessageInfo>> {
-        self.with_conn(|conn| {
-            let row: Option<(Option<String>, String, String, Option<String>)> = conn
-                .query_row(
-                    "SELECT m.remote_id, g.gmail_thread_id, g.label_ids, g.category
-                     FROM gmail_messages g JOIN messages m ON m.id = g.message_id
-                     WHERE g.message_id = ?1",
-                    [id.as_str()],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-                )
-                .optional()?;
-            row.map(|(gmail_id, thread_id, labels, category)| {
-                Ok(GmailMessageInfo {
-                    gmail_id: gmail_id.unwrap_or_default(),
-                    thread_id,
-                    label_ids: serde_json::from_str(&labels)?,
-                    category: category
-                        .as_deref()
-                        .map(enum_parse::<GmailCategory>)
-                        .transpose()?,
-                })
-            })
-            .transpose()
-        })
+        self.with_conn(|conn| gmail_info_in(conn, id))
     }
 
     // --- Label operation queue ----------------------------------------------

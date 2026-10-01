@@ -193,7 +193,9 @@ A widget is a node named after its kind. Its properties are its options.
 The calendar, contact and task widgets (`calendar`, `agenda`,
 `mini-month`, `task-list`, `contact-list`, `contact-card`, `calendar-list`)
 and their options are described in
-[Calendar, contacts and tasks](calendar-contacts-tasks.md#layout-options). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
+[Calendar, contacts and tasks](calendar-contacts-tasks.md#layout-options); the invitation,
+free/busy, Gmail label and category widgets in
+[Invitations, scheduling and Gmail labels](invitations-and-gmail-labels.md#layout-options). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
 the older form `plugin.<plugin-id>.<panel>` is refused with a hint to it.
 
 ```kdl

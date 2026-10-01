@@ -37,10 +37,14 @@ pub(crate) fn sync_store_accounts(
             email: account.email.clone(),
             kind: account.kind(),
         })?;
-        if matches!(account.incoming, IncomingServer::Pop3 { .. }) {
-            for folder in pop3_folders(&account.id) {
-                store.upsert_folder(&folder)?;
-            }
+        let local_folders = match account.incoming {
+            IncomingServer::Pop3 { .. } => pop3_folders(&account.id),
+            // M3b: Gmail's folders follow from the labels (fixed set).
+            IncomingServer::Gmail { .. } => crate::gmail::gmail_folders(&account.id),
+            IncomingServer::Imap { .. } => Vec::new(),
+        };
+        for folder in local_folders {
+            store.upsert_folder(&folder)?;
         }
     }
     Ok(())
@@ -239,12 +243,10 @@ impl Service {
                 }
                 Err(err) => test_result(Err(err)),
             },
-            // M3b: the Gmail API test (token + `users.getProfile`) comes
-            // with the engine (WP85).
-            IncomingServer::Gmail { .. } => test_result(Err(EngineError::permanent(
-                ErrorCode::Unsupported,
-                "testing Gmail API accounts is not wired yet (M3b WP85)",
-            ))),
+            // M3b: a token, then `users.getProfile`.
+            IncomingServer::Gmail { server, .. } => test_result(
+                crate::gmail::test_gmail(server, incoming_creds.login(false).await).await,
+            ),
         };
         let outgoing = match (&config.outgoing, outgoing_server) {
             (Some(OutgoingServer::Smtp { .. }), Some(server)) => {

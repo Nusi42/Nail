@@ -186,24 +186,37 @@ async fn ispdb_by_domain_and_by_mx() {
 
     let d = discoverer(&m, HashMap::new());
     let found = discover("ada@gmail.com", &d).await.unwrap();
-    assert_eq!(found[0].source, DiscoverySource::Ispdb);
+    // M3b: the Gmail API first, IMAP from the ISPDB as the alternative.
+    assert_eq!(found[0].source, DiscoverySource::Provider);
+    assert!(matches!(found[0].incoming, IncomingServer::Gmail { .. }));
+    assert_eq!(found[1].source, DiscoverySource::Ispdb);
     assert!(
-        matches!(&found[0].incoming.server().auth, AuthConfig::OAuth2 { provider, .. } if provider == "google")
+        matches!(&found[1].incoming.server().auth, AuthConfig::OAuth2 { provider, .. } if provider == "google")
     );
 
-    // A custom domain hosted by Google: found through its MX host.
+    // A custom domain hosted by Google (Workspace): found through its MX
+    // host; the Gmail API is offered first.
     let found = discover("ada@custom.example", &d).await.unwrap();
     assert_eq!(
         hosts(&found),
-        [(
-            DiscoverySource::Ispdb,
-            "imap.gmail.com".to_owned(),
-            Some("smtp.gmail.com".to_owned())
-        )]
+        [
+            (
+                DiscoverySource::Provider,
+                "gmail.googleapis.com".to_owned(),
+                None
+            ),
+            (
+                DiscoverySource::Ispdb,
+                "imap.gmail.com".to_owned(),
+                Some("smtp.gmail.com".to_owned())
+            )
+        ]
     );
-    assert!(
-        matches!(&found[0].incoming.server().auth, AuthConfig::OAuth2 { username, .. } if username == "ada@custom.example")
-    );
+    for candidate in &found {
+        assert!(
+            matches!(&candidate.incoming.server().auth, AuthConfig::OAuth2 { username, .. } if username == "ada@custom.example")
+        );
+    }
 }
 
 #[tokio::test]

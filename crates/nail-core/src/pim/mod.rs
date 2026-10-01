@@ -23,7 +23,7 @@
 //! * [`search`] — the PIM search index (in memory, rebuilt from the store).
 
 mod contacts;
-mod engine;
+pub(crate) mod engine;
 mod events;
 mod feed_http;
 mod import;

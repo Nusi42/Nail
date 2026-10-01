@@ -1615,11 +1615,11 @@ async fn remote_scheduling_and_gmail_labels_follow_grants() {
         error_code(&service.handle_remote(&narrow, card.clone()).await),
         Some(ErrorCode::Forbidden)
     );
-    // A full read grant passes the checks; the contract stage answers
-    // `unsupported`.
+    // A full read grant passes the checks (a message without an iTIP
+    // part has no card).
     assert_eq!(
         error_code(&service.handle_remote(&reader, card).await),
-        Some(ErrorCode::Unsupported)
+        None
     );
     // Answering writes the calendar: the read-only grant lacks the scope,
     // the narrow one the accounts.
@@ -1653,7 +1653,7 @@ async fn remote_scheduling_and_gmail_labels_follow_grants() {
     );
     assert_eq!(
         error_code(&service.handle_remote(&reader, free_busy).await),
-        Some(ErrorCode::Unsupported)
+        None
     );
     // Gmail labels: the account must be granted.
     let labels = Request::ListGmailLabels {
@@ -1663,9 +1663,10 @@ async fn remote_scheduling_and_gmail_labels_follow_grants() {
         error_code(&service.handle_remote(&narrow, labels.clone()).await),
         Some(ErrorCode::Forbidden)
     );
+    // Granted; the local demo account is no configured Gmail account.
     assert_eq!(
         error_code(&service.handle_remote(&reader, labels).await),
-        Some(ErrorCode::Unsupported)
+        Some(ErrorCode::NotFound)
     );
 
     // Events.

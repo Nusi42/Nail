@@ -125,6 +125,11 @@ pub enum AutomaticMail {
     /// the prepared message in the draft's first attachment is sent
     /// unchanged to the identity itself; the draft's body is not used.
     AutocryptSetup,
+    /// An iMIP message (M3b, ADR 0070): the prepared invitation, answer or
+    /// cancellation in the draft's first attachment is sent unchanged to
+    /// the draft's recipients (undo send applies); the draft's body is
+    /// not used.
+    Itip,
 }
 
 impl Draft {

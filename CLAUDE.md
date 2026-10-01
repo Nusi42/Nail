@@ -55,7 +55,8 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        answers / counters / organizer requests, SchedulingSettings, free/busy +
                        BusyPeriod::merge), gmail (IncomingServer::Gmail + GmailOptions, GmailFolder /
                        LabelChange mapping, categories, labels, MessageSummary.gmail); engine.rs:
-                       MailApiEngine, AdaptivePoll, FreeBusyProvider, EngineError::retry_after_secs (ADR 0065)
+                       MailApiEngine, AdaptivePoll, FreeBusyProvider, EngineError::retry_after_secs (ADR 0065);
+                       WP85: AutomaticMail::Itip (prepared iMIP mail), DiscoverySource::Provider (ADR 0070)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -100,7 +101,8 @@ crates/nail-store      SQLite metadata (v11), blob store, per-account operation 
                        Collected book, suggest_recipients), reminders, time (ADR 0061);
                        v11 (ADR 0065): messages.remote_id (MessageSource.remote_id), scheduling.rs (itip_state
                        moves forward only, received / sent iTIP messages, settings), gmail.rs (history id,
-                       labels ↔ tags / folders, per-message labels + category, label op queue);
+                       labels ↔ tags / folders, per-message labels + category, label op queue); summaries
+                       carry `gmail` (attach_tags), MessageFilter::GmailCategory (ADR 0070);
                        src/pim/freebusy.rs (WP83 slot)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
@@ -115,7 +117,9 @@ crates/nail-proto-smtp SMTP submission (lettre) → OutgoingTransport (ADR 0017)
 crates/nail-proto-pop3 POP3 client (in-house) + leave-on-server policies (ADR 0017)
 crates/nail-auth       OAuth2 (PKCE, loopback), token manager, keychain SecretStore (ADR 0017)
 crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017); system_dns.rs SystemDns
-                       (DnsQuery_W on Windows, no DNS sockets; mock DNS bound to loopback; ADR 0057)
+                       (DnsQuery_W on Windows, no DNS sockets; mock DNS bound to loopback; ADR 0057);
+                       M3b: Gmail API candidate first (DiscoverySource::Provider) for gmail.com / googlemail.com /
+                       Google MX (ADR 0070)
 crates/nail-search     Tantivy index + query language parser (ADR 0016); open_with(DirectoryWrapper)
                        for the sealed index, IndexPolicy (decrypted indexing opt-in) (ADR 0032);
                        imap.rs: query → IMAP SEARCH key (needs_server, server_search) (ADR 0046);
@@ -125,7 +129,7 @@ crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .
                        corpus/crypto/{pgp,smime}: end-to-end
                        test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
                        smime/ada-{work,home}.p12 are the demo-multi certificates)
-crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers; managesieve.rs:
+crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers; managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
                        sync tokens, TLS, server-side changes for tests) (ADR 0060); dav/schedule.rs + ical.rs:
                        several principals, schedule inbox / outbox, free/busy POST, switchable
@@ -223,8 +227,13 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        import.rs (imports, event / task from email), reminders.rs (scheduler + task),
                        search.rs (in-memory PimIndex)); launch_args.rs (launch-argument parser, shared with
                        app/src-tauri and `nail serve --launch`);
-                       M3b (ADR 0065): scheduling.rs, gmail.rs (requests `unsupported`, Gmail engine stub)
-                       until WP85
+                       M3b (ADR 0070): scheduling.rs (cards on GetMessage / GetInvitation, arrival processing
+                       in the rule-inbox pipeline, answers / organizer flows, iMIP through the outbox as
+                       `AutomaticMail::Itip` prepared mail or server scheduling — never both, free/busy own +
+                       CalDAV outbox, schedule inbox per CalDAV pass), gmail.rs (Gmail engine loop: labels,
+                       full listing with resume / merge, history deltas, PollTimer; GmailExecutor replay; label
+                       queue; sending through the API; TestAccount); pim/engine.rs stores RFC 6638 scheduling
+                       info with the DAV discovery (`source_scheduling`)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -267,7 +276,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        support/plugins.ts + global-setup.ts build the follow-up example outside the repo;
                        tests/plugins.spec.ts (M2d), tests/a11y-windows.spec.ts (axe on every window, tab and
                        dialog in default / high-contrast / dark, self-checked coverage; ADR 0054),
-                       tests/pim.spec.ts (M3a; startNail({launch}) passes `--launch`))
+                       tests/pim.spec.ts (M3a; startNail({launch}) passes `--launch`), tests/scheduling.spec.ts +
+                       tests/gmail.spec.ts (M3b))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
@@ -310,7 +320,7 @@ bash crates/nail-testkit/corpus/crypto/pgp/generate.sh     # OpenPGP interop vec
 bash crates/nail-testkit/corpus/crypto/smime/generate.sh   # S/MIME test CA + vectors (OpenSSL 3.4+ = /mingw64/bin/openssl)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
-cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts, mock CalDAV / CardDAV + ICS feeds (test controls at /api/test/…)
+cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts, mock CalDAV / CardDAV (+ principal bob) + ICS feeds, a mock Gmail account (switched off) (test controls at /api/test/…)
 cargo run -p nail-cli -- serve --seed demo --launch C:/path/x.ics  # hand a file / link to the UI like the desktop shell (M3a)
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist (temp dirs)
 NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]   # stdio bridge to the running app's MCP server
@@ -430,6 +440,14 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `nail-config/src/widgets/{scheduling,gmail}.rs`, `ui/src/features/{scheduling,gmail}/`,
   `locales/*/{scheduling,gmail,core-scheduling,core-gmail}.ftl`). The core answers every M3b
   request `unsupported` until WP85; a Gmail account's engine reports `unsupported`.
+- M3b integration (ADR 0070; packages ADRs 0066 `nail-itip`, 0067 `nail-proto-gmail`, 0068 CalDAV scheduling,
+  0069 UI): iTIP mail is recorded and applied on arrival per `SchedulingSettings` (never junk or spoofed);
+  answers and organizer mail leave through the outbox as `AutomaticMail::Itip` (prepared MIME as the draft's
+  only attachment; undo send) unless the CalDAV server schedules (`calendar-auto-schedule` stored with the DAV
+  discovery) — then only the event is written. Gmail accounts run `gmail::run` (no SMTP; `transport()` returns
+  the engine; no Sent copy). demo-multi's Gmail account starts `enabled=#false` (the other e2e suites count the
+  unified inbox); `scheduling.spec.ts` / `gmail.spec.ts` turn it on or deliver iMIP mail with `imap-deliver`.
+  Clippy `large_futures`: boxed futures in `Service::dispatch` (scheduling).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

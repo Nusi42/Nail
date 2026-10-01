@@ -126,6 +126,9 @@ fn term_matches(kind: &TermKind, message: &dyn MessageView, env: &Env<'_>) -> bo
             .tags()
             .iter()
             .any(|t| t.eq_ignore_ascii_case(&v.text) || t.to_lowercase() == v.text.to_lowercase()),
+        TermKind::Category(v) => message
+            .gmail_category()
+            .is_some_and(|c| c.eq_ignore_ascii_case(&v.text)),
         TermKind::Account(v) => {
             let wanted = v.text.to_lowercase();
             let own = message.account_id();
@@ -214,6 +217,7 @@ mod tests {
                 draft: false,
             },
             tags: vec!["Work".into()],
+            gmail_category: Some("social".into()),
             ..MessageData::new("m1", "work", "f1")
         }
     }
@@ -252,6 +256,9 @@ mod tests {
         assert!(check("has:attachment"));
         assert!(check("tag:work"));
         assert!(!check("tag:home"));
+        // M3b: Gmail categories.
+        assert!(check("category:Social"));
+        assert!(!check("category:promotions"));
         assert!(check(
             "account:work account:Everything account:me@work.example"
         ));

@@ -8,6 +8,7 @@ Guides and references for people using Nail.
 | [Accounts](accounts.md) | Adding an account, signing in, account and identity settings, the unified inbox, virtual accounts, connection states |
 | [Reading and organizing mail](mail.md) | Conversations, flags, archive, move, delete, keyboard shortcuts, snooze, junk mail and the junk filter, messages downloaded on demand, the offline queue |
 | [Calendar, contacts and tasks](calendar-contacts-tasks.md) | Calendar views and the event editor (repeating events: this / this and following / all), reminders, contacts, groups and merging duplicates, tasks with subtasks, subscriptions, CalDAV / CardDAV servers and conflicts, importing `.ics` / `.vcf`, events and tasks from email, what Nail keeps of calendar files |
+| [Invitations, scheduling and Gmail labels](invitations-and-gmail-labels.md) | The invitation card (answering, proposing a new time, the spoofing warning, the mail Nail sends, calendar servers that schedule themselves), organizing meetings, finding a time with free/busy, Gmail accounts, labels and categories |
 | [Searching](search.md) | The search bar and the search language: fields, AND / OR / NOT, quotes, error messages |
 | [Writing mail](composer.md) | The composer: plain text, HTML and Markdown, attachments and the reminder, replies and signatures, drafts saved to the server, undo send, send later, the outbox |
 | [Markdown mail](markdown-mail.md) | What Markdown can do, what recipients get, the mail stylesheet and code colours per identity |
@@ -29,7 +30,7 @@ Guides and references for people using Nail.
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
 | [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities (formats, signatures, mail style), what to synchronize, virtual accounts, OAuth2 providers, undo send |
 
-These pages describe the current preview (milestone M3: calendars, contacts and tasks are new).
+These pages describe the current preview (milestone M3: calendars, contacts, tasks, invitations and Gmail accounts are new).
 
 Internal material (design, plan, decisions) lives in [`docs/`](../../docs/)
 instead. Translations go to `userDocs/<language>/`; a page without a

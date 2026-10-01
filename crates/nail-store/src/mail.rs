@@ -286,6 +286,8 @@ pub(crate) fn attach_tags(
 ) -> Result<Vec<MessageSummary>> {
     for m in &mut messages {
         m.tags = tags_in_tx(conn, &m.id)?;
+        // Gmail data (M3b): labels, category, thread.
+        m.gmail = crate::gmail::gmail_info_in(conn, &m.id)?;
     }
     Ok(messages)
 }

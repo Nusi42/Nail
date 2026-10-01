@@ -135,8 +135,9 @@ fn term_key(term: &Term, now: i64, offset: i32, exact: &mut bool) -> Option<Sear
                 None
             }
         }
-        // The caller's scope decides which folders it searches.
-        TermKind::Account(_) | TermKind::Folder(_) => {
+        // The caller's scope decides which folders it searches; IMAP has
+        // no Gmail categories (they are Gmail API data, M3b).
+        TermKind::Account(_) | TermKind::Folder(_) | TermKind::Category(_) => {
             *exact = false;
             None
         }

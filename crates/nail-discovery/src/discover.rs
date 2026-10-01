@@ -384,6 +384,16 @@ impl Discoverer {
         Vec::new()
     }
 
+    /// Whether the domain's mail exchanger is Google's (Google Workspace).
+    async fn mx_is_google(&self, email: &Email) -> bool {
+        match tokio::time::timeout(self.timeout, self.dns.mx(&email.domain)).await {
+            Ok(Ok(records)) => records
+                .iter()
+                .any(|r| is_google_host(r.exchange.trim_end_matches('.'))),
+            _ => false,
+        }
+    }
+
     /// The address's domain and the base domains of its mail exchangers:
     /// where its servers are expected to live.
     async fn expected_domains(&self, email: &Email) -> Vec<String> {
@@ -531,7 +541,8 @@ fn authenticated(candidate: &DiscoveredAccount) -> bool {
     !insecure(candidate)
         && matches!(
             candidate.source,
-            DiscoverySource::Autoconfig
+            DiscoverySource::Provider
+                | DiscoverySource::Autoconfig
                 | DiscoverySource::WellKnown
                 | DiscoverySource::Ispdb
                 | DiscoverySource::Autodiscover
@@ -568,7 +579,7 @@ pub fn flag_foreign_hosts(candidates: &mut [DiscoveredAccount], domains: &[Strin
 
 fn source_rank(source: DiscoverySource) -> u8 {
     match source {
-        DiscoverySource::Autoconfig => 0,
+        DiscoverySource::Provider | DiscoverySource::Autoconfig => 0,
         DiscoverySource::WellKnown => 1,
         DiscoverySource::Ispdb => 2,
         DiscoverySource::Srv => 3,
@@ -649,9 +660,62 @@ pub async fn discover(
         let domains = d.expected_domains(&email).await;
         flag_foreign_hosts(&mut all, &domains);
     }
+    // M3b: Google-hosted mail gets the Gmail API first (the IMAP
+    // proposals stay as alternatives).
+    let google = is_google_domain(&email.domain)
+        || all
+            .iter()
+            .any(|c| c.warnings.is_empty() && is_google_host(&c.incoming.server().host))
+        || d.mx_is_google(&email).await;
+    if google {
+        all.insert(0, gmail_candidate(&email.address));
+    }
     let ranked = rank(all);
     tracing::debug!(domain = %email.domain, candidates = ranked.len(), "discovery finished");
     Ok(ranked)
+}
+
+/// Domains of Google's own consumer mail.
+const GOOGLE_DOMAINS: [&str; 2] = ["gmail.com", "googlemail.com"];
+
+/// Whether `domain` is Gmail's own.
+pub fn is_google_domain(domain: &str) -> bool {
+    let domain = domain.trim_end_matches('.').to_ascii_lowercase();
+    GOOGLE_DOMAINS.contains(&domain.as_str())
+}
+
+/// Whether `host` is one of Google's mail hosts (`imap.gmail.com`,
+/// `aspmx.l.google.com`, …).
+pub fn is_google_host(host: &str) -> bool {
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    ["gmail.com", "googlemail.com", "google.com"]
+        .iter()
+        .any(|d| host == *d || host.ends_with(&format!(".{d}")))
+}
+
+/// The Gmail API proposal for `email` (OAuth2 with the built-in `google`
+/// provider; no SMTP: Gmail sends through the API).
+pub fn gmail_candidate(email: &str) -> DiscoveredAccount {
+    DiscoveredAccount {
+        source: DiscoverySource::Provider,
+        incoming: IncomingServer::Gmail {
+            server: ServerEndpoint {
+                host: nail_api::gmail::GMAIL_API_HOST.to_owned(),
+                port: 443,
+                tls: TlsMode::Implicit,
+                auth: AuthConfig::OAuth2 {
+                    provider: "google".to_owned(),
+                    username: email.to_owned(),
+                    secret: None,
+                    mechanism: None,
+                },
+            },
+            options: nail_api::gmail::GmailOptions::default(),
+        },
+        outgoing: None,
+        provider_name: None,
+        warnings: Vec::new(),
+    }
 }
 
 /// Which protocols a candidate uses, for display and tests.
@@ -707,6 +771,24 @@ mod tests {
             ]
         );
         assert_eq!(protocols(&ranked[0]), (MailProtocol::Imap, None));
+    }
+
+    #[test]
+    fn google_mail_gets_the_gmail_api() {
+        assert!(is_google_domain("gmail.com") && is_google_domain("GoogleMail.com."));
+        assert!(!is_google_domain("example.org"));
+        assert!(is_google_host("aspmx.l.google.com.") && is_google_host("imap.gmail.com"));
+        assert!(!is_google_host("notgoogle.com"));
+        let candidate = gmail_candidate("ada@gmail.com");
+        assert_eq!(candidate.source, DiscoverySource::Provider);
+        assert_eq!(candidate.incoming.protocol(), MailProtocol::Gmail);
+        assert!(candidate.outgoing.is_none());
+        assert!(matches!(
+            &candidate.incoming.server().auth,
+            AuthConfig::OAuth2 { provider, username, .. }
+                if provider == "google" && username == "ada@gmail.com"
+        ));
+        assert!(authenticated(&candidate));
     }
 
     #[test]

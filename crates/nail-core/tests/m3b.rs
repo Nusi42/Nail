@@ -1,8 +1,8 @@
-//! Wave M3b contract (ADR 0065): every invitation, scheduling, free/busy
-//! and Gmail label request is routed and answered with `unsupported`
-//! until the integration (WP85) wires `nail-itip`, `nail-proto-gmail` and
-//! CalDAV scheduling; a configured Gmail account gets an engine that says
-//! so; the store keeps the new state.
+//! Wave M3b (contract ADR 0065, integration ADR 0070): every invitation,
+//! scheduling, free/busy and Gmail label request is served (never
+//! `unsupported` / `internal`); a configured Gmail account gets the Gmail
+//! API engine; messages without iTIP parts carry no card. The flows
+//! themselves are in `tests/scheduling.rs` and `tests/gmail.rs`.
 
 use std::time::Duration;
 
@@ -115,8 +115,8 @@ fn every_m3b_request() -> Vec<Request> {
 }
 
 #[tokio::test]
-async fn every_m3b_request_answers_unsupported_until_wp85() {
-    let (service, _data, _config) = setup_with(None, false);
+async fn every_m3b_request_is_served() {
+    let (service, _data, _config) = setup_with(Some(GMAIL), false);
     let requests = every_m3b_request();
     assert_eq!(requests.len(), 16);
     for request in requests {
@@ -124,12 +124,13 @@ async fn every_m3b_request_answers_unsupported_until_wp85() {
             .as_str()
             .unwrap()
             .to_owned();
-        match service.handle(request).await {
-            Response::Error { code, message, .. } => {
-                assert_eq!(code, ErrorCode::Unsupported, "{name}: {message}");
-                assert!(message.starts_with(&name), "{message}");
-            }
-            other => panic!("{name}: {other:?}"),
+        // Unknown messages / events / labels are refused for what they
+        // are, never as unsupported or internal.
+        if let Response::Error { code, message, .. } = service.handle(request).await {
+            assert!(
+                !matches!(code, ErrorCode::Unsupported | ErrorCode::Internal),
+                "{name}: {code:?} {message}"
+            );
         }
     }
 }
@@ -142,7 +143,7 @@ const GMAIL: &str = r#"account "gm" name="Gmail" email="ada@gmail.example" {
 "#;
 
 #[tokio::test]
-async fn gmail_accounts_are_listed_and_their_engine_reports_unsupported() {
+async fn gmail_accounts_are_listed_and_their_engine_needs_a_sign_in() {
     let (service, _data, _config) = setup_with(Some(GMAIL), true);
     service.start();
     match service.handle(Request::ListAccounts).await {
@@ -152,9 +153,10 @@ async fn gmail_accounts_are_listed_and_their_engine_reports_unsupported() {
         }
         other => panic!("{other:?}"),
     }
-    // The stub engine reports itself offline with `unsupported`.
+    // The Gmail API engine runs; without a stored sign-in (no refresh
+    // token, nothing is sent anywhere) it reports an authentication error.
     let mut status = None;
-    for _ in 0..100 {
+    for _ in 0..200 {
         if let Response::AccountStatuses { statuses } =
             service.handle(Request::ListAccountStatuses).await
         {
@@ -166,13 +168,13 @@ async fn gmail_accounts_are_listed_and_their_engine_reports_unsupported() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     let status = status.expect("a status for the Gmail account");
-    assert_eq!(status.state, AccountState::Offline);
-    assert_eq!(status.error, Some(ErrorCode::Unsupported));
+    assert_eq!(status.state, AccountState::AuthError, "{status:?}");
+    assert_eq!(status.error, Some(ErrorCode::AuthFailed));
     service.shutdown().await;
 }
 
 #[tokio::test]
-async fn messages_carry_no_invitation_card_until_wp85() {
+async fn messages_without_itip_parts_carry_no_card() {
     let (service, _data, _config) = setup_with(None, false);
     nail_core::demo::seed_demo(service.store(), service.blobs()).unwrap();
     let store = service.store();

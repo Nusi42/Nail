@@ -166,6 +166,7 @@ const SOURCES: DiscoverySource[] = [
   "ispdb",
   "srv",
   "autodiscover",
+  "provider",
   "guess",
 ];
 const VALUE_HINTS = ["is:read", "is:unflagged", "is:answered"];

@@ -100,7 +100,7 @@ fn preview(data: &ImportData) -> Result<PimImportPreview> {
 impl Service {
     /// The calendar an import goes to: the one asked for (it must hold
     /// `component`), else the first writable local one that does.
-    async fn import_target(
+    pub(crate) async fn import_target(
         &self,
         asked: Option<&CalendarId>,
         component: CalendarComponent,

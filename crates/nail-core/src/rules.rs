@@ -301,6 +301,13 @@ pub(crate) fn message_view(
     data.to.clone_from(&summary.to);
     data.flags = summary.flags;
     data.tags.clone_from(&summary.tags);
+    // M3b: `category:` conditions on Gmail mail.
+    data.gmail_category = summary
+        .gmail
+        .as_ref()
+        .and_then(|g| g.category)
+        .and_then(|c| serde_json::to_value(c).ok())
+        .and_then(|v| v.as_str().map(str::to_owned));
     data.date = chrono::DateTime::parse_from_rfc3339(&summary.date)
         .map(|d| d.timestamp())
         .unwrap_or(0);
@@ -868,6 +875,8 @@ impl Service {
         // Junk (M2c): the server's flags and the classifier; mail filed as
         // junk does not notify unless a rule says so.
         let junk = self.classify_arrivals(ids.clone()).await;
+        // Invitations (M3b): recorded, applied per the scheduling settings.
+        self.process_itip_arrivals(&ids, &junk).await;
         let set = self.inner.rules.set();
         let has_arrival = set.rules().iter().any(|r| r.runs_on(RuleRunCause::Arrival));
         let rule_notify = if has_arrival {

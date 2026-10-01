@@ -14,9 +14,16 @@ card above the message text. The card tells you:
   invited and what they answered;
 - whether it overlaps something else in your calendar.
 
-If the sender of an invitation is not its organizer, the card shows a
-warning first. Such invitations are never applied automatically; check
-them before you answer.
+### The spoofing warning
+
+If the sender of an invitation is not its organizer (or an answer does
+not come from the attendee it names), the card shows a warning first:
+"The sender is not the organizer". Anyone can write any organizer into an
+invitation, so such a message may be forged. Nail never applies it on its
+own — it is not added to your calendar, and no update or cancellation in
+it is applied — until you choose to. Check with the organizer before you
+answer. (Messages sent "on behalf of" the organizer by a calendar service,
+like Google Calendar's, are recognised and show no warning.)
 
 ### Answering
 
@@ -36,6 +43,26 @@ Depending on the message the card also offers **Add to calendar**,
 **Update my calendar**, **Remove from calendar** (for cancellations),
 **Ask for the latest version**, **Forward invitation** and **Open in
 calendar**.
+
+### The mail Nail sends
+
+Answers, proposals, invitations, updates and cancellations leave like
+any other mail: through the outbox of the address you were invited at (or
+that organizes the meeting), so **Undo** works for a few seconds after you
+answer. Each mail has a short readable summary (what, when, where, who,
+your note) for people without a calendar program, plus the calendar data
+itself — both inside the message, where Outlook, Google Calendar, Apple
+Calendar and Thunderbird read it, and as an `invite.ics` attachment.
+
+### Calendar servers that schedule themselves
+
+Some CalDAV servers deliver invitations and answers themselves (RFC 6638
+"auto-scheduling"). When the meeting is in a calendar on such a server,
+Nail only saves the event on the server — the server then tells the other
+people — and does **not** send its own mail, so nobody gets the same
+message twice. The card says "Your calendar server sends your answer to
+the organizer." Messages the server delivered to you are picked up with
+each calendar sync.
 
 ### When you organize the meeting
 
@@ -72,14 +99,36 @@ who are busy at the chosen time and suggests times when everyone is free;
 choose one to move the meeting there. Use **Back** / **Next** / **Today**
 to look at other days.
 
-Availability comes from your own calendars and, for other people, from
-your calendar server. People Nail knows nothing about show "No
-information".
+Availability comes from your own calendars (subscriptions and other
+read-only calendars do not count) and, for other people, from your CalDAV
+calendar server (its scheduling outbox). People Nail knows nothing about
+show "No information"; a server that does not share someone's
+availability with you shows "availability could not be checked" for that
+person.
 
 The command `scheduling.find-time` (or the `freebusy-timeline` widget)
 opens **Find a time** on its own: add people, choose the length, pick a
 suggested time and **Create meeting** opens a new event with those people
 invited.
+
+## Gmail accounts
+
+Nail reads Gmail through the Gmail API (not IMAP) when you add an address
+of `gmail.com` or `googlemail.com`, or of a domain whose mail Google
+hosts (Google Workspace): **Add account** proposes "Gmail through the
+Gmail API" first and you sign in with Google. Details for `accounts.kdl`
+are in the [accounts reference](accounts-reference.md#gmail-gmail).
+
+- **New mail** is fetched by asking Gmail for changes regularly (there is
+  no push for desktop programs): every `poll-interval` seconds while things
+  change, less often while nothing happens (up to `max-poll-interval`), and
+  at once when you press **Sync** or change something.
+- **Folders** are Gmail's system labels: Inbox, Sent, Drafts, All Mail
+  (shown as the archive), Spam, Trash. Archiving removes the Inbox label;
+  a message is stored once, whatever labels it has.
+- **Sent mail** is filed by Gmail itself; Nail does not add a copy.
+- Chats are not synced.
+- Gmail has no "answered" mark, so the replied mark exists only in Nail.
 
 ## Gmail labels
 
@@ -96,8 +145,11 @@ widget):
   unread mail; **On messages** hides it on message rows.
 
 In Nail, Gmail labels are tags with the same name: rules, search
-(`tag:Travel`) and the tag commands work with them. The command
-`gmail.apply-labels` lets you tick the labels of the selected message.
+(`tag:Travel`) and the tag commands work with them. A new tag on a Gmail
+message creates the label in Gmail. The command `gmail.apply-labels`
+(**Labels…** in the reader's toolbar) lets you tick the labels of the
+selected message. Label changes made while offline are sent when the
+account is back online.
 
 ## Gmail categories
 

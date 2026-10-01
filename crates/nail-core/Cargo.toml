@@ -14,7 +14,8 @@ default = ["demo"]
 # `nail serve --seed`.
 # `nail-proxy/test-support` lets demo-multi reach its mock image server on
 # one loopback port (only when a seed configures it; ADR 0041).
-demo = ["dep:nail-testkit", "dep:nail-testkit-net", "nail-proxy/test-support"]
+# `nail-proto-gmail/testing`: demo-multi's mock Gmail account (M3b).
+demo = ["dep:nail-testkit", "dep:nail-testkit-net", "nail-proxy/test-support", "nail-proto-gmail/testing"]
 
 [dependencies]
 nail-api.workspace = true
@@ -43,6 +44,9 @@ nail-triage.workspace = true
 # M3a: iCalendar / vCard and the CalDAV / CardDAV client (ADRs 0059, 0060, 0063).
 nail-ical.workspace = true
 nail-dav.workspace = true
+# M3b: iTIP / iMIP and the Gmail API engine (ADRs 0066, 0067, 0070).
+nail-itip.workspace = true
+nail-proto-gmail.workspace = true
 chrono-tz.workspace = true
 iana-time-zone.workspace = true
 rand.workspace = true
@@ -71,6 +75,7 @@ notify-debouncer-mini.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 nail-testkit.workspace = true
 nail-testkit-net.workspace = true
+nail-proto-gmail = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 zeroize.workspace = true
 pretty_assertions.workspace = true

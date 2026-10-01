@@ -188,8 +188,13 @@ signs in with your Google account (`auth "oauth2" provider="google"`; see
 
 Gmail cannot push changes to a desktop program, so Nail checks for them:
 often right after something changed, less often while the mailbox is
-quiet. Your labels become tags in Nail (renaming a label renames the tag),
-and the inbox, sent mail, drafts, spam, trash and "all mail" become folders.
+quiet. Your labels become tags in Nail (renaming a label renames the tag;
+a new tag on a Gmail message creates the label), and the inbox, sent mail,
+drafts, spam, trash and "all mail" become folders. Gmail files the mail
+you send in Sent itself, so Nail adds no copy; chats are not synced; label
+colours must be from Gmail's palette (the label editor offers only those).
+**Add account** proposes this kind of account for `gmail.com`,
+`googlemail.com` and Google Workspace domains.
 
 ```kdl
 account "personal" email="ada@gmail.example" {

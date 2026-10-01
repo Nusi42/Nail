@@ -1154,8 +1154,8 @@ impl Service {
             | Request::ListReminders { .. }
             | Request::SnoozeReminders { .. }
             | Request::DismissReminders { .. }) => crate::pim::handle(self, request).await?,
-            // M3b invitations and scheduling (ADR 0065): one arm, wired by
-            // WP85.
+            // M3b invitations and scheduling (ADRs 0065, 0070); boxed: the
+            // scheduling futures are large.
             request @ (Request::GetInvitation { .. }
             | Request::RespondToInvitation { .. }
             | Request::ProposeNewTime { .. }
@@ -1168,9 +1168,9 @@ impl Service {
             | Request::QueryFreeBusy { .. }
             | Request::GetSchedulingSettings
             | Request::SetSchedulingSettings { .. }) => {
-                crate::scheduling::handle(self, request).await?
+                Box::pin(crate::scheduling::handle(self, request)).await?
             }
-            // M3b Gmail labels: wired by WP85.
+            // M3b Gmail labels (ADRs 0065, 0070).
             request @ (Request::ListGmailLabels { .. }
             | Request::CreateGmailLabel { .. }
             | Request::UpdateGmailLabel { .. }

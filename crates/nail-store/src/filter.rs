@@ -60,6 +60,9 @@ pub enum MessageFilter {
     HasAttachments(bool),
     /// Carries this tag (case-insensitive).
     Tag(String),
+    /// A Gmail message in this inbox category (`category:social`,
+    /// case-insensitive; M3b).
+    GmailCategory(String),
     /// In one of these accounts.
     AccountIn(Vec<AccountId>),
     /// In an account whose id, name or address equals this text
@@ -138,6 +141,12 @@ fn to_sql(filter: &MessageFilter, params: &mut Vec<Box<dyn ToSql>>) -> Result<St
             let p = bind(params, Box::new(tag.clone()));
             format!(
                 "EXISTS (SELECT 1 FROM message_tags t WHERE t.message_id = m.id AND t.tag = {p} COLLATE NOCASE)"
+            )
+        }
+        MessageFilter::GmailCategory(category) => {
+            let p = bind(params, Box::new(category.to_ascii_lowercase()));
+            format!(
+                "EXISTS (SELECT 1 FROM gmail_messages g WHERE g.message_id = m.id AND g.category = {p})"
             )
         }
         MessageFilter::AccountIn(ids) => {

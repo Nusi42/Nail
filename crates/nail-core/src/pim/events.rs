@@ -361,8 +361,12 @@ impl Service {
         if !issues.is_empty() {
             return Err(invalid(&issues));
         }
-        self.writable_calendar(&calendar_id, nail_api::pim::CalendarComponent::Event)
+        let calendar = self
+            .writable_calendar(&calendar_id, nail_api::pim::CalendarComponent::Event)
             .await?;
+        // A meeting needs its organizer (M3b): the calendar's identity.
+        let mut fields = fields;
+        self.default_organizer(&mut fields, &calendar);
         let now = nail_store::pim::time::utc_string(self.pim_now());
         let event = CalendarEvent {
             id: EventId::new(new_id("ev")),
@@ -414,6 +418,13 @@ impl Service {
         }
         if scope.needs_occurrence() && recurrence_id.is_none() {
             return Err(invalid(&[PimIssue::InvalidScope]));
+        }
+        // Attendees added to an event without an organizer (M3b).
+        let mut fields = fields;
+        if event.fields.organizer.is_none()
+            && let Ok(calendar) = self.calendar(&event.calendar_id).await
+        {
+            self.default_organizer(&mut fields, &calendar);
         }
         let original = self
             .item_raw(&PimItemRef::Event {

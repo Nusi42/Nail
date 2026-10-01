@@ -3,4 +3,4 @@
 /**
  * Source of discovered settings, most trusted first.
  */
-export type DiscoverySource = "autoconfig" | "well-known" | "ispdb" | "srv" | "autodiscover" | "guess";
+export type DiscoverySource = "autoconfig" | "well-known" | "ispdb" | "srv" | "autodiscover" | "guess" | "provider";

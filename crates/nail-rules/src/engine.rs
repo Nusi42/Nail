@@ -491,6 +491,9 @@ impl MessageView for WithState<'_> {
     fn tags(&self) -> Vec<String> {
         self.state.tags.clone()
     }
+    fn gmail_category(&self) -> Option<String> {
+        self.inner.gmail_category()
+    }
 }
 
 fn run<'r>(
