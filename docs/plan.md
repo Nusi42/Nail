@@ -395,13 +395,92 @@ Wire host + UI + SDK; **Playwright:** install the example plug-in (permissions d
 ### Carried items not in M2
 PKCS#11 smartcards (M4), revocation checking for S/MIME (later), DNSSEC-validated SRV and a public-suffix list for discovery (later), atomic cross-account moves (later; current behaviour can duplicate, never loses).
 
-## 8. Later milestones (outline; each gets a detailed section before it starts)
+## 8. Milestone M3 — PIM, Gmail API and Exchange (detailed)
+
+**Automated gate:** all suites green, including the Playwright scenarios listed per wave, and the interop CI job extended with a real CalDAV/CardDAV server (Radicale, plus Stalwart's DAV if available) next to Dovecot and Stalwart mail.
+**Human gate (design: "interop suite passes on Dovecot, Stalwart, Radicale, Exchange Online and on-prem"):** the Exchange Online, Exchange Server on-premises and Google parts need real tenants and accounts, so they are owner tasks; the automated suite covers them with recorded fixtures and mock servers.
+
+**Scope decisions for M3**
+- Same licence rule as M2 (no GPL/LGPL/AGPL; check every new crate, e.g. iCalendar/vCard parsers).
+- **No non-loopback sockets** (ADR from the firewall fix): every new protocol engine and mock server binds loopback only; DNS goes through the OS resolver.
+- **Push for Graph and Gmail on a desktop client:** both providers deliver push through webhooks / Pub/Sub, which a desktop app cannot receive without a server. M3 uses delta queries / history polling with adaptive intervals (and EWS streaming notifications, which do work from a client). A push relay stays a later option.
+- **Exchange on-premises authentication** uses Windows SSPI (NTLM / Kerberos / Negotiate) through the `windows` crate, so no NTLM implementation of our own; Basic over TLS and OAuth2 for hybrid remain options.
+- **Google calendar and contacts** stay on CalDAV/CardDAV (decided in the design review); only mail moves to the Gmail API.
+- MCP gets read-only calendar, contact and task resources and tools in M3; writes stay in M4.
+
+M3 runs as three waves on the existing wave workflow (`.claude/workflows/nail-wave.js`).
+
+### Wave M3a — Calendar, contacts and tasks (local, ICS, CalDAV/CardDAV)
+
+#### WP70 — Contract (sequential)
+Calendar, event (incl. recurrence rules, exceptions, overrides, attendees, alarms, time zones, conferencing links, attachments), contact (vCard 3/4 fields, groups, photos, multiple addresses), task (VTODO: due, priority, status, subtasks, recurrence) models; calendar/contact/task sources (local, ICS subscription, CalDAV, CardDAV); requests: list/create/update/delete for each, expand event instances in a range, search contacts, merge contacts, import `.ics` / `.vcf`, create event / task from email, reminders (snooze, dismiss); events for changes and reminders. Store migration for calendars, events, instances cache, contacts, groups, tasks, sources and sync state. Feature slots for UI.
+
+#### WP71 — iCalendar, vCard and recurrence (parallel)
+`nail-ical`: parse and serialize iCalendar (RFC 5545) and vCard 3.0/4.0 losslessly (unknown properties kept), recurrence expansion (RRULE, RDATE, EXDATE, RECURRENCE-ID overrides; a maintained crate with an acceptable licence, or our own), time zones (VTIMEZONE + IANA via `chrono-tz`, DST edge cases), floating and all-day events, VALARM computation; ICS feed parsing for subscriptions. Property tests and a corpus of real-world calendar files (Google, Outlook, Apple, Thunderbird exports).
+
+#### WP72 — CalDAV / CardDAV client (parallel)
+`nail-dav`: discovery (well-known URLs, RFC 6764 SRV/TXT through the OS resolver, principal and home sets), PROPFIND, REPORT (calendar-query, calendar-multiget, addressbook-query/multiget), `sync-collection` (RFC 6578) with ctag/etag fallback, conditional PUT/DELETE with ETags, conflict handling (server wins, keep the local copy as a conflict), auth (Basic over TLS, OAuth2 bearer for Google); a mock CalDAV/CardDAV server in `nail-testkit-net`; Radicale added to the interop CI job.
+
+#### WP73 — PIM store, sync engine pieces and reminders (parallel)
+Store APIs for all PIM tables, instance cache for fast range queries, PIM search (Tantivy fields for events, contacts, tasks), the reminder scheduler (alarms across time zones and restarts, using the triage scheduler's clock injection), collected-addresses book, duplicate detection and merge with links to sources, address autocomplete ranking from contacts + collected + recent.
+
+#### WP74 — PIM UI (parallel)
+Calendar views (day, multi-day, week, work week, month, year, agenda, free-time timeline) as layout widgets, mini-month and today's agenda widgets, event editor (recurrence editor incl. "this / this and following / all", attendees, alarms, time zones, secondary zone), contacts list / card / editor / groups / merge dialog, task list widget and editor, drag to reschedule, keyboard navigation; all themeable, all strings in Fluent catalogs, axe clean.
+
+#### WP75 — Integration (sequential)
+Core wiring (sources, CalDAV/CardDAV sync engines with polling, local calendars, ICS subscriptions, reminders through the notification path, import from launch arguments `.ics` / `.vcf` / `webcal:`, "create event / task from email", address autocomplete in the composer from contacts), MCP read resources/tools for calendars, events, contacts, tasks (with grants), plug-in `calendar.read` permission made real, default layout with a calendar window. **Playwright:** create a recurring event and edit "this and following"; event synced to the mock CalDAV server and a server-side change appears; ICS subscription shows events read-only; reminder fires at the controlled clock time; contact created, synced to mock CardDAV, used in composer autocomplete; duplicate contacts merged; task with subtasks; open a `.ics` file from the launch argument; MCP client lists events after a grant.
+
+### Wave M3b — Invitations, scheduling and the Gmail API engine
+
+#### WP80 — Contract (sequential)
+iTIP methods and attendee states, invitation card data on messages, scheduling requests (respond, counter, send update, cancel, forward invite), free/busy queries, Gmail account kind and Gmail-specific fields (label ids, thread ids, categories), provider-neutral sync engine trait additions needed by API engines.
+
+#### WP81 — iTIP / iMIP (parallel)
+`nail-itip`: iTIP (RFC 5546) processing — REQUEST, REPLY, CANCEL, COUNTER, DECLINECOUNTER, REFRESH, ADD; iMIP (RFC 6047) MIME building and parsing; organizer/attendee logic, sequence and DTSTAMP handling, conflict detection against the user's calendars; CalDAV auto-scheduling (RFC 6638) detection so the client does not send duplicate mail when the server schedules.
+
+#### WP82 — Gmail API engine (parallel)
+`nail-proto-gmail`: OAuth (restricted scopes), `users.messages` list/get (raw MIME) / modify / trash / send, `users.history.list` incremental sync with history-id reset handling, labels ↔ Nail tags and folders, threads, batch requests, quotas with backoff, attachments; adaptive polling (no Pub/Sub, see scope decisions); a mock Gmail REST server in `nail-testkit-net` with recorded-response fixtures.
+
+#### WP83 — Free/busy and scheduling transport (parallel)
+CalDAV scheduling (outbox POST for free/busy, schedule-inbox processing), VFREEBUSY building/parsing, free/busy aggregation across the user's own calendars, room/resource placeholders for Exchange (filled in M3c).
+
+#### WP84 — Invitations and Gmail UI (parallel)
+Invitation card in the reader (Accept / Tentative / Decline / Propose new time, conflicts preview, RSVP comment), attendee picker with free/busy timeline, update/cancel flows for organizers, Gmail label management and label-based views, Gmail categories as filterable property.
+
+#### WP85 — Integration (sequential)
+Wire iTIP (incoming invites update calendars, replies update attendee status, outgoing invites via iMIP or server scheduling), Gmail accounts end to end (setup via OAuth with the Gmail API, sync, send, labels, search), free/busy in the event editor. **Playwright:** receive an invitation and accept it (reply on the mock SMTP, event in the calendar); organizer sends an update and the attendee's event changes; cancel removes the event; counter-proposal flow; free/busy shows busy blocks of another demo account on the mock CalDAV server; a Gmail account (mock Gmail server) syncs, applies a label, archives, sends, and picks up a server-side change via history polling.
+
+### Wave M3c — Microsoft Exchange (Graph and EWS)
+
+#### WP90 — Contract (sequential)
+Exchange account kind (Online via Graph, on-premises via EWS, IMAP fallback), shared mailboxes and delegate access, categories ↔ tags mapping, Focused Inbox property, server-side inbox rules and automatic replies (out of office) for Exchange, meeting rooms and room lists, Microsoft To Do task lists.
+
+#### WP91 — Microsoft Graph engine (parallel)
+`nail-proto-graph`: OAuth (Microsoft identity platform), mail (delta queries per folder, MIME via `$value`, send via MIME, move/flag/categories, attachments), calendar (events + delta, instances, iTIP via Graph's meeting APIs), contacts, To Do tasks, mailbox settings (automatic replies), inbox rules, Focused Inbox, shared mailboxes; throttling (429 + Retry-After), batching; a mock Graph server with recorded fixtures.
+
+#### WP92 — EWS engine (parallel)
+`nail-proto-ews`: SOAP client (`quick-xml`), Autodiscover (POX + v2 JSON), SSPI Negotiate/NTLM/Kerberos via the `windows` crate, Basic over TLS, OAuth2 for hybrid; `SyncFolderHierarchy` / `SyncFolderItems`, `GetItem` with `MimeContent`, `CreateItem` / `UpdateItem` / `MoveItem` / `DeleteItem`, streaming notifications for push, calendar (CalendarView, meeting responses), contacts, tasks, OOF settings, inbox rules, room lists / rooms, delegates and shared mailboxes; a mock EWS server with recorded fixtures.
+
+#### WP93 — Exchange common layer (parallel)
+Mapping between Exchange concepts and Nail's (categories, Focused Inbox, rules ↔ Nail rules where expressible, OOF ↔ vacation settings, To Do ↔ tasks, rooms in the free/busy picker), account setup via Autodiscover with engine choice (Graph for Exchange Online, EWS for on-premises), migration notes from the design (EWS retirement in Exchange Online).
+
+#### WP94 — Exchange UI (parallel)
+Shared mailboxes and delegate folders in the folder tree, room finder in the event editor, out-of-office editor for Exchange accounts, Exchange rule placement badges, Focused Inbox toggle/view, To Do lists in the task widget.
+
+#### WP95 — Integration (sequential)
+Wire both engines into the core's account manager, sync engines, op replayers, PIM sync and rules; MCP coverage for Exchange data. **Playwright (against the mock Graph and mock EWS servers):** add an Exchange Online account and an on-premises account via Autodiscover; mail sync, flag, move, categories as tags, send; calendar event created and a meeting invitation answered; a shared mailbox appears; out-of-office set and read back; a Nail rule placed as an Exchange inbox rule; room booked through the room finder; To Do task synced. Update the interop job documentation for the owner-run Exchange/Google checks.
+
+### Owner tasks for M3
+- An Exchange Online test tenant (Microsoft 365 developer program or similar) and access to an Exchange Server on-premises (2019 / Subscription Edition) for the human interop gate.
+- A Google test account for Gmail API and Google CalDAV/CardDAV, and the Google OAuth client with the restricted Gmail scope.
+
+## 9. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.
-- **M3 Exchange, Gmail API and PIM:** Graph + EWS engines, Gmail API engine, CalDAV/CardDAV, calendar views, iTIP/iMIP, contacts, tasks, interop suite.
+- **M3:** detailed in section 8.
 - **M4 Agents and release:** MCP write tools with grants/confirm/audit, full plug-in system (QuickJS), MAPI provider, MSI + winget + updater, EV signing, import/export, backup.
 
-## 9. How milestones are executed (orchestration)
+## 10. How milestones are executed (orchestration)
 
 Agents: Opus 5.5 at medium effort, coordinated by a workflow. M0 ran as the sequence below; each M1 wave uses the same shape (contract, then parallel packages in disjoint directories, then integrate, two reviews, fix and an independent verify).
 
