@@ -152,6 +152,11 @@ pub struct ServiceOptions {
     /// Limits of the plug-in sandbox (M2d): CPU budget per call, memory,
     /// pending calls, … (`HostLimits::default()`).
     pub plugin_limits: nail_plugins::HostLimits,
+    /// ICS subscriptions may fetch plain `http:` from loopback hosts (tests
+    /// and seeded demos with their mock servers; set by
+    /// [`crate::demo::demo_options`]). Off otherwise: a `webcal://localhost`
+    /// link must not make Nail poll local services (ADR 0064).
+    pub loopback_feeds: bool,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -171,6 +176,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("proxy_fetcher", &self.proxy_fetcher.is_some())
             .field("custom_clock", &self.clock.is_some())
             .field("plugin_limits", &self.plugin_limits)
+            .field("loopback_feeds", &self.loopback_feeds)
             .finish_non_exhaustive()
     }
 }
@@ -195,6 +201,7 @@ impl ServiceOptions {
             proxy_fetcher: None,
             clock: None,
             plugin_limits: nail_plugins::HostLimits::default(),
+            loopback_feeds: false,
         }
     }
 }
@@ -417,7 +424,7 @@ impl Service {
                     (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
                     options.plugin_limits.clone(),
                 ),
-                pim: crate::pim::PimCtl::default(),
+                pim: crate::pim::PimCtl::new(options.loopback_feeds),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),

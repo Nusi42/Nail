@@ -291,7 +291,7 @@ async fn read(mut response: reqwest::Response, max: u64) -> Result<HttpResponse,
 }
 
 /// IPv4-mapped IPv6 peers compare as IPv4.
-fn canonical(ip: IpAddr) -> IpAddr {
+pub(crate) fn canonical(ip: IpAddr) -> IpAddr {
     match ip {
         IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
         IpAddr::V4(_) => ip,
@@ -300,7 +300,7 @@ fn canonical(ip: IpAddr) -> IpAddr {
 
 /// reqwest's resolver for pinned clients: every name must come from the
 /// override map.
-struct RefuseResolver;
+pub(crate) struct RefuseResolver;
 
 impl reqwest::dns::Resolve for RefuseResolver {
     fn resolve(&self, _name: reqwest::dns::Name) -> reqwest::dns::Resolving {

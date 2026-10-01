@@ -68,6 +68,13 @@ pub trait InstanceExpander {
     /// range counts, one moved out does not). The store drops anything
     /// outside the range.
     fn expand(&self, event: &CalendarEvent, from: i64, until: i64) -> Vec<ExpandedInstance>;
+
+    /// Whether the expander ran out of its budget (its last results may be
+    /// incomplete): the store then records no window for what it expanded
+    /// since, so a later query tries again.
+    fn exhausted(&self) -> bool {
+        false
+    }
 }
 
 /// What [`Store::invalidate_instances`] drops.
@@ -147,7 +154,12 @@ fn row_of(event: &CalendarEvent, instance: &ExpandedInstance) -> Option<Row> {
     })
 }
 
-fn insert_rows(tx: &Transaction<'_>, event: &CalendarEvent, rows: &[Row]) -> Result<()> {
+fn insert_rows(
+    tx: &Transaction<'_>,
+    event_id: &str,
+    calendar_id: &str,
+    rows: &[Row],
+) -> Result<()> {
     let mut stmt = tx.prepare_cached(
         "INSERT OR REPLACE INTO pim_event_instances
              (event_id, calendar_id, recurrence_id, start_at, end_at, floating, all_day,
@@ -156,8 +168,8 @@ fn insert_rows(tx: &Transaction<'_>, event: &CalendarEvent, rows: &[Row]) -> Res
     )?;
     for row in rows {
         stmt.execute(params![
-            event.id.as_str(),
-            event.calendar_id.as_str(),
+            event_id,
+            calendar_id,
             row.recurrence_id,
             row.start.secs,
             row.end.secs,
@@ -182,15 +194,30 @@ fn set_window(tx: &Transaction<'_>, event_id: &str, from: i64, until: i64) -> Re
     Ok(())
 }
 
-/// Expands what is missing of `[need_from, need_until)` for one event.
-fn fill(
-    tx: &Transaction<'_>,
+/// What one event's expansion writes into the cache.
+struct Filled {
+    /// The event's stored data as read before expanding (a change since
+    /// then makes the result stale: it is not written).
+    data: rusqlite::types::Value,
+    /// The window it had (`None`: none).
+    window: Option<(i64, i64)>,
+    /// The single event's row, or the series' new rows.
+    rows: Vec<Row>,
+    /// Single events replace their row.
+    single: bool,
+    /// The window it covers afterwards.
+    covered: (i64, i64),
+}
+
+/// Expands what is missing of `[need_from, need_until)` for one event
+/// (outside any transaction: expansion can take a while).
+fn expand_missing(
     event: &CalendarEvent,
     window: Option<(i64, i64)>,
     need_from: i64,
     need_until: i64,
     expander: &dyn InstanceExpander,
-) -> Result<()> {
+) -> (Vec<Row>, bool, (i64, i64)) {
     if !event.is_recurring() {
         let single = ExpandedInstance {
             recurrence_id: None,
@@ -199,13 +226,8 @@ fn fill(
             overridden: false,
             cancelled: false,
         };
-        tx.execute(
-            "DELETE FROM pim_event_instances WHERE event_id = ?1",
-            [event.id.as_str()],
-        )?;
         let rows: Vec<Row> = row_of(event, &single).into_iter().collect();
-        insert_rows(tx, event, &rows)?;
-        return set_window(tx, event.id.as_str(), WHOLE_FROM, WHOLE_UNTIL);
+        return (rows, true, (WHOLE_FROM, WHOLE_UNTIL));
     }
     let pieces: Vec<(i64, i64)> = match window {
         None => vec![(need_from, need_until)],
@@ -220,20 +242,51 @@ fn fill(
             p
         }
     };
+    let mut rows = Vec::new();
     for (from, until) in pieces {
-        let rows: Vec<Row> = expander
-            .expand(event, from, until)
-            .iter()
-            .filter_map(|i| row_of(event, i))
-            .filter(|r| r.start.secs >= from && r.start.secs < until)
-            .collect();
-        insert_rows(tx, event, &rows)?;
+        rows.extend(
+            expander
+                .expand(event, from, until)
+                .iter()
+                .filter_map(|i| row_of(event, i))
+                .filter(|r| r.start.secs >= from && r.start.secs < until),
+        );
     }
-    let (from, until) = match window {
+    let covered = match window {
         None => (need_from, need_until),
         Some((f, u)) => (f.min(need_from), u.max(need_until)),
     };
-    set_window(tx, event.id.as_str(), from, until)
+    (rows, false, covered)
+}
+
+/// Writes an expansion, unless the event or its window changed since it
+/// was read.
+fn write_filled(tx: &Transaction<'_>, event_id: &str, filled: &Filled) -> Result<()> {
+    type Current = (rusqlite::types::Value, String, Option<i64>, Option<i64>);
+    let current: Option<Current> = tx
+        .query_row(
+            "SELECT e.data, e.calendar_id, w.expanded_from, w.expanded_until
+             FROM pim_events e
+             LEFT JOIN pim_instance_windows w ON w.event_id = e.id
+             WHERE e.id = ?1",
+            [event_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .optional()?;
+    let Some((data, calendar_id, from, until)) = current else {
+        return Ok(());
+    };
+    if data != filled.data || from.zip(until) != filled.window {
+        return Ok(());
+    }
+    if filled.single {
+        tx.execute(
+            "DELETE FROM pim_event_instances WHERE event_id = ?1",
+            [event_id],
+        )?;
+    }
+    insert_rows(tx, event_id, &calendar_id, &filled.rows)?;
+    set_window(tx, event_id, filled.covered.0, filled.covered.1)
 }
 
 impl Store {
@@ -314,9 +367,10 @@ impl Store {
         let need_until = align_up(to + FLOATING_SLACK);
         let refs: Vec<&str> = calendars.iter().map(String::as_str).collect();
         // Events that can have occurrences there and lack expansion.
-        let missing: Vec<(String, Option<(i64, i64)>)> = self.with_conn(|conn| {
+        type Missing = (String, Option<(i64, i64)>, rusqlite::types::Value);
+        let missing: Vec<Missing> = self.with_conn(|conn| {
             let mut stmt = conn.prepare(&format!(
-                "SELECT e.id, w.expanded_from, w.expanded_until
+                "SELECT e.id, w.expanded_from, w.expanded_until, e.data
                  FROM pim_events e
                  LEFT JOIN pim_instance_windows w ON w.event_id = e.id
                  WHERE {} AND e.first_start < ?{n1} AND (e.last_end IS NULL OR e.last_end > ?{n2})
@@ -336,24 +390,52 @@ impl Store {
                 let id: String = r.get(0)?;
                 let from: Option<i64> = r.get(1)?;
                 let until: Option<i64> = r.get(2)?;
-                Ok((id, from.zip(until)))
+                Ok((id, from.zip(until), r.get(3)?))
             })?;
             Ok(rows.collect::<rusqlite::Result<_>>()?)
         })?;
         if missing.is_empty() {
             return Ok(());
         }
-        let ids: Vec<&str> = missing.iter().map(|(id, _)| id.as_str()).collect();
+        let ids: Vec<&str> = missing.iter().map(|(id, ..)| id.as_str()).collect();
         let events: HashMap<String, CalendarEvent> = self
             .with_conn(|conn| load_events(conn, &in_list("e.id", ids.len(), 1), &ids))?
             .into_iter()
             .map(|e| (e.id.0.clone(), e))
             .collect();
+        // Expand without holding the connection (other store users go on);
+        // the results are written afterwards in one short transaction.
+        let mut filled: Vec<(&str, Filled)> = Vec::new();
+        for (id, window, data) in missing {
+            if expander.exhausted() {
+                break;
+            }
+            let Some(event) = events.get(&id) else {
+                continue;
+            };
+            let (rows, single, covered) =
+                expand_missing(event, window, need_from, need_until, expander);
+            if expander.exhausted() {
+                // Possibly incomplete: not cached, a later query retries.
+                break;
+            }
+            filled.push((
+                event.id.as_str(),
+                Filled {
+                    data,
+                    window,
+                    rows,
+                    single,
+                    covered,
+                },
+            ));
+        }
+        if filled.is_empty() {
+            return Ok(());
+        }
         self.with_tx(|tx| {
-            for (id, window) in &missing {
-                if let Some(event) = events.get(id) {
-                    fill(tx, event, *window, need_from, need_until, expander)?;
-                }
+            for (id, f) in &filled {
+                write_filled(tx, id, f)?;
             }
             Ok(())
         })
@@ -991,5 +1073,83 @@ mod tests {
         assert_eq!(free_slots(&busy, 12, 28, 1), [(20, 25)]);
         assert_eq!(free_slots(&[], 0, 5, 10), []);
         assert_eq!(free_slots(&[(0, 50)], 0, 40, 1), []);
+    }
+
+    /// Expansion runs without holding the store: the expander can use it
+    /// meanwhile; an event changed during its expansion is not cached
+    /// with stale rows; an expander out of budget leaves the window open.
+    #[test]
+    fn expansion_runs_outside_the_store_lock_and_never_caches_stale_or_cut_results() {
+        struct Meddling {
+            store: Store,
+            inner: TestExpander,
+            change: bool,
+            spent: std::sync::atomic::AtomicBool,
+            spend_after: usize,
+        }
+        impl InstanceExpander for Meddling {
+            fn expand(
+                &self,
+                event: &CalendarEvent,
+                from: i64,
+                until: i64,
+            ) -> Vec<ExpandedInstance> {
+                // The connection is free: this would dead-lock inside the
+                // old write transaction.
+                assert!(self.store.instance_window(&event.id).is_ok());
+                if self.change {
+                    let mut changed = event.clone();
+                    changed.fields.title = "Changed meanwhile".into();
+                    save(&self.store, &changed);
+                }
+                let out = self.inner.expand(event, from, until);
+                if self.inner.calls.load(Ordering::Relaxed) >= self.spend_after {
+                    self.spent.store(true, Ordering::Relaxed);
+                }
+                out
+            }
+
+            fn exhausted(&self) -> bool {
+                self.spent.load(Ordering::Relaxed)
+            }
+        }
+        let store = testing::store();
+        save(&store, &daily_berlin(30));
+        let range = (at("2026-03-27T00:00:00Z"), at("2026-04-03T00:00:00Z"));
+        let meddling = Meddling {
+            store: store.clone(),
+            inner: TestExpander::default(),
+            change: true,
+            spent: Default::default(),
+            spend_after: usize::MAX,
+        };
+        let shown = store
+            .list_event_instances(range.0, range.1, None, "UTC", &meddling)
+            .unwrap();
+        assert!(shown.is_empty(), "nothing cached from the stale expansion");
+        assert_eq!(store.instance_window(&"s".into()).unwrap(), None);
+        // A calm query caches the current version.
+        let calm = TestExpander::default();
+        let shown = store
+            .list_event_instances(range.0, range.1, None, "UTC", &calm)
+            .unwrap();
+        assert_eq!(shown.len(), 7);
+        assert_eq!(shown[0].title, "Changed meanwhile");
+        assert!(store.instance_window(&"s".into()).unwrap().is_some());
+
+        // Out of budget: the result is not cached.
+        let other = testing::store();
+        save(&other, &daily_berlin(30));
+        let spent = Meddling {
+            store: other.clone(),
+            inner: TestExpander::default(),
+            change: false,
+            spent: Default::default(),
+            spend_after: 1,
+        };
+        let _ = other
+            .list_event_instances(range.0, range.1, None, "UTC", &spent)
+            .unwrap();
+        assert_eq!(other.instance_window(&"s".into()).unwrap(), None);
     }
 }

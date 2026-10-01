@@ -78,7 +78,11 @@ pub fn is_occurrence(event: &CalendarEvent, recurrence_id: &PimTime) -> bool {
         return true;
     }
     Occurrences::new(start, event.recurrence.as_ref()).is_some_and(|mut all| {
+        // Jump close to the target instead of walking from the start
+        // (a `SECONDLY` series and a far recurrence id would take minutes).
+        all.skip_before(target);
         all.by_ref()
+            .take(crate::expand::MAX_SCANNED)
             .take_while(|o| *o <= target)
             .any(|o| o == target)
     })
@@ -184,13 +188,23 @@ pub fn end_before(
     let mut generated = Vec::new();
     if let Some(recurrence) = event.recurrence.as_mut() {
         for rule in &mut recurrence.rules {
-            let bound = match &rule.end {
-                RecurrenceEnd::Until { until } => UntilBound::new(until, &start),
-                _ => None,
+            // Only a `COUNT` needs to know how many came before.
+            let before = match &rule.end {
+                RecurrenceEnd::Count { .. } => {
+                    let mut iter = RuleIter::new(rule, first, start.is_date(), None);
+                    let skipped = if iter.skip_before(target) {
+                        usize::try_from(iter.emitted()).unwrap_or(usize::MAX)
+                    } else {
+                        0
+                    };
+                    skipped
+                        + iter
+                            .take(crate::expand::MAX_SCANNED)
+                            .take_while(|o| *o < target)
+                            .count()
+                }
+                _ => 0,
             };
-            let before = RuleIter::new(rule, first, start.is_date(), bound)
-                .take_while(|o| *o < target)
-                .count();
             generated.push(u32::try_from(before).unwrap_or(u32::MAX));
             let ends_earlier = match &rule.end {
                 RecurrenceEnd::Until { until: old } => {
@@ -585,5 +599,26 @@ mod tests {
         assert_eq!(rest.rules[0].end, RecurrenceEnd::Count { count: 1 });
         assert!(advance_task(&next, &rest).is_none(), "COUNT used up");
         assert!(advance_task(&TaskFields::titled("No dates"), &recurrence).is_none());
+    }
+
+    /// A far recurrence id on a fine-grained or long series is checked
+    /// without walking every occurrence; COUNT splits stay exact.
+    #[test]
+    fn far_occurrences_are_checked_quickly() {
+        let begun = std::time::Instant::now();
+        let mut secondly = series("FREQ=SECONDLY");
+        assert!(!is_occurrence(&secondly, &berlin("2099-01-01T00:00:00")));
+        assert!(is_occurrence(&secondly, &berlin("2026-10-05T09:00:10")));
+        secondly.recurrence = Some(Recurrence::rule(
+            parse_rrule("FREQ=HOURLY", &berlin("2026-10-05T09:00:00")).unwrap(),
+        ));
+        assert!(is_occurrence(&secondly, &berlin("2090-10-05T09:00:00")));
+        assert!(!is_occurrence(&secondly, &berlin("2090-10-05T09:30:00")));
+        assert!(begun.elapsed() < std::time::Duration::from_secs(2));
+
+        let mut daily = series("FREQ=DAILY;COUNT=5000");
+        let generated = end_before(&mut daily, &berlin("2030-10-05T09:00:00")).unwrap();
+        // 2026-10-05 .. 2030-10-04: 1461 days.
+        assert_eq!(generated, [1461]);
     }
 }

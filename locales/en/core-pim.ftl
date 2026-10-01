@@ -49,6 +49,11 @@ pim-source-state-disabled = Turned off
 notification-reminder-title = { $title }
 notification-reminder-body = { $when }
 notification-reminder-body-location = { $when } · { $location }
+notification-reminders-title = { $count } reminders
+notification-reminders-body = { $more ->
+    [one] { $title } and one more
+   *[other] { $title } and { $more } more
+}
 
 ## Snoozing reminders (nail-triage reminders)
 

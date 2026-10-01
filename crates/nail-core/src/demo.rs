@@ -152,6 +152,8 @@ pub fn demo_options(mut options: crate::ServiceOptions) -> crate::ServiceOptions
     if options.proxy_fetcher.is_none() {
         options.proxy_fetcher = offline_fetcher();
     }
+    // Subscriptions to the mock HTTP server (plain http on loopback).
+    options.loopback_feeds = true;
     options
 }
 

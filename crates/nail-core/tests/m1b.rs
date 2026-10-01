@@ -1594,3 +1594,59 @@ async fn the_core_feeds_new_mail_and_ui_reports_to_mcp_subscriptions() {
     running.shutdown().await;
     f.service.shutdown().await;
 }
+
+/// Recipients of sent mail that are in no address book land in the
+/// Collected book: contact search (the in-memory PIM index, also behind
+/// MCP) finds them at once, and open contact views hear ContactsChanged.
+#[tokio::test]
+async fn sent_mail_fills_the_collected_book_and_contact_search() {
+    let f = setup().await;
+    synced(&f).await;
+    let search = |query: &'static str| {
+        let service = f.service.clone();
+        async move {
+            match request(
+                &service,
+                Request::SearchContacts {
+                    query: query.into(),
+                    address_book_ids: None,
+                    limit: 10,
+                },
+            )
+            .await
+            {
+                Response::ContactMatches { matches } => matches,
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+    };
+    // The index is built before the mail goes out.
+    assert!(search("zephyrine").await.is_empty());
+    let mut events = f.service.subscribe();
+    let mut draft = blank_draft("Collected recipients");
+    draft.to = vec![Address {
+        name: Some("Zephyrine Quandt".into()),
+        email: "zephyrine@example.net".into(),
+    }];
+    send_now(&f, draft).await;
+    sent_with(&f, "Collected recipients").await;
+    eventually("the recipient is found", || async {
+        search("zephyrine")
+            .await
+            .iter()
+            .any(|m| m.contact.display_name == "Zephyrine Quandt")
+    })
+    .await;
+    let deadline = tokio::time::Instant::now() + TIMEOUT;
+    let mut announced = false;
+    while !announced && tokio::time::Instant::now() < deadline {
+        if let Ok(Ok(Event::ContactsChanged { address_book_ids })) =
+            tokio::time::timeout(Duration::from_secs(1), events.recv()).await
+        {
+            announced = address_book_ids
+                .iter()
+                .any(|b| b.as_str() == nail_store::pim::COLLECTED_BOOK_ID);
+        }
+    }
+    assert!(announced, "ContactsChanged for the Collected book");
+}

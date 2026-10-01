@@ -197,7 +197,8 @@ describe("axe: PIM dialogs", () => {
     await user.click(screen.getByRole("button", { name: /Choose the date for Start/ }));
     expect(screen.getAllByRole("grid").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
-  });
+    // The fullest dialog scan: ~14 s alone, over 20 s under full-suite load.
+  }, 60_000);
 
   it("the merge dialog's list of duplicates has no violations", async () => {
     const env = createEnv();

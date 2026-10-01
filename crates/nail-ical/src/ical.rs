@@ -14,7 +14,7 @@
 //! the original text means with the edited model to decide what to keep.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use base64::Engine as _;
 use chrono::{Datelike, Duration, NaiveTime};
@@ -939,18 +939,45 @@ pub(crate) fn tzids(component: &Component, out: &mut Vec<String>) {
     }
 }
 
+/// A calendar's `VTIMEZONE`s by `TZID` (positions in file order), built
+/// once per calendar so wrapping each item does not scan them all.
+struct ZoneIndex<'a> {
+    zones: Vec<&'a Component>,
+    by_id: HashMap<String, Vec<usize>>,
+}
+
+impl<'a> ZoneIndex<'a> {
+    fn new(calendar: &'a Component) -> Self {
+        let zones: Vec<&Component> = calendar.components_named("VTIMEZONE").collect();
+        let mut by_id: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, zone) in zones.iter().enumerate() {
+            if let Some(id) = zone.text("TZID") {
+                by_id.entry(id).or_default().push(i);
+            }
+        }
+        Self { zones, by_id }
+    }
+}
+
 /// A calendar-level wrapper with the original calendar's
 /// `VERSION` / `PRODID` / `CALSCALE` and the given components.
-fn wrap(calendar: &Component, components: Vec<Component>) -> String {
+fn wrap(calendar: &Component, zone_index: &ZoneIndex<'_>, components: Vec<Component>) -> String {
     let mut wrapper = calendar.shell(|p| p.is("VERSION") || p.is("PRODID") || p.is("CALSCALE"));
     let mut used = Vec::new();
     for c in &components {
         tzids(c, &mut used);
     }
-    let mut zones: Vec<Component> = calendar
-        .components_named("VTIMEZONE")
-        .filter(|z| z.text("TZID").is_some_and(|id| used.contains(&id)))
-        .cloned()
+    let mut positions: Vec<usize> = used
+        .iter()
+        .filter_map(|id| zone_index.by_id.get(id))
+        .flatten()
+        .copied()
+        .collect();
+    positions.sort_unstable();
+    positions.dedup();
+    let mut zones: Vec<Component> = positions
+        .into_iter()
+        .map(|i| zone_index.zones[i].clone())
         .collect();
     zones.extend(components);
     wrapper.components = zones;
@@ -993,18 +1020,27 @@ pub fn parse_calendar(text: &str, options: ParseOptions) -> ParsedCalendar {
     }
     // A whole document that is exactly one item keeps its text verbatim.
     let single = doc.components.len() == 1;
+    let mut index = ItemIndex::default();
     for calendar in calendars {
-        read_one_calendar(calendar, options, single, text, &mut out);
+        read_one_calendar(calendar, options, single, text, &mut index, &mut out);
     }
+    index.drop_replaced(&mut out);
     // Unclosed components: name them where possible.
-    for c in doc.components.iter().flat_map(|c| c.components.iter()) {
-        if !c.is_original() && c.line > 0 {
-            for issue in &mut out.issues {
-                if issue.line == Some(c.line) && matches!(issue.kind, IssueKind::Unclosed { .. }) {
-                    issue.kind = IssueKind::Unclosed {
-                        component: c.name.to_ascii_uppercase(),
-                    };
-                }
+    let unclosed: HashMap<u32, &str> = doc
+        .components
+        .iter()
+        .flat_map(|c| c.components.iter())
+        .filter(|c| c.line > 0 && !c.is_original())
+        .map(|c| (c.line, c.name.as_str()))
+        .collect();
+    if !unclosed.is_empty() {
+        for issue in &mut out.issues {
+            if let (Some(line), IssueKind::Unclosed { .. }) = (issue.line, &issue.kind)
+                && let Some(name) = unclosed.get(&line)
+            {
+                issue.kind = IssueKind::Unclosed {
+                    component: name.to_ascii_uppercase(),
+                };
             }
         }
     }
@@ -1014,11 +1050,56 @@ pub fn parse_calendar(text: &str, options: ParseOptions) -> ParsedCalendar {
     out
 }
 
+/// Where each `UID` was read (a later copy replaces an earlier one, also
+/// across `VCALENDAR`s), without scanning everything read so far.
+#[derive(Default)]
+struct ItemIndex {
+    events: HashMap<String, usize>,
+    tasks: HashMap<String, usize>,
+    replaced_events: HashSet<usize>,
+    replaced_tasks: HashSet<usize>,
+}
+
+impl ItemIndex {
+    fn push_event(&mut self, out: &mut ParsedCalendar, event: ParsedEvent) {
+        if let Some(old) = self.events.insert(event.uid.clone(), out.events.len()) {
+            self.replaced_events.insert(old);
+        }
+        out.events.push(event);
+    }
+
+    fn push_task(&mut self, out: &mut ParsedCalendar, task: ParsedTask) {
+        if let Some(old) = self.tasks.insert(task.uid.clone(), out.tasks.len()) {
+            self.replaced_tasks.insert(old);
+        }
+        out.tasks.push(task);
+    }
+
+    /// Removes the replaced copies (keeping the order of the rest).
+    fn drop_replaced(&self, out: &mut ParsedCalendar) {
+        if !self.replaced_events.is_empty() {
+            let mut i = 0;
+            out.events.retain(|_| {
+                i += 1;
+                !self.replaced_events.contains(&(i - 1))
+            });
+        }
+        if !self.replaced_tasks.is_empty() {
+            let mut i = 0;
+            out.tasks.retain(|_| {
+                i += 1;
+                !self.replaced_tasks.contains(&(i - 1))
+            });
+        }
+    }
+}
+
 fn read_one_calendar(
     calendar: &Component,
     options: ParseOptions,
     single: bool,
     text: &str,
+    index: &mut ItemIndex,
     out: &mut ParsedCalendar,
 ) {
     if out.name.is_none() {
@@ -1054,6 +1135,7 @@ fn read_one_calendar(
     });
     let resolver = ZoneResolver::new(calendar, calendar_year(calendar));
     let ctx = Ctx::new(&resolver, floating_zone);
+    let zone_index = ZoneIndex::new(calendar);
 
     // Group components by kind and UID, in file order.
     let mut groups: BTreeMap<(usize, String), Vec<&Component>> = BTreeMap::new();
@@ -1087,17 +1169,19 @@ fn read_one_calendar(
         let raw = if single && all_items == 1 {
             text.to_owned()
         } else {
-            wrap(calendar, components.iter().map(|c| (*c).clone()).collect())
+            wrap(
+                calendar,
+                &zone_index,
+                components.iter().map(|c| (*c).clone()).collect(),
+            )
         };
         let before = ctx.issues.borrow().len();
         if is_event {
             if let Some(event) = read_event_group(&uid, &components, raw, &ctx, &mut out.issues) {
-                out.events.retain(|e| e.uid != event.uid);
-                out.events.push(event);
+                index.push_event(out, event);
             }
         } else if let Some(task) = read_task_group(&uid, &components, raw, &ctx, &mut out.issues) {
-            out.tasks.retain(|t| t.uid != task.uid);
-            out.tasks.push(task);
+            index.push_task(out, task);
         }
         // Name the item in issues its fields raised.
         let title = components
@@ -1170,6 +1254,9 @@ fn read_event_group(
     };
     let recurrence = read_recurrence(master, &fields.start, ctx);
     let mut overrides: Vec<EventOverride> = Vec::new();
+    // Position of each recurrence id in `overrides` (a later copy wins).
+    let mut override_at: HashMap<PimTime, usize> = HashMap::new();
+    let mut replaced: HashSet<usize> = HashSet::new();
     let mut this_and_future = Vec::new();
     for c in components
         .iter()
@@ -1196,11 +1283,20 @@ fn read_event_group(
         if future {
             this_and_future.push(rid.clone());
         }
-        overrides.retain(|o| o.recurrence_id != rid);
+        if let Some(old) = override_at.insert(rid.clone(), overrides.len()) {
+            replaced.insert(old);
+        }
         overrides.push(EventOverride {
             recurrence_id: rid,
             fields: override_fields,
             this_and_future: future,
+        });
+    }
+    if !replaced.is_empty() {
+        let mut i = 0;
+        overrides.retain(|_| {
+            i += 1;
+            !replaced.contains(&(i - 1))
         });
     }
     let mut seen = HashSet::new();
@@ -1581,5 +1677,72 @@ BEGIN:VTODO\r\nUID:t2\r\nSUMMARY:Sibling of\r\nRELATED-TO;RELTYPE=SIBLING:t1\r\n
         assert!(conference_links_in_text("https://notzoom.us.evil.example/").is_empty());
         assert_eq!(percent_decode(&percent_encode("a b%<c>@x")), "a b%<c>@x");
         assert_eq!(percent_encode("abc@x.org"), "abc@x.org");
+    }
+
+    /// Later copies of a UID or of a RECURRENCE-ID replace earlier ones
+    /// (also across VCALENDARs), and the rest keep their file order.
+    #[test]
+    fn duplicates_are_replaced_in_order() {
+        let text = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n\
+            BEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261001T090000Z\r\nSUMMARY:A1\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:b\r\nDTSTART:20261001T090000Z\r\nSUMMARY:B\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:s\r\nDTSTART:20261001T090000Z\r\nRRULE:FREQ=DAILY\r\nSUMMARY:S\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:s\r\nRECURRENCE-ID:20261002T090000Z\r\nDTSTART:20261002T100000Z\r\nSUMMARY:first\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:s\r\nRECURRENCE-ID:20261003T090000Z\r\nDTSTART:20261003T100000Z\r\nSUMMARY:other\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:s\r\nRECURRENCE-ID:20261002T090000Z\r\nDTSTART:20261002T110000Z\r\nSUMMARY:second\r\nEND:VEVENT\r\n\
+            BEGIN:VTODO\r\nUID:t\r\nSUMMARY:T1\r\nEND:VTODO\r\n\
+            END:VCALENDAR\r\n\
+            BEGIN:VCALENDAR\r\nVERSION:2.0\r\n\
+            BEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261001T090000Z\r\nSUMMARY:A2\r\nEND:VEVENT\r\n\
+            BEGIN:VTODO\r\nUID:t\r\nSUMMARY:T2\r\nEND:VTODO\r\n\
+            END:VCALENDAR\r\n";
+        let parsed = parse_calendar(text, ParseOptions::default());
+        let titles: Vec<&str> = parsed
+            .events
+            .iter()
+            .map(|e| e.fields.title.as_str())
+            .collect();
+        assert_eq!(titles, ["B", "S", "A2"]);
+        let tasks: Vec<&str> = parsed
+            .tasks
+            .iter()
+            .map(|t| t.fields.title.as_str())
+            .collect();
+        assert_eq!(tasks, ["T2"]);
+        let series = &parsed.events[1];
+        let overrides: Vec<&str> = series
+            .overrides
+            .iter()
+            .map(|o| o.fields.title.as_str())
+            .collect();
+        assert_eq!(overrides, ["other", "second"]);
+    }
+
+    /// Many items and many overrides parse in linear time (the old
+    /// per-item scans made 100k items take minutes).
+    #[test]
+    fn large_calendars_parse_in_linear_time() {
+        let mut text = String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n");
+        for i in 0..30_000 {
+            text.push_str(&format!(
+                "BEGIN:VEVENT\r\nUID:e{i}\r\nDTSTART:20261001T090000Z\r\nEND:VEVENT\r\n"
+            ));
+        }
+        text.push_str("BEGIN:VEVENT\r\nUID:s\r\nDTSTART:20200101T090000Z\r\nRRULE:FREQ=DAILY\r\nEND:VEVENT\r\n");
+        let day = chrono::NaiveDate::from_ymd_opt(2020, 1, 2).unwrap();
+        for i in 0..30_000 {
+            let d = (day + Duration::days(i)).format("%Y%m%d");
+            text.push_str(&format!(
+                "BEGIN:VEVENT\r\nUID:s\r\nRECURRENCE-ID:{d}T090000Z\r\nDTSTART:{d}T100000Z\r\nEND:VEVENT\r\n"
+            ));
+        }
+        text.push_str("END:VCALENDAR\r\n");
+        let begun = std::time::Instant::now();
+        let parsed = parse_calendar(&text, ParseOptions::default());
+        let took = begun.elapsed();
+        assert_eq!(parsed.events.len(), 30_001);
+        assert_eq!(parsed.events[30_000].overrides.len(), 30_000);
+        // Generous for debug builds; quadratic scans took far longer.
+        assert!(took < std::time::Duration::from_secs(60), "{took:?}");
     }
 }

@@ -776,13 +776,28 @@ impl Service {
             self.inner.locale.as_deref(),
             nail_store::pim::COLLECTED_BOOK_NAME_ID,
         );
-        if let Err(err) = self
+        match self
             .inner
             .store
-            .call(move |s| s.collect_addresses(&addresses, at, &book).map(|_| ()))
+            .call(move |s| s.collect_addresses(&addresses, at, &book))
             .await
         {
-            tracing::debug!(%err, "cannot record addresses");
+            // New or renamed Collected contacts: searchable at once, and
+            // open contact views refresh.
+            Ok(written) if !written.is_empty() => {
+                let items: Vec<nail_api::pim::PimItemRef> = written
+                    .into_iter()
+                    .map(|contact_id| nail_api::pim::PimItemRef::Contact { contact_id })
+                    .collect();
+                self.pim_index_apply(&items, &[]).await;
+                self.broadcast(nail_api::Event::ContactsChanged {
+                    address_book_ids: vec![nail_api::AddressBookId::new(
+                        nail_store::pim::COLLECTED_BOOK_ID,
+                    )],
+                });
+            }
+            Ok(_) => {}
+            Err(err) => tracing::debug!(%err, "cannot record addresses"),
         }
     }
 }

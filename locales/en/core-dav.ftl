@@ -18,3 +18,4 @@ dav-http-status = The calendar or contacts server answered with an unexpected st
 dav-bad-response = The calendar or contacts server sent an answer Nail does not understand.
 dav-insecure-url = The address must start with https:// (plain http:// only works for this computer).
 dav-token = Nail could not get a sign-in token for the calendar or contacts server. Sign in again.
+dav-redirect-login = The server sent Nail on to { $host }, which asks for your password. Nail does not send your password to another server on its own: enter an address on { $host } as the server address if you trust it.

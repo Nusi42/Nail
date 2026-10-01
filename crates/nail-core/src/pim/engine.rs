@@ -77,8 +77,21 @@ pub(crate) struct SyncChanges {
     pub items: Vec<(PimItemRef, String)>,
     /// Items removed.
     pub removed: Vec<(PimItemRef, String)>,
-    /// Collections added or removed.
+    /// Collections added, removed or changed.
     pub collections: bool,
+    /// The refresh interval a feed asked for (`REFRESH-INTERVAL` /
+    /// `X-PUBLISHED-TTL`), minutes.
+    pub refresh_minutes: Option<u32>,
+}
+
+/// What `sync_ics` needs of a parsed feed besides its items.
+struct FeedMeta {
+    not_icalendar: Option<nail_ical::Issue>,
+    name: Option<String>,
+    color: Option<String>,
+    has_tasks: bool,
+    time_zone: Option<String>,
+    refresh_minutes: Option<u32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -380,13 +393,37 @@ impl Service {
     }
 }
 
+/// The refresh interval in minutes: the configured one (accounts.kdl
+/// allows 5 and more); for a subscription without one, what the feed
+/// asked for (at least [`nail_ical::feed::MIN_REFRESH_MINUTES`]), else the
+/// default.
+pub(crate) fn refresh_minutes(config: &PimSourceConfig, feed_asks: Option<u32>) -> u32 {
+    match &config.settings {
+        PimSourceSettings::Ics {
+            refresh_minutes: None,
+            ..
+        } => {
+            let feed = ParsedCalendar {
+                refresh_minutes: feed_asks,
+                ..Default::default()
+            };
+            nail_ical::feed::refresh_minutes(None, &feed)
+        }
+        _ => config.refresh_minutes(),
+    }
+}
+
 /// The wait after a pass: the refresh interval (or the timing override),
 /// a growing backoff after retryable failures.
-fn next_wait(service: &Service, config: &PimSourceConfig, failures: u32) -> Duration {
-    let interval =
-        service.inner.timing.poll_override.unwrap_or_else(|| {
-            Duration::from_secs(u64::from(config.refresh_minutes().max(1)) * 60)
-        });
+fn next_wait(
+    service: &Service,
+    config: &PimSourceConfig,
+    feed_asks: Option<u32>,
+    failures: u32,
+) -> Duration {
+    let interval = service.inner.timing.poll_override.unwrap_or_else(|| {
+        Duration::from_secs(u64::from(refresh_minutes(config, feed_asks).max(1)) * 60)
+    });
     if failures == 0 {
         return interval;
     }
@@ -400,6 +437,9 @@ fn next_wait(service: &Service, config: &PimSourceConfig, failures: u32) -> Dura
 
 async fn run_engine(service: Service, config: PimSourceConfig, wake: Arc<Notify>) {
     let mut failures = 0u32;
+    // The refresh interval the feed asked for (kept across unchanged
+    // fetches).
+    let mut feed_asks: Option<u32> = None;
     loop {
         service
             .set_source_state(&config.id, PimSourceState::Syncing, None, None)
@@ -407,6 +447,9 @@ async fn run_engine(service: Service, config: PimSourceConfig, wake: Arc<Notify>
         match sync_once(&service, &config).await {
             Ok(changes) => {
                 failures = 0;
+                if changes.refresh_minutes.is_some() {
+                    feed_asks = changes.refresh_minutes;
+                }
                 let now = service.pim_now();
                 service
                     .set_source_state(&config.id, PimSourceState::Idle, None, Some(now))
@@ -431,7 +474,7 @@ async fn run_engine(service: Service, config: PimSourceConfig, wake: Arc<Notify>
                     .await;
             }
         }
-        let wait = next_wait(&service, &config, failures);
+        let wait = next_wait(&service, &config, feed_asks, failures);
         tokio::select! {
             () = tokio::time::sleep(wait) => {}
             () = wake.notified() => {}
@@ -460,7 +503,9 @@ pub(crate) fn feed_calendar_id(source: &PimSourceId) -> CalendarId {
     CalendarId::new(format!("{source}-feed"))
 }
 
-/// Fetches a feed; `None` when it did not change (`304`).
+/// Fetches a feed; `None` when it did not change (`304`). SSRF-safe,
+/// redirects followed by hand, the body capped while it streams
+/// ([`super::feed_http`]).
 async fn fetch_feed(
     service: &Service,
     config: &PimSourceConfig,
@@ -470,127 +515,195 @@ async fn fetch_feed(
     let PimSourceSettings::Ics { url, auth, .. } = &config.settings else {
         return Err(ApiError::internal("not a subscription").into());
     };
-    let fetch = nail_ical::feed::fetch_url(url).ok_or_else(|| {
+    let invalid_url = || {
         ApiError::invalid_request(format!("not a subscription URL: {url}")).with_localized(
             nail_api::LocalizedMessage::new(
                 nail_api::pim::source::PimSourceIssue::InvalidUrl.message_id(),
             ),
         )
-    })?;
-    let http = nail_auth::http_client()
-        .map_err(|e| ApiError::internal(format!("cannot build the HTTP client: {e}")))?;
-    let mut request = http.get(&fetch).header(
-        reqwest::header::ACCEPT,
-        "text/calendar, text/plain;q=0.5, */*;q=0.1",
-    );
-    if let Some(known) = known {
-        if let Some(etag) = &known.etag {
-            request = request.header(reqwest::header::IF_NONE_MATCH, etag);
-        }
-        if let Some(modified) = &known.last_modified {
-            request = request.header(reqwest::header::IF_MODIFIED_SINCE, modified);
-        }
-    }
-    if let Some(AuthConfig::Password { username, .. }) = auth {
-        let password = match secret {
-            Some(SecretValue::Password { password }) => Some(password.clone()),
-            _ => match Service::pim_secret_ref(config) {
-                Some(reference) => {
-                    let store = Arc::clone(&service.inner.secrets);
-                    tokio::task::spawn_blocking(move || store.get(&reference)).await??
-                }
-                None => None,
-            },
-        };
-        request = request.basic_auth(username, password);
-    }
-    let response = tokio::time::timeout(Duration::from_secs(60), request.send())
-        .await
-        .map_err(|_| ApiError::new(ErrorCode::Network, "the feed did not answer in time"))?
-        .map_err(|e| ApiError::new(ErrorCode::Network, format!("cannot fetch the feed: {e}")))?;
-    let status = response.status();
-    if status == reqwest::StatusCode::NOT_MODIFIED {
-        return Ok(None);
-    }
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return Err(
-            ApiError::new(ErrorCode::AuthFailed, format!("the feed answered {status}")).into(),
-        );
-    }
-    if !status.is_success() {
-        let code = if status.is_server_error() {
-            ErrorCode::Unavailable
-        } else {
-            ErrorCode::NotFound
-        };
-        return Err(ApiError::new(code, format!("the feed answered {status}")).into());
-    }
-    let header = |name: reqwest::header::HeaderName| {
-        response
-            .headers()
-            .get(name)
-            .and_then(|v| v.to_str().ok())
-            .map(str::to_owned)
     };
-    let etag = header(reqwest::header::ETAG);
-    let modified = header(reqwest::header::LAST_MODIFIED);
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| ApiError::new(ErrorCode::Network, format!("cannot read the feed: {e}")))?;
-    if bytes.len() > MAX_FEED_BYTES {
-        return Err(ApiError::new(ErrorCode::TooLarge, "the feed is too large").into());
+    let fetch = nail_ical::feed::fetch_url(url).ok_or_else(invalid_url)?;
+    let parsed = Url::parse(&fetch).map_err(|_| invalid_url())?;
+    let basic = match auth {
+        Some(AuthConfig::Password { username, .. }) => {
+            let password = match secret {
+                Some(SecretValue::Password { password }) => Some(password.clone()),
+                _ => match Service::pim_secret_ref(config) {
+                    Some(reference) => {
+                        let store = Arc::clone(&service.inner.secrets);
+                        tokio::task::spawn_blocking(move || store.get(&reference)).await??
+                    }
+                    None => None,
+                },
+            };
+            Some((username.clone(), password))
+        }
+        _ => None,
+    };
+    let request = super::feed_http::FeedRequest {
+        url: parsed,
+        etag: known.and_then(|k| k.etag.clone()),
+        last_modified: known.and_then(|k| k.last_modified.clone()),
+        basic,
+        allow_loopback: service.inner.pim.loopback_feeds,
+        max_bytes: MAX_FEED_BYTES,
+    };
+    let tls = nail_auth::tls_config()
+        .map_err(|e| ApiError::internal(format!("no TLS configuration: {e}")))?;
+    match super::feed_http::fetch(&request, &nail_proxy::SystemResolver, &tls).await? {
+        super::feed_http::FeedResponse::NotModified => Ok(None),
+        super::feed_http::FeedResponse::Fetched {
+            bytes,
+            etag,
+            last_modified,
+        } => Ok(Some((bytes, etag, last_modified, fetch))),
     }
-    Ok(Some((bytes.to_vec(), etag, modified, fetch)))
+}
+
+/// What a subscription's calendar was last set up with from
+/// `accounts.kdl` (an app setting per source): a change of the URL or of
+/// `alarms` refetches the whole feed, a change of name / colour / `alarms`
+/// updates the calendar (edits made in the app since stay otherwise).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct AppliedFeed {
+    url: String,
+    name: Option<String>,
+    color: Option<String>,
+    alarms: bool,
+}
+
+fn applied_feed_key(source: &PimSourceId) -> String {
+    format!("pim.feed-applied.{source}")
 }
 
 async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncChanges> {
-    let PimSourceSettings::Ics { color, alarms, .. } = &config.settings else {
+    let PimSourceSettings::Ics {
+        url, color, alarms, ..
+    } = &config.settings
+    else {
         return Ok(SyncChanges::default());
     };
     let calendar_id = feed_calendar_id(&config.id);
+    let wanted = AppliedFeed {
+        url: nail_ical::feed::fetch_url(url).unwrap_or_else(|| url.clone()),
+        name: config.name.clone(),
+        color: color.clone().filter(|c| nail_api::pim::is_color(c)),
+        alarms: *alarms,
+    };
     let key = calendar_id.clone();
-    let known = service
+    let setting = applied_feed_key(&config.id);
+    let want = wanted.clone();
+    // The calendar's sync state, after applying a changed configuration.
+    let (known, settings_changed) = service
         .inner
         .store
         .call(move |s| {
-            Ok(match s.calendar(&key)? {
-                Some(_) => Some(s.collection_sync(key.as_str())?),
-                None => None,
-            })
+            let Some(calendar) = s.calendar(&key)? else {
+                return Ok((None, false));
+            };
+            let mut sync = s.collection_sync(key.as_str())?;
+            let applied: Option<AppliedFeed> = s.setting(&setting).ok().flatten();
+            if applied.as_ref() == Some(&want) {
+                return Ok((Some(sync), false));
+            }
+            let mut settings = calendar.settings.clone();
+            let before = applied.as_ref();
+            if let Some(name) = &want.name
+                && before.is_none_or(|b| b.name.as_ref() != Some(name))
+            {
+                settings.name.clone_from(name);
+            }
+            if want.color.is_some() && before.is_none_or(|b| b.color != want.color) {
+                settings.color.clone_from(&want.color);
+            }
+            if before.is_none_or(|b| b.alarms != want.alarms) {
+                settings.reminders = want.alarms;
+            }
+            let changed = settings != calendar.settings;
+            if changed {
+                s.update_calendar_settings(&key, &settings)?;
+            }
+            // Another URL or other alarms: fetch everything again; other
+            // alarms also rewrite unchanged items (they are read anew).
+            if before.is_none_or(|b| b.url != want.url || b.alarms != want.alarms) {
+                sync.etag = None;
+                sync.last_modified = None;
+            }
+            if before.is_some_and(|b| b.alarms != want.alarms) {
+                s.forget_server_versions(key.as_str())?;
+            }
+            Ok((Some(sync), changed))
         })
         .await?;
     let Some((bytes, etag, modified, fetch)) =
         fetch_feed(service, config, known.as_ref(), None).await?
     else {
-        return Ok(SyncChanges::default());
+        let setting = applied_feed_key(&config.id);
+        let applied = wanted.clone();
+        service
+            .inner
+            .store
+            .call(move |s| s.set_setting(&setting, &applied))
+            .await?;
+        if settings_changed {
+            service.replan_all_reminders().await;
+        }
+        return Ok(SyncChanges {
+            collections: settings_changed,
+            ..SyncChanges::default()
+        });
     };
-    let feed = nail_ical::feed::parse_feed_bytes(&bytes);
-    if let Some(issue) = feed
-        .issues
-        .iter()
-        .find(|i| matches!(i.kind, nail_ical::IssueKind::NotICalendar))
-    {
+    // Parsing and converting a large feed is CPU work: off the runtime.
+    let blobs = service.blobs().clone();
+    let collection_id = calendar_id.0.clone();
+    let keep_alarms = *alarms;
+    let (feed_meta, items) = tokio::task::spawn_blocking(move || {
+        let feed = nail_ical::feed::parse_feed_bytes(&bytes);
+        let meta = FeedMeta {
+            not_icalendar: feed
+                .issues
+                .iter()
+                .find(|i| matches!(i.kind, nail_ical::IssueKind::NotICalendar))
+                .cloned(),
+            name: feed.name.clone(),
+            color: feed.color.clone(),
+            has_tasks: !feed.tasks.is_empty(),
+            time_zone: feed.time_zone.clone(),
+            refresh_minutes: feed.refresh_minutes,
+        };
+        if meta.not_icalendar.is_some() {
+            return (meta, Vec::new());
+        }
+        let items = calendar_items(&blobs, feed, &collection_id, true, keep_alarms);
+        (meta, items)
+    })
+    .await
+    .map_err(|e| ApiError::internal(format!("feed parsing failed: {e}")))?;
+    if let Some(issue) = &feed_meta.not_icalendar {
         return Err(ApiError::new(ErrorCode::Rejected, issue.diagnostic())
             .with_localized(issue.localized())
             .into());
     }
-    let mut changes = SyncChanges::default();
+    let mut changes = SyncChanges {
+        collections: settings_changed,
+        refresh_minutes: feed_meta.refresh_minutes,
+        ..SyncChanges::default()
+    };
     if known.is_none() {
         let mut settings = CalendarSettings::named(
             config
                 .name
                 .clone()
-                .or_else(|| feed.name.clone())
+                .or_else(|| feed_meta.name.clone())
                 .unwrap_or_else(|| config.id.to_string()),
         );
         settings.color = color
             .clone()
-            .or_else(|| feed.color.clone())
+            .or_else(|| feed_meta.color.clone())
             .filter(|c| nail_api::pim::is_color(c));
         settings.reminders = *alarms;
         let mut components = vec![CalendarComponent::Event];
-        if !feed.tasks.is_empty() {
+        if feed_meta.has_tasks {
             components.push(CalendarComponent::Task);
         }
         let calendar = Calendar {
@@ -600,7 +713,7 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
             settings,
             components,
             read_only: true,
-            timezone: feed.time_zone.clone(),
+            timezone: feed_meta.time_zone.clone(),
         };
         service
             .inner
@@ -609,10 +722,10 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
             .await?;
         changes.collections = true;
     }
-    let items = calendar_items(service.blobs(), feed, calendar_id.as_str(), true, *alarms);
     let uids: Vec<String> = items.iter().map(|(i, _)| i.uid().to_owned()).collect();
     let now = service.pim_now();
     let collection = calendar_id.0.clone();
+    let setting = applied_feed_key(&config.id);
     let (applied, removed) = service
         .inner
         .store
@@ -637,6 +750,7 @@ async fn sync_ics(service: &Service, config: &PimSourceConfig) -> Result<SyncCha
                     last_sync_at: Some(now),
                 },
             )?;
+            s.set_setting(&setting, &wanted)?;
             Ok((applied, removed))
         })
         .await?;
@@ -833,7 +947,10 @@ pub(crate) async fn test_source(
             let (bytes, _, _, fetch) = fetch_feed(service, config, None, secret.as_ref())
                 .await?
                 .ok_or_else(|| ApiError::internal("unexpected 304"))?;
-            let feed = nail_ical::feed::parse_feed_bytes(&bytes);
+            let feed =
+                tokio::task::spawn_blocking(move || nail_ical::feed::parse_feed_bytes(&bytes))
+                    .await
+                    .map_err(|e| ApiError::internal(format!("feed parsing failed: {e}")))?;
             if let Some(issue) = nail_ical::import::fatal_issue(
                 &nail_ical::import::ImportData::Calendar(feed.clone()),
             ) {
@@ -1451,6 +1568,34 @@ mod tests {
 BEGIN:VEVENT\r\nUID:a@x\r\nDTSTAMP:20261001T000000Z\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:A\r\n\
 BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT15M\r\nDESCRIPTION:A\r\nEND:VALARM\r\nEND:VEVENT\r\n\
 BEGIN:VTODO\r\nUID:t@x\r\nDTSTAMP:20261001T000000Z\r\nSUMMARY:T\r\nRELATED-TO;RELTYPE=PARENT:p@x\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+    /// A subscription without its own interval follows the feed's
+    /// `REFRESH-INTERVAL` (at least 15 minutes), else 6 hours; a configured
+    /// interval wins; DAV sources keep theirs.
+    #[test]
+    fn feeds_set_their_refresh_interval() {
+        let ics = |refresh: Option<u32>| PimSourceConfig {
+            id: "f".into(),
+            name: None,
+            enabled: true,
+            settings: PimSourceSettings::Ics {
+                url: "https://feeds.example.com/a.ics".into(),
+                color: None,
+                alarms: false,
+                refresh_minutes: refresh,
+                auth: None,
+            },
+        };
+        assert_eq!(refresh_minutes(&ics(None), None), 360);
+        assert_eq!(refresh_minutes(&ics(None), Some(1440)), 1440);
+        assert_eq!(refresh_minutes(&ics(None), Some(1)), 15);
+        assert_eq!(refresh_minutes(&ics(Some(60)), Some(1440)), 60);
+        assert_eq!(refresh_minutes(&ics(Some(5)), Some(1440)), 5);
+        let feed = nail_ical::feed::parse_feed(
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-PUBLISHED-TTL:PT2H\r\nEND:VCALENDAR\r\n",
+        );
+        assert_eq!(refresh_minutes(&ics(None), feed.refresh_minutes), 120);
+    }
 
     #[test]
     fn calendar_items_have_derived_ids_and_optional_alarms() {

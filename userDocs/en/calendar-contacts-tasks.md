@@ -129,6 +129,12 @@ snoozing applies to this computer.
   sound.
 - Reminders that came due while Nail was not running appear when it starts.
   Those more than two hours late are listed but do not pop up a notification.
+- When more than three reminders are due at the same moment (for example
+  after Nail was closed for a while), you get one notification that says how
+  many there are instead of one each; every reminder still shows in Nail.
+- Events that repeat every minute or every second do not remind you. For one
+  event or task Nail keeps the next 20 reminders and the last 3 missed ones;
+  later ones follow as time goes on.
 - All-day events and events without a time zone remind at the clock time of
   the computer's time zone; when you travel, they follow.
 - Turn a calendar's reminders off in its settings in the calendar list.
@@ -205,7 +211,11 @@ date, syncing, offline, sign-in failed) and the last sync; **Sync now** and
 **Remove** work per source. To add one, choose:
 
 - **Subscription (ICS / webcal):** the address of a calendar feed, such as
-  public holidays. Subscriptions are read-only.
+  public holidays. Subscriptions are read-only. Nail fetches them only over
+  encrypted connections (`https:`; a `webcal:` link is fetched that way) and
+  never from this computer or your local network (addresses such as
+  `localhost` or `192.168.…`), also not when a feed forwards Nail there. A
+  feed that has moved and forwards to its new address keeps working.
 - **CalDAV server** or **CardDAV server:** choose the mail account whose login
   to use (Nail finds the server from the account's domain), or enter the
   server address, user name and password.
@@ -250,6 +260,10 @@ addresses Google's servers. **Test** shows what it found.
 
 **Signing in.** Passwords are sent only over encrypted connections
 (`https:`); plain `http:` is accepted only for a server on this computer.
+Your password goes only to the server you entered or Nail found: when that
+server sends Nail on to another server that asks for the password, Nail
+does not send it there and says so — enter that server's address yourself
+if you trust it.
 Google calendars and contacts use Google sign-in (OAuth2) instead of a
 password. Passwords and sign-ins stay in the Windows credential store.
 
@@ -293,6 +307,10 @@ next sync. Some details:
 - Subscriptions that give times without a zone are read in the feed's own
   time zone (`X-WR-TIMEZONE`), as Google and Outlook.com publish them.
 - Characters in Windows (ANSI) and UTF-16 files are converted.
+- Items that repeat every minute or every second (other programs can make
+  them; Nail's editor cannot) show at most their first 2,000 occurrences.
+- Blocks nested more than 32 levels deep in a file are skipped and reported
+  as unreadable lines (real calendars nest four levels at most).
 
 ## Layout options
 

@@ -313,7 +313,9 @@ impl Service {
         let mut instances = self
             .inner
             .store
-            .call(move |s| s.list_event_instances(from, to, calendars.as_deref(), &tz, &Expander))
+            .call(move |s| {
+                s.list_event_instances(from, to, calendars.as_deref(), &tz, &Expander::default())
+            })
             .await?;
         instances.retain(|i| i.status != nail_api::pim::calendar::EventStatus::Cancelled);
         Ok(instances)
@@ -333,7 +335,9 @@ impl Service {
         let busy = self
             .inner
             .store
-            .call(move |s| s.busy_intervals(from, to, calendars.as_deref(), &tz, &Expander))
+            .call(move |s| {
+                s.busy_intervals(from, to, calendars.as_deref(), &tz, &Expander::default())
+            })
             .await?;
         Ok(
             nail_store::pim::free_slots(&busy, from, to, i64::from(minutes.max(1)) * 60)

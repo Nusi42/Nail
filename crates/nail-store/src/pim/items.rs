@@ -1091,6 +1091,21 @@ impl Store {
             .collect()
     }
 
+    /// Makes the next [`Store::apply_server_item`] of every synced resource
+    /// of a collection rewrite it even when the server's text and ETag did
+    /// not change (the stored text and ETag are cleared): after the way
+    /// server items are read changed (a subscription's `alarms`). Returns
+    /// how many were marked.
+    pub fn forget_server_versions(&self, collection: &str) -> Result<usize> {
+        self.with_conn(|conn| {
+            Ok(conn.execute(
+                "UPDATE pim_objects SET raw = nail_seal('pim_objects.raw', ''), etag = NULL
+                 WHERE collection_id = ?1 AND sync = 'synced' AND deleted = 0",
+                [collection],
+            )?)
+        })
+    }
+
     /// Every resource of a collection with its URL, ETag and state.
     pub fn server_objects(&self, collection: &str) -> Result<Vec<ServerObjectInfo>> {
         self.with_conn(|conn| {
@@ -1850,6 +1865,41 @@ mod tests {
                 .delete_pim_item(&item_ref(PimItemKind::Event, "h2"), 2)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn forgotten_server_versions_are_rewritten() {
+        let store = testing::store();
+        let mut e = testing::Fixtures::new().event("h1", "x1", "Plain");
+        e.calendar_id = ICS_CAL.into();
+        let item = PimItem::Event(e.clone());
+        store
+            .apply_server_item(&item, &raw("h1"), None, None, 1)
+            .unwrap();
+        // The same text again: nothing to do.
+        let mut with_alarm = e.clone();
+        with_alarm
+            .fields
+            .alarms
+            .push(nail_api::pim::Alarm::minutes_before(10));
+        let changed = PimItem::Event(with_alarm);
+        assert!(matches!(
+            store
+                .apply_server_item(&changed, &raw("h1"), None, None, 2)
+                .unwrap(),
+            ServerApply::Unchanged(_)
+        ));
+        assert_eq!(store.forget_server_versions(ICS_CAL).unwrap(), 1);
+        assert!(
+            store
+                .apply_server_item(&changed, &raw("h1"), None, None, 3)
+                .unwrap()
+                .changed()
+        );
+        let stored = store.event(&"h1".into()).unwrap().unwrap();
+        assert_eq!(stored.fields.alarms.len(), 1);
+        let object = store.pim_object(&changed.item_ref()).unwrap().unwrap();
+        assert_eq!(object.raw, raw("h1"));
     }
 
     #[test]

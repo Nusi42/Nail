@@ -529,7 +529,16 @@ pub enum ContentIssueKind {
     Unclosed,
     /// A property outside any component.
     OutsideComponent,
+    /// A component nested deeper than [`MAX_DEPTH`]; it and everything
+    /// in it was skipped.
+    TooDeep,
 }
+
+/// Deepest component nesting [`parse`] keeps (real data nests at most
+/// four levels: `VCALENDAR` > `VTIMEZONE` > `STANDARD`, `VEVENT` >
+/// `VALARM`). Deeper components are skipped so that hostile input cannot
+/// build a tree whose recursive drop / write overflows the stack.
+pub const MAX_DEPTH: usize = 32;
 
 /// A problem found while reading content lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -738,12 +747,30 @@ pub(crate) fn parse_line(text: &str) -> Option<Property> {
 pub fn parse(text: &str) -> Document {
     let mut doc = Document::default();
     let mut stack: Vec<Component> = Vec::new();
+    // Open components inside a skipped (too deep) one.
+    let mut skipping: usize = 0;
     for logical in unfold(text) {
         let upper_head = logical
             .text
             .get(..logical.text.len().min(6))
             .map(str::to_ascii_uppercase)
             .unwrap_or_default();
+        if skipping > 0 {
+            if upper_head == "BEGIN:" {
+                skipping += 1;
+            } else if upper_head.starts_with("END:") {
+                skipping -= 1;
+            }
+            continue;
+        }
+        if upper_head == "BEGIN:" && stack.len() >= MAX_DEPTH {
+            doc.issues.push(ContentIssue {
+                line: logical.line,
+                kind: ContentIssueKind::TooDeep,
+            });
+            skipping = 1;
+            continue;
+        }
         if upper_head == "BEGIN:" {
             let mut component = Component::new(logical.text[6..].trim());
             component.line = logical.line;
@@ -1001,5 +1028,69 @@ mod tests {
         let photo = doc.components[0].property("PHOTO").unwrap();
         assert_eq!(photo.value, " /9j/4AAQSkZJRg==");
         assert_eq!(doc.components[0].text("FN").unwrap(), "A");
+    }
+
+    /// 100k nested `BEGIN`s (hostile feed / import) on a small stack:
+    /// parsing, writing and dropping must not recurse that deep.
+    #[test]
+    fn deep_nesting_is_cut_off_without_overflowing_the_stack() {
+        let worker = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| {
+                let depth = 100_000;
+                let mut text = String::from("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\n");
+                for _ in 0..depth {
+                    text.push_str("BEGIN:X\r\n");
+                }
+                text.push_str("SUMMARY:inside\r\n");
+                for _ in 0..depth {
+                    text.push_str("END:X\r\n");
+                }
+                text.push_str("SUMMARY:kept\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+                let doc = parse(&text);
+                let too_deep: Vec<_> = doc
+                    .issues
+                    .iter()
+                    .filter(|i| i.kind == ContentIssueKind::TooDeep)
+                    .collect();
+                assert_eq!(
+                    too_deep.len(),
+                    1,
+                    "{:?}",
+                    &doc.issues[..doc.issues.len().min(5)]
+                );
+                assert_eq!(
+                    too_deep[0].line,
+                    3 + u32::try_from(MAX_DEPTH).unwrap() - 2 + 1
+                );
+                let event = &doc.components[0].components[0];
+                // The properties after the skipped block still belong to the event.
+                assert_eq!(event.text("SUMMARY").as_deref(), Some("kept"));
+                let mut depth_seen = 0;
+                let mut c = event;
+                while let Some(child) = c.components.first() {
+                    depth_seen += 1;
+                    c = child;
+                }
+                assert_eq!(depth_seen + 2, MAX_DEPTH);
+                let written = doc.to_text();
+                assert!(written.len() < 2_000);
+                drop(doc);
+                // Unclosed deep nesting: closed at the end, still cut off.
+                let unclosed = "BEGIN:VCARD\r\n".repeat(depth);
+                let doc = parse(&unclosed);
+                assert!(
+                    doc.issues
+                        .iter()
+                        .any(|i| i.kind == ContentIssueKind::TooDeep)
+                );
+                drop(doc);
+                // The format parsers on top survive too.
+                let _ = crate::ical::parse_calendar(&text, crate::ical::ParseOptions::default());
+                let _ = crate::vcard::parse_cards(&unclosed);
+                let _ = crate::feed::parse_feed_bytes(text.as_bytes());
+            })
+            .unwrap();
+        worker.join().expect("no stack overflow");
     }
 }

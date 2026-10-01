@@ -1211,3 +1211,56 @@ async fn too_many_redirects_are_an_error() {
         .unwrap_err();
     assert!(matches!(err, DavError::InsecureUrl(_)), "{err:?}");
 }
+
+#[tokio::test]
+async fn logins_never_follow_a_redirect_to_another_server() {
+    let dav = server().await;
+    let front = nail_testkit_net::MockHttpServer::start().await.unwrap();
+    front.route(
+        None,
+        None,
+        "/moved",
+        nail_testkit_net::MockResponse::status(301)
+            .with_header("location", &format!("{}/", dav.base_url())),
+    );
+    let start = Url::parse(&format!("{}/moved", front.base_url())).unwrap();
+    // The other server asks for the login: an error naming it, and the
+    // login was not sent there.
+    let err = client(basic()).collection(&start).await.unwrap_err();
+    assert_eq!(err, DavError::RedirectNeedsLogin("127.0.0.1".into()));
+    assert_eq!(err.code(), ErrorCode::Config);
+    assert!(!dav.requests().is_empty());
+    assert!(dav.requests().iter().all(|r| r.authorization.is_none()));
+    // Discovery reports it rather than "no service".
+    let found = discover(
+        &client(basic()),
+        &no_dns(),
+        &DiscoveryInput {
+            service: DavService::CalDav,
+            url: Some(start.to_string()),
+            email: None,
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(found, DavError::RedirectNeedsLogin(_)),
+        "{found:?}"
+    );
+    assert!(dav.requests().iter().all(|r| r.authorization.is_none()));
+    // Entering the other server's address signs in there.
+    assert!(
+        discover(
+            &client(basic()),
+            &no_dns(),
+            &DiscoveryInput {
+                service: DavService::CalDav,
+                url: Some(dav.base_url()),
+                email: None,
+            },
+        )
+        .await
+        .is_ok()
+    );
+    assert!(dav.requests().iter().any(|r| r.authorization.is_some()));
+}

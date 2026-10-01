@@ -29,6 +29,12 @@ use crate::time::{self, IcalValue};
 /// (rules that can never match, e.g. `BYMONTH=2;BYMONTHDAY=30`).
 const MAX_IDLE_PERIODS: u32 = 200_000;
 
+/// Most occurrences a `MINUTELY` or `SECONDLY` rule yields (counting from
+/// the series start), whatever its `COUNT` / `UNTIL` say: no calendar
+/// needs more, and hostile feeds use such rules to make every expansion,
+/// reminder plan and edit scan millions of occurrences (ADR 0064).
+pub const MAX_SUB_HOURLY_OCCURRENCES: u32 = 2_000;
+
 /// chrono's weekday for the contract's.
 pub fn chrono_weekday(day: Weekday) -> chrono::Weekday {
     match day {
@@ -328,6 +334,10 @@ pub struct RuleIter {
     emitted: u32,
     idle: u32,
     finished: bool,
+    /// Every period yields exactly one occurrence (no `BY*` parts,
+    /// `DAILY` or finer, or `WEEKLY`): skipping periods keeps `COUNT`
+    /// exact.
+    uniform: bool,
 }
 
 fn days_in_month(year: i32, month: u32) -> u32 {
@@ -449,11 +459,26 @@ impl RuleIter {
             .filter(|&s| s < 60)
             .collect();
         let dropped_all_seconds = !rule.by_second.is_empty() && by_second.is_empty();
-        let count = match rule.end {
+        let mut count = match rule.end {
             RecurrenceEnd::Count { count } => Some(count),
             _ if dropped_all_seconds => Some(1),
             _ => None,
         };
+        if matches!(freq, Frequency::Minutely | Frequency::Secondly) {
+            count = Some(count.map_or(MAX_SUB_HOURLY_OCCURRENCES, |c| {
+                c.min(MAX_SUB_HOURLY_OCCURRENCES)
+            }));
+        }
+        let uniform = !matches!(freq, Frequency::Monthly | Frequency::Yearly)
+            && rule.by_second.is_empty()
+            && rule.by_minute.is_empty()
+            && rule.by_hour.is_empty()
+            && rule.by_day.is_empty()
+            && rule.by_month_day.is_empty()
+            && rule.by_year_day.is_empty()
+            && rule.by_week_no.is_empty()
+            && rule.by_month.is_empty()
+            && rule.by_set_pos.is_empty();
         Self {
             freq,
             interval: i64::from(rule.interval.max(1)),
@@ -478,7 +503,93 @@ impl RuleIter {
             emitted: 0,
             idle: 0,
             finished: false,
+            uniform,
         }
+    }
+
+    /// The start of the first sub-daily period (the start truncated to the
+    /// frequency's unit) and the unit in seconds.
+    fn sub_daily_base(&self) -> (NaiveDateTime, i64) {
+        let unit = match self.freq {
+            Frequency::Hourly => 3600,
+            Frequency::Minutely => 60,
+            _ => 1,
+        };
+        let base = self.start.date().and_time(NaiveTime::MIN)
+            + Duration::seconds(i64::from(self.start.num_seconds_from_midnight()) / unit * unit);
+        (base, unit)
+    }
+
+    /// The index of the period that contains `target` (negative for
+    /// targets before the start).
+    fn period_of(&self, target: NaiveDateTime) -> Option<i64> {
+        let units = match self.freq {
+            Frequency::Yearly => i64::from(target.year()) - i64::from(self.start.year()),
+            Frequency::Monthly => {
+                (i64::from(target.year()) * 12 + i64::from(target.month0()))
+                    - (i64::from(self.start.year()) * 12 + i64::from(self.start.month0()))
+            }
+            Frequency::Weekly => {
+                let start_day = self.start.date();
+                let back = (7 + start_day.weekday().num_days_from_monday() as i64
+                    - self.week_start.num_days_from_monday() as i64)
+                    % 7;
+                let week = start_day.checked_sub_signed(Duration::days(back))?;
+                (target.date() - week).num_days().div_euclid(7)
+            }
+            Frequency::Daily => (target.date() - self.start.date()).num_days(),
+            Frequency::Hourly | Frequency::Minutely | Frequency::Secondly => {
+                let (base, unit) = self.sub_daily_base();
+                (target - base).num_seconds().div_euclid(unit)
+            }
+        };
+        Some(units.div_euclid(self.interval.max(1)))
+    }
+
+    /// How many occurrences were yielded or skipped so far (exact while a
+    /// `COUNT` applies).
+    pub fn emitted(&self) -> u32 {
+        self.emitted
+    }
+
+    /// Jumps ahead so that iteration continues shortly before `target`
+    /// instead of walking every period from the start: whole periods that
+    /// end before `target` are skipped (one more period is kept as a
+    /// margin, so the next occurrence may still lie a little before
+    /// `target`). Occurrences after `target` are unaffected. Does nothing
+    /// for rules with a `COUNT` whose periods vary in size (the count
+    /// needs every occurrence before). Returns whether it skipped.
+    pub fn skip_before(&mut self, target: NaiveDateTime) -> bool {
+        if self.finished || (self.count.is_some() && !self.uniform) {
+            return false;
+        }
+        let Some(period) = self.period_of(target) else {
+            return false;
+        };
+        let k = period - 1;
+        if k <= self.period || k <= 0 {
+            return false;
+        }
+        if self.count.is_some() {
+            // One occurrence per period; the start is the one of period 0.
+            match u32::try_from(k) {
+                Ok(emitted) => self.emitted = emitted,
+                Err(_) => {
+                    self.finished = true;
+                    return true;
+                }
+            }
+        } else if self.last.is_none() {
+            self.emitted = 1;
+        }
+        // The start lies before the target: it is skipped too.
+        if self.last.is_none() {
+            self.last = Some(self.start);
+        }
+        self.period = k;
+        self.buffer.clear();
+        self.idle = 0;
+        true
     }
 
     fn day_matches(&self, day: NaiveDate) -> bool {
@@ -663,15 +774,7 @@ impl RuleIter {
                 self.period += 1;
             }
             Frequency::Hourly | Frequency::Minutely | Frequency::Secondly => {
-                let unit = match self.freq {
-                    Frequency::Hourly => 3600,
-                    Frequency::Minutely => 60,
-                    _ => 1,
-                };
-                let base = self.start.date().and_time(NaiveTime::MIN)
-                    + Duration::seconds(
-                        i64::from(self.start.num_seconds_from_midnight()) / unit * unit,
-                    );
+                let (base, unit) = self.sub_daily_base();
                 let at = base.checked_add_signed(Duration::seconds(step.checked_mul(unit)?))?;
                 if at.year() > 9999 {
                     return None;
@@ -783,7 +886,9 @@ impl Iterator for RuleIter {
 #[derive(Debug, Clone)]
 pub struct Occurrences {
     start: NaiveDateTime,
-    rules: Vec<std::iter::Peekable<RuleIter>>,
+    rules: Vec<RuleIter>,
+    /// The next occurrence of each rule (`None`: exhausted).
+    heads: Vec<Option<NaiveDateTime>>,
     dates: Vec<NaiveDateTime>,
     next_date: usize,
     exceptions: HashSet<NaiveDateTime>,
@@ -808,7 +913,7 @@ impl Occurrences {
                     RecurrenceEnd::Until { until } => UntilBound::new(until, start),
                     _ => None,
                 };
-                rules.push(RuleIter::new(rule, first, all_day, until).peekable());
+                rules.push(RuleIter::new(rule, first, all_day, until));
             }
             dates = recurrence
                 .dates
@@ -827,9 +932,11 @@ impl Occurrences {
                 }
             }
         }
+        let heads = rules.iter_mut().map(Iterator::next).collect();
         Some(Self {
             start: first,
             rules,
+            heads,
             dates,
             next_date: 0,
             exceptions,
@@ -837,6 +944,26 @@ impl Occurrences {
             started: false,
             last: None,
         })
+    }
+
+    /// Jumps ahead to shortly before `target` (see
+    /// [`RuleIter::skip_before`]): the following occurrences are the same
+    /// as without the skip from `target` on, but earlier ones may be left
+    /// out. Cheap for any distance.
+    pub fn skip_before(&mut self, target: NaiveDateTime) {
+        if target <= self.start {
+            return;
+        }
+        // The start lies before the target: skipped as well.
+        self.started = true;
+        for (rule, head) in self.rules.iter_mut().zip(self.heads.iter_mut()) {
+            if head.is_some_and(|h| h < target) && rule.skip_before(target) {
+                *head = rule.next();
+            }
+        }
+        while self.dates.get(self.next_date).is_some_and(|&d| d < target) {
+            self.next_date += 1;
+        }
     }
 
     /// Whether an occurrence (in the start's frame) was excluded.
@@ -853,11 +980,7 @@ impl Occurrences {
                 return Some(self.start);
             }
         }
-        let rule_min = self
-            .rules
-            .iter_mut()
-            .filter_map(|r| r.peek().copied())
-            .min();
+        let rule_min = self.heads.iter().flatten().min().copied();
         let date = self.dates.get(self.next_date).copied();
         let next = match (rule_min, date) {
             (Some(r), Some(d)) => r.min(d),
@@ -865,9 +988,9 @@ impl Occurrences {
             (None, Some(d)) => d,
             (None, None) => return None,
         };
-        for rule in &mut self.rules {
-            while rule.peek().is_some_and(|&r| r <= next) {
-                rule.next();
+        for (rule, head) in self.rules.iter_mut().zip(self.heads.iter_mut()) {
+            while head.is_some_and(|r| r <= next) {
+                *head = rule.next();
             }
         }
         while self.dates.get(self.next_date).is_some_and(|&d| d <= next) {
@@ -1517,5 +1640,118 @@ mod tests {
     fn year_limit_stops_iteration() {
         let all = expand("FREQ=YEARLY", "9997-06-01T00:00:00", 10);
         assert_eq!(all.len(), 3);
+    }
+
+    /// Skipping ahead yields exactly the occurrences a full walk yields
+    /// from the target on, for every frequency, with and without COUNT.
+    #[test]
+    fn skip_before_matches_a_full_walk() {
+        let rules = [
+            "FREQ=DAILY",
+            "FREQ=DAILY;INTERVAL=3",
+            "FREQ=DAILY;COUNT=500",
+            "FREQ=DAILY;INTERVAL=2;COUNT=100",
+            "FREQ=DAILY;BYDAY=MO,WE",
+            "FREQ=WEEKLY",
+            "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH",
+            "FREQ=WEEKLY;INTERVAL=3;COUNT=50",
+            "FREQ=WEEKLY;WKST=SU;BYDAY=SU,SA",
+            "FREQ=MONTHLY;BYDAY=-1FR",
+            "FREQ=MONTHLY;BYMONTHDAY=31",
+            "FREQ=MONTHLY;INTERVAL=5;BYSETPOS=2;BYDAY=MO,TU",
+            "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29",
+            "FREQ=YEARLY;INTERVAL=2",
+            "FREQ=HOURLY;INTERVAL=7",
+            "FREQ=HOURLY;COUNT=3000",
+            "FREQ=HOURLY;BYHOUR=9,17",
+            "FREQ=MINUTELY;INTERVAL=13",
+            "FREQ=MINUTELY;INTERVAL=90;COUNT=900",
+            "FREQ=SECONDLY;INTERVAL=1000",
+        ];
+        let start = PimTime::floating("2020-02-29T09:30:15");
+        for text in rules {
+            let r = parse_rrule(text, &start).unwrap();
+            for target in [
+                "2020-02-29T09:30:15",
+                "2020-03-01T00:00:00",
+                "2020-03-11T13:05:00",
+                "2020-06-30T23:59:59",
+                "2021-01-01T00:00:00",
+                "2024-02-29T09:30:15",
+            ] {
+                let target = at(target);
+                let full: Vec<NaiveDateTime> =
+                    RuleIter::new(&r, at("2020-02-29T09:30:15"), false, None)
+                        .take(20_000)
+                        .filter(|o| *o >= target)
+                        .take(40)
+                        .collect();
+                let mut skipped = RuleIter::new(&r, at("2020-02-29T09:30:15"), false, None);
+                skipped.skip_before(target);
+                let skipped: Vec<NaiveDateTime> = skipped
+                    .filter(|o| *o >= target)
+                    .take(full.len().max(1))
+                    .collect();
+                if full.len() < 40 && !full.is_empty() {
+                    // The walk above was cut by `take(20_000)`: compare its part.
+                    assert_eq!(skipped[..full.len()], full[..], "{text} from {target}");
+                } else {
+                    assert_eq!(skipped, full, "{text} from {target}");
+                }
+            }
+        }
+    }
+
+    /// A COUNT stays exact across a skip (the series still ends where it
+    /// ended), and a series in the 1970s is cheap to reach in 2026.
+    #[test]
+    fn skip_keeps_counts_and_reaches_far_targets() {
+        let start = PimTime::floating("2026-10-01T09:00:00");
+        let r = parse_rrule("FREQ=DAILY;COUNT=10", &start).unwrap();
+        let mut iter = RuleIter::new(&r, at("2026-10-01T09:00:00"), false, None);
+        assert!(iter.skip_before(at("2026-10-08T00:00:00")));
+        let rest: Vec<String> = iter.map(|t| t.format("%m-%d").to_string()).collect();
+        // One period before the target is kept as a margin.
+        assert_eq!(rest, ["10-07", "10-08", "10-09", "10-10"]);
+
+        let old = PimTime::floating("1970-01-01T00:00:00");
+        let hourly = parse_rrule("FREQ=HOURLY", &old).unwrap();
+        let mut set = Occurrences::new(&old, Some(&Recurrence::rule(hourly))).unwrap();
+        let begun = std::time::Instant::now();
+        set.skip_before(at("2026-10-01T00:00:00"));
+        let next = set.find(|t| *t >= at("2026-10-01T00:00:00")).unwrap();
+        assert_eq!(next, at("2026-10-01T00:00:00"));
+        assert!(begun.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    /// MINUTELY / SECONDLY rules end after MAX_SUB_HOURLY_OCCURRENCES
+    /// whatever their COUNT or UNTIL say; smaller counts stay.
+    #[test]
+    fn sub_hourly_rules_are_capped() {
+        let start = PimTime::floating("2026-10-01T00:00:00");
+        for text in [
+            "FREQ=SECONDLY",
+            "FREQ=MINUTELY;COUNT=4000000000",
+            "FREQ=SECONDLY;UNTIL=20991231T000000",
+        ] {
+            let r = parse_rrule(text, &start).unwrap();
+            let until = match &r.end {
+                RecurrenceEnd::Until { until } => UntilBound::new(until, &start),
+                _ => None,
+            };
+            let n = RuleIter::new(&r, at("2026-10-01T00:00:00"), false, until).count();
+            assert_eq!(n, MAX_SUB_HOURLY_OCCURRENCES as usize, "{text}");
+        }
+        let small = parse_rrule("FREQ=MINUTELY;COUNT=6", &start).unwrap();
+        assert_eq!(
+            RuleIter::new(&small, at("2026-10-01T00:00:00"), false, None).count(),
+            6
+        );
+        // HOURLY is not capped.
+        let hourly = parse_rrule("FREQ=HOURLY;COUNT=5000", &start).unwrap();
+        assert_eq!(
+            RuleIter::new(&hourly, at("2026-10-01T00:00:00"), false, None).count(),
+            5000
+        );
     }
 }

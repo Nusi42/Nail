@@ -9,19 +9,26 @@
 //! and as a notification) but without sound. Dismissing writes the
 //! alarm's `ACKNOWLEDGED` (RFC 9074) into the item through the PIM queue,
 //! so other devices stop showing it; snoozing stays on this device.
+//!
+//! Floods are bounded (ADR 0064): series repeating every minute or second
+//! get no reminders, each item keeps a few late and the next upcoming
+//! reminders ([`nail_triage::reminders::limit_plan`]), a planning pass
+//! shares one expansion budget, and more than a few reminders due at once
+//! become one summary notification.
 
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use nail_api::pim::calendar::{AlarmTrigger, EventStatus};
+use nail_api::pim::calendar::{AlarmTrigger, EventStatus, Frequency};
 use nail_api::pim::{Alarm, CalendarEvent, PimItemRef, ReminderState, Task};
 use nail_api::{ApiError, Event, EventId, LocalizedMessage, ReminderId, Request, Response, TaskId};
 use nail_store::Store;
 use nail_store::pim::{PlannedReminder, ReminderItemKind, ReminderRecord};
 use nail_triage::Clock;
 use nail_triage::reminders::{
-    FiredReminder, Occurrence, PlannedAlarm, ReminderEntry, ReminderError, ReminderItem,
-    ReminderOp, ReminderPolicy, ReminderScheduler, ReminderStore, plan_alarms,
+    FiredReminder, MAX_SINGLE_NOTIFICATIONS, Occurrence, PlannedAlarm, ReminderEntry,
+    ReminderError, ReminderItem, ReminderOp, ReminderPolicy, ReminderScheduler, ReminderStore,
+    limit_plan, plan_alarms,
 };
 
 use super::{local_zone, local_zone_name, parse_instant};
@@ -130,13 +137,28 @@ fn reach(alarms: &[Alarm]) -> i64 {
         + 86_400
 }
 
-/// The reminders of an event's occurrences in `[from, until)`.
+/// Whether a series repeats more often than hourly (its alarms are not
+/// planned: they would fire every few minutes or seconds).
+fn repeats_sub_hourly(event: &CalendarEvent) -> bool {
+    event.recurrence.as_ref().is_some_and(|r| {
+        r.rules
+            .iter()
+            .any(|rule| matches!(rule.freq, Frequency::Minutely | Frequency::Secondly))
+    }) && !event.fields.start.is_date()
+}
+
+/// The reminders of an event's occurrences in `[from, until)`; the
+/// expansion draws on `budget` (shared by a planning pass).
 pub(crate) fn plan_event(
     event: &CalendarEvent,
     local: Tz,
     from: i64,
     until: i64,
+    budget: &nail_ical::expand::ScanBudget,
 ) -> Vec<PlannedAlarm> {
+    if repeats_sub_hourly(event) {
+        return Vec::new();
+    }
     let alarms: Vec<Alarm> = event
         .fields
         .alarms
@@ -154,6 +176,7 @@ pub(crate) fn plan_event(
         viewer: local,
         limit: 10_000,
         this_and_future: &[],
+        budget: Some(budget),
     };
     let occurrences: Vec<Occurrence> = nail_ical::expand::instances(event, &options)
         .into_iter()
@@ -272,9 +295,10 @@ impl Service {
                 let (key, plan) = match &item {
                     PimItemRef::Event { event_id } => {
                         let plan = match store.event(event_id)? {
-                            Some(e) if reminders_on(store, &e.calendar_id) => {
-                                plan_event(&e, local, from, until)
-                            }
+                            Some(e) if reminders_on(store, &e.calendar_id) => limit_plan(
+                                plan_event(&e, local, from, until, &Default::default()),
+                                now,
+                            ),
                             Some(_) => Vec::new(),
                             None => {
                                 s.forget_item_reminders(&item);
@@ -286,7 +310,7 @@ impl Service {
                     PimItemRef::Task { task_id } => {
                         let plan = match store.task(task_id)? {
                             Some(t) if reminders_on(store, &t.calendar_id) => {
-                                plan_task(&t, local, from, until)
+                                limit_plan(plan_task(&t, local, from, until), now)
                             }
                             Some(_) => Vec::new(),
                             None => {
@@ -342,10 +366,12 @@ impl Service {
                     .map(|r| (r.item_kind == ReminderItemKind::Event, r.item_id))
                     .collect();
                 let mut plans: Vec<(ReminderItem, Vec<PlannedAlarm>)> = Vec::new();
+                // One expansion budget for the whole pass.
+                let budget = nail_ical::expand::ScanBudget::default();
                 for event in store.events(None)? {
                     let had = known.remove(&(true, event.id.0.clone()));
                     let plan = if on(&event.calendar_id) {
-                        plan_event(&event, local, from, until)
+                        limit_plan(plan_event(&event, local, from, until, &budget), now)
                     } else {
                         Vec::new()
                     };
@@ -361,7 +387,7 @@ impl Service {
                 for task in store.list_tasks(Some(&lists), true)? {
                     let had = known.remove(&(false, task.id.0.clone()));
                     let plan = if on(&task.calendar_id) {
-                        plan_task(&task, local, from, until)
+                        limit_plan(plan_task(&task, local, from, until), now)
                     } else {
                         Vec::new()
                     };
@@ -410,15 +436,37 @@ impl Service {
             let now = self.inner.clock.now().with_timezone(&chrono::Local);
             nail_triage::notify::in_quiet_hours(q, &now)
         });
+        let notify_ids: std::collections::HashSet<&ReminderId> = fired
+            .iter()
+            .filter(|f| f.notify)
+            .map(|f| &f.entry.id)
+            .collect();
+        let to_notify: Vec<&nail_api::pim::Reminder> = views
+            .iter()
+            .filter(|r| notify_ids.contains(&r.id))
+            .collect();
+        // Many at once (after a restart, a flood of alarms): one summary.
+        let summarize = to_notify.len() > MAX_SINGLE_NOTIFICATIONS;
+        if summarize
+            && settings.enabled
+            && let Some(first) = to_notify
+                .iter()
+                .min_by(|a, b| (&a.fire_at, &a.id).cmp(&(&b.fire_at, &b.id)))
+        {
+            let notification = nail_triage::reminders::reminders_summary_notification(
+                first,
+                to_notify.len(),
+                settings.sound && !quiet,
+            );
+            tracing::info!(id = %notification.id, count = to_notify.len(), "reminder summary notification");
+            self.broadcast(Event::NotificationRequested { notification });
+        }
         for reminder in &views {
             self.broadcast(Event::ReminderDue {
                 reminder: Box::new(reminder.clone()),
             });
-            let notify = fired
-                .iter()
-                .find(|f| f.entry.id == reminder.id)
-                .is_some_and(|f| f.notify);
-            if notify && settings.enabled {
+            let notify = notify_ids.contains(&reminder.id);
+            if notify && settings.enabled && !summarize {
                 let when = reminder
                     .starts_at
                     .as_deref()
@@ -565,9 +613,7 @@ mod tests {
             calendar_id: "c".into(),
             uid: "u".into(),
             fields,
-            recurrence: Some(Recurrence::rule(RecurrenceRule::new(
-                nail_api::pim::calendar::Frequency::Daily,
-            ))),
+            recurrence: Some(Recurrence::rule(RecurrenceRule::new(Frequency::Daily))),
             overrides: Vec::new(),
             sequence: 0,
             created_at: None,
@@ -580,6 +626,7 @@ mod tests {
             Tz::Europe__Berlin,
             at("2026-10-24T00:00:00Z"),
             at("2026-10-27T00:00:00Z"),
+            &Default::default(),
         );
         let fires: Vec<String> = plan
             .iter()
@@ -624,5 +671,42 @@ mod tests {
         assert_eq!(plan[0].fire_at, at("2026-10-05T11:30:00Z"));
         task.fields.status = nail_api::pim::TaskStatus::Completed;
         assert!(plan_task(&task, Tz::UTC, window.0, window.1).is_empty());
+    }
+
+    /// Series repeating every minute or second plan no reminders at all;
+    /// hourly ones still do.
+    #[test]
+    fn sub_hourly_series_get_no_reminders() {
+        let mut fields = EventFields::new(
+            "Spam",
+            PimTime::utc("2026-10-05T09:00:00"),
+            PimTime::utc("2026-10-05T09:00:01"),
+        );
+        fields.alarms.push(Alarm::minutes_before(0));
+        let mut event = CalendarEvent {
+            id: "e".into(),
+            calendar_id: "c".into(),
+            uid: "u".into(),
+            fields,
+            recurrence: Some(Recurrence::rule(RecurrenceRule::new(Frequency::Secondly))),
+            overrides: Vec::new(),
+            sequence: 0,
+            created_at: None,
+            updated_at: None,
+            read_only: false,
+            sync: PimItemSync::Synced,
+        };
+        let window = (at("2026-10-05T00:00:00Z"), at("2026-10-06T00:00:00Z"));
+        let budget = nail_ical::expand::ScanBudget::default();
+        assert!(plan_event(&event, Tz::UTC, window.0, window.1, &budget).is_empty());
+        event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(Frequency::Minutely)));
+        assert!(plan_event(&event, Tz::UTC, window.0, window.1, &budget).is_empty());
+        event.recurrence = Some(Recurrence::rule(RecurrenceRule::new(Frequency::Hourly)));
+        let plan = plan_event(&event, Tz::UTC, window.0, window.1, &budget);
+        assert_eq!(plan.len(), 15);
+        // The per-item cap keeps a few late and the next ones.
+        let now = at("2026-10-05T20:30:00Z");
+        let limited = limit_plan(plan, now);
+        assert_eq!(limited.len(), 3 + 3);
     }
 }

@@ -136,6 +136,14 @@ pub fn is_allowed_url(url: &Url) -> bool {
     }
 }
 
+/// Whether two URLs share scheme, host and port (the origin the login
+/// belongs to).
+pub fn same_origin(a: &Url, b: &Url) -> bool {
+    a.scheme().eq_ignore_ascii_case(b.scheme())
+        && a.host_str().map(str::to_ascii_lowercase) == b.host_str().map(str::to_ascii_lowercase)
+        && a.port_or_known_default() == b.port_or_known_default()
+}
+
 /// Parses and checks a server URL ([`is_allowed_url`]).
 pub fn parse_server_url(text: &str) -> Result<Url, DavError> {
     let url = Url::parse(text.trim()).map_err(|e| DavError::InsecureUrl(format!("{text}: {e}")))?;
@@ -261,9 +269,24 @@ impl DavClient {
             if !is_allowed_url(&current) {
                 return Err(DavError::InsecureUrl(current.to_string()));
             }
+            // The login goes only to the origin of the requested URL, never
+            // to another server a redirect names (like curl and browsers).
+            let authorize = same_origin(&current, url);
             let reply = self
-                .send_once(&method, &current, depth, headers, body.as_ref(), refreshed)
+                .send_once(
+                    &method,
+                    &current,
+                    depth,
+                    headers,
+                    body.as_ref(),
+                    authorize.then_some(refreshed),
+                )
                 .await?;
+            if reply.status == 401 && !authorize && !matches!(self.auth, DavAuth::None) {
+                return Err(DavError::RedirectNeedsLogin(
+                    current.host_str().unwrap_or_default().to_owned(),
+                ));
+            }
             if reply.status == 401 && !refreshed && matches!(self.auth, DavAuth::OAuth2 { .. }) {
                 refreshed = true;
                 continue;
@@ -297,14 +320,19 @@ impl DavClient {
         depth: Option<Depth>,
         headers: &[(HeaderName, String)],
         body: Option<&(&str, Vec<u8>)>,
-        force_refresh: bool,
+        // `Some(force_refresh)`: send the login (with a fresh token).
+        login: Option<bool>,
     ) -> Result<Reply, DavError> {
         let (target, host) = self.target(url);
         let mut request = self.http.request(method.clone(), target);
         if let Some(host) = host {
             request = request.header(reqwest::header::HOST, host);
         }
-        if let Some(authorization) = self.authorization(force_refresh).await? {
+        let authorization = match login {
+            Some(force_refresh) => self.authorization(force_refresh).await?,
+            None => None,
+        };
+        if let Some(authorization) = authorization {
             let mut value = HeaderValue::from_str(&authorization)
                 .map_err(|_| DavError::Protocol("credentials are not valid header text".into()))?;
             value.set_sensitive(true);

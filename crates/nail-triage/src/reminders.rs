@@ -65,6 +65,8 @@ pub const FLUENT_IDS: &[&str] = &[
     "notification-reminder-title",
     "notification-reminder-body",
     "notification-reminder-body-location",
+    "notification-reminders-title",
+    "notification-reminders-body",
     "reminder-error-not-in-future",
     "reminder-error-too-far",
     "reminder-error-store",
@@ -72,6 +74,18 @@ pub const FLUENT_IDS: &[&str] = &[
 
 /// Longest snooze accepted (about a year).
 pub const MAX_REMINDER_SNOOZE_SECS: i64 = 366 * 86_400;
+
+/// Most past (catch-up) reminders one item keeps in a plan
+/// ([`limit_plan`]).
+pub const MAX_LATE_PER_ITEM: usize = 3;
+
+/// Most upcoming reminders one item keeps in a plan ([`limit_plan`]); the
+/// core plans again hourly, so later ones follow.
+pub const MAX_AHEAD_PER_ITEM: usize = 20;
+
+/// More notification-worthy reminders than this in one poll become one
+/// summary notification ([`reminders_summary_notification`]).
+pub const MAX_SINGLE_NOTIFICATIONS: usize = 3;
 
 /// What a reminder belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -274,6 +288,24 @@ pub fn plan_alarms<Tz: TimeZone>(
         )
     });
     out
+}
+
+/// Caps one item's plan (sorted by fire time, as [`plan_alarms`] returns
+/// it): the latest [`MAX_LATE_PER_ITEM`] reminders before `now` and the
+/// next [`MAX_AHEAD_PER_ITEM`] from `now` on. A hostile or careless series
+/// (an alarm on every minute, `REPEAT` every second) then cannot flood the
+/// store or the notifications.
+pub fn limit_plan(plan: Vec<PlannedAlarm>, now: i64) -> Vec<PlannedAlarm> {
+    let split = plan.partition_point(|p| p.fire_at < now);
+    let late_from = split.saturating_sub(MAX_LATE_PER_ITEM);
+    let ahead_until = split.saturating_add(MAX_AHEAD_PER_ITEM).min(plan.len());
+    if late_from == 0 && ahead_until == plan.len() {
+        return plan;
+    }
+    plan.into_iter()
+        .skip(late_from)
+        .take(ahead_until - late_from)
+        .collect()
 }
 
 /// A reminder as the scheduler keeps it.
@@ -648,6 +680,33 @@ pub fn reminder_notification(reminder: &Reminder, when: &str, sound: bool) -> Ma
         title: LocalizedMessage::new("notification-reminder-title")
             .arg("title", reminder.title.as_str()),
         body: Some(body),
+        sound,
+    }
+}
+
+/// One notification for many reminders that came due together (more than
+/// [`MAX_SINGLE_NOTIFICATIONS`] in one poll, e.g. after a restart):
+/// `reminders:<first id>`, tag `reminders` (texts
+/// `notification-reminders-*`). `first` is the earliest one.
+pub fn reminders_summary_notification(
+    first: &Reminder,
+    count: usize,
+    sound: bool,
+) -> MailNotification {
+    let count = i64::try_from(count).unwrap_or(i64::MAX);
+    MailNotification {
+        tag: "reminders".to_owned(),
+        id: format!("reminders:{}", first.id),
+        kind: NOTIFICATION_KIND,
+        account_id: None,
+        folder_id: None,
+        message_ids: Vec::new(),
+        title: LocalizedMessage::new("notification-reminders-title").arg("count", count),
+        body: Some(
+            LocalizedMessage::new("notification-reminders-body")
+                .arg("title", first.title.as_str())
+                .arg("more", count.saturating_sub(1)),
+        ),
         sound,
     }
 }
@@ -1272,5 +1331,61 @@ mod tests {
             serde_json::to_value(NOTIFICATION_KIND).unwrap(),
             serde_json::json!("reminder")
         );
+    }
+
+    /// A flood of reminders for one item (an alarm on every minute, or a
+    /// REPEAT every second) is cut to a few late ones and the next ones.
+    #[test]
+    fn plans_are_limited_per_item() {
+        let now = at("2026-10-05T12:00:00Z");
+        let plan: Vec<PlannedAlarm> = (-7_200..7_200)
+            .map(|i| PlannedAlarm {
+                fire_at: now + i,
+                recurrence_id: None,
+                alarm_key: format!("k{i}"),
+            })
+            .collect();
+        let limited = limit_plan(plan, now);
+        assert_eq!(limited.len(), MAX_LATE_PER_ITEM + MAX_AHEAD_PER_ITEM);
+        assert_eq!(limited[0].fire_at, now - 3);
+        assert_eq!(limited[MAX_LATE_PER_ITEM].fire_at, now);
+        assert_eq!(limited.last().unwrap().fire_at, now + 19);
+        // Small plans stay as they are.
+        let small = vec![PlannedAlarm {
+            fire_at: now - 10,
+            recurrence_id: None,
+            alarm_key: "0".into(),
+        }];
+        assert_eq!(limit_plan(small.clone(), now), small);
+        assert!(limit_plan(Vec::new(), now).is_empty());
+    }
+
+    #[test]
+    fn summary_notification() {
+        let reminder = Reminder {
+            id: "r1".into(),
+            target: nail_api::pim::ReminderTarget::Task {
+                task_id: "t".into(),
+            },
+            calendar_id: "c".into(),
+            title: "Pay the bill".into(),
+            location: None,
+            description: None,
+            starts_at: None,
+            all_day: false,
+            fire_at: "2026-10-05T09:00:00Z".into(),
+            state: ReminderState::Fired,
+            snoozed_until: None,
+        };
+        let n = reminders_summary_notification(&reminder, 7, false);
+        assert_eq!(n.id, "reminders:r1");
+        assert_eq!(n.tag, "reminders");
+        assert_eq!(n.kind, NotificationKind::Reminder);
+        assert_eq!(n.title.id, "notification-reminders-title");
+        assert!(!n.sound);
+        let body = serde_json::to_value(n.body.unwrap()).unwrap();
+        assert_eq!(body["id"], "notification-reminders-body");
+        assert_eq!(body["args"]["more"], 6);
+        assert_eq!(body["args"]["title"], "Pay the bill");
     }
 }

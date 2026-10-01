@@ -190,6 +190,7 @@ pub async fn discover(
                 tracing::debug!(%candidate, error = %e, "DAV discovery candidate failed");
                 // Keep the most telling error: TLS beats network beats the rest.
                 let rank = |e: &DavError| match e {
+                    DavError::RedirectNeedsLogin(_) => 4,
                     DavError::Tls(_) => 3,
                     DavError::Network(_) | DavError::Timeout => 2,
                     DavError::RateLimited(_) => 1,
@@ -204,6 +205,7 @@ pub async fn discover(
     match last {
         Some(
             e @ (DavError::Tls(_)
+            | DavError::RedirectNeedsLogin(_)
             | DavError::Network(_)
             | DavError::Timeout
             | DavError::RateLimited(_)),

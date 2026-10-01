@@ -470,3 +470,390 @@ async fn reminders_fire_at_the_clock_time() {
     assert!(event.fields.alarms[0].acknowledged.is_some());
     service.shutdown().await;
 }
+
+/// Hostile or careless calendars cannot flood reminders (ADR 0064): a
+/// series repeating every second plans none, an alarm repeating every
+/// minute keeps a bounded plan, and many reminders due at once become one
+/// summary notification.
+#[tokio::test(flavor = "multi_thread")]
+async fn reminder_floods_are_bounded() {
+    let f = start("", &[]).await;
+    let service = &f.service;
+    let start_at = chrono::DateTime::parse_from_rfc3339("2026-10-05T09:00:00Z")
+        .unwrap()
+        .timestamp();
+    f.clock.set(start_at - 3600);
+    let Response::Calendars { calendars } =
+        ok(service, Request::ListCalendars { source_id: None }).await
+    else {
+        panic!()
+    };
+    let calendar = calendars
+        .iter()
+        .find(|c| c.has_events())
+        .unwrap()
+        .id
+        .clone();
+    let create = |title: &str, rule: Option<&str>, alarm: Alarm| {
+        let mut fields = EventFields::new(
+            title,
+            PimTime::utc("2026-10-05T09:00:00"),
+            PimTime::utc("2026-10-05T09:30:00"),
+        );
+        fields.alarms.push(alarm);
+        let recurrence = rule.map(|r| {
+            nail_api::pim::Recurrence::rule(
+                nail_ical::recur::parse_rrule(r, &PimTime::utc("2026-10-05T09:00:00")).unwrap(),
+            )
+        });
+        Request::CreateEvent {
+            calendar_id: calendar.clone(),
+            fields: Box::new(fields),
+            recurrence,
+        }
+    };
+    ok(
+        service,
+        create(
+            "Every second",
+            Some("FREQ=SECONDLY"),
+            Alarm::minutes_before(15),
+        ),
+    )
+    .await;
+    let mut repeating = Alarm::minutes_before(15);
+    repeating.repeat = Some(nail_api::pim::calendar::AlarmRepeat {
+        count: 100,
+        interval_secs: 60,
+    });
+    ok(service, create("Nagging", None, repeating)).await;
+    // Only the next MAX_AHEAD_PER_ITEM of the nagging alarm are planned,
+    // none of the series repeating every second.
+    let planned = eventually("the planned reminders", || async {
+        let records = service.store().reminder_records(&[]).unwrap();
+        (!records.is_empty()).then_some(records)
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let planned_again = service.store().reminder_records(&[]).unwrap();
+    assert_eq!(planned.len(), planned_again.len());
+    assert_eq!(planned.len(), nail_triage::reminders::MAX_AHEAD_PER_ITEM);
+    let items: std::collections::HashSet<&str> =
+        planned.iter().map(|r| r.item_id.as_str()).collect();
+    assert_eq!(items.len(), 1);
+    for i in 0..5 {
+        ok(
+            service,
+            create(&format!("Meeting {i}"), None, Alarm::minutes_before(15)),
+        )
+        .await;
+    }
+    let mut events = service.subscribe();
+    // At 08:45 six reminders are due at once: one summary notification.
+    f.clock.set(start_at - 15 * 60);
+    let mut due = 0;
+    let mut notifications = Vec::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    while (due < 6 || notifications.is_empty()) && tokio::time::Instant::now() < deadline {
+        match tokio::time::timeout(Duration::from_secs(1), events.recv()).await {
+            Ok(Ok(Event::ReminderDue { .. })) => due += 1,
+            Ok(Ok(Event::NotificationRequested { notification }))
+                if notification.kind == NotificationKind::Reminder =>
+            {
+                notifications.push(notification);
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(due, 6);
+    // Late arrivals would show up here.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    while let Ok(event) = events.try_recv() {
+        if let Event::NotificationRequested { notification } = event {
+            notifications.push(notification);
+        }
+    }
+    assert_eq!(notifications.len(), 1, "{notifications:?}");
+    assert_eq!(notifications[0].tag, "reminders");
+    assert_eq!(notifications[0].title.id, "notification-reminders-title");
+    service.shutdown().await;
+}
+
+const FEED_WITH_ALARM: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Town//EN\r\nX-WR-CALNAME:Town\r\n\
+BEGIN:VEVENT\r\nUID:m1@town\r\nDTSTAMP:20261001T000000Z\r\nDTSTART:20261007T180000Z\r\n\
+DTEND:20261007T190000Z\r\nSUMMARY:Council meeting\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\n\
+DESCRIPTION:Reminder\r\nTRIGGER:-PT30M\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+/// Changing a subscription in accounts.kdl takes effect on the next
+/// fetch: `alarms` switches the calendar's reminders and refetches the
+/// feed without the stored ETag (a `304` would keep the items without
+/// their alarms), a new name renames the calendar; unchanged
+/// subscriptions keep fetching conditionally.
+#[tokio::test(flavor = "multi_thread")]
+async fn changed_subscriptions_take_effect() {
+    use nail_proxy::testing::{Reply, Upstream};
+    let upstream = Upstream::start().await.unwrap();
+    upstream.route(
+        "/town.ics",
+        Reply::ok("text/calendar", FEED_WITH_ALARM).header("ETag", "\"v1\""),
+    );
+    let url = format!("http://{}/town.ics", upstream.addr());
+    let kdl = format!("calendar-subscription \"town\" url=\"{url}\"\n");
+    let f = start(&kdl, &[]).await;
+    let service = &f.service;
+    let calendar = eventually("the feed's calendar", || async {
+        calendars(service, "town").await.into_iter().next()
+    })
+    .await;
+    let list = eventually("the feed's events", || async {
+        let list = instances(service, &calendar.id).await;
+        (!list.is_empty()).then_some(list)
+    })
+    .await;
+    assert!(!calendar.settings.reminders);
+    assert!(!list[0].has_alarms, "alarms are off for subscriptions");
+    let first_requests = upstream.requests().len();
+    assert_eq!(first_requests, 1);
+
+    let config = nail_api::pim::PimSourceConfig {
+        id: "town".into(),
+        name: Some("Council".into()),
+        enabled: true,
+        settings: nail_api::pim::source::PimSourceSettings::Ics {
+            url: url.clone(),
+            color: None,
+            alarms: true,
+            refresh_minutes: None,
+            auth: None,
+        },
+    };
+    ok(
+        service,
+        Request::UpdatePimSource {
+            config: Box::new(config),
+            secret: None,
+        },
+    )
+    .await;
+    let calendar = eventually("the changed calendar", || async {
+        calendars(service, "town")
+            .await
+            .into_iter()
+            .next()
+            .filter(|c| c.settings.reminders && c.settings.name == "Council")
+    })
+    .await;
+    let list = eventually("the feed's alarms", || async {
+        let list = instances(service, &calendar.id).await;
+        list.first().is_some_and(|i| i.has_alarms).then_some(list)
+    })
+    .await;
+    assert_eq!(list[0].title, "Council meeting");
+    let requests = upstream.requests();
+    assert!(requests.len() > first_requests);
+    assert_eq!(
+        requests[first_requests].header("if-none-match"),
+        None,
+        "the changed subscription is fetched in full"
+    );
+    // Unchanged: conditional again.
+    ok(service, Request::SyncPimSources { source_id: None }).await;
+    let requests = eventually("a conditional fetch", || async {
+        let requests = upstream.requests();
+        (requests.len() > first_requests + 1).then_some(requests)
+    })
+    .await;
+    assert_eq!(
+        requests.last().unwrap().header("if-none-match"),
+        Some("\"v1\"")
+    );
+    service.shutdown().await;
+}
+
+/// A subscription to a service on this computer is refused outside tests
+/// and seeded demos (a `webcal://localhost` link must not make Nail poll
+/// local services).
+#[tokio::test(flavor = "multi_thread")]
+async fn loopback_subscriptions_are_refused_in_real_runs() {
+    let http = MockHttpServer::start().await.unwrap();
+    http.get(
+        None,
+        "/holidays.ics",
+        MockResponse {
+            status: 200,
+            content_type: "text/calendar".into(),
+            body: FEED.as_bytes().to_vec(),
+            headers: Vec::new(),
+            delay: None,
+        },
+    );
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    std::fs::write(
+        config.path().join("accounts.kdl"),
+        format!(
+            "calendar-subscription \"town\" url=\"webcal://localhost:{}/holidays.ics\"\n",
+            http.addr().port()
+        ),
+    )
+    .unwrap();
+    let mut options =
+        nail_core::demo::demo_options(ServiceOptions::new(data.path(), config.path()));
+    options.watch_config = false;
+    options.timing = EngineTiming::fast();
+    // As in a real (not seeded) run.
+    options.loopback_feeds = false;
+    let service = Service::open(options).unwrap();
+    let source = eventually("the refused subscription", || async {
+        let Response::PimSources { sources } = ok(&service, Request::ListPimSources).await else {
+            panic!()
+        };
+        sources
+            .into_iter()
+            .find(|s| s.id.as_str() == "town" && s.error.is_some())
+    })
+    .await;
+    assert_eq!(source.error, Some(ErrorCode::Forbidden));
+    assert!(http.requests().is_empty());
+    service.shutdown().await;
+}
+
+/// WP75's conflict rule end to end: a local edit of an event another
+/// client changed meanwhile meets `412` on replay; the server's version
+/// wins and is shown, the local one is kept as a conflict copy; resolving
+/// with `keep: local` writes it back to the server, `keep: server` drops
+/// it.
+#[tokio::test(flavor = "multi_thread")]
+async fn conflicts_keep_the_server_version_and_resolve_both_ways() {
+    let dav = MockDavServer::start(MockDavConfig::default())
+        .await
+        .unwrap();
+    let path = dav.calendar_path("personal");
+    dav.put_object(&path, "server-1.ics", SERVER_EVENT).unwrap();
+    let kdl = format!(
+        "caldav \"dav\" url=\"{}/\" {{\n    auth \"password\" username=\"ada\"\n}}\n",
+        dav.base_url()
+    );
+    let f = start(&kdl, &[("keychain:nail/pim/dav/password", "secret")]).await;
+    let service = &f.service;
+    let personal = eventually("the personal calendar", || async {
+        calendars(service, "dav")
+            .await
+            .into_iter()
+            .find(|c| c.settings.name == "Personal")
+    })
+    .await;
+    let event_id = eventually("the server's event", || async {
+        instances(service, &personal.id)
+            .await
+            .into_iter()
+            .find(|i| i.title == "From another client")
+            .map(|i| i.event_id)
+    })
+    .await;
+    let get = |id: nail_api::EventId| async move {
+        let Response::PimEvent { event } = ok(service, Request::GetEvent { event_id: id }).await
+        else {
+            panic!()
+        };
+        event
+    };
+    let edit = |title: &'static str, event: Box<nail_api::pim::CalendarEvent>| async move {
+        let mut fields = event.fields.clone();
+        fields.title = title.into();
+        ok(
+            service,
+            Request::UpdateEvent {
+                event_id: event.id.clone(),
+                scope: nail_api::pim::EditScope::All,
+                recurrence_id: None,
+                fields: Box::new(fields),
+                recurrence: None,
+            },
+        )
+        .await;
+    };
+
+    // Another client changes it (no sync yet), then we edit our copy.
+    dav.put_object(
+        &path,
+        "server-1.ics",
+        &SERVER_EVENT.replace("From another client", "Changed elsewhere"),
+    )
+    .unwrap();
+    edit("Our edit", get(event_id.clone()).await).await;
+    let conflicted = eventually("the conflict", || async {
+        let event = get(event_id.clone()).await;
+        (event.sync == nail_api::pim::PimItemSync::Conflict).then_some(event)
+    })
+    .await;
+    assert_eq!(conflicted.fields.title, "Changed elsewhere");
+    let object = service
+        .store()
+        .pim_object(&nail_api::pim::PimItemRef::Event {
+            event_id: event_id.clone(),
+        })
+        .unwrap()
+        .unwrap();
+    assert!(object.conflict_raw.unwrap().contains("SUMMARY:Our edit"));
+    let server_text = || dav.object(&path, "server-1.ics").unwrap().data;
+    assert!(server_text().contains("Changed elsewhere"));
+
+    // Keep ours: written back over the server's version.
+    ok(
+        service,
+        Request::ResolvePimConflict {
+            item: nail_api::pim::PimItemRef::Event {
+                event_id: event_id.clone(),
+            },
+            keep: nail_api::pim::ConflictChoice::Local,
+        },
+    )
+    .await;
+    eventually("our version on the server", || async {
+        server_text().contains("SUMMARY:Our edit").then_some(())
+    })
+    .await;
+    let resolved = eventually("the synced event", || async {
+        let event = get(event_id.clone()).await;
+        (event.sync == nail_api::pim::PimItemSync::Synced).then_some(event)
+    })
+    .await;
+    assert_eq!(resolved.fields.title, "Our edit");
+
+    // Again, but keep the server's: the copy goes, nothing is written.
+    dav.put_object(
+        &path,
+        "server-1.ics",
+        &SERVER_EVENT.replace("From another client", "Second change"),
+    )
+    .unwrap();
+    edit("Second edit", resolved).await;
+    eventually("the second conflict", || async {
+        let event = get(event_id.clone()).await;
+        (event.sync == nail_api::pim::PimItemSync::Conflict).then_some(())
+    })
+    .await;
+    ok(
+        service,
+        Request::ResolvePimConflict {
+            item: nail_api::pim::PimItemRef::Event {
+                event_id: event_id.clone(),
+            },
+            keep: nail_api::pim::ConflictChoice::Server,
+        },
+    )
+    .await;
+    let kept = get(event_id.clone()).await;
+    assert_eq!(kept.sync, nail_api::pim::PimItemSync::Synced);
+    assert_eq!(kept.fields.title, "Second change");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(server_text().contains("Second change"));
+    let object = service
+        .store()
+        .pim_object(&nail_api::pim::PimItemRef::Event { event_id })
+        .unwrap()
+        .unwrap();
+    assert!(object.conflict_raw.is_none());
+    service.shutdown().await;
+}

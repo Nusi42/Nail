@@ -63,6 +63,11 @@ pub enum DavError {
     /// Getting an OAuth2 access token failed.
     #[error("access token: {0}")]
     Token(Box<EngineError>),
+    /// A redirect led to another server (scheme, host or port), which
+    /// asks for the login: Nail does not send it there on its own; the
+    /// user can enter that server's address instead. Holds its host.
+    #[error("redirected to {0}, which asks for the login")]
+    RedirectNeedsLogin(String),
 }
 
 impl DavError {
@@ -79,7 +84,7 @@ impl DavError {
             Self::TooLarge(_) => ErrorCode::TooLarge,
             Self::Status { status, .. } if *status >= 500 => ErrorCode::Unavailable,
             Self::Status { .. } => ErrorCode::Rejected,
-            Self::InsecureUrl(_) => ErrorCode::Config,
+            Self::InsecureUrl(_) | Self::RedirectNeedsLogin(_) => ErrorCode::Config,
             Self::Token(e) => e.code,
         }
     }
@@ -113,6 +118,9 @@ impl DavError {
             }
             Self::Protocol(_) => LocalizedMessage::new("dav-bad-response"),
             Self::InsecureUrl(_) => LocalizedMessage::new("dav-insecure-url"),
+            Self::RedirectNeedsLogin(host) => {
+                LocalizedMessage::new("dav-redirect-login").arg("host", host.as_str())
+            }
             Self::Token(e) => e
                 .localized
                 .as_deref()
@@ -123,7 +131,7 @@ impl DavError {
 
     /// Every Fluent id [`DavError::localized`] can return (for the catalog
     /// coverage test).
-    pub const MESSAGE_IDS: [&'static str; 15] = [
+    pub const MESSAGE_IDS: [&'static str; 16] = [
         "dav-network",
         "dav-timeout",
         "dav-tls",
@@ -139,6 +147,7 @@ impl DavError {
         "dav-bad-response",
         "dav-insecure-url",
         "dav-token",
+        "dav-redirect-login",
     ];
 
     /// The error for an unexpected HTTP status of `what`.
@@ -196,6 +205,7 @@ mod tests {
             },
             DavError::Protocol("x".into()),
             DavError::InsecureUrl("http://x".into()),
+            DavError::RedirectNeedsLogin("other.example".into()),
             DavError::Token(Box::new(EngineError::permanent(
                 ErrorCode::AuthFailed,
                 "revoked",

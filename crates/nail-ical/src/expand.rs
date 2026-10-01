@@ -12,6 +12,13 @@
 //!   that is cancelled is hidden.
 //! * `RANGE=THISANDFUTURE` overrides apply to every later occurrence:
 //!   their fields, shifted by the override's move.
+//! * Cost: iteration jumps ahead to the range
+//!   ([`crate::recur::Occurrences::skip_before`]) instead of walking from
+//!   the series start, scans at most [`MAX_SCANNED`] occurrences per
+//!   series, and a [`ScanBudget`] shared by every series of one request
+//!   bounds the whole request (ADR 0064).
+
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use chrono_tz::Tz;
@@ -26,6 +33,53 @@ use crate::time;
 /// Most occurrences looked at for one series and range (guards against
 /// `SECONDLY` rules over long ranges).
 pub const MAX_SCANNED: usize = 200_000;
+
+/// How many occurrences one request (a calendar view, a reminder plan)
+/// may scan over all its series; see [`ScanBudget`].
+pub const REQUEST_SCAN_BUDGET: usize = 1_000_000;
+
+/// Occurrences that may still be scanned, shared by every expansion of a
+/// request: a calendar with thousands of hostile series costs one budget,
+/// not thousands of [`MAX_SCANNED`]s. Once spent, expansions stop early
+/// (their results are incomplete; [`ScanBudget::exhausted`] says so).
+#[derive(Debug)]
+pub struct ScanBudget {
+    left: AtomicUsize,
+    spent_out: std::sync::atomic::AtomicBool,
+}
+
+impl ScanBudget {
+    /// A budget of `scans` occurrences.
+    pub fn new(scans: usize) -> Self {
+        Self {
+            left: AtomicUsize::new(scans),
+            spent_out: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    /// Takes one scan; `false` when the budget is spent.
+    pub fn take(&self) -> bool {
+        let taken = self
+            .left
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+            .is_ok();
+        if !taken {
+            self.spent_out.store(true, Ordering::Relaxed);
+        }
+        taken
+    }
+
+    /// Whether an expansion was cut short because the budget ran out.
+    pub fn exhausted(&self) -> bool {
+        self.spent_out.load(Ordering::Relaxed)
+    }
+}
+
+impl Default for ScanBudget {
+    fn default() -> Self {
+        Self::new(REQUEST_SCAN_BUDGET)
+    }
+}
 
 /// The length of an occurrence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +138,8 @@ pub struct ExpandOptions<'a> {
     /// ([`crate::ParsedEvent::this_and_future`]); overrides with
     /// [`EventOverride::this_and_future`] set count as well.
     pub this_and_future: &'a [PimTime],
+    /// The request's budget (`None`: only [`MAX_SCANNED`] per series).
+    pub budget: Option<&'a ScanBudget>,
 }
 
 impl ExpandOptions<'_> {
@@ -95,6 +151,7 @@ impl ExpandOptions<'_> {
             viewer,
             limit: 10_000,
             this_and_future: &[],
+            budget: None,
         }
     }
 }
@@ -218,8 +275,20 @@ pub fn instances(event: &CalendarEvent, options: &ExpandOptions<'_>) -> Vec<Even
         Span::Wall(d) | Span::Exact(d) => d.max(Duration::zero()),
     };
     let earliest_start = options.from - longest - Duration::days(2);
+    // Jump ahead to the range: occurrences before `earliest_start` matter
+    // only when a THISANDFUTURE override moves them later.
+    let latest_shift = future
+        .iter()
+        .filter_map(|(rid, o)| Some(frame(&o.fields.start)? - *rid))
+        .max()
+        .unwrap_or_else(Duration::zero)
+        .max(Duration::zero());
+    let frame_zone = start.tz().and_then(time::zone).unwrap_or(viewer);
+    if let Some(skip_to) = earliest_start.checked_sub_signed(latest_shift + Duration::days(2)) {
+        occurrences.skip_before(time::to_local(skip_to, frame_zone));
+    }
     for (scanned, occurrence) in occurrences.by_ref().enumerate() {
-        if scanned >= MAX_SCANNED {
+        if scanned >= MAX_SCANNED || options.budget.is_some_and(|b| !b.take()) {
             break;
         }
         let occurrence_start = time::like(occurrence, start);
@@ -658,5 +727,94 @@ mod tests {
             ),
             []
         );
+    }
+
+    /// A `SECONDLY` series from 1970 costs next to nothing in a 2026 view
+    /// (it ended long ago: MINUTELY / SECONDLY are capped), and an
+    /// `HOURLY` series older than MAX_SCANNED hours still shows.
+    #[test]
+    fn old_fine_grained_series_are_cheap_and_correct() {
+        let range = ExpandOptions::range(
+            utc("2026-10-01T00:00:00Z"),
+            utc("2026-10-02T00:00:00Z"),
+            Tz::UTC,
+        );
+        let secondly = series(
+            PimTime::utc("1970-01-01T00:00:00"),
+            PimTime::utc("1970-01-01T00:00:01"),
+            "FREQ=SECONDLY",
+        );
+        let begun = std::time::Instant::now();
+        for _ in 0..200 {
+            assert!(instances(&secondly, &range).is_empty());
+        }
+        assert!(
+            begun.elapsed() < std::time::Duration::from_secs(5),
+            "{:?}",
+            begun.elapsed()
+        );
+        let hourly = series(
+            PimTime::utc("1990-01-01T00:30:00"),
+            PimTime::utc("1990-01-01T00:45:00"),
+            "FREQ=HOURLY;INTERVAL=6",
+        );
+        assert_eq!(
+            starts(&instances(&hourly, &range)),
+            [
+                "2026-10-01T00:30:00Z",
+                "2026-10-01T06:30:00Z",
+                "2026-10-01T12:30:00Z",
+                "2026-10-01T18:30:00Z"
+            ]
+        );
+        // A long COUNT keeps counting correctly over the skip.
+        let counted = series(
+            PimTime::utc("2000-01-01T10:00:00"),
+            PimTime::utc("2000-01-01T11:00:00"),
+            "FREQ=DAILY;COUNT=9771",
+        );
+        assert_eq!(
+            starts(&instances(&counted, &range)),
+            ["2026-10-01T10:00:00Z"]
+        );
+        let ended = series(
+            PimTime::utc("2000-01-01T10:00:00"),
+            PimTime::utc("2000-01-01T11:00:00"),
+            "FREQ=DAILY;COUNT=9770",
+        );
+        assert!(instances(&ended, &range).is_empty());
+    }
+
+    /// A shared budget bounds a whole request over many costly series and
+    /// says when it ran out.
+    #[test]
+    fn a_shared_budget_bounds_the_request() {
+        let costly = series(
+            PimTime::utc("2026-01-01T00:00:00"),
+            PimTime::utc("2026-01-01T00:00:00"),
+            "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30;COUNT=5",
+        );
+        let budget = ScanBudget::new(1_000);
+        let options = ExpandOptions {
+            budget: Some(&budget),
+            ..ExpandOptions::range(
+                utc("2026-10-01T00:00:00Z"),
+                utc("2026-11-01T00:00:00Z"),
+                Tz::UTC,
+            )
+        };
+        let daily = series(
+            PimTime::utc("2026-09-01T09:00:00"),
+            PimTime::utc("2026-09-01T10:00:00"),
+            "FREQ=DAILY",
+        );
+        assert_eq!(instances(&daily, &options).len(), 31);
+        assert!(!budget.exhausted());
+        let _ = instances(&costly, &options);
+        for _ in 0..2_000 {
+            let _ = instances(&daily, &options);
+        }
+        assert!(budget.exhausted());
+        assert!(instances(&daily, &options).is_empty());
     }
 }

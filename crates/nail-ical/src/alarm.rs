@@ -111,6 +111,7 @@ pub fn event_firings(
         viewer,
         limit: 100_000,
         this_and_future,
+        budget: None,
     };
     let mut out = Vec::new();
     let mut absolute_done: Vec<String> = Vec::new();

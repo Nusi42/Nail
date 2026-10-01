@@ -192,7 +192,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        plug-in request; commands / UI actions answer Done at once);
                        M3a (ADR 0063): pim/ (mod.rs routing + PimCtl, sources.rs (accounts.kdl sources,
                        collections, local defaults, conflicts), engine.rs (ICS / CalDAV / CardDAV engines,
-                       PimReplayer), events.rs (edit scopes, instances, free time, tasks), contacts.rs,
+                       PimReplayer), feed_http.rs (SSRF-safe subscription fetch, ADR 0064),
+                       events.rs (edit scopes, instances, free time, tasks), contacts.rs,
                        import.rs (imports, event / task from email), reminders.rs (scheduler + task),
                        search.rs (in-memory PimIndex)); launch_args.rs (launch-argument parser, shared with
                        app/src-tauri and `nail serve --launch`)
@@ -381,6 +382,13 @@ npm run tauri dev                          # desktop app with Vite hot reload
   remote PIM still needs a grant for every account. Core tests: `tests/pim.rs`, `tests/pim_sync.rs` (mock DAV /
   HTTP servers, `AdjustableClock`). demo-multi adds `work-calendars` / `work-contacts` (mock DAV, password
   `dav-secret`) and the `holidays` feed, controls `dav-objects` / `dav-put` / `dav-delete` / `feeds`.
+- M3a review fixes (ADR 0064): untrusted calendar data is bounded — `nail-ical` nests at most 32 levels, recurrence
+  jumps ahead (`skip_before`), `MINUTELY` / `SECONDLY` rules stop after 2,000 occurrences, expansions share an
+  `expand::ScanBudget` per request (core `Expander::default()`), the instance cache expands outside the store lock;
+  subscriptions are fetched only through `nail-core/src/pim/feed_http.rs` (SSRF-safe; plain loopback `http:` only
+  with `ServiceOptions::loopback_feeds`, which `demo::demo_options` sets); `DavClient` sends logins only to the
+  requested origin (`DavError::RedirectNeedsLogin`); reminders are capped per item (`limit_plan`) and summarized
+  when more than three fire at once.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

@@ -398,14 +398,18 @@ calendar-subscription "holidays" name="Holidays" url="webcal://example.org/holid
 
 | Property | Meaning | Default |
 | --- | --- | --- |
-| `url` | The calendar's address: `https://`, `webcal://` or `webcals://` (required) | — |
+| `url` | The calendar's address: `https://`, `webcal://` or `webcals://` (required; fetched over `https:`, never from this computer or the local network) | — |
 | `name` | Name shown in Nail | the name the calendar gives itself |
 | `color` | `#RGB`, `#RRGGBB`, `#RRGGBBAA` or a colour name | the theme's |
 | `alarms` | `#true` shows the reminders the published calendar contains | `#false` |
 | `refresh` | Minutes between refreshes (5 to 10080) | what the calendar suggests, else 360 |
 | `enabled` | `#false` stops refreshing without removing the calendar | `#true` |
 
-A protected calendar takes an `auth` node like a server (below).
+A protected calendar takes an `auth` node like a server (below); its
+password goes only to the address in `url`, not to another server the feed
+forwards to. Changes to a subscription take effect at its next refresh: a
+new `url` or `alarms` fetches the whole calendar again, and a new `name`,
+`color` or `alarms` updates the calendar in Nail.
 
 ### Calendar and contacts servers (`caldav`, `carddav`)
 

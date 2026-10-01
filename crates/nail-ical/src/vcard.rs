@@ -15,6 +15,8 @@
 //! original lines, unknown properties stay, and the card keeps its
 //! version (a vCard 2.1 card is written as 3.0 once edited).
 
+use std::collections::{HashMap, HashSet};
+
 use base64::Engine as _;
 use chrono::{DateTime, Utc};
 use nail_api::pim::contact::{
@@ -610,6 +612,12 @@ pub fn parse_cards(text: &str) -> ParsedCards {
         });
     }
     let single = doc.components.len() == 1;
+    // Where each UID was read; a later copy replaces an earlier one
+    // (indexes instead of scanning everything read so far).
+    let mut group_at: HashMap<String, usize> = HashMap::new();
+    let mut contact_at: HashMap<String, usize> = HashMap::new();
+    let mut replaced_groups: HashSet<usize> = HashSet::new();
+    let mut replaced_contacts: HashSet<usize> = HashSet::new();
     for card in cards {
         let raw = if single {
             text.to_owned()
@@ -627,7 +635,9 @@ pub fn parse_cards(text: &str) -> ParsedCards {
         };
         if let Some(style) = is_group_card(card) {
             let (member_uids, member_emails) = read_members(card);
-            out.groups.retain(|g| g.group.uid != uid);
+            if let Some(old) = group_at.insert(uid.clone(), out.groups.len()) {
+                replaced_groups.insert(old);
+            }
             out.groups.push(ParsedGroup {
                 group: GroupCard {
                     uid,
@@ -666,12 +676,12 @@ pub fn parse_cards(text: &str) -> ParsedCards {
             }
             None => None,
         };
-        if out.contacts.iter().any(|c| c.uid == uid) {
+        if let Some(old) = contact_at.insert(uid.clone(), out.contacts.len()) {
             out.issues.push(
                 Issue::new(IssueKind::DuplicateUid, Some(card.line))
                     .item(Some(fields.display_name.clone())),
             );
-            out.contacts.retain(|c| c.uid != uid);
+            replaced_contacts.insert(old);
         }
         out.contacts.push(ParsedContact {
             uid,
@@ -681,6 +691,20 @@ pub fn parse_cards(text: &str) -> ParsedCards {
             updated_at: read_rev(card),
             raw,
             line: card.line,
+        });
+    }
+    if !replaced_groups.is_empty() {
+        let mut i = 0;
+        out.groups.retain(|_| {
+            i += 1;
+            !replaced_groups.contains(&(i - 1))
+        });
+    }
+    if !replaced_contacts.is_empty() {
+        let mut i = 0;
+        out.contacts.retain(|_| {
+            i += 1;
+            !replaced_contacts.contains(&(i - 1))
         });
     }
     if out.contacts.is_empty() && out.groups.is_empty() {
@@ -1878,5 +1902,37 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nKIND:group\r\nFN:Suppliers\r\nMEMBER:urn:uuid:ACME
         );
         assert_eq!(derived.contacts[0].fields.display_name, "x@y.example");
         assert_eq!(uid_key("urn:uuid:ABC"), "abc");
+    }
+
+    /// Later cards with the same UID replace earlier ones (reported), the
+    /// rest keep their order.
+    #[test]
+    fn duplicate_cards_are_replaced_in_order() {
+        let text = "BEGIN:VCARD\r\nVERSION:4.0\r\nUID:a\r\nFN:A1\r\nEND:VCARD\r\n\
+            BEGIN:VCARD\r\nVERSION:4.0\r\nUID:b\r\nFN:B\r\nEND:VCARD\r\n\
+            BEGIN:VCARD\r\nVERSION:4.0\r\nUID:g\r\nKIND:group\r\nFN:G1\r\nEND:VCARD\r\n\
+            BEGIN:VCARD\r\nVERSION:4.0\r\nUID:a\r\nFN:A2\r\nEND:VCARD\r\n\
+            BEGIN:VCARD\r\nVERSION:4.0\r\nUID:g\r\nKIND:group\r\nFN:G2\r\nEND:VCARD\r\n";
+        let parsed = parse_cards(text);
+        let names: Vec<&str> = parsed
+            .contacts
+            .iter()
+            .map(|c| c.fields.display_name.as_str())
+            .collect();
+        assert_eq!(names, ["B", "A2"]);
+        let groups: Vec<&str> = parsed
+            .groups
+            .iter()
+            .map(|g| g.group.name.as_str())
+            .collect();
+        assert_eq!(groups, ["G2"]);
+        assert_eq!(
+            parsed
+                .issues
+                .iter()
+                .filter(|i| matches!(i.kind, IssueKind::DuplicateUid))
+                .count(),
+            1
+        );
     }
 }

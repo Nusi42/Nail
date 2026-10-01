@@ -25,6 +25,7 @@
 mod contacts;
 mod engine;
 mod events;
+mod feed_http;
 mod import;
 mod reminders;
 mod search;
@@ -63,6 +64,19 @@ pub(crate) struct PimCtl {
     local_ready: std::sync::atomic::AtomicBool,
     /// The source configurations last reconciled (changes are announced).
     last_sources: Mutex<Vec<nail_api::pim::PimSourceConfig>>,
+    /// Subscriptions may use plain `http:` to loopback hosts
+    /// ([`crate::ServiceOptions::loopback_feeds`]).
+    pub(crate) loopback_feeds: bool,
+}
+
+impl PimCtl {
+    /// The PIM state of a new service.
+    pub(crate) fn new(loopback_feeds: bool) -> Self {
+        Self {
+            loopback_feeds,
+            ..Self::default()
+        }
+    }
 }
 
 /// Answers one PIM request.
@@ -347,8 +361,12 @@ pub(crate) fn blob_bytes(blobs: &BlobStore, sha256: &str) -> Option<Vec<u8>> {
 
 /// The instance cache's expander: `nail-ical`'s recurrence engine in the
 /// cache's frame (zoned times as instants, dates and floating times as
-/// wall clock read as UTC).
-pub(crate) struct Expander;
+/// wall clock read as UTC). One per request: its scan budget bounds the
+/// work of the whole request (ADR 0064).
+#[derive(Default)]
+pub(crate) struct Expander {
+    budget: nail_ical::expand::ScanBudget,
+}
 
 impl InstanceExpander for Expander {
     fn expand(&self, event: &CalendarEvent, from: i64, until: i64) -> Vec<ExpandedInstance> {
@@ -358,6 +376,7 @@ impl InstanceExpander for Expander {
             viewer: Tz::UTC,
             limit: 50_000,
             this_and_future: &[],
+            budget: Some(&self.budget),
         };
         nail_ical::expand::instances(event, &options)
             .into_iter()
@@ -369,6 +388,10 @@ impl InstanceExpander for Expander {
                 cancelled: false,
             })
             .collect()
+    }
+
+    fn exhausted(&self) -> bool {
+        self.budget.exhausted()
     }
 }
 
@@ -479,7 +502,7 @@ mod tests {
             .with_ymd_and_hms(2026, 10, 6, 0, 0, 0)
             .unwrap()
             .timestamp();
-        let list = Expander.expand(&event, from, from + 2 * 86_400);
+        let list = Expander::default().expand(&event, from, from + 2 * 86_400);
         let starts: Vec<&PimTime> = list.iter().map(|i| &i.start).collect();
         assert_eq!(
             starts,
