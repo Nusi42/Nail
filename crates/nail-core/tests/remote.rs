@@ -1687,3 +1687,98 @@ async fn remote_scheduling_and_gmail_labels_follow_grants() {
         Some(changed)
     );
 }
+
+#[tokio::test]
+async fn remote_scheduling_mail_needs_the_send_scope() {
+    // Review M3b: requests that mail iTIP messages from the user's
+    // identities need `send`, not just `calendar`.
+    use nail_api::scheduling::{CancelScope, InvitationResponse, InvitationTarget};
+    let f = setup();
+    let service = &f.service;
+    let message = demo_messages(&f)[0].clone();
+    let no_send = remote_session(&f, "no-send", RemoteAccessPreset::NoSend.grant()).await;
+    let full = remote_session(&f, "full", RemoteAccessPreset::Full.grant()).await;
+    let event = InvitationTarget::Event {
+        event_id: "no-such-event".into(),
+        recurrence_id: None,
+    };
+    let mailing = [
+        Request::ForwardInvitation {
+            target: event.clone(),
+            to: vec![nail_api::Address {
+                name: None,
+                email: "someone@example.org".into(),
+            }],
+            comment: None,
+        },
+        Request::ProposeNewTime {
+            target: event.clone(),
+            start: nail_api::pim::PimTime::utc("2026-10-05T09:00:00"),
+            end: nail_api::pim::PimTime::utc("2026-10-05T10:00:00"),
+            comment: None,
+        },
+        Request::RefreshInvitation {
+            target: event.clone(),
+        },
+        Request::RespondToInvitation {
+            target: event.clone(),
+            response: InvitationResponse::Accept,
+            comment: None,
+            send: true,
+            calendar_id: None,
+        },
+        Request::SendInvitations {
+            event_id: "no-such-event".into(),
+            recurrence_id: None,
+            attendees: Vec::new(),
+            comment: None,
+        },
+        Request::CancelMeeting {
+            event_id: "no-such-event".into(),
+            scope: CancelScope::Meeting,
+            recurrence_id: None,
+            attendees: Vec::new(),
+            comment: None,
+        },
+        Request::RespondToCounter {
+            message_id: message.id.clone(),
+            accept: false,
+            comment: None,
+        },
+    ];
+    for request in mailing {
+        assert_eq!(
+            error_code(&service.handle_remote(&no_send, request.clone()).await),
+            Some(ErrorCode::Forbidden),
+            "{request:?}"
+        );
+        // With `send`, the checks pass (the request then fails on the
+        // unknown event / the message without an invitation).
+        assert_ne!(
+            error_code(&service.handle_remote(&full, request.clone()).await),
+            Some(ErrorCode::Forbidden),
+            "{request:?}"
+        );
+    }
+    // Answering without mailing needs only `calendar`.
+    let quiet = Request::RespondToInvitation {
+        target: event,
+        response: InvitationResponse::Accept,
+        comment: None,
+        send: false,
+        calendar_id: None,
+    };
+    assert_ne!(
+        error_code(&service.handle_remote(&no_send, quiet).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // Applying a message that is no REFRESH mails nothing.
+    let apply = Request::ApplyInvitation {
+        message_id: message.id.clone(),
+        calendar_id: None,
+    };
+    assert_ne!(
+        error_code(&service.handle_remote(&no_send, apply).await),
+        Some(ErrorCode::Forbidden)
+    );
+}

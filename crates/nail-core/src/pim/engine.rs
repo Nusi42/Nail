@@ -899,16 +899,37 @@ pub(crate) struct StoredScheduling {
     pub auto_schedule: bool,
     /// `schedule-default-calendar-URL`.
     pub default_calendar: Option<String>,
+    /// When the server was asked (Unix seconds; `None` = stored before
+    /// the M3b review fixes: ask again). Asked again after
+    /// [`SCHEDULING_RECHECK_SECS`], so a server that starts scheduling
+    /// later is noticed.
+    #[serde(default)]
+    pub asked_at: Option<i64>,
+}
+
+/// How long a stored scheduling answer is trusted before the principal is
+/// asked again (a day).
+pub(crate) const SCHEDULING_RECHECK_SECS: i64 = 24 * 60 * 60;
+
+/// Whether the principal is to be asked about scheduling (again): never
+/// asked, asked before `asked_at` was recorded, or longer ago than
+/// [`SCHEDULING_RECHECK_SECS`] (or in the future: the clock moved back).
+fn needs_scheduling_check(stored: Option<&StoredScheduling>, now: i64) -> bool {
+    match stored.and_then(|s| s.asked_at) {
+        Some(at) => now < at || now - at >= SCHEDULING_RECHECK_SECS,
+        None => true,
+    }
 }
 
 impl StoredScheduling {
-    fn of(info: &nail_dav::SchedulingInfo) -> Self {
+    fn of(info: &nail_dav::SchedulingInfo, asked_at: i64) -> Self {
         Self {
             inbox: info.inbox.as_ref().map(Url::to_string),
             outbox: info.outbox.as_ref().map(Url::to_string),
             addresses: info.addresses.clone(),
             auto_schedule: info.auto_schedule,
             default_calendar: info.default_calendar.as_ref().map(Url::to_string),
+            asked_at: Some(asked_at),
         }
     }
 
@@ -952,16 +973,68 @@ pub(crate) async fn source_scheduling(
         .flatten()
 }
 
-/// Asks the principal about scheduling once (RFC 6638) and stores the
-/// answer with the discovery; a server without scheduling is stored as
-/// such, other failures are asked again on the next pass.
+/// Whether a CalDAV source's RFC 6638 scheduling is not known (never
+/// asked, or asking failed so far). Nail cannot tell then whether the
+/// server delivers on its own, so events written to it mark their parties
+/// `SCHEDULE-AGENT=CLIENT` ([`client_scheduled`]): Nail mails, the server
+/// keeps out (never both).
+pub(crate) async fn scheduling_unknown(service: &Service, source: &PimSourceId) -> bool {
+    let is_caldav = service
+        .inner
+        .accounts
+        .config()
+        .pim_source(source)
+        .is_some_and(|c| c.kind() == PimSourceKind::Caldav);
+    if !is_caldav {
+        return false;
+    }
+    let id = source.clone();
+    let stored: Option<StoredDiscovery> = service
+        .inner
+        .store
+        .call(move |s| Ok(s.pim_source(&id)?.and_then(|r| r.discovery)))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value(v).ok());
+    stored.is_none_or(|d| d.scheduling.is_none())
+}
+
+/// An event's text with its organizer and every attendee marked
+/// `SCHEDULE-AGENT=CLIENT` (events without attendees are left alone).
+pub(crate) fn client_scheduled(
+    raw: &str,
+    event: &nail_api::pim::calendar::CalendarEvent,
+) -> String {
+    let mut attendees: Vec<String> = Vec::new();
+    for fields in std::iter::once(&event.fields).chain(event.overrides.iter().map(|o| &o.fields)) {
+        for a in &fields.attendees {
+            if !attendees.iter().any(|x| x.eq_ignore_ascii_case(&a.email)) {
+                attendees.push(a.email.clone());
+            }
+        }
+    }
+    if attendees.is_empty() {
+        return raw.to_owned();
+    }
+    nail_itip::server::mark_client_scheduled(raw, &event.uid, true, &attendees)
+}
+
+/// Asks the principal about scheduling (RFC 6638) when it was never asked
+/// or the answer is older than [`SCHEDULING_RECHECK_SECS`], and stores
+/// the answer with the discovery; a server without scheduling is stored
+/// as such. Other failures keep the previous answer (none = unknown) and
+/// are asked again on the next pass.
 async fn ensure_scheduling(
     service: &Service,
     config: &PimSourceConfig,
     client: &DavClient,
     found: &mut StoredDiscovery,
 ) {
-    if config.kind() != PimSourceKind::Caldav || found.scheduling.is_some() {
+    let now = service.pim_now();
+    if config.kind() != PimSourceKind::Caldav
+        || !needs_scheduling_check(found.scheduling.as_ref(), now)
+    {
         return;
     }
     let Ok(principal) = Url::parse(&found.principal) else {
@@ -970,8 +1043,11 @@ async fn ensure_scheduling(
     let home = found.home_sets.first().and_then(|h| Url::parse(h).ok());
     found.scheduling = match nail_dav::discover_scheduling(client, &principal, home.as_ref()).await
     {
-        Ok(info) => Some(StoredScheduling::of(&info)),
-        Err(DavError::NoScheduling) => Some(StoredScheduling::default()),
+        Ok(info) => Some(StoredScheduling::of(&info, now)),
+        Err(DavError::NoScheduling) => Some(StoredScheduling {
+            asked_at: Some(now),
+            ..StoredScheduling::default()
+        }),
         Err(err) => {
             tracing::debug!(source = %config.id, error = %err, "scheduling discovery failed");
             return;
@@ -1679,6 +1755,47 @@ pub(crate) fn dav_source_ids(sources: &[PimSourceConfig]) -> HashSet<PimSourceId
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheduling_is_asked_again_after_a_day() {
+        let day = SCHEDULING_RECHECK_SECS;
+        assert!(needs_scheduling_check(None, 1_000));
+        let legacy = StoredScheduling::default();
+        assert!(needs_scheduling_check(Some(&legacy), 1_000));
+        let asked = StoredScheduling {
+            asked_at: Some(1_000),
+            ..StoredScheduling::default()
+        };
+        assert!(!needs_scheduling_check(Some(&asked), 1_000));
+        assert!(!needs_scheduling_check(Some(&asked), 1_000 + day - 1));
+        assert!(needs_scheduling_check(Some(&asked), 1_000 + day));
+        // The clock moved back.
+        assert!(needs_scheduling_check(Some(&asked), 999));
+    }
+
+    #[test]
+    fn unknown_scheduling_marks_every_party_client_scheduled() {
+        let raw = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//EN\r\nBEGIN:VEVENT\r\n\
+UID:m@x\r\nDTSTAMP:20261001T000000Z\r\nDTSTART:20261005T090000Z\r\nSUMMARY:M\r\n\
+ORGANIZER:mailto:ada@x.org\r\nATTENDEE:mailto:bob@x.org\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let mut event = nail_itip::parse_itip(raw, Some("PUBLISH"))
+            .event
+            .unwrap()
+            .into_event("ev".into(), "cal".into(), false, Default::default());
+        let attendees = std::mem::take(&mut event.fields.attendees);
+        // No attendees: left alone.
+        assert_eq!(client_scheduled(raw, &event), raw);
+        event.fields.attendees = attendees;
+        let marked = client_scheduled(raw, &event);
+        assert!(
+            marked.contains("ORGANIZER;SCHEDULE-AGENT=CLIENT:mailto:ada@x.org"),
+            "{marked}"
+        );
+        assert!(
+            marked.contains("ATTENDEE;SCHEDULE-AGENT=CLIENT:mailto:bob@x.org"),
+            "{marked}"
+        );
+    }
 
     const ICS: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//EN\r\n\
 BEGIN:VEVENT\r\nUID:a@x\r\nDTSTAMP:20261001T000000Z\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:A\r\n\

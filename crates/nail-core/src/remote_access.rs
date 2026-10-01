@@ -529,29 +529,47 @@ impl Service {
             | Request::DismissReminders { .. } => check_full_pim(access),
 
             // M3b scheduling (ADR 0065): invitations touch the calendars
-            // (full grant, like PIM) and the message they came in (granted,
-            // readable); iTIP mail goes out through the user's identities.
-            Request::GetInvitation { message_id }
-            | Request::ApplyInvitation { message_id, .. }
-            | Request::RespondToCounter { message_id, .. } => {
+            // (full grant, like PIM, which also covers every identity's
+            // account) and the message they came in (granted, readable).
+            // Whatever can mail an iTIP message from the user's identities
+            // also needs `send`, like `SendDraft`.
+            Request::GetInvitation { message_id } => {
                 check_full_pim(access)?;
                 self.check_readable(access, message_id).await
             }
-            Request::RespondToInvitation { target, .. }
-            | Request::ProposeNewTime { target, .. }
+            Request::ApplyInvitation { message_id, .. } => {
+                check_full_pim(access)?;
+                self.check_readable(access, message_id).await?;
+                // Applying a REFRESH mails the current version.
+                if self.is_itip_refresh(message_id).await {
+                    check_send(access)?;
+                }
+                Ok(())
+            }
+            Request::RespondToCounter { message_id, .. } => {
+                check_full_pim(access)?;
+                check_send(access)?;
+                self.check_readable(access, message_id).await
+            }
+            Request::RespondToInvitation { target, send, .. } => {
+                check_full_pim(access)?;
+                if *send {
+                    check_send(access)?;
+                }
+                self.check_invitation_target(access, target).await
+            }
+            Request::ProposeNewTime { target, .. }
             | Request::RefreshInvitation { target }
             | Request::ForwardInvitation { target, .. } => {
                 check_full_pim(access)?;
-                match target {
-                    nail_api::scheduling::InvitationTarget::Message { message_id } => {
-                        self.check_readable(access, message_id).await
-                    }
-                    nail_api::scheduling::InvitationTarget::Event { .. } => Ok(()),
-                }
+                check_send(access)?;
+                self.check_invitation_target(access, target).await
             }
-            Request::SendInvitations { .. }
-            | Request::CancelMeeting { .. }
-            | Request::QueryFreeBusy { .. }
+            Request::SendInvitations { .. } | Request::CancelMeeting { .. } => {
+                check_full_pim(access)?;
+                check_send(access)
+            }
+            Request::QueryFreeBusy { .. }
             | Request::GetSchedulingSettings
             | Request::SetSchedulingSettings { .. } => check_full_pim(access),
             // M3b Gmail labels: the account must be granted.
@@ -593,6 +611,20 @@ impl Service {
             .into());
         }
         Ok(())
+    }
+
+    /// The invitation message a scheduling request names is readable.
+    async fn check_invitation_target(
+        &self,
+        access: &Access,
+        target: &nail_api::scheduling::InvitationTarget,
+    ) -> Result<()> {
+        match target {
+            nail_api::scheduling::InvitationTarget::Message { message_id } => {
+                self.check_readable(access, message_id).await
+            }
+            nail_api::scheduling::InvitationTarget::Event { .. } => Ok(()),
+        }
     }
 
     async fn encrypted(&self, id: &MessageId) -> Result<bool> {
@@ -1217,6 +1249,15 @@ fn check_account(access: &Access, id: &AccountId) -> Result<()> {
         Ok(())
     } else {
         Err(forbidden(format!("account {id} is not granted")).into())
+    }
+}
+
+/// Mail leaving from the user's identities needs the `send` scope.
+fn check_send(access: &Access) -> Result<()> {
+    if access.has(McpScope::Send) {
+        Ok(())
+    } else {
+        Err(forbidden("sending mail needs the send scope".into()).into())
     }
 }
 

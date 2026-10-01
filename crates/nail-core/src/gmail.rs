@@ -546,6 +546,15 @@ async fn full_sync(
             done: pages,
             total: pages + u32::from(page.next_page.is_some()),
         });
+        if resumed && page.next_page.is_none() {
+            // The pages listed before the interruption are not in `listed`:
+            // the merge needs every id the server has now (ids only). Asked
+            // before the cursor is stored, so a failure resumes here again.
+            listed = engine
+                .all_message_ids()
+                .await
+                .map_err(|e| core_error(e.into()))?;
+        }
         let (id, next, at) = (account.clone(), page.next_page.clone(), cursor);
         service
             .store()
@@ -566,8 +575,9 @@ async fn full_sync(
             None => break,
         }
     }
-    if !resumed {
-        // Merge: messages the server no longer lists are gone.
+    {
+        // Merge: messages the server no longer lists are gone (also after
+        // a resumed listing: `listed` then holds every id on the server).
         let id = account.clone();
         let gone: Vec<MessageId> = service
             .store()
@@ -775,7 +785,9 @@ async fn store_messages(
                     Ok(report)
                 })
                 .await?;
-            if report.new.contains(&id) {
+            // Only mail arriving in the inbox or a user folder counts (like
+            // IMAP): never the user's own sent mail, Spam or Trash.
+            if report.new.contains(&id) && crate::sync::runs_arrival_rules(folder.role) {
                 new_ids.push((id, folder.id));
             }
         }

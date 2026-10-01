@@ -4,4 +4,4 @@
  * A problem with an invitation message (the card shows it; the core
  * refuses requests that need what is missing with `invalid_request`).
  */
-export type ItipIssue = "unparsable" | "unknown-method" | "no-event" | "missing-uid" | "missing-organizer" | "attendee-count" | "sender-not-organizer" | "sender-not-attendee" | "not-addressed-to-me" | "several-events";
+export type ItipIssue = "unparsable" | "unknown-method" | "no-event" | "missing-uid" | "missing-organizer" | "attendee-count" | "sender-not-organizer" | "sender-not-attendee" | "not-addressed-to-me" | "several-events" | "organizer-changed" | "sent-on-behalf" | "uninvited-attendee";

@@ -719,3 +719,30 @@ async fn attendee_declines_by_deleting() {
         .unwrap();
     assert!(organizer_copy.data.contains("PARTSTAT=DECLINED"));
 }
+
+#[tokio::test]
+async fn a_failing_options_request_leaves_scheduling_unknown() {
+    // Review M3b: a transient OPTIONS failure used to be stored as "the
+    // server does not schedule", so Nail mailed what the server delivered.
+    let server = server(true).await;
+    let principal = url(&server, &server.principal_path());
+    server.fail_next("OPTIONS", 500);
+    let err = discover_scheduling(&login("ada"), &principal, None)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, DavError::Status { status: 500, .. }),
+        "{err:?}"
+    );
+    // A server that does not know OPTIONS does not schedule.
+    server.fail_next("OPTIONS", 405);
+    let info = discover_scheduling(&login("ada"), &principal, None)
+        .await
+        .unwrap();
+    assert!(!info.auto_schedule);
+    // Asked again: it schedules.
+    let info = discover_scheduling(&login("ada"), &principal, None)
+        .await
+        .unwrap();
+    assert!(info.auto_schedule);
+}

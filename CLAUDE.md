@@ -448,6 +448,11 @@ npm run tauri dev                          # desktop app with Vite hot reload
   the engine; no Sent copy). demo-multi's Gmail account starts `enabled=#false` (the other e2e suites count the
   unified inbox); `scheduling.spec.ts` / `gmail.spec.ts` turn it on or deliver iMIP mail with `imap-deliver`.
   Clippy `large_futures`: boxed futures in `Service::dispatch` (scheduling).
+- M3b review fixes (ADR 0071): arrival processing applies nothing whose card has an issue that
+  `ItipIssue::blocks_automatic` (sender checks, `organizer-changed`, `sent-on-behalf`, `uninvited-attendee`,
+  `not-addressed-to-me`), never `PUBLISH`; remote scheduling requests that mail need `send`; arrival rules /
+  iTIP only for Inbox / Other folders (`sync::runs_arrival_rules`, IMAP and Gmail); meetings written to a
+  CalDAV source with unknown scheduling get `SCHEDULE-AGENT=CLIENT` (`pim::engine::scheduling_unknown`).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

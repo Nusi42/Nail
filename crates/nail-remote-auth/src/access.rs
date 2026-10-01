@@ -358,8 +358,11 @@ pub fn required_access(request: &Request) -> RequestAccess {
 
         // --- Invitations and scheduling (M3b, ADR 0065): cards and
         // free/busy are reads; answering and organizing write the
-        // calendar (`calendar`; the core also needs `send` when the
-        // request mails an iTIP message); settings are administration. ---
+        // calendar (`calendar`; the core's `check_remote_request` also
+        // requires `send` whenever the request can mail an iTIP message:
+        // answers with `send`, proposals, refreshes, forwards, organizer
+        // requests, counters, applying a REFRESH); settings are
+        // administration. ---
         Request::GetInvitation { .. } => ("GetInvitation", Scope(S::Read)),
         Request::RespondToInvitation { .. } => ("RespondToInvitation", Scope(S::Calendar)),
         Request::ProposeNewTime { .. } => ("ProposeNewTime", Scope(S::Calendar)),

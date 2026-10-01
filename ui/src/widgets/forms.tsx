@@ -360,6 +360,22 @@ export function EndpointFields({
   );
 }
 
+/** IMAP and POP3 accounts switch between each other. */
+const MAIL_PROTOCOL_CHOICES: readonly Choice[] = [
+  { value: "imap", label: "server-protocol-imap" },
+  { value: "pop3", label: "server-protocol-pop3" },
+];
+
+/** A Gmail API account stays one: no IMAP / POP3 conversion from here. */
+const GMAIL_PROTOCOL_CHOICES: readonly Choice[] = [
+  { value: "gmail", label: "server-protocol-gmail" },
+];
+
+/** The protocol choices for an incoming server. */
+export function protocolChoices(incoming: IncomingServer): readonly Choice[] {
+  return incoming.protocol === "gmail" ? GMAIL_PROTOCOL_CHOICES : MAIL_PROTOCOL_CHOICES;
+}
+
 /** Editor for the incoming server (protocol + endpoint). */
 export function IncomingFields({
   incoming,
@@ -374,11 +390,12 @@ export function IncomingFields({
         labelId="server-protocol"
         name="incoming-protocol"
         value={incoming.protocol}
-        choices={[
-          { value: "imap", label: "server-protocol-imap" },
-          { value: "pop3", label: "server-protocol-pop3" },
-        ]}
-        onChange={(protocol) => onChange(withProtocol(incoming, protocol as "imap" | "pop3"))}
+        choices={protocolChoices(incoming)}
+        onChange={(protocol) => {
+          if (protocol === "imap" || protocol === "pop3") {
+            onChange(withProtocol(incoming, protocol));
+          }
+        }}
       />
       <EndpointFields
         name="incoming"

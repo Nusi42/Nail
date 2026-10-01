@@ -33,6 +33,11 @@ async function enableGmail(page: Page) {
   const settings = page.getByRole("dialog", { name: "Settings" });
   await settings.getByRole("tab", { name: "Accounts", exact: true }).click();
   await settings.getByRole("button", { name: /^Gmail/ }).click();
+  // A Gmail API account shows as one (not as IMAP) with its polling options.
+  await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("gmail");
+  await expect(
+    settings.getByRole("spinbutton", { name: "Shortest check interval (seconds)" }),
+  ).toHaveValue("10");
   await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings.getByText("Settings saved.")).toBeVisible();

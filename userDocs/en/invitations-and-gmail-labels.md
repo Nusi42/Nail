@@ -14,16 +14,37 @@ card above the message text. The card tells you:
   invited and what they answered;
 - whether it overlaps something else in your calendar.
 
-### The spoofing warning
+### Warnings about forged messages
 
-If the sender of an invitation is not its organizer (or an answer does
-not come from the attendee it names), the card shows a warning first:
-"The sender is not the organizer". Anyone can write any organizer into an
-invitation, so such a message may be forged. Nail never applies it on its
-own — it is not added to your calendar, and no update or cancellation in
-it is applied — until you choose to. Check with the organizer before you
-answer. (Messages sent "on behalf of" the organizer by a calendar service,
-like Google Calendar's, are recognised and show no warning.)
+Anyone can write any organizer or attendee into an invitation, so the
+card checks who a message really comes from and shows a warning first
+when something does not fit:
+
+- **This invitation was not sent by the organizer** (or an answer does not
+  come from the attendee it names).
+- **Sent by someone acting for the organizer or participant**: the message
+  itself claims that its sender may act for the organizer ("sent by").
+  Nail cannot check that claim; assistants who send for their manager
+  cause this warning too.
+- **Names a different organizer than the event in your calendar**: a
+  message about a meeting you already have, but from another organizer.
+  Everyone invited to a meeting (and anyone who saw a forwarded
+  invitation) knows the meeting's internal identifier, so such a message
+  may try to take your meeting over.
+- **Comes from someone who is not invited**: an answer to one of your
+  meetings from a person who is not on the guest list (nor named as a
+  stand-in by a guest).
+
+Nail never applies such a message on its own — it is not added to your
+calendar, and no update, cancellation or answer in it is applied — until
+you choose to. Check with the organizer before you answer. Applying an
+update by hand never changes who organizes the meeting. (Messages a
+calendar service like Google Calendar sends for the organizer, with the
+organizer as the sender, are recognised and show no warning.)
+
+Published events (calendar data "for your information", without an
+invitation) and messages about other people's meetings are never applied
+on their own either, and neither is anything in a message marked as junk.
 
 ### Answering
 
@@ -63,6 +84,12 @@ people — and does **not** send its own mail, so nobody gets the same
 message twice. The card says "Your calendar server sends your answer to
 the organizer." Messages the server delivered to you are picked up with
 each calendar sync.
+
+Nail asks the server about this with the first sync and again once a
+day. Until it knows (for example while the server cannot be reached),
+Nail sends the mail itself and tells the server, in the event it saves,
+to stay out of the delivery for that meeting — again, nobody gets two
+messages.
 
 ### When you organize the meeting
 
@@ -127,6 +154,10 @@ are in the [accounts reference](accounts-reference.md#gmail-gmail).
   (shown as the archive), Spam, Trash. Archiving removes the Inbox label;
   a message is stored once, whatever labels it has.
 - **Sent mail** is filed by Gmail itself; Nail does not add a copy.
+- **Rules and invitations** act on new mail in the inbox only — not on
+  your own sent mail, Spam or Trash (as for other accounts).
+- **Settings → Accounts** shows a Gmail account as "Gmail API" and lets you
+  change its shortest and longest check intervals.
 - Chats are not synced.
 - Gmail has no "answered" mark, so the replied mark exists only in Nail.
 

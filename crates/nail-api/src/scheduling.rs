@@ -270,11 +270,24 @@ pub enum ItipIssue {
     /// More than one event (different `UID`s) in one message; only the
     /// first is used.
     SeveralEvents,
+    /// The message names another organizer than the user's copy of the
+    /// event (possible hijacking by someone who knows the `UID`): never
+    /// applied automatically, and applying it by hand keeps the stored
+    /// organizer.
+    OrganizerChanged,
+    /// The sender acts for the organizer / attendee only through the
+    /// `SENT-BY` the message itself names (unverifiable; never applied
+    /// automatically).
+    SentOnBehalf,
+    /// A `REPLY` / `COUNTER` / `REFRESH` from someone who is not invited
+    /// to the event (nor a declared delegate): never applied
+    /// automatically.
+    UninvitedAttendee,
 }
 
 impl ItipIssue {
     /// Every issue.
-    pub const ALL: [ItipIssue; 10] = [
+    pub const ALL: [ItipIssue; 13] = [
         Self::Unparsable,
         Self::UnknownMethod,
         Self::NoEvent,
@@ -285,6 +298,9 @@ impl ItipIssue {
         Self::SenderNotAttendee,
         Self::NotAddressedToMe,
         Self::SeveralEvents,
+        Self::OrganizerChanged,
+        Self::SentOnBehalf,
+        Self::UninvitedAttendee,
     ];
 
     /// The Fluent id (`itip-issue-*`, in `core-scheduling.ftl`).
@@ -300,7 +316,26 @@ impl ItipIssue {
             Self::SenderNotAttendee => "itip-issue-sender-not-attendee",
             Self::NotAddressedToMe => "itip-issue-not-addressed-to-me",
             Self::SeveralEvents => "itip-issue-several-events",
+            Self::OrganizerChanged => "itip-issue-organizer-changed",
+            Self::SentOnBehalf => "itip-issue-sent-on-behalf",
+            Self::UninvitedAttendee => "itip-issue-uninvited-attendee",
         }
+    }
+
+    /// Whether the issue keeps the core from processing the message on
+    /// its own (the card still offers its actions, with the warning):
+    /// sender checks, organizer changes, `SENT-BY` claims, uninvited
+    /// attendees and messages not addressed to the user.
+    pub fn blocks_automatic(self) -> bool {
+        matches!(
+            self,
+            Self::SenderNotOrganizer
+                | Self::SenderNotAttendee
+                | Self::OrganizerChanged
+                | Self::SentOnBehalf
+                | Self::UninvitedAttendee
+                | Self::NotAddressedToMe
+        ) || self.is_fatal()
     }
 
     /// Whether the issue makes the invitation unusable (vs. a warning).
@@ -786,6 +821,19 @@ mod tests {
         }
         assert!(ItipIssue::MissingUid.is_fatal());
         assert!(!ItipIssue::SenderNotOrganizer.is_fatal());
+        for issue in [
+            ItipIssue::SenderNotOrganizer,
+            ItipIssue::SenderNotAttendee,
+            ItipIssue::OrganizerChanged,
+            ItipIssue::SentOnBehalf,
+            ItipIssue::UninvitedAttendee,
+            ItipIssue::NotAddressedToMe,
+            ItipIssue::Unparsable,
+        ] {
+            assert!(issue.blocks_automatic(), "{issue:?}");
+        }
+        assert!(!ItipIssue::SeveralEvents.blocks_automatic());
+        assert!(!ItipIssue::AttendeeCount.blocks_automatic());
         for issue in FreeBusyIssue::ALL {
             assert!(issue.message_id().starts_with("freebusy-issue-"));
         }

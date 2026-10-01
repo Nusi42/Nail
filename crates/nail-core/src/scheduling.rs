@@ -10,8 +10,10 @@
 //!   the instance cache and the transport (iMIP, or the CalDAV server when
 //!   it schedules: RFC 6638 `SCHEDULE-AGENT`).
 //! * **Arrival**: new iTIP mail is recorded and processed per
-//!   [`SchedulingSettings`] — never when the sender check failed
-//!   (`sender-not-organizer` / `sender-not-attendee`) or the mail is junk.
+//!   [`SchedulingSettings`] — never when the card has an issue that
+//!   [`ItipIssue::blocks_automatic`] (sender checks, `SENT-BY` claims,
+//!   another organizer than the copy's, uninvited attendees), never
+//!   `PUBLISH` or observer messages, never junk.
 //! * **Writes** go through the PIM queue (`save_item` / `delete_item`;
 //!   `nail-ical` patches the stored text); **iMIP mail** goes through the
 //!   outbox as a prepared message (`AutomaticMail::Itip`, undo send
@@ -249,6 +251,15 @@ impl Service {
         }))
     }
 
+    /// Whether the message carries an iTIP `REFRESH` (applying it mails
+    /// the current version; remote sessions need `send` for that).
+    pub(crate) async fn is_itip_refresh(&self, id: &MessageId) -> bool {
+        matches!(
+            self.load_itip(id).await,
+            Ok(Some(loaded)) if loaded.object.method == Some(ItipMethod::Refresh)
+        )
+    }
+
     /// Like [`Self::load_itip`], `invalid_request` without an iTIP part.
     pub(crate) async fn loaded(&self, id: &MessageId) -> Result<Loaded> {
         self.load_itip(id)
@@ -373,7 +384,14 @@ impl Service {
             self.copy_of(&uid).await?
         };
         let analysis = nail_itip::card::analyze(object, &loaded.senders, &me);
-        let organizer = object.organizer().map(|o| normalize(&o.email));
+        // The version the calendar has is keyed on the copy's organizer: a
+        // message naming another organizer must not compare against "no
+        // version" (and so always look newer).
+        let organizer = copy
+            .as_ref()
+            .and_then(|c| c.event.fields.organizer.as_ref())
+            .or_else(|| object.organizer())
+            .map(|o| normalize(&o.email));
         let from = analysis
             .from_attendee
             .as_ref()
@@ -540,15 +558,25 @@ impl Service {
     }
 
     /// Records the organizer's version the copy now has.
+    ///
+    /// The version is keyed on the organizer of the user's copy (the
+    /// message's only when no copy names one), the same key the card reads.
     async fn record_version(&self, object: &ItipObject, message: Option<&MessageId>) {
-        let (Some(uid), Some(organizer)) = (object.uid.clone(), object.organizer()) else {
+        let Some(uid) = object.uid.clone() else {
+            return;
+        };
+        let stored = match self.copy_of(&uid).await {
+            Ok(copy) => copy.and_then(|c| c.event.fields.organizer.map(|o| o.email)),
+            Err(_) => None,
+        };
+        let Some(organizer) = stored.or_else(|| object.organizer().map(|o| o.email.clone())) else {
             return;
         };
         let version = object.version();
         let record = ItipStateRecord {
             uid,
             recurrence_id: String::new(),
-            address: normalize(&organizer.email),
+            address: normalize(&organizer),
             party: ItipParty::Organizer,
             sequence: version.sequence,
             dtstamp: version.dtstamp,
@@ -1429,13 +1457,11 @@ impl Service {
                     continue;
                 }
             };
-            let spoofed = card.issues.iter().any(|i| {
-                matches!(
-                    i,
-                    ItipIssue::SenderNotOrganizer | ItipIssue::SenderNotAttendee
-                )
-            });
-            if spoofed || card.state == InvitationState::Invalid {
+            // Spoofed senders, `SENT-BY` claims, another organizer than the
+            // copy's, uninvited attendees, messages about other people's
+            // events: the card shows them, nothing is applied on its own.
+            let blocked = card.issues.iter().any(|i| i.blocks_automatic());
+            if blocked || card.state == InvitationState::Invalid {
                 self.mark_message(&loaded, ItipMessageState::Ignored, None)
                     .await;
                 continue;
@@ -1445,14 +1471,26 @@ impl Service {
                     .await;
                 continue;
             }
-            let automatic = (card.allows(InvitationAction::AddToCalendar)
-                && settings.add_invitations
-                && card.method != ItipMethod::Publish
-                && card.role == InvitationRole::Attendee)
-                || (card.allows(InvitationAction::UpdateCalendar) && settings.apply_updates)
-                || (card.allows(InvitationAction::ApplyReply) && settings.apply_replies)
-                || (card.allows(InvitationAction::RemoveFromCalendar)
-                    && settings.apply_cancellations);
+            // PUBLISH carries no sender check and observers are not part of
+            // the event: both are only ever applied by hand. Organizer
+            // messages are applied for attendees only (the user's own
+            // REQUEST coming back is not an update), answers for the
+            // organizer only.
+            let eligible = card.method != ItipMethod::Publish
+                && card.role
+                    == if card.method.from_organizer() {
+                        InvitationRole::Attendee
+                    } else {
+                        InvitationRole::Organizer
+                    };
+            let automatic = eligible
+                && ((card.allows(InvitationAction::AddToCalendar)
+                    && settings.add_invitations
+                    && card.role == InvitationRole::Attendee)
+                    || (card.allows(InvitationAction::UpdateCalendar) && settings.apply_updates)
+                    || (card.allows(InvitationAction::ApplyReply) && settings.apply_replies)
+                    || (card.allows(InvitationAction::RemoveFromCalendar)
+                        && settings.apply_cancellations));
             if automatic {
                 match self.apply_message(&loaded, None).await {
                     Ok(_) => {

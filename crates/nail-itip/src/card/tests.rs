@@ -140,7 +140,9 @@ fn spoofed_invitations_are_flagged() {
         "ORGANIZER;CN=Ada;SENT-BY=\"mailto:assistant@example.org\":",
     );
     let inv = card(&delegated, &["assistant@example.org"], &bob(), None);
-    assert!(inv.issues.is_empty());
+    // ... but only with a warning: the claim comes from the message itself.
+    assert_eq!(inv.issues, [ItipIssue::SentOnBehalf]);
+    assert!(inv.allows(A::Accept));
     // The Sender header counts too (calendar services sending for the organizer).
     let inv = card(
         &text,
@@ -602,4 +604,107 @@ fn disallowed_counters_and_my_entry() {
     let own = card(&text, &["ada@example.org"], &ada(), None);
     assert_eq!(own.role, InvitationRole::Organizer);
     assert_eq!(own.actions, [A::AddToCalendar]);
+}
+
+#[test]
+fn another_organizer_than_the_stored_copy_is_flagged() {
+    // Review M3b: Mallory reuses the UID of Ada's meeting, names herself as
+    // the organizer and sends from her own address (the sender check
+    // passes against the message alone).
+    let event = stored_event(&request(0, "20261001T080000Z"), 0);
+    let stored = Some(StoredCopy {
+        event: &event,
+        dtstamp: Some("2026-10-01T08:00:00Z"),
+        read_only: false,
+    });
+    let hijack = request(1, "20261002T080000Z").replace(
+        "ORGANIZER;CN=Ada:mailto:ada@example.org",
+        "ORGANIZER:mailto:mallory@evil.example",
+    );
+    let inv = card(&hijack, &["mallory@evil.example"], &bob(), stored);
+    assert_eq!(inv.issues, [ItipIssue::OrganizerChanged]);
+    assert!(inv.issues.iter().any(|i| i.blocks_automatic()));
+    // A PUBLISH over the event (no attendees, any organizer).
+    let publish = cal(
+        "PUBLISH",
+        "BEGIN:VEVENT\r\nUID:m1@example.org\r\nDTSTART:20261005T070000Z\r\n\
+DTEND:20261005T080000Z\r\nSUMMARY:Published over\r\nSEQUENCE:0\r\n\
+DTSTAMP:20261003T080000Z\r\nORGANIZER:mailto:someone@evil.example\r\nEND:VEVENT\r\n",
+    );
+    let inv = card(&publish, &["mallory@evil.example"], &bob(), stored);
+    assert!(inv.issues.contains(&ItipIssue::OrganizerChanged));
+    // The real organizer: no issue.
+    let update = request(1, "20261002T080000Z");
+    let inv = card(&update, &["ada@example.org"], &bob(), stored);
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
+    // No stored copy: nothing to compare with.
+    let inv = card(&hijack, &["mallory@evil.example"], &bob(), None);
+    assert!(inv.issues.is_empty(), "{:?}", inv.issues);
+}
+
+#[test]
+fn a_sent_by_claim_is_not_trusted() {
+    // Review M3b: the SENT-BY of the message itself cannot prove anything.
+    let text = request(0, "20261001T080000Z").replace(
+        "ORGANIZER;CN=Ada:mailto:ada@example.org",
+        "ORGANIZER;SENT-BY=\"mailto:mallory@evil.example\":mailto:ceo@work.example",
+    );
+    let inv = card(&text, &["mallory@evil.example"], &bob(), None);
+    assert_eq!(inv.issues, [ItipIssue::SentOnBehalf]);
+    assert!(ItipIssue::SentOnBehalf.blocks_automatic());
+    // The same on the attendee side.
+    let event = stored_event(&request(1, "20261001T080000Z"), 1);
+    let stored = Some(StoredCopy {
+        event: &event,
+        dtstamp: None,
+        read_only: false,
+    });
+    let answer = reply("ACCEPTED", 1, "20261001T090000Z").replace(
+        "ATTENDEE;CN=Bob;",
+        "ATTENDEE;CN=Bob;SENT-BY=\"mailto:mallory@evil.example\";",
+    );
+    let inv = card(&answer, &["mallory@evil.example"], &ada(), stored);
+    assert_eq!(inv.issues, [ItipIssue::SentOnBehalf]);
+    // The organizer sending themselves stays clean.
+    let inv = card(&text, &["ceo@work.example"], &bob(), None);
+    assert!(inv.issues.is_empty());
+}
+
+#[test]
+fn answers_from_uninvited_people_are_flagged() {
+    // Review M3b: a REPLY from someone not on the event would add them.
+    let event = stored_event(&request(1, "20261001T080000Z"), 1);
+    let stored = Some(StoredCopy {
+        event: &event,
+        dtstamp: None,
+        read_only: false,
+    });
+    let crasher = reply("ACCEPTED", 1, "20261001T090000Z")
+        .replace("mailto:bob@example.org", "mailto:mallory@evil.example");
+    let inv = card(&crasher, &["mallory@evil.example"], &ada(), stored);
+    assert_eq!(inv.issues, [ItipIssue::UninvitedAttendee]);
+    // An invited attendee: no issue.
+    let ok = reply("ACCEPTED", 1, "20261001T090000Z");
+    assert!(
+        card(&ok, &["bob@example.org"], &ada(), stored)
+            .issues
+            .is_empty()
+    );
+    // A delegate an attendee declared is expected.
+    let mut delegating = event.clone();
+    delegating.fields.attendees[0]
+        .delegated_to
+        .push("dan@example.org".into());
+    let stored = Some(StoredCopy {
+        event: &delegating,
+        dtstamp: None,
+        read_only: false,
+    });
+    let delegate = reply("ACCEPTED", 1, "20261001T090000Z")
+        .replace("mailto:bob@example.org", "mailto:dan@example.org");
+    assert!(
+        card(&delegate, &["dan@example.org"], &ada(), stored)
+            .issues
+            .is_empty()
+    );
 }

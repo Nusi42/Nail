@@ -969,3 +969,28 @@ async fn reqwest_get(server: &MockGmailServer, path: &str) -> (u16, String) {
         .unwrap();
     (response.status().as_u16(), response.text().await.unwrap())
 }
+
+#[tokio::test]
+async fn every_message_id_is_listed_without_fetching() {
+    // Review M3b: merging a resumed full listing needs the server's ids.
+    let (server, engine) = demo().await;
+    let trashed = server.deliver(&raw("t@example.org", "t", ""), &["TRASH"]);
+    let (_, listed, _) = full_sync(&engine, None).await;
+    server.clear_requests();
+    let ids = engine.all_message_ids().await.unwrap();
+    let expected: std::collections::HashSet<String> =
+        listed.iter().map(|m| m.remote_id.clone()).collect();
+    // Every listed message (the listing leaves out chat transcripts, the
+    // id set does not: they are never stored, so the merge ignores them).
+    assert!(expected.is_subset(&ids), "{expected:?} {ids:?}");
+    assert!(ids.contains(&trashed));
+    // Ids only: no message was fetched.
+    assert!(
+        server
+            .requests()
+            .iter()
+            .all(|r| r.path.ends_with("/messages") && !r.in_batch),
+        "{:?}",
+        server.requests()
+    );
+}

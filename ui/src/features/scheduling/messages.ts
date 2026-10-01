@@ -34,6 +34,9 @@ export const ITIP_ISSUES: readonly ItipIssue[] = [
   "sender-not-attendee",
   "not-addressed-to-me",
   "several-events",
+  "organizer-changed",
+  "sent-on-behalf",
+  "uninvited-attendee",
 ];
 
 /** Problems with free/busy questions (`FreeBusyIssue::message_id`). */

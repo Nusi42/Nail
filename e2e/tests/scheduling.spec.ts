@@ -300,3 +300,61 @@ test("free/busy shows the busy blocks of another account on the CalDAV server", 
       .locator('[data-part="freebusy.busy"]'),
   ).toHaveCount(2);
 });
+
+interface DavObject {
+  name: string;
+  etag: string;
+  data: string;
+}
+
+const davObjects = (collection: string) =>
+  control<DavObject[]>(server, "dav-objects", { collection });
+
+test("invitations go to the CalDAV calendar chosen in the settings and updates change it there", async ({
+  page,
+}) => {
+  await openApp(page);
+  // Settings: new invitations go to the CalDAV calendar "Personal".
+  const calendar = await openCalendar(page);
+  await page
+    .getByRole("toolbar", { name: "Calendar actions" })
+    .getByRole("button", { name: "Invitation settings", exact: true })
+    .click();
+  const settings = page.getByRole("dialog", { name: "Invitation settings" });
+  await settings.getByLabel("Calendar for new invitations").selectOption({ label: "Personal" });
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(settings).toBeHidden();
+  await calendar.getByRole("button", { name: "Close" }).first().click();
+  await expect(calendar).toBeHidden();
+
+  const uid = "e2e-orion@example.org";
+  await deliver(page, request(uid, "Orion sync", 1), "Orion sync");
+  // Added on arrival: the event is written to the mock CalDAV server.
+  await expect
+    .poll(
+      async () =>
+        (await davObjects("personal")).some(
+          (o) => o.data.includes(`UID:${uid}`) && o.data.includes("SUMMARY:Orion sync"),
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  // The organizer's update changes the copy on the server.
+  await deliver(
+    page,
+    request(uid, "Orion sync moved", 2, 1, "20261002T080000Z"),
+    "Orion sync moved",
+  );
+  await expect
+    .poll(
+      async () =>
+        (await davObjects("personal")).some(
+          (o) => o.data.includes(`UID:${uid}`) && o.data.includes("SUMMARY:Orion sync moved"),
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  expect((await davObjects("personal")).filter((o) => o.data.includes(`UID:${uid}`))).toHaveLength(
+    1,
+  );
+});

@@ -18,6 +18,9 @@ itip-issue-sender-not-organizer = This invitation was not sent by the organizer.
 itip-issue-sender-not-attendee = This reply was not sent by the participant it names.
 itip-issue-not-addressed-to-me = None of your addresses is invited to this event.
 itip-issue-several-events = This message contains several events; only the first is shown.
+itip-issue-organizer-changed = This message names a different organizer than the event in your calendar. It may not come from the real organizer.
+itip-issue-sent-on-behalf = This message was sent by someone acting for the organizer or participant. Check it before you answer.
+itip-issue-uninvited-attendee = This answer comes from someone who is not invited to the event.
 
 ## Problems with free/busy questions (FreeBusyIssue)
 

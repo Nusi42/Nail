@@ -71,7 +71,10 @@ has:
 - **Access** — *Read only* (read mail, attachments and sources),
   *Everything but sending*, or *Full access*. **Administration** (settings,
   accounts, keys, remote users) is a separate choice. Narrowing a user's
-  access narrows their devices and sessions at once.
+  access narrows their devices and sessions at once. With *Everything but
+  sending* a user can still answer invitations without telling the
+  organizer, but nothing that mails someone: sending an answer, proposing
+  a new time, forwarding an invitation, sending or cancelling a meeting.
 - **Password** — at least 12 characters. There are **no default
   passwords**: a new user has none and first signs in from a device paired
   with a code.

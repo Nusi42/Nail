@@ -312,6 +312,30 @@ impl GmailEngine {
         Ok(remote_message(&message, &table))
     }
 
+    /// Every message id of the mailbox (Spam and Trash included): ids
+    /// only, `messages.list` pages of 500 without fetching anything else.
+    /// Merging a resumed full listing needs the whole set.
+    pub async fn all_message_ids(&self) -> Result<HashSet<String>, GmailError> {
+        let mut out = HashSet::new();
+        let mut token: Option<String> = None;
+        loop {
+            let list = self
+                .client
+                .list_messages(&ListQuery {
+                    include_spam_trash: true,
+                    max_results: Some(500),
+                    page_token: token.take(),
+                    ..ListQuery::default()
+                })
+                .await?;
+            out.extend(list.messages.into_iter().map(|m| m.id));
+            match list.next_page_token {
+                Some(next) => token = Some(next),
+                None => return Ok(out),
+            }
+        }
+    }
+
     /// The message ids of a thread, oldest first.
     pub async fn thread_message_ids(&self, thread_id: &str) -> Result<Vec<String>, GmailError> {
         let thread = self.client.get_thread(thread_id, Format::Minimal).await?;

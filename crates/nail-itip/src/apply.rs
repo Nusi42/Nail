@@ -85,11 +85,16 @@ fn check_uid(existing: &CalendarEvent, object: &ItipObject) -> Result<(), ApplyE
 }
 
 /// The user's personal parts of a field set (alarms, colour) carried over
-/// to the organizer's new version.
+/// to the organizer's new version. The stored organizer stays too: an
+/// update never changes who organizes the event (a message naming another
+/// organizer is `organizer-changed` on the card and applied only by hand).
 fn keep_personal(new: &mut EventFields, old: &EventFields) {
     new.alarms.clone_from(&old.alarms);
     if new.color.is_none() {
         new.color.clone_from(&old.color);
+    }
+    if old.organizer.is_some() {
+        new.organizer.clone_from(&old.organizer);
     }
 }
 

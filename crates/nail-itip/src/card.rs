@@ -7,11 +7,18 @@
 //!   when several are listed); else an observer (forwarded invitation,
 //!   `PUBLISH`, or a message about someone else's event).
 //! * **Sender checks** — organizer methods (`REQUEST`, `ADD`, `CANCEL`,
-//!   `DECLINECOUNTER`) must come from the organizer or its `SENT-BY`;
-//!   attendee methods (`REPLY`, `COUNTER`, `REFRESH`) from the attendee
-//!   they name or its `SENT-BY`. A mismatch is a spoofing warning
-//!   (`sender-not-organizer` / `sender-not-attendee`): the card still
-//!   offers its actions, the core never applies such a message on its own.
+//!   `DECLINECOUNTER`) must come from the organizer; attendee methods
+//!   (`REPLY`, `COUNTER`, `REFRESH`) from the attendee they name. A
+//!   mismatch is a spoofing warning (`sender-not-organizer` /
+//!   `sender-not-attendee`). A sender that matches only the `SENT-BY` the
+//!   message itself names is `sent-on-behalf` (the claim cannot be
+//!   verified). The card still offers its actions; the core never applies
+//!   such a message on its own ([`ItipIssue::blocks_automatic`]).
+//! * **Stored copy checks** — a message from the organizer side that names
+//!   another organizer than the user's copy is `organizer-changed` (anyone
+//!   who knows the `UID` could otherwise rewrite the event); an answer
+//!   from someone who is neither invited nor a declared delegate is
+//!   `uninvited-attendee`.
 //! * **State** — against the stored copy and the stored scheduling state
 //!   with [`crate::order::Version`]: newer = `update`, equal = `current`,
 //!   older = `outdated` (stale updates are ignored).
@@ -123,11 +130,13 @@ pub fn analyze(object: &ItipObject, senders: &[String], me: &UserAddresses) -> A
         None => None,
     };
 
-    let from_sender = |a: &ItipAttendee| {
-        senders
-            .iter()
-            .any(|s| same(&a.attendee.email, s) || a.sent_by.as_deref().is_some_and(|b| same(b, s)))
+    let direct = |a: &ItipAttendee| senders.iter().any(|s| same(&a.attendee.email, s));
+    let on_behalf = |a: &ItipAttendee| {
+        a.sent_by
+            .as_deref()
+            .is_some_and(|b| senders.iter().any(|s| same(b, s)))
     };
+    let from_sender = |a: &ItipAttendee| direct(a) || on_behalf(a);
     if !method.from_organizer() {
         out.from_attendee = match method {
             ItipMethod::Counter if main.attendees.len() > 1 => {
@@ -145,14 +154,26 @@ pub fn analyze(object: &ItipObject, senders: &[String], me: &UserAddresses) -> A
 
     if !senders.is_empty() {
         if method.from_organizer() && method != ItipMethod::Publish {
-            if !senders.iter().any(|s| main.sent_by_organizer(s)) {
+            let organizer = main.organizer.as_ref();
+            if senders
+                .iter()
+                .any(|s| organizer.is_some_and(|o| same(&o.email, s)))
+            {
+                // The organizer itself.
+            } else if senders.iter().any(|s| main.sent_by_organizer(s)) {
+                out.issues.push(ItipIssue::SentOnBehalf);
+            } else {
                 out.issues.push(ItipIssue::SenderNotOrganizer);
             }
         } else if !method.from_organizer()
             && let Some(attendee) = &out.from_attendee
-            && !from_sender(attendee)
+            && !direct(attendee)
         {
-            out.issues.push(ItipIssue::SenderNotAttendee);
+            out.issues.push(if on_behalf(attendee) {
+                ItipIssue::SentOnBehalf
+            } else {
+                ItipIssue::SenderNotAttendee
+            });
         }
     }
 
@@ -201,13 +222,19 @@ pub fn build_card(input: CardInput<'_>) -> Invitation {
     let analysis = analyze(object, input.senders, input.me);
     let main = object.main();
     let mut issues = object.issues.clone();
-    for issue in &analysis.issues {
+    let method = object.method.unwrap_or(ItipMethod::Publish);
+    let recurrence_id = main.and_then(|c| c.recurrence_id.clone());
+    let stored_issues = match (input.stored, main, object.method) {
+        (Some(stored), Some(main), Some(_)) => {
+            copy_issues(&stored, main, method, &analysis, input.me)
+        }
+        _ => Vec::new(),
+    };
+    for issue in analysis.issues.iter().chain(&stored_issues) {
         if !issues.contains(issue) {
             issues.push(*issue);
         }
     }
-    let method = object.method.unwrap_or(ItipMethod::Publish);
-    let recurrence_id = main.and_then(|c| c.recurrence_id.clone());
     let state = if object.is_invalid() || main.is_none() {
         InvitationState::Invalid
     } else {
@@ -266,6 +293,52 @@ pub fn build_card(input: CardInput<'_>) -> Invitation {
         transport: input.transport,
         issues,
     }
+}
+
+/// Problems of a message compared with the user's copy of the event:
+/// another organizer (`organizer-changed`), an answer from someone who is
+/// not invited (`uninvited-attendee`).
+fn copy_issues(
+    stored: &StoredCopy<'_>,
+    main: &ItipComponent,
+    method: ItipMethod,
+    analysis: &Analysis,
+    me: &UserAddresses,
+) -> Vec<ItipIssue> {
+    let mut out = Vec::new();
+    if method.from_organizer() {
+        let same_organizer = match (&stored.event.fields.organizer, &main.organizer) {
+            (Some(have), Some(named)) => {
+                same(&have.email, &named.email)
+                    || (me.contains(&have.email) && me.contains(&named.email))
+            }
+            (None, None) => true,
+            _ => false,
+        };
+        if !same_organizer {
+            out.push(ItipIssue::OrganizerChanged);
+        }
+    } else if let Some(from) = &analysis.from_attendee
+        && !is_invited(stored, main.recurrence_id.as_ref(), &from.attendee.email)
+    {
+        out.push(ItipIssue::UninvitedAttendee);
+    }
+    out
+}
+
+/// Whether `address` is an attendee of the copy (the series or the
+/// occurrence) or a delegate an attendee declared.
+pub fn is_invited(stored: &StoredCopy<'_>, recurrence_id: Option<&PimTime>, address: &str) -> bool {
+    let mut sets = vec![&stored.event.fields];
+    if recurrence_id.is_some() {
+        sets.push(stored.fields_for(recurrence_id));
+    }
+    sets.iter().any(|fields| {
+        fields
+            .attendees
+            .iter()
+            .any(|a| same(&a.email, address) || a.delegated_to.iter().any(|d| same(d, address)))
+    })
 }
 
 /// The proposal of a `COUNTER` component.

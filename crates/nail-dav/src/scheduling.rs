@@ -177,6 +177,16 @@ pub async fn discover_scheduling(
     let auto_schedule = match client.dav_classes(options_target).await {
         Ok(classes) => classes.iter().any(|c| c == "calendar-auto-schedule"),
         Err(e @ (DavError::AuthFailed | DavError::Token(_))) => return Err(e),
+        // Transient failures leave the answer unknown (asked again later):
+        // assuming no server scheduling would make Nail mail what the
+        // server also delivers.
+        Err(
+            e @ (DavError::Network(_)
+            | DavError::Timeout
+            | DavError::Tls(_)
+            | DavError::RateLimited(_)),
+        ) => return Err(e),
+        Err(e @ DavError::Status { status, .. }) if status >= 500 => return Err(e),
         Err(e) => {
             tracing::debug!(error = %e, "OPTIONS failed; assuming no server scheduling");
             false

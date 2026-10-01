@@ -315,6 +315,38 @@ function AccountForm({
           }
         />
       )}
+      {incoming.protocol === "gmail" && (
+        <Section titleId="settings-gmail">
+          <NumberField
+            labelId="settings-gmail-poll-interval"
+            name="poll-interval"
+            hintId="settings-gmail-poll-interval-hint"
+            min={10}
+            value={incoming.options.poll_interval_secs}
+            onChange={(v) =>
+              setConfig({
+                ...config,
+                incoming: { ...incoming, options: { ...incoming.options, poll_interval_secs: v } },
+              })
+            }
+          />
+          <NumberField
+            labelId="settings-gmail-max-poll-interval"
+            name="max-poll-interval"
+            min={10}
+            value={incoming.options.max_poll_interval_secs}
+            onChange={(v) =>
+              setConfig({
+                ...config,
+                incoming: {
+                  ...incoming,
+                  options: { ...incoming.options, max_poll_interval_secs: v },
+                },
+              })
+            }
+          />
+        </Section>
+      )}
       {incoming.protocol === "pop3" && (
         <Section titleId="settings-pop3">
           <CheckField

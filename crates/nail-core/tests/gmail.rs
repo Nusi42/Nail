@@ -16,7 +16,7 @@ use nail_api::{
     MoveTarget, Request, Response, SearchQuery,
 };
 use nail_core::{EngineTiming, Service, ServiceOptions};
-use nail_proto_gmail::testing::MockGmailServer;
+use nail_proto_gmail::testing::{InjectedError, MockGmailServer};
 use nail_testkit_net::{MockOAuthConfig, MockOAuthServer};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
@@ -508,4 +508,149 @@ async fn test_account_reads_the_gmail_profile() {
     assert_eq!(result.incoming.error, None, "{:?}", result.incoming);
     assert_eq!(result.incoming.capabilities, ["gmail:ada@gmail.example"]);
     assert!(result.outgoing.is_none());
+}
+
+/// An iMIP invitation from Grace to the Gmail user.
+fn gmail_invitation(uid: &str, subject: &str) -> Vec<u8> {
+    format!(
+        "From: Grace Hopper <grace@example.org>\r\nTo: ada@gmail.example\r\nSubject: {subject}\r\n\
+         Date: Thu, 01 Oct 2026 12:00:00 +0000\r\nMessage-ID: <{uid}>\r\nMIME-Version: 1.0\r\n\
+         Content-Type: text/calendar; method=REQUEST; charset=utf-8\r\n\r\n\
+         BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//EN\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\n\
+         UID:{uid}\r\nDTSTAMP:20261001T080000Z\r\nSEQUENCE:0\r\nDTSTART:20261005T090000Z\r\n\
+         DTEND:20261005T100000Z\r\nSUMMARY:{subject}\r\nORGANIZER:mailto:grace@example.org\r\n\
+         ATTENDEE;RSVP=TRUE:mailto:ada@gmail.example\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    )
+    .into_bytes()
+}
+
+async fn invitation_event(env: &Env, message: &MessageSummary) -> Option<nail_api::EventId> {
+    match request(
+        &env.service,
+        Request::GetInvitation {
+            message_id: message.id.clone(),
+        },
+    )
+    .await
+    {
+        Response::Invitation {
+            invitation: Some(card),
+        } => card.event_id,
+        other => panic!("no card: {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_inbox_mail_counts_as_arriving() {
+    // Review M3b: new Gmail mail in Sent, Spam or Trash ran through the
+    // arrival rules and iTIP processing.
+    let env = setup().await;
+    synced(&env).await;
+    env.gmail.deliver(
+        &gmail_invitation("sent-1@example.org", "Copy in Sent"),
+        &["SENT"],
+    );
+    env.gmail.deliver(
+        &gmail_invitation("trash-1@example.org", "Copy in Trash"),
+        &["TRASH"],
+    );
+    env.gmail.deliver(
+        &gmail_invitation("inbox-1@example.org", "Invitation in the inbox"),
+        &["INBOX", "UNREAD"],
+    );
+    env.service
+        .handle(Request::SyncNow {
+            account_id: Some(AccountId::new(ACCOUNT)),
+        })
+        .await;
+    until("the inbox invitation is added to the calendar", || async {
+        let inbox = messages(&env.service, FolderRole::Inbox).await;
+        match inbox
+            .iter()
+            .find(|m| m.subject == "Invitation in the inbox")
+        {
+            Some(m) => invitation_event(&env, m).await.is_some(),
+            None => false,
+        }
+    })
+    .await;
+    for (role, subject) in [
+        (FolderRole::Sent, "Copy in Sent"),
+        (FolderRole::Trash, "Copy in Trash"),
+    ] {
+        let list = messages(&env.service, role).await;
+        let message = by_subject(&list, subject);
+        assert_eq!(invitation_event(&env, message).await, None, "{subject}");
+    }
+}
+
+fn plain(message_id: &str, subject: &str) -> Vec<u8> {
+    format!(
+        "From: Grace Hopper <grace@example.org>\r\nTo: ada@gmail.example\r\nSubject: {subject}\r\n\
+         Date: Thu, 01 Oct 2026 12:00:00 +0000\r\nMessage-ID: <{message_id}>\r\n\r\nHello.\r\n"
+    )
+    .into_bytes()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resumed_full_listing_still_removes_deleted_messages() {
+    // Review M3b: after a history expiry, a full listing interrupted and
+    // resumed on the next pass skipped the merge, so messages deleted on
+    // the server stayed in Nail.
+    let env = setup().await;
+    synced(&env).await;
+    let doomed = env
+        .gmail
+        .deliver(&plain("doomed@example.org", "Doomed"), &["INBOX"]);
+    env.service
+        .handle(Request::SyncNow {
+            account_id: Some(AccountId::new(ACCOUNT)),
+        })
+        .await;
+    until("the message arrives", || async {
+        messages(&env.service, FolderRole::Inbox)
+            .await
+            .iter()
+            .any(|m| m.subject == "Doomed")
+    })
+    .await;
+    // More than one listing page (100 messages a page).
+    for i in 0..105 {
+        env.gmail
+            .deliver(&plain(&format!("filler-{i}@example.org"), "Filler"), &[]);
+    }
+    env.gmail.delete(&doomed);
+    env.gmail.expire_history();
+    // The second page fails once: the pass ends, the next one resumes.
+    env.gmail.clear_requests();
+    env.gmail
+        .inject(InjectedError::status(400).on("pageToken").method("GET"));
+    env.service
+        .handle(Request::SyncNow {
+            account_id: Some(AccountId::new(ACCOUNT)),
+        })
+        .await;
+    until(
+        "the resumed listing removes the deleted message",
+        || async {
+            let resumed = env
+                .gmail
+                .requests()
+                .iter()
+                .filter(|r| r.path.ends_with("/messages") && r.query.contains("pageToken"))
+                .count()
+                >= 2;
+            resumed
+                && !messages(&env.service, FolderRole::Inbox)
+                    .await
+                    .iter()
+                    .any(|m| m.subject == "Doomed")
+        },
+    )
+    .await;
+    // Nothing else went.
+    let inbox = messages(&env.service, FolderRole::Inbox).await;
+    assert!(inbox.iter().any(|m| m.subject.contains("Lunch on Friday")));
+    let archive = messages(&env.service, FolderRole::Archive).await;
+    assert!(archive.iter().filter(|m| m.subject == "Filler").count() >= 100);
 }

@@ -54,8 +54,14 @@ import {
   type SchedulingWrite,
 } from "./queries";
 
-/** Issues that warn about a forged sender (shown first, as alerts). */
-const SPOOFING = new Set(["sender-not-organizer", "sender-not-attendee"]);
+/** Issues that warn about a forged sender or a hijacked event (shown first, as alerts). */
+const SPOOFING = new Set([
+  "sender-not-organizer",
+  "sender-not-attendee",
+  "organizer-changed",
+  "sent-on-behalf",
+  "uninvited-attendee",
+]);
 
 export interface InvitationCardProps {
   messageId: MessageId;

@@ -533,3 +533,26 @@ ATTENDEE:mailto:bob@example.org\r\nEND:VEVENT\r\n",
     );
     assert_eq!(single.fields.status, EventStatus::Confirmed);
 }
+
+#[test]
+fn an_update_never_changes_the_organizer() {
+    // Review M3b: a message naming another organizer (applied by hand from
+    // an `organizer-changed` card) keeps the stored organizer.
+    let existing = stored(&cal("REQUEST", SERIES));
+    let hijack = cal(
+        "REQUEST",
+        &SERIES
+            .replace("SEQUENCE:1", "SEQUENCE:2")
+            .replace(
+                "ORGANIZER:mailto:ada@example.org",
+                "ORGANIZER:mailto:mallory@evil.example",
+            )
+            .replace("SUMMARY:Weekly", "SUMMARY:Hijacked"),
+    );
+    let updated = apply_request(&existing, &parse_itip(&hijack, None)).unwrap();
+    assert_eq!(updated.fields.title, "Hijacked");
+    assert_eq!(
+        updated.fields.organizer.as_ref().map(|o| o.email.as_str()),
+        Some("ada@example.org")
+    );
+}

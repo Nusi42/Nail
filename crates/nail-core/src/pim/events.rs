@@ -253,6 +253,20 @@ impl Service {
     pub(crate) async fn save_item(&self, item: PimItem, raw: String) -> Result<PimWrite> {
         let now = self.pim_now();
         let collection = item.collection_id().to_owned();
+        // A meeting written to a CalDAV server whose RFC 6638 scheduling is
+        // not known yet: Nail delivers (iMIP), so the server is told to
+        // keep out (never both; M3b review).
+        let raw = match &item {
+            PimItem::Event(event) if !event.fields.attendees.is_empty() => {
+                match self.collection_source(&collection).await {
+                    Ok(source) if super::engine::scheduling_unknown(self, &source).await => {
+                        super::engine::client_scheduled(&raw, event)
+                    }
+                    _ => raw,
+                }
+            }
+            _ => raw,
+        };
         let write = self
             .inner
             .store

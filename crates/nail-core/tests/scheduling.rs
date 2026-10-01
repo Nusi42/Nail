@@ -718,3 +718,585 @@ async fn a_server_that_schedules_delivers_and_nail_mails_nothing() {
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert!(!smtp(&f).iter().any(|m| m.contains(&event.uid)));
 }
+
+/// Delivers Grace's invitation `uid` and waits until it is in the calendar
+/// (also proves that every message delivered before it was processed).
+async fn invited(f: &Fixture, uid: &str, title: &str) -> (MessageSummary, Invitation) {
+    let message = deliver(
+        f,
+        &invitation(uid, 0, title, "20261005T090000Z", "20261001T080000Z"),
+        title,
+    )
+    .await;
+    let card = until_some(&format!("{title:?} is in the calendar"), || async {
+        let c = card(f, &message).await;
+        c.event_id.is_some().then_some(c)
+    })
+    .await;
+    (message, card)
+}
+
+/// A meeting the user organizes in the local calendar, with Grace invited.
+async fn organized(f: &Fixture, title: &str) -> CalendarEvent {
+    let Response::Calendars { calendars } =
+        ok(&f.service, Request::ListCalendars { source_id: None }).await
+    else {
+        panic!()
+    };
+    let local = calendars
+        .iter()
+        .find(|c| c.source_id.as_str() == "local" && !c.read_only)
+        .unwrap();
+    let mut fields = EventFields::new(
+        title,
+        PimTime::utc("2026-10-08T13:00:00"),
+        PimTime::utc("2026-10-08T14:00:00"),
+    );
+    let mut grace = Attendee::new("grace@example.org");
+    grace.name = Some("Grace Hopper".into());
+    fields.attendees = vec![grace];
+    let Response::EventSaved { event, .. } = ok(
+        &f.service,
+        Request::CreateEvent {
+            calendar_id: local.id.clone(),
+            fields: Box::new(fields),
+            recurrence: None,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    *event
+}
+
+async fn get_event(f: &Fixture, id: &nail_api::EventId) -> CalendarEvent {
+    match ok(
+        &f.service,
+        Request::GetEvent {
+            event_id: id.clone(),
+        },
+    )
+    .await
+    {
+        Response::PimEvent { event } => *event,
+        other => panic!("{other:?}"),
+    }
+}
+
+const MALLORY: &str = "Mallory <mallory@evil.example>";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn hijacks_by_uid_are_never_applied() {
+    // Review M3b: anyone who knows a meeting's UID (a co-attendee, a
+    // forwarded invitation) must not rewrite it.
+    let f = setup().await;
+    let uid = "probe-1@example.org";
+    let (original, first) = invited(&f, uid, "Probe meeting").await;
+    let event_id = first.event_id.clone().unwrap();
+
+    // A: a REQUEST naming Mallory as the organizer, from Mallory.
+    let hijack = deliver(
+        &f,
+        &imip(
+            MALLORY,
+            MULTI_WORK_EMAIL,
+            "Hijacked",
+            "hijack-a",
+            "REQUEST",
+            uid,
+            1,
+            "20261002T080000Z",
+            &format!(
+                "DTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:Hijacked\r\n\
+                 LOCATION:https://evil.example/join\r\nORGANIZER:mailto:mallory@evil.example\r\n\
+                 ATTENDEE;RSVP=TRUE:mailto:{MULTI_WORK_EMAIL}\r\n"
+            ),
+        ),
+        "Hijacked",
+    )
+    .await;
+    // B: a PUBLISH over the event (no attendees, another organizer).
+    let publish = deliver(
+        &f,
+        &imip(
+            MALLORY,
+            MULTI_WORK_EMAIL,
+            "Published over",
+            "hijack-b",
+            "PUBLISH",
+            uid,
+            0,
+            "20261003T080000Z",
+            "DTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:Published over\r\n\
+             ORGANIZER:mailto:someone@evil.example\r\n",
+        ),
+        "Published over",
+    )
+    .await;
+    // C: a new invitation "from the CEO", sent by Mallory with a SENT-BY
+    // naming herself.
+    let sent_by = deliver(
+        &f,
+        &imip(
+            MALLORY,
+            MULTI_WORK_EMAIL,
+            "Board meeting",
+            "hijack-c",
+            "REQUEST",
+            "board-1@work.example",
+            0,
+            "20261001T080000Z",
+            &format!(
+                "DTSTART:20261007T090000Z\r\nDTEND:20261007T100000Z\r\nSUMMARY:Board meeting\r\n\
+                 ORGANIZER;SENT-BY=\"mailto:mallory@evil.example\":mailto:ceo@work.example\r\n\
+                 ATTENDEE;RSVP=TRUE:mailto:{MULTI_WORK_EMAIL}\r\n"
+            ),
+        ),
+        "Board meeting",
+    )
+    .await;
+    // Everything delivered before this one has been processed.
+    invited(&f, "sentinel-1@example.org", "Sentinel one").await;
+
+    let copy = get_event(&f, &event_id).await;
+    assert_eq!(copy.fields.title, "Probe meeting");
+    assert_eq!(copy.fields.location.as_deref(), Some("Room 1"));
+    assert_eq!(
+        copy.fields.organizer.as_ref().map(|o| o.email.as_str()),
+        Some("grace@example.org")
+    );
+    let a = card(&f, &hijack).await;
+    assert!(a.issues.contains(&ItipIssue::OrganizerChanged), "{a:?}");
+    let b = card(&f, &publish).await;
+    assert!(b.issues.contains(&ItipIssue::OrganizerChanged), "{b:?}");
+    let c = card(&f, &sent_by).await;
+    assert!(c.issues.contains(&ItipIssue::SentOnBehalf), "{c:?}");
+    assert_eq!(c.event_id, None);
+
+    // Applying A by hand (the card still offers it, with the warning) keeps
+    // the organizer, so the real organizer's later updates still apply on
+    // their own.
+    assert!(a.allows(InvitationAction::UpdateCalendar), "{a:?}");
+    ok(
+        &f.service,
+        Request::ApplyInvitation {
+            message_id: hijack.id.clone(),
+            calendar_id: None,
+        },
+    )
+    .await;
+    let copy = get_event(&f, &event_id).await;
+    assert_eq!(copy.fields.title, "Hijacked");
+    assert_eq!(
+        copy.fields.organizer.as_ref().map(|o| o.email.as_str()),
+        Some("grace@example.org")
+    );
+    let update = deliver(
+        &f,
+        &invitation(
+            uid,
+            5,
+            "Probe meeting (moved)",
+            "20261006T090000Z",
+            "20261004T080000Z",
+        ),
+        "Probe meeting (moved)",
+    )
+    .await;
+    eventually("the real organizer's update is applied", || async {
+        get_event(&f, &event_id).await.fields.title == "Probe meeting (moved)"
+    })
+    .await;
+    assert!(card(&f, &update).await.issues.is_empty());
+    assert_eq!(card(&f, &original).await.state, InvitationState::Outdated);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn replies_from_uninvited_people_are_not_recorded() {
+    // Review M3b: a REPLY from someone who is not invited would add them,
+    // and every later REQUEST would go to them too.
+    let f = setup().await;
+    let event = organized(&f, "Closed meeting").await;
+    let crasher = deliver(
+        &f,
+        &imip(
+            MALLORY,
+            MULTI_WORK_EMAIL,
+            "Accepted: Closed meeting",
+            "crasher-1",
+            "REPLY",
+            &event.uid,
+            0,
+            "20261001T090000Z",
+            &format!(
+                "ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:mallory@evil.example\r\n"
+            ),
+        ),
+        "Accepted: Closed meeting",
+    )
+    .await;
+    // Grace's own answer is recorded on arrival; Mallory's (delivered
+    // first) has been processed by then.
+    deliver(
+        &f,
+        &imip(
+            GRACE,
+            MULTI_WORK_EMAIL,
+            "Accepted: Closed meeting (Grace)",
+            "crasher-2",
+            "REPLY",
+            &event.uid,
+            0,
+            "20261001T100000Z",
+            &format!(
+                "ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n"
+            ),
+        ),
+        "Accepted: Closed meeting (Grace)",
+    )
+    .await;
+    eventually("Grace's answer is recorded", || async {
+        get_event(&f, &event.id).await.fields.attendees[0].status == ParticipationStatus::Accepted
+    })
+    .await;
+    let copy = get_event(&f, &event.id).await;
+    let emails: Vec<&str> = copy
+        .fields
+        .attendees
+        .iter()
+        .map(|a| a.email.as_str())
+        .collect();
+    assert_eq!(emails, ["grace@example.org"]);
+    let c = card(&f, &crasher).await;
+    assert!(c.issues.contains(&ItipIssue::UninvitedAttendee), "{c:?}");
+    let result = scheduled(
+        ok(
+            &f.service,
+            Request::SendInvitations {
+                event_id: event.id.clone(),
+                recurrence_id: None,
+                attendees: Vec::new(),
+                comment: None,
+            },
+        )
+        .await,
+    );
+    assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn attendees_propose_refresh_and_forward() {
+    let f = setup().await;
+    let uid = "propose-1@example.org";
+    let (message, first) = invited(&f, uid, "Proposal meeting").await;
+    let target = InvitationTarget::Message {
+        message_id: message.id.clone(),
+    };
+
+    // A new time: a COUNTER to the organizer.
+    let result = scheduled(
+        ok(
+            &f.service,
+            Request::ProposeNewTime {
+                target: target.clone(),
+                start: PimTime::utc("2026-10-05T15:00:00"),
+                end: PimTime::utc("2026-10-05T16:00:00"),
+                comment: Some("Afternoon?".into()),
+            },
+        )
+        .await,
+    );
+    assert_eq!(result.sent.len(), 1);
+    assert_eq!(result.sent[0].method, ItipMethod::Counter);
+    assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
+    assert!(result.sent[0].outbox_id.is_some());
+    eventually("the COUNTER reaches the SMTP server", || async {
+        smtp(&f).iter().any(|m| {
+            m.contains("METHOD:COUNTER")
+                && m.contains(&format!("UID:{uid}"))
+                && m.contains("DTSTART:20261005T150000Z")
+                && m.contains("Afternoon?")
+                && m.contains("grace@example.org")
+        })
+    })
+    .await;
+    // The calendar copy is unchanged until the organizer agrees.
+    let copy = event(&f, &first).await.unwrap();
+    assert_eq!(copy.fields.start, PimTime::utc("2026-10-05T09:00:00"));
+
+    // Asking for the current version: a REFRESH, from the event itself.
+    let result = scheduled(
+        ok(
+            &f.service,
+            Request::RefreshInvitation {
+                target: InvitationTarget::Event {
+                    event_id: copy.id.clone(),
+                    recurrence_id: None,
+                },
+            },
+        )
+        .await,
+    );
+    assert_eq!(result.sent[0].method, ItipMethod::Refresh);
+    assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
+    eventually("the REFRESH reaches the SMTP server", || async {
+        smtp(&f)
+            .iter()
+            .any(|m| m.contains("METHOD:REFRESH") && m.contains(&format!("UID:{uid}")))
+    })
+    .await;
+
+    // Forwarding: the organizer's REQUEST, unchanged, to Dan.
+    let result = scheduled(
+        ok(
+            &f.service,
+            Request::ForwardInvitation {
+                target,
+                to: vec![nail_api::Address {
+                    name: Some("Dan".into()),
+                    email: "dan@example.org".into(),
+                }],
+                comment: Some("You should come".into()),
+            },
+        )
+        .await,
+    );
+    assert_eq!(result.sent[0].method, ItipMethod::Request);
+    assert_eq!(result.sent[0].recipients, ["dan@example.org"]);
+    eventually("the forwarded REQUEST reaches the SMTP server", || async {
+        smtp(&f).iter().any(|m| {
+            m.contains("METHOD:REQUEST")
+                && m.contains(&format!("UID:{uid}"))
+                && m.contains("dan@example.org")
+                && m.contains("mailto:grace@example.org")
+        })
+    })
+    .await;
+    // Bad recipients are refused.
+    let response = f
+        .service
+        .handle(Request::ForwardInvitation {
+            target: InvitationTarget::Message {
+                message_id: message.id.clone(),
+            },
+            to: vec![nail_api::Address {
+                name: None,
+                email: "not an address".into(),
+            }],
+            comment: None,
+        })
+        .await;
+    assert!(matches!(response, Response::Error { .. }), "{response:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn declined_counters_tell_the_attendee_and_keep_the_time() {
+    let f = setup().await;
+    let event = organized(&f, "Fixed time review").await;
+    let counter = deliver(
+        &f,
+        &imip(
+            GRACE,
+            MULTI_WORK_EMAIL,
+            "New time proposed: Fixed time review",
+            "decline-counter-1",
+            "COUNTER",
+            &event.uid,
+            0,
+            "20261001T100000Z",
+            &format!(
+                "DTSTART:20261008T150000Z\r\nDTEND:20261008T160000Z\r\nSUMMARY:Fixed time review\r\n\
+                 ORGANIZER:mailto:{MULTI_WORK_EMAIL}\r\nATTENDEE;PARTSTAT=ACCEPTED:mailto:grace@example.org\r\n"
+            ),
+        ),
+        "New time proposed: Fixed time review",
+    )
+    .await;
+    let c = card(&f, &counter).await;
+    assert!(c.allows(InvitationAction::DeclineCounter), "{c:?}");
+    let result = scheduled(
+        ok(
+            &f.service,
+            Request::RespondToCounter {
+                message_id: counter.id.clone(),
+                accept: false,
+                comment: Some("The room is booked".into()),
+            },
+        )
+        .await,
+    );
+    assert_eq!(result.sent.len(), 1);
+    assert_eq!(result.sent[0].method, ItipMethod::DeclineCounter);
+    assert_eq!(result.sent[0].recipients, ["grace@example.org"]);
+    eventually("the DECLINECOUNTER reaches the SMTP server", || async {
+        smtp(&f).iter().any(|m| {
+            m.contains("METHOD:DECLINECOUNTER")
+                && m.contains(&format!("UID:{}", event.uid))
+                && m.contains("The room is booked")
+        })
+    })
+    .await;
+    let copy = get_event(&f, &event.id).await;
+    assert_eq!(copy.fields.start, PimTime::utc("2026-10-08T13:00:00"));
+    assert_eq!(copy.sequence, event.sequence);
+}
+
+/// The message with `subject` in any folder of the work account.
+async fn anywhere(f: &Fixture, subject: &str) -> Option<MessageSummary> {
+    let Response::Folders { folders } = ok(
+        &f.service,
+        Request::ListFolders {
+            account_id: AccountId::new(MULTI_WORK_ID),
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    for folder in folders {
+        if let Response::Messages { messages, .. } = ok(
+            &f.service,
+            Request::ListMessages {
+                folder_id: folder.id,
+                offset: 0,
+                limit: 500,
+            },
+        )
+        .await
+            && let Some(m) = messages.into_iter().find(|m| m.subject == subject)
+        {
+            return Some(m);
+        }
+    }
+    None
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn junk_invitations_are_never_applied() {
+    let f = setup().await;
+    // The server marks it as junk ($Junk; honoured by default).
+    let raw = invitation(
+        "junk-1@example.org",
+        0,
+        "Cheap meeting",
+        "20261005T090000Z",
+        "20261001T080000Z",
+    );
+    f.demo
+        .control("imap-deliver", &json!({ "raw": raw, "flags": ["$Junk"] }))
+        .unwrap();
+    let junk = until_some("the junk invitation arrives", || async {
+        anywhere(&f, "Cheap meeting").await
+    })
+    .await;
+    // A later invitation is added, so the junk one was processed.
+    invited(&f, "sentinel-2@example.org", "Sentinel two").await;
+    let c = card(&f, &junk).await;
+    assert_eq!(c.event_id, None, "{c:?}");
+    assert_eq!(c.state, InvitationState::New);
+    assert!(c.allows(InvitationAction::AddToCalendar));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unknown_server_scheduling_never_delivers_twice() {
+    // Review M3b: while a CalDAV server's scheduling is unknown (asking
+    // failed), Nail mailed iMIP and the server, which schedules, delivered
+    // too. Now the parties are marked SCHEDULE-AGENT=CLIENT on the server.
+    let demo = start_demo_multi().await.unwrap();
+    demo.dav.set_auto_schedule(true);
+    // Every OPTIONS (only the scheduling discovery asks it) fails.
+    for _ in 0..2000 {
+        demo.dav.fail_next("OPTIONS", 500);
+    }
+    let data_dir = tempfile::tempdir().unwrap();
+    let config_dir = tempfile::tempdir().unwrap();
+    demo.write_config(config_dir.path()).unwrap();
+    let options = demo.service_options(ServiceOptions::new(data_dir.path(), config_dir.path()));
+    let service = Service::open(options).unwrap();
+    let f = Fixture {
+        service,
+        demo,
+        _dirs: (data_dir, config_dir),
+    };
+    let calendar = until_some("the CalDAV calendar", || async {
+        let Response::Calendars { calendars } = f
+            .service
+            .handle(Request::ListCalendars { source_id: None })
+            .await
+        else {
+            return None;
+        };
+        calendars
+            .into_iter()
+            .find(|c| c.source_id.as_str() == "work-calendars" && !c.read_only)
+    })
+    .await;
+    let mut fields = EventFields::new(
+        "Unknown scheduling",
+        PimTime::utc("2026-10-09T09:00:00"),
+        PimTime::utc("2026-10-09T10:00:00"),
+    );
+    fields.attendees = vec![Attendee::new(MULTI_DAV_OTHER_EMAIL)];
+    let Response::EventSaved { event, .. } = ok(
+        &f.service,
+        Request::CreateEvent {
+            calendar_id: calendar.id.clone(),
+            fields: Box::new(fields),
+            recurrence: None,
+        },
+    )
+    .await
+    else {
+        panic!()
+    };
+    let result = scheduled(
+        ok(
+            &f.service,
+            Request::SendInvitations {
+                event_id: event.id.clone(),
+                recurrence_id: None,
+                attendees: Vec::new(),
+                comment: None,
+            },
+        )
+        .await,
+    );
+    assert_eq!(result.sent[0].transport, SchedulingTransport::Imip);
+    eventually("the REQUEST is mailed", || async {
+        smtp(&f)
+            .iter()
+            .any(|m| m.contains("METHOD:REQUEST") && m.contains(&event.uid))
+    })
+    .await;
+    // The copy on the server tells it to keep out.
+    let stored = until_some("the event is on the CalDAV server", || async {
+        f.demo.dav.collection_paths().into_iter().find_map(|path| {
+            f.demo.dav.collection(&path).and_then(|c| {
+                c.objects
+                    .into_values()
+                    .find(|o| o.data.contains(&event.uid))
+                    .map(|o| o.data)
+            })
+        })
+    })
+    .await;
+    let unfolded = stored.replace("\r\n ", "").replace("\r\n\t", "");
+    assert!(
+        unfolded.lines().any(|l| l.starts_with("ATTENDEE")
+            && l.contains("SCHEDULE-AGENT=CLIENT")
+            && l.contains(MULTI_DAV_OTHER_EMAIL)),
+        "{stored}"
+    );
+    // Never both: the server delivered nothing for this event.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(
+        !f.demo
+            .dav
+            .scheduled_messages()
+            .iter()
+            .any(|m| m.uid == event.uid),
+        "{:?}",
+        f.demo.dav.scheduled_messages()
+    );
+}

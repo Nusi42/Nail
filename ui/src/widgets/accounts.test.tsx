@@ -12,7 +12,7 @@ import {
   secretsFor,
   withAccountSignIn,
 } from "./AccountSetup";
-import { defaultPort, withProtocol, withTls } from "./forms";
+import { defaultPort, protocolChoices, withProtocol, withTls } from "./forms";
 import { pruneToMembers, virtualProblems, newVirtualAccount } from "./VirtualAccountEditor";
 
 /** Forwards OAuth results to the UI state, as the app's event handler does. */
@@ -334,6 +334,49 @@ describe("account-settings", () => {
       await screen.findByRole("checkbox", { name: "Keep messages on the server" }),
     ).toBeChecked();
     expect(screen.queryByLabelText(/Check for new mail every/)).toBeNull();
+  });
+
+  it("keeps Gmail API accounts Gmail and edits their polling", async () => {
+    // Review M3b: the protocol select showed "IMAP" for a Gmail account and
+    // turned it into an IMAP account when touched.
+    const user = userEvent.setup();
+    const env = createEnv();
+    const personal = env.transport.data.accountsConfig.accounts[0] as AccountConfig;
+    personal.incoming = {
+      protocol: "gmail",
+      server: { ...personal.incoming.server, host: "gmail.googleapis.com", port: 443 },
+      options: { poll_interval_secs: null, max_poll_interval_secs: null },
+    };
+    expect(protocolChoices(personal.incoming).map((c) => c.value)).toEqual(["gmail"]);
+    renderNode(widget("account-settings"), env);
+    const protocol = await screen.findByRole("combobox", { name: "Protocol" });
+    expect(protocol).toHaveValue("gmail");
+    expect(
+      within(protocol)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Gmail API"]);
+    expect(screen.queryByLabelText(/Check for new mail every/)).toBeNull();
+    await user.type(
+      screen.getByRole("spinbutton", { name: "Shortest check interval (seconds)" }),
+      "20",
+    );
+    await user.type(
+      screen.getByRole("spinbutton", { name: "Longest check interval (seconds)" }),
+      "600",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
+    const update = env.transport.requests.find((r) => r.type === "UpdateAccount");
+    expect(update?.type === "UpdateAccount" && update.config.incoming).toMatchObject({
+      protocol: "gmail",
+      options: { poll_interval_secs: 20, max_poll_interval_secs: 600 },
+    });
+    // IMAP / POP3 accounts still switch between each other.
+    expect(protocolChoices(withProtocol(personal.incoming, "imap")).map((c) => c.value)).toEqual([
+      "imap",
+      "pop3",
+    ]);
   });
 
   it("lists problems", () => {

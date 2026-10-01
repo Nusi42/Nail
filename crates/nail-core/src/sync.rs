@@ -532,7 +532,7 @@ pub(crate) async fn sync_folder(
     if known.is_some()
         && !reset
         && !new_ids.is_empty()
-        && matches!(folder.role, FolderRole::Inbox | FolderRole::Other)
+        && runs_arrival_rules(folder.role)
         && !hidden
     {
         // Arrival rules run on new mail (the rules task wakes on NewMail;
@@ -625,6 +625,14 @@ async fn trim_bodies(ctx: &SyncCtx, folder: &Folder, cutoff: i64) -> Result<()> 
 
 /// The header block of a raw message (up to and including the empty
 /// line), or everything when there is no body.
+/// Whether new mail in a folder with `role` is "arriving" mail: queued
+/// for arrival rules and iTIP processing. Only the inbox and the user's
+/// own folders; never Sent (the user's own mail, also what Nail sent),
+/// Drafts, Junk, Trash, Archive or All Mail. IMAP and Gmail share it.
+pub(crate) fn runs_arrival_rules(role: FolderRole) -> bool {
+    matches!(role, FolderRole::Inbox | FolderRole::Other)
+}
+
 pub(crate) fn header_block(raw: &[u8]) -> &[u8] {
     if let Some(i) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
         return &raw[..i + 4];
@@ -820,5 +828,27 @@ fn incoming(message: FetchedMessage) -> IncomingMessage {
         raw: message.raw,
         headers_only: message.headers_only,
         size: message.size.map(u64::from),
+    }
+}
+
+#[cfg(test)]
+mod arrival_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_inbox_and_user_folders_take_arrivals() {
+        // Review M3b: Gmail ran arrival rules / iTIP processing on Sent,
+        // Spam and Trash; IMAP and Gmail now share this filter.
+        assert!(runs_arrival_rules(FolderRole::Inbox));
+        assert!(runs_arrival_rules(FolderRole::Other));
+        for role in [
+            FolderRole::Sent,
+            FolderRole::Drafts,
+            FolderRole::Archive,
+            FolderRole::Junk,
+            FolderRole::Trash,
+        ] {
+            assert!(!runs_arrival_rules(role), "{role:?}");
+        }
     }
 }
