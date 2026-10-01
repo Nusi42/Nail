@@ -43,6 +43,10 @@ pub struct FlowOptions {
     pub timeout: Duration,
     /// Browser pages after the redirect.
     pub pages: CallbackPages,
+    /// Scopes to ask for instead of the provider's (M3c: Microsoft issues
+    /// tokens per resource, so an Exchange account signs in for Graph or
+    /// EWS only); `None` = the provider's mail scopes.
+    pub scopes: Option<Vec<String>>,
 }
 
 impl FlowOptions {
@@ -55,6 +59,7 @@ impl FlowOptions {
             login_hint: None,
             timeout: Self::DEFAULT_TIMEOUT,
             pages,
+            scopes: None,
         }
     }
 }
@@ -137,8 +142,11 @@ pub async fn start_flow(
         .map_err(|e| AuthError::Protocol(e.to_string()))?
         .port();
     let redirect_uri = format!("http://127.0.0.1:{port}/");
-    let (url, state, verifier) =
-        client.authorize_url(&redirect_uri, options.login_hint.as_deref())?;
+    let (url, state, verifier) = client.authorize_url_with(
+        &redirect_uri,
+        options.login_hint.as_deref(),
+        options.scopes.as_deref(),
+    )?;
     let (cancel_tx, mut cancel_rx) = watch::channel(false);
     let redirect = redirect_uri.clone();
     let provider = client.spec().id.clone();

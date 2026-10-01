@@ -129,6 +129,9 @@ fn term_matches(kind: &TermKind, message: &dyn MessageView, env: &Env<'_>) -> bo
         TermKind::Category(v) => message
             .gmail_category()
             .is_some_and(|c| c.eq_ignore_ascii_case(&v.text)),
+        TermKind::Focus(v) => message
+            .exchange_focus()
+            .is_some_and(|c| c.eq_ignore_ascii_case(&v.text)),
         TermKind::Account(v) => {
             let wanted = v.text.to_lowercase();
             let own = message.account_id();

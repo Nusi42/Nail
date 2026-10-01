@@ -63,6 +63,9 @@ pub enum MessageFilter {
     /// A Gmail message in this inbox category (`category:social`,
     /// case-insensitive; M3b).
     GmailCategory(String),
+    /// An Exchange inbox message classified like this (`focus:focused` /
+    /// `focus:other`, lowercase; M3c).
+    ExchangeFocus(String),
     /// In one of these accounts.
     AccountIn(Vec<AccountId>),
     /// In an account whose id, name or address equals this text
@@ -147,6 +150,12 @@ fn to_sql(filter: &MessageFilter, params: &mut Vec<Box<dyn ToSql>>) -> Result<St
             let p = bind(params, Box::new(category.to_ascii_lowercase()));
             format!(
                 "EXISTS (SELECT 1 FROM gmail_messages g WHERE g.message_id = m.id AND g.category = {p})"
+            )
+        }
+        MessageFilter::ExchangeFocus(focus) => {
+            let p = bind(params, Box::new(focus.to_ascii_lowercase()));
+            format!(
+                "EXISTS (SELECT 1 FROM exchange_items x WHERE x.message_id = m.id AND x.inference = {p})"
             )
         }
         MessageFilter::AccountIn(ids) => {

@@ -157,6 +157,39 @@ impl Service {
             .map_err(|e| ApiError::new(e.code(), e.to_string()).into())
     }
 
+    /// `DiscoverAccount` with Exchange Autodiscover (M3c): its proposals
+    /// come first; what it asks or adds goes with the answer.
+    pub(crate) async fn discover_all(
+        &self,
+        email: &str,
+        trusted_hosts: &[String],
+        windows_sign_in: bool,
+    ) -> Result<(
+        Vec<DiscoveredAccount>,
+        Option<nail_api::exchange::ExchangeDiscoveryInfo>,
+    )> {
+        let (general, (exchange, info)) = tokio::join!(
+            self.discover(email),
+            crate::exchange::setup::autodiscover(self, email, trusted_hosts, windows_sign_in)
+        );
+        let mut candidates = exchange;
+        match general {
+            Ok(found) => {
+                for c in found {
+                    if !candidates
+                        .iter()
+                        .any(|e| e.incoming == c.incoming && e.outgoing == c.outgoing)
+                    {
+                        candidates.push(c);
+                    }
+                }
+            }
+            Err(err) if candidates.is_empty() && info.is_none() => return Err(err),
+            Err(err) => tracing::info!(%err, "discovery failed; Autodiscover answered"),
+        }
+        Ok((candidates, info))
+    }
+
     /// Where a test or save gets an endpoint's secret: the request's
     /// secrets (the incoming one also serves the outgoing server when it
     /// has none of its own and uses the same method), else the keychain.
@@ -248,12 +281,10 @@ impl Service {
             IncomingServer::Gmail { server, .. } => test_result(
                 crate::gmail::test_gmail(server, incoming_creds.login(false).await).await,
             ),
-            // M3c: the Graph / EWS test (sign-in + mailbox info) comes with
-            // the engines (WP95).
-            IncomingServer::Exchange { .. } => test_result(Err(EngineError::permanent(
-                ErrorCode::Unsupported,
-                "testing Exchange accounts is not wired yet (M3c WP95)",
-            ))),
+            // M3c: sign in and ask the server about the mailbox.
+            IncomingServer::Exchange { .. } => test_result(
+                crate::exchange::setup::test_exchange(self, config, incoming_creds.source).await,
+            ),
         };
         let outgoing = match (&config.outgoing, outgoing_server) {
             (Some(OutgoingServer::Smtp { .. }), Some(server)) => {
@@ -289,12 +320,20 @@ impl Service {
         &self,
         provider: String,
         login_hint: Option<String>,
+        protocol: Option<nail_api::accounts::MailProtocol>,
     ) -> Result<Response> {
         let manager = self.inner.tokens.manager();
         let mut options = nail_auth::FlowOptions::new(crate::strings::oauth_callback_pages(
             self.inner.locale.as_deref(),
         ));
         options.login_hint = login_hint;
+        // M3c: Microsoft issues tokens per resource (Graph or EWS).
+        if let Some(protocol) = protocol {
+            let scopes = nail_auth::providers::mail_scopes(&provider, &[protocol]);
+            if !scopes.is_empty() {
+                options.scopes = Some(scopes);
+            }
+        }
         let flow = manager.start_flow(&provider, options).await?;
         let flow_id = self.inner.flows.next_id();
         let authorize_url = flow.authorize_url().to_owned();
@@ -410,6 +449,10 @@ impl Service {
             .cloned()
             .ok_or_else(|| ApiError::internal(format!("account {id} vanished")))?;
         self.store_secrets(&saved_account, secrets).await?;
+        if add {
+            // M3c: the shared mailboxes Autodiscover found (automapped).
+            crate::exchange::setup::store_discovered_mailboxes(self, &saved_account).await;
+        }
         self.accounts_changed().await?;
         tracing::info!(account = %id, add, "account saved");
         Ok(saved_account)

@@ -265,6 +265,13 @@ impl Service {
             .iter()
             .map(|s| (s.id.clone(), s.kind()))
             .collect();
+        // M3c: the sources of Exchange accounts follow their accounts.
+        let exchange: Vec<nail_api::AccountId> = config
+            .accounts
+            .iter()
+            .filter(|a| matches!(a.incoming, nail_api::IncomingServer::Exchange { .. }))
+            .map(|a| a.id.clone())
+            .collect();
         let result = self
             .inner
             .store
@@ -272,7 +279,13 @@ impl Service {
                 for (id, kind) in &configured {
                     s.ensure_pim_source(id, *kind, now)?;
                 }
-                let ids: Vec<PimSourceId> = configured.iter().map(|(id, _)| id.clone()).collect();
+                let mut ids: Vec<PimSourceId> =
+                    configured.iter().map(|(id, _)| id.clone()).collect();
+                ids.extend(
+                    exchange
+                        .iter()
+                        .map(nail_api::exchange::exchange_pim_source_id),
+                );
                 s.retain_pim_sources(&ids)
             })
             .await;
@@ -524,7 +537,9 @@ impl Service {
         let config = self.inner.accounts.config();
         for item in list {
             let (source, account) = parts(item);
-            *account = config.pim_source(source).and_then(|s| s.account().cloned());
+            // M3c: an Exchange account's source names its account.
+            *account = nail_api::exchange::exchange_pim_source_account(source)
+                .or_else(|| config.pim_source(source).and_then(|s| s.account().cloned()));
         }
     }
 

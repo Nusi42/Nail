@@ -168,12 +168,24 @@ impl OAuthClient {
         redirect: &str,
         login_hint: Option<&str>,
     ) -> Result<(url::Url, CsrfToken, PkceCodeVerifier), AuthError> {
+        self.authorize_url_with(redirect, login_hint, None)
+    }
+
+    /// [`Self::authorize_url`] asking for `scopes` instead of the
+    /// provider's (`None` = the provider's).
+    pub fn authorize_url_with(
+        &self,
+        redirect: &str,
+        login_hint: Option<&str>,
+        scopes: Option<&[String]>,
+    ) -> Result<(url::Url, CsrfToken, PkceCodeVerifier), AuthError> {
         let (challenge, verifier) = PkceCodeChallenge::new_random_sha256();
         let client = self.oauth(Some(redirect))?;
+        let scopes = scopes.unwrap_or(&self.spec.scopes);
         let mut request = client
             .authorize_url(CsrfToken::new_random)
             .set_pkce_challenge(challenge)
-            .add_scopes(self.spec.scopes.iter().cloned().map(Scope::new));
+            .add_scopes(scopes.iter().cloned().map(Scope::new));
         for (name, value) in &self.spec.extra_auth_params {
             request = request.add_extra_param(name.clone(), value.clone());
         }
@@ -247,6 +259,17 @@ mod tests {
         assert_eq!(&query["state"], state.secret());
         assert!(!query.contains_key("client_secret"));
         assert!(verifier.secret().len() >= 43);
+    }
+
+    #[test]
+    fn a_flow_can_ask_for_other_scopes() {
+        let scopes = vec!["Mail.ReadWrite".to_owned(), "offline_access".to_owned()];
+        let (url, _, _) = google()
+            .authorize_url_with("http://127.0.0.1:5000/", None, Some(&scopes))
+            .unwrap();
+        let query: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(query["scope"], "Mail.ReadWrite offline_access");
+        assert!(!query.contains_key("login_hint"));
     }
 
     #[test]

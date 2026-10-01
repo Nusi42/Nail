@@ -49,6 +49,9 @@ setup-source-provider = Gmail through the Gmail API (built into Nail)
 setup-warning-insecure-source = Received without encryption: anyone on your network could have changed it.
 setup-warning-foreign-hosts = The servers are not part of your address's domain.
 setup-warning-check = These settings could not be verified. Only continue if you know these are your provider's servers; otherwise your password goes to someone else.
+# M3c: Exchange Autodiscover asked something.
+setup-exchange-trust = Trust { $host } and look again
+setup-exchange-windows-sign-in = Look again with my Windows sign-in
 setup-edit-servers = Edit server settings
 setup-sign-in = Sign-in method
 setup-password = Password

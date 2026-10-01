@@ -37,8 +37,11 @@ use nail_api::engine::{MemorySecretStore, SecretStore};
 use nail_api::security::{KeyAlgorithm, SecretProtection};
 use nail_api::{Account, AccountId, AccountKind, Folder, FolderRole, SecretRef};
 use nail_discovery::{Discoverer, HickoryDns, ReqwestFetch, TcpProbe};
+use nail_exchange::testing::{MockAutodiscoverServer, MockHost, MockV2};
 use nail_pgp::discovery::{HttpClient, HttpResponse};
+use nail_proto_ews::testing::{MockAuth, MockEwsServer};
 use nail_proto_gmail::testing::MockGmailServer;
+use nail_proto_graph::testing::MockGraphServer;
 use nail_proto_imap::{Credentials, ImapConfig, Security};
 use nail_store::{BlobStore, Store};
 use nail_testkit::{
@@ -345,6 +348,23 @@ pub const MULTI_GMAIL_PROVIDER: &str = "demo-google";
 const MULTI_GMAIL_REFRESH_TOKEN: &str = "demo-gmail-refresh";
 /// Password of the mock CalDAV / CardDAV server.
 pub const MULTI_DAV_PASSWORD: &str = "dav-secret";
+/// Id of the Exchange Online (Graph) account of `--seed demo-multi` (M3c).
+pub const MULTI_EXCHANGE_ID: &str = "exchange";
+/// Address of the Exchange Online account (the mock Graph server's tenant).
+pub const MULTI_EXCHANGE_EMAIL: &str = "ada@contoso.example";
+/// The OAuth2 provider of the demo Exchange Online account (the mock
+/// authorization server; no Microsoft sign-in in demos).
+pub const MULTI_MICROSOFT_PROVIDER: &str = "demo-microsoft";
+/// The refresh token the demo keychain holds for the Exchange account.
+const MULTI_EXCHANGE_REFRESH_TOKEN: &str = "demo-graph-refresh";
+/// Id of the on-premises Exchange (EWS) account of `--seed demo-multi`
+/// (M3c; switched off at first).
+pub const MULTI_EWS_ID: &str = "corp";
+/// Address of the on-premises Exchange (EWS) mailbox (Autodiscover:
+/// `autodiscover.corp.example` points at the mock EWS server).
+pub const MULTI_EWS_EMAIL: &str = "ada@corp.example";
+/// Password of the mock EWS server (Basic over loopback).
+pub const MULTI_EWS_PASSWORD: &str = "corp-secret";
 
 /// An all-day event of a demo feed `days` after today.
 fn feed_event(uid: &str, title: &str, days: i64) -> String {
@@ -430,8 +450,16 @@ pub struct DemoMulti {
     pub dav: MockDavServer,
     /// The Gmail API server of the "gmail" account (M3b).
     pub gmail: MockGmailServer,
-    /// The OAuth2 authorization server of the Gmail account (M3b).
+    /// The OAuth2 authorization server of the Gmail account (M3b) and the
+    /// Exchange Online account (M3c).
     pub oauth: MockOAuthServer,
+    /// The Microsoft Graph server of the "exchange" account (M3c).
+    pub graph: MockGraphServer,
+    /// The EWS server set up through Autodiscover (M3c).
+    pub ews: MockEwsServer,
+    /// Autodiscover for `contoso.example` (Exchange Online) and
+    /// `corp.example` (the mock EWS server) (M3c).
+    pub autodiscover: MockAutodiscoverServer,
     /// The clock snooze, quiet hours and notifications see; moved by the
     /// `clock-set` / `clock-advance` controls (M2c).
     pub clock: Arc<crate::AdjustableClock>,
@@ -623,6 +651,44 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         MULTI_GMAIL_EMAIL,
         "https://mail.google.com/",
     );
+    // M3c: Exchange Online (mock Graph, the same mock sign-in) and an
+    // on-premises Exchange (mock EWS, Basic) found through Autodiscover.
+    let graph = MockGraphServer::start_demo().await.map_err(io_error)?;
+    oauth.add_refresh_token(
+        MULTI_EXCHANGE_REFRESH_TOKEN,
+        MULTI_EXCHANGE_EMAIL,
+        "https://graph.microsoft.com/.default",
+    );
+    let ews = MockEwsServer::start_with(MockAuth::Basic {
+        username: MULTI_EWS_EMAIL.to_owned(),
+        password: MULTI_EWS_PASSWORD.to_owned(),
+    })
+    .await
+    .map_err(io_error)?;
+    let autodiscover = MockAutodiscoverServer::start_hosts(
+        [
+            (
+                "autodiscover.contoso.example".to_owned(),
+                MockHost {
+                    v2: Some(MockV2::Url(
+                        "https://outlook.office365.com/EWS/Exchange.asmx".to_owned(),
+                    )),
+                    ..MockHost::default()
+                },
+            ),
+            (
+                "autodiscover.corp.example".to_owned(),
+                MockHost {
+                    v2: Some(MockV2::Url(ews.url())),
+                    ..MockHost::default()
+                },
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    )
+    .await
+    .map_err(io_error)?;
     let personal = dav.calendar_path("personal");
     for (name, data) in [
         (
@@ -710,6 +776,18 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
             MULTI_GMAIL_REFRESH_TOKEN,
         )
         .map_err(io_error)?;
+    secrets
+        .set(
+            &SecretRef::default_for(&AccountId::new(MULTI_EXCHANGE_ID), SecretKind::OAuth2),
+            MULTI_EXCHANGE_REFRESH_TOKEN,
+        )
+        .map_err(io_error)?;
+    secrets
+        .set(
+            &SecretRef::default_for(&AccountId::new(MULTI_EWS_ID), SecretKind::Password),
+            MULTI_EWS_PASSWORD,
+        )
+        .map_err(io_error)?;
     Ok(DemoMulti {
         work,
         home,
@@ -721,10 +799,42 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         dav,
         gmail,
         oauth,
+        graph,
+        ews,
+        autodiscover,
         clock: Arc::new(crate::AdjustableClock::new()),
         secrets,
         discoverer: Arc::new(discoverer),
         pop3_counter: AtomicU32::new(0),
+    })
+}
+
+/// DNS for the demo's Exchange Autodiscover: no SRV records (no sockets).
+#[derive(Debug)]
+struct NoSrv;
+
+type DnsResult<T> = std::result::Result<Vec<T>, nail_discovery::NetError>;
+
+impl nail_discovery::DnsLookup for NoSrv {
+    fn srv<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, DnsResult<nail_discovery::SrvRecord>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn mx<'a>(&'a self, _domain: &'a str) -> BoxFuture<'a, DnsResult<nail_discovery::MxRecord>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+/// A mock Graph message as the controls report it.
+fn graph_message_json(m: &nail_proto_graph::testing::MockMessage) -> Value {
+    json!({
+        "id": m.id,
+        "folder": m.folder,
+        "subject": subject_of(&m.raw),
+        "read": m.is_read,
+        "flag": m.flag,
+        "categories": m.categories,
+        "inference": m.inference,
     })
 }
 
@@ -739,6 +849,8 @@ impl DemoMulti {
         let sieve = self.sieve.port();
         let (dav, http) = (self.dav.addr().port(), self.http.addr().port());
         let gmail = self.gmail.addr().port();
+        let graph = self.graph.addr().port();
+        let ews = self.ews.url();
         let (oauth_auth, oauth_token) = (self.oauth.authorize_url(), self.oauth.token_url());
         format!(
             r##"{MULTI_CONFIG_MARKER}
@@ -788,6 +900,28 @@ account "{MULTI_GMAIL_ID}" email="{MULTI_GMAIL_EMAIL}" name="Gmail" enabled=#fal
     }}
     identity "{MULTI_GMAIL_EMAIL}" name="Ada Lovelace"
 }}
+
+oauth-provider "{MULTI_MICROSOFT_PROVIDER}" client-id="nail-test-client" auth-url="{oauth_auth}" token-url="{oauth_token}" {{
+    scopes "https://graph.microsoft.com/.default"
+}}
+
+// Exchange Online through Microsoft Graph (M3c); switched off at first
+// like the Gmail account.
+account "{MULTI_EXCHANGE_ID}" email="{MULTI_EXCHANGE_EMAIL}" name="Contoso" enabled=#false {{
+    exchange host="127.0.0.1" port={graph} tls="plaintext" poll-interval=10 max-poll-interval=10 {{
+        auth "oauth2" provider="{MULTI_MICROSOFT_PROVIDER}"
+    }}
+    identity "{MULTI_EXCHANGE_EMAIL}" name="Ada Lovelace"
+}}
+
+// Exchange Server on-premises through EWS (M3c): Basic over the loopback
+// connection of the demo, streaming notifications; switched off at first.
+account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
+    exchange engine="ews" host="127.0.0.1" url="{ews}" tls="plaintext" poll-interval=10 max-poll-interval=10 {{
+        auth "password" username="{MULTI_EWS_EMAIL}"
+    }}
+    identity "{MULTI_EWS_EMAIL}" name="Ada Lovelace"
+}}
 "##
         )
     }
@@ -811,7 +945,33 @@ account "{MULTI_GMAIL_ID}" email="{MULTI_GMAIL_EMAIL}" name="Gmail" enabled=#fal
         options.timing = crate::EngineTiming::fast();
         options.open_browser = false;
         options.clock = Some(Arc::clone(&self.clock) as Arc<dyn nail_triage::Clock>);
+        options.exchange = self.exchange_hooks();
         demo_options(options)
+    }
+
+    /// Exchange Autodiscover and Graph pointed at the mocks (M3c).
+    fn exchange_hooks(&self) -> crate::ExchangeHooks {
+        let http = nail_auth::tls_config_with_roots(&[])
+            .ok()
+            .and_then(|tls| nail_auth::http_client_builder(tls).no_proxy().build().ok())
+            .map(|client| {
+                Arc::new(
+                    nail_exchange::http::ReqwestHttp::new(client)
+                        .route_all_to(self.autodiscover.addr()),
+                ) as Arc<dyn nail_exchange::http::ExchangeHttp>
+            });
+        crate::ExchangeHooks {
+            autodiscover_http: http,
+            autodiscover_dns: Some(Arc::new(NoSrv)),
+            no_microsoft_lookup: true,
+            negotiate: None,
+            graph_endpoint: Some(crate::GraphEndpoint {
+                host: "127.0.0.1".to_owned(),
+                port: self.graph.addr().port(),
+                tls: nail_api::accounts::TlsMode::Plaintext,
+                provider: MULTI_MICROSOFT_PROVIDER.to_owned(),
+            }),
+        }
     }
 
     /// Gives both demo accounts an own OpenPGP key (Ed25519 + X25519,
@@ -935,6 +1095,15 @@ account "{MULTI_GMAIL_ID}" email="{MULTI_GMAIL_EMAIL}" name="Gmail" enabled=#fal
     ///   server of the "gmail" account (M3b)
     /// * `dav-user-put {user?, name, data}` → `{etag}`: an event in the
     ///   `personal` calendar of the second principal (`bob`, M3b)
+    /// * `graph-deliver {raw, folder?}` → `{id}`; `graph-messages
+    ///   {mailbox?}` / `graph-folders {mailbox?}` → the mock Graph tenant's
+    ///   messages / folders; `graph-sent` → `[data]`; `graph-settings` →
+    ///   `{categories, automatic_replies, rules}`; `graph-pim` → `{events,
+    ///   tasks, contacts}`; `graph-meetings` → `[{event_id, action}]`: the
+    ///   "exchange" account's server (M3c)
+    /// * `ews-deliver {raw, folder?}` → `{id}`; `ews-messages {folder?}` →
+    ///   `[{id, subject, read}]`; `ews-sent` → `[data]`: the mock EWS
+    ///   server Autodiscover finds for `corp.example` (M3c)
     /// * `clock` → `{now}`; `clock-set {at}` (Unix seconds);
     ///   `clock-advance {seconds}`: the clock of snooze, quiet hours and
     ///   notifications (M2c)
@@ -1170,6 +1339,92 @@ account "{MULTI_GMAIL_ID}" email="{MULTI_GMAIL_EMAIL}" name="Gmail" enabled=#fal
                 self.clock.advance(seconds);
                 Ok(json!({ "now": nail_triage::Clock::unix(&*self.clock) }))
             }
+            // M3c: the mock Graph server of the "exchange" account and the
+            // mock EWS server.
+            "graph-deliver" => {
+                let raw = text("raw").ok_or("raw is required")?;
+                let folder = text("folder").unwrap_or("inbox");
+                let id = self.graph.deliver(None, folder, crlf(raw).as_bytes());
+                Ok(json!({ "id": id }))
+            }
+            "graph-messages" => Ok(self.graph.with_mailbox(text("mailbox"), |m, _| {
+                Value::Array(m.messages.values().map(graph_message_json).collect())
+            })),
+            "graph-folders" => Ok(self.graph.with_mailbox(text("mailbox"), |m, _| {
+                Value::Array(
+                    m.folders
+                        .values()
+                        .map(|f| json!({"id": f.id, "name": f.name, "well_known": f.well_known}))
+                        .collect(),
+                )
+            })),
+            "graph-sent" => Ok(Value::Array(
+                self.graph
+                    .sent()
+                    .into_iter()
+                    .map(|s| Value::String(String::from_utf8_lossy(&s.raw).into_owned()))
+                    .collect(),
+            )),
+            "graph-settings" => Ok(self.graph.with_mailbox(None, |m, _| {
+                json!({
+                    "categories": m.categories,
+                    "automatic_replies": m.automatic_replies,
+                    "rules": m.rules,
+                })
+            })),
+            "graph-pim" => Ok(self.graph.with_mailbox(None, |m, _| {
+                json!({
+                    "events": m.events.values().collect::<Vec<_>>(),
+                    "tasks": m
+                        .tasks
+                        .values()
+                        .map(|t| json!({"list": t.list, "task": t.value, "checklist": t.checklist}))
+                        .collect::<Vec<_>>(),
+                    "contacts": m.contacts.values().collect::<Vec<_>>(),
+                })
+            })),
+            "graph-meetings" => Ok(Value::Array(
+                self.graph
+                    .meeting_actions()
+                    .into_iter()
+                    .map(|a| json!({"event_id": a.event_id, "action": a.action}))
+                    .collect(),
+            )),
+            "ews-deliver" => {
+                let raw = text("raw").ok_or("raw is required")?;
+                let folder = self
+                    .ews
+                    .folder_id(None, text("folder").unwrap_or("inbox"))
+                    .ok_or("no such EWS folder")?;
+                let id = self.ews.deliver(&folder, crlf(raw).as_bytes(), false);
+                Ok(json!({ "id": id }))
+            }
+            "ews-messages" => {
+                let folder = self
+                    .ews
+                    .folder_id(None, text("folder").unwrap_or("inbox"))
+                    .ok_or("no such EWS folder")?;
+                Ok(Value::Array(
+                    self.ews
+                        .items_in(&folder)
+                        .iter()
+                        .map(|i| {
+                            json!({
+                                "id": i.id,
+                                "subject": i.text("Subject"),
+                                "read": i.text("IsRead") == Some("true"),
+                            })
+                        })
+                        .collect(),
+                ))
+            }
+            "ews-sent" => Ok(Value::Array(
+                self.ews
+                    .sent()
+                    .into_iter()
+                    .map(|s| Value::String(String::from_utf8_lossy(&s.raw).into_owned()))
+                    .collect(),
+            )),
             other => Err(format!("unknown control command {other:?}")),
         }
     }

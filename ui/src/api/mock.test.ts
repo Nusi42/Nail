@@ -333,7 +333,7 @@ describe("accounts in the mock core", () => {
   it("runs an OAuth sign-in and reports it with OAuthFinished", async () => {
     const { client, events } = setup();
     const started = await client.request(
-      { type: "StartOAuth", provider: "google", login_hint: "ada@gmail.com" },
+      { type: "StartOAuth", provider: "google", login_hint: "ada@gmail.com", protocol: null },
       "OAuthStarted",
     );
     await vi.waitFor(() =>
@@ -345,7 +345,7 @@ describe("accounts in the mock core", () => {
       }),
     );
     expect(
-      await client.call({ type: "StartOAuth", provider: "acme", login_hint: null }),
+      await client.call({ type: "StartOAuth", provider: "acme", login_hint: null, protocol: null }),
     ).toMatchObject({
       code: "config",
     });

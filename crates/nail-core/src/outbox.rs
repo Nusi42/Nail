@@ -278,19 +278,19 @@ impl Service {
         Ok(draft)
     }
 
-    /// The transport of an account's outgoing server: SMTP, or the Gmail
-    /// API for Gmail accounts (M3b; `messages.send`).
-    pub(crate) fn transport(&self, account: &AccountConfig) -> Result<Arc<dyn OutgoingTransport>> {
+    /// The transport of an account's outgoing server: SMTP, the Gmail API
+    /// for Gmail accounts (M3b; `messages.send`), or the Graph / EWS
+    /// engine for Exchange accounts (M3c; the server files the Sent copy).
+    pub(crate) async fn transport(
+        &self,
+        account: &AccountConfig,
+    ) -> Result<Arc<dyn OutgoingTransport>> {
         if let IncomingServer::Gmail { .. } = &account.incoming {
             return Ok(Arc::new(crate::gmail::engine_for(self, account)?));
         }
         if let IncomingServer::Exchange { .. } = &account.incoming {
-            // M3c: sending through the Graph / EWS engine is wired by WP95.
-            return Err(ApiError::unsupported(format!(
-                "sending from Exchange account {} is not wired yet (M3c WP95)",
-                account.id
-            ))
-            .into());
+            let engine = crate::exchange::engine_of(self, account).await?;
+            return Ok(engine as Arc<dyn OutgoingTransport>);
         }
         Ok(Arc::new(self.smtp_transport(account)?))
     }
@@ -409,7 +409,7 @@ impl Service {
                 .ok()
                 .flatten()
         };
-        let transport = self.transport(&account).map_err(EngineError::from)?;
+        let transport = self.transport(&account).await.map_err(EngineError::from)?;
         for message in &messages {
             transport.send(&message.envelope, &message.raw).await?;
         }

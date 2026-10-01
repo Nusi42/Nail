@@ -1,0 +1,1654 @@
+//! The engine of an Exchange account (ADR 0077).
+//!
+//! * **Loop** ([`run`]): one pass = replay (mail queue, Exchange queue),
+//!   mail of the own mailbox and every shown shared / delegate mailbox,
+//!   settings (categories, automatic replies, inbox rules and placement;
+//!   every [`SETTINGS_EVERY`] passes, after local changes and on "Sync"),
+//!   PIM. EWS accounts with streaming wait for notifications between
+//!   passes (`wait_for_changes`); Graph accounts poll with
+//!   [`PollTimer`] and ask quiet folders less often ([`FolderPoll`]).
+//! * **Mail**: the folder hierarchy per mailbox (a cursor each; another
+//!   mailbox's tree lives under `@<address>`), then the items of each mail
+//!   folder (a cursor each; an expired one means a full listing merged
+//!   with the store). New messages are fetched as MIME and ingested once,
+//!   under an id derived from their first server id; the server id lives
+//!   in `messages.remote_id` and changes when the message moves.
+//! * **Replay** ([`ExchangeExecutor`]): flags / tags (= categories) /
+//!   moves / deletes / appends of the mail queue as `RemoteWrite`s against
+//!   the message's mailbox; a move stores the new id. The Exchange queue
+//!   (categories, automatic replies, rules, Focused Inbox) through the
+//!   settings / classify calls.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+
+use nail_api::engine::{
+    BoxFuture, DeltaOutcome, EngineError, RemoteMessage, RemoteMessageChange, RemoteWrite,
+    SyncDelta, WriteOutcome,
+};
+use nail_api::exchange::engine::{
+    ExchangeEngine, ExchangeFolder, ExchangeFolderClass, HierarchyOutcome,
+};
+use nail_api::exchange::{
+    ExchangeArea, ExchangeCategorySettings, ExchangeEngine as EngineKind, ExchangeMailboxState,
+    ExchangePush, ExchangeWarning, ExchangeWellKnownFolder, mailbox_folder_path,
+};
+use nail_api::{
+    AccountConfig, AccountId, AccountState, ApiError, ErrorCode, Event, Folder, FolderId,
+    FolderRole, MessageId,
+};
+use nail_proto_graph::{FolderPoll, PollTimer};
+use nail_store::exchange::{
+    ExchangeFolderRecord, ExchangeItemRecord, ExchangeOp, ExchangeOpOutcome, ExchangeSyncRecord,
+};
+use nail_store::{Operation, QueuedOp, SyncedMessage};
+use tokio::sync::watch;
+
+use super::{RunningEngine, changed, exchange_parts};
+use crate::engine::{Signals, state_for_error, stopped, unix_now};
+use crate::error::{CoreError, Result};
+use crate::ids;
+use crate::ingest::{IncomingMessage, ingest};
+use crate::replay::{OpExecutor, replay_account};
+use crate::service::{Service, lock};
+
+/// Settings (categories, automatic replies, rules) are read every this
+/// many passes (and after local changes or "Sync").
+pub(crate) const SETTINGS_EVERY: u32 = 10;
+
+/// Messages fetched per store transaction.
+const INGEST_CHUNK: usize = 25;
+
+/// Longest a streaming wait lasts before a pass runs anyway.
+const STREAM_WAIT_SECS: u32 = 60;
+
+/// Most pages of one folder in one pass (a runaway cursor).
+const MAX_PAGES: u32 = 1_000;
+
+/// The store id of an Exchange message (from its first server id).
+pub(crate) fn exchange_message_id(account: &AccountId, remote_id: &str) -> MessageId {
+    ids::pop3_message_id(account, &format!("\0exchange\0{remote_id}"))
+}
+
+/// The store id of an Exchange folder (stable across renames and moves).
+pub(crate) fn exchange_folder_id(
+    account: &AccountId,
+    mailbox: Option<&str>,
+    remote: &str,
+) -> FolderId {
+    ids::folder_id(
+        account,
+        &format!("\u{1}exchange\u{1}{}\u{1}{remote}", mailbox.unwrap_or("")),
+    )
+}
+
+/// The root folder of another mailbox (`@<address>`).
+pub(crate) fn mailbox_root_id(account: &AccountId, mailbox: &str) -> FolderId {
+    ids::folder_id(account, &format!("\u{1}exchange-root\u{1}{mailbox}"))
+}
+
+/// What the loop keeps between passes.
+pub(crate) struct LoopState {
+    poll: PollTimer,
+    folders: FolderPoll,
+    passes: u32,
+    settings_due: bool,
+    /// Folders a notification named (EWS): synced in the next pass even if
+    /// the schedule would skip them.
+    woken: HashSet<FolderId>,
+    /// Whether the server classifies mail (Focused Inbox).
+    focused_inbox: Option<bool>,
+}
+
+/// The engine of an Exchange account: see the module docs.
+pub(crate) async fn run(
+    service: Service,
+    account: AccountConfig,
+    signals: Arc<Signals>,
+    mut stop: watch::Receiver<bool>,
+) {
+    let Some((_, options)) = exchange_parts(&account) else {
+        return;
+    };
+    let options = options.clone();
+    service.set_status(&account.id, AccountState::Connecting, None);
+    let engine = match super::setup::engine_for(&service, &account).await {
+        Ok(engine) => engine,
+        Err(err) => {
+            service.set_status(
+                &account.id,
+                AccountState::Offline,
+                Some((err.code(), err.to_string(), err.localized())),
+            );
+            stopped(&mut stop).await;
+            return;
+        }
+    };
+    let streaming = engine.kind() == EngineKind::Ews && options.streaming();
+    let running = Arc::new(RunningEngine {
+        engine,
+        push: Mutex::new(if streaming {
+            ExchangePush::Streaming
+        } else {
+            ExchangePush::Polling
+        }),
+        warnings: Mutex::new(Vec::new()),
+        settings_wake: tokio::sync::Notify::new(),
+    });
+    service
+        .inner
+        .exchange
+        .register(&account.id, Arc::clone(&running));
+    changed(&service, &account.id, &[ExchangeArea::Status]);
+    let timing = service.inner.timing;
+    let mut state = LoopState {
+        poll: PollTimer::new(&options),
+        folders: FolderPoll::new(),
+        passes: 0,
+        settings_due: true,
+        woken: HashSet::new(),
+        focused_inbox: None,
+    };
+    let mut backoff = timing.reconnect_min;
+    loop {
+        if *stop.borrow() {
+            break;
+        }
+        let result = tokio::select! {
+            result = pass(&service, &account, &running, &mut state) => result,
+            () = stopped(&mut stop) => break,
+        };
+        let ok = result.is_ok();
+        let delay = match result {
+            Ok(()) => {
+                backoff = timing.reconnect_min;
+                service.set_status(&account.id, AccountState::Online, None);
+                timing
+                    .poll_override
+                    .unwrap_or_else(|| state.poll.next_delay())
+            }
+            Err(err) => {
+                let code = err.code();
+                tracing::info!(account = %account.id, %err, "Exchange sync failed");
+                service.set_status(
+                    &account.id,
+                    state_for_error(code),
+                    Some((code, err.to_string(), err.localized())),
+                );
+                service.broadcast(Event::SyncFailed {
+                    account_id: account.id.clone(),
+                    code,
+                    message: err.to_string(),
+                    localized: err.localized(),
+                });
+                let engine_err: EngineError = err.into();
+                if let Some(secs) = engine_err.retry_after_secs {
+                    record_throttle(&service, &account.id, secs).await;
+                }
+                state.poll.observe(&Err(engine_err));
+                state.poll.end_round();
+                let delay = state.poll.next_delay().max(backoff);
+                backoff = (backoff * 2).min(timing.reconnect_max);
+                delay
+            }
+        };
+        let deadline = tokio::time::Instant::now() + delay;
+        let mut push_ok = streaming && ok;
+        loop {
+            if push_ok {
+                // EWS streaming: wait for the server (or the user).
+                let own = own_folder_ids(&service, &account.id).await;
+                let wait = running
+                    .engine
+                    .wait_for_changes(None, &own, STREAM_WAIT_SECS);
+                tokio::select! {
+                    result = wait => match result {
+                        Ok(Some(folders)) if !folders.is_empty() => {
+                            for remote in folders {
+                                state.woken.insert(exchange_folder_id(
+                                    &account.id, None, &remote,
+                                ));
+                            }
+                            break;
+                        }
+                        Ok(Some(_)) => {
+                            if tokio::time::Instant::now() >= deadline {
+                                break;
+                            }
+                        }
+                        Ok(None) => {
+                            *lock(&running.push) = ExchangePush::Polling;
+                            push_ok = false;
+                        }
+                        Err(err) => {
+                            tracing::info!(account = %account.id, %err, "streaming notifications failed");
+                            break;
+                        }
+                    },
+                    () = signals.sync.notified() => {
+                        state.poll.user_activity();
+                        state.folders.wake_all();
+                        state.settings_due = true;
+                        break;
+                    }
+                    () = signals.replay.notified() => {
+                        replay(&service, &account.id, &running).await;
+                        super::pim::replay_writes(&service, &account, running.engine.as_ref()).await;
+                    }
+                    () = running.settings_wake.notified() => {
+                        state.settings_due = true;
+                        break;
+                    }
+                    () = stopped(&mut stop) => {
+                        service.inner.exchange.unregister(&account.id, &running);
+                        return;
+                    }
+                }
+                continue;
+            }
+            tokio::select! {
+                () = tokio::time::sleep_until(deadline) => break,
+                () = signals.sync.notified() => {
+                    state.poll.user_activity();
+                    state.folders.wake_all();
+                    state.settings_due = true;
+                    break;
+                }
+                () = signals.replay.notified() => {
+                    state.poll.user_activity();
+                    replay(&service, &account.id, &running).await;
+                    super::pim::replay_writes(&service, &account, running.engine.as_ref()).await;
+                }
+                () = running.settings_wake.notified() => {
+                    state.settings_due = true;
+                    break;
+                }
+                () = stopped(&mut stop) => {
+                    service.inner.exchange.unregister(&account.id, &running);
+                    return;
+                }
+            }
+        }
+    }
+    service.inner.exchange.unregister(&account.id, &running);
+    tracing::info!(account = %account.id, "engine stopped");
+}
+
+async fn record_throttle(service: &Service, account: &AccountId, secs: u32) {
+    let id = account.clone();
+    let until = unix_now() + i64::from(secs);
+    let _ = service
+        .store()
+        .call(move |s| {
+            if let Some(mut record) = s.exchange_sync(&id)? {
+                record.throttled_until = Some(until);
+                s.set_exchange_sync(&id, &record)?;
+            }
+            Ok(())
+        })
+        .await;
+    changed(service, account, &[ExchangeArea::Status]);
+}
+
+/// The remote ids of the own mailbox's mail folders (what streaming
+/// watches).
+async fn own_folder_ids(service: &Service, account: &AccountId) -> Vec<String> {
+    let id = account.clone();
+    service
+        .store()
+        .call(move |s| s.exchange_folders(&id))
+        .await
+        .map(|folders| {
+            folders
+                .into_iter()
+                .filter(|f| f.mailbox.is_none())
+                .map(|f| f.remote_id)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// One pass (see the module docs).
+async fn pass(
+    service: &Service,
+    account: &AccountConfig,
+    running: &Arc<RunningEngine>,
+    state: &mut LoopState,
+) -> Result<()> {
+    let engine = &running.engine;
+    tracing::debug!(account = %account.id, pass = state.passes, "Exchange pass");
+    if state.focused_inbox.is_none() {
+        let info = engine.server_info().await.map_err(CoreError::from)?;
+        state.focused_inbox = Some(info.focused_inbox);
+        if !info.focused_inbox {
+            let mut warnings = lock(&running.warnings);
+            if !warnings.contains(&ExchangeWarning::FocusedInboxUnavailable) {
+                warnings.push(ExchangeWarning::FocusedInboxUnavailable);
+            }
+        }
+        let (id, kind) = (account.id.clone(), engine.kind());
+        let version = info.server_version.clone();
+        service
+            .store()
+            .call(move |s| {
+                let mut record = s.exchange_sync(&id)?.unwrap_or(ExchangeSyncRecord {
+                    engine: kind,
+                    server_version: None,
+                    subscription_id: None,
+                    watermark: None,
+                    throttled_until: None,
+                    last_sync_at: None,
+                });
+                record.engine = kind;
+                record.server_version = version;
+                s.set_exchange_sync(&id, &record)
+            })
+            .await?;
+        changed(service, &account.id, &[ExchangeArea::Status]);
+    }
+    let replayed = replay(service, &account.id, running).await;
+    state.settings_due |= replayed;
+    // Mail: the own mailbox, then the shown other mailboxes.
+    sync_mailbox(service, account, engine, None, state).await?;
+    let id = account.id.clone();
+    let mailboxes = service
+        .store()
+        .call(move |s| s.exchange_mailboxes(&id, false))
+        .await?;
+    for mailbox in mailboxes.iter().filter(|m| m.settings.mail) {
+        let address = mailbox.settings.address.clone();
+        let result = sync_mailbox(service, account, engine, Some(&address), state).await;
+        let (new_state, error) = match &result {
+            Ok(()) => (ExchangeMailboxState::Synced, None),
+            Err(err) => {
+                let code = err.code();
+                let state = match code {
+                    ErrorCode::Forbidden | ErrorCode::AuthFailed => {
+                        ExchangeMailboxState::AccessDenied
+                    }
+                    ErrorCode::NotFound => ExchangeMailboxState::NotFound,
+                    _ => ExchangeMailboxState::Error,
+                };
+                tracing::info!(account = %account.id, mailbox = %address, %err, "mailbox sync failed");
+                (
+                    state,
+                    Some(ApiError::from(CoreError::Engine(EngineError::permanent(
+                        code,
+                        err.to_string(),
+                    )))),
+                )
+            }
+        };
+        if new_state != mailbox.state
+            || (new_state == ExchangeMailboxState::Synced && mailbox.root_folder_id.is_none())
+        {
+            let (id, key) = (account.id.clone(), address.clone());
+            let root = (new_state == ExchangeMailboxState::Synced)
+                .then(|| mailbox_root_id(&account.id, &address));
+            service
+                .store()
+                .call(move |s| {
+                    s.set_exchange_mailbox_state(
+                        &id,
+                        &key,
+                        new_state,
+                        root.as_ref(),
+                        error.as_ref(),
+                    )
+                })
+                .await?;
+            changed(service, &account.id, &[ExchangeArea::Mailboxes]);
+        }
+    }
+    // Settings.
+    state.passes += 1;
+    if state.settings_due || state.passes.is_multiple_of(SETTINGS_EVERY) {
+        state.settings_due = false;
+        if let Err(err) = super::settings::sync(service, account, running).await {
+            tracing::info!(account = %account.id, %err, "Exchange settings sync failed");
+        }
+    }
+    // Calendars, contacts, tasks.
+    tracing::debug!(account = %account.id, "Exchange pass: PIM");
+    let pim_changed = super::pim::sync(service, account, engine.as_ref()).await?;
+    tracing::debug!(account = %account.id, "Exchange pass done");
+    state.poll.observe_changes(pim_changed);
+    state.poll.end_round();
+    let id = account.id.clone();
+    service
+        .store()
+        .call(move |s| {
+            if let Some(mut record) = s.exchange_sync(&id)? {
+                record.last_sync_at = Some(unix_now());
+                record.throttled_until = None;
+                s.set_exchange_sync(&id, &record)?;
+            }
+            Ok(())
+        })
+        .await?;
+    changed(service, &account.id, &[ExchangeArea::Status]);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Folders
+
+/// A folder's items cursor, interrupted first sync and last sync.
+type CursorState = (Option<String>, Option<String>, Option<i64>);
+
+/// What the hierarchy knows about a folder.
+#[derive(Debug, Clone)]
+struct KnownFolder {
+    name: String,
+    parent: Option<String>,
+    well_known: Option<ExchangeWellKnownFolder>,
+    change_key: Option<String>,
+}
+
+/// Syncs a mailbox: hierarchy, then the due mail folders.
+async fn sync_mailbox(
+    service: &Service,
+    account: &AccountConfig,
+    engine: &Arc<dyn ExchangeEngine>,
+    mailbox: Option<&str>,
+    state: &mut LoopState,
+) -> Result<()> {
+    sync_hierarchy(service, account, engine.as_ref(), mailbox).await?;
+    let id = account.id.clone();
+    let key = mailbox.map(str::to_owned);
+    let folders: Vec<ExchangeFolderRecord> = service
+        .store()
+        .call(move |s| {
+            Ok(s.exchange_folders(&id)?
+                .into_iter()
+                .filter(|f| f.mailbox == key)
+                .collect())
+        })
+        .await?;
+    for f in &folders {
+        let priority = mailbox.is_none() && f.well_known == Some(ExchangeWellKnownFolder::Inbox);
+        state
+            .folders
+            .track(f.folder_id.as_str(), priority || f.cursor.is_none());
+    }
+    let due: HashSet<String> = state.folders.due().into_iter().collect();
+    for folder in folders {
+        let key = folder.folder_id.as_str().to_owned();
+        let woken = state.woken.remove(&folder.folder_id);
+        if !due.contains(&key) && !woken {
+            continue;
+        }
+        let result = sync_folder(service, account, engine.as_ref(), &folder).await;
+        match result {
+            Ok(changes) => {
+                state.folders.observe(&key, changes);
+                state.poll.observe_changes(changes);
+                if folder.cursor.is_some() {
+                    state.folders.track(
+                        &key,
+                        mailbox.is_none()
+                            && folder.well_known == Some(ExchangeWellKnownFolder::Inbox),
+                    );
+                }
+            }
+            Err(err) if err.code() == ErrorCode::NotFound => {
+                tracing::info!(account = %account.id, folder = %folder.remote_id, "folder gone");
+                remove_folders(service, std::slice::from_ref(&folder.folder_id)).await?;
+                state.folders.untrack(&key);
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(())
+}
+
+/// The folder hierarchy of a mailbox into the store.
+async fn sync_hierarchy(
+    service: &Service,
+    account: &AccountConfig,
+    engine: &dyn ExchangeEngine,
+    mailbox: Option<&str>,
+) -> Result<()> {
+    let (id, key) = (account.id.clone(), mailbox.map(str::to_owned));
+    let mut cursor = service
+        .store()
+        .call(move |s| s.exchange_hierarchy_cursor(&id, key.as_deref()))
+        .await?;
+    let mut full = cursor.is_none();
+    let mut upserted: Vec<ExchangeFolder> = Vec::new();
+    let mut removed: Vec<String> = Vec::new();
+    let mut pages = 0u32;
+    let final_cursor = loop {
+        pages += 1;
+        if pages > MAX_PAGES {
+            return Err(
+                ApiError::new(ErrorCode::Internal, "the folder listing does not end").into(),
+            );
+        }
+        match engine
+            .folder_hierarchy(mailbox, cursor.as_deref())
+            .await
+            .map_err(CoreError::from)?
+        {
+            HierarchyOutcome::CursorExpired => {
+                if full {
+                    return Err(ApiError::new(
+                        ErrorCode::Internal,
+                        "the server refused a full folder listing",
+                    )
+                    .into());
+                }
+                cursor = None;
+                full = true;
+                upserted.clear();
+                removed.clear();
+            }
+            HierarchyOutcome::Delta(delta) => {
+                upserted.extend(delta.upserted);
+                removed.extend(delta.removed);
+                if !delta.more {
+                    break delta.cursor;
+                }
+                cursor = Some(delta.cursor);
+            }
+        }
+    };
+    apply_hierarchy(service, account, mailbox, &upserted, &removed, full).await?;
+    let (id, key) = (account.id.clone(), mailbox.map(str::to_owned));
+    let now = unix_now();
+    service
+        .store()
+        .call(move |s| {
+            s.set_exchange_hierarchy_cursor(&id, key.as_deref(), Some(&final_cursor), now)
+        })
+        .await?;
+    Ok(())
+}
+
+/// Applies folder changes: rows (paths from the parent chain, roles from
+/// well-known names for the own mailbox), Exchange records, removals.
+async fn apply_hierarchy(
+    service: &Service,
+    account: &AccountConfig,
+    mailbox: Option<&str>,
+    upserted: &[ExchangeFolder],
+    removed: &[String],
+    full: bool,
+) -> Result<()> {
+    let id = account.id.clone();
+    let key = mailbox.map(str::to_owned);
+    let records: Vec<(ExchangeFolderRecord, String)> = service
+        .store()
+        .call(move |s| {
+            let mut out = Vec::new();
+            for record in s.exchange_folders(&id)? {
+                if record.mailbox != key {
+                    continue;
+                }
+                let name = s
+                    .get_folder(&record.folder_id)
+                    .map(|f| f.name)
+                    .unwrap_or_default();
+                out.push((record, name));
+            }
+            Ok(out)
+        })
+        .await?;
+    let mut known: HashMap<String, KnownFolder> = HashMap::new();
+    let mut cursors: HashMap<String, CursorState> = HashMap::new();
+    for (record, name) in records {
+        cursors.insert(
+            record.remote_id.clone(),
+            (
+                record.cursor.clone(),
+                record.full_sync_page.clone(),
+                record.last_sync_at,
+            ),
+        );
+        if !full {
+            known.insert(
+                record.remote_id.clone(),
+                KnownFolder {
+                    name,
+                    parent: record.parent_remote_id.clone(),
+                    well_known: record.well_known,
+                    change_key: record.change_key.clone(),
+                },
+            );
+        }
+    }
+    let before: HashSet<String> = cursors.keys().cloned().collect();
+    for folder in upserted {
+        if folder.class != ExchangeFolderClass::Mail {
+            known.remove(&folder.remote_id);
+            continue;
+        }
+        known.insert(
+            folder.remote_id.clone(),
+            KnownFolder {
+                name: folder.name.clone(),
+                parent: folder.parent.clone(),
+                well_known: folder.well_known,
+                change_key: folder.change_key.clone(),
+            },
+        );
+    }
+    for gone in removed {
+        known.remove(gone);
+    }
+    // Paths from the parent chain (parents outside the mail tree: top level).
+    let path_of = |remote: &str| -> (String, usize) {
+        let mut parts = Vec::new();
+        let mut at = Some(remote.to_owned());
+        let mut guard = 0;
+        while let Some(r) = at {
+            guard += 1;
+            let Some(k) = known.get(&r) else { break };
+            parts.push(k.name.replace('/', "\u{2215}"));
+            at = k.parent.clone().filter(|p| known.contains_key(p));
+            if guard > 64 {
+                break;
+            }
+        }
+        parts.reverse();
+        let depth = parts.len();
+        (parts.join("/"), depth)
+    };
+    let mut rows: Vec<(usize, Folder, ExchangeFolderRecord)> = Vec::new();
+    for (remote, k) in &known {
+        let (display, depth) = path_of(remote);
+        let folder_id = exchange_folder_id(&account.id, mailbox, remote);
+        let parent_id = match k.parent.as_ref().filter(|p| known.contains_key(*p)) {
+            Some(parent) => Some(exchange_folder_id(&account.id, mailbox, parent)),
+            None => mailbox.map(|m| mailbox_root_id(&account.id, m)),
+        };
+        let role = if mailbox.is_none() {
+            k.well_known
+                .and_then(ExchangeWellKnownFolder::role)
+                .unwrap_or(FolderRole::Other)
+        } else {
+            FolderRole::Other
+        };
+        let (cursor, page, at) = cursors.get(remote).cloned().unwrap_or_default();
+        rows.push((
+            depth,
+            Folder {
+                id: folder_id.clone(),
+                account_id: account.id.clone(),
+                parent_id,
+                name: k.name.clone(),
+                path: mailbox_folder_path(mailbox, &display),
+                role,
+                unread: 0,
+                total: 0,
+            },
+            ExchangeFolderRecord {
+                folder_id,
+                mailbox: mailbox.map(str::to_owned),
+                remote_id: remote.clone(),
+                change_key: k.change_key.clone(),
+                parent_remote_id: k.parent.clone(),
+                well_known: k.well_known,
+                cursor,
+                full_sync_page: page,
+                last_sync_at: at,
+            },
+        ));
+    }
+    rows.sort_by_key(|(depth, f, _)| (*depth, f.path.clone()));
+    let gone: Vec<FolderId> = before
+        .iter()
+        .filter(|r| !known.contains_key(*r))
+        .map(|r| exchange_folder_id(&account.id, mailbox, r))
+        .collect();
+    let (id, root) = (
+        account.id.clone(),
+        mailbox.map(|m| (mailbox_root_id(&account.id, m), m.to_owned())),
+    );
+    let changed_rows = service
+        .store()
+        .call(move |s| {
+            let mut changed = false;
+            if let Some((root_id, address)) = &root {
+                let name = s
+                    .exchange_mailboxes(&id, true)?
+                    .into_iter()
+                    .find(|m| &m.settings.address == address)
+                    .and_then(|m| m.settings.name)
+                    .unwrap_or_else(|| address.clone());
+                s.upsert_folder(&Folder {
+                    id: root_id.clone(),
+                    account_id: id.clone(),
+                    parent_id: None,
+                    name,
+                    path: mailbox_folder_path(Some(address), ""),
+                    role: FolderRole::Other,
+                    unread: 0,
+                    total: 0,
+                })?;
+            }
+            for (_, folder, record) in &rows {
+                let existing = s.exchange_folder(&folder.id)?;
+                let same = match (&existing, s.get_folder(&folder.id).ok()) {
+                    (Some(e), Some(f)) => {
+                        e == record
+                            && f.path == folder.path
+                            && f.name == folder.name
+                            && f.parent_id == folder.parent_id
+                    }
+                    _ => false,
+                };
+                if !same {
+                    s.upsert_folder(folder)?;
+                    s.upsert_exchange_folder(&id, record)?;
+                    changed = true;
+                }
+            }
+            Ok(changed)
+        })
+        .await?;
+    if !gone.is_empty() {
+        remove_folders(service, &gone).await?;
+    }
+    if changed_rows || !gone.is_empty() {
+        service.broadcast(Event::MailChanged {
+            folder_ids: Vec::new(),
+        });
+    }
+    Ok(())
+}
+
+/// Removes folders with their messages (and from the index).
+async fn remove_folders(service: &Service, folders: &[FolderId]) -> Result<()> {
+    let list = folders.to_vec();
+    let messages: Vec<MessageId> = service
+        .store()
+        .call(move |s| {
+            let mut out = Vec::new();
+            for folder in &list {
+                if let Ok(page) = s.list_messages(folder, 0, u32::MAX) {
+                    out.extend(page.messages.into_iter().map(|m| m.id));
+                }
+            }
+            Ok(out)
+        })
+        .await?;
+    remove_messages(service, messages).await?;
+    let list = folders.to_vec();
+    service
+        .store()
+        .call(move |s| {
+            for folder in &list {
+                s.delete_folder(folder)?;
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// Forgets the local copy of another mailbox's folders (`RemoveExchangeMailbox`,
+/// mail no longer shown).
+pub(crate) async fn forget_mailbox(
+    service: &Service,
+    account: &AccountId,
+    address: &str,
+) -> Result<()> {
+    let (id, key) = (account.clone(), address.trim().to_ascii_lowercase());
+    let (folders, root) = service
+        .store()
+        .call(move |s| {
+            let folders: Vec<FolderId> = s
+                .exchange_folders(&id)?
+                .into_iter()
+                .filter(|f| f.mailbox.as_deref() == Some(key.as_str()))
+                .map(|f| f.folder_id)
+                .collect();
+            s.set_exchange_hierarchy_cursor(&id, Some(&key), None, unix_now())?;
+            Ok((folders, mailbox_root_id(&id, &key)))
+        })
+        .await?;
+    let mut all = folders;
+    all.push(root);
+    remove_folders(service, &all).await?;
+    service.broadcast(Event::MailChanged {
+        folder_ids: Vec::new(),
+    });
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Items
+
+/// Syncs one folder's items; `true` when something changed.
+async fn sync_folder(
+    service: &Service,
+    account: &AccountConfig,
+    engine: &dyn ExchangeEngine,
+    folder: &ExchangeFolderRecord,
+) -> Result<bool> {
+    let mailbox = folder.mailbox.as_deref();
+    let mut cursor = folder.cursor.clone();
+    let mut full = cursor.is_none();
+    let first_sync = folder.cursor.is_none() && folder.last_sync_at.is_none();
+    let mut listed: HashSet<String> = HashSet::new();
+    let mut any = false;
+    let mut pages = 0u32;
+    loop {
+        pages += 1;
+        if pages > MAX_PAGES {
+            break;
+        }
+        match engine
+            .folder_items(mailbox, &folder.remote_id, cursor.as_deref(), None)
+            .await
+            .map_err(CoreError::from)?
+        {
+            DeltaOutcome::CursorExpired => {
+                if full {
+                    return Err(ApiError::new(
+                        ErrorCode::Internal,
+                        "the server refused a full listing",
+                    )
+                    .into());
+                }
+                tracing::info!(account = %account.id, folder = %folder.remote_id, "cursor expired; listing again");
+                cursor = None;
+                full = true;
+                listed.clear();
+                any = true;
+            }
+            DeltaOutcome::Delta(delta) => {
+                listed.extend(delta.added.iter().map(|m| m.remote_id.clone()));
+                listed.extend(delta.changed.iter().map(|m| m.remote_id.clone()));
+                any |= !(delta.added.is_empty()
+                    && delta.changed.is_empty()
+                    && delta.removed.is_empty());
+                apply_delta(service, account, engine, folder, &delta, !first_sync).await?;
+                let (id, next, more) = (folder.folder_id.clone(), delta.cursor.clone(), delta.more);
+                let now = unix_now();
+                service
+                    .store()
+                    .call(move |s| s.set_exchange_folder_cursor(&id, Some(&next), None, now))
+                    .await?;
+                if !more {
+                    break;
+                }
+                cursor = Some(delta.cursor);
+            }
+        }
+    }
+    if full {
+        // Merge: what the server no longer lists is gone (local-only
+        // messages without a server id stay).
+        let id = folder.folder_id.clone();
+        let gone: Vec<MessageId> = service
+            .store()
+            .call(move |s| {
+                let mut gone = Vec::new();
+                for m in s.list_messages(&id, 0, u32::MAX)?.messages {
+                    if let Some(remote) = s.message_remote_id(&m.id)?
+                        && !listed.contains(&remote)
+                    {
+                        gone.push(m.id);
+                    }
+                }
+                Ok(gone)
+            })
+            .await?;
+        any |= !gone.is_empty();
+        remove_messages(service, gone).await?;
+    }
+    if any {
+        service.broadcast(Event::MailChanged {
+            folder_ids: vec![folder.folder_id.clone()],
+        });
+    }
+    Ok(any)
+}
+
+async fn remove_messages(service: &Service, ids: Vec<MessageId>) -> Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let index = service.inner.search.get();
+    service
+        .store()
+        .call(move |s| {
+            for id in &ids {
+                s.delete_message(id)?;
+            }
+            if let Err(err) = index.remove(&ids) {
+                tracing::warn!(%err, "cannot remove deleted messages from the index");
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+/// The master category list as the mapping wants it.
+async fn master(service: &Service, account: &AccountId) -> Result<Vec<ExchangeCategorySettings>> {
+    let id = account.clone();
+    Ok(service
+        .store()
+        .call(move |s| s.exchange_category_records(&id))
+        .await?
+        .into_iter()
+        .map(|r| ExchangeCategorySettings {
+            name: r.name,
+            color: r.color,
+        })
+        .collect())
+}
+
+/// Applies one page of item changes.
+async fn apply_delta(
+    service: &Service,
+    account: &AccountConfig,
+    engine: &dyn ExchangeEngine,
+    folder: &ExchangeFolderRecord,
+    delta: &SyncDelta,
+    arrivals: bool,
+) -> Result<()> {
+    let master = master(service, &account.id).await?;
+    store_messages(
+        service,
+        account,
+        engine,
+        folder,
+        &delta.added,
+        &master,
+        arrivals,
+    )
+    .await?;
+    let mut unknown = Vec::new();
+    for change in &delta.changed {
+        if !apply_change(service, &account.id, folder, change, &master).await? {
+            unknown.push(change.remote_id.clone());
+        }
+    }
+    // A change of a message Nail does not have: fetch it as new.
+    let fresh: Vec<RemoteMessage> = unknown
+        .into_iter()
+        .map(|remote_id| RemoteMessage {
+            remote_id,
+            thread_id: None,
+            folder: folder.remote_id.clone(),
+            flags: nail_api::Flags::default(),
+            tags: Vec::new(),
+            internal_date: None,
+            size: None,
+            raw: None,
+            gmail: None,
+            change_key: None,
+            exchange: None,
+        })
+        .collect();
+    store_messages(service, account, engine, folder, &fresh, &master, arrivals).await?;
+    let id = account.id.clone();
+    let removed = delta.removed.clone();
+    let gone: Vec<MessageId> = service
+        .store()
+        .call(move |s| {
+            let mut out = Vec::new();
+            for remote in &removed {
+                if let Some(m) = s.message_by_remote_id(&id, remote)? {
+                    out.push(m);
+                }
+            }
+            Ok(out)
+        })
+        .await?;
+    remove_messages(service, gone).await?;
+    Ok(())
+}
+
+/// The Exchange extras a message keeps (Focused Inbox only in the Inbox).
+fn item_record(
+    folder: &ExchangeFolderRecord,
+    change_key: Option<&String>,
+    info: Option<&nail_api::exchange::ExchangeMessageInfo>,
+) -> ExchangeItemRecord {
+    ExchangeItemRecord {
+        mailbox: folder.mailbox.clone(),
+        change_key: change_key.cloned(),
+        conversation_id: info.and_then(|i| i.conversation_id.clone()),
+        inference: nail_exchange::mapping::focus::stored_inference(
+            folder.well_known.filter(|_| folder.mailbox.is_none()),
+            info.and_then(|i| i.inference),
+        ),
+    }
+}
+
+/// A metadata change of a stored message; `false` when it is unknown.
+async fn apply_change(
+    service: &Service,
+    account: &AccountId,
+    folder: &ExchangeFolderRecord,
+    change: &RemoteMessageChange,
+    master: &[ExchangeCategorySettings],
+) -> Result<bool> {
+    let (id, change, folder, master) = (
+        account.clone(),
+        change.clone(),
+        folder.clone(),
+        master.to_vec(),
+    );
+    Ok(service
+        .store()
+        .call(move |s| {
+            let Some(message_id) = s.message_by_remote_id(&id, &change.remote_id)? else {
+                return Ok(false);
+            };
+            let mut stored = s.get_message(&message_id)?;
+            let target = match &change.folder {
+                Some(remote) => s
+                    .exchange_folder_by_remote(&id, folder.mailbox.as_deref(), remote)?
+                    .unwrap_or_else(|| folder.clone()),
+                None => folder.clone(),
+            };
+            stored.summary.folder_id = target.folder_id.clone();
+            if let Some(flags) = change.flags {
+                stored.summary.flags = flags;
+            }
+            if let Some(tags) = &change.tags {
+                let mut keep: Vec<String> = stored
+                    .summary
+                    .tags
+                    .iter()
+                    .filter(|t| !nail_exchange::mapping::categories::is_category_name(t))
+                    .cloned()
+                    .collect();
+                keep.extend(nail_exchange::mapping::categories::tags_for_categories(
+                    tags, &master,
+                ));
+                stored.summary.tags = keep;
+            }
+            s.merge_messages(&[SyncedMessage {
+                message: stored,
+                meta: None,
+            }])?;
+            let previous = s.exchange_item(&message_id)?;
+            let mut record = item_record(
+                &target,
+                change.change_key.as_ref(),
+                change.exchange.as_ref(),
+            );
+            if change.exchange.is_none()
+                && let Some(previous) = previous
+            {
+                record.conversation_id = previous.conversation_id;
+                if target.well_known == Some(ExchangeWellKnownFolder::Inbox) {
+                    record.inference = previous.inference;
+                }
+            }
+            s.set_exchange_item(&message_id, &record)?;
+            Ok(true)
+        })
+        .await?)
+}
+
+/// Stores listed / new messages: known ones get the server's metadata,
+/// new ones are fetched as MIME and ingested.
+async fn store_messages(
+    service: &Service,
+    account: &AccountConfig,
+    engine: &dyn ExchangeEngine,
+    folder: &ExchangeFolderRecord,
+    messages: &[RemoteMessage],
+    master: &[ExchangeCategorySettings],
+    arrivals: bool,
+) -> Result<()> {
+    if messages.is_empty() {
+        return Ok(());
+    }
+    let local_folder = {
+        let id = folder.folder_id.clone();
+        service.store().call(move |s| s.get_folder(&id)).await?
+    };
+    let mut new_ids: Vec<MessageId> = Vec::new();
+    for chunk in messages.chunks(INGEST_CHUNK) {
+        for m in chunk {
+            let change = RemoteMessageChange {
+                remote_id: m.remote_id.clone(),
+                folder: Some(folder.remote_id.clone()),
+                flags: Some(m.flags),
+                tags: Some(m.tags.clone()),
+                gmail: None,
+                change_key: m.change_key.clone(),
+                exchange: m.exchange.clone(),
+            };
+            if apply_change(service, &account.id, folder, &change, master).await? {
+                continue;
+            }
+            let raw = match &m.raw {
+                Some(raw) => raw.clone(),
+                None => match engine
+                    .fetch_mime(folder.mailbox.as_deref(), &m.remote_id)
+                    .await
+                {
+                    Ok(raw) => raw,
+                    Err(err) if err.code == ErrorCode::NotFound => continue,
+                    Err(err) => return Err(err.into()),
+                },
+            };
+            let id = exchange_message_id(&account.id, &m.remote_id);
+            let tags = nail_exchange::mapping::categories::tags_for_categories(&m.tags, master);
+            let incoming = IncomingMessage {
+                uid: None,
+                id: Some(id.clone()),
+                flags: m.flags,
+                keywords: tags,
+                internal_date: m.internal_date.and_then(|t| {
+                    chrono::DateTime::from_timestamp(t, 0)
+                        .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+                }),
+                raw,
+                headers_only: false,
+                size: m.size,
+            };
+            let blobs = service.blobs().clone();
+            let index = service.inner.search.get();
+            let target = local_folder.clone();
+            let record = item_record(folder, m.change_key.as_ref(), m.exchange.as_ref());
+            let (remote, stored_id) = (m.remote_id.clone(), id.clone());
+            let report = service
+                .store()
+                .call(move |s| {
+                    let report = ingest(s, &blobs, Some(&index), &target, 0, &[incoming])?;
+                    s.set_message_remote_id(&stored_id, Some(&remote))?;
+                    s.set_exchange_item(&stored_id, &record)?;
+                    Ok(report)
+                })
+                .await?;
+            if report.new.contains(&id)
+                && folder.mailbox.is_none()
+                && crate::sync::runs_arrival_rules(local_folder.role)
+            {
+                new_ids.push(id);
+            }
+        }
+    }
+    if arrivals && !new_ids.is_empty() {
+        let queued = new_ids.clone();
+        if let Err(err) = service
+            .store()
+            .call(move |s| crate::rules::queue_for_rules(s, &queued))
+            .await
+        {
+            tracing::warn!(%err, "cannot queue new Exchange mail for the rules");
+        }
+        if local_folder.role == FolderRole::Inbox {
+            service.broadcast(Event::NewMail {
+                account_id: account.id.clone(),
+                folder_id: local_folder.id.clone(),
+                message_ids: new_ids,
+            });
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Replay
+
+/// Replays the mail queue and the Exchange queue; `true` when Exchange
+/// operations ran (the settings are read again).
+pub(crate) async fn replay(
+    service: &Service,
+    account: &AccountId,
+    running: &Arc<RunningEngine>,
+) -> bool {
+    let executor = ExchangeExecutor {
+        service,
+        engine: Arc::clone(&running.engine),
+    };
+    tracing::debug!(%account, "Exchange replay: mail");
+    if let Err(err) = replay_account(service, account, &executor).await {
+        tracing::warn!(%account, %err, "replaying Exchange writes failed");
+    }
+    tracing::debug!(%account, "Exchange replay: Exchange operations");
+    match replay_exchange_ops(service, account, running.engine.as_ref()).await {
+        Ok(ran) => ran,
+        Err(err) => {
+            tracing::info!(%account, %err, "Exchange operations deferred");
+            false
+        }
+    }
+}
+
+/// Replays the Exchange operation queue, one at a time (a create's id
+/// moves later operations to the server's id).
+async fn replay_exchange_ops(
+    service: &Service,
+    account: &AccountId,
+    engine: &dyn ExchangeEngine,
+) -> Result<bool> {
+    let mut areas: Vec<ExchangeArea> = Vec::new();
+    let mut ran = false;
+    let mut mail = false;
+    for _ in 0..1000 {
+        let id = account.clone();
+        let pending = service
+            .store()
+            .call(move |s| s.pending_exchange_ops(&id))
+            .await?;
+        let Some(op) = pending.into_iter().next() else {
+            break;
+        };
+        ran = true;
+        tracing::debug!(%account, op = ?op.op, "Exchange operation");
+        let target = op.target.clone().unwrap_or_default();
+        let (result, area) = match &op.op {
+            ExchangeOp::CreateCategory { settings } => (
+                engine.create_category(settings).await.map(Some),
+                ExchangeArea::Categories,
+            ),
+            ExchangeOp::UpdateCategory { settings, .. } => (
+                engine.update_category(&target, settings).await,
+                ExchangeArea::Categories,
+            ),
+            ExchangeOp::DeleteCategory { .. } => (
+                engine.delete_category(&target).await.map(|()| None),
+                ExchangeArea::Categories,
+            ),
+            ExchangeOp::SetAutomaticReplies { settings } => (
+                engine.set_automatic_replies(settings).await.map(|()| None),
+                ExchangeArea::AutomaticReplies,
+            ),
+            ExchangeOp::SetRuleEnabled {
+                server_rule_id,
+                enabled,
+            } => {
+                let rule = super::settings::server_rule(service, account, server_rule_id).await;
+                let result = match rule {
+                    Ok(mut rule) => {
+                        rule.enabled = *enabled;
+                        engine.update_inbox_rule(&rule).await.map(|()| None)
+                    }
+                    // Gone meanwhile: nothing to switch.
+                    Err(err) if err.code() == ErrorCode::NotFound => Ok(None),
+                    Err(err) => Err(EngineError::from(err)),
+                };
+                (result, ExchangeArea::Rules)
+            }
+            ExchangeOp::DeleteRule { server_rule_id } => (
+                engine
+                    .delete_inbox_rule(server_rule_id)
+                    .await
+                    .map(|()| None),
+                ExchangeArea::Rules,
+            ),
+            ExchangeOp::Classify {
+                message_ids,
+                classification,
+                always,
+            } => {
+                mail = true;
+                (
+                    classify(service, engine, message_ids, *classification, *always)
+                        .await
+                        .map(|()| None),
+                    ExchangeArea::Status,
+                )
+            }
+        };
+        let (outcome, stop) = match result {
+            Ok(server_id) => (ExchangeOpOutcome::Done { server_id }, false),
+            Err(err) if err.retryable && op.attempts < 5 => {
+                (ExchangeOpOutcome::Retry(err.message.clone()), true)
+            }
+            Err(err) => {
+                tracing::warn!(%account, error = %err, "an Exchange operation failed");
+                (ExchangeOpOutcome::Failed(err.message.clone()), false)
+            }
+        };
+        let row = op.id;
+        service
+            .store()
+            .call(move |s| s.finish_exchange_op(row, &outcome))
+            .await?;
+        if !areas.contains(&area) {
+            areas.push(area);
+        }
+        if stop {
+            break;
+        }
+    }
+    if ran {
+        if !areas.contains(&ExchangeArea::Status) {
+            areas.push(ExchangeArea::Status);
+        }
+        changed(service, account, &areas);
+        if mail || areas.contains(&ExchangeArea::Categories) {
+            service.broadcast(Event::MailChanged {
+                folder_ids: Vec::new(),
+            });
+        }
+    }
+    Ok(ran)
+}
+
+/// Moves messages between Focused and Other on the server (per mailbox).
+async fn classify(
+    service: &Service,
+    engine: &dyn ExchangeEngine,
+    messages: &[MessageId],
+    classification: nail_api::exchange::InferenceClassification,
+    always: bool,
+) -> Result<(), EngineError> {
+    let ids = messages.to_vec();
+    let found: Vec<(Option<String>, String)> = service
+        .store()
+        .call(move |s| {
+            let mut out = Vec::new();
+            for id in &ids {
+                let Ok(Some(remote)) = s.message_remote_id(id) else {
+                    continue;
+                };
+                let mailbox = s.exchange_item(id)?.and_then(|i| i.mailbox);
+                out.push((mailbox, remote));
+            }
+            Ok(out)
+        })
+        .await
+        .map_err(|e| EngineError::from(CoreError::from(e)))?;
+    let mut by_mailbox: HashMap<Option<String>, Vec<String>> = HashMap::new();
+    for (mailbox, remote) in found {
+        by_mailbox.entry(mailbox).or_default().push(remote);
+    }
+    for (mailbox, remotes) in by_mailbox {
+        engine
+            .classify(mailbox.as_deref(), &remotes, classification, always)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Replays queued mail writes of an Exchange account through its engine.
+pub(crate) struct ExchangeExecutor<'a> {
+    pub service: &'a Service,
+    pub engine: Arc<dyn ExchangeEngine>,
+}
+
+impl ExchangeExecutor<'_> {
+    async fn remote_of(
+        &self,
+        message: &MessageId,
+    ) -> Result<Option<(Option<String>, String)>, EngineError> {
+        let id = message.clone();
+        self.service
+            .store()
+            .call(move |s| {
+                let remote = match s.message_remote_id(&id) {
+                    Ok(Some(r)) => r,
+                    Ok(None) => return Ok(None),
+                    Err(err) if err.is_not_found() => return Ok(None),
+                    Err(err) => return Err(err),
+                };
+                let mailbox = s.exchange_item(&id)?.and_then(|i| i.mailbox);
+                Ok(Some((mailbox, remote)))
+            })
+            .await
+            .map_err(|e| EngineError::from(CoreError::from(e)))
+    }
+
+    async fn folder(&self, id: &FolderId) -> Result<Option<ExchangeFolderRecord>, EngineError> {
+        let id = id.clone();
+        self.service
+            .store()
+            .call(move |s| s.exchange_folder(&id))
+            .await
+            .map_err(|e| EngineError::from(CoreError::from(e)))
+    }
+
+    async fn set_remote(
+        &self,
+        message: &MessageId,
+        remote: &str,
+        folder: Option<&ExchangeFolderRecord>,
+    ) {
+        let (id, remote, folder) = (message.clone(), remote.to_owned(), folder.cloned());
+        let _ = self
+            .service
+            .store()
+            .call(move |s| {
+                s.set_message_remote_id(&id, Some(&remote))?;
+                if let Some(folder) = folder
+                    && let Some(mut item) = s.exchange_item(&id)?
+                {
+                    item.mailbox = folder.mailbox;
+                    if folder.well_known != Some(ExchangeWellKnownFolder::Inbox) {
+                        item.inference = None;
+                    }
+                    s.set_exchange_item(&id, &item)?;
+                }
+                Ok(())
+            })
+            .await;
+    }
+
+    async fn run(&self, op: &QueuedOp) -> Result<(), EngineError> {
+        match &op.operation {
+            Operation::UpdateFlags { message_id, change } => {
+                let Some((mailbox, remote_id)) = self.remote_of(message_id).await? else {
+                    return Ok(());
+                };
+                let keep = |tags: &[String]| -> Vec<String> {
+                    tags.iter()
+                        .filter(|t| nail_exchange::mapping::categories::is_category_name(t))
+                        .cloned()
+                        .collect()
+                };
+                let write = RemoteWrite::SetFlags {
+                    remote_id,
+                    change: nail_api::FlagChange {
+                        seen: change.seen,
+                        flagged: change.flagged,
+                        answered: change.answered,
+                        draft: change.draft,
+                        add_tags: keep(&change.add_tags),
+                        remove_tags: keep(&change.remove_tags),
+                    },
+                };
+                self.engine.write(mailbox.as_deref(), &write).await?;
+                Ok(())
+            }
+            Operation::MoveMessage {
+                message_id,
+                target_folder_id,
+                source,
+            } => {
+                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
+                    Some(r) => {
+                        let mailbox = self.remote_of(message_id).await?.and_then(|(m, _)| m);
+                        Some((mailbox, r))
+                    }
+                    None => self.remote_of(message_id).await?,
+                };
+                let Some((_, remote_id)) = remote else {
+                    return Ok(());
+                };
+                let Some(from) = (match source {
+                    Some(source) => self.folder(&source.folder_id).await?,
+                    None => None,
+                }) else {
+                    return Ok(());
+                };
+                let Some(to) = self.folder(target_folder_id).await? else {
+                    return Err(EngineError::permanent(
+                        ErrorCode::Unsupported,
+                        "moving Exchange messages out of the account is not supported yet",
+                    ));
+                };
+                if from.mailbox != to.mailbox {
+                    return Err(EngineError::permanent(
+                        ErrorCode::Unsupported,
+                        "moving messages between Exchange mailboxes is not supported yet",
+                    ));
+                }
+                let write = RemoteWrite::Move {
+                    remote_id,
+                    from_folder: from.remote_id.clone(),
+                    to_folder: to.remote_id.clone(),
+                };
+                if let WriteOutcome::Done {
+                    remote_id: Some(new),
+                } = self.engine.write(from.mailbox.as_deref(), &write).await?
+                {
+                    self.set_remote(message_id, &new, Some(&to)).await;
+                }
+                Ok(())
+            }
+            Operation::DeleteMessage {
+                message_id,
+                source,
+                trash_folder_id,
+                ..
+            } => {
+                let remote = match source.as_ref().and_then(|s| s.remote_id.clone()) {
+                    Some(r) => Some(r),
+                    None => self.remote_of(message_id).await?.map(|(_, r)| r),
+                };
+                let Some(remote_id) = remote else {
+                    return Ok(());
+                };
+                let mailbox = match source {
+                    Some(source) => self
+                        .folder(&source.folder_id)
+                        .await?
+                        .and_then(|f| f.mailbox),
+                    None => None,
+                };
+                let write = if trash_folder_id.is_some() {
+                    RemoteWrite::Trash { remote_id }
+                } else {
+                    RemoteWrite::Delete { remote_id }
+                };
+                let outcome = self.engine.write(mailbox.as_deref(), &write).await?;
+                if let (
+                    WriteOutcome::Done {
+                        remote_id: Some(new),
+                    },
+                    Some(trash),
+                ) = (outcome, trash_folder_id)
+                {
+                    let folder = self.folder(trash).await?;
+                    self.set_remote(message_id, &new, folder.as_ref()).await;
+                }
+                Ok(())
+            }
+            Operation::AppendMessage {
+                message_id,
+                folder_id,
+            } => {
+                let Some(folder) = self.folder(folder_id).await? else {
+                    return Ok(());
+                };
+                let id = message_id.clone();
+                let blobs = self.service.blobs().clone();
+                let found = self
+                    .service
+                    .store()
+                    .call(move |s| {
+                        let m = match s.get_message(&id) {
+                            Ok(m) => m,
+                            Err(err) if err.is_not_found() => return Ok(None),
+                            Err(err) => return Err(err),
+                        };
+                        let raw = match m.blob_hash {
+                            Some(hash) => blobs.get(&hash).ok(),
+                            None => None,
+                        };
+                        Ok(raw.map(|raw| (raw, m.summary.flags)))
+                    })
+                    .await
+                    .map_err(|e| EngineError::from(CoreError::from(e)))?;
+                let Some((raw, flags)) = found else {
+                    return Ok(());
+                };
+                let write = RemoteWrite::Append {
+                    folder: folder.remote_id.clone(),
+                    raw,
+                    flags,
+                };
+                if let WriteOutcome::Done {
+                    remote_id: Some(remote),
+                } = self.engine.write(folder.mailbox.as_deref(), &write).await?
+                {
+                    let (id, f) = (message_id.clone(), folder.clone());
+                    let record = item_record(&f, None, None);
+                    let _ = self
+                        .service
+                        .store()
+                        .call(move |s| {
+                            s.set_message_remote_id(&id, Some(&remote))?;
+                            s.set_exchange_item(&id, &record)
+                        })
+                        .await;
+                }
+                Ok(())
+            }
+            other => Err(EngineError::permanent(
+                ErrorCode::Internal,
+                format!("cannot replay {} on an Exchange account", other.kind()),
+            )),
+        }
+    }
+}
+
+impl OpExecutor for ExchangeExecutor<'_> {
+    fn execute<'a>(&'a self, op: &'a QueuedOp) -> BoxFuture<'a, Result<(), EngineError>> {
+        Box::pin(self.run(op))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ids_are_stable_and_separate() {
+        let account = AccountId::new("ex");
+        assert_eq!(
+            exchange_message_id(&account, "AAMk1"),
+            exchange_message_id(&account, "AAMk1")
+        );
+        assert_ne!(
+            exchange_message_id(&account, "AAMk1"),
+            crate::gmail::gmail_message_id(&account, "AAMk1")
+        );
+        assert_ne!(
+            exchange_folder_id(&account, None, "f1"),
+            exchange_folder_id(&account, Some("support@contoso.example"), "f1")
+        );
+        assert_ne!(
+            mailbox_root_id(&account, "support@contoso.example"),
+            exchange_folder_id(&account, Some("support@contoso.example"), "")
+        );
+    }
+
+    #[test]
+    fn focused_inbox_is_kept_for_the_own_inbox_only() {
+        let info = nail_api::exchange::ExchangeMessageInfo {
+            item_id: "x".into(),
+            conversation_id: Some("c".into()),
+            inference: Some(nail_api::exchange::InferenceClassification::Other),
+            mailbox: None,
+        };
+        let mut inbox = ExchangeFolderRecord::new("f", "inbox-id");
+        inbox.well_known = Some(ExchangeWellKnownFolder::Inbox);
+        let record = item_record(&inbox, None, Some(&info));
+        assert_eq!(
+            record.inference,
+            Some(nail_api::exchange::InferenceClassification::Other)
+        );
+        assert_eq!(record.conversation_id.as_deref(), Some("c"));
+        let mut shared = inbox.clone();
+        shared.mailbox = Some("support@contoso.example".into());
+        assert_eq!(item_record(&shared, None, Some(&info)).inference, None);
+        let archive = ExchangeFolderRecord::new("g", "archive-id");
+        assert_eq!(item_record(&archive, None, Some(&info)).inference, None);
+    }
+}

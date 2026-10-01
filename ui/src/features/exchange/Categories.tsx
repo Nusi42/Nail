@@ -11,7 +11,8 @@
  * - mount point `MessageCategories`: the categories of one Exchange
  *   message as coloured chips (list rows, reader).
  */
-import { useId, useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { errorMessageOf } from "../../api/client";
 import type {
   CategoryColor,
@@ -22,6 +23,8 @@ import type {
 import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { optionBool, type WidgetProps } from "../../layout/widgetRegistry";
+import { findSummary, patchSummaries, queued } from "../../state/mailOps";
+import { useClient } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
 import { CategorySwatch, Problem, useWriteContext } from "./common";
@@ -395,5 +398,118 @@ export function CategoryDeleteDialog({ close }: DialogProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+/** Dialog `exchange-apply-categories`: the categories of the selected message as check boxes. */
+export function ApplyCategoriesDialog({ close }: DialogProps) {
+  const t = useT();
+  const client = useClient();
+  const queryClient = useQueryClient();
+  const store = useUiStoreApi();
+  const messageId = useUi((s) => s.selectedMessageId);
+  const summary = useMemo(
+    () => (messageId ? findSummary(queryClient, messageId) : undefined),
+    [messageId, queryClient],
+  );
+  const categories = useCategories(summary?.exchange ? summary.account_id : null);
+  const [chosen, setChosen] = useState<Set<string> | null>(null);
+  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!summary?.exchange) {
+    return (
+      <div data-part="exchange.dialog" data-state="empty">
+        <p data-part="exchange.hint">{t("exchange-apply-nothing")}</p>
+        <button type="button" data-part="form.button" onClick={close}>
+          {t("exchange-close")}
+        </button>
+      </div>
+    );
+  }
+  const list = categories.data ?? [];
+  const has = (name: string) =>
+    summary.tags.some((tag) => tag.toLowerCase() === name.toLowerCase());
+  const selected = chosen ?? new Set(list.filter((c) => has(c.name)).map((c) => c.name));
+
+  const apply = async (event: FormEvent) => {
+    event.preventDefault();
+    const add = list.filter((c) => selected.has(c.name) && !has(c.name)).map((c) => c.name);
+    const remove = summary.tags.filter(
+      (tag) =>
+        list.some((c) => c.name.toLowerCase() === tag.toLowerCase()) &&
+        ![...selected].some((s) => s.toLowerCase() === tag.toLowerCase()),
+    );
+    if (add.length === 0 && remove.length === 0) {
+      close();
+      return;
+    }
+    setBusy(true);
+    setProblem(null);
+    patchSummaries(queryClient, [summary.id], (m) => ({
+      ...m,
+      tags: [...new Set([...m.tags.filter((tag) => !remove.includes(tag)), ...add])].sort(),
+    }));
+    try {
+      await queued(
+        { client, store, queryClient },
+        {
+          type: "UpdateFlags",
+          message_ids: [summary.id],
+          change: {
+            seen: null,
+            flagged: null,
+            answered: null,
+            draft: null,
+            add_tags: add,
+            remove_tags: remove,
+          },
+        },
+      );
+      close();
+    } catch (error) {
+      setProblem(errorMessageOf(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      data-part="exchange.dialog"
+      data-dialog="apply-categories"
+      aria-busy={busy}
+      onSubmit={(e) => void apply(e)}
+    >
+      <p data-part="exchange.intro">{t("exchange-apply-intro", { subject: summary.subject })}</p>
+      <fieldset data-part="exchange.colors">
+        <legend data-part="form.section.title">{t("exchange-categories-title")}</legend>
+        {list.length === 0 && <p data-part="exchange.hint">{t("exchange-categories-none")}</p>}
+        {list.map((c) => (
+          <label key={c.id} data-part="form.check" data-color={c.color}>
+            <input
+              type="checkbox"
+              checked={selected.has(c.name)}
+              onChange={(e) => {
+                const next = new Set(selected);
+                if (e.target.checked) next.add(c.name);
+                else next.delete(c.name);
+                setChosen(next);
+              }}
+            />
+            <CategorySwatch color={c.color} />
+            <span data-part="form.check.label">{c.name}</span>
+          </label>
+        ))}
+      </fieldset>
+      <Problem message={problem} />
+      <div data-part="exchange.actions">
+        <button type="submit" data-part="form.button" data-variant="primary" disabled={busy}>
+          {t("exchange-apply")}
+        </button>
+        <button type="button" data-part="form.button" onClick={close}>
+          {t("exchange-cancel")}
+        </button>
+      </div>
+    </form>
   );
 }

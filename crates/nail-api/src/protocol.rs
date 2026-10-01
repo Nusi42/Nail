@@ -147,6 +147,16 @@ pub enum Request {
     DiscoverAccount {
         /// The address to set up.
         email: String,
+        /// Hosts outside the address's domain the user trusts with the
+        /// login (Exchange Autodiscover; M3c,
+        /// [`crate::exchange::ExchangeDiscoveryPrompt::ConfirmRedirect`]).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        trusted_hosts: Vec<String>,
+        /// Let Exchange Autodiscover sign in as the signed-in Windows user
+        /// (servers of the address's domain or trusted hosts only; M3c,
+        /// [`crate::exchange::ExchangeDiscoveryPrompt::NeedsLogin`]).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        windows_sign_in: bool,
     },
     /// Connect and log in with a configuration without saving anything.
     /// Answered with [`Response::AccountTested`], which reports failures
@@ -169,6 +179,11 @@ pub enum Request {
         provider: String,
         /// Address to pre-fill on the provider's sign-in page.
         login_hint: Option<String>,
+        /// Ask for the scopes of this protocol only (M3c: Microsoft issues
+        /// tokens per resource, so an Exchange account signs in for
+        /// `graph` or `ews`); `null` = the provider's mail scopes.
+        #[serde(default)]
+        protocol: Option<crate::accounts::MailProtocol>,
     },
     /// Abort a running OAuth2 sign-in. Answered with [`Response::Done`]; the
     /// flow finishes with `cancelled`.
@@ -2284,6 +2299,11 @@ pub enum Response {
         email: String,
         /// Proposals, best first.
         candidates: Vec<DiscoveredAccount>,
+        /// What Exchange Autodiscover added (a question for the user,
+        /// automapped mailboxes); `null` when it found nothing (M3c).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        exchange: Option<Box<crate::exchange::ExchangeDiscoveryInfo>>,
     },
     /// Answer to [`Request::TestAccount`].
     AccountTested {
@@ -3601,7 +3621,9 @@ mod tests {
     fn m1a_requests_serialize() {
         assert_eq!(
             serde_json::to_value(Request::DiscoverAccount {
-                email: "ada@example.org".into()
+                email: "ada@example.org".into(),
+                trusted_hosts: Vec::new(),
+                windows_sign_in: false,
             })
             .unwrap(),
             json!({"type": "DiscoverAccount", "email": "ada@example.org"})

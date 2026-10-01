@@ -174,8 +174,19 @@ async fn configured_accounts_sync_and_list_with_all_accounts_first() {
         panic!()
     };
     let ids: Vec<&str> = accounts.iter().map(|a| a.id.as_str()).collect();
-    // M3b: the demo Gmail account is configured but switched off.
-    assert_eq!(ids, ["all", MULTI_WORK_ID, MULTI_HOME_ID, "gmail"]);
+    // M3b / M3c: the demo Gmail and Exchange accounts are configured but
+    // switched off.
+    assert_eq!(
+        ids,
+        [
+            "all",
+            MULTI_WORK_ID,
+            MULTI_HOME_ID,
+            "gmail",
+            "exchange",
+            "corp"
+        ]
+    );
     assert_eq!(accounts[0].name, "");
     eventually("both accounts online", || async {
         statuses(&f.service).await
@@ -183,6 +194,8 @@ async fn configured_accounts_sync_and_list_with_all_accounts_first() {
                 (AccountId::new(MULTI_WORK_ID), AccountState::Online),
                 (AccountId::new(MULTI_HOME_ID), AccountState::Online),
                 (AccountId::new("gmail"), AccountState::Disabled),
+                (AccountId::new("exchange"), AccountState::Disabled),
+                (AccountId::new("corp"), AccountState::Disabled),
             ]
     })
     .await;
@@ -932,6 +945,8 @@ async fn accounts_are_discovered_tested_added_and_removed() {
         &f.service,
         Request::DiscoverAccount {
             email: MULTI_NEW_EMAIL.into(),
+            trusted_hosts: Vec::new(),
+            windows_sign_in: false,
         },
     )
     .await
@@ -1049,9 +1064,10 @@ async fn accounts_are_discovered_tested_added_and_removed() {
     );
     let kdl = std::fs::read_to_string(f.config_dir.path().join("accounts.kdl")).unwrap();
     assert!(!kdl.contains("bob-new.example"));
-    // Left: the two demo accounts' passwords, the two demo DAV sources'
-    // and the demo Gmail account's sign-in (M3b).
-    assert_eq!(f.demo.secrets.len(), 5, "its keychain entry is gone");
+    // Left: the two demo accounts' passwords, the two demo DAV sources',
+    // the demo Gmail account's sign-in (M3b) and the demo Exchange
+    // accounts' sign-ins (M3c).
+    assert_eq!(f.demo.secrets.len(), 7, "its keychain entry is gone");
     assert!(matches!(
         request(
             &f.service,

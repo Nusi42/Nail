@@ -1804,11 +1804,14 @@ async fn remote_exchange_requests_follow_grants() {
         error_code(&service.handle_remote(&narrow, status.clone()).await),
         Some(ErrorCode::Forbidden)
     );
-    // Granted: the request reaches the core (unsupported until WP95).
-    assert_eq!(
-        error_code(&service.handle_remote(&reader, status).await),
-        Some(ErrorCode::Unsupported)
-    );
+    // Granted: the request reaches the core (which refuses it for an
+    // account that is not an Exchange account).
+    let reached = |code: Option<ErrorCode>| {
+        matches!(code, Some(ErrorCode::NotFound | ErrorCode::InvalidRequest))
+    };
+    assert!(reached(error_code(
+        &service.handle_remote(&reader, status).await
+    )));
     // Categories and Focused Inbox need `organize`.
     let category = Request::CreateExchangeCategory {
         account_id: message.account_id.clone(),
@@ -1818,10 +1821,9 @@ async fn remote_exchange_requests_follow_grants() {
         error_code(&service.handle_remote(&reader, category.clone()).await),
         Some(ErrorCode::Forbidden)
     );
-    assert_eq!(
-        error_code(&service.handle_remote(&full, category).await),
-        Some(ErrorCode::Unsupported)
-    );
+    assert!(reached(error_code(
+        &service.handle_remote(&full, category).await
+    )));
     let focus = Request::ClassifyFocused {
         message_ids: vec![message.id.clone()],
         classification: InferenceClassification::Other,
@@ -1831,10 +1833,9 @@ async fn remote_exchange_requests_follow_grants() {
         error_code(&service.handle_remote(&narrow, focus.clone()).await),
         Some(ErrorCode::Forbidden)
     );
-    assert_eq!(
-        error_code(&service.handle_remote(&full, focus).await),
-        Some(ErrorCode::Unsupported)
-    );
+    assert!(reached(error_code(
+        &service.handle_remote(&full, focus).await
+    )));
     // Automatic replies are administration.
     let oof = Request::SetAutomaticReplies {
         account_id: message.account_id.clone(),

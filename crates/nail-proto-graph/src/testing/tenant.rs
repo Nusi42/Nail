@@ -627,9 +627,12 @@ impl Mailbox {
             .ok_or_else(|| MockError::bad("ErrorInvalidRequest", "not an object"))?;
         object.insert("id".into(), json!(id));
         object.insert("changeKey".into(), json!("DwAAAB1"));
-        object
-            .entry("iCalUId")
-            .or_insert_with(|| json!(format!("040000008200E000{}", id.len())));
+        object.entry("iCalUId").or_insert_with(|| {
+            // Unique per event, shaped like Exchange's (a fixed prefix
+            // and the item's bytes in hex).
+            let hex: String = id.bytes().map(|b| format!("{b:02X}")).collect();
+            json!(format!("040000008200E00074C5B7101A82E008{hex}"))
+        });
         let kind = if object.get("recurrence").is_some_and(|r| !r.is_null()) {
             "seriesMaster"
         } else {

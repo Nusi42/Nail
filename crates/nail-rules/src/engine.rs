@@ -494,6 +494,9 @@ impl MessageView for WithState<'_> {
     fn gmail_category(&self) -> Option<String> {
         self.inner.gmail_category()
     }
+    fn exchange_focus(&self) -> Option<String> {
+        self.inner.exchange_focus()
+    }
 }
 
 fn run<'r>(

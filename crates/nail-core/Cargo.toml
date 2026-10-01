@@ -14,8 +14,18 @@ default = ["demo"]
 # `nail serve --seed`.
 # `nail-proxy/test-support` lets demo-multi reach its mock image server on
 # one loopback port (only when a seed configures it; ADR 0041).
-# `nail-proto-gmail/testing`: demo-multi's mock Gmail account (M3b).
-demo = ["dep:nail-testkit", "dep:nail-testkit-net", "nail-proxy/test-support", "nail-proto-gmail/testing"]
+# `nail-proto-gmail/testing`: demo-multi's mock Gmail account (M3b);
+# `nail-proto-graph/testing`, `nail-proto-ews/testing`, `nail-exchange/testing`:
+# demo-multi's mock Graph / EWS accounts and mock Autodiscover (M3c).
+demo = [
+    "dep:nail-testkit",
+    "dep:nail-testkit-net",
+    "nail-proxy/test-support",
+    "nail-proto-gmail/testing",
+    "nail-proto-graph/testing",
+    "nail-proto-ews/testing",
+    "nail-exchange/testing",
+]
 
 [dependencies]
 nail-api.workspace = true
@@ -47,6 +57,10 @@ nail-dav.workspace = true
 # M3b: iTIP / iMIP and the Gmail API engine (ADRs 0066, 0067, 0070).
 nail-itip.workspace = true
 nail-proto-gmail.workspace = true
+# M3c: the Graph and EWS engines and the Exchange common layer (ADRs 0073-0075, 0077).
+nail-proto-graph.workspace = true
+nail-proto-ews.workspace = true
+nail-exchange.workspace = true
 chrono-tz.workspace = true
 iana-time-zone.workspace = true
 rand.workspace = true
@@ -76,6 +90,9 @@ rmcp = { workspace = true, features = ["client", "transport-streamable-http-clie
 nail-testkit.workspace = true
 nail-testkit-net.workspace = true
 nail-proto-gmail = { workspace = true, features = ["testing"] }
+nail-proto-graph = { workspace = true, features = ["testing"] }
+nail-proto-ews = { workspace = true, features = ["testing"] }
+nail-exchange = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 zeroize.workspace = true
 pretty_assertions.workspace = true

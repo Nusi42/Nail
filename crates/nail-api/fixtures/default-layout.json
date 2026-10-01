@@ -1655,6 +1655,12 @@
       "icon": null,
       "alias_of": null,
       "args": []
+    },
+    "exchange.apply-categories": {
+      "label": "@exchange.action.apply-categories",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
@@ -2150,6 +2156,13 @@
       },
       {
         "type": "action",
+        "action": "exchange.apply-categories",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "exchange.classify",
         "args": [],
         "label": null,
@@ -2366,6 +2379,13 @@
       {
         "type": "action",
         "action": "gmail.apply-labels",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.apply-categories",
         "args": [],
         "label": null,
         "icon": null

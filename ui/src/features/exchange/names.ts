@@ -31,6 +31,8 @@ export const CATEGORY_DELETE_DIALOG = "exchange-category-delete";
 export const AUTOMATIC_REPLIES_DIALOG = "exchange-automatic-replies";
 /** Move the selected message to Focused / Other (optionally always). */
 export const CLASSIFY_DIALOG = "exchange-classify";
+/** The categories of the selected message (WP95). */
+export const APPLY_CATEGORIES_DIALOG = "exchange-apply-categories";
 
 export const DIALOGS = [
   MAILBOX_EDITOR_DIALOG,
@@ -39,6 +41,7 @@ export const DIALOGS = [
   CATEGORY_DELETE_DIALOG,
   AUTOMATIC_REPLIES_DIALOG,
   CLASSIFY_DIALOG,
+  APPLY_CATEGORIES_DIALOG,
 ] as const;
 
 /** Action ids (`exchange.*`). */
@@ -49,4 +52,5 @@ export const ACTIONS = [
   "exchange.focus",
   "exchange.classify",
   "exchange.toggle-focused",
+  "exchange.apply-categories",
 ] as const;

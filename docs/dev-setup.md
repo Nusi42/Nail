@@ -97,6 +97,30 @@ ADR 0060). The DAV checks of `tests/dav.rs` also run locally without
 Docker against the in-process mock (`MockDavServer` over TLS), and can be
 pointed at a Radicale installed from PyPI (see the interop README).
 
+**Owner-run checks (M3 human gate).** Microsoft and Google services cannot
+run in CI; the automated suite covers them with recorded-style fixtures
+and the mock servers (`MockGraphServer`, `MockEwsServer`,
+`MockAutodiscoverServer`, `MockGmailServer`). Before the M3 gate the owner
+runs, by hand:
+
+- **Exchange Online** (a Microsoft 365 test tenant): add the account
+  through Autodiscover (Graph, Microsoft sign-in with the app's client id),
+  then the `exchange.spec.ts` checklist by hand — mail sync / flag / move /
+  categories / send, a shared mailbox, automatic replies, a Nail rule
+  placed as an inbox rule, the room finder (needs `Place.Read.All` admin
+  consent), a meeting answered, a To Do task. Also confirm the behaviours
+  listed as owner checks in ADR 0073 (nested folders in `mailFolders/delta`,
+  `cancelledOccurrences`, `If-Match` change keys, MIME creates outside
+  Drafts) and the EWS retirement date (ADR 0075).
+- **Exchange Server 2019 / SE**: the same with EWS — Windows sign-in as the
+  domain user (Kerberos), with explicit credentials and with NTLM
+  (`cargo test -p nail-exchange --test sspi_live -- --ignored` with
+  `NAIL_EWS_LIVE_URL`, optionally `NAIL_EWS_LIVE_PACKAGE=ntlm`), streaming
+  notifications, the `CategoryList`, `ResolveNames` (ADR 0074).
+- **Google**: a test account with the restricted Gmail scope on the Google
+  OAuth client: the `gmail.spec.ts` checklist by hand, Google CalDAV /
+  CardDAV with the calendar and contacts scopes.
+
 ### Dependency rules
 
 No GPL / LGPL / AGPL dependency, no OpenSSL and no aws-lc (TLS uses
@@ -205,6 +229,7 @@ How it works:
 | `e2e/tests/pim.spec.ts` | `--seed demo-multi` (M3a): a weekly event edited "this and following" (two series); an event created in the CalDAV calendar reaches the mock CalDAV server and another client's event (`dav-put`) appears after "Sync"; the ICS subscription's holiday is read-only and a second feed is added from the sources dialog; a reminder fires at the controlled clock time (`clock-set`) and is dismissed; a contact created in the CardDAV book reaches the server and is suggested in the composer; duplicate contacts (local + CardDAV) merged into one linked person; a task with a subtask completed; an `.ics` given with `--launch` previewed and imported; an MCP client lists events only after a grant |
 | `e2e/tests/scheduling.spec.ts` | `--seed demo-multi` (M3b): an iMIP invitation (delivered with `imap-deliver`) is added on arrival and accepted from the reader's card, the `REPLY` reaches the mock SMTP server and the event is in the calendar; an organizer's update moves the event and the cancellation is removed with "Remove from calendar"; a meeting created in the event editor is sent ("Send invitations"), Grace's `COUNTER` is accepted from the card and the updated `REQUEST` goes out; the attendee picker shows `bob`'s busy blocks from the mock CalDAV server's outbox |
 | `e2e/tests/gmail.spec.ts` | `--seed demo-multi` (M3b): the Gmail account switched on in the settings syncs (four inbox conversations, chat skipped), category tabs filter the inbox, a label applied with "Labels…" reaches the mock Gmail server, archive removes `INBOX`, mail is sent through the API (`gmail-sent`), a message delivered on the server (`gmail-deliver`) arrives by history polling |
+| `e2e/tests/exchange.spec.ts` | `--seed demo-multi` (M3c): an Exchange Online account added through Autodiscover (mock Autodiscover → Graph, the redirect confirmed, the mock Microsoft sign-in) syncs; an on-premises account added through Autodiscover (EWS, password) syncs and gets a server-side message by streaming notifications (`ews-deliver`); the "Contoso" Graph account switched on: Focused / Other tabs, flag, move into a subfolder, a new category and a category set on a message reach the mock Graph tenant (`graph-messages`, `graph-settings`), mail sent through Graph (`graph-sent`); a shared mailbox opened (its folder tree) and automatic replies set through Settings → Vacation reply and read back in the Exchange editor; a rule created from a message placed as an inbox rule; a To Do task created, a room booked through the room finder and an invitation answered through Graph's meeting API (`graph-pim`, `graph-meetings`, no mail sent) |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 
 ### Generated files and snapshots
@@ -341,6 +366,16 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `gmail-modify` | `id?` / `subject?`, `add?`, `remove?` | Changes a message's labels on the server (history polling picks it up) |
 | `gmail-labels` | – | `[{id, name}]` of the mock Gmail account |
 | `gmail-sent` | – | Raw texts of what Nail sent through `messages.send` |
+| `graph-deliver` | `raw`, `folder?` | New message in the mock Graph tenant of the `exchange` account (`inbox` by default); `{id}` (M3c) |
+| `graph-messages` | `mailbox?` | `[{id, folder, subject, read, flag, categories, inference}]` of the user's (or a shared) mailbox |
+| `graph-folders` | `mailbox?` | `[{id, name, well_known}]` |
+| `graph-sent` | – | Raw texts of what Nail sent through `sendMail` |
+| `graph-settings` | – | `{categories, automatic_replies, rules}` (Graph JSON) |
+| `graph-pim` | – | `{events, tasks, contacts}` (Graph JSON; tasks with their list and checklist) |
+| `graph-meetings` | – | `[{event_id, action}]`: meeting answers / cancellations received |
+| `ews-deliver` | `raw`, `folder?` | New message on the mock EWS server (distinguished folder name, `inbox` by default); `{id}` (M3c) |
+| `ews-messages` | `folder?` | `[{id, subject, read}]` of an EWS folder |
+| `ews-sent` | – | Raw texts of what Nail sent through EWS |
 | `feeds` | – | `{holidays, town}`: URLs of the demo ICS feeds (`holidays` is configured, `town` is for adding a subscription) |
 | `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications, reminders), Unix seconds |
 | `clock-set` | `at` | Sets that clock to `at` (Unix seconds); it keeps running |
@@ -507,6 +542,11 @@ For M3c:
 - **0075 (WP93):** `nail-exchange` — Autodiscover with engine choice and the credential rule,
   SSPI sign-in, the Exchange ↔ Nail mapping, EWS retirement notes.
 - **0076 (WP94):** the Exchange UI (`ui/src/features/exchange/`).
+- **0077:** M3c integration (the Exchange engine task in `nail-core/src/exchange/`: mail per
+  folder, replay, Exchange queue, settings and rule placement, the `exchange:<account>` PIM
+  source with meetings through the engines' meeting APIs, free/busy and rooms, `focus:`,
+  Autodiscover in `DiscoverAccount`, per-protocol OAuth scopes; demo-multi Graph / EWS accounts
+  and mock Autodiscover; `exchange.spec.ts`).
 
 For M3b:
 

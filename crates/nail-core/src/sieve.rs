@@ -130,6 +130,13 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
         }
         Request::GetVacation { account_id } => {
+            // M3c: an Exchange account's automatic replies.
+            if crate::exchange::exchange_account(service, &account_id).is_ok() {
+                return Ok(Response::Vacation {
+                    settings: crate::exchange::settings::vacation(service, &account_id).await?,
+                    account_id,
+                });
+            }
             let config = service.inner.accounts.config();
             imap_account(&config, &account_id)?;
             let id = account_id.clone();
@@ -143,6 +150,21 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             account_id,
             settings,
         } => {
+            if crate::exchange::exchange_account(service, &account_id).is_ok() {
+                if let Some(issue) = settings.issues().first() {
+                    return Err(ApiError::invalid_request(format!(
+                        "invalid vacation settings ({})",
+                        issue.message_id()
+                    ))
+                    .with_localized(LocalizedMessage::new(issue.message_id()))
+                    .into());
+                }
+                crate::exchange::settings::set_vacation(service, &account_id, &settings).await?;
+                return Ok(Response::Vacation {
+                    settings: crate::exchange::settings::vacation(service, &account_id).await?,
+                    account_id,
+                });
+            }
             let config = service.inner.accounts.config();
             sieve_account(&config, &account_id)?;
             if let Some(issue) = settings.issues().first() {
@@ -327,6 +349,10 @@ impl Service {
             }
         }
         self.inner.sieve.wake.notify_one();
+        // M3c: Exchange accounts place rules as inbox rules.
+        if tokio::runtime::Handle::try_current().is_ok() {
+            crate::exchange::settings::queue_rules(self, account);
+        }
     }
 
     /// Rules of an account that its server runs (the arrival rules skip
@@ -334,6 +360,10 @@ impl Service {
     /// by the last successful upload. Survives restarts and failed
     /// uploads, which leave that script active; empty once it is removed.
     pub(crate) async fn server_rules(&self, account: &AccountId) -> Vec<RuleId> {
+        // M3c: rules placed as Exchange inbox rules.
+        if crate::exchange::exchange_account(self, account).is_ok() {
+            return crate::exchange::settings::placed_rules(self, account).await;
+        }
         let id = account.clone();
         match self.store().call(move |s| s.sieve_record(&id)).await {
             Ok(record) if record.script_hash.is_some() => record.server_rules,

@@ -270,6 +270,22 @@ account "home" email="ada@home.example" {
 }
 ```
 
+Exchange accounts are best set up through **Add account**: Autodiscover
+fills in the node. Nail asks before it sends a sign-in to a server outside
+your address's domain, and always for servers found through the unencrypted
+HTTP redirect method or a DNS SRV record; the global Microsoft Autodiscover
+service receives the address you set up (only for domains whose mail
+Microsoft hosts). See
+[Microsoft Exchange](exchange.md#what-autodiscover-sends-where).
+
+Exchange Server (EWS) specifics: there is no Focused Inbox; Outlook
+client-only rules block placing Nail's rules as inbox rules until they are
+removed; answering an invitation without sending the answer only updates
+the calendar; rooms carry no capacity or building. Moving an Exchange
+Online account from `engine="ews"` to `engine="graph"` needs a new
+Microsoft sign-in (tokens are per service), and its shared mailboxes are
+then added by address.
+
 ### Signing in (`auth`)
 
 Each server may have an `auth` line. Without one, Nail signs in with a

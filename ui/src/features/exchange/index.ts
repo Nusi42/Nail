@@ -25,10 +25,16 @@ import { findSummary } from "../../state/mailOps";
 import { queryKeys } from "../../state/queries";
 import type { Feature, FeatureEventHandler } from "../types";
 import { AutomaticRepliesBanner, AutomaticRepliesDialog } from "./AutomaticReplies";
-import { CategoryDeleteDialog, CategoryEditorDialog, CategoryList } from "./Categories";
+import {
+  ApplyCategoriesDialog,
+  CategoryDeleteDialog,
+  CategoryEditorDialog,
+  CategoryList,
+} from "./Categories";
 import { ClassifyDialog, FocusedTabs, otherFocus } from "./Focused";
 import { MailboxEditorDialog, MailboxList, MailboxRemoveDialog } from "./Mailboxes";
 import {
+  APPLY_CATEGORIES_DIALOG,
   AUTOMATIC_REPLIES_BANNER_WIDGET,
   AUTOMATIC_REPLIES_DIALOG,
   CATEGORIES_WIDGET,
@@ -167,6 +173,14 @@ export const actions: Feature["actions"] = {
     },
     enabled: (ctx) => selectedInference(ctx) !== null,
   },
+  /** The categories of the selected Exchange message (tags written as categories). */
+  "exchange.apply-categories": {
+    run: (ctx) => ctx.store.getState().openWindow(APPLY_CATEGORIES_DIALOG),
+    enabled: (ctx) => {
+      const id = ctx.store.getState().selectedMessageId;
+      return id !== null && findSummary(ctx.queryClient, id)?.exchange != null;
+    },
+  },
   /** Switch the Focused Inbox tabs of the selected account on / off. */
   "exchange.toggle-focused": {
     run: (ctx) => {
@@ -187,6 +201,7 @@ export const dialogs: Feature["dialogs"] = {
   [CATEGORY_DELETE_DIALOG]: CategoryDeleteDialog,
   [AUTOMATIC_REPLIES_DIALOG]: AutomaticRepliesDialog,
   [CLASSIFY_DIALOG]: ClassifyDialog,
+  [APPLY_CATEGORIES_DIALOG]: ApplyCategoriesDialog,
 };
 
 /** Exchange state changed: refetch the named areas of the account (or everything on mail changes). */

@@ -352,9 +352,12 @@ impl Service {
 
     /// Whether the server schedules for `calendar` (RFC 6638).
     async fn calendar_scheduling(&self, calendar: &Calendar) -> CalendarScheduling {
-        let auto_schedule = crate::pim::engine::source_scheduling(self, &calendar.source_id)
-            .await
-            .is_some_and(|i| i.auto_schedule);
+        // M3c: Exchange schedules its meetings itself (the engines' meeting
+        // APIs, ADR 0077): never iMIP for an Exchange calendar.
+        let auto_schedule = calendar.exchange.is_some()
+            || crate::pim::engine::source_scheduling(self, &calendar.source_id)
+                .await
+                .is_some_and(|i| i.auto_schedule);
         CalendarScheduling {
             auto_schedule,
             writable: !calendar.read_only,
@@ -2026,6 +2029,18 @@ impl Service {
                 }
             }
             rest.retain(|a| !answers.contains_key(&normalize(a)));
+        }
+        // M3c: people and rooms of Exchange organizations.
+        if !rest.is_empty() {
+            let query = FreeBusyQuery {
+                organizer: organizer.clone(),
+                attendees: rest.clone(),
+                from: from.clone(),
+                to: to.clone(),
+            };
+            for entry in crate::exchange::free_busy(self, &query).await {
+                answers.insert(normalize(&entry.email), entry);
+            }
         }
         Ok(FreeBusyResult {
             attendees: attendees

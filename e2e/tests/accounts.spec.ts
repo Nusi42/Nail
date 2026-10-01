@@ -23,7 +23,7 @@ const accountItems = (page: Page) => page.locator('[data-part="account-switcher.
 test("the unified inbox shows both accounts and their status", async ({ page }) => {
   await page.goto(server.url);
   const accounts = accountItems(page);
-  await expect(accounts).toHaveCount(4);
+  await expect(accounts).toHaveCount(6);
   await expect(accounts.nth(0)).toHaveAttribute("data-kind", "virtual");
   await expect(accounts.nth(0)).toHaveText(/All accounts/);
   await expect(accounts.nth(1)).toHaveAttribute("data-kind", "imap");
@@ -33,6 +33,11 @@ test("the unified inbox shows both accounts and their status", async ({ page }) 
   // M3b: the demo Gmail account starts switched off.
   await expect(accounts.nth(3)).toHaveAttribute("data-kind", "gmail");
   await expect(accounts.nth(3)).toHaveAttribute("data-status", "disabled");
+  // M3c: so do the demo Exchange accounts (Graph, EWS).
+  for (const index of [4, 5]) {
+    await expect(accounts.nth(index)).toHaveAttribute("data-kind", "exchange");
+    await expect(accounts.nth(index)).toHaveAttribute("data-status", "disabled");
+  }
 
   // "All accounts" is selected: its merged inbox holds both accounts' mail;
   // the mailing-list message both accounts received is shown once.
@@ -53,7 +58,7 @@ test("the unified inbox shows both accounts and their status", async ({ page }) 
 
 test("an account is added through discovery against the mock servers", async ({ page }) => {
   await page.goto(server.url);
-  await expect(accountItems(page)).toHaveCount(4);
+  await expect(accountItems(page)).toHaveCount(6);
   await page
     .getByRole("toolbar", { name: "Main toolbar" })
     .getByRole("button", {

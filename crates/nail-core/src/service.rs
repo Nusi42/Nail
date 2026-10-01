@@ -157,6 +157,10 @@ pub struct ServiceOptions {
     /// [`crate::demo::demo_options`]). Off otherwise: a `webcal://localhost`
     /// link must not make Nail poll local services (ADR 0064).
     pub loopback_feeds: bool,
+    /// How Exchange accounts reach their servers (M3c): Autodiscover's
+    /// HTTP and Windows sign-in; the defaults use the real network and
+    /// SSPI. Seeded demos and tests point them at mock servers.
+    pub exchange: crate::exchange::ExchangeHooks,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -177,6 +181,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("custom_clock", &self.clock.is_some())
             .field("plugin_limits", &self.plugin_limits)
             .field("loopback_feeds", &self.loopback_feeds)
+            .field("exchange", &self.exchange)
             .finish_non_exhaustive()
     }
 }
@@ -202,6 +207,7 @@ impl ServiceOptions {
             clock: None,
             plugin_limits: nail_plugins::HostLimits::default(),
             loopback_feeds: false,
+            exchange: crate::exchange::ExchangeHooks::default(),
         }
     }
 }
@@ -268,6 +274,9 @@ pub(crate) struct Inner {
     /// Calendars, contacts and tasks: source engines, reminders, the PIM
     /// search index (M3a).
     pub(crate) pim: crate::pim::PimCtl,
+    /// Exchange accounts: running engines, Autodiscover / sign-in hooks
+    /// (M3c).
+    pub(crate) exchange: crate::exchange::ExchangeCtl,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -425,6 +434,7 @@ impl Service {
                     options.plugin_limits.clone(),
                 ),
                 pim: crate::pim::PimCtl::new(options.loopback_feeds),
+                exchange: crate::exchange::ExchangeCtl::new(options.exchange.clone()),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -807,17 +817,28 @@ impl Service {
                 self.start_sync(account_id).await?;
                 Response::SyncStarted
             }
-            Request::DiscoverAccount { email } => Response::Discovered {
-                candidates: self.discover(&email).await?,
+            Request::DiscoverAccount {
                 email,
-            },
+                trusted_hosts,
+                windows_sign_in,
+            } => {
+                let (candidates, exchange) = self
+                    .discover_all(&email, &trusted_hosts, windows_sign_in)
+                    .await?;
+                Response::Discovered {
+                    candidates,
+                    email,
+                    exchange: exchange.map(Box::new),
+                }
+            }
             Request::TestAccount { config, secrets } => Response::AccountTested {
                 result: Box::new(self.test_account(&config, &secrets).await?),
             },
             Request::StartOAuth {
                 provider,
                 login_hint,
-            } => self.start_oauth(provider, login_hint).await?,
+                protocol,
+            } => self.start_oauth(provider, login_hint, protocol).await?,
             Request::CancelOAuth { flow_id } => {
                 self.inner.flows.cancel(&flow_id)?;
                 Response::Done

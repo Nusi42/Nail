@@ -31,6 +31,23 @@ only if your organization really uses that server.
 Nail also warns when an account uses EWS with Exchange Online: Microsoft is
 retiring EWS there, so switch such an account to Microsoft Graph.
 
+### What Autodiscover sends where
+
+Autodiscover first asks your domain's own servers and then — only when
+your domain's mail is handled by Microsoft (its MX records point to
+Microsoft) — Microsoft's global Autodiscover service, which learns the
+address you are setting up. Nail never sends a password while
+looking up the settings. It signs in as the user signed in to Windows only
+when a server of your address's domain asks for it and you choose **Look
+again with my Windows sign-in**. If a server of your domain points to a
+server outside it, or the settings were found through the unencrypted
+"HTTP redirect" method or a DNS record, Nail asks first (**Trust … and
+look again**) before anything goes there.
+
+If nothing is found, choose **Microsoft 365 or Exchange Online** or
+**Exchange Server in my organization** on the first page and enter the
+server yourself.
+
 ### Signing in to an Exchange server
 
 For Exchange Server in your organization you can sign in:
@@ -74,6 +91,10 @@ counts; choose one to see its messages in every folder. **New category**,
   a colour (as in Outlook).
 - Category names cannot contain commas or semicolons.
 
+**Categories…** in the message toolbar (and in its right-click menu) sets
+the categories of the selected message: they are written to the server as
+the message's categories.
+
 ## Focused Inbox
 
 If your server sorts mail into Focused and Other, tabs above the message
@@ -100,6 +121,10 @@ While replies are on, a banner says so, with **Turn off** and **Edit…**.
 "Saved in Nail; not on the server yet" means the change is still on its
 way to the server.
 
+**Settings → Vacation reply** works for Exchange accounts too: it sets the
+automatic replies, with the same text for people inside and outside your
+organization. Use the editor above for different texts.
+
 ## Rules on the server
 
 For Exchange accounts, Nail places your rules as Exchange inbox rules where
@@ -122,11 +147,62 @@ the location if it is empty); the room's answer appears under **Booked
 rooms**. If Nail says that rooms need the "Place.Read.All" permission, ask
 your administrator to grant it.
 
+## Meetings
+
+Invitations in an Exchange calendar are answered through Exchange: when
+you accept, decline or answer tentatively, Exchange sends your answer to
+the organizer — Nail sends no invitation mail of its own. Meetings you
+organize in an Exchange calendar are sent to the attendees by Exchange
+when you save them, and cancelled when you delete them. Free/busy of
+people and rooms of your organization comes from Exchange.
+
 ## Microsoft To Do
 
 Your To Do lists appear in the task widget under **Microsoft To Do —
 <account>**, with **Tasks** first and **Flagged email** last; task lists of
-shared mailboxes follow, then your other lists.
+shared mailboxes follow, then your other lists. A task's checklist items
+are its subtasks. A subtask you add in Nail shows briefly as gone after it
+is saved and comes back with the next sync (Exchange gives it its id).
+
+## Good to know (Microsoft 365)
+
+- Messages Nail files into a folder (other than drafts) appear as drafts in
+  Outlook on the web: Microsoft Graph creates every uploaded message as a
+  draft. Sent mail is filed by Exchange itself.
+- To Do lists are synced for your own mailbox only (shared mailboxes show
+  their calendars and contacts).
+- Calendars are synced from one year back to two years ahead.
+- The room finder needs the `Place.Read.All` permission, which your
+  administrator grants once for the organization.
+- Messages larger than about 3 MB (4 MB once encoded) cannot be sent
+  through Microsoft Graph yet.
+- Sending "as" a shared mailbox is not offered yet: mail goes out from
+  your own address.
+
+## Good to know (Exchange Server)
+
+- Exchange Server in your organization has no Focused Inbox: the tabs say
+  so, and **Always move messages from …** is not available.
+- If Outlook keeps rules that only Outlook can run ("client-only" rules),
+  Exchange refuses changes to the rule list until they are removed in
+  Outlook; Nail then keeps running your rules itself.
+- Answering an invitation without sending your answer only updates your
+  calendar.
+- Rooms listed by Exchange Server show no seats or building.
+- New mail arrives at once: Exchange Server tells Nail about changes
+  (streaming notifications); Microsoft 365 is asked every few seconds to
+  minutes, more often while you work.
+
+## Moving from EWS to Microsoft Graph
+
+Microsoft is retiring Exchange Web Services in Exchange Online. An account
+set up with `engine="ews"` against Exchange Online shows a warning; switch
+it to **Microsoft Graph (Exchange Online)** in the account settings (or
+`engine="graph"` in `accounts.kdl`). Microsoft issues sign-ins per
+service, so you sign in with Microsoft once more after the switch. Shared
+mailboxes on Exchange Online are added by their address (**Add shared
+mailbox…**): only Exchange Server in your organization lists them
+automatically.
 
 ## Layout options
 

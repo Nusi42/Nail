@@ -51,6 +51,11 @@ pub trait MessageView {
     fn gmail_category(&self) -> Option<String> {
         None
     }
+    /// The Exchange Focused Inbox classification (`focused` / `other`;
+    /// M3c), if any.
+    fn exchange_focus(&self) -> Option<String> {
+        None
+    }
 }
 
 /// A message held in memory.
@@ -90,6 +95,9 @@ pub struct MessageData {
     pub tags: Vec<String>,
     /// The Gmail inbox category (M3b; `None` outside Gmail accounts).
     pub gmail_category: Option<String>,
+    /// The Exchange Focused Inbox classification (M3c; `None` outside
+    /// Exchange inboxes).
+    pub exchange_focus: Option<String>,
 }
 
 impl MessageData {
@@ -117,6 +125,7 @@ impl MessageData {
             flags: Flags::default(),
             tags: Vec::new(),
             gmail_category: None,
+            exchange_focus: None,
         }
     }
 }
@@ -183,6 +192,10 @@ impl MessageView for MessageData {
 
     fn gmail_category(&self) -> Option<String> {
         self.gmail_category.clone()
+    }
+
+    fn exchange_focus(&self) -> Option<String> {
+        self.exchange_focus.clone()
     }
 }
 

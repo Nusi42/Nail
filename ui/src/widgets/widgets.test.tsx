@@ -293,6 +293,9 @@ describe("toolbar", () => {
       "Create task from email",
       // M3b: labels of a Gmail message.
       "Labels…",
+      // M3c: categories and Focused Inbox of an Exchange message.
+      "Categories…",
+      "Move to Focused / Other…",
       "Import Autocrypt setup message",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");

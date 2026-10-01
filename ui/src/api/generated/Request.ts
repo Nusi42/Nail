@@ -41,6 +41,7 @@ import type { KeyFilter } from "./KeyFilter";
 import type { KeyId } from "./KeyId";
 import type { KeyLookupSource } from "./KeyLookupSource";
 import type { LayoutPatch } from "./LayoutPatch";
+import type { MailProtocol } from "./MailProtocol";
 import type { McpClientId } from "./McpClientId";
 import type { McpGrant } from "./McpGrant";
 import type { McpSettings } from "./McpSettings";
@@ -133,7 +134,19 @@ account_id: AccountId | null, } | { "type": "DiscoverAccount",
 /**
  * The address to set up.
  */
-email: string, } | { "type": "TestAccount", 
+email: string, 
+/**
+ * Hosts outside the address's domain the user trusts with the
+ * login (Exchange Autodiscover; M3c,
+ * [`crate::exchange::ExchangeDiscoveryPrompt::ConfirmRedirect`]).
+ */
+trusted_hosts?: Array<string>, 
+/**
+ * Let Exchange Autodiscover sign in as the signed-in Windows user
+ * (servers of the address's domain or trusted hosts only; M3c,
+ * [`crate::exchange::ExchangeDiscoveryPrompt::NeedsLogin`]).
+ */
+windows_sign_in?: boolean, } | { "type": "TestAccount", 
 /**
  * The configuration to test.
  */
@@ -149,7 +162,13 @@ provider: string,
 /**
  * Address to pre-fill on the provider's sign-in page.
  */
-login_hint: string | null, } | { "type": "CancelOAuth", 
+login_hint: string | null, 
+/**
+ * Ask for the scopes of this protocol only (M3c: Microsoft issues
+ * tokens per resource, so an Exchange account signs in for
+ * `graph` or `ews`); `null` = the provider's mail scopes.
+ */
+protocol: MailProtocol | null, } | { "type": "CancelOAuth", 
 /**
  * The flow.
  */

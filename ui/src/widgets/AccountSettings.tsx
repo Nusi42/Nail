@@ -7,6 +7,12 @@ import { type WidgetProps } from "../layout/widgetRegistry";
 import { isEmail } from "../state/addresses";
 import { queryKeys, useAccountsConfig, useAccountStatuses, useClient } from "../state/queries";
 import { useUi } from "../state/uiStore";
+import {
+  ExchangeOptionsFields,
+  ExchangeSignInFields,
+  ExchangeStatusPanel,
+  exchangeSecretsFor,
+} from "../features/exchange";
 import { accountSignIn, secretsFor, SETUP_WINDOW } from "./AccountSetup";
 import {
   CheckField,
@@ -240,7 +246,11 @@ function AccountForm({
     if (problems.length > 0) return;
     void run(async () => {
       const secrets: SecretInput[] =
-        accountSignIn(config).kind === "password" ? secretsFor(config, password, null) : [];
+        config.incoming.protocol === "exchange"
+          ? exchangeSecretsFor(config, password, null)
+          : accountSignIn(config).kind === "password"
+            ? secretsFor(config, password, null)
+            : [];
       // New identities are identified by their address (IdentityId rules).
       const identities = config.identities.map((i) => ({
         ...i,
@@ -347,6 +357,28 @@ function AccountForm({
           />
         </Section>
       )}
+      {incoming.protocol === "exchange" && (
+        <>
+          <ExchangeSignInFields
+            email={config.email}
+            engine={incoming.options.engine}
+            auth={incoming.server.auth}
+            onChange={(auth) =>
+              setConfig({
+                ...config,
+                incoming: { ...incoming, server: { ...incoming.server, auth } },
+              })
+            }
+            password={password}
+            onPasswordChange={setPassword}
+          />
+          <ExchangeOptionsFields
+            options={incoming.options}
+            onChange={(options) => setConfig({ ...config, incoming: { ...incoming, options } })}
+          />
+          <ExchangeStatusPanel accountId={config.id} />
+        </>
+      )}
       {incoming.protocol === "pop3" && (
         <Section titleId="settings-pop3">
           <CheckField
@@ -394,7 +426,7 @@ function AccountForm({
           onChange={(outgoing) => setConfig({ ...config, outgoing })}
         />
       )}
-      {accountSignIn(config).kind === "password" && (
+      {accountSignIn(config).kind === "password" && incoming.protocol !== "exchange" && (
         <TextField
           labelId="settings-new-password"
           name="password"

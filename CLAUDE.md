@@ -272,7 +272,12 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        full listing with resume / merge, history deltas, PollTimer; GmailExecutor replay; label
                        queue; sending through the API; TestAccount); pim/engine.rs stores RFC 6638 scheduling
                        info with the DAV discovery (`source_scheduling`);
-                       M3c contract: exchange.rs (every Exchange request `unsupported`, engine stub) (ADR 0072)
+                       M3c (ADR 0077): exchange/ (mod.rs the 18 requests + ExchangeCtl / ExchangeHooks, setup.rs
+                       engines (Graph / EWS, SSPI), TestAccount, Autodiscover in DiscoverAccount, sync.rs the engine
+                       task (mail per folder, ExchangeExecutor replay, Exchange queue, Graph polling / EWS streaming),
+                       settings.rs (categories, automatic replies, rule placement as inbox rules, vacation mapping),
+                       pim.rs (`exchange:<account>` source, ExchangeReplayer: meetings through the meeting APIs));
+                       `focus:` (search filter, rules' message view)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -362,7 +367,7 @@ bash crates/nail-testkit/corpus/crypto/pgp/generate.sh     # OpenPGP interop vec
 bash crates/nail-testkit/corpus/crypto/smime/generate.sh   # S/MIME test CA + vectors (OpenSSL 3.4+ = /mingw64/bin/openssl)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
-cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts, mock CalDAV / CardDAV (+ principal bob) + ICS feeds, a mock Gmail account (switched off) (test controls at /api/test/…)
+cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts, mock CalDAV / CardDAV (+ principal bob) + ICS feeds, a mock Gmail account, mock Exchange Online (Graph) + Exchange Server (EWS) accounts (all three switched off) and mock Autodiscover (test controls at /api/test/…)
 cargo run -p nail-cli -- serve --seed demo --launch C:/path/x.ics  # hand a file / link to the UI like the desktop shell (M3a)
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist (temp dirs)
 NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]   # stdio bridge to the running app's MCP server
@@ -491,8 +496,8 @@ npm run tauri dev                          # desktop app with Vite hot reload
   1 event `ExchangeChanged {areas}`; engine seams `ExchangeEngine` / `NegotiateAuth` and provider-neutral PIM
   shapes in `nail_api::exchange::{engine,pim}`; store v12 with APIs; stub crates `nail-proto-graph`,
   `nail-proto-ews` (mocks: feature `testing`), `nail-exchange`; slots `ui/src/features/exchange/`,
-  `nail-config/src/widgets/exchange.rs`, `locales/*/{exchange,core-exchange,core-graph,core-ews}.ftl`). The core
-  answers every M3c request `unsupported` until WP95; an Exchange account's engine reports `unsupported`.
+  `nail-config/src/widgets/exchange.rs`, `locales/*/{exchange,core-exchange,core-graph,core-ews}.ftl`). Served
+  since WP95 (ADR 0077, below).
   Microsoft tokens are per resource: Graph scopes (`nail_auth::mail_scopes(microsoft, [Graph])`) and Outlook
   IMAP / EWS scopes are separate sign-ins.
 - M3b integration (ADR 0070; packages ADRs 0066 `nail-itip`, 0067 `nail-proto-gmail`, 0068 CalDAV scheduling,
@@ -508,6 +513,16 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `not-addressed-to-me`), never `PUBLISH`; remote scheduling requests that mail need `send`; arrival rules /
   iTIP only for Inbox / Other folders (`sync::runs_arrival_rules`, IMAP and Gmail); meetings written to a
   CalDAV source with unknown scheduling get `SCHEDULE-AGENT=CLIENT` (`pim::engine::scheduling_unknown`).
+- M3c integration (ADR 0077; packages ADRs 0073 Graph, 0074 EWS, 0075 common layer, 0076 UI): Exchange accounts
+  run `exchange::sync::run` (one engine `Arc<dyn ExchangeEngine>` per account, also the outbox transport via trait
+  upcasting; the server files the Sent copy); messages keep an id derived from their first server id, folders one
+  from (mailbox, remote id); other mailboxes hang under `@<address>`; Exchange calendars are server-scheduled
+  (answers via `respond_to_meeting`, never iMIP); rule edits and account changes re-place rules (`queue_sieve` →
+  `settings::queue_rules`). `ServiceOptions::exchange` (`ExchangeHooks`): Autodiscover HTTP / DNS, the Microsoft
+  lookup switch, an injected `NegotiateAuth`, a Graph endpoint for demos. `DiscoverAccount` carries
+  `trusted_hosts` / `windows_sign_in` and answers `exchange` (prompts, automapped mailboxes); `StartOAuth` carries
+  `protocol` (per-service scopes). demo-multi's Exchange accounts `exchange` (Graph) and `corp` (EWS) start
+  `enabled=#false`; `exchange.spec.ts` switches one on or adds accounts through Autodiscover.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

@@ -280,6 +280,7 @@ layout "default" {
         action "exchange.focus"   label="@exchange.action.focus"
         action "exchange.classify" label="@exchange.action.classify"
         action "exchange.toggle-focused" label="@exchange.action.toggle-focused"
+        action "exchange.apply-categories" label="@exchange.action.apply-categories"
     }
 
     keys context="list" {
@@ -385,6 +386,7 @@ layout "default" {
         item "calendar.event-from-message"
         item "tasks.from-message"
         item "gmail.apply-labels"
+        item "exchange.apply-categories"
         item "exchange.classify"
         item "security.autocrypt.import"
     }
@@ -430,6 +432,7 @@ layout "default" {
         item "calendar.event-from-message"
         item "tasks.from-message"
         item "gmail.apply-labels"
+        item "exchange.apply-categories"
         item "exchange.classify"
     }
 

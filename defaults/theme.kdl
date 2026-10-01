@@ -3719,6 +3719,7 @@ theme "default" mode="system" {
     part "label-list" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.xs" "$space.sm"; }
     part "label-list.header" { display "flex"; align-items "center"; justify-content "space-between"; gap "$space.xs"; }
     part "label-list.title" { margin 0; font-size "$font-size.sm"; font-weight "$font-weight.bold"; color "$color.fg-muted"; }
+    part "label-list.icon" { width "$size.icon"; height "$size.icon"; flex-shrink 0; }
     part "label-list.new" { border 0; padding "$space.xxs" "$space.xs"; color "$color.accent"; background-color "transparent"; cursor "pointer"; }
     part "label-list.items" { display "flex"; flex-direction "column"; }
     part "label-list.items[depth=\"1\"]" { padding-left "$space.lg"; }
@@ -3780,6 +3781,8 @@ theme "default" mode="system" {
     part "exchange-mailboxes.kind" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "exchange-mailboxes.shows" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "exchange-mailboxes.state" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.icon" { width "$size.icon"; height "$size.icon"; flex-shrink 0; }
+    part "exchange-mailboxes.action.text" { font-size "$font-size.xs"; }
     part "exchange-mailboxes.new" { border 0; padding "$space.xxs" "$space.xs"; color "$color.accent"; background-color "transparent"; cursor "pointer"; }
     part "exchange-mailboxes.edit" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
     part "exchange-mailboxes.remove" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
@@ -3796,6 +3799,8 @@ theme "default" mode="system" {
     part "exchange-categories.name" { flex "1"; overflow "hidden"; text-overflow "ellipsis"; white-space "nowrap"; }
     part "exchange-categories.unread" { font-size "$font-size.xs"; font-weight "$font-weight.bold"; color "$color.unread"; }
     part "exchange-categories.pending" { font-size "$font-size.xs"; color "$color.warning"; }
+    part "exchange-categories.icon" { width "$size.icon"; height "$size.icon"; flex-shrink 0; }
+    part "exchange-categories.action.text" { font-size "$font-size.xs"; }
     part "exchange-categories.new" { border 0; padding "$space.xxs" "$space.xs"; color "$color.accent"; background-color "transparent"; cursor "pointer"; }
     part "exchange-categories.edit" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
     part "exchange-categories.delete" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }

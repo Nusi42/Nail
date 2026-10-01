@@ -71,6 +71,7 @@ mod watch;
 
 pub use clock::AdjustableClock;
 pub use error::{CoreError, Result};
+pub use exchange::{ExchangeHooks, GraphEndpoint};
 pub use mcp::{McpCore, McpRunning, mcp_endpoint_path};
 pub use nail_store::DataDirLock;
 pub use remote::RemoteUiCommand;

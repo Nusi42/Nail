@@ -14380,6 +14380,18 @@
       "source": null
     },
     {
+      "selector": "label-list.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)",
+        "flex-shrink": "0"
+      },
+      "source": null
+    },
+    {
       "selector": "label-list.new",
       "states": [],
       "conditions": [],
@@ -15157,6 +15169,28 @@
       "source": null
     },
     {
+      "selector": "exchange-mailboxes.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)",
+        "flex-shrink": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "exchange-mailboxes.action.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
       "selector": "exchange-mailboxes.new",
       "states": [],
       "conditions": [],
@@ -15364,6 +15398,28 @@
       "declarations": {
         "font-size": "var(--nail-font-size-xs)",
         "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "exchange-categories.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)",
+        "flex-shrink": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "exchange-categories.action.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)"
       },
       "source": null
     },

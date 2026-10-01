@@ -41,6 +41,7 @@ async fn start(service: &Service) -> (OAuthFlowId, String) {
         .handle(Request::StartOAuth {
             provider: "mock".into(),
             login_hint: Some("sam@nail.example".into()),
+            protocol: None,
         })
         .await
     {
@@ -238,6 +239,7 @@ async fn sign_ins_can_be_cancelled_and_unknown_providers_fail() {
             .handle(Request::StartOAuth {
                 provider: "google".into(),
                 login_hint: None,
+                protocol: None,
             })
             .await,
         Response::Error {

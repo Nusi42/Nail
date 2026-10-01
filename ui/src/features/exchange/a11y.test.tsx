@@ -29,6 +29,7 @@ import {
 import { exchangeCandidate } from "./model";
 import { EXCHANGE_ACCOUNT, EXCHANGE_CALENDARS, SHARED_ROOT } from "./mockSeed";
 import {
+  APPLY_CATEGORIES_DIALOG,
   AUTOMATIC_REPLIES_DIALOG,
   CATEGORY_DELETE_DIALOG,
   CATEGORY_EDITOR_DIALOG,
@@ -198,6 +199,11 @@ describe("axe: Exchange dialogs", () => {
       const summary = message(env, "Your weekly digest");
       cacheList(env, [summary]);
       ui.classifyMessages({ messageIds: [summary.id], to: "focused" });
+    }
+    if (name === APPLY_CATEGORIES_DIALOG) {
+      const summary = message(env, "Phoenix launch checklist");
+      cacheList(env, [summary]);
+      env.store.getState().selectMessage(summary.id);
     }
   }
 

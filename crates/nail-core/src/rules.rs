@@ -308,6 +308,12 @@ pub(crate) fn message_view(
         .and_then(|g| g.category)
         .and_then(|c| serde_json::to_value(c).ok())
         .and_then(|v| v.as_str().map(str::to_owned));
+    // M3c: `focus:` conditions on Exchange inbox mail.
+    data.exchange_focus = summary
+        .exchange
+        .as_ref()
+        .and_then(|x| x.inference)
+        .map(|i| i.as_str().to_owned());
     data.date = chrono::DateTime::parse_from_rfc3339(&summary.date)
         .map(|d| d.timestamp())
         .unwrap_or(0);

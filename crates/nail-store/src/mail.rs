@@ -289,6 +289,8 @@ pub(crate) fn attach_tags(
         m.tags = tags_in_tx(conn, &m.id)?;
         // Gmail data (M3b): labels, category, thread.
         m.gmail = crate::gmail::gmail_info_in(conn, &m.id)?;
+        // Exchange data (M3c): Focused Inbox, conversation, mailbox.
+        m.exchange = crate::exchange::exchange_info_in(conn, &m.id)?;
     }
     Ok(messages)
 }

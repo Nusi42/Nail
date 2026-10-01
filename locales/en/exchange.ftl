@@ -14,6 +14,7 @@ window-exchange-category-editor = Category
 window-exchange-category-delete = Delete category
 window-exchange-automatic-replies = Automatic replies
 window-exchange-classify = Focused Inbox
+window-exchange-apply-categories = Categories of this message
 
 ## Actions (layout labels @exchange.action.*)
 
@@ -23,6 +24,7 @@ exchange-action-new-category = New category
 exchange-action-focus = Show Focused / Other
 exchange-action-classify = Move to Focused / Other…
 exchange-action-toggle-focused = Show Focused Inbox
+exchange-action-apply-categories = Categories…
 
 ## Layout labels
 
@@ -82,6 +84,9 @@ exchange-category-delete-hint =
        *[other] It is removed from the category list. The { $count } messages that have it keep it, without a colour.
     }
 exchange-category-delete = Delete
+exchange-apply-intro = Categories of “{ $subject }”:
+exchange-apply-nothing = Select a message of an Exchange account first.
+exchange-apply = Apply
 
 ## Shared and delegate mailboxes
 

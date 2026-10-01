@@ -6,8 +6,19 @@ import type {
   AccountTestResult,
   DiscoveredAccount,
   EndpointTestResult,
+  ExchangeDiscoveryInfo,
   SecretInput,
 } from "../api/generated";
+import {
+  ExchangeAccountType,
+  ExchangeServerReview,
+  ExchangeSignInFields,
+  exchangeCandidate,
+  exchangeCredentialsReady,
+  exchangeSecretsFor,
+  needsRedirectConfirmation,
+  type ExchangeSetupChoice,
+} from "../features/exchange";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { type WidgetProps } from "../layout/widgetRegistry";
 import { isEmail } from "../state/addresses";
@@ -183,6 +194,13 @@ export function AccountSetup({ node }: WidgetProps) {
   const [saved, setSaved] = useState<AccountConfig | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // M3c: Exchange (the kind of account, Autodiscover's question, the
+  // trusted redirect).
+  const [exchangeChoice, setExchangeChoice] = useState<ExchangeSetupChoice>("auto");
+  const [exchangeHost, setExchangeHost] = useState("");
+  const [exchangeInfo, setExchangeInfo] = useState<ExchangeDiscoveryInfo | null>(null);
+  const [trustedHosts, setTrustedHosts] = useState<string[]>([]);
+  const [trusted, setTrusted] = useState(false);
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -203,9 +221,51 @@ export function AccountSetup({ node }: WidgetProps) {
   const signIn = config ? accountSignIn(config) : null;
   const providers = (accountsConfig.data?.oauth_providers ?? []).map((p) => p.id);
   const flowId = oauthDone ? oauth.flowId : null;
-  const secrets = config ? secretsFor(config, password, flowId) : [];
-  const credentialsReady =
-    signIn?.kind === "none" || (signIn?.kind === "password" ? password !== "" : oauthDone);
+  const exchangeIncoming = config?.incoming.protocol === "exchange" ? config.incoming : null;
+  const secrets = config
+    ? exchangeIncoming
+      ? exchangeSecretsFor(config, password, flowId)
+      : secretsFor(config, password, flowId)
+    : [];
+  const credentialsReady = exchangeIncoming
+    ? exchangeCredentialsReady(exchangeIncoming.server.auth, password, oauthDone)
+    : signIn?.kind === "none" || (signIn?.kind === "password" ? password !== "" : oauthDone);
+  const chosenCandidate = candidates[chosen] ?? null;
+  const redirectUnconfirmed =
+    exchangeIncoming !== null &&
+    chosenCandidate !== null &&
+    needsRedirectConfirmation(email.trim(), chosenCandidate) &&
+    !trusted;
+
+  /** Shows proposals on the servers step. */
+  const propose = (address: string, found: DiscoveredAccount[]) => {
+    setCandidates(found);
+    const index = preferredCandidate(found);
+    setChosen(index);
+    const first = found[index];
+    setConfig(configFrom(first ?? manualCandidate(address), address, name));
+    // Unverified settings: show the servers, not just a summary.
+    const exchange = first?.incoming.protocol === "exchange";
+    setEditing(!exchange && (first === undefined || first.warnings.length > 0));
+    setOAuth(null);
+    setTrusted(false);
+    setStep("servers");
+  };
+
+  const lookup = (address: string, hosts: string[], windowsSignIn: boolean) =>
+    run(async () => {
+      const found = await client.request(
+        {
+          type: "DiscoverAccount",
+          email: address,
+          trusted_hosts: hosts,
+          windows_sign_in: windowsSignIn,
+        },
+        "Discovered",
+      );
+      setExchangeInfo(found.exchange ?? null);
+      propose(address, found.candidates);
+    });
 
   const discover = (event: FormEvent) => {
     event.preventDefault();
@@ -214,18 +274,27 @@ export function AccountSetup({ node }: WidgetProps) {
       setError("setup-error-email");
       return;
     }
-    void run(async () => {
-      const found = await client.request({ type: "DiscoverAccount", email: address }, "Discovered");
-      setCandidates(found.candidates);
-      const index = preferredCandidate(found.candidates);
-      setChosen(index);
-      const first = found.candidates[index];
-      setConfig(configFrom(first ?? manualCandidate(address), address, name));
-      // Unverified settings: show the servers, not just a summary.
-      setEditing(first === undefined || first.warnings.length > 0);
-      setOAuth(null);
-      setStep("servers");
-    });
+    // M3c: the user said what the account is: no lookup.
+    if (exchangeChoice !== "auto") {
+      setExchangeInfo(null);
+      propose(address, [exchangeCandidate(address, exchangeChoice, exchangeHost || null)]);
+      return;
+    }
+    setTrustedHosts([]);
+    void lookup(address, [], false);
+  };
+
+  /** Autodiscover asked: trust a host / sign in as the Windows user, then look again. */
+  const answerPrompt = () => {
+    const prompt = exchangeInfo?.prompt;
+    if (!prompt) return;
+    if (prompt.kind === "confirm-redirect") {
+      const hosts = [...trustedHosts, prompt.host];
+      setTrustedHosts(hosts);
+      void lookup(email.trim(), hosts, false);
+    } else {
+      void lookup(email.trim(), trustedHosts, true);
+    }
   };
 
   const choose = (index: number) => {
@@ -234,13 +303,27 @@ export function AccountSetup({ node }: WidgetProps) {
     setChosen(index);
     setConfig(configFrom(candidate, email.trim(), name));
     setOAuth(null);
+    setTrusted(false);
+  };
+
+  /** The Exchange review changed the proposal (engine, server, URL). */
+  const changeCandidate = (candidate: DiscoveredAccount) => {
+    setCandidates(candidates.map((c, i) => (i === chosen ? candidate : c)));
+    setConfig(configFrom(candidate, email.trim(), name));
+    setOAuth(null);
   };
 
   const startOAuth = () =>
     run(async () => {
       if (signIn?.kind !== "oauth2") return;
+      // M3c: Microsoft issues tokens per resource (Graph or EWS).
+      const protocol = exchangeIncoming
+        ? exchangeIncoming.options.engine === "ews"
+          ? ("ews" as const)
+          : ("graph" as const)
+        : null;
       const started = await client.request(
-        { type: "StartOAuth", provider: signIn.provider, login_hint: email.trim() },
+        { type: "StartOAuth", provider: signIn.provider, login_hint: email.trim(), protocol },
         "OAuthStarted",
       );
       setOAuth({ flowId: started.flow_id, url: started.authorize_url, opened: started.opened });
@@ -335,6 +418,14 @@ export function AccountSetup({ node }: WidgetProps) {
             autoComplete="email"
             onChange={setEmail}
           />
+          <ExchangeAccountType
+            choice={exchangeChoice}
+            host={exchangeHost}
+            onChange={(choice, host) => {
+              setExchangeChoice(choice);
+              setExchangeHost(host);
+            }}
+          />
           <div data-part="account-setup.actions">
             <button
               type="submit"
@@ -351,6 +442,31 @@ export function AccountSetup({ node }: WidgetProps) {
 
       {step === "servers" && config && (
         <form data-part="account-setup.form" noValidate onSubmit={test}>
+          {exchangeInfo?.prompt && (
+            <div
+              data-part="account-setup.warning"
+              data-warning={exchangeInfo.prompt.kind}
+              role="alert"
+            >
+              <p data-part="account-setup.notice">
+                {t(exchangeInfo.prompt.localized.id, exchangeInfo.prompt.localized.args)}
+              </p>
+              <button
+                type="button"
+                data-part="form.button"
+                data-action="lookup-again"
+                disabled={busy}
+                onClick={answerPrompt}
+              >
+                {t(
+                  exchangeInfo.prompt.kind === "confirm-redirect"
+                    ? "setup-exchange-trust"
+                    : "setup-exchange-windows-sign-in",
+                  { host: exchangeInfo.prompt.host },
+                )}
+              </button>
+            </div>
+          )}
           {candidates.length === 0 ? (
             <p data-part="account-setup.notice">{t("setup-nothing-found")}</p>
           ) : (
@@ -396,7 +512,16 @@ export function AccountSetup({ node }: WidgetProps) {
               {t("setup-warning-check")}
             </p>
           )}
-          {!editing && (
+          {exchangeIncoming && chosenCandidate && (
+            <ExchangeServerReview
+              email={email.trim()}
+              candidate={chosenCandidate}
+              onChange={changeCandidate}
+              confirmed={trusted}
+              onConfirm={setTrusted}
+            />
+          )}
+          {!editing && !exchangeIncoming && (
             <button
               type="button"
               data-part="form.button"
@@ -406,7 +531,7 @@ export function AccountSetup({ node }: WidgetProps) {
               {t("setup-edit-servers")}
             </button>
           )}
-          {editing && (
+          {editing && !exchangeIncoming && (
             <>
               <IncomingFields
                 incoming={config.incoming}
@@ -420,17 +545,37 @@ export function AccountSetup({ node }: WidgetProps) {
               )}
             </>
           )}
-          <SelectField
-            labelId="setup-sign-in"
-            name="sign-in"
-            value={signIn ? signInValue(signIn) : "password"}
-            choices={signInChoices(providers)}
-            onChange={(value) => {
-              setConfig(withAccountSignIn(config, parseSignIn(value)));
-              setOAuth(null);
-            }}
-          />
-          {signIn?.kind === "password" && (
+          {exchangeIncoming ? (
+            <ExchangeSignInFields
+              email={email.trim()}
+              engine={exchangeIncoming.options.engine}
+              auth={exchangeIncoming.server.auth}
+              onChange={(auth) => {
+                setConfig({
+                  ...config,
+                  incoming: {
+                    ...exchangeIncoming,
+                    server: { ...exchangeIncoming.server, auth },
+                  },
+                });
+                setOAuth(null);
+              }}
+              password={password}
+              onPasswordChange={setPassword}
+            />
+          ) : (
+            <SelectField
+              labelId="setup-sign-in"
+              name="sign-in"
+              value={signIn ? signInValue(signIn) : "password"}
+              choices={signInChoices(providers)}
+              onChange={(value) => {
+                setConfig(withAccountSignIn(config, parseSignIn(value)));
+                setOAuth(null);
+              }}
+            />
+          )}
+          {signIn?.kind === "password" && !exchangeIncoming && (
             <TextField
               labelId="setup-password"
               name="password"
@@ -518,7 +663,7 @@ export function AccountSetup({ node }: WidgetProps) {
               data-part="form.button"
               data-action="next"
               data-variant="primary"
-              disabled={busy || !credentialsReady}
+              disabled={busy || !credentialsReady || redirectUnconfirmed}
             >
               {t(busy ? "setup-testing" : "setup-test")}
             </button>

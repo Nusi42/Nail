@@ -97,6 +97,8 @@ async fn a_new_client_sees_nothing_until_granted() {
         "content is marked untrusted"
     );
     assert_eq!(value["data"]["id"], json!("m1"));
+    // Exchange data travels with the message (M3c).
+    assert_eq!(value["data"]["exchange"]["inference"], json!("focused"));
     assert_eq!(
         value["data"]["attachments"][0]["uri"],
         json!("nail://messages/m1/attachments/0")

@@ -1228,6 +1228,72 @@ pub struct ExchangeCollectionInfo {
 }
 
 // ---------------------------------------------------------------------------
+// Account setup (WP95)
+
+/// How Autodiscover found a host that would get the login
+/// ([`ExchangeDiscoveryPrompt::ConfirmRedirect`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExchangeRedirectReason {
+    /// An HTTP redirect to another domain.
+    HttpRedirect,
+    /// A POX `redirectUrl` to another domain.
+    RedirectUrl,
+    /// A POX `redirectAddr` to an address of another domain.
+    RedirectAddr,
+    /// The unauthenticated HTTP redirect method.
+    HttpMethod,
+    /// A DNS SRV record (`_autodiscover._tcp`).
+    Srv,
+}
+
+/// Autodiscover stopped to ask the user ([`crate::Request::DiscoverAccount`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum ExchangeDiscoveryPrompt {
+    /// The next step would send the login to `host`, outside the address's
+    /// domain: ask again with the host in `trusted_hosts` once the user
+    /// trusts it (`exchange-autodiscover-confirm-redirect`).
+    ConfirmRedirect {
+        /// The URL that would get the login.
+        url: String,
+        /// Its host.
+        host: String,
+        /// The address's domain.
+        domain: String,
+        /// How the host was found.
+        reason: ExchangeRedirectReason,
+        /// The question to show.
+        localized: LocalizedMessage,
+    },
+    /// A server of the domain asks to sign in: ask again with
+    /// `windows_sign_in` (the signed-in Windows user), or set the account
+    /// up by hand (`exchange-autodiscover-needs-login`).
+    NeedsLogin {
+        /// The host that asked.
+        host: String,
+        /// The text to show.
+        localized: LocalizedMessage,
+    },
+}
+
+/// What Exchange Autodiscover added to a [`crate::Response::Discovered`].
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+pub struct ExchangeDiscoveryInfo {
+    /// Autodiscover stopped to ask (the candidates are what other lookups
+    /// found).
+    #[serde(default)]
+    pub prompt: Option<ExchangeDiscoveryPrompt>,
+    /// The user's display name, when a POX answer gave it.
+    #[serde(default)]
+    pub display_name: Option<String>,
+    /// Shared mailboxes the server automaps (stored with origin
+    /// `automapped` when the account is added).
+    #[serde(default)]
+    pub mailboxes: Vec<ExchangeMailboxSettings>,
+}
+
+// ---------------------------------------------------------------------------
 // Status
 
 /// How the account learns about changes.

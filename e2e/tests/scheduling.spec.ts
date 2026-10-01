@@ -287,8 +287,14 @@ test("free/busy shows the busy blocks of another account on the CalDAV server", 
   await editor.getByLabel("Address").fill("bob@example.org");
   await editor.getByRole("button", { name: "Add", exact: true }).click();
   const availability = editor.locator('[data-part="freebusy"]');
-  // Bob's demo events are tomorrow (10:00 and 14:00 UTC).
-  await availability.getByRole("button", { name: "Next day" }).click();
+  // Bob's demo events are tomorrow in UTC (10:00 and 14:00 UTC); the
+  // timeline starts at today in the local zone, which can be another day.
+  const now = new Date();
+  const utcTomorrow = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  const localToday = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  for (let day = 0; day < Math.round((utcTomorrow - localToday) / 86_400_000); day++) {
+    await availability.getByRole("button", { name: "Next day" }).click();
+  }
   const bob = availability.getByRole("img", { name: /^bob@example\.org: .*busy/ });
   await expect(bob).toBeVisible({ timeout: 20_000 });
   await expect(

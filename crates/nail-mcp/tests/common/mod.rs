@@ -52,7 +52,13 @@ pub fn summary(id: &str, account: &str, folder: &str, thread: &str) -> MessageSu
         duplicates: vec![],
         headers_only: false,
         gmail: None,
-        exchange: None,
+        // M3c: an Exchange inbox message (Focused Inbox) for `m1`.
+        exchange: (id == "m1").then(|| nail_api::exchange::ExchangeMessageInfo {
+            item_id: "AAMk-m1".into(),
+            conversation_id: Some("AAQk-c1".into()),
+            inference: Some(nail_api::exchange::InferenceClassification::Focused),
+            mailbox: None,
+        }),
     }
 }
 

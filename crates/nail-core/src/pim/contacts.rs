@@ -280,7 +280,7 @@ impl Service {
         nail_ical::vcard::write_contact(contact, original, &options)
     }
 
-    fn group_text(&self, group: &GroupCard, original: Option<&str>) -> String {
+    pub(crate) fn group_text(&self, group: &GroupCard, original: Option<&str>) -> String {
         let options = CardWriteOptions::at(self.pim_utc_now());
         nail_ical::vcard::write_group(group, original, &options)
     }

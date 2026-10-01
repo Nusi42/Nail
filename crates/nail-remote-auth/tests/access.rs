@@ -280,6 +280,7 @@ async fn desktop_only_requests_are_refused_even_for_admins() {
         Request::StartOAuth {
             provider: "google".into(),
             login_hint: None,
+            protocol: None,
         },
     ] {
         let error = h.auth.authorize(&ctx, &request).unwrap_err();

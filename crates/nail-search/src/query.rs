@@ -93,6 +93,9 @@ pub enum TermKind {
     /// `category:` — a Gmail inbox category (`primary`, `social`,
     /// `promotions`, `updates`, `forums`; case-insensitive; M3b).
     Category(Value),
+    /// `focus:` — Exchange Focused Inbox (`focused`, `other`;
+    /// case-insensitive; M3c).
+    Focus(Value),
     /// `account:` — an account's id, name or address, or a virtual account.
     Account(Value),
     /// `folder:` — a folder's name, path or role.
@@ -496,6 +499,7 @@ impl<'a> Lexer<'a> {
                 | "is"
                 | "tag"
                 | "category"
+                | "focus"
                 | "account"
                 | "folder"
                 | "before"
@@ -558,6 +562,14 @@ impl<'a> Lexer<'a> {
             ),
             "tag" => TermKind::Tag(v()),
             "category" => TermKind::Category(v()),
+            "focus" => {
+                if !["focused", "other"].contains(&value.to_lowercase().as_str()) {
+                    return Err(invalid(format!(
+                        "focus:{value} is not supported (use focus:focused or focus:other)"
+                    )));
+                }
+                TermKind::Focus(v())
+            }
             "account" => TermKind::Account(v()),
             "folder" => TermKind::Folder(v()),
             "before" | "after" => {
@@ -968,6 +980,10 @@ impl fmt::Display for Term {
                 f.write_str("category:")?;
                 write_value(f, &v.text, v.quoted)
             }
+            TermKind::Focus(v) => {
+                f.write_str("focus:")?;
+                write_value(f, &v.text, v.quoted)
+            }
             TermKind::Account(v) => {
                 f.write_str("account:")?;
                 write_value(f, &v.text, v.quoted)
@@ -1361,6 +1377,7 @@ mod tests {
             r#""AND" "-x" "from:y" "a\"b""#,
             "tag:\"two words\" folder:INBOX account:work",
             "category:social -category:promotions",
+            "focus:focused OR focus:other",
         ] {
             let q = p(s);
             let printed = q.to_string();
@@ -1374,5 +1391,11 @@ mod tests {
     fn gmail_categories_are_a_field() {
         let q = p("CATEGORY:Social");
         assert_eq!(q.to_string(), "category:Social");
+    }
+
+    #[test]
+    fn exchange_focus_is_a_field_with_two_values() {
+        assert_eq!(p("FOCUS:Other").to_string(), "focus:Other");
+        assert!(parse_query("focus:later").is_err());
     }
 }

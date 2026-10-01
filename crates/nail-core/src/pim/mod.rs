@@ -408,6 +408,10 @@ impl Service {
 
     /// The mail account a source belongs to (DAV sources with `account=`).
     pub(crate) fn pim_source_account(&self, source: &PimSourceId) -> Option<AccountId> {
+        // M3c: an Exchange account's source (`exchange:<account>`).
+        if let Some(account) = nail_api::exchange::exchange_pim_source_account(source) {
+            return Some(account);
+        }
         self.inner
             .accounts
             .config()

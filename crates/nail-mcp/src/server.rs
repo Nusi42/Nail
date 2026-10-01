@@ -318,6 +318,8 @@ impl<D: McpData> Shared<D> {
             "flags": summary.flags,
             "tags": summary.tags,
             "date": summary.date,
+            // M3c: Exchange data (Focused Inbox, conversation, mailbox).
+            "exchange": summary.exchange,
             "headers": body.headers,
             "text": body.text,
             "html": body.sanitized_html,

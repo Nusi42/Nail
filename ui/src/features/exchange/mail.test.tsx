@@ -24,6 +24,7 @@ import {
   SHARED_ROOT,
 } from "./mockSeed";
 import {
+  APPLY_CATEGORIES_DIALOG,
   CATEGORY_DELETE_DIALOG,
   CATEGORY_EDITOR_DIALOG,
   CLASSIFY_DIALOG,
@@ -126,6 +127,32 @@ describe("categories", () => {
     await waitFor(() => expect(close).toHaveBeenCalled());
     expect(requests(env, "DeleteExchangeCategory")[0]?.category_id).toBe("{0004-cat}");
     expect(message(env, "Phoenix launch checklist").tags).toContain("Urgent");
+  });
+
+  it("applies categories to the selected message as tags", async () => {
+    const env = setup();
+    const user = userEvent.setup();
+    const close = vi.fn();
+    const checklist = message(env, "Phoenix launch checklist");
+    cacheList(env, [checklist]);
+    const handler = actions["exchange.apply-categories"];
+    expect(handler?.enabled?.(actionContext(env), [])).toBe(false);
+    env.store.getState().selectMessage(checklist.id);
+    expect(handler?.enabled?.(actionContext(env), [])).toBe(true);
+    await handler?.run(actionContext(env), []);
+    expect(env.store.getState().windows).toContain(APPLY_CATEGORIES_DIALOG);
+    const Apply = dialog(APPLY_CATEGORIES_DIALOG);
+    renderWithProviders(<Apply name={APPLY_CATEGORIES_DIALOG} close={close} />, env);
+    const urgent = await screen.findByRole("checkbox", { name: "Urgent" });
+    expect(urgent).toBeChecked();
+    await user.click(urgent);
+    await user.click(screen.getByRole("checkbox", { name: "Customers" }));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(close).toHaveBeenCalled());
+    expect(requests(env, "UpdateFlags")[0]?.change).toMatchObject({
+      add_tags: ["Customers"],
+      remove_tags: ["Urgent"],
+    });
   });
 
   it("shows a message's categories as coloured chips, nothing for other mail", async () => {

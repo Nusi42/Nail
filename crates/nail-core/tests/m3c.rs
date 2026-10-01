@@ -1,8 +1,10 @@
-//! Wave M3c contract (ADR 0072): every Exchange request is routed and
-//! answered `unsupported` until the integration (WP95) wires the engines;
-//! a configured Exchange account is listed as one and its engine reports
-//! itself offline with `unsupported`; the store keeps Exchange state.
-//! WP95 replaces these expectations with the served behaviour.
+//! Wave M3c (contract ADR 0072, integration ADR 0077): every Exchange
+//! request is routed and served from the store (the engines run them
+//! against the server: `tests/exchange.rs`); requests for other accounts
+//! answer `invalid_request`; a configured Exchange account is listed as
+//! one and its engine starts (and reports an unreachable server);
+//! `TestAccount` signs in through the engine; the store keeps Exchange
+//! state.
 
 use std::time::Duration;
 
@@ -29,14 +31,21 @@ fn setup_with(
     (service, data, config)
 }
 
+// Loopback ports nothing listens on: the engines start and stay offline
+// (no network in tests).
 const EXCHANGE: &str = r#"account "work" name="Work" email="ada@contoso.example" {
-    exchange {
+    exchange host="127.0.0.1" port=9 tls="plaintext" {
         auth "oauth2" provider="microsoft"
     }
 }
 account "corp" name="Corp" email="ada@corp.example" {
-    exchange engine="ews" host="mail.corp.example" {
-        auth "windows"
+    exchange engine="ews" host="127.0.0.1" url="http://127.0.0.1:9/EWS/Exchange.asmx" tls="plaintext" {
+        auth "password" username="ada@corp.example"
+    }
+}
+account "mail" name="Mail" email="ada@mail.example" {
+    imap host="127.0.0.1" port=9 tls="plaintext" {
+        auth "password" username="ada"
     }
 }
 "#;
@@ -122,7 +131,7 @@ fn every_m3c_request() -> Vec<Request> {
 }
 
 #[tokio::test]
-async fn every_m3c_request_is_routed_and_unsupported_until_wp95() {
+async fn every_m3c_request_is_routed_and_served() {
     let (service, _data, _config) = setup_with(Some(EXCHANGE), false);
     let requests = every_m3c_request();
     assert_eq!(requests.len(), 18);
@@ -131,18 +140,71 @@ async fn every_m3c_request_is_routed_and_unsupported_until_wp95() {
             .as_str()
             .unwrap()
             .to_owned();
-        match service.handle(request).await {
-            Response::Error { code, message, .. } => {
-                assert_eq!(code, ErrorCode::Unsupported, "{name}: {message}");
-                assert!(message.contains(&name), "{name}: {message}");
+        let response = service.handle(request).await;
+        match name.as_str() {
+            // Ids nobody has.
+            "UpdateExchangeCategory"
+            | "DeleteExchangeCategory"
+            | "SetExchangeInboxRuleEnabled"
+            | "DeleteExchangeInboxRule"
+            | "ClassifyFocused" => {
+                assert!(
+                    matches!(
+                        response,
+                        Response::Error {
+                            code: ErrorCode::NotFound,
+                            ..
+                        }
+                    ),
+                    "{name}: {response:?}"
+                );
             }
-            other => panic!("{name}: {other:?}"),
+            // The server is asked (and unreachable here).
+            "ListRoomLists" | "FindRooms" => {
+                let Response::Error { code, .. } = &response else {
+                    panic!("{name}: {response:?}");
+                };
+                assert_ne!(*code, ErrorCode::Unsupported, "{name}");
+            }
+            _ => assert!(
+                !matches!(response, Response::Error { .. }),
+                "{name}: {response:?}"
+            ),
         }
+    }
+    // Other accounts are refused.
+    let other = service
+        .handle(Request::GetExchangeStatus {
+            account_id: "mail".into(),
+        })
+        .await;
+    assert!(
+        matches!(
+            other,
+            Response::Error {
+                code: ErrorCode::InvalidRequest,
+                ..
+            }
+        ),
+        "{other:?}"
+    );
+    // The queued category and the shown mailbox are there.
+    match service
+        .handle(Request::ListExchangeCategories {
+            account_id: "work".into(),
+        })
+        .await
+    {
+        Response::ExchangeCategories { categories, .. } => {
+            assert_eq!(categories.len(), 1);
+            assert_eq!(categories[0].name, "Red");
+        }
+        other => panic!("{other:?}"),
     }
 }
 
 #[tokio::test]
-async fn exchange_accounts_are_listed_and_their_engine_is_not_wired() {
+async fn exchange_accounts_are_listed_and_their_engines_start() {
     let (service, _data, _config) = setup_with(Some(EXCHANGE), true);
     service.start();
     match service.handle(Request::ListAccounts).await {
@@ -155,7 +217,7 @@ async fn exchange_accounts_are_listed_and_their_engine_is_not_wired() {
         other => panic!("{other:?}"),
     }
     let mut status = None;
-    for _ in 0..200 {
+    for _ in 0..400 {
         if let Response::AccountStatuses { statuses } =
             service.handle(Request::ListAccountStatuses).await
         {
@@ -169,8 +231,8 @@ async fn exchange_accounts_are_listed_and_their_engine_is_not_wired() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     let status = status.expect("a status for the Exchange account");
-    assert_eq!(status.state, AccountState::Offline, "{status:?}");
-    assert_eq!(status.error, Some(ErrorCode::Unsupported));
+    assert_ne!(status.state, AccountState::Online, "{status:?}");
+    assert_ne!(status.error, Some(ErrorCode::Unsupported), "{status:?}");
     // No folders until the server's hierarchy is synced.
     match service
         .handle(Request::ListFolders {
@@ -185,21 +247,28 @@ async fn exchange_accounts_are_listed_and_their_engine_is_not_wired() {
 }
 
 #[tokio::test]
-async fn testing_an_exchange_account_reports_unsupported() {
+async fn testing_an_exchange_account_signs_in_through_the_engine() {
     let (service, _data, _config) = setup_with(None, false);
     let config = nail_config::parse_accounts(EXCHANGE, "accounts.kdl")
         .unwrap()
         .accounts
-        .remove(0);
+        .remove(1);
     match service
         .handle(Request::TestAccount {
             config: Box::new(config),
-            secrets: vec![],
+            secrets: vec![nail_api::accounts::SecretInput {
+                endpoint: nail_api::accounts::EndpointSlot::Incoming,
+                value: nail_api::accounts::SecretValue::Password {
+                    password: "secret".into(),
+                },
+            }],
         })
         .await
     {
         Response::AccountTested { result } => {
-            assert_eq!(result.incoming.error, Some(ErrorCode::Unsupported));
+            // Nothing listens there: a network error, not "unsupported".
+            assert!(result.incoming.error.is_some());
+            assert_ne!(result.incoming.error, Some(ErrorCode::Unsupported));
             assert!(result.outgoing.is_none());
         }
         other => panic!("{other:?}"),

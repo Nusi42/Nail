@@ -78,6 +78,7 @@ vacation-intro = While you are away, the server answers new mail for you — als
 vacation-account = Account
 vacation-loading = Loading the vacation reply…
 vacation-needs-sieve = Turn on server-side rules for this account (Server rules tab) so the reply reaches the server.
+vacation-exchange-hint = For a Microsoft Exchange account this sets its automatic replies (out of office), with the same text for people inside and outside your organization.
 vacation-enabled = Send a vacation reply
 vacation-subject = Subject
 vacation-subject-hint = Leave empty for the server's default ("Auto:" and the original subject).

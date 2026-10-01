@@ -503,7 +503,9 @@ function Vacation({ account }: { account: AccountConfig }) {
   if (!vacation.data) return <p data-part="vacation-editor.loading">{t("vacation-loading")}</p>;
   return (
     <>
-      {account.sieve === undefined || account.sieve.enabled === false ? (
+      {account.incoming.protocol === "exchange" ? (
+        <p data-part="vacation-editor.hint">{t("vacation-exchange-hint")}</p>
+      ) : account.sieve === undefined || account.sieve.enabled === false ? (
         <p data-part="vacation-editor.hint">{t("vacation-needs-sieve")}</p>
       ) : null}
       <VacationForm key={account.id} accountId={account.id} saved={vacation.data} />
@@ -516,7 +518,10 @@ export function VacationEditorWidget({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
   const config = useAccountsConfig();
-  const imap = (config.data?.accounts ?? []).filter((a) => a.incoming.protocol === "imap");
+  // M3c: an Exchange account's vacation reply is its automatic replies.
+  const imap = (config.data?.accounts ?? []).filter(
+    (a) => a.incoming.protocol === "imap" || a.incoming.protocol === "exchange",
+  );
   const [chosen, setChosen] = useState<string | null>(null);
   const account = imap.find((a) => a.id === chosen) ?? imap[0];
   return (

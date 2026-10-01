@@ -28,6 +28,7 @@ import type { ErrorCode } from "./ErrorCode";
 import type { EventFields } from "./EventFields";
 import type { EventInstance } from "./EventInstance";
 import type { ExchangeCategory } from "./ExchangeCategory";
+import type { ExchangeDiscoveryInfo } from "./ExchangeDiscoveryInfo";
 import type { ExchangeMailbox } from "./ExchangeMailbox";
 import type { ExchangeRulesStatus } from "./ExchangeRulesStatus";
 import type { ExchangeStatus } from "./ExchangeStatus";
@@ -168,7 +169,12 @@ email: string,
 /**
  * Proposals, best first.
  */
-candidates: Array<DiscoveredAccount>, } | { "type": "AccountTested", 
+candidates: Array<DiscoveredAccount>, 
+/**
+ * What Exchange Autodiscover added (a question for the user,
+ * automapped mailboxes); `null` when it found nothing (M3c).
+ */
+exchange?: ExchangeDiscoveryInfo, } | { "type": "AccountTested", 
 /**
  * Per-server results.
  */

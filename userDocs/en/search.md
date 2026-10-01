@@ -34,6 +34,7 @@ lower case do not matter, and accents are ignored (`cafe` finds "café").
 | `account:work` | in the account "work" (by its name in `accounts.kdl`); a virtual account's name means all its accounts; `account:all` means every account |
 | `folder:receipts` | in a folder called "receipts" |
 | `category:social` | Gmail messages in an inbox category (`primary`, `social`, `promotions`, `updates`, `forums`) |
+| `focus:other` | Microsoft Exchange inbox messages in Focused (`focus:focused`) or Other (`focus:other`) |
 | `before:2026-09-01` | sent before that day (days start at midnight, your time) |
 | `after:2026-09-01` | sent on or after that day |
 | `after:7d`, `before:2w` | sent within / longer ago than 7 days, 2 weeks (`h` hours, `d` days, `w` weeks, `m` months of 30 days, `y` years) |

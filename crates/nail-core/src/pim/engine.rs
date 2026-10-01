@@ -311,6 +311,11 @@ impl Service {
 
     /// Wakes a source's engine (a write was queued, or the user asked).
     pub(crate) fn wake_pim_source(&self, source: &PimSourceId) {
+        // M3c: an Exchange source replays with its account's engine.
+        if let Some(account) = nail_api::exchange::exchange_pim_source_account(source) {
+            self.inner.engines.request_replay(&account);
+            return;
+        }
         if let Some(handle) = lock(&self.inner.pim.engines).get(source) {
             handle.wake.notify_one();
         }
@@ -318,6 +323,17 @@ impl Service {
 
     /// `SyncPimSources`: one source or all.
     pub(crate) fn sync_pim_now(&self, source: Option<&PimSourceId>) {
+        if let Some(account) = source.and_then(nail_api::exchange::exchange_pim_source_account) {
+            self.inner.engines.request_sync(&account);
+            return;
+        }
+        if source.is_none() {
+            for account in self.inner.engines.accounts() {
+                if crate::exchange::exchange_account(self, &account).is_ok() {
+                    self.inner.engines.request_sync(&account);
+                }
+            }
+        }
         let engines = lock(&self.inner.pim.engines);
         for (id, handle) in engines.iter() {
             if source.is_none_or(|s| s == id) {
@@ -346,7 +362,7 @@ impl Service {
     }
 
     /// After a pass: index, reminders and change events.
-    async fn after_sync(&self, changes: SyncChanges) {
+    pub(crate) async fn after_sync(&self, changes: SyncChanges) {
         if changes.collections {
             self.pim_events([Event::CalendarsChanged, Event::AddressBooksChanged]);
         }
@@ -1465,6 +1481,17 @@ async fn replay_dav(service: &Service, config: &PimSourceConfig, client: &DavCli
         .store
         .replay_pim_source(&config.id, &replayer, ReplayPolicy::default())
         .await?;
+    report_replay(service, &config.id, &report).await;
+    Ok(())
+}
+
+/// Announces the outcome of a PIM replay pass (op statuses, changed sync
+/// states) and purges finished operations (DAV and Exchange sources).
+pub(crate) async fn report_replay(
+    service: &Service,
+    source: &PimSourceId,
+    report: &nail_store::pim::PimReplayReport,
+) {
     for (ids, state) in [
         (&report.done, OpState::Done),
         (&report.failed, OpState::Failed),
@@ -1481,7 +1508,7 @@ async fn replay_dav(service: &Service, config: &PimSourceConfig, client: &DavCli
             service.broadcast(Event::PimOpStatus {
                 status: nail_api::pim::PimOpStatus {
                     op_id: nail_api::OpId::new(id.to_string()),
-                    source_id: config.id.clone(),
+                    source_id: source.clone(),
                     state,
                     error: (state == OpState::Failed).then_some(ErrorCode::Rejected),
                     message: error,
@@ -1505,7 +1532,6 @@ async fn replay_dav(service: &Service, config: &PimSourceConfig, client: &DavCli
         ]);
     }
     let _ = service.inner.store.call(|s| s.purge_done_pim_ops()).await;
-    Ok(())
 }
 
 struct DavReplayer {
