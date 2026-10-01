@@ -20,8 +20,10 @@ import { COLUMN_IDS } from "../widgets/MessageList";
 import { errorMessageId } from "../api/client";
 import * as composerMessages from "../features/composer/messages";
 import * as customizationMessages from "../features/customization/messages";
+import * as gmailMessages from "../features/gmail/messages";
 import * as mcpMessages from "../features/mcp/messages";
 import * as rulesMessages from "../features/rules/messages";
+import * as schedulingMessages from "../features/scheduling/messages";
 import * as remoteMessages from "../features/remote/messages";
 import * as securityMessages from "../features/security/messages";
 import * as menusMessages from "../features/menus/messages";
@@ -46,6 +48,8 @@ const FEATURE_MESSAGES = [
   menusMessages,
   pluginsMessages,
   pimMessages,
+  schedulingMessages,
+  gmailMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

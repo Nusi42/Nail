@@ -66,6 +66,13 @@
 //!   ([`Store::append_plugin_log`]); storage values and log messages are
 //!   sealed at rest.
 //!
+//! * M3b (schema v11, ADR 0065): remote ids of API-account messages
+//!   ([`Store::message_by_remote_id`]), the scheduling state of
+//!   invitations ([`scheduling`]: `SEQUENCE` / `DTSTAMP` / answer per
+//!   event and address, received and sent iTIP messages, settings) and
+//!   Gmail accounts ([`gmail`]: `historyId`, labels ↔ tags / folders,
+//!   per-message labels and category, the label operation queue).
+//!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
 
@@ -76,6 +83,7 @@ mod compose;
 mod crypto;
 mod error;
 mod filter;
+pub mod gmail;
 pub mod lock;
 mod mail;
 mod mcp;
@@ -86,6 +94,7 @@ mod queue;
 mod remote;
 mod rules;
 mod saved_search;
+pub mod scheduling;
 mod schema;
 pub mod seal;
 pub mod store;

@@ -239,6 +239,12 @@ impl Service {
                 }
                 Err(err) => test_result(Err(err)),
             },
+            // M3b: the Gmail API test (token + `users.getProfile`) comes
+            // with the engine (WP85).
+            IncomingServer::Gmail { .. } => test_result(Err(EngineError::permanent(
+                ErrorCode::Unsupported,
+                "testing Gmail API accounts is not wired yet (M3b WP85)",
+            ))),
         };
         let outgoing = match (&config.outgoing, outgoing_server) {
             (Some(OutgoingServer::Smtp { .. }), Some(server)) => {

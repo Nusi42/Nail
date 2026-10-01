@@ -190,6 +190,7 @@ impl From<SieveError> for EngineError {
             message: err.to_string(),
             retryable: err.is_retryable(),
             localized: None,
+            retry_after_secs: None,
         }
         .with_localized(localized)
     }

@@ -276,4 +276,12 @@ reminder: Reminder, } | { "type": "RemindersChanged" } | { "type": "PimOpStatus"
 /**
  * The new status.
  */
-status: PimOpStatus, };
+status: PimOpStatus, } | { "type": "InvitationsChanged", 
+/**
+ * The messages.
+ */
+message_ids: Array<MessageId>, } | { "type": "SchedulingSettingsChanged" } | { "type": "GmailLabelsChanged", 
+/**
+ * The account.
+ */
+account_id: AccountId, };

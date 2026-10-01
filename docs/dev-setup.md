@@ -480,6 +480,15 @@ For M2c:
   headers-only sync + on-demand bodies + server search, replay connection, localized
   messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)
 
+For M3b:
+
+- **0065:** the M3b contract (invitations and scheduling: iTIP methods, the invitation card on
+  `MessageBody.invitation`, answers / counters / organizer updates and cancellations, free/busy;
+  Gmail accounts as a `gmail` node in `accounts.kdl` with labels ↔ folders / tags, thread ids,
+  categories, label management; `MailApiEngine` / `AdaptivePoll` / `FreeBusyProvider`; store v11;
+  the `nail-itip` / `nail-proto-gmail` stubs (mock Gmail server: `--features testing`); slots).
+  Texts built in Rust: `locales/<lang>/core-scheduling.ftl`, `core-gmail.ftl`.
+
 For M3a:
 
 - **0058:** the M3a contract (calendars, events with recurrence / overrides / edit scopes,

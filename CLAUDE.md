@@ -51,6 +51,11 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        tasks, reminders, sources = PimSourceConfig in AccountsConfig.pim_sources,
                        import, read-only MCP payloads; issues() + pim-issue-* ids) (ADR 0058);
                        WP75: EventOverride.this_and_future, plugins::PluginCalendarEvent (ADR 0063)
+                       M3b: scheduling (ItipMethod, Invitation card on MessageBody.invitation, targets,
+                       answers / counters / organizer requests, SchedulingSettings, free/busy +
+                       BusyPeriod::merge), gmail (IncomingServer::Gmail + GmailOptions, GmailFolder /
+                       LabelChange mapping, categories, labels, MessageSummary.gmail); engine.rs:
+                       MailApiEngine, AdaptivePoll, FreeBusyProvider, EngineError::retry_after_secs (ADR 0065)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -64,8 +69,10 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        (ADRs 0050, 0055);
                        M3a: accounts.kdl `calendar-subscription` / `caldav` / `carddav` nodes (read, write,
                        schema; upsert/remove_pim_source), widgets/pim.rs (typed options of the PIM widgets
-                       incl. `calendar-list`) (ADRs 0058, 0062)
-crates/nail-store      SQLite metadata (v10), blob store, per-account operation queue with sync-side
+                       incl. `calendar-list`) (ADRs 0058, 0062);
+                       M3b: account `gmail` node (oauth2 only, no smtp, plaintext only on loopback),
+                       widgets/{scheduling,gmail}.rs (WP84 slots) (ADR 0065)
+crates/nail-store      SQLite metadata (v11), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -90,7 +97,11 @@ crates/nail-store      SQLite metadata (v10), blob store, per-account operation 
                        pim_ops queue (ADR 0058); src/pim/ (WP73): collections, items (user writes + PIM
                        queue in one transaction, server merge with conflict copies), ops (replay), instances
                        (InstanceExpander, 90-day chunks, note_zone_data), contacts (duplicates, merge links,
-                       Collected book, suggest_recipients), reminders, time (ADR 0061)
+                       Collected book, suggest_recipients), reminders, time (ADR 0061);
+                       v11 (ADR 0065): messages.remote_id (MessageSource.remote_id), scheduling.rs (itip_state
+                       moves forward only, received / sent iTIP messages, settings), gmail.rs (history id,
+                       labels ↔ tags / folders, per-message labels + category, label op queue);
+                       src/pim/freebusy.rs (WP83 slot)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -142,7 +153,11 @@ crates/nail-dav        CalDAV / CardDAV client (M3a WP72): DavClient (Basic over
                        endpoints), PROPFIND / REPORT (calendar-query + time-range, multiget, addressbook-query,
                        sync-collection), sync_collection (RFC 6578 with paging and token reset, ctag/ETag
                        fallback), write_object / delete_object (If-Match / If-None-Match, 412 → server wins),
-                       MKCALENDAR / MKCOL / PROPPATCH; DavError → ErrorCode + dav-* texts (ADR 0060)
+                       MKCALENDAR / MKCOL / PROPPATCH; DavError → ErrorCode + dav-* texts (ADR 0060);
+                       src/scheduling.rs (M3b WP83 slot: RFC 6638 outbox / inbox, VFREEBUSY)
+crates/nail-itip       iTIP / iMIP (M3b WP81 stub; mail-parser / mail-builder + nail-ical) (ADR 0065)
+crates/nail-proto-gmail Gmail API engine (M3b WP82 stub): api_base; feature `testing` = MockGmailServer on
+                       127.0.0.1 (ADR 0065)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -196,7 +211,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        events.rs (edit scopes, instances, free time, tasks), contacts.rs,
                        import.rs (imports, event / task from email), reminders.rs (scheduler + task),
                        search.rs (in-memory PimIndex)); launch_args.rs (launch-argument parser, shared with
-                       app/src-tauri and `nail serve --launch`)
+                       app/src-tauri and `nail serve --launch`);
+                       M3b (ADR 0065): scheduling.rs, gmail.rs (requests `unsupported`, Gmail engine stub)
+                       until WP85
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -218,7 +235,7 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (context menus, resolve.ts), customization/Editors.tsx; M2d: plugins/;
                        M3a: pim/ (calendar, contacts, tasks; lazyDialogs.ts, parts.ts PIM_BASE_CSS,
                        @internationalized/date + react-aria-components for the date / time picker;
-                       ADRs 0058, 0062));
+                       ADRs 0058, 0062); M3b: scheduling/, gmail/ (WP84 slots, ADR 0065));
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -389,6 +406,16 @@ npm run tauri dev                          # desktop app with Vite hot reload
   with `ServiceOptions::loopback_feeds`, which `demo::demo_options` sets); `DavClient` sends logins only to the
   requested origin (`DavError::RedirectNeedsLogin`); reminders are capped per item (`limit_plan`) and summarized
   when more than three fire at once.
+- M3b contract: ADR 0065 (`nail_api::scheduling`: iTIP methods, the invitation card on
+  `MessageBody.invitation`, `InvitationTarget` message / event, 12 requests incl. free/busy and
+  settings; `nail_api::gmail`: `gmail` account node (oauth2, no smtp), messages stored once with
+  the folder from their labels, user labels = tags, categories on `MessageSummary.gmail`, 4 label
+  requests through a label queue; `MailApiEngine` / `AdaptivePoll` / `FreeBusyProvider`; 3 events;
+  store v11 with APIs; stub crates `nail-itip` / `nail-proto-gmail` (mock server: feature
+  `testing`); slots `nail-dav/src/scheduling.rs`, `nail-store/src/pim/freebusy.rs`,
+  `nail-config/src/widgets/{scheduling,gmail}.rs`, `ui/src/features/{scheduling,gmail}/`,
+  `locales/*/{scheduling,gmail,core-scheduling,core-gmail}.ftl`). The core answers every M3b
+  request `unsupported` until WP85; a Gmail account's engine reports `unsupported`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

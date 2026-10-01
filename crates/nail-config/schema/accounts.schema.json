@@ -83,6 +83,17 @@
             "null"
           ]
         },
+        "gmail": {
+          "description": "`gmail { auth \"oauth2\" provider=\"google\" }`: the Gmail API (M3b;\nsends through the API, so no `smtp`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GmailSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "identity": {
           "description": "`identity \"<address>\" … { bcc …; signature … }`: sending identities,\nthe first is the default (default: one for `email`).",
           "type": "array",
@@ -572,6 +583,71 @@
           "anyOf": [
             {
               "$ref": "#/$defs/RoleSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "GmailSchema": {
+      "description": "`gmail host=… port=… tls=… poll-interval=… max-poll-interval=…`\n(every property optional).",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "How to log in: `auth \"oauth2\" provider=\"google\"`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "description": "API host (default gmail.googleapis.com).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max-poll-interval": {
+          "description": "Longest seconds between history polls when nothing changes\n(default 300).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 10
+        },
+        "poll-interval": {
+          "description": "Shortest seconds between history polls (default 30).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 86400,
+          "minimum": 10
+        },
+        "port": {
+          "description": "Port (default 443).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 65535,
+          "minimum": 1
+        },
+        "tls": {
+          "description": "Transport security (default implicit; plaintext only for localhost\ntest servers).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TlsSchema"
             },
             {
               "type": "null"

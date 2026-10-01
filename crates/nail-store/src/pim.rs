@@ -31,9 +31,11 @@
 //! * [`reminders`] — alarm occurrences and their state for the reminder
 //!   scheduler in `nail-triage`.
 //! * [`time`] — calendar times as cache seconds.
+//! * [`freebusy`] — busy periods of the user's calendars (M3b WP83).
 
 pub mod collections;
 pub mod contacts;
+pub mod freebusy;
 pub mod instances;
 pub mod items;
 pub mod ops;

@@ -124,6 +124,7 @@ impl From<ImapError> for EngineError {
             retryable: err.is_transient(),
             message: err.to_string(),
             localized: None,
+            retry_after_secs: None,
         }
     }
 }

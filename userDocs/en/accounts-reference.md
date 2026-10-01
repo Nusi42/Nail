@@ -84,8 +84,8 @@ Inside the account:
 
 | Node | Meaning |
 | --- | --- |
-| `imap` or `pop3` | The incoming server (exactly one) |
-| `smtp` | The outgoing server (optional; without it the account only receives) |
+| `imap`, `pop3` or `gmail` | The incoming server (exactly one) |
+| `smtp` | The outgoing server (optional; without it the account only receives; not with `gmail`) |
 | `identity` | A sending identity (any number; the first is the default) |
 | `sync` | Which folders to synchronize and how much to download |
 | `authserv-id` | Which receiving servers' sender checks to trust (see below) |
@@ -171,6 +171,36 @@ POP3 servers download mail into local folders and accept:
 | `delete-when-deleted-locally` | With `leave-on-server`: delete from the server when you delete the message in Nail | `#false` |
 
 SMTP servers also accept `dsn=#true` to ask for delivery failure reports.
+
+### Gmail (`gmail`)
+
+A `gmail` node connects to Gmail through the Gmail API instead of IMAP:
+labels, threads and categories come over as Gmail has them, and Nail sends
+through the same connection, so a Gmail account has no `smtp` node. It
+signs in with your Google account (`auth "oauth2" provider="google"`; see
+[OAuth2 providers](#oauth2-providers)). Every property is optional:
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `poll-interval` | Shortest time in seconds between checks for changes (at least 10) | 30 |
+| `max-poll-interval` | Longest time in seconds between checks when nothing changes | 300 |
+| `host`, `port`, `tls` | Only for test servers on your own computer | `gmail.googleapis.com`, 443, `"implicit"` |
+
+Gmail cannot push changes to a desktop program, so Nail checks for them:
+often right after something changed, less often while the mailbox is
+quiet. Your labels become tags in Nail (renaming a label renames the tag),
+and the inbox, sent mail, drafts, spam, trash and "all mail" become folders.
+
+```kdl
+account "personal" email="ada@gmail.example" {
+    gmail poll-interval=60 {
+        auth "oauth2" provider="google"
+    }
+}
+```
+
+A Gmail address set up with `imap` and `smtp` keeps working as an IMAP
+account.
 
 ```kdl
 account "home" email="ada@home.example" {

@@ -1,0 +1,44 @@
+[package]
+name = "nail-proto-gmail"
+description = "Gmail API engine for Nail: history sync, raw MIME, labels, threads, batch requests, quotas, sending; plus a loopback mock Gmail REST server (feature `testing`)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# The mock Gmail REST server (`nail_proto_gmail::testing`): loopback only
+# (ADR 0057), recorded-response fixtures. Used by this crate's tests, the
+# core's tests and the demo-multi seed (WP85).
+testing = ["dep:axum"]
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+# HTTP: the workspace reqwest (rustls without a default provider; the
+# ring TLS configuration with the platform verifier comes from nail-auth,
+# like the OAuth2, discovery and DAV clients). Access tokens come through
+# nail_api::engine::AccessTokenProvider.
+reqwest.workspace = true
+nail-auth.workspace = true
+url.workspace = true
+# Gmail JSON resources (messages, history, labels, errors).
+serde.workspace = true
+serde_json.workspace = true
+# `raw` messages are base64url (RFC 4648 section 5).
+base64.workspace = true
+# internalDate, Retry-After dates.
+chrono.workspace = true
+# The mock server (feature `testing`); MIT, already in the workspace.
+axum = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+nail-proto-gmail = { path = ".", features = ["testing"] }
+
+[lints]
+workspace = true

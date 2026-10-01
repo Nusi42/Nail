@@ -34,11 +34,13 @@ import {
   createCustomizationMockState,
   type CustomizationMockState,
 } from "../features/customization/mock";
+import { createGmailMockState, type GmailMockState } from "../features/gmail/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
 import { createPimMockState, type PimMockState } from "../features/pim/mock";
 import { createPluginsMockState, type PluginsMockState } from "../features/plugins/mock";
 import { createRemoteMockState, type RemoteMockState } from "../features/remote/mock";
 import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
+import { createSchedulingMockState, type SchedulingMockState } from "../features/scheduling/mock";
 import { createSecurityMockState, type SecurityMockState } from "../features/security/mock";
 import { createSieveMockState, type SieveMockState } from "../features/sieve/mock";
 import { createTriageMockState, type TriageMockState } from "../features/triage/mock";
@@ -89,6 +91,8 @@ export interface MockFeatures {
   triage: TriageMockState;
   plugins: PluginsMockState;
   pim: PimMockState;
+  scheduling: SchedulingMockState;
+  gmail: GmailMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -463,6 +467,8 @@ export function createMockData(inboxSize = 250): MockData {
       triage: createTriageMockState(),
       plugins: createPluginsMockState(),
       pim: createPimMockState(),
+      scheduling: createSchedulingMockState(),
+      gmail: createGmailMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

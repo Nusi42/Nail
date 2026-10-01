@@ -140,7 +140,14 @@ impl AccountConfig {
         match self.incoming {
             IncomingServer::Imap { .. } => crate::domain::AccountKind::Imap,
             IncomingServer::Pop3 { .. } => crate::domain::AccountKind::Pop3,
+            IncomingServer::Gmail { .. } => crate::domain::AccountKind::Gmail,
         }
+    }
+
+    /// Whether the account can send: an outgoing server, or an API account
+    /// that sends through its API (Gmail `messages.send`).
+    pub fn can_send(&self) -> bool {
+        self.outgoing.is_some() || self.incoming.sends_itself()
     }
 
     /// The default identity (the first one).
@@ -169,14 +176,43 @@ pub enum IncomingServer {
         #[serde(default)]
         options: Pop3Options,
     },
+    /// The Gmail API (M3b, ADR 0065): sync through `users.history`,
+    /// sending through `users.messages.send` (the account has no
+    /// `outgoing` server). `server` is the API host (default
+    /// [`crate::gmail::GMAIL_API_HOST`], port 443, implicit TLS; plain
+    /// `http` only for loopback test servers) with `oauth2` auth.
+    Gmail {
+        /// API host, security and login.
+        server: ServerEndpoint,
+        /// Gmail-specific settings.
+        #[serde(default)]
+        options: crate::gmail::GmailOptions,
+    },
 }
 
 impl IncomingServer {
     /// The server endpoint, whatever the protocol.
     pub fn server(&self) -> &ServerEndpoint {
         match self {
-            Self::Imap { server, .. } | Self::Pop3 { server, .. } => server,
+            Self::Imap { server, .. } | Self::Pop3 { server, .. } | Self::Gmail { server, .. } => {
+                server
+            }
         }
+    }
+
+    /// The protocol of this side.
+    pub fn protocol(&self) -> MailProtocol {
+        match self {
+            Self::Imap { .. } => MailProtocol::Imap,
+            Self::Pop3 { .. } => MailProtocol::Pop3,
+            Self::Gmail { .. } => MailProtocol::Gmail,
+        }
+    }
+
+    /// Whether this side also sends (API accounts): then the account has
+    /// no `outgoing` server.
+    pub fn sends_itself(&self) -> bool {
+        matches!(self, Self::Gmail { .. })
     }
 }
 
@@ -242,6 +278,8 @@ pub enum MailProtocol {
     Pop3,
     /// SMTP submission.
     Smtp,
+    /// The Gmail REST API (HTTPS; M3b).
+    Gmail,
 }
 
 /// The standard port of `protocol` with `tls`.
@@ -253,6 +291,8 @@ pub fn default_port(protocol: MailProtocol, tls: TlsMode) -> u16 {
         (MailProtocol::Pop3, _) => 110,
         (MailProtocol::Smtp, TlsMode::Implicit) => 465,
         (MailProtocol::Smtp, _) => 587,
+        (MailProtocol::Gmail, TlsMode::Implicit) => 443,
+        (MailProtocol::Gmail, _) => 80,
     }
 }
 

@@ -166,6 +166,7 @@ mod tests {
             tags: vec![],
             duplicates: vec![],
             headers_only: false,
+            gmail: None,
         }
     }
 

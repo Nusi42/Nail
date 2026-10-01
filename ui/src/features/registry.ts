@@ -10,6 +10,7 @@ import type { WidgetRegistry } from "../layout/widgetRegistry";
 import { builtinWidgets } from "../widgets";
 import * as composer from "./composer";
 import * as customization from "./customization";
+import * as gmail from "./gmail";
 import * as launch from "./launch";
 import * as mcp from "./mcp";
 import * as menus from "./menus";
@@ -17,6 +18,7 @@ import * as pim from "./pim";
 import * as plugins from "./plugins";
 import * as remote from "./remote";
 import * as rules from "./rules";
+import * as scheduling from "./scheduling";
 import * as security from "./security";
 import * as sieve from "./sieve";
 import * as sync from "./sync";
@@ -38,6 +40,8 @@ export const features: Readonly<Record<string, Feature>> = {
   menus,
   plugins,
   pim,
+  scheduling,
+  gmail,
 };
 
 /** The merged registries. */

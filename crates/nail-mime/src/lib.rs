@@ -105,6 +105,7 @@ impl ParsedMessage {
             tags: Vec::new(),
             duplicates: Vec::new(),
             headers_only: false,
+            gmail: None,
         }
     }
 
@@ -126,6 +127,7 @@ impl ParsedMessage {
             remote_content: None,
             render_url: None,
             junk: None,
+            invitation: None,
         }
     }
 }

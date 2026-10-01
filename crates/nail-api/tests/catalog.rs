@@ -7,12 +7,14 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use nail_api::ErrorCode;
+use nail_api::gmail::{GmailCategory, GmailLabelIssue};
 use nail_api::mcp::McpSettingsIssue;
 use nail_api::pim::PimIssue;
 use nail_api::pim::source::{PimSourceIssue, PimSourceState};
 use nail_api::plugins::{
     PluginManifestIssueKind, PluginPermission, PluginStopReason, PluginUiIssueKind,
 };
+use nail_api::scheduling::{FreeBusyIssue, ItipIssue};
 use nail_api::sieve::{ManageSieveIssue, VacationIssue};
 use nail_api::triage::{JunkIssue, NotificationIssue};
 
@@ -104,6 +106,16 @@ fn contract_message_ids_exist_in_english() {
         ]
         .map(str::to_owned),
     );
+    // M3b (ADR 0065): invitation and free/busy problems, Gmail label
+    // problems and category names.
+    wanted.extend(ItipIssue::ALL.iter().map(|i| i.message_id().to_owned()));
+    wanted.extend(FreeBusyIssue::ALL.iter().map(|i| i.message_id().to_owned()));
+    wanted.extend(
+        GmailLabelIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(GmailCategory::ALL.iter().map(|c| c.message_id()));
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -135,6 +147,10 @@ fn german_catalogs_are_the_same_files() {
         "core-ical.ftl",
         "core-dav.ftl",
         "pim.ftl",
+        "core-scheduling.ftl",
+        "core-gmail.ftl",
+        "scheduling.ftl",
+        "gmail.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

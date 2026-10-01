@@ -158,6 +158,10 @@ pub struct MessageSource {
     /// it again when the UID is unknown or stale.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub header_message_id: Option<String>,
+    /// The message's id on an API server (Gmail; M3b, schema v11), which
+    /// API engines replay against instead of a UID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_id: Option<String>,
 }
 
 /// A user-initiated write. Stored as JSON in `op_queue.payload`, so variants
@@ -369,20 +373,26 @@ fn source_in_tx(tx: &Transaction<'_>, id: &MessageId) -> Result<MessageSource> {
             .flatten(),
         None => None,
     };
-    let header_message_id = tx
+    let (header_message_id, remote_id) = tx
         .query_row(
-            "SELECT message_id FROM messages WHERE id = ?1",
+            "SELECT message_id, remote_id FROM messages WHERE id = ?1",
             [id.as_str()],
-            |r| r.get::<_, Option<String>>(0),
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                ))
+            },
         )
         .optional()?
-        .flatten();
+        .unwrap_or_default();
     Ok(MessageSource {
         account_id: stored.summary.account_id,
         folder_id: stored.summary.folder_id,
         uid: stored.uid,
         uid_validity,
         header_message_id,
+        remote_id,
     })
 }
 

@@ -37,18 +37,18 @@ pub struct ProviderSpec {
 pub fn mail_scopes(provider: &str, protocols: &[MailProtocol]) -> Vec<String> {
     let mut scopes: Vec<String> = Vec::new();
     match provider {
-        // One scope covers IMAP, POP3 and SMTP.
-        GOOGLE => scopes.push("https://mail.google.com/".to_owned()),
+        // One scope covers IMAP, POP3, SMTP and the Gmail API (M3b).
+        GOOGLE => scopes.push(nail_api::gmail::GMAIL_SCOPE.to_owned()),
         MICROSOFT => {
             for protocol in protocols {
-                scopes.push(
-                    match protocol {
-                        MailProtocol::Imap => "https://outlook.office.com/IMAP.AccessAsUser.All",
-                        MailProtocol::Pop3 => "https://outlook.office.com/POP.AccessAsUser.All",
-                        MailProtocol::Smtp => "https://outlook.office.com/SMTP.Send",
-                    }
-                    .to_owned(),
-                );
+                // The Gmail API is Google's only (M3c adds Graph scopes).
+                let scope = match protocol {
+                    MailProtocol::Imap => "https://outlook.office.com/IMAP.AccessAsUser.All",
+                    MailProtocol::Pop3 => "https://outlook.office.com/POP.AccessAsUser.All",
+                    MailProtocol::Smtp => "https://outlook.office.com/SMTP.Send",
+                    MailProtocol::Gmail => continue,
+                };
+                scopes.push(scope.to_owned());
             }
             // Required to receive a refresh token.
             scopes.push("offline_access".to_owned());
@@ -258,6 +258,14 @@ mod tests {
             ["https://mail.google.com/"]
         );
         assert!(mail_scopes("other", &[MailProtocol::Imap]).is_empty());
+        assert_eq!(
+            mail_scopes(GOOGLE, &[MailProtocol::Gmail]),
+            ["https://mail.google.com/"]
+        );
+        assert_eq!(
+            mail_scopes(MICROSOFT, &[MailProtocol::Gmail]),
+            ["offline_access"]
+        );
         let ms = builtin(MICROSOFT).unwrap();
         assert!(
             ms.scopes

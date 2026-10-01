@@ -32,6 +32,7 @@ pub mod discovery;
 pub mod error;
 pub mod multistatus;
 pub mod ops;
+pub mod scheduling;
 pub mod sync;
 pub mod write;
 pub mod xml;

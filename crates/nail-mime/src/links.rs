@@ -759,6 +759,7 @@ mod tests {
             remote_content: None,
             render_url: None,
             junk: None,
+            invitation: None,
         };
         let w = message_warnings(&body);
         assert_eq!(w.len(), 2, "{w:?}");

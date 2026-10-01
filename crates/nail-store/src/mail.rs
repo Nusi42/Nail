@@ -209,6 +209,7 @@ pub(crate) fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<MessageSummary
     let from_email: Option<String> = row.get(5)?;
     Ok(MessageSummary {
         headers_only: row.get(18)?,
+        gmail: None,
         id: MessageId(row.get(0)?),
         folder_id: FolderId(row.get(1)?),
         account_id: AccountId(row.get(2)?),

@@ -1154,6 +1154,27 @@ impl Service {
             | Request::ListReminders { .. }
             | Request::SnoozeReminders { .. }
             | Request::DismissReminders { .. }) => crate::pim::handle(self, request).await?,
+            // M3b invitations and scheduling (ADR 0065): one arm, wired by
+            // WP85.
+            request @ (Request::GetInvitation { .. }
+            | Request::RespondToInvitation { .. }
+            | Request::ProposeNewTime { .. }
+            | Request::RefreshInvitation { .. }
+            | Request::ForwardInvitation { .. }
+            | Request::ApplyInvitation { .. }
+            | Request::SendInvitations { .. }
+            | Request::CancelMeeting { .. }
+            | Request::RespondToCounter { .. }
+            | Request::QueryFreeBusy { .. }
+            | Request::GetSchedulingSettings
+            | Request::SetSchedulingSettings { .. }) => {
+                crate::scheduling::handle(self, request).await?
+            }
+            // M3b Gmail labels: wired by WP85.
+            request @ (Request::ListGmailLabels { .. }
+            | Request::CreateGmailLabel { .. }
+            | Request::UpdateGmailLabel { .. }
+            | Request::DeleteGmailLabel { .. }) => crate::gmail::handle(self, request).await?,
         })
     }
 }

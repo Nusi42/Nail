@@ -656,12 +656,8 @@ pub async fn discover(
 
 /// Which protocols a candidate uses, for display and tests.
 pub fn protocols(candidate: &DiscoveredAccount) -> (MailProtocol, Option<MailProtocol>) {
-    let incoming = match candidate.incoming {
-        IncomingServer::Imap { .. } => MailProtocol::Imap,
-        IncomingServer::Pop3 { .. } => MailProtocol::Pop3,
-    };
     (
-        incoming,
+        candidate.incoming.protocol(),
         candidate.outgoing.as_ref().map(|_| MailProtocol::Smtp),
     )
 }

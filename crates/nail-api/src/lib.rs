@@ -43,6 +43,14 @@
 //!   sources (local, ICS subscriptions, CalDAV, CardDAV; configured in
 //!   `accounts.kdl`), reminders, `.ics` / `.vcf` import and the read-only
 //!   MCP payloads.
+//! * M3b (ADR 0065): [`scheduling`] — iTIP / iMIP invitations (methods,
+//!   attendee states, the invitation card on [`MessageBody::invitation`],
+//!   answering, counter-proposals, organizer updates / cancellations,
+//!   forwarding, refresh), scheduling settings and free/busy; [`gmail`] —
+//!   Gmail accounts through the Gmail API (labels ↔ folders and tags,
+//!   thread ids, categories, label management). [`engine`] gains the
+//!   provider-neutral [`engine::MailApiEngine`], [`engine::AdaptivePoll`]
+//!   and [`engine::FreeBusyProvider`].
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -66,6 +74,7 @@ pub mod customize;
 pub mod domain;
 pub mod engine;
 pub mod error;
+pub mod gmail;
 pub mod ids;
 pub mod launch;
 pub mod localized;
@@ -78,6 +87,7 @@ pub mod protocol;
 pub mod remote;
 pub mod remote_content;
 pub mod rules;
+pub mod scheduling;
 pub mod search;
 pub mod security;
 pub mod sieve;
@@ -110,11 +120,13 @@ pub use domain::{
     MessageHeaders, MessageLocation, MessageSummary, ThreadSummary,
 };
 pub use error::{ApiError, ErrorCode};
+pub use gmail::{GmailCategory, GmailLabel, GmailLabelSettings, GmailMessageInfo, GmailOptions};
 pub use ids::{
     AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
-    EventId, FolderId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId, OutboxId,
-    PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId, RemoteDeviceId,
-    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId, ThreadId,
+    EventId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId,
+    OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId,
+    RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId,
+    ThreadId,
 };
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
@@ -134,6 +146,10 @@ pub use remote::{
 };
 pub use remote_content::{RemoteContentAllow, RemoteContentInfo, RemoteContentScope};
 pub use rules::{Condition, Rule, RuleAction, RuleRun, RuleTrigger};
+pub use scheduling::{
+    FreeBusyResult, Invitation, InvitationResponse, InvitationTarget, ItipMethod, SchedulingResult,
+    SchedulingSettings,
+};
 pub use search::{SavedSearch, SearchError, SearchErrorKind, SearchHit, SearchQuery};
 pub use security::{
     AuthResults, CryptoKey, CryptoTechnology, IdentityCrypto, MessageWarning, SecurityStatus,
@@ -230,6 +246,22 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     pim::mcp::McpContactResource::export_all(&cfg)?;
     pim::mcp::McpContactSearchResult::export_all(&cfg)?;
     pim::mcp::McpTasksResource::export_all(&cfg)?;
+    // M3b: scheduling and Gmail types the UI names but that are reachable
+    // only through optional fields, or not at all (issues, actions, the
+    // folder mapping, label kinds).
+    scheduling::ItipIssue::export_all(&cfg)?;
+    scheduling::FreeBusyIssue::export_all(&cfg)?;
+    scheduling::InvitationAction::export_all(&cfg)?;
+    scheduling::InvitationState::export_all(&cfg)?;
+    scheduling::InvitationRole::export_all(&cfg)?;
+    scheduling::BusyKind::export_all(&cfg)?;
+    Invitation::export_all(&cfg)?;
+    gmail::GmailLabelIssue::export_all(&cfg)?;
+    gmail::GmailFolder::export_all(&cfg)?;
+    gmail::GmailLabelKind::export_all(&cfg)?;
+    GmailCategory::export_all(&cfg)?;
+    GmailMessageInfo::export_all(&cfg)?;
+    GmailOptions::export_all(&cfg)?;
 
     write_index(out_dir)
 }

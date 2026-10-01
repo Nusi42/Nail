@@ -198,6 +198,7 @@ async fn row_location(
                 uid: m.uid,
                 uid_validity,
                 header_message_id,
+                remote_id: None,
             };
             Ok(Some((folder, source)))
         })
@@ -753,7 +754,7 @@ impl Service {
                 config: crate::creds::imap_config(server, options),
                 credentials: Arc::new(self.endpoint_credentials(&config.id, &server.auth)),
             }),
-            IncomingServer::Pop3 { .. } => None,
+            IncomingServer::Pop3 { .. } | IncomingServer::Gmail { .. } => None,
         }
     }
 

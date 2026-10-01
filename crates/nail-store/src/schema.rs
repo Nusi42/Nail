@@ -1050,6 +1050,153 @@ CREATE TABLE pim_ops (
 CREATE INDEX pim_ops_state ON pim_ops(source_id, state, id);
 "#;
 
+/// Schema v11 (M3b, ADR 0065): scheduling state and Gmail accounts.
+///
+/// * `messages.remote_id` — the message's id on an API server (Gmail; M3c
+///   Graph / EWS), unique per account and kept across moves (API messages
+///   are stored once, their folder follows their labels).
+/// * `itip_state` — per event (`UID` + recurrence id, `''` = the whole
+///   event) and address (organizer or attendee, lowercase): the newest
+///   `SEQUENCE` / `DTSTAMP` applied and the answer (`PARTSTAT`), so older
+///   iTIP messages are recognised as outdated.
+/// * `itip_messages` — every received iTIP message and what was done
+///   with it (`new`, `applied`, `outdated`, `ignored`, `failed`).
+/// * `itip_sent` — every iTIP message Nail sent (or had the CalDAV server
+///   send): replies, requests, cancels, counters, refreshes.
+/// * `gmail_sync` — per Gmail account: the last applied `historyId` and an
+///   interrupted full sync's page token.
+/// * `gmail_labels` — the account's labels (id ↔ name ↔ Nail tag / folder,
+///   colours, visibility, local sync state).
+/// * `gmail_messages` — Gmail's thread id, label ids and category of each
+///   stored Gmail message.
+/// * `gmail_label_ops` — the label operation queue (create / update /
+///   delete), per account.
+const V11: &str = r#"
+ALTER TABLE messages ADD COLUMN remote_id TEXT;
+CREATE UNIQUE INDEX messages_remote_id ON messages(account_id, remote_id)
+    WHERE remote_id IS NOT NULL;
+
+CREATE TABLE itip_state (
+    uid           TEXT NOT NULL,
+    -- The occurrence (nail_api PimTime as JSON); '' = the whole event.
+    recurrence_id TEXT NOT NULL DEFAULT '',
+    -- Lowercase email address.
+    address       TEXT NOT NULL,
+    role          TEXT NOT NULL CHECK (role IN ('organizer', 'attendee')),
+    sequence      INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
+    -- RFC 3339 UTC.
+    dtstamp       TEXT,
+    -- nail_api ParticipationStatus (kebab-case); NULL for the organizer.
+    partstat      TEXT,
+    -- The message last applied for this address (no FK: kept after the
+    -- message is deleted).
+    message_id    TEXT,
+    -- Unix seconds.
+    updated_at    INTEGER NOT NULL,
+    PRIMARY KEY (uid, recurrence_id, address)
+) WITHOUT ROWID;
+
+CREATE TABLE itip_messages (
+    message_id    TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- nail_api ItipMethod (kebab-case).
+    method        TEXT NOT NULL,
+    uid           TEXT NOT NULL,
+    recurrence_id TEXT NOT NULL DEFAULT '',
+    sequence      INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
+    dtstamp       TEXT,
+    -- Lowercase address of the organizer / attendee it came from.
+    sender        TEXT,
+    state         TEXT NOT NULL DEFAULT 'new'
+                  CHECK (state IN ('new', 'applied', 'outdated', 'ignored', 'failed')),
+    -- The user's event it was applied to (no FK: events come and go).
+    event_id      TEXT,
+    processed_at  INTEGER
+) WITHOUT ROWID;
+CREATE INDEX itip_messages_uid ON itip_messages(uid, recurrence_id);
+
+CREATE TABLE itip_sent (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id    TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    identity_id   TEXT NOT NULL,
+    method        TEXT NOT NULL,
+    uid           TEXT NOT NULL,
+    recurrence_id TEXT NOT NULL DEFAULT '',
+    sequence      INTEGER NOT NULL DEFAULT 0 CHECK (sequence >= 0),
+    dtstamp       TEXT NOT NULL,
+    partstat      TEXT,
+    -- JSON array of addresses.
+    recipients    TEXT NOT NULL DEFAULT '[]',
+    transport     TEXT NOT NULL CHECK (transport IN ('imip', 'server')),
+    -- The outbox entry of an iMIP mail (nail_api OutboxId).
+    outbox_id     TEXT,
+    created_at    INTEGER NOT NULL
+);
+CREATE INDEX itip_sent_uid ON itip_sent(uid, recurrence_id);
+
+CREATE TABLE gmail_sync (
+    account_id           TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- The last historyId whose changes are all stored; NULL = full sync.
+    history_id           INTEGER,
+    -- An interrupted full sync: the next page token and the historyId
+    -- taken when it started.
+    full_sync_page       TEXT,
+    full_sync_history_id INTEGER,
+    -- Unix seconds.
+    last_sync_at         INTEGER
+) WITHOUT ROWID;
+
+CREATE TABLE gmail_labels (
+    account_id         TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    label_id           TEXT NOT NULL,
+    name               TEXT NOT NULL,
+    kind               TEXT NOT NULL CHECK (kind IN ('system', 'user')),
+    color_background   TEXT,
+    color_text         TEXT,
+    list_visibility    TEXT NOT NULL DEFAULT 'show'
+                       CHECK (list_visibility IN ('show', 'show-if-unread', 'hide')),
+    message_visibility TEXT NOT NULL DEFAULT 'show'
+                       CHECK (message_visibility IN ('show', 'hide')),
+    -- The Nail tag of a user label (its name).
+    tag                TEXT,
+    -- The folder of a system label shown as a folder.
+    folder_id          TEXT REFERENCES folders(id) ON DELETE SET NULL,
+    sync               TEXT NOT NULL DEFAULT 'synced' CHECK (sync IN ('synced', 'pending')),
+    PRIMARY KEY (account_id, label_id)
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX gmail_labels_tag ON gmail_labels(account_id, tag) WHERE tag IS NOT NULL;
+
+CREATE TABLE gmail_messages (
+    message_id      TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    gmail_thread_id TEXT NOT NULL,
+    -- JSON array of label ids.
+    label_ids       TEXT NOT NULL DEFAULT '[]',
+    category        TEXT CHECK (category IS NULL
+                    OR category IN ('primary', 'social', 'promotions', 'updates', 'forums'))
+) WITHOUT ROWID;
+CREATE INDEX gmail_messages_thread ON gmail_messages(account_id, gmail_thread_id);
+CREATE INDEX gmail_messages_category ON gmail_messages(account_id, category)
+    WHERE category IS NOT NULL;
+
+CREATE TABLE gmail_label_ops (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- The label (a local-… id until a create is replayed).
+    label_id   TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK (kind IN ('create', 'update', 'delete')),
+    -- JSON (nail_api GmailLabelSettings) for create / update.
+    payload    TEXT,
+    state      TEXT NOT NULL DEFAULT 'pending'
+               CHECK (state IN ('pending', 'done', 'failed')),
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX gmail_label_ops_state ON gmail_label_ops(account_id, state, id);
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -1085,6 +1232,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(V8),
     Migration::sql(V9),
     Migration::sql(V10),
+    Migration::sql(V11),
 ];
 
 /// The schema version this build creates and understands.
@@ -1182,6 +1330,13 @@ mod tests {
                 "drafts",
                 "folder_marks",
                 "folders",
+                "gmail_label_ops",
+                "gmail_labels",
+                "gmail_messages",
+                "gmail_sync",
+                "itip_messages",
+                "itip_sent",
+                "itip_state",
                 "junk_settings",
                 "junk_tokens",
                 "junk_training",
@@ -1424,6 +1579,65 @@ mod tests {
             .query_row("SELECT server_rules FROM sieve_state", [], |r| r.get(0))
             .unwrap();
         assert_eq!(rules, "[]");
+    }
+
+    #[test]
+    fn v11_adds_remote_ids_scheduling_and_gmail_tables() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        migrate_to_version(&mut conn, 10).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (id, name, email, kind) VALUES ('g', 'G', 'g@x', 'gmail');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('fi', 'g', 'Inbox', 'INBOX');
+             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'g', 'fi', 'x');",
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        conn.execute_batch(
+            "UPDATE messages SET remote_id = '18c0' WHERE id = 'm';
+             INSERT INTO gmail_messages (message_id, account_id, gmail_thread_id, label_ids, category)
+                 VALUES ('m', 'g', 't1', '[\"INBOX\"]', 'social');
+             INSERT INTO gmail_labels (account_id, label_id, name, kind, tag)
+                 VALUES ('g', 'Label_1', 'Work', 'user', 'Work');
+             INSERT INTO itip_messages (message_id, account_id, method, uid)
+                 VALUES ('m', 'g', 'request', 'uid-1');",
+        )
+        .unwrap();
+        // One remote id per account; categories and states are checked.
+        assert!(
+            conn.execute(
+                "INSERT INTO messages (id, account_id, folder_id, date, remote_id)
+                 VALUES ('n', 'g', 'fi', 'x', '18c0')",
+                []
+            )
+            .is_err()
+        );
+        assert!(
+            conn.execute("UPDATE gmail_messages SET category = 'spam'", [])
+                .is_err()
+        );
+        assert!(
+            conn.execute("UPDATE itip_messages SET state = 'bogus'", [])
+                .is_err()
+        );
+        // Deleting the message removes its Gmail and iTIP rows; deleting
+        // the account removes the labels.
+        conn.execute("DELETE FROM messages WHERE id = 'm'", [])
+            .unwrap();
+        let left: i64 = conn
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM gmail_messages) + (SELECT COUNT(*) FROM itip_messages)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
+        conn.execute("DELETE FROM accounts WHERE id = 'g'", [])
+            .unwrap();
+        let labels: i64 = conn
+            .query_row("SELECT COUNT(*) FROM gmail_labels", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(labels, 0);
     }
 
     #[test]

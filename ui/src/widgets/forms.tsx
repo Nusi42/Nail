@@ -223,6 +223,8 @@ export function defaultPort(protocol: MailProtocol, tls: TlsMode): number {
       return implicit ? 995 : 110;
     case "smtp":
       return implicit ? 465 : 587;
+    case "gmail":
+      return implicit ? 443 : 80;
   }
 }
 

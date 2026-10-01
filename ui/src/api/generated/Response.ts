@@ -29,9 +29,12 @@ import type { EventInstance } from "./EventInstance";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { FolderSyncPolicy } from "./FolderSyncPolicy";
+import type { FreeBusyResult } from "./FreeBusyResult";
 import type { FreeSlot } from "./FreeSlot";
+import type { GmailLabel } from "./GmailLabel";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
+import type { Invitation } from "./Invitation";
 import type { JunkStatus } from "./JunkStatus";
 import type { KeyEncoding } from "./KeyEncoding";
 import type { KeyImportResult } from "./KeyImportResult";
@@ -79,6 +82,8 @@ import type { RuleMatch } from "./RuleMatch";
 import type { RuleRun } from "./RuleRun";
 import type { RuleSieveStatus } from "./RuleSieveStatus";
 import type { SavedSearch } from "./SavedSearch";
+import type { SchedulingResult } from "./SchedulingResult";
+import type { SchedulingSettings } from "./SchedulingSettings";
 import type { SearchError } from "./SearchError";
 import type { SearchHit } from "./SearchHit";
 import type { SecuritySettings } from "./SecuritySettings";
@@ -825,7 +830,40 @@ preview: PimImportPreview, } | { "type": "PimImported",
 /**
  * What it did.
  */
-result: PimImportResult, } | { "type": "Reminders", 
+result: PimImportResult, } | { "type": "Invitation", 
+/**
+ * The card; `null` = the message has no iTIP part.
+ */
+invitation: Invitation | null, } | { "type": "Scheduled", 
+/**
+ * What happened.
+ */
+result: SchedulingResult, } | { "type": "FreeBusy", 
+/**
+ * Busy periods per attendee.
+ */
+result: FreeBusyResult, } | { "type": "SchedulingSettings", 
+/**
+ * The settings.
+ */
+settings: SchedulingSettings, } | { "type": "GmailLabels", 
+/**
+ * The account.
+ */
+account_id: AccountId, 
+/**
+ * System labels first (in [`crate::gmail::GmailFolder`] order,
+ * then the categories), then user labels by name.
+ */
+labels: Array<GmailLabel>, } | { "type": "GmailLabelSaved", 
+/**
+ * The label.
+ */
+label: GmailLabel, 
+/**
+ * The queued label operations.
+ */
+op_ids: Array<OpId>, } | { "type": "Reminders", 
 /**
  * Fired and snoozed reminders (and pending ones up to `until`),
  * by fire time.

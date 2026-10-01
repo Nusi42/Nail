@@ -492,7 +492,9 @@ impl Service {
                 // Broadcasts the change and wakes the account's replay.
                 self.enqueue(vec![op]).await?;
             }
-            IncomingServer::Pop3 { .. } => {
+            // POP3 has no server folder; Gmail files sent mail itself
+            // (`messages.send` labels it SENT; M3b).
+            IncomingServer::Pop3 { .. } | IncomingServer::Gmail { .. } => {
                 self.broadcast(Event::MailChanged {
                     folder_ids: vec![folder.id.clone()],
                 });

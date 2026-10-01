@@ -51,6 +51,7 @@ pub fn summary(id: &str, account: &str, folder: &str, thread: &str) -> MessageSu
         tags: vec![],
         duplicates: vec![],
         headers_only: false,
+        gmail: None,
     }
 }
 
@@ -201,6 +202,7 @@ impl McpData for FakeData {
             remote_content: None,
             render_url: None,
             junk: None,
+            invitation: None,
         })
     }
 

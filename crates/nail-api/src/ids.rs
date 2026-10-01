@@ -199,6 +199,12 @@ string_id!(
     /// ([`crate::pim::Reminder`]). Opaque.
     ReminderId
 );
+string_id!(
+    /// Gmail's id of a label (`INBOX`, `CATEGORY_SOCIAL`, `Label_12`), or
+    /// a temporary `local-…` id for a label created locally whose creation
+    /// is still queued (M3b, [`crate::gmail::GmailLabel`]).
+    GmailLabelId
+);
 
 impl PimSourceId {
     /// Id of the built-in local source (local calendars, task lists and

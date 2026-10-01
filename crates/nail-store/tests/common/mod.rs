@@ -60,6 +60,7 @@ pub fn message(id: &str, account: &str, folder: &str, date: &str) -> StoredMessa
         tags: Vec::new(),
         duplicates: Vec::new(),
         headers_only: false,
+        gmail: None,
     })
 }
 

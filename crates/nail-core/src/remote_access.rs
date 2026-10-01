@@ -527,6 +527,38 @@ impl Service {
             | Request::ListReminders { .. }
             | Request::SnoozeReminders { .. }
             | Request::DismissReminders { .. } => check_full_pim(access),
+
+            // M3b scheduling (ADR 0065): invitations touch the calendars
+            // (full grant, like PIM) and the message they came in (granted,
+            // readable); iTIP mail goes out through the user's identities.
+            Request::GetInvitation { message_id }
+            | Request::ApplyInvitation { message_id, .. }
+            | Request::RespondToCounter { message_id, .. } => {
+                check_full_pim(access)?;
+                self.check_readable(access, message_id).await
+            }
+            Request::RespondToInvitation { target, .. }
+            | Request::ProposeNewTime { target, .. }
+            | Request::RefreshInvitation { target }
+            | Request::ForwardInvitation { target, .. } => {
+                check_full_pim(access)?;
+                match target {
+                    nail_api::scheduling::InvitationTarget::Message { message_id } => {
+                        self.check_readable(access, message_id).await
+                    }
+                    nail_api::scheduling::InvitationTarget::Event { .. } => Ok(()),
+                }
+            }
+            Request::SendInvitations { .. }
+            | Request::CancelMeeting { .. }
+            | Request::QueryFreeBusy { .. }
+            | Request::GetSchedulingSettings
+            | Request::SetSchedulingSettings { .. } => check_full_pim(access),
+            // M3b Gmail labels: the account must be granted.
+            Request::ListGmailLabels { account_id }
+            | Request::CreateGmailLabel { account_id, .. }
+            | Request::UpdateGmailLabel { account_id, .. }
+            | Request::DeleteGmailLabel { account_id, .. } => check_account(access, account_id),
         }
     }
 
@@ -1171,6 +1203,10 @@ impl Service {
             | Event::ReminderDue { .. }
             | Event::RemindersChanged
             | Event::PimOpStatus { .. } => full(&access),
+            // M3b: invitation cards and scheduling settings follow PIM
+            // (full grants); Gmail labels follow their account.
+            Event::InvitationsChanged { .. } | Event::SchedulingSettingsChanged => full(&access),
+            Event::GmailLabelsChanged { account_id } => access.allows_account(account_id),
         };
         allowed.then_some(event)
     }

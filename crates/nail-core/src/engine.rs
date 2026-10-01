@@ -249,6 +249,10 @@ impl Service {
                         task_signals,
                         stop_rx,
                     )),
+                    // M3b: the Gmail API engine (WP82) is wired by WP85.
+                    IncomingServer::Gmail { .. } => {
+                        tokio::spawn(crate::gmail::run(service, config, task_signals, stop_rx))
+                    }
                 };
                 tracing::info!(account = %account.id, "engine started");
                 running.insert(

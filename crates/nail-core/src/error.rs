@@ -138,6 +138,7 @@ impl From<CoreError> for EngineError {
                 retryable: other.is_transient(),
                 message: other.to_string(),
                 localized: None,
+                retry_after_secs: None,
             },
         }
     }

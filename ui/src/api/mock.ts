@@ -21,11 +21,13 @@ import {
   isComposerRequest,
 } from "../features/composer/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
+import { answerGmail, isGmailRequest } from "../features/gmail/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerPim, isPimRequest } from "../features/pim/mock";
 import { answerPlugins, isPluginsRequest } from "../features/plugins/mock";
 import { answerRemote, decorateRemoteContent, isRemoteRequest } from "../features/remote/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
+import { answerScheduling, isSchedulingRequest } from "../features/scheduling/mock";
 import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
 import { answerSieve, isSieveRequest } from "../features/sieve/mock";
 import { answerSync, isSyncRequest } from "../features/sync/mock";
@@ -116,6 +118,8 @@ export class MockTransport implements Transport, MockCore {
     if (isSyncRequest(request)) return answerSync(this, request);
     if (isPluginsRequest(request)) return answerPlugins(this, request);
     if (isPimRequest(request)) return answerPim(this, request);
+    if (isSchedulingRequest(request)) return answerScheduling(this, request);
+    if (isGmailRequest(request)) return answerGmail(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };

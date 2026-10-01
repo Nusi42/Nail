@@ -355,6 +355,29 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::ListReminders { .. } => ("ListReminders", Scope(S::Read)),
         Request::SnoozeReminders { .. } => ("SnoozeReminders", Scope(S::Calendar)),
         Request::DismissReminders { .. } => ("DismissReminders", Scope(S::Calendar)),
+
+        // --- Invitations and scheduling (M3b, ADR 0065): cards and
+        // free/busy are reads; answering and organizing write the
+        // calendar (`calendar`; the core also needs `send` when the
+        // request mails an iTIP message); settings are administration. ---
+        Request::GetInvitation { .. } => ("GetInvitation", Scope(S::Read)),
+        Request::RespondToInvitation { .. } => ("RespondToInvitation", Scope(S::Calendar)),
+        Request::ProposeNewTime { .. } => ("ProposeNewTime", Scope(S::Calendar)),
+        Request::RefreshInvitation { .. } => ("RefreshInvitation", Scope(S::Calendar)),
+        Request::ForwardInvitation { .. } => ("ForwardInvitation", Scope(S::Calendar)),
+        Request::ApplyInvitation { .. } => ("ApplyInvitation", Scope(S::Calendar)),
+        Request::SendInvitations { .. } => ("SendInvitations", Scope(S::Calendar)),
+        Request::CancelMeeting { .. } => ("CancelMeeting", Scope(S::Calendar)),
+        Request::RespondToCounter { .. } => ("RespondToCounter", Scope(S::Calendar)),
+        Request::QueryFreeBusy { .. } => ("QueryFreeBusy", Scope(S::Read)),
+        Request::GetSchedulingSettings => ("GetSchedulingSettings", Scope(S::Read)),
+        Request::SetSchedulingSettings { .. } => ("SetSchedulingSettings", Admin),
+
+        // --- Gmail labels (M3b): like tags (`organize`). ---
+        Request::ListGmailLabels { .. } => ("ListGmailLabels", Scope(S::Read)),
+        Request::CreateGmailLabel { .. } => ("CreateGmailLabel", Scope(S::Organize)),
+        Request::UpdateGmailLabel { .. } => ("UpdateGmailLabel", Scope(S::Organize)),
+        Request::DeleteGmailLabel { .. } => ("DeleteGmailLabel", Scope(S::Organize)),
     };
     RequestAccess { name, access }
 }
@@ -670,5 +693,53 @@ mod pim_tests {
             required_access(&Request::ListPimSources).name,
             "ListPimSources"
         );
+    }
+}
+
+#[cfg(test)]
+mod m3b_tests {
+    use super::*;
+    use nail_api::gmail::GmailLabelSettings;
+    use nail_api::scheduling::{InvitationResponse, InvitationTarget, SchedulingSettings};
+
+    #[test]
+    fn scheduling_and_gmail_label_access() {
+        let card = required_access(&Request::GetInvitation {
+            message_id: "m1".into(),
+        });
+        assert_eq!(card.access, Access::Scope(McpScope::Read));
+        assert!(!card.audited());
+        let answer = required_access(&Request::RespondToInvitation {
+            target: InvitationTarget::Message {
+                message_id: "m1".into(),
+            },
+            response: InvitationResponse::Accept,
+            comment: None,
+            send: true,
+            calendar_id: None,
+        });
+        assert_eq!(answer.access, Access::Scope(McpScope::Calendar));
+        assert!(answer.audited());
+        let free_busy = required_access(&Request::QueryFreeBusy {
+            attendees: vec!["bob@example.org".into()],
+            from: "2026-10-05T00:00:00Z".into(),
+            to: "2026-10-06T00:00:00Z".into(),
+            identity_id: None,
+            ignore_event_id: None,
+        });
+        assert_eq!(free_busy.access, Access::Scope(McpScope::Read));
+        assert_eq!(
+            required_access(&Request::SetSchedulingSettings {
+                settings: SchedulingSettings::default()
+            })
+            .access,
+            Access::Admin
+        );
+        let label = required_access(&Request::CreateGmailLabel {
+            account_id: "gm".into(),
+            settings: GmailLabelSettings::named("Work"),
+        });
+        assert_eq!(label.access, Access::Scope(McpScope::Organize));
+        assert_eq!(label.name, "CreateGmailLabel");
     }
 }

@@ -26,6 +26,8 @@ members = [
     "crates/nail-plugins",
     "crates/nail-ical",
     "crates/nail-dav",
+    "crates/nail-itip",
+    "crates/nail-proto-gmail",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -60,6 +62,8 @@ default-members = [
     "crates/nail-plugins",
     "crates/nail-ical",
     "crates/nail-dav",
+    "crates/nail-itip",
+    "crates/nail-proto-gmail",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -100,6 +104,8 @@ nail-triage = { path = "crates/nail-triage" }
 nail-plugins = { path = "crates/nail-plugins" }
 nail-ical = { path = "crates/nail-ical" }
 nail-dav = { path = "crates/nail-dav" }
+nail-itip = { path = "crates/nail-itip" }
+nail-proto-gmail = { path = "crates/nail-proto-gmail" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -253,6 +259,15 @@ calcard = { version = "0.3.14", default-features = false }
 chrono-tz = "0.10.4"
 # The OS zone as an IANA name (already in the lock through chrono; MIT OR Apache-2.0; M3a).
 iana-time-zone = "0.1.65"
+
+# M3b (ADR 0065). Invitations / scheduling and the Gmail API engine need
+# no new third-party crate: nail-itip (WP81) uses the workspace
+# mail-parser / mail-builder / chrono with nail-ical; nail-proto-gmail
+# (WP82) the workspace reqwest (TLS from nail-auth, ring), serde_json,
+# base64 and, for its loopback mock server (feature `testing`), axum;
+# CalDAV scheduling and free/busy (WP83) extend nail-dav and
+# nail-testkit-net with their existing quick-xml / axum. Ask before adding
+# more (licences: no GPL / LGPL / AGPL, no OpenSSL / aws-lc).
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

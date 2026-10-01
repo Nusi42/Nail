@@ -35,11 +35,13 @@ use crate::customize::{
 };
 use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
+use crate::gmail::{GmailLabel, GmailLabelSettings};
 use crate::ids::{
     AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
-    EventId, FolderId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId, OutboxId,
-    PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId, RemoteDeviceId,
-    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId, ThreadId,
+    EventId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId,
+    OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId,
+    RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId,
+    ThreadId,
 };
 use crate::launch::LaunchRequest;
 use crate::localized::LocalizedMessage;
@@ -68,6 +70,10 @@ use crate::remote::{
 };
 use crate::remote_content::{RemoteContentAllow, RemoteContentScope};
 use crate::rules::{Rule, RuleMatch, RuleRun};
+use crate::scheduling::{
+    CancelScope, FreeBusyResult, Invitation, InvitationResponse, InvitationTarget,
+    SchedulingResult, SchedulingSettings,
+};
 use crate::search::{SavedSearch, SearchError, SearchHit, SearchQuery, ServerSearch};
 use crate::security::{
     CryptoKey, KeyAlgorithm, KeyEncoding, KeyFilter, KeyImportResult, KeyLookupCandidate,
@@ -1842,6 +1848,203 @@ pub enum Request {
         /// The reminders.
         reminder_ids: Vec<ReminderId>,
     },
+
+    // --- Invitations and scheduling (M3b WP80, ADR 0065) ---
+    /// The invitation card of a message (also on
+    /// [`MessageBody::invitation`]). Answered with
+    /// [`Response::Invitation`]; `invitation` is `null` for a message
+    /// without an iTIP part.
+    GetInvitation {
+        /// The message.
+        message_id: MessageId,
+    },
+    /// Accept, tentatively accept or decline: sets the user's
+    /// `PARTSTAT` in the calendar copy (adding the event when it is new)
+    /// and sends a `REPLY` to the organizer (iMIP, or nothing extra when
+    /// the server schedules). Answered with [`Response::Scheduled`];
+    /// `invalid_request` with an `itip-issue-*` id when the invitation is
+    /// unusable or the user is not invited.
+    RespondToInvitation {
+        /// The invitation message, or the event in a calendar.
+        target: InvitationTarget,
+        /// The answer.
+        response: InvitationResponse,
+        /// A comment for the organizer (`COMMENT`).
+        #[serde(default)]
+        comment: Option<String>,
+        /// Send the reply (`false` = only update the calendar, "don't send
+        /// a response").
+        #[serde(default = "default_true")]
+        send: bool,
+        /// Where a new event goes; `null` = the scheduling settings'
+        /// calendar, else the default calendar.
+        #[serde(default)]
+        calendar_id: Option<CalendarId>,
+    },
+    /// Propose another time (`COUNTER` to the organizer). The user's copy
+    /// stays as it is. Answered with [`Response::Scheduled`].
+    ProposeNewTime {
+        /// The invitation message, or the event in a calendar.
+        target: InvitationTarget,
+        /// Proposed start.
+        start: PimTime,
+        /// Proposed end.
+        end: PimTime,
+        /// A comment.
+        #[serde(default)]
+        comment: Option<String>,
+    },
+    /// Ask the organizer for the current version (`REFRESH`). Answered with
+    /// [`Response::Scheduled`].
+    RefreshInvitation {
+        /// The invitation message, or the event in a calendar.
+        target: InvitationTarget,
+    },
+    /// Forward an invitation to other people (RFC 5546 §2.1.5: the
+    /// original `REQUEST`, unchanged, as iMIP). Answered with
+    /// [`Response::Scheduled`].
+    ForwardInvitation {
+        /// The invitation message, or the event in a calendar.
+        target: InvitationTarget,
+        /// Recipients.
+        to: Vec<Address>,
+        /// A note in the mail's text part.
+        #[serde(default)]
+        comment: Option<String>,
+    },
+    /// Process a received iTIP message without answering: add a `PUBLISH`
+    /// / `REQUEST` / `ADD`, apply an update or `CANCEL`, record a `REPLY`'s
+    /// answer, answer a `REFRESH` with the current version, or note a
+    /// `DECLINECOUNTER`. Answered with [`Response::Scheduled`];
+    /// `conflict` when the message is outdated.
+    ApplyInvitation {
+        /// The message.
+        message_id: MessageId,
+        /// Where a new event goes; `null` = as for
+        /// [`Request::RespondToInvitation`].
+        #[serde(default)]
+        calendar_id: Option<CalendarId>,
+    },
+    /// Organizer: send the event to its attendees (`REQUEST`, new or
+    /// updated; `SEQUENCE` goes up when the change is significant). Save
+    /// the event first with [`Request::CreateEvent`] /
+    /// [`Request::UpdateEvent`]. Answered with [`Response::Scheduled`];
+    /// `invalid_request` when the user is not the organizer.
+    SendInvitations {
+        /// The event.
+        event_id: EventId,
+        /// One occurrence (an override); `null` = the series.
+        #[serde(default)]
+        recurrence_id: Option<PimTime>,
+        /// Only these attendees (new ones); empty = everyone.
+        #[serde(default)]
+        attendees: Vec<String>,
+        /// A note in the mail's text part.
+        #[serde(default)]
+        comment: Option<String>,
+    },
+    /// Organizer: cancel the meeting, one occurrence, or some attendees
+    /// (`CANCEL`). Answered with [`Response::Scheduled`].
+    CancelMeeting {
+        /// The event.
+        event_id: EventId,
+        /// What is cancelled.
+        #[serde(default)]
+        scope: CancelScope,
+        /// The occurrence, for [`CancelScope::Occurrence`].
+        #[serde(default)]
+        recurrence_id: Option<PimTime>,
+        /// The attendees, for [`CancelScope::Attendees`].
+        #[serde(default)]
+        attendees: Vec<String>,
+        /// A note in the mail's text part.
+        #[serde(default)]
+        comment: Option<String>,
+    },
+    /// Organizer: accept a `COUNTER` (the event moves to the proposal and
+    /// everyone gets the update) or decline it (`DECLINECOUNTER` to the
+    /// proposer). Answered with [`Response::Scheduled`].
+    RespondToCounter {
+        /// The `COUNTER` message.
+        message_id: MessageId,
+        /// Accept the proposal.
+        accept: bool,
+        /// A note.
+        #[serde(default)]
+        comment: Option<String>,
+    },
+    /// Busy periods of attendees in a range. Answered with
+    /// [`Response::FreeBusy`]; `invalid_request` with a `freebusy-issue-*`
+    /// id.
+    QueryFreeBusy {
+        /// Attendee addresses (at most
+        /// [`crate::scheduling::MAX_FREE_BUSY_ATTENDEES`]).
+        attendees: Vec<String>,
+        /// Range start (RFC 3339 UTC).
+        from: String,
+        /// Range end (RFC 3339 UTC; at most
+        /// [`crate::scheduling::MAX_FREE_BUSY_DAYS`] after `from`).
+        to: String,
+        /// The organizer identity asking (picks the CalDAV source / account
+        /// to ask); `null` = the default identity.
+        #[serde(default)]
+        identity_id: Option<IdentityId>,
+        /// Leave this event out of the user's own busy time (editing it).
+        #[serde(default)]
+        ignore_event_id: Option<EventId>,
+    },
+    /// Answered with [`Response::SchedulingSettings`].
+    GetSchedulingSettings,
+    /// Replace the scheduling settings. Answered with
+    /// [`Response::SchedulingSettings`], followed by
+    /// [`Event::SchedulingSettingsChanged`].
+    SetSchedulingSettings {
+        /// The settings.
+        settings: SchedulingSettings,
+    },
+
+    // --- Gmail labels (M3b) ---
+    /// Labels of a Gmail account (system and user labels, with counts).
+    /// Answered with [`Response::GmailLabels`]; `invalid_request` for
+    /// accounts of other kinds.
+    ListGmailLabels {
+        /// The Gmail account.
+        account_id: AccountId,
+    },
+    /// Create a user label (queued; it has a `local-…` id until the
+    /// server assigned one). Answered with [`Response::GmailLabelSaved`],
+    /// followed by [`Event::GmailLabelsChanged`]; `invalid_request` with a
+    /// `gmail-label-issue-*` id.
+    CreateGmailLabel {
+        /// The Gmail account.
+        account_id: AccountId,
+        /// The settings.
+        settings: GmailLabelSettings,
+    },
+    /// Rename / recolour a user label (renaming renames its tag on every
+    /// message). Answered with [`Response::GmailLabelSaved`];
+    /// `invalid_request` for system labels.
+    UpdateGmailLabel {
+        /// The Gmail account.
+        account_id: AccountId,
+        /// The label.
+        label_id: GmailLabelId,
+        /// The new settings.
+        settings: GmailLabelSettings,
+    },
+    /// Delete a user label (its tag goes from every message; the messages
+    /// stay). Answered with [`Response::Done`]; `invalid_request` for
+    /// system labels.
+    DeleteGmailLabel {
+        /// The Gmail account.
+        account_id: AccountId,
+        /// The label.
+        label_id: GmailLabelId,
+    },
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// The core's answer to one [`Request`].
@@ -2606,6 +2809,47 @@ pub enum Response {
         /// What it did.
         result: Box<PimImportResult>,
     },
+    /// Answer to [`Request::GetInvitation`].
+    Invitation {
+        /// The card; `null` = the message has no iTIP part.
+        invitation: Option<Box<Invitation>>,
+    },
+    /// Answer to the scheduling requests ([`Request::RespondToInvitation`],
+    /// [`Request::ProposeNewTime`], [`Request::RefreshInvitation`],
+    /// [`Request::ForwardInvitation`], [`Request::ApplyInvitation`],
+    /// [`Request::SendInvitations`], [`Request::CancelMeeting`],
+    /// [`Request::RespondToCounter`]).
+    Scheduled {
+        /// What happened.
+        result: Box<SchedulingResult>,
+    },
+    /// Answer to [`Request::QueryFreeBusy`].
+    FreeBusy {
+        /// Busy periods per attendee.
+        result: Box<FreeBusyResult>,
+    },
+    /// Answer to [`Request::GetSchedulingSettings`] and
+    /// [`Request::SetSchedulingSettings`].
+    SchedulingSettings {
+        /// The settings.
+        settings: SchedulingSettings,
+    },
+    /// Answer to [`Request::ListGmailLabels`].
+    GmailLabels {
+        /// The account.
+        account_id: AccountId,
+        /// System labels first (in [`crate::gmail::GmailFolder`] order,
+        /// then the categories), then user labels by name.
+        labels: Vec<GmailLabel>,
+    },
+    /// Answer to [`Request::CreateGmailLabel`] and
+    /// [`Request::UpdateGmailLabel`].
+    GmailLabelSaved {
+        /// The label.
+        label: Box<GmailLabel>,
+        /// The queued label operations.
+        op_ids: Vec<OpId>,
+    },
     /// Answer to [`Request::ListReminders`].
     Reminders {
         /// Fired and snoozed reminders (and pending ones up to `until`),
@@ -2961,6 +3205,21 @@ pub enum Event {
     PimOpStatus {
         /// The new status.
         status: PimOpStatus,
+    },
+    /// Invitation cards of these messages changed (a reply was applied,
+    /// the event changed or was answered elsewhere); clients refetch
+    /// [`Request::GetInvitation`] / the message (M3b).
+    InvitationsChanged {
+        /// The messages.
+        message_ids: Vec<MessageId>,
+    },
+    /// The scheduling settings changed.
+    SchedulingSettingsChanged,
+    /// Labels of a Gmail account were added, changed or removed (locally
+    /// or by sync); clients refetch [`Request::ListGmailLabels`] (M3b).
+    GmailLabelsChanged {
+        /// The account.
+        account_id: AccountId,
     },
 }
 

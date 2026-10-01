@@ -11,6 +11,7 @@ use nail_api::accounts::{
     SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode,
     VirtualAccountConfig, default_port,
 };
+use nail_api::gmail::{GMAIL_API_HOST, GmailOptions};
 use nail_api::pim::source::{MIN_REFRESH_MINUTES, is_valid_pim_source_id};
 use nail_api::pim::{
     PimSourceConfig, PimSourceSettings, has_url_scheme, is_color, is_https_or_loopback_url,
@@ -408,6 +409,25 @@ impl Reader<'_, '_> {
                     }
                     sieve = Some((self.sieve(child)?, child));
                 }
+                "gmail" => {
+                    if incoming.is_some() {
+                        return Err(self.src.node_err(child, msg("config-account-one-incoming")));
+                    }
+                    let (server, provider) = self.server(child, &email)?;
+                    if !matches!(server.auth, AuthConfig::OAuth2 { .. }) {
+                        return Err(self.src.node_err(child, msg("config-gmail-needs-oauth2")));
+                    }
+                    if server.tls == TlsMode::Plaintext && !is_loopback_host(&server.host) {
+                        return Err(self
+                            .src
+                            .node_err(child, msg("config-gmail-plaintext-needs-loopback")));
+                    }
+                    providers.extend(provider);
+                    incoming = Some(IncomingServer::Gmail {
+                        server,
+                        options: self.gmail_options(child)?,
+                    });
+                }
                 other => {
                     return Err(self.src.node_err(
                         child,
@@ -416,7 +436,7 @@ impl Reader<'_, '_> {
                             .arg("parent", "account")
                             .arg(
                                 "expected",
-                                "imap, pop3, smtp, identity, sync, sieve, authserv-id",
+                                "imap, pop3, gmail, smtp, identity, sync, sieve, authserv-id",
                             ),
                     ));
                 }
@@ -432,6 +452,12 @@ impl Reader<'_, '_> {
             && !matches!(incoming, IncomingServer::Imap { .. })
         {
             return Err(self.src.node_err(child, msg("config-sieve-needs-imap")));
+        }
+        if incoming.sends_itself()
+            && outgoing.is_some()
+            && let Some(child) = children(node).iter().find(|c| name(c) == "smtp")
+        {
+            return Err(self.src.node_err(child, msg("config-gmail-no-smtp")));
         }
         if identities.is_empty() {
             identities.push(Identity {
@@ -577,6 +603,7 @@ impl Reader<'_, '_> {
         let protocol = match name(node) {
             "imap" => MailProtocol::Imap,
             "pop3" => MailProtocol::Pop3,
+            "gmail" => MailProtocol::Gmail,
             _ => MailProtocol::Smtp,
         };
         let allowed: &[&str] = match protocol {
@@ -598,6 +625,7 @@ impl Reader<'_, '_> {
                 "delete-when-deleted-locally",
             ],
             MailProtocol::Smtp => &["host", "port", "tls", "dsn"],
+            MailProtocol::Gmail => &["host", "port", "tls", "poll-interval", "max-poll-interval"],
         };
         self.check_props(node, allowed)?;
         self.check_unique_props(node)?;
@@ -617,6 +645,8 @@ impl Reader<'_, '_> {
                 }
                 h.to_owned()
             }
+            // The Gmail API has one host (M3b).
+            None if protocol == MailProtocol::Gmail => GMAIL_API_HOST.to_owned(),
             None => {
                 return Err(self.src.node_err(
                     node,
@@ -793,6 +823,23 @@ impl Reader<'_, '_> {
             )?,
             compress: self.prop_bool(node, "compress")?,
             max_connections: self.prop_u32_range(node, "max-connections", 1, 16)?,
+        })
+    }
+
+    fn gmail_options(&self, node: &KdlNode) -> Result<GmailOptions, ConfigError> {
+        Ok(GmailOptions {
+            poll_interval_secs: self.prop_u32_range(
+                node,
+                "poll-interval",
+                GmailOptions::MIN_POLL_INTERVAL_SECS,
+                86_400,
+            )?,
+            max_poll_interval_secs: self.prop_u32_range(
+                node,
+                "max-poll-interval",
+                GmailOptions::MIN_POLL_INTERVAL_SECS,
+                86_400,
+            )?,
         })
     }
 
@@ -1646,6 +1693,15 @@ fn parse_role(text: &str) -> Option<FolderRole> {
         "trash" => FolderRole::Trash,
         _ => return None,
     })
+}
+
+/// Whether `host` is a loopback host (`localhost`, `127.0.0.1`, `::1`):
+/// the only hosts a `gmail` node may reach without TLS (mock servers).
+fn is_loopback_host(host: &str) -> bool {
+    matches!(
+        host.to_ascii_lowercase().as_str(),
+        "localhost" | "127.0.0.1" | "::1" | "[::1]"
+    )
 }
 
 pub(crate) fn role_name(role: FolderRole) -> &'static str {

@@ -3,6 +3,7 @@ import type { AccountId } from "./AccountId";
 import type { Address } from "./Address";
 import type { Flags } from "./Flags";
 import type { FolderId } from "./FolderId";
+import type { GmailMessageInfo } from "./GmailMessageInfo";
 import type { MessageId } from "./MessageId";
 import type { MessageLocation } from "./MessageLocation";
 import type { ThreadId } from "./ThreadId";
@@ -70,4 +71,9 @@ duplicates: Array<MessageLocation>,
  * The body is not stored locally (sync policy headers-only or recent
  * N days, M2c); opening the message fetches it. Absent = `false`.
  */
-headers_only?: boolean, };
+headers_only?: boolean, 
+/**
+ * Gmail labels, thread id and category (M3b, Gmail accounts only);
+ * absent elsewhere.
+ */
+gmail?: GmailMessageInfo, };

@@ -84,6 +84,9 @@ config-auth-method-unknown = unknown auth method { $found } (expected "password"
 config-authserv-id-empty = `authserv-id` needs at least one server id
 config-authserv-id-invalid = { $found } is not a server id like "mx.example.net"
 config-sieve-needs-imap = `sieve` (ManageSieve) needs an IMAP account
+config-gmail-needs-oauth2 = a `gmail` account signs in with `auth "oauth2"`
+config-gmail-no-smtp = a `gmail` account sends through the Gmail API; remove the `smtp` node
+config-gmail-plaintext-needs-loopback = `tls="plaintext"` is only allowed for local test servers (localhost)
 config-sieve-script-invalid = `script` must be 1 to 128 characters without control characters or slashes, found { $found }
 config-needs-leave-on-server = `{ $key }` only applies with leave-on-server=#true
 config-bcc-empty = `bcc` needs at least one address

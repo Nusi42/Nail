@@ -1,0 +1,29 @@
+[package]
+name = "nail-itip"
+description = "iTIP (RFC 5546) and iMIP (RFC 6047) for Nail: invitation processing, replies, counters, cancellations, organizer / attendee logic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+# iCalendar reading / patching writers and recurrence (the scheduling
+# data is VEVENT text; nail-ical keeps unknown properties).
+nail-ical.workspace = true
+# iMIP: finding `text/calendar; method=…` parts in received mail
+# (Apache-2.0 OR MIT) and building the reply / request mail
+# (multipart/alternative with text, text/calendar and an .ics
+# attachment; Apache-2.0 OR MIT). Both already in the workspace.
+mail-parser.workspace = true
+mail-builder.workspace = true
+# DTSTAMP / sequence handling, conflicts in UTC.
+chrono.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

@@ -4461,6 +4461,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-itip"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mail-builder",
+ "mail-parser",
+ "nail-api",
+ "nail-ical",
+ "pretty_assertions",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "nail-mcp"
 version = "0.1.0"
 dependencies = [
@@ -4544,6 +4557,26 @@ dependencies = [
  "unic-langid",
  "url",
  "zip",
+]
+
+[[package]]
+name = "nail-proto-gmail"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "nail-api",
+ "nail-auth",
+ "nail-proto-gmail",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

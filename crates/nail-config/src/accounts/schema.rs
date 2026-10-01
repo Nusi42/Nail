@@ -144,6 +144,9 @@ struct AccountSchema {
     imap: Option<ImapSchema>,
     /// `pop3 host=… { auth … }`: POP3 incoming server.
     pop3: Option<Pop3Schema>,
+    /// `gmail { auth "oauth2" provider="google" }`: the Gmail API (M3b;
+    /// sends through the API, so no `smtp`).
+    gmail: Option<GmailSchema>,
     /// `smtp host=… { auth … }`: outgoing server.
     smtp: Option<SmtpSchema>,
     /// `identity "<address>" … { bcc …; signature … }`: sending identities,
@@ -237,6 +240,30 @@ struct Pop3Schema {
     /// Delete from the server when deleted locally (default `#false`).
     delete_when_deleted_locally: Option<bool>,
     /// How to log in.
+    auth: Option<AuthSchema>,
+}
+
+/// `gmail host=… port=… tls=… poll-interval=… max-poll-interval=…`
+/// (every property optional).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct GmailSchema {
+    /// API host (default gmail.googleapis.com).
+    host: Option<String>,
+    /// Port (default 443).
+    #[schemars(range(min = 1, max = 65535))]
+    port: Option<u32>,
+    /// Transport security (default implicit; plaintext only for localhost
+    /// test servers).
+    tls: Option<TlsSchema>,
+    /// Shortest seconds between history polls (default 30).
+    #[schemars(range(min = 10, max = 86400))]
+    poll_interval: Option<u32>,
+    /// Longest seconds between history polls when nothing changes
+    /// (default 300).
+    #[schemars(range(min = 10, max = 86400))]
+    max_poll_interval: Option<u32>,
+    /// How to log in: `auth "oauth2" provider="google"`.
     auth: Option<AuthSchema>,
 }
 

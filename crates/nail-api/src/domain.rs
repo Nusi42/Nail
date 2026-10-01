@@ -7,8 +7,10 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::gmail::GmailMessageInfo;
 use crate::ids::{AccountId, FolderId, MessageId, ThreadId};
 use crate::remote_content::RemoteContentInfo;
+use crate::scheduling::Invitation;
 use crate::security::{AuthResults, MessageWarning, SecurityStatus};
 use crate::triage::JunkVerdict;
 
@@ -20,7 +22,8 @@ pub enum AccountKind {
     Imap,
     /// POP3 delivering into local folders (M1).
     Pop3,
-    /// Gmail via the Gmail API (M3; in M1 Gmail is an IMAP account).
+    /// Gmail via the Gmail API (M3b; a Gmail address configured with
+    /// `imap` stays an IMAP account).
     Gmail,
     /// Microsoft Exchange via Graph or EWS (M3).
     Exchange,
@@ -158,6 +161,11 @@ pub struct MessageSummary {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[ts(as = "Option<bool>", optional)]
     pub headers_only: bool,
+    /// Gmail labels, thread id and category (M3b, Gmail accounts only);
+    /// absent elsewhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub gmail: Option<GmailMessageInfo>,
 }
 
 /// Where a copy of a message lives.
@@ -293,6 +301,11 @@ pub struct MessageBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub junk: Option<JunkVerdict>,
+    /// The invitation card (M3b): the message carries an iTIP method
+    /// (`text/calendar; method=…`); absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub invitation: Option<Box<Invitation>>,
 }
 
 #[cfg(test)]
@@ -349,6 +362,7 @@ mod tests {
             tags: vec!["work".into()],
             duplicates: vec![],
             headers_only: false,
+            gmail: None,
         };
         let json = serde_json::to_value(&summary).unwrap();
         assert_eq!(

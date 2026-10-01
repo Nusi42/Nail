@@ -220,6 +220,12 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
                 );
             children.push(line.finish(1, indent, &[render_auth(&server.auth, 2, indent)]));
         }
+        IncomingServer::Gmail { server, options } => {
+            let line = endpoint_line("gmail", server)
+                .num_opt("poll-interval", options.poll_interval_secs)
+                .num_opt("max-poll-interval", options.max_poll_interval_secs);
+            children.push(line.finish(1, indent, &[render_auth(&server.auth, 2, indent)]));
+        }
     }
     if let Some(OutgoingServer::Smtp { server, options }) = &account.outgoing {
         let line = endpoint_line("smtp", server).bool_opt("dsn", options.dsn);
@@ -683,9 +689,11 @@ fn is_default_prop(node: &KdlNode, key: &str, value: &KdlValue, ctx: &Ctx<'_>) -
         "imap" => Some(MailProtocol::Imap),
         "pop3" => Some(MailProtocol::Pop3),
         "smtp" => Some(MailProtocol::Smtp),
+        "gmail" => Some(MailProtocol::Gmail),
         _ => None,
     };
     match (node.name().value(), key) {
+        ("gmail", "host") => value.as_string() == Some(nail_api::gmail::GMAIL_API_HOST),
         (_, "tls") if protocol.is_some() => value.as_string() == Some("implicit"),
         (_, "port") if protocol.is_some() => {
             let tls = match str_prop(node, "tls") {

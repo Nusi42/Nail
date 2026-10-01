@@ -74,6 +74,7 @@ mod tests {
             message: "keychain locked".into(),
             retryable: true,
             localized: None,
+            retry_after_secs: None,
         };
         assert_eq!(
             AuthError::from(locked).to_api().code,

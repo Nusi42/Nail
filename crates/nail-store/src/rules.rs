@@ -542,6 +542,7 @@ mod tests {
             tags: Vec::new(),
             duplicates: Vec::new(),
             headers_only: false,
+            gmail: None,
         };
         store
             .upsert_message(&crate::StoredMessage::new(summary))

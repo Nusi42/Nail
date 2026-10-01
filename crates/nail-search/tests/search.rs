@@ -163,6 +163,7 @@ fn fixture() -> Fixture {
             tags: m.tags.iter().map(|t| (*t).to_owned()).collect(),
             duplicates: vec![],
             headers_only: false,
+            gmail: None,
         };
         synced.push(SyncedMessage {
             message: StoredMessage::new(summary),

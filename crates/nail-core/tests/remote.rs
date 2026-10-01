@@ -1595,3 +1595,94 @@ async fn remote_pim_needs_a_full_grant() {
     };
     assert_eq!(service.remote_event(&narrow, due).await, None);
 }
+
+/// M3b contract (ADR 0065): invitation cards and scheduling follow the PIM
+/// rule (a grant for every account) plus the message they came in; Gmail
+/// labels follow their account; the events likewise.
+#[tokio::test]
+async fn remote_scheduling_and_gmail_labels_follow_grants() {
+    use nail_api::scheduling::{InvitationResponse, InvitationTarget};
+    let f = setup();
+    let service = &f.service;
+    let message = demo_messages(&f)[0].clone();
+    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+
+    let card = Request::GetInvitation {
+        message_id: message.id.clone(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, card.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // A full read grant passes the checks; the contract stage answers
+    // `unsupported`.
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, card).await),
+        Some(ErrorCode::Unsupported)
+    );
+    // Answering writes the calendar: the read-only grant lacks the scope,
+    // the narrow one the accounts.
+    let answer = Request::RespondToInvitation {
+        target: InvitationTarget::Message {
+            message_id: message.id.clone(),
+        },
+        response: InvitationResponse::Accept,
+        comment: None,
+        send: true,
+        calendar_id: None,
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, answer.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, answer).await),
+        Some(ErrorCode::Forbidden)
+    );
+    let free_busy = Request::QueryFreeBusy {
+        attendees: vec!["bob@example.org".into()],
+        from: "2026-10-05T00:00:00Z".into(),
+        to: "2026-10-06T00:00:00Z".into(),
+        identity_id: None,
+        ignore_event_id: None,
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, free_busy.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, free_busy).await),
+        Some(ErrorCode::Unsupported)
+    );
+    // Gmail labels: the account must be granted.
+    let labels = Request::ListGmailLabels {
+        account_id: message.account_id.clone(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, labels.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, labels).await),
+        Some(ErrorCode::Unsupported)
+    );
+
+    // Events.
+    let cards = nail_api::Event::InvitationsChanged {
+        message_ids: vec![message.id.clone()],
+    };
+    assert_eq!(service.remote_event(&narrow, cards.clone()).await, None);
+    assert_eq!(
+        service.remote_event(&reader, cards.clone()).await,
+        Some(cards)
+    );
+    let changed = nail_api::Event::GmailLabelsChanged {
+        account_id: message.account_id.clone(),
+    };
+    assert_eq!(service.remote_event(&narrow, changed.clone()).await, None);
+    assert_eq!(
+        service.remote_event(&reader, changed.clone()).await,
+        Some(changed)
+    );
+}

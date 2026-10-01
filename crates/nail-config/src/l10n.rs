@@ -48,6 +48,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/core-dav.ftl"),
     ),
     (
+        "core-gmail.ftl",
+        include_str!("../../../locales/en/core-gmail.ftl"),
+    ),
+    (
         "core-ical.ftl",
         include_str!("../../../locales/en/core-ical.ftl"),
     ),
@@ -58,6 +62,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     (
         "core-plugins.ftl",
         include_str!("../../../locales/en/core-plugins.ftl"),
+    ),
+    (
+        "core-scheduling.ftl",
+        include_str!("../../../locales/en/core-scheduling.ftl"),
     ),
     (
         "core-sieve.ftl",
@@ -72,6 +80,7 @@ pub const EN_FILES: &[(&str, &str)] = &[
         "customization.ftl",
         include_str!("../../../locales/en/customization.ftl"),
     ),
+    ("gmail.ftl", include_str!("../../../locales/en/gmail.ftl")),
     ("mcp.ftl", include_str!("../../../locales/en/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/en/menus.ftl")),
     ("pim.ftl", include_str!("../../../locales/en/pim.ftl")),
@@ -81,6 +90,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ),
     ("remote.ftl", include_str!("../../../locales/en/remote.ftl")),
     ("rules.ftl", include_str!("../../../locales/en/rules.ftl")),
+    (
+        "scheduling.ftl",
+        include_str!("../../../locales/en/scheduling.ftl"),
+    ),
     (
         "security.ftl",
         include_str!("../../../locales/en/security.ftl"),
@@ -114,6 +127,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/core-dav.ftl"),
     ),
     (
+        "core-gmail.ftl",
+        include_str!("../../../locales/de/core-gmail.ftl"),
+    ),
+    (
         "core-ical.ftl",
         include_str!("../../../locales/de/core-ical.ftl"),
     ),
@@ -124,6 +141,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "core-plugins.ftl",
         include_str!("../../../locales/de/core-plugins.ftl"),
+    ),
+    (
+        "core-scheduling.ftl",
+        include_str!("../../../locales/de/core-scheduling.ftl"),
     ),
     (
         "core-sieve.ftl",
@@ -138,6 +159,7 @@ pub const DE_FILES: &[(&str, &str)] = &[
         "customization.ftl",
         include_str!("../../../locales/de/customization.ftl"),
     ),
+    ("gmail.ftl", include_str!("../../../locales/de/gmail.ftl")),
     ("mcp.ftl", include_str!("../../../locales/de/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/de/menus.ftl")),
     ("pim.ftl", include_str!("../../../locales/de/pim.ftl")),
@@ -147,6 +169,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ),
     ("remote.ftl", include_str!("../../../locales/de/remote.ftl")),
     ("rules.ftl", include_str!("../../../locales/de/rules.ftl")),
+    (
+        "scheduling.ftl",
+        include_str!("../../../locales/de/scheduling.ftl"),
+    ),
     (
         "security.ftl",
         include_str!("../../../locales/de/security.ftl"),

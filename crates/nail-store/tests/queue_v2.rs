@@ -191,6 +191,7 @@ fn move_applies_locally_and_records_the_source() {
             uid: Some(1),
             uid_validity: None,
             header_message_id: None,
+            remote_id: None,
         })
     );
     let moved = store.get_message(&"m1".into()).unwrap();
@@ -574,6 +575,7 @@ fn sources_record_uid_validity_and_message_id() {
             uid: Some(1),
             uid_validity: Some(77),
             header_message_id: Some("m1@example.org".into()),
+            remote_id: None,
         })
     );
     // Old payloads without the new fields still load.

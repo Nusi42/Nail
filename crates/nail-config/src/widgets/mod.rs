@@ -7,18 +7,22 @@
 //! [`security`] those of M2a WP34 (ADR 0029), [`remote`] those of M2b
 //! WP43 (ADR 0036), [`sieve`], [`triage`] and [`sync`] those of M2c WP54
 //! (ADR 0043), [`plugins`] those of M2d (plug-in panels; WP62, ADR 0050),
-//! [`pim`] those of M3a (calendars, contacts, tasks; WP74, ADR 0058). The
+//! [`pim`] those of M3a (calendars, contacts, tasks; WP74, ADR 0058),
+//! [`scheduling`] and [`gmail`] those of M3b (invitations, free/busy,
+//! Gmail labels and categories; WP84, ADR 0065). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
 mod composer;
 mod core;
 mod customization;
+mod gmail;
 mod mcp;
 mod pim;
 mod plugins;
 mod remote;
 mod rules;
+mod scheduling;
 mod security;
 mod sieve;
 mod sync;
@@ -63,9 +67,9 @@ pub(crate) const fn widget(
     }
 }
 
-/// A widget that is not implemented yet (any options are accepted). No kind
-/// uses it since M3a; kept for the slots of later waves.
-#[allow(dead_code)]
+/// A widget that is not implemented yet (any options are accepted): the
+/// slots of a wave's contract until its UI package types them (M3b: the
+/// scheduling and Gmail widgets, WP84).
 pub(crate) const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
     WidgetSpec {
         kind,
@@ -89,6 +93,8 @@ const TABLES: &[&[WidgetSpec]] = &[
     sync::WIDGETS,
     plugins::WIDGETS,
     pim::WIDGETS,
+    scheduling::WIDGETS,
+    gmail::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {
