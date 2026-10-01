@@ -86,6 +86,11 @@ pub struct AutodiscoverRequest {
     /// Hosts outside the address's domain the user confirmed
     /// ([`AutodiscoverOutcome::ConfirmRedirect`]).
     pub trusted_hosts: Vec<String>,
+    /// Hosts that may get the login: the ones the user answered a
+    /// [`AutodiscoverOutcome::NeedsLogin`] prompt for. Another host asking
+    /// to sign in is a new prompt (a Windows sign-in is not offered to
+    /// every host of the domain, ADR 0078). `None` = every trusted host.
+    pub login_hosts: Option<Vec<String>>,
 }
 
 /// Why a host needs confirmation.
@@ -637,7 +642,12 @@ impl Run<'_> {
                     },
                 )));
             }
-            if !self.request.login.is_some() {
+            let allowed = self
+                .request
+                .login_hosts
+                .as_ref()
+                .is_none_or(|hosts| hosts.iter().any(|h| h.eq_ignore_ascii_case(&host)));
+            if !self.request.login.is_some() || !allowed {
                 return Ok(Some(AutodiscoverOutcome::NeedsLogin(LoginNeeded {
                     url: url.to_string(),
                     host,

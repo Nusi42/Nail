@@ -298,23 +298,31 @@ impl ExchangeHttp for ReqwestHttp {
                         .map(|v| (name.as_str().to_owned(), v.to_owned()))
                 })
                 .collect();
+            let mut response = response;
             if response
                 .content_length()
                 .is_some_and(|l| l > MAX_BODY as u64)
             {
                 return Err(HttpError::network("response too large"));
             }
-            let body = response
-                .bytes()
+            // Read in chunks and stop at the limit: Autodiscover talks to
+            // untrusted hosts, and a chunked answer without an end must not
+            // fill the memory (ADR 0078).
+            let mut body = Vec::new();
+            while let Some(chunk) = response
+                .chunk()
                 .await
-                .map_err(|e| HttpError::network(e.without_url().to_string()))?;
-            if body.len() > MAX_BODY {
-                return Err(HttpError::network("response too large"));
+                .map_err(|e| HttpError::network(e.without_url().to_string()))?
+            {
+                if body.len() + chunk.len() > MAX_BODY {
+                    return Err(HttpError::network("response too large"));
+                }
+                body.extend_from_slice(&chunk);
             }
             Ok(HttpResponse {
                 status,
                 headers,
-                body: body.to_vec(),
+                body,
             })
         })
     }
@@ -323,6 +331,35 @@ impl ExchangeHttp for ReqwestHttp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn an_endless_answer_is_cut_at_the_limit() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
+            let _ = socket
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nTransfer-Encoding: chunked\r\n\r\n",
+                )
+                .await;
+            // Chunks without an end.
+            let chunk = format!("{:x}\r\n{}\r\n", 64 * 1024, "x".repeat(64 * 1024));
+            while socket.write_all(chunk.as_bytes()).await.is_ok() {}
+        });
+        let http = ReqwestHttp::system().unwrap();
+        let url = Url::parse(&format!("http://{addr}/autodiscover/autodiscover.xml")).unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            http.send(&HttpRequest::get(url)),
+        )
+        .await
+        .expect("cut at the limit, not read until the end");
+        assert_eq!(result.unwrap_err().message, "response too large");
+    }
 
     #[test]
     fn requests_never_print_credentials() {

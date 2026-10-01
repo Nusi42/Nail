@@ -281,6 +281,21 @@ async fn pox_with_basic_and_login_prompts() {
     assert_eq!(needed.host, "corp.example");
     assert_eq!(needed.schemes, [AuthScheme::Basic]);
     assert_eq!(needed.localized().id, "exchange-autodiscover-needs-login");
+
+    // The login goes only to the hosts the user answered a prompt for.
+    let mut limited = request("ada@corp.example", basic("secret"));
+    limited.login_hosts = Some(vec!["autodiscover.corp.example".into()]);
+    let outcome = d.discover(&limited).await.unwrap();
+    let AutodiscoverOutcome::NeedsLogin(needed) = outcome else {
+        panic!("a login prompt for the other host, got {outcome:?}");
+    };
+    assert_eq!(needed.host, "corp.example");
+    limited.login_hosts = Some(vec!["corp.example".into()]);
+    let outcome = d.discover(&limited).await.unwrap();
+    assert!(
+        matches!(outcome, AutodiscoverOutcome::Found(_)),
+        "{outcome:?}"
+    );
 }
 
 #[tokio::test]

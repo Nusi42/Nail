@@ -1419,6 +1419,58 @@ CREATE TABLE exchange_ops (
 CREATE INDEX exchange_ops_state ON exchange_ops(account_id, state, id);
 "#;
 
+/// Schema v13 (M3c review fixes, ADR 0078): resumable Exchange listings,
+/// moves seen from other clients, meeting answers.
+///
+/// * `exchange_pim_collections.full_sync_page` — a full listing of a
+///   calendar / contact folder / task list in progress (the page to go on
+///   with), like `exchange_folders.full_sync_page` for mail folders.
+/// * `exchange_listed` — the server ids a full listing of a mail folder or
+///   PIM collection (`scope`) has seen so far; the merge after the last
+///   page removes what the server no longer lists, also when the listing
+///   took several passes.
+/// * `exchange_removed` — messages a folder's changes reported as removed,
+///   kept until every folder of the mailbox was synced: a message another
+///   client moved shows up in its new folder and is moved locally instead
+///   of being downloaded again.
+/// * `exchange_meeting_answers` — per meeting the user was invited to: the
+///   own answer as last synced, and an answer queued from Nail with its
+///   comment (sealed) and whether the organizer is told.
+const V13: &str = r#"
+ALTER TABLE exchange_pim_collections ADD COLUMN full_sync_page TEXT;
+
+CREATE TABLE exchange_listed (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- A mail folder id or a PIM collection id.
+    scope      TEXT NOT NULL,
+    remote_id  TEXT NOT NULL,
+    PRIMARY KEY (scope, remote_id)
+) WITHOUT ROWID;
+
+CREATE TABLE exchange_removed (
+    message_id TEXT PRIMARY KEY NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- Lowercase address; '' = the account's own mailbox.
+    mailbox    TEXT NOT NULL DEFAULT '',
+    removed_at INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX exchange_removed_mailbox ON exchange_removed(account_id, mailbox);
+
+CREATE TABLE exchange_meeting_answers (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    collection_id TEXT NOT NULL REFERENCES pim_collections(id) ON DELETE CASCADE,
+    uid           TEXT NOT NULL,
+    -- nail_api ParticipationStatus (kebab-case) as the server last reported it.
+    synced_status TEXT,
+    -- An answer queued from Nail (RespondToInvitation).
+    queued        INTEGER NOT NULL DEFAULT 0 CHECK (queued IN (0, 1)),
+    send          INTEGER NOT NULL DEFAULT 1 CHECK (send IN (0, 1)),
+    -- The answer's comment; sealed at rest.
+    comment       TEXT,
+    UNIQUE (collection_id, uid)
+);
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -1474,6 +1526,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::sql(V10),
     Migration::sql(V11),
     Migration::rebuild(V12),
+    Migration::sql(V13),
 ];
 
 /// The schema version this build creates and understands.
@@ -1618,11 +1671,14 @@ mod tests {
                 "exchange_categories",
                 "exchange_folders",
                 "exchange_items",
+                "exchange_listed",
                 "exchange_mailbox_sync",
                 "exchange_mailboxes",
+                "exchange_meeting_answers",
                 "exchange_ops",
                 "exchange_pim_collections",
                 "exchange_pim_items",
+                "exchange_removed",
                 "exchange_rooms",
                 "exchange_rules",
                 "exchange_sync",

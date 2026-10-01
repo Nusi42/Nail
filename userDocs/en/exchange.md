@@ -39,7 +39,8 @@ Microsoft) — Microsoft's global Autodiscover service, which learns the
 address you are setting up. Nail never sends a password while
 looking up the settings. It signs in as the user signed in to Windows only
 when a server of your address's domain asks for it and you choose **Look
-again with my Windows sign-in**. If a server of your domain points to a
+again with my Windows sign-in** — and only to the server that prompt
+named: if another server asks too, Nail asks you again. If a server of your domain points to a
 server outside it, or the settings were found through the unencrypted
 "HTTP redirect" method or a DNS record, Nail asks first (**Trust … and
 look again**) before anything goes there.
@@ -156,6 +157,11 @@ organize in an Exchange calendar are sent to the attendees by Exchange
 when you save them, and cancelled when you delete them. Free/busy of
 people and rooms of your organization comes from Exchange.
 
+Changing your own copy of a meeting you were invited to (its reminder,
+categories, notes or how it shows your time) updates only your calendar:
+the organizer hears from you only when you change your answer. A comment
+you write with your answer goes to the organizer with it.
+
 ## Microsoft To Do
 
 Your To Do lists appear in the task widget under **Microsoft To Do —
@@ -189,9 +195,23 @@ is saved and comes back with the next sync (Exchange gives it its id).
 - Answering an invitation without sending your answer only updates your
   calendar.
 - Rooms listed by Exchange Server show no seats or building.
+- Events you create or change are saved with your time zone, so a weekly
+  meeting stays at the same time after the change to or from daylight
+  saving time. A recurring event in a time zone Exchange Server does not
+  know is not saved to the server (Nail reports the change as failed); a single event
+  in such a zone is saved at the same moment in UTC.
 - New mail arrives at once: Exchange Server tells Nail about changes
   (streaming notifications); Microsoft 365 is asked every few seconds to
   minutes, more often while you work.
+
+## Good to know (all Exchange accounts)
+
+- When Outlook, your phone or a rule on the server moves a message, Nail
+  moves its copy too: the message keeps its tags, snooze and other things
+  you set in Nail, and it does not count as new mail.
+- The first sync of a large mailbox can take several rounds (Exchange
+  limits how fast it may be read). Mail found during that first sync is
+  never treated as new: no notifications and no rules run on it.
 
 ## Moving from EWS to Microsoft Graph
 

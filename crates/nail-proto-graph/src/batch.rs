@@ -59,8 +59,8 @@ impl BatchRequest {
 
     fn to_json(&self, id: usize) -> Value {
         let mut headers = serde_json::Map::new();
-        for (name, value) in &self.headers {
-            headers.insert(name.clone(), Value::String(value.clone()));
+        for (name, value) in crate::client::with_immutable_ids(&self.headers) {
+            headers.insert(name, Value::String(value));
         }
         if self.body.is_some() {
             headers.insert("Content-Type".into(), "application/json".into());
@@ -248,14 +248,43 @@ mod tests {
         assert_eq!(
             get.to_json(3),
             json!({"id": "3", "method": "GET", "url": "/me/mailFolders/inbox",
-                   "headers": {"Prefer": "outlook.timezone=\"UTC\""}})
+                   "headers": {"Prefer": "IdType=\"ImmutableId\", outlook.timezone=\"UTC\""}})
         );
         let patch =
             BatchRequest::with_body(Method::PATCH, "/me/messages/m1", json!({"isRead": true}));
         assert_eq!(
             patch.to_json(0),
             json!({"id": "0", "method": "PATCH", "url": "/me/messages/m1",
-                   "headers": {"Content-Type": "application/json"}, "body": {"isRead": true}})
+                   "headers": {"Content-Type": "application/json",
+                               "Prefer": "IdType=\"ImmutableId\""},
+                   "body": {"isRead": true}})
+        );
+    }
+
+    #[test]
+    fn every_request_asks_for_immutable_ids() {
+        let merged = crate::client::with_immutable_ids(&[
+            ("Prefer".into(), "odata.maxpagesize=50".into()),
+            ("If-Match".into(), "W/\"ck\"".into()),
+            (
+                "prefer".into(),
+                "outlook.timezone=\"UTC\", IdType=\"RestId\"".into(),
+            ),
+        ]);
+        assert_eq!(
+            merged,
+            vec![
+                ("If-Match".to_owned(), "W/\"ck\"".to_owned()),
+                (
+                    "Prefer".to_owned(),
+                    "IdType=\"ImmutableId\", odata.maxpagesize=50, outlook.timezone=\"UTC\""
+                        .to_owned()
+                ),
+            ]
+        );
+        assert_eq!(
+            crate::client::with_immutable_ids(&[]),
+            vec![("Prefer".to_owned(), "IdType=\"ImmutableId\"".to_owned())]
         );
     }
 

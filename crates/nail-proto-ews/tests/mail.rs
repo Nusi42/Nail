@@ -1069,6 +1069,10 @@ async fn streaming_notifications_wake_the_wait() {
         engine.watcher().subscription_id(None).unwrap(),
         subscription
     );
+    // Lost again right away: an error the caller backs off from, not
+    // another "everything may have changed" (no wake-all loop).
+    server.expire_subscriptions();
+    assert!(engine.wait_for_changes(None, &folders, 5).await.is_err());
 
     // Distinguished names work as folder names.
     let named = vec!["inbox".to_owned()];

@@ -51,6 +51,7 @@ use nail_store::pim::{
     PimItem, PimOperation, PimReplayOutcome, PimReplayer, QueuedPimOp, ServerApply, ServerRemove,
 };
 
+use super::sync::Listing;
 use crate::error::{CoreError, Result};
 use crate::pim::derived_id;
 use crate::pim::engine::SyncChanges;
@@ -423,7 +424,9 @@ fn items_of(
     }
 }
 
-/// Syncs one collection's items.
+/// Syncs one collection's items. A full listing (no cursor, or an expired
+/// one) is kept across passes (`full_sync_page`, the ids it saw in the
+/// store) and merged only after its last page (ADR 0078).
 async fn sync_collection(
     service: &Service,
     account: &AccountConfig,
@@ -434,21 +437,32 @@ async fn sync_collection(
     changes: &mut SyncChanges,
 ) -> Result<()> {
     let (id, k) = (account.id.clone(), key.to_owned());
-    let mut cursor = service
+    let (stored_cursor, page) = service
         .store()
         .call(move |s| {
-            Ok(s.exchange_pim_collections(&id)?
+            let cursor = s
+                .exchange_pim_collections(&id)?
                 .into_iter()
                 .find(|c| c.collection_id == k)
-                .and_then(|c| c.cursor))
+                .and_then(|c| c.cursor);
+            Ok((cursor, s.exchange_pim_listing(&k)?))
         })
         .await?;
-    let mut full = cursor.is_none();
-    let mut listed: HashSet<String> = HashSet::new();
+    // PIM listings are never "first": there are no arrivals.
+    let mut listing = Listing::of(stored_cursor.as_deref(), page.as_deref(), Some(0));
+    let mut cursor = match &listing {
+        Some(l) => l.resume.clone(),
+        None => stored_cursor,
+    };
+    if listing.as_ref().is_some_and(|l| l.resume.is_none()) {
+        save_listing(service, key, None, listing.as_ref(), true).await?;
+    }
+    let mut restarted = false;
     let mut pages = 0u32;
     loop {
         pages += 1;
         if pages > MAX_PAGES {
+            // Goes on in the next pass; a partial listing is never merged.
             break;
         }
         let outcome = engine
@@ -457,22 +471,37 @@ async fn sync_collection(
             .map_err(CoreError::from)?;
         let delta = match outcome {
             PimDeltaOutcome::CursorExpired => {
-                if full {
-                    break;
+                listing = Listing::after_expiry(listing, &mut restarted);
+                if listing.is_none() {
+                    return Err(nail_api::ApiError::new(
+                        nail_api::ErrorCode::Internal,
+                        "the server refused a full listing",
+                    )
+                    .into());
                 }
                 cursor = None;
-                full = true;
-                listed.clear();
+                save_listing(service, key, None, listing.as_ref(), true).await?;
                 continue;
             }
             PimDeltaOutcome::Delta(delta) => delta,
         };
+        let own = own_addresses(account);
         let mut stored: Vec<(PimItem, String, String, Option<String>)> = Vec::new();
         for item in &delta.upserted {
-            let rows = items_of(service, item, key, folder.read_only);
-            listed.extend(rows.iter().map(|(_, _, href, _)| href.clone()));
-            stored.extend(rows);
+            stored.extend(items_of(service, item, key, folder.read_only));
         }
+        // The own answer to each meeting as the server has it (a later
+        // local edit answers again only when it changes; ADR 0078).
+        let answers: Vec<(String, Option<String>)> = stored
+            .iter()
+            .filter_map(|(item, _, _, _)| match item {
+                PimItem::Event(event) if !event.fields.attendees.is_empty() => {
+                    Some((event.uid.clone(), own_status(event, &own)))
+                }
+                _ => None,
+            })
+            .collect();
+        let seen: Vec<String> = stored.iter().map(|(_, _, href, _)| href.clone()).collect();
         let (k, removed, next) = (key.to_owned(), delta.removed.clone(), delta.cursor.clone());
         let now = service.pim_now();
         let parents: Vec<String> = delta
@@ -481,6 +510,11 @@ async fn sync_collection(
             .map(|i| i.remote_id().to_owned())
             .collect();
         let hrefs: HashSet<String> = stored.iter().map(|(_, _, h, _)| h.clone()).collect();
+        let (account_id, more) = (account.id.clone(), delta.more);
+        let progress = listing.clone().map(|mut l| {
+            l.resume = Some(delta.cursor.clone());
+            l
+        });
         let (applied, gone) = service
             .store()
             .call(move |s| {
@@ -496,6 +530,9 @@ async fn sync_collection(
                         Ok(_) => {}
                         Err(err) => tracing::warn!(%href, %err, "cannot store an Exchange item"),
                     }
+                }
+                for (uid, status) in &answers {
+                    s.set_exchange_synced_answer(&k, uid, status.as_deref())?;
                 }
                 // Checklist items a task no longer has.
                 for object in s.server_objects(&k)? {
@@ -520,10 +557,37 @@ async fn sync_collection(
                         }
                     }
                 }
-                s.set_exchange_pim_cursor(&k, Some(&next), now)?;
+                match progress {
+                    None => s.set_exchange_pim_listing(&k, Some(&next), None, now)?,
+                    Some(listing) => {
+                        s.add_exchange_listed(&account_id, &k, &seen)?;
+                        if more {
+                            s.set_exchange_pim_listing(&k, None, Some(&listing.encode()), now)?;
+                        } else {
+                            // The last page: items the server no longer
+                            // has go (local ones not uploaded yet stay).
+                            let listed = s.exchange_listed(&k)?;
+                            for object in s.server_objects(&k)? {
+                                let Some(href) = object.href else { continue };
+                                if !listed.contains(&href)
+                                    && let ServerRemove::Removed(i)
+                                    | ServerRemove::KeptAsConflict(i) =
+                                        s.remove_server_item(&k, Some(&href), None)?
+                                {
+                                    gone.push(i);
+                                }
+                            }
+                            s.clear_exchange_listed(&k)?;
+                            s.set_exchange_pim_listing(&k, Some(&next), None, now)?;
+                        }
+                    }
+                }
                 Ok((applied, gone))
             })
             .await?;
+        if let Some(l) = &mut listing {
+            l.resume = Some(delta.cursor.clone());
+        }
         changes
             .items
             .extend(applied.into_iter().map(|i| (i, key.to_owned())));
@@ -535,30 +599,52 @@ async fn sync_collection(
         }
         cursor = Some(delta.cursor);
     }
-    if full {
-        // Items the server no longer has (local ones not uploaded yet stay).
-        let k = key.to_owned();
-        let gone = service
-            .store()
-            .call(move |s| {
-                let mut gone = Vec::new();
-                for object in s.server_objects(&k)? {
-                    let Some(href) = object.href else { continue };
-                    if !listed.contains(&href)
-                        && let ServerRemove::Removed(i) | ServerRemove::KeptAsConflict(i) =
-                            s.remove_server_item(&k, Some(&href), None)?
-                    {
-                        gone.push(i);
-                    }
-                }
-                Ok(gone)
-            })
-            .await?;
-        changes
-            .removed
-            .extend(gone.into_iter().map(|i| (i, key.to_owned())));
-    }
     Ok(())
+}
+
+/// Stores a collection's cursor and listing in progress (`clear`: forget
+/// what a listing saw).
+async fn save_listing(
+    service: &Service,
+    key: &str,
+    cursor: Option<String>,
+    listing: Option<&Listing>,
+    clear: bool,
+) -> Result<()> {
+    let (k, page, now) = (
+        key.to_owned(),
+        listing.map(Listing::encode),
+        service.pim_now(),
+    );
+    service
+        .store()
+        .call(move |s| {
+            if clear {
+                s.clear_exchange_listed(&k)?;
+            }
+            s.set_exchange_pim_listing(&k, cursor.as_deref(), page.as_deref(), now)
+        })
+        .await?;
+    Ok(())
+}
+
+/// The user's own participation status in a meeting (kebab-case), if the
+/// user is an attendee.
+fn own_status(event: &CalendarEvent, own: &[String]) -> Option<String> {
+    event
+        .fields
+        .attendees
+        .iter()
+        .find(|a| own.contains(&a.email.to_ascii_lowercase()))
+        .map(|a| status_text(a.status))
+}
+
+/// A participation status as stored.
+fn status_text(status: ParticipationStatus) -> String {
+    serde_json::to_value(status)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_else(|| format!("{status:?}").to_ascii_lowercase())
 }
 
 /// Forgets the collections of another mailbox (`RemoveExchangeMailbox`).
@@ -694,24 +780,73 @@ fn outcome_of(err: &nail_api::engine::EngineError) -> PimReplayOutcome {
     }
 }
 
-/// Times as EWS wants them: UTC wall times (dates stay dates).
-fn ews_times(event: &mut ExchangeEvent) {
-    let fix = |t: &mut ExchangeDateTime, all_day: bool| {
-        if all_day {
-            t.time_zone = "UTC".to_owned();
-        } else if let Some(utc) = nail_exchange::mapping::time::utc_text(t) {
+/// Times as EWS wants them (ADR 0078): in a Windows zone, so the server
+/// expands a series in its zone across daylight-saving changes; all-day
+/// items in the user's zone (`local`, IANA). A timed item whose zone has
+/// no Windows equivalent goes out in UTC — a series is refused instead
+/// (it would move by an hour at each change).
+fn ews_zones(event: &mut ExchangeEvent, local: &str) -> std::result::Result<(), String> {
+    use nail_exchange::mapping::time::{instant, zone_of};
+    use nail_exchange::mapping::windows_zones::windows_zone;
+    let year = event
+        .start
+        .date_time
+        .get(..4)
+        .and_then(|y| y.parse().ok())
+        .unwrap_or(2026);
+    let to_utc = |t: &mut ExchangeDateTime| {
+        if let Some(utc) = nail_exchange::mapping::time::utc_text(t) {
             *t = ExchangeDateTime::utc(utc.trim_end_matches('Z').to_owned());
         }
     };
-    let all_day = event.is_all_day;
-    fix(&mut event.start, all_day);
-    fix(&mut event.end, all_day);
-    if let Some(recurrence) = &mut event.recurrence {
-        recurrence.time_zone = Some("UTC".to_owned());
+    if event.is_all_day {
+        let zone = zone_of(local)
+            .filter(|tz| *tz != chrono_tz::Tz::UTC)
+            .and_then(|tz| windows_zone(tz, year))
+            .unwrap_or("UTC");
+        event.start.time_zone = zone.to_owned();
+        event.end.time_zone = zone.to_owned();
+        if let Some(recurrence) = &mut event.recurrence {
+            recurrence.time_zone = Some(zone.to_owned());
+        }
+    } else {
+        let tz = zone_of(&event.start.time_zone).filter(|tz| *tz != chrono_tz::Tz::UTC);
+        match tz.map(|tz| (tz, windows_zone(tz, year))) {
+            Some((tz, Some(windows))) => {
+                // The end as a wall time in the start's zone.
+                if zone_of(&event.end.time_zone) != Some(tz)
+                    && let Some(end) = instant(&event.end)
+                {
+                    event.end.date_time =
+                        chrono::TimeZone::from_utc_datetime(&tz, &end.naive_utc())
+                            .format("%Y-%m-%dT%H:%M:%S")
+                            .to_string();
+                }
+                event.start.time_zone = windows.to_owned();
+                event.end.time_zone = windows.to_owned();
+                if let Some(recurrence) = &mut event.recurrence {
+                    recurrence.time_zone = Some(windows.to_owned());
+                }
+            }
+            Some((tz, None)) if event.recurrence.is_some() => {
+                return Err(format!(
+                    "Exchange Server has no time zone like {} for this series",
+                    tz.name()
+                ));
+            }
+            _ => {
+                to_utc(&mut event.start);
+                to_utc(&mut event.end);
+                if let Some(recurrence) = &mut event.recurrence {
+                    recurrence.time_zone = Some("UTC".to_owned());
+                }
+            }
+        }
     }
     for x in &mut event.exceptions {
-        ews_times(x);
+        ews_zones(x, local)?;
     }
+    Ok(())
 }
 
 impl ExchangeReplayer<'_> {
@@ -719,7 +854,14 @@ impl ExchangeReplayer<'_> {
         self.collections.iter().find(|c| c.collection_id == key)
     }
 
+    /// The zone of dates and floating times of events (EWS: mapped to a
+    /// Windows id by [`ews_zones`]).
     fn zone(&self) -> String {
+        crate::pim::local_zone_name()
+    }
+
+    /// The zone of task dates (EWS writes them in UTC).
+    fn task_zone(&self) -> String {
         if self.engine.kind() == EngineKind::Ews {
             "UTC".to_owned()
         } else {
@@ -911,32 +1053,62 @@ impl ExchangeReplayer<'_> {
         etag: Option<&str>,
     ) -> std::result::Result<PimReplayOutcome, String> {
         let own = own_addresses(self.account);
-        // An invitation the user answers: the meeting API, not an update.
+        // An invitation the user answers: the meeting API, not an update —
+        // but only when the answer changed (or Nail queued one with its
+        // comment); other edits of the user's copy (reminder, categories,
+        // notes, show-as) are written as an update nobody is told about
+        // (ADR 0078).
         if let Some(remote) = remote
             && !event.fields.attendees.is_empty()
             && !self.organizes(event)
         {
-            let me = event
+            let status = own_status(event, &own);
+            let response = match event
                 .fields
                 .attendees
                 .iter()
-                .find(|a| own.contains(&a.email.to_ascii_lowercase()));
-            let response = match me.map(|a| a.status) {
+                .find(|a| own.contains(&a.email.to_ascii_lowercase()))
+                .map(|a| a.status)
+            {
                 Some(ParticipationStatus::Accepted) => Some(InvitationResponse::Accept),
                 Some(ParticipationStatus::Tentative) => Some(InvitationResponse::Tentative),
                 Some(ParticipationStatus::Declined) => Some(InvitationResponse::Decline),
                 _ => None,
             };
-            if let Some(response) = response {
+            let (k, uid) = (collection.collection_id.clone(), event.uid.clone());
+            let answer = self
+                .service
+                .inner
+                .store
+                .call(move |s| s.exchange_meeting_answer(&k, &uid))
+                .await
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let changed = status != answer.synced_status;
+            if let Some(response) = response
+                && (changed || answer.queued.is_some())
+            {
+                let (comment, send) = answer.queued.map_or((None, true), |q| (q.comment, q.send));
                 return match self
                     .engine
-                    .respond_to_meeting(mailbox, remote, response, None, true)
+                    .respond_to_meeting(mailbox, remote, response, comment.as_deref(), send)
                     .await
                 {
-                    Ok(()) => Ok(PimReplayOutcome::Done {
-                        href: Some(remote.to_owned()),
-                        etag: None,
-                    }),
+                    Ok(()) => {
+                        let (k, uid) = (collection.collection_id.clone(), event.uid.clone());
+                        let _ = self
+                            .service
+                            .inner
+                            .store
+                            .call(move |s| {
+                                s.finish_exchange_meeting_answer(&k, &uid, status.as_deref())
+                            })
+                            .await;
+                        Ok(PimReplayOutcome::Done {
+                            href: Some(remote.to_owned()),
+                            etag: None,
+                        })
+                    }
                     Err(err) => Ok(outcome_of(&err)),
                 };
             }
@@ -956,8 +1128,10 @@ impl ExchangeReplayer<'_> {
                 )));
             }
         };
-        if self.engine.kind() == EngineKind::Ews {
-            ews_times(&mut mapped);
+        if self.engine.kind() == EngineKind::Ews
+            && let Err(reason) = ews_zones(&mut mapped, &zone)
+        {
+            return Ok(PimReplayOutcome::Fail(reason));
         }
         let send = if self.organizes(event) {
             MeetingSend::ToAll
@@ -1065,7 +1239,7 @@ impl ExchangeReplayer<'_> {
         children.sort_by_key(|(_, t)| t.fields.order.unwrap_or(i64::MAX));
         let subtasks: Vec<(Option<String>, &Task)> =
             children.iter().map(|(c, t)| (c.clone(), t)).collect();
-        let zone = self.zone();
+        let zone = self.task_zone();
         let ctx = TaskWriteContext {
             remote: href.as_deref().map(|h| (h, etag.as_deref())),
             default_zone: &zone,
@@ -1235,25 +1409,56 @@ mod tests {
     }
 
     #[test]
-    fn ews_writes_use_utc_wall_times() {
-        let mut timed = event(
+    fn ews_writes_keep_the_zone_as_a_windows_id() {
+        // A weekly 09:00 Berlin series stays at 09:00 Berlin (no drift at
+        // the daylight-saving change): W. Europe Standard Time, not UTC.
+        let mut series = event(
+            "2026-10-05T09:00:00",
             "2026-10-05T10:00:00",
-            "2026-10-05T11:00:00",
             "Europe/Berlin",
             false,
         );
-        ews_times(&mut timed);
-        assert_eq!(timed.start.time_zone, "UTC");
-        assert_eq!(timed.start.date_time, "2026-10-05T08:00:00");
-        assert_eq!(timed.end.date_time, "2026-10-05T09:00:00");
+        series.recurrence = Some(
+            serde_json::from_value(serde_json::json!({
+                "pattern": {"kind": "weekly", "interval": 1, "days_of_week": ["monday"]},
+                "range": {"kind": "noEnd", "start_date": "2026-10-05"},
+                "time_zone": "Europe/Berlin",
+            }))
+            .unwrap(),
+        );
+        ews_zones(&mut series, "Europe/Berlin").unwrap();
+        assert_eq!(series.start.time_zone, "W. Europe Standard Time");
+        assert_eq!(series.start.date_time, "2026-10-05T09:00:00");
+        assert_eq!(series.end.time_zone, "W. Europe Standard Time");
+        assert_eq!(
+            series.recurrence.unwrap().time_zone.as_deref(),
+            Some("W. Europe Standard Time")
+        );
+        // The end in another zone becomes a wall time in the start's.
+        let mut flight = event(
+            "2026-10-05T09:00:00",
+            "2026-10-05T12:00:00",
+            "Europe/Berlin",
+            false,
+        );
+        flight.end.time_zone = "UTC".into();
+        ews_zones(&mut flight, "Europe/Berlin").unwrap();
+        assert_eq!(flight.end.date_time, "2026-10-05T14:00:00");
+        assert_eq!(flight.end.time_zone, "W. Europe Standard Time");
+        // All-day items: the user's zone, dates stay dates.
         let mut all_day = event(
             "2026-10-05T00:00:00",
             "2026-10-06T00:00:00",
             "Europe/Berlin",
             true,
         );
-        ews_times(&mut all_day);
+        ews_zones(&mut all_day, "America/New_York").unwrap();
         assert_eq!(all_day.start.date_time, "2026-10-05T00:00:00");
-        assert_eq!(all_day.start.time_zone, "UTC");
+        assert_eq!(all_day.start.time_zone, "Eastern Standard Time");
+        // UTC stays UTC.
+        let mut utc = event("2026-10-05T08:00:00", "2026-10-05T09:00:00", "UTC", false);
+        ews_zones(&mut utc, "Europe/Berlin").unwrap();
+        assert_eq!(utc.start.time_zone, "UTC");
+        assert_eq!(utc.start.date_time, "2026-10-05T08:00:00");
     }
 }

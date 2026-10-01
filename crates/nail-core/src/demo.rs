@@ -1400,9 +1400,11 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                 Ok(json!({ "id": id }))
             }
             "ews-messages" => {
+                let name = text("folder").unwrap_or("inbox");
                 let folder = self
                     .ews
-                    .folder_id(None, text("folder").unwrap_or("inbox"))
+                    .folder_id(None, name)
+                    .or_else(|| self.ews.folder_named(None, name))
                     .ok_or("no such EWS folder")?;
                 Ok(Value::Array(
                     self.ews
@@ -1413,11 +1415,39 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                                 "id": i.id,
                                 "subject": i.text("Subject"),
                                 "read": i.text("IsRead") == Some("true"),
+                                "categories": i.props.strings("Categories", "String"),
+                                "start": i.text("Start"),
+                                "start_time_zone": i
+                                    .props
+                                    .child("StartTimeZone")
+                                    .and_then(|z| z.attr("Id")),
                             })
                         })
                         .collect(),
                 ))
             }
+            "ews-settings" => {
+                let oof = self.ews.oof();
+                Ok(json!({
+                    "oof": {"state": oof.state, "internal": oof.internal, "external": oof.external},
+                    "rules": self
+                        .ews
+                        .rules()
+                        .iter()
+                        .map(|r| json!({
+                            "name": r.child_text("DisplayName"),
+                            "enabled": r.child_text("IsEnabled") == Some("true"),
+                        }))
+                        .collect::<Vec<_>>(),
+                }))
+            }
+            "ews-meetings" => Ok(Value::Array(
+                self.ews
+                    .meeting_messages()
+                    .into_iter()
+                    .map(|m| json!({"kind": m.kind, "subject": m.subject, "comment": m.comment}))
+                    .collect(),
+            )),
             "ews-sent" => Ok(Value::Array(
                 self.ews
                     .sent()

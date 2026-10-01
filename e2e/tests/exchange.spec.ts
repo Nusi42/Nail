@@ -53,12 +53,34 @@ const graphPim = () =>
     tasks: { list: string; task: Record<string, unknown> }[];
   }>(server, "graph-pim");
 
+interface EwsItem {
+  id: string;
+  subject: string | null;
+  read: boolean;
+  categories: string[];
+  start: string | null;
+  start_time_zone: string | null;
+}
+
+const ewsItems = (folder = "inbox") => control<EwsItem[]>(server, "ews-messages", { folder });
+const ewsSettings = () =>
+  control<{
+    oof: { state: string; internal: string; external: string };
+    rules: { name: string | null; enabled: boolean }[];
+  }>(server, "ews-settings");
+
 /** Settings → Accounts → Contoso → "Synchronize this account". */
 async function enableContoso(page: Page) {
+  await enableAccount(page, "Contoso", 2);
+}
+
+/** Settings → Accounts → `name` → "Synchronize this account"; waits for
+ * `messages` rows in its inbox. */
+async function enableAccount(page: Page, name: string, messages: number) {
   await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
   const settings = page.getByRole("dialog", { name: "Settings" });
   await settings.getByRole("tab", { name: "Accounts", exact: true }).click();
-  await settings.getByRole("button", { name: /^Contoso/ }).click();
+  await settings.getByRole("button", { name: new RegExp(`^${name}`) }).click();
   // An Exchange account shows its engine and options.
   await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("exchange");
   await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
@@ -66,10 +88,10 @@ async function enableContoso(page: Page) {
   await expect(settings.getByText("Settings saved.")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(settings).toBeHidden();
-  const contoso = accountItems(page).filter({ hasText: "Contoso" });
-  await expect(contoso).toHaveAttribute("data-status", "online", { timeout: 30_000 });
-  await contoso.click();
-  await expect(rows(page)).toHaveCount(2, { timeout: 30_000 });
+  const account = accountItems(page).filter({ hasText: name });
+  await expect(account).toHaveAttribute("data-status", "online", { timeout: 30_000 });
+  await account.click();
+  await expect(rows(page)).toHaveCount(messages, { timeout: 30_000 });
 }
 
 /** Opens the Add account dialog and looks up `email`. */
@@ -358,4 +380,95 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
     )
     .toContain("accept");
   expect(await control<string[]>(server, "graph-sent")).toEqual([]);
+});
+
+test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic replies and answers a meeting", async ({
+  page,
+}) => {
+  await page.goto(server.url);
+  await enableAccount(page, "Corp", 3);
+
+  // Move to Archive: replayed through EWS (MoveItem).
+  await rows(page).filter({ hasText: "Quarterly numbers" }).click();
+  await page.locator('[data-part="message-list"]').focus();
+  await page.keyboard.press("v");
+  const move = page.getByRole("dialog", { name: "Move to folder" });
+  await move.getByRole("button", { name: "Archive", exact: true }).click();
+  await expect(rows(page)).toHaveCount(2);
+  await expect
+    .poll(async () => (await ewsItems("Archive")).map((i) => i.subject), { timeout: 30_000 })
+    .toContain("Quarterly numbers");
+
+  // A category of the server's master list, set as a tag.
+  await rows(page).filter({ hasText: "Password expires in 7 days" }).click();
+  await readerToolbar(page).getByRole("button", { name: "Categories…" }).click();
+  const apply = page.getByRole("dialog", { name: "Categories of this message" });
+  await apply.getByRole("checkbox", { name: "Work" }).check();
+  await apply.getByRole("button", { name: "Apply" }).click();
+  await expect(apply).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        (await ewsItems()).find((i) => i.subject === "Password expires in 7 days")?.categories,
+      { timeout: 30_000 },
+    )
+    .toContain("Work");
+
+  // Sending goes through EWS (SendAndSaveCopy).
+  await page.locator('[data-part="message-list"]').focus();
+  await page.keyboard.press("c");
+  const composer = page.getByRole("dialog", { name: "New message" });
+  await composer.getByRole("textbox", { name: "To" }).fill("bob@corp.example");
+  await composer.getByRole("textbox", { name: "Subject" }).fill("Sent through EWS");
+  await composer.getByRole("textbox", { name: "Message" }).fill("Hello Bob");
+  await composer.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(composer).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        (await control<string[]>(server, "ews-sent")).some((raw) =>
+          raw.includes("Sent through EWS"),
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+
+  // Automatic replies through the vacation editor (SetUserOofSettings).
+  await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("tab", { name: "Vacation reply" }).click();
+  const vacation = settings.locator('[data-part="vacation-editor"]');
+  await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: "Corp" });
+  await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
+  await vacation.getByRole("textbox", { name: "Message" }).fill("Away until Monday.");
+  await vacation.getByRole("button", { name: "Save", exact: true }).click();
+  await expect
+    .poll(async () => (await ewsSettings()).oof.internal, { timeout: 30_000 })
+    .toContain("Away until Monday.");
+  await page.keyboard.press("Escape");
+
+  // An invitation in the Exchange Server calendar is answered through EWS
+  // (AcceptItem), not by iMIP mail.
+  await mainToolbar(page).getByRole("button", { name: "Calendar" }).click();
+  const calendar = page.getByRole("dialog", { name: "Calendar", exact: true });
+  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar
+    .getByRole("button", { name: /^Board review,/ })
+    .first()
+    .click({ timeout: 30_000 });
+  const editor = page.getByRole("dialog", { name: "Event", exact: true });
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await control<{ kind: string; subject: string }[]>(server, "ews-meetings")).some(
+          (m) => m.kind === "Accept" && m.subject.includes("Board review"),
+        ),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  expect(
+    (await control<string[]>(server, "ews-sent")).some((raw) => raw.includes("text/calendar")),
+  ).toBe(false);
 });

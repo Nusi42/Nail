@@ -948,7 +948,31 @@ impl Service {
             &ctx.uid,
             scheduling,
         );
-        let (event, ops) = self.write_copy(answered, original.as_deref()).await?;
+        // Exchange answers through its meeting API when the copy is
+        // replayed: the comment and whether the organizer is told go with
+        // it (ADR 0078).
+        let exchange_answer = calendar
+            .exchange
+            .is_some()
+            .then(|| (answered.calendar_id.0.clone(), answered.uid.clone()));
+        if let Some((k, uid)) = exchange_answer.clone() {
+            let comment = comment.clone();
+            self.store()
+                .call(move |s| s.queue_exchange_meeting_answer(&k, &uid, comment.as_deref(), send))
+                .await?;
+        }
+        let (event, ops) = match self.write_copy(answered, original.as_deref()).await {
+            Ok(written) => written,
+            Err(err) => {
+                if let Some((k, uid)) = exchange_answer {
+                    let _ = self
+                        .store()
+                        .call(move |s| s.drop_exchange_meeting_answer(&k, &uid))
+                        .await;
+                }
+                return Err(err);
+            }
+        };
         op_ids.extend(ops);
         if let Some(loaded) = &ctx.loaded {
             self.record_version(&loaded.object, Some(&loaded.message_id))

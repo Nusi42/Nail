@@ -227,7 +227,16 @@ struct Active {
 #[derive(Debug, Default)]
 pub struct StreamingWatcher {
     active: Mutex<HashMap<Option<String>, Active>>,
+    /// When each mailbox's subscription was last replaced after it got
+    /// lost.
+    renewed: Mutex<HashMap<Option<String>, Instant>>,
 }
+
+/// A subscription lost again this soon after it was replaced is an error
+/// (the caller backs off) instead of "everything may have changed" once
+/// more: a subscription that keeps disappearing (a load balancer without
+/// server affinity) must not wake every folder in a loop.
+pub const RENEW_QUIET: Duration = Duration::from_secs(120);
 
 /// How often a broken stream is reopened within one wait before the error
 /// is passed on.
@@ -250,6 +259,18 @@ impl StreamingWatcher {
     /// again).
     pub fn forget(&self, mailbox: Option<&str>) {
         self.lock().remove(&mailbox.map(str::to_ascii_lowercase));
+    }
+
+    /// Records a replaced subscription; `false` when the previous one was
+    /// replaced less than [`RENEW_QUIET`] before `now`.
+    fn note_renewal(&self, mailbox: Option<&str>, now: Instant) -> bool {
+        let key = mailbox.map(str::to_ascii_lowercase);
+        let mut renewed = self.renewed.lock().unwrap_or_else(PoisonError::into_inner);
+        let quiet = renewed
+            .get(&key)
+            .is_none_or(|at| now.saturating_duration_since(*at) >= RENEW_QUIET);
+        renewed.insert(key, now);
+        quiet
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<Option<String>, Active>> {
@@ -328,6 +349,12 @@ impl StreamingWatcher {
             if fresh && renewed {
                 // A lost subscription was replaced: events in between are
                 // gone, so everything may have changed.
+                if !self.note_renewal(mailbox, Instant::now()) {
+                    return Err(EwsError::Unavailable(
+                        "the streaming subscription keeps getting lost".into(),
+                        None,
+                    ));
+                }
                 return Ok(active.asked.clone());
             }
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -438,6 +465,17 @@ mod tests {
     use super::*;
     use crate::xml::parse;
     use pretty_assertions::assert_eq;
+
+    #[test]
+    fn a_subscription_lost_again_soon_is_an_error() {
+        let watcher = StreamingWatcher::new();
+        let start = Instant::now();
+        assert!(watcher.note_renewal(None, start));
+        assert!(!watcher.note_renewal(None, start + Duration::from_secs(5)));
+        // Per mailbox.
+        assert!(watcher.note_renewal(Some("Boss@contoso.example"), start));
+        assert!(watcher.note_renewal(None, start + RENEW_QUIET + Duration::from_secs(10)));
+    }
 
     #[test]
     fn reads_notifications() {

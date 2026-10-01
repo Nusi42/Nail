@@ -52,6 +52,9 @@ pub type MockResult<T> = Result<T, MockError>;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IdGen {
     next: u64,
+    /// The client asks for immutable ids (`Prefer: IdType="ImmutableId"`):
+    /// a moved message keeps its id.
+    pub immutable: bool,
 }
 
 impl IdGen {
@@ -578,7 +581,11 @@ impl Mailbox {
             .get(id)
             .cloned()
             .ok_or_else(|| MockError::not_found(id))?;
-        let new_id = ids.make("msg");
+        let new_id = if !copy && ids.immutable {
+            id.to_owned()
+        } else {
+            ids.make("msg")
+        };
         if !copy {
             self.messages.remove(id);
             self.touch(&format!("msgs:{}", message.folder), id);
@@ -1089,6 +1096,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(mb.messages[&id].received, "2026-10-01T08:00:00Z");
+        ids.immutable = false;
         let moved = mb.move_message(ids, &id, "archive", false).unwrap();
         assert_ne!(moved, id);
         let now = mb.seq();

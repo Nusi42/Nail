@@ -28,6 +28,7 @@ pub mod rules;
 pub mod tasks;
 pub mod text;
 pub mod time;
+pub mod windows_zones;
 
 use nail_api::exchange::rules::Importance;
 

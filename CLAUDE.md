@@ -83,7 +83,7 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        widgets/{scheduling,gmail}.rs (WP84 slots) (ADR 0065);
                        M3c: account `exchange` node (engine, host / url, polling, streaming, server-rules;
                        `auth "windows"` only there), widgets/exchange.rs (WP94 slot) (ADR 0072)
-crates/nail-store      SQLite metadata (v12), blob store, per-account operation queue with sync-side
+crates/nail-store      SQLite metadata (v13), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -118,7 +118,10 @@ crates/nail-store      SQLite metadata (v12), blob store, per-account operation 
                        Migration::rebuild runs a step with foreign keys off + foreign_key_check), exchange.rs
                        (cursors per folder / mailbox / PIM collection, remote ids + change keys, mailboxes,
                        categories, automatic replies + exchange_ops payload sealed, rules, rooms, the Exchange
-                       operation queue); Calendar / AddressBook `.exchange` read from exchange_pim_collections
+                       operation queue); Calendar / AddressBook `.exchange` read from exchange_pim_collections;
+                       v13 (ADR 0078): exchange_sync.rs (full listings kept across passes: exchange_listed +
+                       exchange_pim_collections.full_sync_page; exchange_removed = removals kept until the mailbox
+                       was synced (moves by other clients); exchange_meeting_answers, comment sealed)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -208,7 +211,8 @@ crates/nail-exchange   Exchange common layer (WP93, ADR 0075): autodiscover/ (v2
                        NeedsLogin, engine choice), http.rs (ExchangeHttp, ReqwestHttp::route_all_to), negotiate.rs (401
                        handshake, Basic over TLS), sspi.rs (SspiNegotiate: NegotiateAuth over SSPI; real in-process
                        handshake tests; ignored live test tests/sspi_live.rs with NAIL_EWS_LIVE_URL), mapping/ (categories,
-                       focus, rules, oof, events, tasks, contacts, rooms, text, time), texts.rs (exchange-autodiscover-*,
+                       focus, rules, oof, events, tasks, contacts, rooms, text, time, windows_zones = IANA → Windows ids
+                       for EWS writes; ADR 0078), texts.rs (exchange-autodiscover-*,
                        -signin-*, -rule-reason-*, -oof-note-*, -pim-reason-*); feature `testing` = MockAutodiscoverServer
                        (multi-host, Basic / scripted Negotiate, request log)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)

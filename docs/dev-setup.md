@@ -374,7 +374,9 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `graph-pim` | – | `{events, tasks, contacts}` (Graph JSON; tasks with their list and checklist) |
 | `graph-meetings` | – | `[{event_id, action}]`: meeting answers / cancellations received |
 | `ews-deliver` | `raw`, `folder?` | New message on the mock EWS server (distinguished folder name, `inbox` by default); `{id}` (M3c) |
-| `ews-messages` | `folder?` | `[{id, subject, read}]` of an EWS folder |
+| `ews-messages` | `folder?` | `[{id, subject, read, categories, start, start_time_zone}]` of an EWS folder (distinguished name such as `inbox` / `calendar`, or a display name such as `Archive`) |
+| `ews-settings` | – | `{oof: {state, internal, external}, rules: [{name, enabled}]}` of the mock EWS server |
+| `ews-meetings` | – | `[{kind, subject, comment}]`: meeting requests, answers and cancellations the mock EWS server sent |
 | `ews-sent` | – | Raw texts of what Nail sent through EWS |
 | `feeds` | – | `{holidays, town}`: URLs of the demo ICS feeds (`holidays` is configured, `town` is for adding a subscription) |
 | `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications, reminders), Unix seconds |

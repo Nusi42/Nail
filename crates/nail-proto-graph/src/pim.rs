@@ -428,6 +428,22 @@ pub fn event_from_graph(value: &Value) -> Option<ExchangeEvent> {
     })
 }
 
+/// What an update of a meeting the user does not organize may change: the
+/// own copy (reminder, categories, notes, show-as, …), not the attendees,
+/// the response request or the series (ADR 0078).
+pub fn event_update_to_graph(e: &ExchangeEvent) -> Value {
+    let mut out = event_to_graph(e);
+    if !e.is_organizer
+        && !e.attendees.is_empty()
+        && let Some(map) = out.as_object_mut()
+    {
+        for key in ["attendees", "responseRequested", "recurrence"] {
+            map.remove(key);
+        }
+    }
+    out
+}
+
 /// The writable parts of the contract's event as a Graph `event`.
 pub fn event_to_graph(e: &ExchangeEvent) -> Value {
     let mut out = json!({
@@ -1363,7 +1379,7 @@ impl GraphEngine {
                     .send_json(
                         Method::PATCH,
                         &format!("{base}/events/{}", path_segment(&event.remote_id)),
-                        Some(&event_to_graph(event)),
+                        Some(&event_update_to_graph(event)),
                         &if_match(event.change_key.as_deref()),
                         true,
                         "PATCH event",
@@ -1738,6 +1754,15 @@ mod tests {
         let graph = event_to_graph(&event);
         assert_eq!(graph["recurrence"]["range"]["type"], "numbered");
         assert_eq!(graph["attendees"][1]["type"], "resource");
+        // An attendee's update leaves the organizer's parts alone.
+        let mut copy = event.clone();
+        copy.is_organizer = false;
+        let update = event_update_to_graph(&copy);
+        assert!(update.get("attendees").is_none());
+        assert!(update.get("recurrence").is_none());
+        assert_eq!(update["reminderMinutesBeforeStart"], 15);
+        copy.is_organizer = true;
+        assert!(event_update_to_graph(&copy).get("attendees").is_some());
         assert_eq!(graph["location"]["locationType"], "conferenceRoom");
         assert_eq!(graph["reminderMinutesBeforeStart"], 15);
         let mut round = event_from_graph(&graph).unwrap();

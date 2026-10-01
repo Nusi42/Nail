@@ -120,6 +120,9 @@ pub(crate) struct ExchangeCtl {
     /// Automapped mailboxes Autodiscover found, by address (lowercase),
     /// stored when the account is added.
     discovered: Mutex<HashMap<String, Vec<ExchangeMailboxSettings>>>,
+    /// Hosts whose sign-in prompt Autodiscover showed, by address
+    /// (lowercase): a Windows sign-in goes only there (ADR 0078).
+    login_prompts: Mutex<HashMap<String, Vec<String>>>,
     /// Warnings of accounts without a running engine (rooms asked through
     /// a temporary engine).
     warnings: Mutex<HashMap<AccountId, Vec<ExchangeWarning>>>,
@@ -131,6 +134,7 @@ impl ExchangeCtl {
             hooks,
             engines: Mutex::new(HashMap::new()),
             discovered: Mutex::new(HashMap::new()),
+            login_prompts: Mutex::new(HashMap::new()),
             warnings: Mutex::new(HashMap::new()),
         }
     }
@@ -161,6 +165,27 @@ impl ExchangeCtl {
             .collect();
         out.sort_by(|a, b| a.0.cmp(&b.0));
         out
+    }
+
+    /// Remembers the host a Windows sign-in prompt named for an address
+    /// (the next run may sign in there, and only there).
+    pub(crate) fn remember_login_prompt(&self, email: &str, host: &str) {
+        let mut prompts = lock(&self.login_prompts);
+        let hosts = prompts
+            .entry(email.trim().to_ascii_lowercase())
+            .or_default();
+        let host = host.trim().to_ascii_lowercase();
+        if !hosts.contains(&host) {
+            hosts.push(host);
+        }
+    }
+
+    /// The hosts an address's Windows sign-in may go to.
+    pub(crate) fn login_hosts(&self, email: &str) -> Vec<String> {
+        lock(&self.login_prompts)
+            .get(&email.trim().to_ascii_lowercase())
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub(crate) fn remember_discovery(&self, email: &str, mailboxes: Vec<ExchangeMailboxSettings>) {
@@ -931,6 +956,19 @@ pub(crate) async fn free_busy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_windows_sign_in_goes_only_to_prompted_hosts() {
+        let ctl = ExchangeCtl::new(ExchangeHooks::default());
+        assert!(ctl.login_hosts("ada@corp.example").is_empty());
+        ctl.remember_login_prompt("Ada@Corp.example ", "Autodiscover.corp.example");
+        ctl.remember_login_prompt("ada@corp.example", "autodiscover.corp.example");
+        assert_eq!(
+            ctl.login_hosts("ada@corp.example"),
+            ["autodiscover.corp.example"]
+        );
+        assert!(ctl.login_hosts("grace@corp.example").is_empty());
+    }
 
     #[test]
     fn hooks_debug_hides_details() {

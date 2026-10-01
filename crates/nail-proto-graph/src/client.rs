@@ -132,6 +132,33 @@ pub(crate) enum Body {
     },
 }
 
+/// The `Prefer` value asking for immutable ids: a message keeps its id when
+/// it is moved (by Nail, another client or a server rule), so a move is not
+/// seen as a delete plus a new message (ADR 0078).
+pub const IMMUTABLE_IDS: &str = "IdType=\"ImmutableId\"";
+
+/// `headers` with [`IMMUTABLE_IDS`] merged into their `Prefer` header (one
+/// header, preferences separated by commas).
+pub(crate) fn with_immutable_ids(headers: &[(String, String)]) -> Vec<(String, String)> {
+    let mut prefer = vec![IMMUTABLE_IDS.to_owned()];
+    let mut out = Vec::with_capacity(headers.len() + 1);
+    for (name, value) in headers {
+        if name.eq_ignore_ascii_case("prefer") {
+            prefer.extend(
+                value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|p| !p.is_empty() && !p.starts_with("IdType="))
+                    .map(str::to_owned),
+            );
+        } else {
+            out.push((name.clone(), value.clone()));
+        }
+    }
+    out.push(("Prefer".to_owned(), prefer.join(", ")));
+    out
+}
+
 /// A request.
 #[derive(Debug, Clone)]
 pub(crate) struct Call {
@@ -354,7 +381,7 @@ impl GraphClient {
         request = request
             .header(reqwest::header::AUTHORIZATION, value)
             .header(reqwest::header::ACCEPT, "application/json");
-        for (name, value) in &call.headers {
+        for (name, value) in with_immutable_ids(&call.headers) {
             request = request.header(name.as_str(), value.as_str());
         }
         match &call.body {

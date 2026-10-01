@@ -150,6 +150,7 @@ pub(crate) async fn run(
         focused_inbox: None,
     };
     let mut backoff = timing.reconnect_min;
+    let mut stream_backoff = timing.reconnect_min;
     loop {
         if *stop.borrow() {
             break;
@@ -192,7 +193,7 @@ pub(crate) async fn run(
                 delay
             }
         };
-        let deadline = tokio::time::Instant::now() + delay;
+        let mut deadline = tokio::time::Instant::now() + delay;
         let mut push_ok = streaming && ok;
         loop {
             if push_ok {
@@ -204,6 +205,7 @@ pub(crate) async fn run(
                 tokio::select! {
                     result = wait => match result {
                         Ok(Some(folders)) if !folders.is_empty() => {
+                            stream_backoff = timing.reconnect_min;
                             for remote in folders {
                                 state.woken.insert(exchange_folder_id(
                                     &account.id, None, &remote,
@@ -212,6 +214,7 @@ pub(crate) async fn run(
                             break;
                         }
                         Ok(Some(_)) => {
+                            stream_backoff = timing.reconnect_min;
                             if tokio::time::Instant::now() >= deadline {
                                 break;
                             }
@@ -221,8 +224,22 @@ pub(crate) async fn run(
                             push_ok = false;
                         }
                         Err(err) => {
+                            // Poll until the next pass, which waits for the
+                            // back-off and the server's Retry-After: a
+                            // subscription that keeps failing must not turn
+                            // into back-to-back passes (ADR 0078).
                             tracing::info!(account = %account.id, %err, "streaming notifications failed");
-                            break;
+                            if let Some(secs) = err.retry_after_secs {
+                                record_throttle(&service, &account.id, secs).await;
+                            }
+                            let wait = stream_retry_delay(
+                                &mut state.poll,
+                                &mut stream_backoff,
+                                timing.reconnect_max,
+                                &err,
+                            );
+                            deadline = deadline.max(tokio::time::Instant::now() + wait);
+                            push_ok = false;
                         }
                     },
                     () = signals.sync.notified() => {
@@ -272,6 +289,22 @@ pub(crate) async fn run(
     }
     service.inner.exchange.unregister(&account.id, &running);
     tracing::info!(account = %account.id, "engine stopped");
+}
+
+/// The wait after streaming notifications failed: the back-off (doubling
+/// up to `max`) or the server's Retry-After, whichever is longer; the
+/// poll timer learns the Retry-After for the next round.
+fn stream_retry_delay(
+    poll: &mut PollTimer,
+    backoff: &mut std::time::Duration,
+    max: std::time::Duration,
+    err: &EngineError,
+) -> std::time::Duration {
+    poll.observe(&Err(err.clone()));
+    let retry_after = std::time::Duration::from_secs(u64::from(err.retry_after_secs.unwrap_or(0)));
+    let delay = (*backoff).max(retry_after);
+    *backoff = (*backoff * 2).min(max);
+    delay
 }
 
 async fn record_throttle(service: &Service, account: &AccountId, secs: u32) {
@@ -472,34 +505,63 @@ async fn sync_mailbox(
             .track(f.folder_id.as_str(), priority || f.cursor.is_none());
     }
     let due: HashSet<String> = state.folders.due().into_iter().collect();
-    for folder in folders {
-        let key = folder.folder_id.as_str().to_owned();
+    let mut synced: HashSet<FolderId> = HashSet::new();
+    for folder in &folders {
         let woken = state.woken.remove(&folder.folder_id);
-        if !due.contains(&key) && !woken {
+        if !due.contains(folder.folder_id.as_str()) && !woken {
             continue;
         }
-        let result = sync_folder(service, account, engine.as_ref(), &folder).await;
-        match result {
-            Ok(changes) => {
-                state.folders.observe(&key, changes);
-                state.poll.observe_changes(changes);
-                if folder.cursor.is_some() {
-                    state.folders.track(
-                        &key,
-                        mailbox.is_none()
-                            && folder.well_known == Some(ExchangeWellKnownFolder::Inbox),
-                    );
-                }
-            }
-            Err(err) if err.code() == ErrorCode::NotFound => {
-                tracing::info!(account = %account.id, folder = %folder.remote_id, "folder gone");
-                remove_folders(service, std::slice::from_ref(&folder.folder_id)).await?;
-                state.folders.untrack(&key);
-            }
-            Err(err) => return Err(err),
+        synced.insert(folder.folder_id.clone());
+        sync_one(service, account, engine, mailbox, folder, state).await?;
+    }
+    // Messages reported removed may have moved to a folder this pass did
+    // not sync yet: every folder of the mailbox is synced before what is
+    // still marked is deleted (ADR 0078).
+    let (id, key) = (account.id.clone(), mailbox.map(str::to_owned));
+    let pending = service
+        .store()
+        .call(move |s| s.exchange_removed(&id, key.as_deref()))
+        .await?;
+    if !pending.is_empty() {
+        for folder in folders.iter().filter(|f| !synced.contains(&f.folder_id)) {
+            sync_one(service, account, engine, mailbox, folder, state).await?;
         }
+        flush_removed(service, &account.id, mailbox).await?;
     }
     Ok(())
+}
+
+/// Syncs one mail folder of a mailbox (a folder the server no longer has
+/// is removed).
+async fn sync_one(
+    service: &Service,
+    account: &AccountConfig,
+    engine: &Arc<dyn ExchangeEngine>,
+    mailbox: Option<&str>,
+    folder: &ExchangeFolderRecord,
+    state: &mut LoopState,
+) -> Result<()> {
+    let key = folder.folder_id.as_str().to_owned();
+    match sync_folder(service, account, engine.as_ref(), folder).await {
+        Ok(changes) => {
+            state.folders.observe(&key, changes);
+            state.poll.observe_changes(changes);
+            if folder.cursor.is_some() {
+                state.folders.track(
+                    &key,
+                    mailbox.is_none() && folder.well_known == Some(ExchangeWellKnownFolder::Inbox),
+                );
+            }
+            Ok(())
+        }
+        Err(err) if err.code() == ErrorCode::NotFound => {
+            tracing::info!(account = %account.id, folder = %folder.remote_id, "folder gone");
+            remove_folders(service, std::slice::from_ref(&folder.folder_id)).await?;
+            state.folders.untrack(&key);
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// The folder hierarchy of a mailbox into the store.
@@ -779,6 +841,7 @@ async fn remove_folders(service: &Service, folders: &[FolderId]) -> Result<()> {
         .store()
         .call(move |s| {
             for folder in &list {
+                s.clear_exchange_listed(folder.as_str())?;
                 s.delete_folder(folder)?;
             }
             Ok(())
@@ -820,6 +883,117 @@ pub(crate) async fn forget_mailbox(
 // ---------------------------------------------------------------------------
 // Items
 
+/// What kind of full listing runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ListingKind {
+    /// The folder was never listed: what it holds is not new mail.
+    First,
+    /// Listed again (an expired cursor): merged with the store, and what
+    /// arrived meanwhile is new mail.
+    Full,
+}
+
+/// A full listing of a mail folder or PIM collection, kept across passes
+/// (`full_sync_page`) until its last page arrived: an interrupted first
+/// listing stays a first listing, and the merge runs only after the last
+/// page (ADR 0078).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Listing {
+    pub kind: ListingKind,
+    /// The page to go on with (`None` = from the start).
+    pub resume: Option<String>,
+}
+
+impl Listing {
+    pub(crate) fn new(kind: ListingKind) -> Self {
+        Self { kind, resume: None }
+    }
+
+    /// The stored form (`first:<page>` / `full:<page>`).
+    pub(crate) fn encode(&self) -> String {
+        let kind = match self.kind {
+            ListingKind::First => "first",
+            ListingKind::Full => "full",
+        };
+        format!("{kind}:{}", self.resume.as_deref().unwrap_or(""))
+    }
+
+    pub(crate) fn decode(text: &str) -> Option<Self> {
+        let (kind, page) = text.split_once(':')?;
+        let kind = match kind {
+            "first" => ListingKind::First,
+            "full" => ListingKind::Full,
+            _ => return None,
+        };
+        Some(Self {
+            kind,
+            resume: (!page.is_empty()).then(|| page.to_owned()),
+        })
+    }
+
+    /// The listing a folder needs: the one in progress, a first one
+    /// (never listed), a full one (no cursor), or none (go on with the
+    /// cursor).
+    pub(crate) fn of(
+        cursor: Option<&str>,
+        page: Option<&str>,
+        last_sync_at: Option<i64>,
+    ) -> Option<Self> {
+        if let Some(listing) = page.and_then(Self::decode) {
+            return Some(listing);
+        }
+        if cursor.is_some() {
+            return None;
+        }
+        Some(Self::new(if last_sync_at.is_none() {
+            ListingKind::First
+        } else {
+            ListingKind::Full
+        }))
+    }
+
+    /// Whether new messages of this listing are arrivals (rules, NewMail).
+    pub(crate) fn arrivals(&self) -> bool {
+        self.kind == ListingKind::Full
+    }
+
+    /// The listing after the server refused its cursor: a delta cursor
+    /// starts a full listing; a listing that went on from a stored page
+    /// starts again (once); a listing from the start fails (`None`).
+    pub(crate) fn after_expiry(listing: Option<Self>, restarted: &mut bool) -> Option<Self> {
+        match listing {
+            None => Some(Self::new(ListingKind::Full)),
+            Some(l) if l.resume.is_some() && !*restarted => {
+                *restarted = true;
+                Some(Self::new(l.kind))
+            }
+            Some(_) => None,
+        }
+    }
+}
+
+/// Stores a folder's cursor and listing in progress (`clear`: forget what
+/// a listing saw — it starts or ended).
+async fn save_folder_cursor(
+    service: &Service,
+    folder: &FolderId,
+    cursor: Option<String>,
+    listing: Option<&Listing>,
+    clear: bool,
+) -> Result<()> {
+    let (id, page, now) = (folder.clone(), listing.map(Listing::encode), unix_now());
+    service
+        .store()
+        .call(move |s| {
+            if clear {
+                s.clear_exchange_listed(id.as_str())?;
+            }
+            s.set_exchange_folder_cursor(&id, cursor.as_deref(), page.as_deref(), now)
+        })
+        .await?;
+    Ok(())
+}
+
 /// Syncs one folder's items; `true` when something changed.
 async fn sync_folder(
     service: &Service,
@@ -828,15 +1002,27 @@ async fn sync_folder(
     folder: &ExchangeFolderRecord,
 ) -> Result<bool> {
     let mailbox = folder.mailbox.as_deref();
-    let mut cursor = folder.cursor.clone();
-    let mut full = cursor.is_none();
-    let first_sync = folder.cursor.is_none() && folder.last_sync_at.is_none();
-    let mut listed: HashSet<String> = HashSet::new();
+    let mut listing = Listing::of(
+        folder.cursor.as_deref(),
+        folder.full_sync_page.as_deref(),
+        folder.last_sync_at,
+    );
+    let mut cursor = match &listing {
+        Some(l) => l.resume.clone(),
+        None => folder.cursor.clone(),
+    };
+    if listing.as_ref().is_some_and(|l| l.resume.is_none()) {
+        save_folder_cursor(service, &folder.folder_id, None, listing.as_ref(), true).await?;
+    }
+    let mut restarted = false;
     let mut any = false;
     let mut pages = 0u32;
     loop {
         pages += 1;
         if pages > MAX_PAGES {
+            // A runaway listing goes on in the next pass; a partial
+            // listing is never merged.
+            tracing::info!(account = %account.id, folder = %folder.remote_id, "page limit; going on later");
             break;
         }
         match engine
@@ -845,32 +1031,73 @@ async fn sync_folder(
             .map_err(CoreError::from)?
         {
             DeltaOutcome::CursorExpired => {
-                if full {
+                let was_delta = listing.is_none();
+                listing = Listing::after_expiry(listing, &mut restarted);
+                if listing.is_none() {
                     return Err(ApiError::new(
                         ErrorCode::Internal,
                         "the server refused a full listing",
                     )
                     .into());
                 }
-                tracing::info!(account = %account.id, folder = %folder.remote_id, "cursor expired; listing again");
+                if was_delta {
+                    tracing::info!(account = %account.id, folder = %folder.remote_id, "cursor expired; listing again");
+                }
                 cursor = None;
-                full = true;
-                listed.clear();
                 any = true;
+                save_folder_cursor(service, &folder.folder_id, None, listing.as_ref(), true)
+                    .await?;
             }
             DeltaOutcome::Delta(delta) => {
-                listed.extend(delta.added.iter().map(|m| m.remote_id.clone()));
-                listed.extend(delta.changed.iter().map(|m| m.remote_id.clone()));
                 any |= !(delta.added.is_empty()
                     && delta.changed.is_empty()
                     && delta.removed.is_empty());
-                apply_delta(service, account, engine, folder, &delta, !first_sync).await?;
-                let (id, next, more) = (folder.folder_id.clone(), delta.cursor.clone(), delta.more);
-                let now = unix_now();
-                service
-                    .store()
-                    .call(move |s| s.set_exchange_folder_cursor(&id, Some(&next), None, now))
-                    .await?;
+                let arrivals = listing.as_ref().is_none_or(Listing::arrivals);
+                apply_delta(service, account, engine, folder, &delta, arrivals).await?;
+                let more = delta.more;
+                match &mut listing {
+                    None => {
+                        save_folder_cursor(
+                            service,
+                            &folder.folder_id,
+                            Some(delta.cursor.clone()),
+                            None,
+                            false,
+                        )
+                        .await?;
+                    }
+                    Some(l) => {
+                        let seen: Vec<String> = delta
+                            .added
+                            .iter()
+                            .map(|m| m.remote_id.clone())
+                            .chain(delta.changed.iter().map(|m| m.remote_id.clone()))
+                            .collect();
+                        let (id, scope) = (account.id.clone(), folder.folder_id.clone());
+                        service
+                            .store()
+                            .call(move |s| s.add_exchange_listed(&id, scope.as_str(), &seen))
+                            .await?;
+                        if more {
+                            l.resume = Some(delta.cursor.clone());
+                            save_folder_cursor(service, &folder.folder_id, None, Some(l), false)
+                                .await?;
+                        } else {
+                            // The last page: what the server no longer
+                            // lists is gone (or moved: see `flush_removed`);
+                            // local-only messages without a server id stay.
+                            any |= merge_listing(service, &account.id, folder).await?;
+                            save_folder_cursor(
+                                service,
+                                &folder.folder_id,
+                                Some(delta.cursor.clone()),
+                                None,
+                                true,
+                            )
+                            .await?;
+                        }
+                    }
+                }
                 if !more {
                     break;
                 }
@@ -878,33 +1105,59 @@ async fn sync_folder(
             }
         }
     }
-    if full {
-        // Merge: what the server no longer lists is gone (local-only
-        // messages without a server id stay).
-        let id = folder.folder_id.clone();
-        let gone: Vec<MessageId> = service
-            .store()
-            .call(move |s| {
-                let mut gone = Vec::new();
-                for m in s.list_messages(&id, 0, u32::MAX)?.messages {
-                    if let Some(remote) = s.message_remote_id(&m.id)?
-                        && !listed.contains(&remote)
-                    {
-                        gone.push(m.id);
-                    }
-                }
-                Ok(gone)
-            })
-            .await?;
-        any |= !gone.is_empty();
-        remove_messages(service, gone).await?;
-    }
     if any {
         service.broadcast(Event::MailChanged {
             folder_ids: vec![folder.folder_id.clone()],
         });
     }
     Ok(any)
+}
+
+/// After the last page of a full listing: the folder's messages the
+/// listing did not see are marked removed; `true` when there were any.
+async fn merge_listing(
+    service: &Service,
+    account: &AccountId,
+    folder: &ExchangeFolderRecord,
+) -> Result<bool> {
+    let (id, folder_id, mailbox, now) = (
+        account.clone(),
+        folder.folder_id.clone(),
+        folder.mailbox.clone(),
+        unix_now(),
+    );
+    Ok(service
+        .store()
+        .call(move |s| {
+            let gone = s.exchange_unlisted_messages(&folder_id)?;
+            for m in &gone {
+                s.mark_exchange_removed(&id, mailbox.as_deref(), m, now)?;
+            }
+            Ok(!gone.is_empty())
+        })
+        .await?)
+}
+
+/// Deletes the messages of a mailbox still marked removed after every
+/// folder of it was synced (they did not show up anywhere else).
+async fn flush_removed(
+    service: &Service,
+    account: &AccountId,
+    mailbox: Option<&str>,
+) -> Result<()> {
+    let (id, key) = (account.clone(), mailbox.map(str::to_owned));
+    let gone = service
+        .store()
+        .call(move |s| s.exchange_removed(&id, key.as_deref()))
+        .await?;
+    if gone.is_empty() {
+        return Ok(());
+    }
+    remove_messages(service, gone).await?;
+    service.broadcast(Event::MailChanged {
+        folder_ids: Vec::new(),
+    });
+    Ok(())
 }
 
 async fn remove_messages(service: &Service, ids: Vec<MessageId>) -> Result<()> {
@@ -986,21 +1239,30 @@ async fn apply_delta(
         })
         .collect();
     store_messages(service, account, engine, folder, &fresh, &master, arrivals).await?;
-    let id = account.id.clone();
-    let removed = delta.removed.clone();
-    let gone: Vec<MessageId> = service
+    // Removed from this folder: deleted, or moved by another client (or a
+    // server rule). Marked until every folder of the mailbox was synced
+    // (`flush_removed`), so a moved message is moved locally when it shows
+    // up in its new folder. A message already moved elsewhere stays.
+    let (id, removed, folder_id, mailbox, now) = (
+        account.id.clone(),
+        delta.removed.clone(),
+        folder.folder_id.clone(),
+        folder.mailbox.clone(),
+        unix_now(),
+    );
+    service
         .store()
         .call(move |s| {
-            let mut out = Vec::new();
             for remote in &removed {
-                if let Some(m) = s.message_by_remote_id(&id, remote)? {
-                    out.push(m);
+                if let Some(m) = s.message_by_remote_id(&id, remote)?
+                    && s.get_message(&m)?.summary.folder_id == folder_id
+                {
+                    s.mark_exchange_removed(&id, mailbox.as_deref(), &m, now)?;
                 }
             }
-            Ok(out)
+            Ok(())
         })
         .await?;
-    remove_messages(service, gone).await?;
     Ok(())
 }
 
@@ -1041,52 +1303,127 @@ async fn apply_change(
             let Some(message_id) = s.message_by_remote_id(&id, &change.remote_id)? else {
                 return Ok(false);
             };
-            let mut stored = s.get_message(&message_id)?;
-            let target = match &change.folder {
-                Some(remote) => s
-                    .exchange_folder_by_remote(&id, folder.mailbox.as_deref(), remote)?
-                    .unwrap_or_else(|| folder.clone()),
-                None => folder.clone(),
-            };
-            stored.summary.folder_id = target.folder_id.clone();
-            if let Some(flags) = change.flags {
-                stored.summary.flags = flags;
-            }
-            if let Some(tags) = &change.tags {
-                let mut keep: Vec<String> = stored
-                    .summary
-                    .tags
-                    .iter()
-                    .filter(|t| !nail_exchange::mapping::categories::is_category_name(t))
-                    .cloned()
-                    .collect();
-                keep.extend(nail_exchange::mapping::categories::tags_for_categories(
-                    tags, &master,
-                ));
-                stored.summary.tags = keep;
-            }
-            s.merge_messages(&[SyncedMessage {
-                message: stored,
-                meta: None,
-            }])?;
-            let previous = s.exchange_item(&message_id)?;
-            let mut record = item_record(
-                &target,
-                change.change_key.as_ref(),
-                change.exchange.as_ref(),
-            );
-            if change.exchange.is_none()
-                && let Some(previous) = previous
-            {
-                record.conversation_id = previous.conversation_id;
-                if target.well_known == Some(ExchangeWellKnownFolder::Inbox) {
-                    record.inference = previous.inference;
-                }
-            }
-            s.set_exchange_item(&message_id, &record)?;
+            apply_change_to(s, &id, &message_id, &folder, &change, &master)?;
             Ok(true)
         })
         .await?)
+}
+
+/// Applies a server change to the stored message `message_id` (moving it
+/// to the change's folder; a message marked removed is on the server
+/// after all).
+fn apply_change_to(
+    s: &nail_store::Store,
+    id: &AccountId,
+    message_id: &MessageId,
+    folder: &ExchangeFolderRecord,
+    change: &RemoteMessageChange,
+    master: &[ExchangeCategorySettings],
+) -> nail_store::Result<()> {
+    s.clear_exchange_removed(message_id)?;
+    let mut stored = s.get_message(message_id)?;
+    let target = match &change.folder {
+        Some(remote) => s
+            .exchange_folder_by_remote(id, folder.mailbox.as_deref(), remote)?
+            .unwrap_or_else(|| folder.clone()),
+        None => folder.clone(),
+    };
+    stored.summary.folder_id = target.folder_id.clone();
+    if let Some(flags) = change.flags {
+        stored.summary.flags = flags;
+    }
+    if let Some(tags) = &change.tags {
+        let mut keep: Vec<String> = stored
+            .summary
+            .tags
+            .iter()
+            .filter(|t| !nail_exchange::mapping::categories::is_category_name(t))
+            .cloned()
+            .collect();
+        keep.extend(nail_exchange::mapping::categories::tags_for_categories(
+            tags, master,
+        ));
+        stored.summary.tags = keep;
+    }
+    s.merge_messages(&[SyncedMessage {
+        message: stored,
+        meta: None,
+    }])?;
+    let previous = s.exchange_item(message_id)?;
+    let mut record = item_record(
+        &target,
+        change.change_key.as_ref(),
+        change.exchange.as_ref(),
+    );
+    if change.exchange.is_none()
+        && let Some(previous) = previous
+    {
+        record.conversation_id = previous.conversation_id;
+        if target.well_known == Some(ExchangeWellKnownFolder::Inbox) {
+            record.inference = previous.inference;
+        }
+    }
+    s.set_exchange_item(message_id, &record)?;
+    Ok(())
+}
+
+/// A message another client moved, found again in `folder` under its new
+/// server id: the stored copy (with its local state) moves there instead
+/// of a second copy being downloaded (ADR 0078). Candidates carry the same
+/// `Message-ID` in the same mailbox: first one marked removed (its old
+/// folder reported it gone); else, outside a first listing, one in another
+/// folder whose old server id no longer exists. `None`: a new message.
+async fn moved_copy(
+    service: &Service,
+    account: &AccountId,
+    engine: &dyn ExchangeEngine,
+    folder: &ExchangeFolderRecord,
+    raw: &[u8],
+    probe: bool,
+) -> Result<Option<MessageId>> {
+    let Some(message_id) = nail_mime::parse_message(raw).headers.message_id else {
+        return Ok(None);
+    };
+    let (id, mailbox, folder_id, mid) = (
+        account.clone(),
+        folder.mailbox.clone(),
+        folder.folder_id.clone(),
+        message_id.clone(),
+    );
+    let (removed, others) = service
+        .store()
+        .call(move |s| {
+            let removed = s.exchange_removed_by_message_id(&id, mailbox.as_deref(), &mid)?;
+            let mut others = Vec::new();
+            if removed.is_empty() {
+                for m in s.find_messages_by_message_id(&mid)? {
+                    if m.account_id != id || m.folder_id == folder_id {
+                        continue;
+                    }
+                    let same_mailbox = s.exchange_item(&m.id)?.and_then(|i| i.mailbox) == mailbox;
+                    if let (true, Some(remote)) = (same_mailbox, s.message_remote_id(&m.id)?) {
+                        others.push((m.id, remote));
+                    }
+                }
+            }
+            Ok((removed, others))
+        })
+        .await?;
+    if let Some(first) = removed.into_iter().next() {
+        return Ok(Some(first));
+    }
+    if !probe {
+        return Ok(None);
+    }
+    for (candidate, remote) in others {
+        match engine.fetch_mime(folder.mailbox.as_deref(), &remote).await {
+            // Still there: a copy, not the moved message.
+            Ok(_) => {}
+            Err(err) if err.code == ErrorCode::NotFound => return Ok(Some(candidate)),
+            Err(err) => return Err(err.into()),
+        }
+    }
+    Ok(None)
 }
 
 /// Stores listed / new messages: known ones get the server's metadata,
@@ -1133,6 +1470,21 @@ async fn store_messages(
                     Err(err) => return Err(err.into()),
                 },
             };
+            if let Some(moved) =
+                moved_copy(service, &account.id, engine, folder, &raw, arrivals).await?
+            {
+                tracing::debug!(account = %account.id, message = ?moved, "moved on the server");
+                let (id, f, master) = (account.id.clone(), folder.clone(), master.to_vec());
+                let remote = m.remote_id.clone();
+                service
+                    .store()
+                    .call(move |s| {
+                        s.set_message_remote_id(&moved, Some(&remote))?;
+                        apply_change_to(s, &id, &moved, &f, &change, &master)
+                    })
+                    .await?;
+                continue;
+            }
             let id = exchange_message_id(&account.id, &m.remote_id);
             let tags = nail_exchange::mapping::categories::tags_for_categories(&m.tags, master);
             let incoming = IncomingMessage {
@@ -1415,6 +1767,18 @@ impl ExchangeExecutor<'_> {
             .store()
             .call(move |s| {
                 s.set_message_remote_id(&id, Some(&remote))?;
+                // A listing of the target in progress must not take the
+                // moved message for one the server no longer has.
+                if let Some(folder) = &folder
+                    && folder.full_sync_page.is_some()
+                {
+                    let account = s.get_message(&id)?.summary.account_id;
+                    s.add_exchange_listed(
+                        &account,
+                        folder.folder_id.as_str(),
+                        std::slice::from_ref(&remote),
+                    )?;
+                }
                 if let Some(folder) = folder
                     && let Some(mut item) = s.exchange_item(&id)?
                 {
@@ -1627,6 +1991,83 @@ mod tests {
             mailbox_root_id(&account, "support@contoso.example"),
             exchange_folder_id(&account, Some("support@contoso.example"), "")
         );
+    }
+
+    #[test]
+    fn an_interrupted_first_listing_stays_a_first_listing() {
+        // Never listed: a first listing (no arrivals).
+        let first = Listing::of(None, None, None).unwrap();
+        assert_eq!(first.kind, ListingKind::First);
+        assert!(!first.arrivals());
+        // Interrupted after a page: the next pass goes on with it, still
+        // without arrivals, although a page was stored and synced.
+        let mut going = first.clone();
+        going.resume = Some("https://graph/next?$skiptoken=a:b".into());
+        let stored = going.encode();
+        let resumed = Listing::of(None, Some(&stored), Some(1_700_000_000)).unwrap();
+        assert_eq!(resumed, going);
+        assert!(!resumed.arrivals());
+        // A cursor and no listing: deltas.
+        assert_eq!(Listing::of(Some("delta"), None, Some(1)), None);
+        // No cursor after a sync: listed again, with arrivals.
+        let full = Listing::of(None, None, Some(1)).unwrap();
+        assert_eq!(full.kind, ListingKind::Full);
+        assert!(full.arrivals());
+        assert_eq!(
+            Listing::decode("full:"),
+            Some(Listing::new(ListingKind::Full))
+        );
+        assert_eq!(Listing::decode("garbage"), None);
+    }
+
+    #[test]
+    fn an_expired_cursor_during_a_listing_restarts_once_then_fails() {
+        let mut restarted = false;
+        // A delta cursor expired: a full listing.
+        let full = Listing::after_expiry(None, &mut restarted).unwrap();
+        assert_eq!(full.kind, ListingKind::Full);
+        assert!(!restarted);
+        // A stored page expired: the listing starts again (same kind).
+        let going = Listing {
+            kind: ListingKind::First,
+            resume: Some("page".into()),
+        };
+        let again = Listing::after_expiry(Some(going.clone()), &mut restarted).unwrap();
+        assert_eq!(again, Listing::new(ListingKind::First));
+        // Again, or from the start: an error, never a merge of nothing.
+        assert_eq!(Listing::after_expiry(Some(going), &mut restarted), None);
+        let mut fresh = false;
+        assert_eq!(
+            Listing::after_expiry(Some(Listing::new(ListingKind::Full)), &mut fresh),
+            None
+        );
+    }
+
+    #[test]
+    fn failed_streaming_waits_for_backoff_and_retry_after() {
+        use std::time::Duration;
+        let mut poll = PollTimer::new(&nail_api::exchange::ExchangeOptions::default());
+        let mut backoff = Duration::from_millis(200);
+        let max = Duration::from_secs(1);
+        let err = EngineError::permanent(ErrorCode::Forbidden, "ErrorProxyRequestNotAllowed");
+        assert_eq!(
+            stream_retry_delay(&mut poll, &mut backoff, max, &err),
+            Duration::from_millis(200)
+        );
+        assert_eq!(
+            stream_retry_delay(&mut poll, &mut backoff, max, &err),
+            Duration::from_millis(400)
+        );
+        let mut busy = EngineError::temporary(ErrorCode::Network, "busy");
+        busy.retry_after_secs = Some(30);
+        assert_eq!(
+            stream_retry_delay(&mut poll, &mut backoff, max, &busy),
+            Duration::from_secs(30)
+        );
+        assert_eq!(backoff, max);
+        // The poll timer waits for the Retry-After too.
+        poll.end_round();
+        assert!(poll.next_delay() >= Duration::from_secs(30));
     }
 
     #[test]

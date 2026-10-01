@@ -282,6 +282,12 @@ pub const SEALED_COLUMNS: &[SealedColumn] = &[
         column: "payload",
         key: "id",
     },
+    // A meeting answer's comment queued for the meeting API (v13, ADR 0078).
+    SealedColumn {
+        table: "exchange_meeting_answers",
+        column: "comment",
+        key: "id",
+    },
 ];
 
 /// Progress of the sealed columns: how many values are sealed and how many

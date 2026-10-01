@@ -299,6 +299,9 @@ pub(crate) async fn autodiscover(
         login,
         windows_username: None,
         trusted_hosts: trusted_hosts.to_vec(),
+        // A Windows sign-in goes only to hosts whose prompt the user
+        // answered (ADR 0078).
+        login_hosts: windows_sign_in.then(|| service.inner.exchange.login_hosts(email)),
     };
     let outcome = match discoverer.discover(&request).await {
         Ok(outcome) => outcome,
@@ -341,16 +344,22 @@ pub(crate) async fn autodiscover(
                 ..ExchangeDiscoveryInfo::default()
             }),
         ),
-        AutodiscoverOutcome::NeedsLogin(needed) => (
-            Vec::new(),
-            Some(ExchangeDiscoveryInfo {
-                prompt: Some(ExchangeDiscoveryPrompt::NeedsLogin {
-                    localized: needed.localized(),
-                    host: needed.host,
+        AutodiscoverOutcome::NeedsLogin(needed) => {
+            service
+                .inner
+                .exchange
+                .remember_login_prompt(email, &needed.host);
+            (
+                Vec::new(),
+                Some(ExchangeDiscoveryInfo {
+                    prompt: Some(ExchangeDiscoveryPrompt::NeedsLogin {
+                        localized: needed.localized(),
+                        host: needed.host,
+                    }),
+                    ..ExchangeDiscoveryInfo::default()
                 }),
-                ..ExchangeDiscoveryInfo::default()
-            }),
-        ),
+            )
+        }
         AutodiscoverOutcome::NotFound { .. } => (Vec::new(), None),
     }
 }

@@ -206,6 +206,12 @@ pub(crate) fn dispatch(state: &mut State, req: &Req, in_batch: bool) -> Reply {
         content_type: req.header("content-type").map(str::to_owned),
         body: String::from_utf8_lossy(&req.body).into_owned(),
     });
+    if req
+        .header("prefer")
+        .is_some_and(|p| p.contains("IdType=\"ImmutableId\""))
+    {
+        state.tenant.ids.immutable = true;
+    }
     if !in_batch {
         let accepted = match (&state.token, &token) {
             (_, None) => false,

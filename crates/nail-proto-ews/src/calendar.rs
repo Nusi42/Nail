@@ -585,9 +585,21 @@ pub fn event_create_xml(event: &ExchangeEvent) -> Result<String, EwsError> {
 /// The updates that replace an event's fields (unset optional fields are
 /// removed; `UID` cannot change).
 pub fn event_updates(event: &ExchangeEvent, occurrence: bool) -> Result<Vec<Update>, EwsError> {
+    // A meeting the user does not organize: the own copy only (reminder,
+    // categories, notes, show-as, …), not the attendees, the response
+    // request or the series (ADR 0078).
+    let attendee = !event.is_organizer && !event.attendees.is_empty();
+    let organizers = [
+        Field::Uri("calendar:RequiredAttendees"),
+        Field::Uri("calendar:OptionalAttendees"),
+        Field::Uri("calendar:Resources"),
+        Field::Uri("calendar:IsResponseRequested"),
+        Field::Uri("calendar:Recurrence"),
+    ];
     Ok(event_fields(event, occurrence)?
         .into_iter()
         .filter(|(f, _)| *f != Field::Uri("calendar:UID"))
+        .filter(|(f, _)| !(attendee && organizers.contains(f)))
         .map(|(field, value)| match value {
             Some(v) => Update::Set(field, v),
             None => Update::Delete(field),
@@ -920,6 +932,22 @@ mod tests {
                 .all(|u| !matches!(u, Update::Set(Field::Uri("calendar:Recurrence"), _)))
         );
         assert!(updates.contains(&Update::Delete(Field::Uri("calendar:OptionalAttendees"))));
+        // An attendee's update of the own copy leaves the organizer's
+        // parts alone.
+        let mut copy = event.clone();
+        copy.is_organizer = false;
+        let updates = event_updates(&copy, false).unwrap();
+        assert!(updates.iter().all(|u| !matches!(
+            u,
+            Update::Set(
+                Field::Uri("calendar:RequiredAttendees" | "calendar:Recurrence"),
+                _
+            ) | Update::Delete(Field::Uri("calendar:OptionalAttendees"))
+        )));
+        assert!(updates.iter().any(|u| matches!(
+            u,
+            Update::Set(Field::Uri("item:ReminderMinutesBeforeStart"), _)
+        )));
         let mut utc = event.clone();
         utc.start = ExchangeDateTime::utc("2026-10-05T07:00:00");
         utc.end = ExchangeDateTime::utc("2026-10-05T07:30:00");

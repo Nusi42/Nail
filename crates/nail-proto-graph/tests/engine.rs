@@ -446,7 +446,8 @@ async fn replayed_writes() {
     engine.write(None, &same).await.unwrap();
     assert!(server.requests().iter().all(|r| r.method != "PATCH"));
 
-    // Moves answer the new id; trash goes to Deleted Items.
+    // Moves answer the id (immutable ids: the same); trash goes to
+    // Deleted Items.
     let moved = engine
         .write(
             None,
@@ -464,7 +465,14 @@ async fn replayed_writes() {
     else {
         panic!("a move answers the new id");
     };
-    assert_ne!(moved_id, review);
+    assert_eq!(moved_id, review, "immutable ids survive a move");
+    assert!(
+        server.requests().iter().filter(|r| !r.in_batch).all(|r| r
+            .prefer
+            .as_deref()
+            .is_some_and(|p| p.contains("IdType=\"ImmutableId\""))),
+        "every request asks for immutable ids"
+    );
     assert_eq!(
         server.message(None, &moved_id).unwrap().folder,
         server.folder_id(None, "archive")
@@ -487,19 +495,7 @@ async fn replayed_writes() {
         server.message(None, &trashed).unwrap().folder,
         server.folder_id(None, "deleteditems")
     );
-    // The old id is gone.
-    assert_eq!(
-        engine
-            .write(
-                None,
-                &RemoteWrite::Trash {
-                    remote_id: moved_id
-                }
-            )
-            .await
-            .unwrap(),
-        WriteOutcome::Gone
-    );
+    assert_eq!(trashed, moved_id);
     assert_eq!(
         engine
             .write(
@@ -1374,8 +1370,12 @@ async fn calendar_deltas() {
         .unwrap();
     assert!(!invite.is_organizer);
     // The events were read with their zone.
-    assert!(server.requests().iter().any(|r| r.in_batch
-        && r.prefer.as_deref() == Some("outlook.timezone=\"W. Europe Standard Time\"")));
+    assert!(server.requests().iter().any(|r| {
+        r.in_batch
+            && r.prefer
+                .as_deref()
+                .is_some_and(|p| p.contains("outlook.timezone=\"W. Europe Standard Time\""))
+    }));
 
     // An exception and a cancelled occurrence on the server.
     let master = series.remote_id.clone();

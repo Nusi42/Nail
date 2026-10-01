@@ -83,6 +83,7 @@ mod compose;
 mod crypto;
 mod error;
 pub mod exchange;
+pub mod exchange_sync;
 mod filter;
 pub mod gmail;
 pub mod lock;
