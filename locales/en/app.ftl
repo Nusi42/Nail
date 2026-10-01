@@ -125,6 +125,7 @@ search-hint-is-answered = Messages you replied to
 search-hint-tag = Messages with a tag
 search-hint-account = Messages of one account
 search-hint-folder = Messages in a folder
+search-hint-category = Gmail inbox category (primary, social, promotions, updates, forums)
 search-hint-before = Sent before a date (YYYY-MM-DD)
 search-hint-after = Sent on or after a date (YYYY-MM-DD)
 search-hint-size = Larger than a size, e.g. size>2M (or size< for smaller)

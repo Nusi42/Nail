@@ -20,3 +20,25 @@ gmail-category-social = Social
 gmail-category-promotions = Promotions
 gmail-category-updates = Updates
 gmail-category-forums = Forums
+
+## Gmail API engine errors (GmailError::localized, WP82)
+
+gmail-network = Gmail could not be reached. Check the internet connection.
+gmail-timeout = Gmail did not answer in time.
+gmail-tls = The secure connection to Gmail failed.
+gmail-auth-failed = Google refused the sign-in. Sign in to the account again.
+gmail-insufficient-scope = The Google sign-in does not allow access to the mailbox. Sign in again and allow mail access.
+gmail-forbidden = Gmail does not allow this.
+gmail-missing = The message or label no longer exists in Gmail.
+gmail-rate-limited = Gmail asks Nail to slow down. Nail tries again later.
+gmail-unavailable = Gmail is not available at the moment. Nail tries again later.
+gmail-rejected = Gmail refused the request.
+gmail-label-color-rejected = Gmail does not accept this label colour. Choose one of Gmail's colours.
+gmail-label-conflict = A label with this name already exists in Gmail.
+gmail-too-large = The message is too large for Gmail.
+gmail-http-status = Gmail answered with an unexpected error (HTTP { $status }).
+gmail-bad-response = Gmail sent an answer Nail does not understand.
+gmail-insecure-url = The Gmail API address is not secure. Use https (plain http only for local test servers).
+gmail-config = This account is not set up for the Gmail API with a Google sign-in.
+gmail-token = Nail could not get a Google access token.
+gmail-move-unsupported = Gmail cannot move messages this way.

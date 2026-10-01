@@ -19,3 +19,8 @@ dav-bad-response = The calendar or contacts server sent an answer Nail does not 
 dav-insecure-url = The address must start with https:// (plain http:// only works for this computer).
 dav-token = Nail could not get a sign-in token for the calendar or contacts server. Sign in again.
 dav-redirect-login = The server sent Nail on to { $host }, which asks for your password. Nail does not send your password to another server on its own: enter an address on { $host } as the server address if you trust it.
+
+# CalDAV scheduling and free/busy (M3b WP83).
+dav-no-scheduling = This calendar server does not offer scheduling (free/busy and invitations through the server).
+dav-freebusy-no-access = The calendar server does not let you see when { $attendee } is busy.
+dav-freebusy-failed = The calendar server could not tell when { $attendee } is busy ({ $status }).

@@ -131,9 +131,9 @@ describe("event editor", () => {
     await user.clear(screen.getByLabelText("Number of times"));
     await user.type(screen.getByLabelText("Number of times"), "4");
     expect(screen.getByText(/4 times\.$/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Email address"), "grace@navy.example");
-    await user.click(screen.getByRole("button", { name: "Add attendee" }));
-    expect(screen.getByText("grace@navy.example")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Address"), "grace@navy.example");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getAllByText("grace@navy.example").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Add a reminder" }));
     await user.selectOptions(screen.getByLabelText("Also show the times in"), "America/New_York");
     expect(screen.getAllByText(/^In America\/New York:/)).toHaveLength(2);

@@ -1,0 +1,93 @@
+{
+  "emailAddress": "ada@gmail.example",
+  "historyId": "4200",
+  "labels": [
+    {
+      "id": "Label_1",
+      "name": "Work/Projects",
+      "type": "user",
+      "messageListVisibility": "show",
+      "labelListVisibility": "labelShow",
+      "color": { "textColor": "#ffffff", "backgroundColor": "#fb4c2f" }
+    },
+    {
+      "id": "Label_2",
+      "name": "Receipts",
+      "type": "user",
+      "messageListVisibility": "show",
+      "labelListVisibility": "labelShowIfUnread"
+    }
+  ],
+  "messages": [
+    {
+      "id": "18c0000000000001",
+      "threadId": "18c0000000000001",
+      "labelIds": ["INBOX", "UNREAD", "IMPORTANT", "CATEGORY_PERSONAL"],
+      "internalDate": "1790845200000",
+      "rawText": "From: Grace Hopper <grace@example.org>\nTo: Ada Lovelace <ada@gmail.example>\nSubject: Lunch on Friday?\nDate: Thu, 01 Oct 2026 09:00:00 +0000\nMessage-ID: <lunch-1@example.org>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nShall we try the new place around the corner on Friday?\n"
+    },
+    {
+      "id": "18c0000000000002",
+      "threadId": "18c0000000000001",
+      "labelIds": ["SENT"],
+      "internalDate": "1790847000000",
+      "rawText": "From: Ada Lovelace <ada@gmail.example>\nTo: Grace Hopper <grace@example.org>\nSubject: Re: Lunch on Friday?\nDate: Thu, 01 Oct 2026 09:30:00 +0000\nMessage-ID: <lunch-2@gmail.example>\nIn-Reply-To: <lunch-1@example.org>\nReferences: <lunch-1@example.org>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nGladly, 12:30?\n"
+    },
+    {
+      "id": "18c0000000000003",
+      "threadId": "18c0000000000003",
+      "labelIds": ["INBOX", "UNREAD", "CATEGORY_PROMOTIONS"],
+      "internalDate": "1790834400000",
+      "rawText": "From: Gadget Store <news@gadgets.example>\nTo: ada@gmail.example\nSubject: Autumn sale: 20% off calculators\nDate: Thu, 01 Oct 2026 06:00:00 +0000\nMessage-ID: <sale-2026@gadgets.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nOur autumn sale starts today.\n"
+    },
+    {
+      "id": "18c0000000000004",
+      "threadId": "18c0000000000004",
+      "labelIds": ["INBOX", "CATEGORY_SOCIAL"],
+      "internalDate": "1790830800000",
+      "rawText": "From: Social Network <notify@social.example>\nTo: ada@gmail.example\nSubject: Charles mentioned you\nDate: Thu, 01 Oct 2026 05:00:00 +0000\nMessage-ID: <mention-77@social.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nCharles Babbage mentioned you in a comment.\n"
+    },
+    {
+      "id": "18c0000000000005",
+      "threadId": "18c0000000000005",
+      "labelIds": ["Label_1", "STARRED", "CATEGORY_UPDATES"],
+      "internalDate": "1790762400000",
+      "rawText": "From: Charles Babbage <charles@engine.example>\nTo: Ada Lovelace <ada@gmail.example>\nSubject: Analytical engine: notes\nDate: Wed, 30 Sep 2026 10:00:00 +0000\nMessage-ID: <notes-g@engine.example>\nMIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"notes-boundary\"\n\n--notes-boundary\nContent-Type: text/plain; charset=utf-8\n\nThe notes for section G are attached.\n--notes-boundary\nContent-Type: application/pdf; name=\"note-g.pdf\"\nContent-Disposition: attachment; filename=\"note-g.pdf\"\nContent-Transfer-Encoding: base64\n\nJVBERi0xLjQKJcK1wrYKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0YK\n--notes-boundary--\n"
+    },
+    {
+      "id": "18c0000000000006",
+      "threadId": "18c0000000000006",
+      "labelIds": ["INBOX", "Label_2", "CATEGORY_UPDATES"],
+      "internalDate": "1790793000000",
+      "raw": "RnJvbTogUGFwZXIgU2hvcCA8b3JkZXJzQHNob3AuZXhhbXBsZT4NClRvOiBBZGEgTG92ZWxhY2UgPGFkYUBnbWFpbC5leGFtcGxlPg0KU3ViamVjdDogWW91ciByZWNlaXB0ICM0NzExDQpEYXRlOiBXZWQsIDMwIFNlcCAyMDI2IDE4OjMwOjAwICswMDAwDQpNZXNzYWdlLUlEOiA8cmVjZWlwdC00NzExQHNob3AuZXhhbXBsZT4NCk1JTUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDhiaXQNCg0KVGhhbmsgeW91IGZvciB5b3VyIG9yZGVyLiBUb3RhbDogMTIsNTAg4oKsDQo"
+    },
+    {
+      "id": "18c0000000000007",
+      "threadId": "18c0000000000007",
+      "labelIds": ["SPAM", "UNREAD"],
+      "internalDate": "1790740800000",
+      "rawText": "From: Prize Office <win@prize.example>\nTo: ada@gmail.example\nSubject: You have won!\nDate: Wed, 30 Sep 2026 04:00:00 +0000\nMessage-ID: <win-1@prize.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nClaim your prize now.\n"
+    },
+    {
+      "id": "18c0000000000008",
+      "threadId": "18c0000000000008",
+      "labelIds": ["TRASH"],
+      "internalDate": "1790654400000",
+      "rawText": "From: Old Club <club@old.example>\nTo: ada@gmail.example\nSubject: Meeting minutes\nDate: Tue, 29 Sep 2026 04:00:00 +0000\nMessage-ID: <minutes@old.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nMinutes of the last meeting.\n"
+    },
+    {
+      "id": "18c0000000000009",
+      "threadId": "18c0000000000009",
+      "labelIds": ["DRAFT"],
+      "internalDate": "1790850600000",
+      "rawText": "From: Ada Lovelace <ada@gmail.example>\nTo: charles@engine.example\nSubject: Draft: comments on section G\nDate: Thu, 01 Oct 2026 10:30:00 +0000\nMessage-ID: <draft-g@gmail.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nFirst thoughts ...\n"
+    },
+    {
+      "id": "18c000000000000a",
+      "threadId": "18c000000000000a",
+      "labelIds": ["CHAT"],
+      "internalDate": "1790820000000",
+      "rawText": "From: grace@example.org\nTo: ada@gmail.example\nSubject: Chat with Grace\nDate: Thu, 01 Oct 2026 02:00:00 +0000\n\nGrace: are you there?\n"
+    }
+  ]
+}

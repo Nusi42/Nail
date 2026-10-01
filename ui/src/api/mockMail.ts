@@ -423,6 +423,7 @@ function searchable(d: MockData, m: MessageSummary): Searchable {
     answered: m.flags.answered,
     draft: m.flags.draft,
     hasAttachments: m.has_attachments,
+    category: m.gmail?.category ?? null,
   };
 }
 

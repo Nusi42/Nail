@@ -24,6 +24,7 @@ export const SEARCH_FIELDS = [
   "folder",
   "before",
   "after",
+  "category",
 ] as const;
 
 export type SearchField = (typeof SEARCH_FIELDS)[number];
@@ -308,6 +309,8 @@ export interface Searchable {
   answered: boolean;
   draft: boolean;
   hasAttachments: boolean;
+  /** Gmail category (`category:`), absent outside Gmail accounts. */
+  category?: string | null;
 }
 
 const includes = (hay: string, needle: string) => hay.toLowerCase().includes(needle.toLowerCase());
@@ -340,6 +343,8 @@ export function matches(node: QueryNode, m: Searchable): boolean {
           return m.account === v || includes(m.accountName, v);
         case "folder":
           return includes(m.folder, v);
+        case "category":
+          return (m.category ?? "").toLowerCase() === v.toLowerCase();
         case "has":
           return m.hasAttachments;
         case "before":

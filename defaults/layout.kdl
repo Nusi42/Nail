@@ -17,16 +17,22 @@ layout "default" {
                     min-sizes="160px 280px 320px" \
                     max-sizes="480px none none" \
                     collapsible="true false true" {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto auto" {
                         search-bar id="search" scope="account"
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
+                        // Gmail accounts: labels as views (nothing for other accounts).
+                        label-list id="gmail-labels"
                         smart-folders id="smart-folders" label="@saved-search-label"
                     }
-                    message-list id="list" label="@layout.pane.messages" page-size=100 {
-                        row "{from.name}  {date | relative}"
-                        row "{subject}"
-                        row "{preview}"
+                    stack id="list-pane" label="@layout.pane.messages" sizes="auto 1fr" {
+                        // Gmail inbox categories (nothing for other accounts).
+                        category-tabs id="gmail-categories"
+                        message-list id="list" page-size=100 {
+                            row "{from.name}  {date | relative}"
+                            row "{subject}"
+                            row "{preview}"
+                        }
                     }
                     stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
@@ -59,14 +65,18 @@ layout "default" {
                 config-errors id="config-errors" hide-when-valid=#true
                 search-bar id="search" scope="account"
                 tabs id="panes" active=1 {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto auto" {
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
+                        label-list id="gmail-labels"
                         smart-folders id="smart-folders" label="@saved-search-label"
                     }
-                    message-list id="list" label="@layout.pane.messages" page-size=100 {
-                        row "{from.name}  {date | relative}"
-                        row "{subject}"
+                    stack id="list-pane" label="@layout.pane.messages" sizes="auto 1fr" {
+                        category-tabs id="gmail-categories"
+                        message-list id="list" page-size=100 {
+                            row "{from.name}  {date | relative}"
+                            row "{subject}"
+                        }
                     }
                     stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
@@ -238,6 +248,16 @@ layout "default" {
         action "pim.import"       label="@pim.action.import"
         action "pim.sources"      label="@pim.action.sources"
         action "pim.sync"         label="@pim.action.sync"         icon="sync"
+        // Invitations, scheduling and Gmail labels (M3b).
+        action "scheduling.accept" label="@scheduling.action.accept"
+        action "scheduling.tentative" label="@scheduling.action.tentative"
+        action "scheduling.decline" label="@scheduling.action.decline"
+        action "scheduling.find-time" label="@scheduling.action.find-time" icon="calendar"
+        action "scheduling.settings" label="@scheduling.action.settings"
+        action "gmail.new-label"  label="@gmail.action.new-label"  icon="plus"
+        action "gmail.apply-labels" label="@gmail.action.apply-labels"
+        action "gmail.label-view" label="@gmail.action.label-view"
+        action "gmail.category"   label="@gmail.action.category"
     }
 
     keys context="list" {
@@ -250,6 +270,9 @@ layout "default" {
     keys context="reader" {
         bind "j" "mail.next"
         bind "k" "mail.previous"
+        bind "shift+y" "scheduling.accept"
+        bind "shift+m" "scheduling.tentative"
+        bind "shift+n" "scheduling.decline"
     }
 
     keys context="composer" {
@@ -338,6 +361,7 @@ layout "default" {
         item "rules.create-from-message"
         item "calendar.event-from-message"
         item "tasks.from-message"
+        item "gmail.apply-labels"
         item "security.autocrypt.import"
     }
 
@@ -347,9 +371,11 @@ layout "default" {
         separator
         item "tasks.new"
         item "contacts.new"
+        item "scheduling.find-time"
         spacer
         item "pim.import"
         item "pim.sources"
+        item "scheduling.settings"
     }
 
     toolbar "customize" {
@@ -379,6 +405,7 @@ layout "default" {
         item "rules.create-from-message"
         item "calendar.event-from-message"
         item "tasks.from-message"
+        item "gmail.apply-labels"
     }
 
     menu "context:thread-view.message" {
@@ -404,5 +431,6 @@ layout "default" {
     menu "context:folder-tree.folder" {
         item "sync.now"
         item "sync.folder-policy"
+        item "gmail.new-label"
     }
 }

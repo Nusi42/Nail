@@ -19,8 +19,8 @@ M2d: ADR 0050; M3a: ADR 0058; M3b: ADR 0065):
 | `menus/`         | M2c WP54     | right-click context menus from `layout.kdl` (`resolve.ts`)                                                                                                                                                |
 | `plugins/`       | M2d WP62     | plug-in UI trees, dialogs, panels, commands, install dialog, plug-in manager                                                                                                                              |
 | `pim/`           | M3a WP74     | calendar views + `calendar-list`, lazy editor dialogs (`lazyDialogs.ts`), contacts, groups, merge, tasks, reminder toasts, import / sources (launch files and `webcal:` links), `parts.ts` `PIM_BASE_CSS` |
-| `scheduling/`    | M3b WP84     | invitation card, answers / counter-proposals, organizer updates and cancellations, attendee picker with free/busy                                                                                         |
-| `gmail/`         | M3b WP84     | Gmail labels (management, label views), categories as a filter, Gmail account setup                                                                                                                       |
+| `scheduling/`    | M3b WP84     | invitation card, answers / counter-proposals, organizer updates and cancellations, attendee picker with free/busy; mounts `InvitationCard` (reader), `AttendeePicker` + `MeetingPanel` (event editor), `SCHEDULING_BASE_CSS` |
+| `gmail/`         | M3b WP84     | Gmail labels (management, label views), categories as a filter; mounts `MessageLabels` (reader), `GMAIL_BASE_CSS`                                                                                       |
 
 ## Files of a slot
 

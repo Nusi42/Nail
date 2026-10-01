@@ -4371,10 +4371,12 @@ dependencies = [
  "nail-dav",
  "nail-discovery",
  "nail-ical",
+ "nail-itip",
  "nail-mcp",
  "nail-mime",
  "nail-pgp",
  "nail-plugins",
+ "nail-proto-gmail",
  "nail-proto-imap",
  "nail-proto-pop3",
  "nail-proto-smtp",
@@ -4465,12 +4467,15 @@ name = "nail-itip"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "chrono-tz",
+ "fluent-bundle",
  "mail-builder",
  "mail-parser",
  "nail-api",
  "nail-ical",
  "pretty_assertions",
  "thiserror 2.0.21",
+ "unic-langid",
 ]
 
 [[package]]
@@ -4566,6 +4571,7 @@ dependencies = [
  "axum",
  "base64 0.23.1",
  "chrono",
+ "mail-parser",
  "nail-api",
  "nail-auth",
  "nail-proto-gmail",

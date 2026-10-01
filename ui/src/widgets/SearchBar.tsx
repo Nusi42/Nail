@@ -17,6 +17,7 @@ export const QUERY_HINTS = [
   "tag:",
   "account:",
   "folder:",
+  "category:",
   "before:",
   "after:",
   "size>",

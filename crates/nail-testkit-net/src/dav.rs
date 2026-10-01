@@ -34,6 +34,39 @@
 //! Default collections (with [`MockDavConfig::seed`]): calendars
 //! `personal` (events and tasks), `tasks` (tasks) and the read-only
 //! `holidays`; the address book `contacts`.
+//!
+//! **Scheduling (RFC 6638; M3b WP83)**, on by default
+//! ([`MockDavConfig::scheduling`]):
+//!
+//! * more principals on the same server ([`MockDavConfig::users`],
+//!   [`MockDavServer::add_user`]), each with its own login, address
+//!   (`calendar-user-address-set`), `calendar-user-type` (rooms and
+//!   resources too), calendar home with a `personal` calendar, schedule
+//!   inbox and outbox; `current-user-principal` follows the login;
+//! * the principal's `schedule-inbox-URL` / `schedule-outbox-URL`, the
+//!   inbox's `schedule-default-calendar-URL`;
+//! * `POST` of a `VFREEBUSY` request to the own outbox: a
+//!   `schedule-response` with one `VFREEBUSY` reply per known recipient,
+//!   computed from the recipient's calendars (opaque, not cancelled,
+//!   not declined events; tentative or unanswered ones as
+//!   `BUSY-TENTATIVE`; recurrences are not expanded), `3.7` for unknown
+//!   addresses and `3.8` for principals that hide their free/busy
+//!   ([`MockDavServer::set_free_busy_visible`]);
+//! * the schedule inbox: items can be listed, read, multiget and deleted
+//!   (not written); tests deliver into it directly
+//!   ([`MockDavServer::deliver`]);
+//! * **auto-scheduling** ([`MockDavConfig::auto_schedule`],
+//!   [`MockDavServer::set_auto_schedule`]; off by default): the `DAV`
+//!   header then has `calendar-auto-schedule`, and writes schedule like a
+//!   real server: an organizer's `PUT` sends `REQUEST`s to the attendees
+//!   whose `SCHEDULE-AGENT` is `SERVER` (local ones get it in their inbox
+//!   and their default calendar; others count as sent by mail), sets
+//!   `SCHEDULE-STATUS` on them and then answers without an `ETag` (the
+//!   stored object differs from the one sent); an organizer's `DELETE`
+//!   sends `CANCEL`s; an attendee's `PUT` with a changed `PARTSTAT` (or
+//!   `DELETE`, as declined) sends a `REPLY` to the organizer and updates
+//!   the organizer's copy, unless the request carries `Schedule-Reply: F`.
+//!   Every iTIP message is recorded ([`MockDavServer::scheduled_messages`]).
 
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Write as _;
@@ -55,6 +88,8 @@ use tokio_rustls::TlsAcceptor;
 use crate::MockNetError;
 use crate::stream::MockStream;
 
+mod ical;
+mod schedule;
 #[allow(dead_code)]
 mod xml;
 
@@ -103,6 +138,72 @@ pub struct MockDavConfig {
     pub sync_page_size: Option<usize>,
     /// Create the default collections.
     pub seed: bool,
+    /// The user's calendar-user address (`calendar-user-address-set`).
+    pub email: String,
+    /// Offer RFC 6638 scheduling: schedule inbox / outbox, free/busy
+    /// `POST`, `calendar-schedule` in the `DAV` header.
+    pub scheduling: bool,
+    /// The server schedules itself (`calendar-auto-schedule`): see the
+    /// module docs. Needs `scheduling`.
+    pub auto_schedule: bool,
+    /// More principals on the same server.
+    pub users: Vec<MockDavUser>,
+}
+
+/// Another principal of a [`MockDavServer`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MockDavUser {
+    /// User name (path segment and Basic login).
+    pub username: String,
+    /// Password for Basic authentication.
+    pub password: String,
+    /// Calendar-user address.
+    pub email: String,
+    /// `calendar-user-type`: `INDIVIDUAL`, `ROOM`, `RESOURCE`, `GROUP`.
+    pub user_type: String,
+    /// Display name of the principal.
+    pub display_name: String,
+}
+
+impl MockDavUser {
+    /// A person `username` with password `secret` and address
+    /// `<username>@example.org`.
+    pub fn new(username: &str) -> Self {
+        Self {
+            username: username.to_owned(),
+            password: "secret".to_owned(),
+            email: format!("{username}@example.org"),
+            user_type: "INDIVIDUAL".to_owned(),
+            display_name: username.to_owned(),
+        }
+    }
+
+    /// A room `username` (`calendar-user-type` `ROOM`).
+    pub fn room(username: &str, display_name: &str) -> Self {
+        Self {
+            user_type: "ROOM".to_owned(),
+            display_name: display_name.to_owned(),
+            ..Self::new(username)
+        }
+    }
+}
+
+/// An iTIP message the server scheduled (auto-scheduling).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MockScheduleMessage {
+    /// `REQUEST`, `REPLY` or `CANCEL`.
+    pub method: String,
+    /// Sender address.
+    pub from: String,
+    /// Recipient address.
+    pub to: String,
+    /// The event's `UID`.
+    pub uid: String,
+    /// Delivered to a local inbox (`false`: an external address, which a
+    /// real server would mail).
+    pub local: bool,
+    /// The iTIP text.
+    pub data: String,
 }
 
 impl Default for MockDavConfig {
@@ -118,6 +219,10 @@ impl Default for MockDavConfig {
             etag_on_put: true,
             sync_page_size: None,
             seed: true,
+            email: "ada@example.org".to_owned(),
+            scheduling: true,
+            auto_schedule: false,
+            users: Vec::new(),
         }
     }
 }
@@ -129,6 +234,10 @@ pub enum MockCollectionKind {
     Calendar(Vec<String>),
     /// An address book.
     AddressBook,
+    /// A schedule inbox (RFC 6638): iTIP messages delivered to the user.
+    ScheduleInbox,
+    /// A schedule outbox (RFC 6638): free/busy requests are `POST`ed here.
+    ScheduleOutbox,
 }
 
 /// A stored calendar object or vCard.
@@ -174,8 +283,19 @@ impl MockCollection {
         }
     }
 
+    /// Holds iCalendar objects (a calendar or a schedule inbox).
     fn is_calendar(&self) -> bool {
-        matches!(self.kind, MockCollectionKind::Calendar(_))
+        matches!(
+            self.kind,
+            MockCollectionKind::Calendar(_) | MockCollectionKind::ScheduleInbox
+        )
+    }
+
+    fn is_schedule(&self) -> bool {
+        matches!(
+            self.kind,
+            MockCollectionKind::ScheduleInbox | MockCollectionKind::ScheduleOutbox
+        )
     }
 }
 
@@ -196,6 +316,8 @@ pub struct DavRequest {
     pub authorization: Option<String>,
     /// `Content-Type` header.
     pub content_type: Option<String>,
+    /// `Schedule-Reply` header (RFC 6638 §8.1).
+    pub schedule_reply: Option<String>,
     /// The body as text.
     pub body: String,
 }
@@ -205,6 +327,12 @@ struct Data {
     seq: u64,
     collections: BTreeMap<String, MockCollection>,
     failures: VecDeque<(String, u16)>,
+    /// Every principal by user name (the configured user included).
+    users: BTreeMap<String, MockDavUser>,
+    auto_schedule: bool,
+    scheduled: Vec<MockScheduleMessage>,
+    /// Users whose free/busy others may not see (`3.8`).
+    hidden_free_busy: Vec<String>,
 }
 
 impl Data {
@@ -256,19 +384,99 @@ struct Inner {
     requests: Mutex<Vec<DavRequest>>,
 }
 
+fn principal_of(user: &str) -> String {
+    format!("{PRINCIPAL_PATH}{user}/")
+}
+fn calendar_home_of(user: &str) -> String {
+    format!("{CALENDARS_PATH}{user}/")
+}
+fn addressbook_home_of(user: &str) -> String {
+    format!("{ADDRESSBOOKS_PATH}{user}/")
+}
+fn inbox_of(user: &str) -> String {
+    format!("{CALENDARS_PATH}{user}/inbox/")
+}
+fn outbox_of(user: &str) -> String {
+    format!("{CALENDARS_PATH}{user}/outbox/")
+}
+
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl Inner {
     fn principal(&self) -> String {
-        format!("{PRINCIPAL_PATH}{}/", self.config.username)
+        principal_of(&self.config.username)
     }
     fn calendar_home(&self) -> String {
-        format!("{CALENDARS_PATH}{}/", self.config.username)
+        calendar_home_of(&self.config.username)
     }
     fn addressbook_home(&self) -> String {
-        format!("{ADDRESSBOOKS_PATH}{}/", self.config.username)
+        addressbook_home_of(&self.config.username)
+    }
+}
+
+impl Data {
+    /// Creates the principal's inbox / outbox (with scheduling) and, with
+    /// `seed`, its `personal` calendar.
+    fn add_user(&mut self, user: MockDavUser, scheduling: bool, seed: bool) {
+        let name = user.username.clone();
+        if scheduling {
+            for (path, kind) in [
+                (inbox_of(&name), MockCollectionKind::ScheduleInbox),
+                (outbox_of(&name), MockCollectionKind::ScheduleOutbox),
+            ] {
+                let seq = self.next();
+                self.collections
+                    .entry(path)
+                    .or_insert_with(|| MockCollection::new(kind, "", seq));
+            }
+        }
+        if seed {
+            let seq = self.next();
+            self.collections
+                .entry(format!("{}personal/", calendar_home_of(&name)))
+                .or_insert_with(|| {
+                    MockCollection::new(
+                        MockCollectionKind::Calendar(vec!["VEVENT".into(), "VTODO".into()]),
+                        "Personal",
+                        seq,
+                    )
+                });
+        }
+        self.users.insert(name, user);
+    }
+
+    /// The user whose address is `email`.
+    fn user_by_email(&self, email: &str) -> Option<&MockDavUser> {
+        let email = ical::address(email);
+        self.users
+            .values()
+            .find(|u| u.email.eq_ignore_ascii_case(&email))
+    }
+
+    /// Where the server puts invitations for `user`: `personal`, else the
+    /// first event calendar in the home.
+    fn default_calendar(&self, user: &str) -> Option<String> {
+        let home = calendar_home_of(user);
+        let personal = format!("{home}personal/");
+        if self.collections.contains_key(&personal) {
+            return Some(personal);
+        }
+        self.collections
+            .iter()
+            .find(|(p, c)| {
+                p.starts_with(&home)
+                    && matches!(&c.kind, MockCollectionKind::Calendar(comps) if comps.iter().any(|c| c == "VEVENT"))
+            })
+            .map(|(p, _)| p.clone())
+    }
+
+    /// The owner of a path under a calendar home.
+    fn owner_of(&self, path: &str) -> Option<String> {
+        let rest = path.strip_prefix(CALENDARS_PATH)?;
+        let user = rest.split('/').next()?;
+        self.users.contains_key(user).then(|| user.to_owned())
     }
 }
 
@@ -323,7 +531,25 @@ impl MockDavServer {
             seq: 0,
             collections: BTreeMap::new(),
             failures: VecDeque::new(),
+            users: BTreeMap::new(),
+            auto_schedule: config.scheduling && config.auto_schedule,
+            scheduled: Vec::new(),
+            hidden_free_busy: Vec::new(),
         };
+        data.add_user(
+            MockDavUser {
+                username: config.username.clone(),
+                password: config.password.clone(),
+                email: config.email.clone(),
+                user_type: "INDIVIDUAL".to_owned(),
+                display_name: config.username.clone(),
+            },
+            config.scheduling,
+            false,
+        );
+        for user in &config.users {
+            data.add_user(user.clone(), config.scheduling, true);
+        }
         if config.seed {
             let cal_home = format!("{CALENDARS_PATH}{}/", config.username);
             let book_home = format!("{ADDRESSBOOKS_PATH}{}/", config.username);
@@ -506,9 +732,87 @@ impl MockDavServer {
         lock(&self.inner.data).collections.get(path).cloned()
     }
 
-    /// Paths of every collection.
+    /// Paths of every calendar and address book (schedule inboxes and
+    /// outboxes are left out).
     pub fn collection_paths(&self) -> Vec<String> {
-        lock(&self.inner.data).collections.keys().cloned().collect()
+        lock(&self.inner.data)
+            .collections
+            .iter()
+            .filter(|(_, c)| !c.is_schedule())
+            .map(|(p, _)| p.clone())
+            .collect()
+    }
+
+    /// Adds a principal (with its `personal` calendar, and inbox / outbox
+    /// when scheduling is on).
+    pub fn add_user(&self, user: MockDavUser) {
+        lock(&self.inner.data).add_user(user, self.inner.config.scheduling, true);
+    }
+
+    /// The principal path of `user`.
+    pub fn user_principal_path(&self, user: &str) -> String {
+        principal_of(user)
+    }
+
+    /// Path of `user`'s calendar `name`.
+    pub fn user_calendar_path(&self, user: &str, name: &str) -> String {
+        format!("{}{name}/", calendar_home_of(user))
+    }
+
+    /// Path of `user`'s schedule inbox.
+    pub fn inbox_path(&self, user: &str) -> String {
+        inbox_of(user)
+    }
+
+    /// Path of `user`'s schedule outbox.
+    pub fn outbox_path(&self, user: &str) -> String {
+        outbox_of(user)
+    }
+
+    /// The items in `user`'s schedule inbox by name.
+    pub fn inbox(&self, user: &str) -> Vec<(String, MockObject)> {
+        lock(&self.inner.data)
+            .collections
+            .get(&inbox_of(user))
+            .map(|c| {
+                c.objects
+                    .iter()
+                    .map(|(n, o)| (n.clone(), o.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Puts an iTIP message into `user`'s schedule inbox, as if the server
+    /// had delivered it (from another server, or an iMIP gateway); returns
+    /// its ETag, `None` without such an inbox.
+    pub fn deliver(&self, user: &str, name: &str, data: &str) -> Option<String> {
+        lock(&self.inner.data).put(&inbox_of(user), name, data)
+    }
+
+    /// Switches auto-scheduling on or off (see the module docs).
+    pub fn set_auto_schedule(&self, on: bool) {
+        lock(&self.inner.data).auto_schedule = on && self.inner.config.scheduling;
+    }
+
+    /// Whether the server schedules itself now.
+    pub fn auto_schedule(&self) -> bool {
+        lock(&self.inner.data).auto_schedule
+    }
+
+    /// Whether others may see `user`'s free/busy (default yes; no =
+    /// request status `3.8`).
+    pub fn set_free_busy_visible(&self, user: &str, visible: bool) {
+        let mut data = lock(&self.inner.data);
+        data.hidden_free_busy.retain(|u| u != user);
+        if !visible {
+            data.hidden_free_busy.push(user.to_owned());
+        }
+    }
+
+    /// Every iTIP message the server scheduled, in order.
+    pub fn scheduled_messages(&self) -> Vec<MockScheduleMessage> {
+        lock(&self.inner.data).scheduled.clone()
     }
 
     /// Stores an object as another client would; returns its ETag, `None`
@@ -625,19 +929,27 @@ fn dav_error(status: u16, ns: &str, condition: &str) -> Response {
     )
 }
 
-fn authorized(config: &MockDavConfig, authorization: Option<&str>) -> bool {
-    let Some(value) = authorization else {
-        return false;
-    };
+/// The user the request signs in as, if the login is valid (a bearer
+/// token belongs to the configured user).
+fn authorized(
+    config: &MockDavConfig,
+    users: &BTreeMap<String, MockDavUser>,
+    authorization: Option<&str>,
+) -> Option<String> {
+    let value = authorization?;
     if let Some(token) = value.strip_prefix("Bearer ") {
-        return config.bearer_token.as_deref() == Some(token.trim());
+        return (config.bearer_token.as_deref() == Some(token.trim()))
+            .then(|| config.username.clone());
     }
-    if let Some(encoded) = value.strip_prefix("Basic ") {
-        let expected = base64::engine::general_purpose::STANDARD
-            .encode(format!("{}:{}", config.username, config.password));
-        return encoded.trim() == expected;
-    }
-    false
+    let encoded = value.strip_prefix("Basic ")?;
+    users
+        .values()
+        .find(|u| {
+            base64::engine::general_purpose::STANDARD
+                .encode(format!("{}:{}", u.username, u.password))
+                == encoded.trim()
+        })
+        .map(|u| u.username.clone())
 }
 
 async fn handle(State(inner): State<Arc<Inner>>, request: Request) -> Response {
@@ -656,6 +968,7 @@ async fn handle(State(inner): State<Arc<Inner>>, request: Request) -> Response {
         if_none_match: header_text(&headers, "if-none-match"),
         authorization: header_text(&headers, "authorization"),
         content_type: header_text(&headers, "content-type"),
+        schedule_reply: header_text(&headers, "schedule-reply"),
         body,
     };
     lock(&inner.requests).push(recorded.clone());
@@ -689,50 +1002,59 @@ async fn handle(State(inner): State<Arc<Inner>>, request: Request) -> Response {
         return empty(404);
     }
     if method == "OPTIONS" {
-        let response = empty(200);
-        let response = with_header(
-            response,
-            "dav",
-            "1, 3, access-control, calendar-access, addressbook, extended-mkcol",
-        );
+        let mut classes =
+            "1, 3, access-control, calendar-access, addressbook, extended-mkcol".to_owned();
+        if inner.config.scheduling {
+            classes.push_str(", calendar-schedule");
+        }
+        if lock(&inner.data).auto_schedule {
+            classes.push_str(", calendar-auto-schedule");
+        }
+        let response = with_header(empty(200), "dav", &classes);
         return with_header(
             response,
             "allow",
-            "OPTIONS, GET, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR, MKCOL",
+            "OPTIONS, GET, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR, MKCOL, POST",
         );
     }
-    if !authorized(&inner.config, recorded.authorization.as_deref()) {
+    let me = authorized(
+        &inner.config,
+        &lock(&inner.data).users,
+        recorded.authorization.as_deref(),
+    );
+    let Some(me) = me else {
         return with_header(
             empty(401),
             "www-authenticate",
             "Basic realm=\"nail-mock-dav\", charset=\"UTF-8\"",
         );
-    }
+    };
     match method.as_str() {
-        "PROPFIND" => propfind(&inner, &recorded),
-        "REPORT" => report(&inner, &recorded),
+        "PROPFIND" => propfind(&inner, &recorded, &me),
+        "REPORT" => report(&inner, &recorded, &me),
         "GET" | "HEAD" => get(&inner, &recorded),
-        "PUT" => put(&inner, &recorded),
-        "DELETE" => delete(&inner, &recorded),
-        "MKCALENDAR" => mkcol(&inner, &recorded, true),
-        "MKCOL" => mkcol(&inner, &recorded, false),
+        "PUT" => put(&inner, &recorded, &me),
+        "DELETE" => delete(&inner, &recorded, &me),
+        "MKCALENDAR" => mkcol(&inner, &recorded, true, &me),
+        "MKCOL" => mkcol(&inner, &recorded, false, &me),
         "PROPPATCH" => proppatch(&inner, &recorded),
+        "POST" => schedule::post(&inner, &recorded, &me),
         _ => empty(405),
     }
 }
 
-/// What a path names.
+/// What a path names (homes and principals name their user).
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Resource {
     Context,
-    Principal,
-    CalendarHome,
-    AddressBookHome,
+    Principal(String),
+    CalendarHome(String),
+    AddressBookHome(String),
     Collection(String),
     Object(String, String),
 }
 
-fn resolve(inner: &Inner, data: &Data, path: &str) -> Option<Resource> {
+fn resolve(_inner: &Inner, data: &Data, path: &str) -> Option<Resource> {
     let with_slash = if path.ends_with('/') {
         path.to_owned()
     } else {
@@ -741,14 +1063,16 @@ fn resolve(inner: &Inner, data: &Data, path: &str) -> Option<Resource> {
     if with_slash == CONTEXT_PATH {
         return Some(Resource::Context);
     }
-    if with_slash == inner.principal() {
-        return Some(Resource::Principal);
-    }
-    if with_slash == inner.calendar_home() {
-        return Some(Resource::CalendarHome);
-    }
-    if with_slash == inner.addressbook_home() {
-        return Some(Resource::AddressBookHome);
+    for user in data.users.keys() {
+        if with_slash == principal_of(user) {
+            return Some(Resource::Principal(user.clone()));
+        }
+        if with_slash == calendar_home_of(user) {
+            return Some(Resource::CalendarHome(user.clone()));
+        }
+        if with_slash == addressbook_home_of(user) {
+            return Some(Resource::AddressBookHome(user.clone()));
+        }
     }
     if data.collections.contains_key(&with_slash) {
         return Some(Resource::Collection(with_slash));
@@ -826,44 +1150,70 @@ fn prop_value(
     inner: &Inner,
     data: &Data,
     resource: &Resource,
-    ns: &str,
-    name: &str,
+    me: &str,
+    (ns, name): (&str, &str),
 ) -> Option<String> {
     let config = &inner.config;
     let collection = match resource {
         Resource::Collection(path) | Resource::Object(path, _) => data.collections.get(path),
         _ => None,
     };
+    let principal = match resource {
+        Resource::Principal(user) => data.users.get(user),
+        _ => None,
+    };
     match (ns, name) {
-        (NS_DAV, "current-user-principal") => Some(href(&inner.principal())),
+        (NS_DAV, "current-user-principal") => Some(href(&principal_of(me))),
         (NS_DAV, "resourcetype") => Some(match resource {
-            Resource::Context | Resource::CalendarHome | Resource::AddressBookHome => {
+            Resource::Context | Resource::CalendarHome(_) | Resource::AddressBookHome(_) => {
                 "<d:collection/>".to_owned()
             }
-            Resource::Principal => "<d:collection/><d:principal/>".to_owned(),
+            Resource::Principal(_) => "<d:collection/><d:principal/>".to_owned(),
             Resource::Collection(_) => match collection?.kind {
                 MockCollectionKind::Calendar(_) => "<d:collection/><c:calendar/>".to_owned(),
                 MockCollectionKind::AddressBook => "<d:collection/><card:addressbook/>".to_owned(),
+                MockCollectionKind::ScheduleInbox => {
+                    "<d:collection/><c:schedule-inbox/>".to_owned()
+                }
+                MockCollectionKind::ScheduleOutbox => {
+                    "<d:collection/><c:schedule-outbox/>".to_owned()
+                }
             },
             Resource::Object(..) => String::new(),
         }),
         (NS_DAV, "displayname") => match resource {
-            Resource::Principal => Some(escape(&config.username).into_owned()),
+            Resource::Principal(_) => Some(escape(&principal?.display_name).into_owned()),
             Resource::Collection(_) => Some(escape(&collection?.display_name).into_owned()),
             _ => None,
         },
-        (NS_DAV, "principal-URL") if *resource == Resource::Principal => {
-            Some(href(&inner.principal()))
+        (NS_DAV, "principal-URL") => principal.map(|p| href(&principal_of(&p.username))),
+        (NS_CALDAV, "calendar-home-set") => principal.map(|p| href(&calendar_home_of(&p.username))),
+        (NS_CARDDAV, "addressbook-home-set") => {
+            principal.map(|p| href(&addressbook_home_of(&p.username)))
         }
-        (NS_CALDAV, "calendar-home-set") if *resource == Resource::Principal => {
-            Some(href(&inner.calendar_home()))
+        (NS_CALDAV, "calendar-user-address-set") => principal.map(|p| {
+            format!(
+                "{}{}",
+                href(&format!("mailto:{}", p.email)),
+                href(&principal_of(&p.username))
+            )
+        }),
+        (NS_CALDAV, "calendar-user-type") => principal.map(|p| escape(&p.user_type).into_owned()),
+        (NS_CALDAV, "schedule-inbox-URL") if config.scheduling => {
+            principal.map(|p| href(&inbox_of(&p.username)))
         }
-        (NS_CARDDAV, "addressbook-home-set") if *resource == Resource::Principal => {
-            Some(href(&inner.addressbook_home()))
+        (NS_CALDAV, "schedule-outbox-URL") if config.scheduling => {
+            principal.map(|p| href(&outbox_of(&p.username)))
         }
-        (NS_CALDAV, "calendar-user-address-set") if *resource == Resource::Principal => {
-            Some(href(&format!("mailto:{}", config.username)))
-        }
+        (NS_CALDAV, "schedule-default-calendar-URL") => match (resource, collection) {
+            (Resource::Collection(path), Some(c))
+                if c.kind == MockCollectionKind::ScheduleInbox =>
+            {
+                let owner = data.owner_of(path)?;
+                data.default_calendar(&owner).map(|p| href(&p))
+            }
+            _ => None,
+        },
         (NS_CS, "getctag") if config.ctag => match resource {
             Resource::Collection(_) => Some(format!("\"ctag-{}\"", collection?.changed)),
             _ => None,
@@ -878,7 +1228,8 @@ fn prop_value(
         (NS_DAV, "supported-report-set") => {
             match resource {
                 Resource::Collection(_) => {
-                    let coll = collection?;
+                    let coll =
+                        collection.filter(|c| c.kind != MockCollectionKind::ScheduleOutbox)?;
                     let mut reports = Vec::new();
                     if coll.is_calendar() {
                         reports.extend(["<c:calendar-query/>", "<c:calendar-multiget/>"]);
@@ -951,12 +1302,12 @@ fn prop_value(
     }
 }
 
-fn resource_path(inner: &Inner, resource: &Resource) -> String {
+fn resource_path(resource: &Resource) -> String {
     match resource {
         Resource::Context => CONTEXT_PATH.to_owned(),
-        Resource::Principal => inner.principal(),
-        Resource::CalendarHome => inner.calendar_home(),
-        Resource::AddressBookHome => inner.addressbook_home(),
+        Resource::Principal(user) => principal_of(user),
+        Resource::CalendarHome(user) => calendar_home_of(user),
+        Resource::AddressBookHome(user) => addressbook_home_of(user),
         Resource::Collection(path) => path.clone(),
         Resource::Object(path, name) => format!("{path}{name}"),
     }
@@ -967,6 +1318,7 @@ fn response_for(
     inner: &Inner,
     data: &Data,
     resource: &Resource,
+    me: &str,
     props: Option<&[(String, String)]>,
 ) -> String {
     let mut found = String::new();
@@ -979,13 +1331,13 @@ fn response_for(
             .collect(),
     };
     for (ns, name) in &wanted {
-        match prop_value(inner, data, resource, ns, name) {
+        match prop_value(inner, data, resource, me, (ns, name)) {
             Some(value) => found.push_str(&element(ns, name, &value)),
             None if props.is_some() => missing.push_str(&element(ns, name, "")),
             None => {}
         }
     }
-    let mut out = format!("<d:response>{}", href(&resource_path(inner, resource)));
+    let mut out = format!("<d:response>{}", href(&resource_path(resource)));
     if !found.is_empty() {
         let _ = write!(
             out,
@@ -1009,7 +1361,7 @@ fn parse_body(body: &str) -> Result<Option<Element>, Box<Response>> {
     xml::parse(body).map(Some).map_err(|_| Box::new(empty(400)))
 }
 
-fn propfind(inner: &Inner, request: &DavRequest) -> Response {
+fn propfind(inner: &Inner, request: &DavRequest, me: &str) -> Response {
     let root = match parse_body(&request.body) {
         Ok(root) => root,
         Err(response) => return *response,
@@ -1026,16 +1378,22 @@ fn propfind(inner: &Inner, request: &DavRequest) -> Response {
     let mut resources = vec![resource.clone()];
     if depth == "1" {
         match &resource {
-            Resource::CalendarHome => resources.extend(
+            Resource::CalendarHome(user) => resources.extend(
                 data.collections
                     .iter()
-                    .filter(|(p, c)| c.is_calendar() && p.starts_with(&inner.calendar_home()))
+                    .filter(|(p, c)| {
+                        (c.is_calendar() || c.is_schedule())
+                            && p.starts_with(&calendar_home_of(user))
+                    })
                     .map(|(p, _)| Resource::Collection(p.clone())),
             ),
-            Resource::AddressBookHome => resources.extend(
+            Resource::AddressBookHome(user) => resources.extend(
                 data.collections
                     .iter()
-                    .filter(|(p, c)| !c.is_calendar() && p.starts_with(&inner.addressbook_home()))
+                    .filter(|(p, c)| {
+                        c.kind == MockCollectionKind::AddressBook
+                            && p.starts_with(&addressbook_home_of(user))
+                    })
                     .map(|(p, _)| Resource::Collection(p.clone())),
             ),
             Resource::Collection(path) => {
@@ -1052,12 +1410,12 @@ fn propfind(inner: &Inner, request: &DavRequest) -> Response {
     }
     let body: String = resources
         .iter()
-        .map(|r| response_for(inner, &data, r, props.as_deref()))
+        .map(|r| response_for(inner, &data, r, me, props.as_deref()))
         .collect();
     multistatus(&body)
 }
 
-fn report(inner: &Inner, request: &DavRequest) -> Response {
+fn report(inner: &Inner, request: &DavRequest, me: &str) -> Response {
     let root = match parse_body(&request.body) {
         Ok(Some(root)) => root,
         Ok(None) => return empty(400),
@@ -1079,6 +1437,7 @@ fn report(inner: &Inner, request: &DavRequest) -> Response {
                     inner,
                     &data,
                     &Resource::Object(path.clone(), name.clone()),
+                    me,
                     props.as_deref(),
                 )
             })
@@ -1126,7 +1485,7 @@ fn report(inner: &Inner, request: &DavRequest) -> Response {
             multistatus(&body)
         }
         (NS_DAV, "sync-collection") if inner.config.sync_collection => {
-            sync_collection(inner, &data, &path, coll, &root, props.as_deref())
+            sync_collection(inner, &data, (&path, coll), &root, me, props.as_deref())
         }
         _ => dav_error(403, NS_DAV, "supported-report"),
     }
@@ -1135,9 +1494,9 @@ fn report(inner: &Inner, request: &DavRequest) -> Response {
 fn sync_collection(
     inner: &Inner,
     data: &Data,
-    path: &str,
-    coll: &MockCollection,
+    (path, coll): (&str, &MockCollection),
     root: &Element,
+    me: &str,
     props: Option<&[(String, String)]>,
 ) -> Response {
     let token = root.child_text(NS_DAV, "sync-token").unwrap_or_default();
@@ -1197,6 +1556,7 @@ fn sync_collection(
                 inner,
                 data,
                 &Resource::Object(path.to_owned(), name.clone()),
+                me,
                 props,
             ));
         }
@@ -1375,7 +1735,7 @@ fn precondition_fails(request: &DavRequest, current: Option<&MockObject>) -> boo
     false
 }
 
-fn put(inner: &Inner, request: &DavRequest) -> Response {
+fn put(inner: &Inner, request: &DavRequest, me: &str) -> Response {
     let Some((parent, name)) = split_member(&request.path) else {
         return empty(405);
     };
@@ -1383,7 +1743,7 @@ fn put(inner: &Inner, request: &DavRequest) -> Response {
     let Some(coll) = data.collections.get(&parent) else {
         return empty(409);
     };
-    if coll.read_only {
+    if coll.read_only || coll.is_schedule() {
         return dav_error(403, NS_DAV, "need-privileges");
     }
     let expected = if coll.is_calendar() {
@@ -1413,18 +1773,27 @@ fn put(inner: &Inner, request: &DavRequest) -> Response {
         return empty(412);
     }
     let created = current.is_none();
+    let previous = current.map(|o| o.data.clone());
     let Some(etag) = data.put(&parent, &name, &request.body) else {
         return empty(409);
     };
+    let rewritten = data.auto_schedule
+        && schedule::after_put(
+            &mut data,
+            (&parent, &name),
+            me,
+            previous.as_deref(),
+            request,
+        );
     let response = empty(if created { 201 } else { 204 });
-    if inner.config.etag_on_put {
+    if inner.config.etag_on_put && !rewritten {
         with_header(response, "etag", &etag)
     } else {
         response
     }
 }
 
-fn delete(inner: &Inner, request: &DavRequest) -> Response {
+fn delete(inner: &Inner, request: &DavRequest, me: &str) -> Response {
     let mut data = lock(&inner.data);
     match resolve(inner, &data, &request.path) {
         Some(Resource::Object(path, name)) => {
@@ -1435,8 +1804,21 @@ fn delete(inner: &Inner, request: &DavRequest) -> Response {
             if precondition_fails(request, coll.objects.get(&name)) {
                 return empty(412);
             }
+            let previous = coll
+                .is_calendar()
+                .then(|| coll.objects.get(&name).map(|o| o.data.clone()))
+                .flatten()
+                .filter(|_| coll.kind != MockCollectionKind::ScheduleInbox);
             data.delete(&path, &name);
+            if data.auto_schedule
+                && let Some(previous) = previous
+            {
+                schedule::after_delete(&mut data, me, &previous, request);
+            }
             empty(204)
+        }
+        Some(Resource::Collection(path)) if data.collections[&path].is_schedule() => {
+            dav_error(403, NS_DAV, "need-privileges")
         }
         Some(Resource::Collection(path)) => {
             data.collections.remove(&path);
@@ -1464,7 +1846,7 @@ fn set_props(root: Option<&Element>) -> Vec<&Element> {
         .collect()
 }
 
-fn mkcol(inner: &Inner, request: &DavRequest, calendar: bool) -> Response {
+fn mkcol(inner: &Inner, request: &DavRequest, calendar: bool, me: &str) -> Response {
     let root = match parse_body(&request.body) {
         Ok(root) => root,
         Err(response) => return *response,
@@ -1475,9 +1857,9 @@ fn mkcol(inner: &Inner, request: &DavRequest, calendar: bool) -> Response {
         format!("{}/", request.path)
     };
     let home = if calendar {
-        inner.calendar_home()
+        calendar_home_of(me)
     } else {
-        inner.addressbook_home()
+        addressbook_home_of(me)
     };
     let parent_ok = path.starts_with(&home)
         && path.len() > home.len()
@@ -1808,5 +2190,319 @@ mod tests {
             Some(("/a/b/".to_owned(), "c.ics".to_owned()))
         );
         assert_eq!(split_member("/a/b/"), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Scheduling (WP83)
+
+    const BOB: &str = "Authorization: Basic Ym9iOnNlY3JldA==\r\n";
+
+    fn freebusy_request(organizer: &str, attendees: &[&str]) -> String {
+        let mut out = format!(
+            "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nBEGIN:VFREEBUSY\r\nUID:q\r\n\
+             DTSTART:20261005T000000Z\r\nDTEND:20261006T000000Z\r\nORGANIZER:mailto:{organizer}\r\n"
+        );
+        for a in attendees {
+            out.push_str(&format!("ATTENDEE:mailto:{a}\r\n"));
+        }
+        out + "END:VFREEBUSY\r\nEND:VCALENDAR\r\n"
+    }
+
+    async fn scheduling_server(auto: bool) -> MockDavServer {
+        MockDavServer::start(MockDavConfig {
+            auto_schedule: auto,
+            users: vec![MockDavUser::new("bob")],
+            ..MockDavConfig::default()
+        })
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn principals_inbox_and_outbox() {
+        let server = scheduling_server(false).await;
+        server.add_user(MockDavUser::room("room-1", "Room 1"));
+        assert_eq!(
+            server.collection_paths(),
+            [
+                "/dav/addressbooks/ada/contacts/",
+                "/dav/calendars/ada/holidays/",
+                "/dav/calendars/ada/personal/",
+                "/dav/calendars/ada/tasks/",
+                "/dav/calendars/bob/personal/",
+                "/dav/calendars/room-1/personal/",
+            ],
+            "inboxes and outboxes are not listed"
+        );
+        let options = raw(server.addr(), "OPTIONS /dav/ HTTP/1.1\r\n", "").await;
+        let lower = options.to_ascii_lowercase();
+        assert!(lower.contains("calendar-schedule"));
+        assert!(!lower.contains("calendar-auto-schedule"));
+        server.set_auto_schedule(true);
+        let options = raw(server.addr(), "OPTIONS /dav/ HTTP/1.1\r\n", "").await;
+        assert!(
+            options
+                .to_ascii_lowercase()
+                .contains("calendar-auto-schedule")
+        );
+
+        // Bob's login sees Bob as the current principal.
+        let props = "<d:propfind xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\"><d:prop>\
+                     <d:current-user-principal/><c:schedule-inbox-URL/><c:schedule-outbox-URL/>\
+                     <c:calendar-user-address-set/><c:calendar-user-type/></d:prop></d:propfind>";
+        let bob = raw(
+            server.addr(),
+            &format!("PROPFIND /dav/principals/bob/ HTTP/1.1\r\nDepth: 0\r\n{BOB}"),
+            props,
+        )
+        .await;
+        assert_eq!(status(&bob), 207);
+        for part in [
+            "<d:current-user-principal><d:href>/dav/principals/bob/</d:href>",
+            "<c:schedule-inbox-URL><d:href>/dav/calendars/bob/inbox/</d:href>",
+            "<c:schedule-outbox-URL><d:href>/dav/calendars/bob/outbox/</d:href>",
+            "<d:href>mailto:bob@example.org</d:href>",
+            "<c:calendar-user-type>INDIVIDUAL</c:calendar-user-type>",
+        ] {
+            assert!(bob.contains(part), "{part} in {bob}");
+        }
+        let room = raw(
+            server.addr(),
+            &format!("PROPFIND /dav/principals/room-1/ HTTP/1.1\r\nDepth: 0\r\n{AUTH}"),
+            props,
+        )
+        .await;
+        assert!(room.contains("<c:calendar-user-type>ROOM</c:calendar-user-type>"));
+        assert!(room.contains("<d:current-user-principal><d:href>/dav/principals/ada/</d:href>"));
+
+        // The home lists the inbox and outbox with their resource types;
+        // the inbox names the default calendar.
+        let home = raw(
+            server.addr(),
+            &format!("PROPFIND /dav/calendars/bob/ HTTP/1.1\r\nDepth: 1\r\n{BOB}"),
+            "<d:propfind xmlns:d=\"DAV:\"><d:prop><d:resourcetype/></d:prop></d:propfind>",
+        )
+        .await;
+        assert!(home.contains("<c:schedule-inbox/>") && home.contains("<c:schedule-outbox/>"));
+        let inbox = raw(
+            server.addr(),
+            &format!("PROPFIND /dav/calendars/bob/inbox/ HTTP/1.1\r\nDepth: 0\r\n{BOB}"),
+            "<d:propfind xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\"><d:prop>\
+             <c:schedule-default-calendar-URL/></d:prop></d:propfind>",
+        )
+        .await;
+        assert!(inbox.contains("<d:href>/dav/calendars/bob/personal/</d:href>"));
+
+        // Inboxes are read-only, the outbox is not a collection to delete.
+        let put = raw(
+            server.addr(),
+            &format!(
+                "PUT /dav/calendars/bob/inbox/x.ics HTTP/1.1\r\nContent-Type: text/calendar\r\n{BOB}"
+            ),
+            "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
+        .await;
+        assert_eq!(status(&put), 403);
+        let delete = raw(
+            server.addr(),
+            &format!("DELETE /dav/calendars/bob/outbox/ HTTP/1.1\r\n{BOB}"),
+            "",
+        )
+        .await;
+        assert_eq!(status(&delete), 403);
+        assert!(
+            server
+                .deliver("bob", "i.ics", "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n")
+                .is_some()
+        );
+        assert_eq!(server.inbox("bob").len(), 1);
+        assert!(server.deliver("nobody", "i.ics", "x").is_none());
+    }
+
+    #[tokio::test]
+    async fn free_busy_posts() {
+        let server = scheduling_server(false).await;
+        let bob_personal = server.user_calendar_path("bob", "personal");
+        server.put_object(
+            &bob_personal,
+            "a.ics",
+            "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261005T090000Z\r\nDURATION:PT1H\r\n\
+             END:VEVENT\r\nEND:VCALENDAR\r\n",
+        );
+        let post = async |head: &str, body: &str| {
+            raw(
+                server.addr(),
+                &format!("POST {head} HTTP/1.1\r\nContent-Type: text/calendar\r\n{AUTH}"),
+                body,
+            )
+            .await
+        };
+        let ok = post(
+            "/dav/calendars/ada/outbox/",
+            &freebusy_request("ada@example.org", &["bob@example.org", "zed@example.org"]),
+        )
+        .await;
+        assert_eq!(status(&ok), 200);
+        assert!(ok.contains("<c:schedule-response"));
+        assert!(ok.contains("FREEBUSY;FBTYPE=BUSY:20261005T090000Z/20261005T100000Z"));
+        assert!(ok.contains("3.7;Invalid calendar user"));
+        server.set_free_busy_visible("bob", false);
+        let hidden = post(
+            "/dav/calendars/ada/outbox/",
+            &freebusy_request("ada@example.org", &["bob@example.org"]),
+        )
+        .await;
+        assert!(hidden.contains("3.8;No authority"));
+        assert!(!hidden.contains("FREEBUSY"));
+        server.set_free_busy_visible("bob", true);
+
+        let wrong_organizer = post(
+            "/dav/calendars/ada/outbox/",
+            &freebusy_request("bob@example.org", &["bob@example.org"]),
+        )
+        .await;
+        assert_eq!(status(&wrong_organizer), 403);
+        assert!(wrong_organizer.contains("organizer-allowed"));
+        let not_mine = post(
+            "/dav/calendars/bob/outbox/",
+            &freebusy_request("ada@example.org", &["bob@example.org"]),
+        )
+        .await;
+        assert_eq!(status(&not_mine), 403);
+        let not_freebusy = post(
+            "/dav/calendars/ada/outbox/",
+            "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+        )
+        .await;
+        assert_eq!(status(&not_freebusy), 400);
+        assert_eq!(
+            status(&post("/dav/calendars/ada/personal/", "x").await),
+            405
+        );
+        assert_eq!(status(&post("/dav/nowhere/", "x").await), 404);
+        let xml = raw(
+            server.addr(),
+            &format!("POST /dav/calendars/ada/outbox/ HTTP/1.1\r\nContent-Type: application/xml\r\n{AUTH}"),
+            "<x/>",
+        )
+        .await;
+        assert_eq!(status(&xml), 415);
+    }
+
+    #[tokio::test]
+    async fn auto_scheduling_honours_schedule_reply() {
+        let server = scheduling_server(true).await;
+        let invite = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:m\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\n\
+                      ORGANIZER:mailto:ada@example.org\r\nATTENDEE:mailto:bob@example.org\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let created = raw(
+            server.addr(),
+            &format!(
+                "PUT /dav/calendars/ada/personal/m.ics HTTP/1.1\r\nContent-Type: text/calendar\r\n{AUTH}"
+            ),
+            invite,
+        )
+        .await;
+        assert_eq!(status(&created), 201);
+        assert!(
+            !created.to_ascii_lowercase().contains("etag:"),
+            "the stored object was changed: {created}"
+        );
+        assert_eq!(server.inbox("bob").len(), 1);
+        let copy = server
+            .object(&server.user_calendar_path("bob", "personal"), "m.ics")
+            .unwrap();
+        // Bob accepts without a reply (Schedule-Reply: F).
+        let accepted = copy.data.replace(
+            "ATTENDEE:mailto:bob",
+            "ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob",
+        );
+        let quiet = raw(
+            server.addr(),
+            &format!(
+                "PUT /dav/calendars/bob/personal/m.ics HTTP/1.1\r\nContent-Type: text/calendar\r\n\
+                 Schedule-Reply: F\r\n{BOB}"
+            ),
+            &accepted,
+        )
+        .await;
+        assert_eq!(status(&quiet), 204);
+        assert!(quiet.to_ascii_lowercase().contains("etag:"));
+        assert!(server.inbox("ada").is_empty());
+        assert_eq!(server.scheduled_messages().len(), 1);
+        assert_eq!(
+            server.requests().last().unwrap().schedule_reply.as_deref(),
+            Some("F")
+        );
+        // Unchanged PARTSTAT: no reply either.
+        let same = raw(
+            server.addr(),
+            &format!(
+                "PUT /dav/calendars/bob/personal/m.ics HTTP/1.1\r\nContent-Type: text/calendar\r\n{BOB}"
+            ),
+            &accepted,
+        )
+        .await;
+        assert_eq!(status(&same), 204);
+        assert!(server.inbox("ada").is_empty());
+        // Taking Bob off the meeting cancels it for him.
+        let without_bob = invite.replace(
+            "ATTENDEE:mailto:bob@example.org\r\n",
+            "ATTENDEE:mailto:ext@x.example\r\n",
+        );
+        raw(
+            server.addr(),
+            &format!(
+                "PUT /dav/calendars/ada/personal/m.ics HTTP/1.1\r\nContent-Type: text/calendar\r\n{AUTH}"
+            ),
+            &without_bob,
+        )
+        .await;
+        let methods: Vec<(String, String)> = server
+            .scheduled_messages()
+            .into_iter()
+            .map(|m| (m.method, m.to))
+            .collect();
+        assert_eq!(
+            methods,
+            [
+                ("REQUEST".into(), "bob@example.org".into()),
+                ("REQUEST".into(), "ext@x.example".into()),
+                ("CANCEL".into(), "bob@example.org".into()),
+            ]
+        );
+        let cancelled = server
+            .object(&server.user_calendar_path("bob", "personal"), "m.ics")
+            .unwrap();
+        assert!(cancelled.data.contains("STATUS:CANCELLED"));
+        assert!(
+            cancelled.data.contains("PARTSTAT=ACCEPTED"),
+            "Bob's answer is kept"
+        );
+    }
+
+    #[tokio::test]
+    async fn without_scheduling_there_is_no_inbox_or_outbox() {
+        let server = MockDavServer::start(MockDavConfig {
+            scheduling: false,
+            auto_schedule: true,
+            ..MockDavConfig::default()
+        })
+        .await
+        .unwrap();
+        assert!(!server.auto_schedule());
+        server.set_auto_schedule(true);
+        assert!(!server.auto_schedule(), "auto-scheduling needs scheduling");
+        let options = raw(server.addr(), "OPTIONS /dav/ HTTP/1.1\r\n", "").await;
+        assert!(!options.to_ascii_lowercase().contains("calendar-schedule"));
+        let post = raw(
+            server.addr(),
+            &format!(
+                "POST /dav/calendars/ada/outbox/ HTTP/1.1\r\nContent-Type: text/calendar\r\n{AUTH}"
+            ),
+            &freebusy_request("ada@example.org", &["ada@example.org"]),
+        )
+        .await;
+        assert_eq!(status(&post), 404);
+        assert!(server.inbox("ada").is_empty());
     }
 }

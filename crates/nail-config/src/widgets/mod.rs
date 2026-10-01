@@ -69,7 +69,9 @@ pub(crate) const fn widget(
 
 /// A widget that is not implemented yet (any options are accepted): the
 /// slots of a wave's contract until its UI package types them (M3b: the
-/// scheduling and Gmail widgets, WP84).
+/// scheduling and Gmail widgets, WP84). Unused between waves; the next
+/// contract (M3c) uses it for its slots.
+#[allow(dead_code)]
 pub(crate) const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
     WidgetSpec {
         kind,

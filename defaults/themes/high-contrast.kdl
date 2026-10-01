@@ -79,4 +79,13 @@ theme "High contrast" extends="default" mode="high-contrast" {
 
     // Dividers are easy to see and to grab.
     part "split.divider" { background-color "$color.border"; }
+
+    // Invitations and free/busy (M3b): states differ by more than colour.
+    part "invitation" { border "$border.thin"; border-left-width 6; }
+    part "invitation.issue[severity=\"danger\"]" { text-decoration "underline"; }
+    part "freebusy.busy" { border "2px solid $color.border"; }
+    part "freebusy.meeting" { border "3px dashed $color.focus-ring"; }
+    part "label-list.view:focus-visible" { outline "3px solid $color.focus-ring"; }
+    part "category-tabs.tab" { border "$border.thin"; }
+    part "category-tabs.tab:selected" { text-decoration "underline"; }
 }

@@ -74,6 +74,7 @@
                     "auto",
                     "auto",
                     "1fr",
+                    "auto",
                     "auto"
                   ],
                   "children": [
@@ -110,6 +111,15 @@
                     },
                     {
                       "type": "widget",
+                      "id": "gmail-labels",
+                      "label": null,
+                      "kind": "label-list",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
                       "id": "smart-folders",
                       "label": "@saved-search-label",
                       "kind": "smart-folders",
@@ -120,19 +130,39 @@
                   ]
                 },
                 {
-                  "type": "widget",
-                  "id": "list",
+                  "type": "stack",
+                  "id": "list-pane",
                   "label": "@layout.pane.messages",
-                  "kind": "message-list",
-                  "options": {
-                    "page-size": 100
-                  },
-                  "rows": [
-                    "{from.name}  {date | relative}",
-                    "{subject}",
-                    "{preview}"
+                  "sizes": [
+                    "auto",
+                    "1fr"
                   ],
-                  "source": null
+                  "children": [
+                    {
+                      "type": "widget",
+                      "id": "gmail-categories",
+                      "label": null,
+                      "kind": "category-tabs",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "list",
+                      "label": null,
+                      "kind": "message-list",
+                      "options": {
+                        "page-size": 100
+                      },
+                      "rows": [
+                        "{from.name}  {date | relative}",
+                        "{subject}",
+                        "{preview}"
+                      ],
+                      "source": null
+                    }
+                  ]
                 },
                 {
                   "type": "stack",
@@ -316,6 +346,7 @@
                   "sizes": [
                     "auto",
                     "1fr",
+                    "auto",
                     "auto"
                   ],
                   "children": [
@@ -341,6 +372,15 @@
                     },
                     {
                       "type": "widget",
+                      "id": "gmail-labels",
+                      "label": null,
+                      "kind": "label-list",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
                       "id": "smart-folders",
                       "label": "@saved-search-label",
                       "kind": "smart-folders",
@@ -351,18 +391,38 @@
                   ]
                 },
                 {
-                  "type": "widget",
-                  "id": "list",
+                  "type": "stack",
+                  "id": "list-pane",
                   "label": "@layout.pane.messages",
-                  "kind": "message-list",
-                  "options": {
-                    "page-size": 100
-                  },
-                  "rows": [
-                    "{from.name}  {date | relative}",
-                    "{subject}"
+                  "sizes": [
+                    "auto",
+                    "1fr"
                   ],
-                  "source": null
+                  "children": [
+                    {
+                      "type": "widget",
+                      "id": "gmail-categories",
+                      "label": null,
+                      "kind": "category-tabs",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "list",
+                      "label": null,
+                      "kind": "message-list",
+                      "options": {
+                        "page-size": 100
+                      },
+                      "rows": [
+                        "{from.name}  {date | relative}",
+                        "{subject}"
+                      ],
+                      "source": null
+                    }
+                  ]
                 },
                 {
                   "type": "stack",
@@ -1416,6 +1476,60 @@
       "icon": "sync",
       "alias_of": null,
       "args": []
+    },
+    "scheduling.accept": {
+      "label": "@scheduling.action.accept",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "scheduling.tentative": {
+      "label": "@scheduling.action.tentative",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "scheduling.decline": {
+      "label": "@scheduling.action.decline",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "scheduling.find-time": {
+      "label": "@scheduling.action.find-time",
+      "icon": "calendar",
+      "alias_of": null,
+      "args": []
+    },
+    "scheduling.settings": {
+      "label": "@scheduling.action.settings",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "gmail.new-label": {
+      "label": "@gmail.action.new-label",
+      "icon": "plus",
+      "alias_of": null,
+      "args": []
+    },
+    "gmail.apply-labels": {
+      "label": "@gmail.action.apply-labels",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "gmail.label-view": {
+      "label": "@gmail.action.label-view",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "gmail.category": {
+      "label": "@gmail.action.category",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
@@ -1453,6 +1567,24 @@
       "context": "reader",
       "key": "k",
       "action": "mail.previous",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "shift+y",
+      "action": "scheduling.accept",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "shift+m",
+      "action": "scheduling.tentative",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "shift+n",
+      "action": "scheduling.decline",
       "args": []
     },
     {
@@ -1880,6 +2012,13 @@
       },
       {
         "type": "action",
+        "action": "gmail.apply-labels",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "security.autocrypt.import",
         "args": [],
         "label": null,
@@ -1912,6 +2051,13 @@
         "icon": null
       },
       {
+        "type": "action",
+        "action": "scheduling.find-time",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
         "type": "spacer"
       },
       {
@@ -1924,6 +2070,13 @@
       {
         "type": "action",
         "action": "pim.sources",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "scheduling.settings",
         "args": [],
         "label": null,
         "icon": null
@@ -2071,6 +2224,13 @@
         "args": [],
         "label": null,
         "icon": null
+      },
+      {
+        "type": "action",
+        "action": "gmail.apply-labels",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "context:thread-view.message": [
@@ -2178,6 +2338,13 @@
       {
         "type": "action",
         "action": "sync.folder-policy",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "gmail.new-label",
         "args": [],
         "label": null,
         "icon": null

@@ -21,9 +21,16 @@ mail-parser.workspace = true
 mail-builder.workspace = true
 # DTSTAMP / sequence handling, conflicts in UTC.
 chrono.workspace = true
+# The viewer's zone for floating / all-day times in conflict checks (the
+# same chrono-tz nail-ical uses; MIT OR Apache-2.0, already in the lock).
+chrono-tz.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# Tests render the iMIP texts from locales/en/itip.ftl (the same
+# fluent-bundle nail-config uses; Apache-2.0 OR MIT).
+fluent-bundle.workspace = true
+unic-langid.workspace = true
 
 [lints]
 workspace = true

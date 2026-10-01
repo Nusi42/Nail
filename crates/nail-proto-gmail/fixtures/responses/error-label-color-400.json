@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": 400,
+    "message": "Label color #123456 is not on the allowed color palette",
+    "errors": [
+      { "message": "Label color #123456 is not on the allowed color palette", "domain": "global", "reason": "invalidArgument" }
+    ],
+    "status": "INVALID_ARGUMENT"
+  }
+}

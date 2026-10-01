@@ -1,24 +1,51 @@
 /**
  * Feature slot of M3b WP84 for invitations and scheduling (contract
- * ADR 0065): the invitation card in the reader (Accept / Tentative /
- * Decline / Propose new time with an optional comment, conflicts preview,
+ * ADR 0065; UI ADR 0069): the invitation card in the reader (Accept /
+ * Tentative / Decline / Propose new time with an optional comment,
+ * conflicts preview, series or one occurrence, updated / cancelled states,
  * the organizer's view of replies and counter-proposals), the attendee
  * picker with the free/busy timeline in the event editor, the organizer's
  * update / cancel flows, scheduling settings.
  *
+ * Mount points for the integrator (components other features render):
+ * - `InvitationCard` — the reader, between the headers and the body:
+ *   `<InvitationCard messageId={m.id} invitation={m.invitation ?? null} />`
+ *   (renders nothing without an invitation).
+ * - `AttendeePicker` — the PIM event editor, instead of its attendee list:
+ *   attendees, roles / kinds, address suggestions, free/busy timeline with
+ *   suggested slots (`onTimeChange` moves the event).
+ * - `MeetingPanel` — the PIM event editor for a saved event with attendees:
+ *   organizer "send invitations / cancel", attendee answers / new time.
+ *
  * Only WP84 edits the files in this directory (plus
- * `crates/nail-config/src/widgets/scheduling.rs` and
- * `locales/{en,de}/scheduling.ftl`). The central registry
- * (`../registry.ts`) merges these exports into the app; see
- * `../README.md`.
+ * `locales/{en,de}/scheduling.ftl`). The central registry (`../registry.ts`)
+ * merges these exports into the app; see `../README.md`.
  */
 import type { Event as NailEvent } from "../../api/generated";
+import type { ActionContext } from "../../actions/registry";
 import type { Feature, FeatureEventHandler } from "../types";
+import { FindTimeDialog, FreeBusyWidget } from "./AttendeePicker";
+import { InvitationCardWidget } from "./InvitationCard";
+import { CancelMeetingDialog, SchedulingSettingsDialog } from "./MeetingPanel";
+import {
+  CANCEL_DIALOG,
+  FIND_TIME_DIALOG,
+  FREEBUSY_WIDGET,
+  INVITATION_CARD_WIDGET,
+  SETTINGS_DIALOG,
+} from "./names";
+import { scheduleWrite, schedulingKeys } from "./queries";
+import { schedulingStoreFor } from "./store";
+import type { InvitationResponse } from "../../api/generated";
 
-/** Query keys of this feature. */
-export const schedulingKeys = {
-  all: ["scheduling"] as const,
-};
+export { schedulingKeys } from "./queries";
+export { InvitationCard } from "./InvitationCard";
+export { AttendeePicker, FindTime } from "./AttendeePicker";
+export { FreeBusyTimeline } from "./FreeBusyTimeline";
+export { MeetingPanel } from "./MeetingPanel";
+export { SCHEDULING_BASE_CSS } from "./parts";
+export { CANCEL_DIALOG, FIND_TIME_DIALOG, SETTINGS_DIALOG } from "./names";
+export { schedulingStoreFor } from "./store";
 
 /**
  * The core's events that change invitation cards or free/busy (a reply
@@ -32,13 +59,65 @@ export const SCHEDULING_EVENTS = [
 ] as const satisfies readonly NailEvent["type"][];
 
 /** Layout widget kinds → components. */
-export const widgets: Feature["widgets"] = {};
+export const widgets: Feature["widgets"] = {
+  [INVITATION_CARD_WIDGET]: InvitationCardWidget,
+  [FREEBUSY_WIDGET]: FreeBusyWidget,
+};
+
+/** Answers the invitation of the selected message (and sends the reply). */
+async function answerSelected(ctx: ActionContext, response: InvitationResponse): Promise<void> {
+  const messageId = ctx.store.getState().selectedMessageId;
+  if (messageId === null) return;
+  await scheduleWrite(ctx, {
+    type: "RespondToInvitation",
+    target: { type: "message", message_id: messageId },
+    response,
+    comment: null,
+    send: true,
+    calendar_id: null,
+  });
+}
+
+/** Whether the selected message has a card offering `response` (as far as the cache knows). */
+function offers(ctx: ActionContext, response: InvitationResponse): boolean {
+  const messageId = ctx.store.getState().selectedMessageId;
+  if (messageId === null) return false;
+  const card = ctx.queryClient.getQueryData<{ actions: string[] } | null>(
+    schedulingKeys.invitation(messageId),
+  );
+  return card?.actions.includes(response) ?? false;
+}
 
 /** Action ids → handlers. */
-export const actions: Feature["actions"] = {};
+export const actions: Feature["actions"] = {
+  "scheduling.accept": {
+    run: (ctx) => answerSelected(ctx, "accept"),
+    enabled: (ctx) => offers(ctx, "accept"),
+  },
+  "scheduling.tentative": {
+    run: (ctx) => answerSelected(ctx, "tentative"),
+    enabled: (ctx) => offers(ctx, "tentative"),
+  },
+  "scheduling.decline": {
+    run: (ctx) => answerSelected(ctx, "decline"),
+    enabled: (ctx) => offers(ctx, "decline"),
+  },
+  /** Opens "find a time" (optionally with the selected message's people). */
+  "scheduling.find-time": {
+    run: (ctx) => {
+      schedulingStoreFor(ctx.store).getState().setFindTime(null);
+      ctx.store.getState().openWindow(FIND_TIME_DIALOG);
+    },
+  },
+  "scheduling.settings": { run: (ctx) => ctx.store.getState().openWindow(SETTINGS_DIALOG) },
+};
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
+export const dialogs: Feature["dialogs"] = {
+  [CANCEL_DIALOG]: CancelMeetingDialog,
+  [SETTINGS_DIALOG]: SchedulingSettingsDialog,
+  [FIND_TIME_DIALOG]: FindTimeDialog,
+};
 
 /** Invitations or calendars changed: refetch what shows them. */
 export const handleSchedulingEvent: FeatureEventHandler = (event, { queryClient }) => {

@@ -1,6 +1,6 @@
 [package]
 name = "nail-dav"
-description = "CalDAV (RFC 4791) and CardDAV (RFC 6352) client for Nail: discovery, PROPFIND / REPORT, sync-collection, conditional writes"
+description = "CalDAV (RFC 4791) and CardDAV (RFC 6352) client for Nail: discovery, PROPFIND / REPORT, sync-collection, conditional writes, CalDAV scheduling (RFC 6638) and free/busy"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

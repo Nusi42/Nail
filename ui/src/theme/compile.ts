@@ -15,7 +15,9 @@
  * Everything is validated defensively: a rule with an unsafe selector piece or
  * value is dropped with a warning instead of corrupting the sheet.
  */
+import { GMAIL_BASE_CSS } from "../features/gmail/parts";
 import { PIM_BASE_CSS } from "../features/pim/parts";
+import { SCHEDULING_BASE_CSS } from "../features/scheduling/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
   AncestorSelector,
@@ -229,7 +231,9 @@ ${[
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
 }
 ${PLUGIN_BASE_CSS}
-${PIM_BASE_CSS}`;
+${PIM_BASE_CSS}
+${SCHEDULING_BASE_CSS}
+${GMAIL_BASE_CSS}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {

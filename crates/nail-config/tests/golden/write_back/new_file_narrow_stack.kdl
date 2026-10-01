@@ -11,16 +11,22 @@ layout "custom" extends="default" {
                     min-sizes="160px 280px 320px" \
                     max-sizes="480px none none" \
                     collapsible="true false true" {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto auto" {
                         search-bar id="search" scope="account"
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
+                        // Gmail accounts: labels as views (nothing for other accounts).
+                        label-list id="gmail-labels"
                         smart-folders id="smart-folders" label="@saved-search-label"
                     }
-                    message-list id="list" label="@layout.pane.messages" page-size=100 {
-                        row "{from.name}  {date | relative}"
-                        row "{subject}"
-                        row "{preview}"
+                    stack id="list-pane" label="@layout.pane.messages" sizes="auto 1fr" {
+                        // Gmail inbox categories (nothing for other accounts).
+                        category-tabs id="gmail-categories"
+                        message-list id="list" page-size=100 {
+                            row "{from.name}  {date | relative}"
+                            row "{subject}"
+                            row "{preview}"
+                        }
                     }
                     stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"
@@ -51,14 +57,18 @@ layout "custom" extends="default" {
                 config-errors id="config-errors" hide-when-valid=#true
                 search-bar id="search" scope="account"
                 tabs id="panes" active=1 {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto auto" {
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
+                        label-list id="gmail-labels"
                         smart-folders id="smart-folders" label="@saved-search-label"
                     }
-                    message-list id="list" label="@layout.pane.messages" page-size=100 {
-                        row "{from.name}  {date | relative}"
-                        row "{subject}"
+                    stack id="list-pane" label="@layout.pane.messages" sizes="auto 1fr" {
+                        category-tabs id="gmail-categories"
+                        message-list id="list" page-size=100 {
+                            row "{from.name}  {date | relative}"
+                            row "{subject}"
+                        }
                     }
                     stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
                         toolbar id="reader-toolbar" toolbar="reader"

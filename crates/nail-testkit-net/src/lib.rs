@@ -20,7 +20,9 @@
 //! * [`MockDavServer`]: CalDAV / CardDAV (RFC 4791 / 6352: discovery,
 //!   PROPFIND, REPORT incl. sync-collection, conditional writes,
 //!   MKCALENDAR, Basic / bearer auth, optional TLS, server-side changes
-//!   for tests, fault injection; M3a WP72).
+//!   for tests, fault injection; M3a WP72), with RFC 6638 scheduling:
+//!   several principals, schedule inbox / outbox, free/busy `POST`,
+//!   switchable auto-scheduling (M3b WP83).
 //!
 //! TLS certificates come from [`nail_testkit::tls`]; clients trust
 //! `ca_der()` of the server. The mock IMAP server stays in `nail-testkit`.
@@ -38,7 +40,8 @@ pub mod smtp;
 mod stream;
 
 pub use dav::{
-    DavRequest, MockCollection, MockCollectionKind, MockDavConfig, MockDavServer, MockObject,
+    DavRequest, MockCollection, MockCollectionKind, MockDavConfig, MockDavServer, MockDavUser,
+    MockObject, MockScheduleMessage,
 };
 pub use dns::{DnsZone, MockDnsServer, MxAnswer, SrvAnswer, ZoneAnswer};
 pub use http::{MockHttpServer, MockResponse, RecordedRequest};

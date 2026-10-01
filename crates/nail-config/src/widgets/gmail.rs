@@ -1,18 +1,35 @@
 //! Widgets of M3b WP84 (Gmail labels and categories; contract ADR 0065).
 //! Rendered by `ui/src/features/gmail/`.
 //!
-//! Slot created by WP80 as future widgets (any options accepted); WP84
-//! gives them typed options.
+//! Neither takes `row` children; the options are listed in
+//! `userDocs/en/invitations-and-gmail-labels.md#layout-options`.
 
-use super::{WidgetSpec, future_widget};
+use super::OptionType::{Bool, Str};
+use super::{WidgetSpec, widget};
 
 /// Widgets of this feature.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // The labels of the selected Gmail account (label-based views,
     // management).
-    future_widget("label-list", true),
+    widget(
+        "label-list",
+        &[("show-hidden", Bool), ("show-counts", Bool)],
+        &[],
+        false,
+    ),
     // The inbox categories as a filter (Primary, Social, …).
-    future_widget("category-tabs", false),
+    // `categories` = space-separated names from primary / social /
+    // promotions / updates / forums.
+    widget(
+        "category-tabs",
+        &[
+            ("categories", Str),
+            ("show-all", Bool),
+            ("show-counts", Bool),
+        ],
+        &[],
+        false,
+    ),
 ];
 
 #[cfg(test)]
@@ -26,8 +43,8 @@ mod tests {
         let text = "layout \"x\" extends=\"default\" {
     window \"main\" {
         stack {
-            label-list
-            category-tabs
+            label-list show-hidden=#false show-counts=#true
+            category-tabs categories=\"primary social\" show-all=#true show-counts=#false
         }
     }
 }

@@ -30,6 +30,10 @@ serde.workspace = true
 serde_json.workspace = true
 # `raw` messages are base64url (RFC 4648 section 5).
 base64.workspace = true
+# Message-ID / In-Reply-To / recipients of raw messages (idempotent
+# appends, reply threading, Bcc for envelope recipients); Apache-2.0 OR MIT,
+# already in the workspace.
+mail-parser.workspace = true
 # internalDate, Retry-After dates.
 chrono.workspace = true
 # The mock server (feature `testing`); MIT, already in the workspace.

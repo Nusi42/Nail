@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
 import { AttachmentWarningMark } from "../features/security";
+import { MessageLabels } from "../features/gmail";
+import { InvitationCard } from "../features/scheduling";
 import type { Address, MessageBody } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
 import { optionBool, optionList, type WidgetProps } from "../layout/widgetRegistry";
@@ -109,6 +111,12 @@ function Body({ message }: { message: MessageBody }) {
   return <pre data-part="message-view.text">{message.text}</pre>;
 }
 
+/** Label chips / category of a Gmail message (from the cached summary). */
+function summaryOf(ctx: ReturnType<typeof useComposeContext>, id: MessageBody["id"]): ReactNode {
+  const summary = findSummary(ctx.queryClient, id);
+  return summary?.gmail ? <MessageLabels message={summary} /> : null;
+}
+
 /** Headers and body of the selected message. */
 export function MessageView({ node }: WidgetProps) {
   const t = useT();
@@ -156,6 +164,8 @@ export function MessageView({ node }: WidgetProps) {
             );
           })}
         </header>
+        {summaryOf(ctx, message.id)}
+        <InvitationCard messageId={message.id} invitation={message.invitation ?? null} />
         <Body message={message} />
         {message.attachments.length > 0 && (
           <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>

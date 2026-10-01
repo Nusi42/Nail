@@ -1,19 +1,37 @@
 //! Widgets of M3b WP84 (invitations and scheduling; contract ADR 0065).
 //! Rendered by `ui/src/features/scheduling/`.
 //!
-//! Slot created by WP80 with the kinds the plan names, still as future
-//! widgets (any options accepted); WP84 gives them typed options and adds
-//! the dialogs and settings widgets it needs.
+//! Neither takes `row` children; the options are listed in
+//! `userDocs/en/invitations-and-gmail-labels.md#layout-options`.
 
-use super::{WidgetSpec, future_widget};
+use super::OptionType::{Bool, OneOf, Str, UInt};
+use super::{WidgetSpec, widget};
 
 /// Widgets of this feature.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // The invitation card of the open message (method, organizer,
     // attendees, answer buttons, conflicts).
-    future_widget("invitation-card", false),
+    widget(
+        "invitation-card",
+        &[
+            ("attendees", OneOf(&["collapsed", "expanded"])),
+            ("conflicts", Bool),
+        ],
+        &[],
+        false,
+    ),
     // The attendee picker's free/busy timeline.
-    future_widget("freebusy-timeline", true),
+    widget(
+        "freebusy-timeline",
+        &[
+            ("hour-start", UInt),
+            ("hour-end", UInt),
+            ("duration", UInt),
+            ("time-zone", Str),
+        ],
+        &[],
+        false,
+    ),
 ];
 
 #[cfg(test)]
@@ -27,8 +45,8 @@ mod tests {
         let text = "layout \"x\" extends=\"default\" {
     window \"main\" {
         stack {
-            invitation-card
-            freebusy-timeline
+            invitation-card attendees=\"expanded\" conflicts=#true
+            freebusy-timeline hour-start=8 hour-end=18 duration=30 time-zone=\"Europe/Berlin\"
         }
     }
 }

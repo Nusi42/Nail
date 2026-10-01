@@ -465,20 +465,20 @@ mod tests {
         assert!(layout.keys.iter().any(|k| k.context == "list"
             && k.key == "shift+f"
             && k.action == "plugin.follow-up.follow-up"));
-        // The panel sits after the message list in both breakpoints; the
-        // split's size lists grew with it.
+        // The panel sits after the message list in both breakpoints (inside
+        // the list pane's stack, under the Gmail category tabs and the
+        // list); the stack's size list grew with it.
         assert_eq!(
             placed_panels(&layout),
             HashSet::from(["follow-up.due".to_owned()])
         );
         assert_eq!(text.matches("plugin-panel \"follow-up.due\"").count(), 2);
-        assert!(text.contains("sizes=\"240px 1fr 280px 1.4fr\""), "{text}");
-        assert!(
-            text.contains("min-sizes=\"160px 280px none 320px\""),
-            "{text}"
-        );
-        assert!(
-            text.contains("collapsible=\"true false true true\""),
+        assert_eq!(
+            text.matches(
+                "stack id=\"list-pane\" label=\"@layout.pane.messages\" sizes=\"auto 1fr auto\""
+            )
+            .count(),
+            2,
             "{text}"
         );
     }

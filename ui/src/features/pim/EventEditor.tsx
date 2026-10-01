@@ -12,12 +12,11 @@
  * amount). Deleting uses the same choice.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import type {
   Alarm,
   AlarmAction,
   Attendee,
-  AttendeeRole,
   Calendar,
   CalendarEvent,
   ConferenceLink,
@@ -33,7 +32,6 @@ import { useDateFormat } from "../../i18n/format";
 import {
   ALARM_ACTIONS,
   ALARM_UNITS,
-  ATTENDEE_ROLES,
   EDIT_SCOPES,
   EVENT_STATUSES,
   TRANSPARENCIES,
@@ -46,7 +44,9 @@ import { wallDelta } from "./changes";
 import { NumberField, Problem, problemOf, useChangeContext } from "./common";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { formatInstant } from "./fmt";
-import { deleteEvent, saveEvent, useCalendars, useContactSearch, useEvent } from "./queries";
+import { deleteEvent, saveEvent, useCalendars, useEvent } from "./queries";
+import { AttendeePicker, MeetingPanel } from "../scheduling";
+import { useMyAddresses } from "../scheduling/queries";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { choiceOf, recurrenceOf, type RecurrenceChoice } from "./recurrence";
 import { emptyEventFields } from "./defaults";
@@ -288,6 +288,7 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
   };
   const writable = calendars.filter((c) => !c.read_only && c.components.includes("event"));
   const viewerTz = localZone();
+  const myAddresses = useMyAddresses();
   const occurrence =
     target.mode === "edit" && target.recurrenceId !== null && event?.recurrence
       ? target.recurrenceId
@@ -706,7 +707,28 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           />
         </div>
 
-        <AttendeeEditor value={form.attendees} onChange={(attendees) => update({ attendees })} />
+        <AttendeePicker
+          value={form.attendees}
+          onChange={(attendees) => update({ attendees })}
+          start={preview.start}
+          end={preview.end}
+          onTimeChange={(start, end) => {
+            const s = splitPimTime(start);
+            const e = splitPimTime(end);
+            update({
+              startDay: s.day,
+              startTime: s.time ?? form.startTime,
+              endDay: e.day,
+              endTime: e.time ?? form.endTime,
+            });
+          }}
+          organizer={event?.fields.organizer?.email ?? myAddresses[0] ?? null}
+          eventId={event?.id ?? null}
+          tz={viewerTz}
+        />
+        {target.mode === "edit" && event !== null && event.fields.attendees.length > 0 && (
+          <MeetingPanel event={event} recurrenceId={occurrence} />
+        )}
         <AlarmEditor value={form.alarms} onChange={(alarms) => update({ alarms })} tz={viewerTz} />
 
         <fieldset data-part="pim.editor.flags">
@@ -882,158 +904,6 @@ function ConferenceEditor({
       >
         {t("pim-conference-add")}
       </button>
-    </fieldset>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Attendees
-
-function AttendeeEditor({
-  value,
-  onChange,
-}: {
-  value: Attendee[];
-  onChange(value: Attendee[]): void;
-}) {
-  const t = useT();
-  const id = useId();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [query, setQuery] = useState("");
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(email.trim().length >= 2 ? email.trim() : ""), 150);
-    return () => clearTimeout(timer);
-  }, [email]);
-  const matches = useContactSearch(query, null);
-  const add = (address: string, display: string | null) => {
-    const clean = address.trim();
-    if (!clean || value.some((a) => a.email.toLowerCase() === clean.toLowerCase())) return;
-    onChange([
-      ...value,
-      {
-        email: clean,
-        name: display?.trim() || null,
-        role: "required",
-        status: "needs-action",
-        kind: "individual",
-        rsvp: true,
-        delegated_to: [],
-        delegated_from: [],
-      },
-    ]);
-    setEmail("");
-    setName("");
-  };
-  const suggestions = (matches.data ?? [])
-    .flatMap((m) =>
-      m.contact.emails.map((address) => ({
-        address,
-        name: m.contact.display_name,
-        id: m.contact.id,
-      })),
-    )
-    .filter((s) => !value.some((a) => a.email.toLowerCase() === s.address.toLowerCase()))
-    .slice(0, 6);
-  return (
-    <fieldset data-part="pim.editor.attendees">
-      <legend data-part="form.section.title">{t("pim-attendees-legend")}</legend>
-      {value.length === 0 && <p data-part="pim.editor.hint">{t("pim-attendees-none")}</p>}
-      <ul data-part="pim.editor.attendee-list">
-        {value.map((attendee, index) => (
-          <li key={attendee.email} data-part="pim.editor.row" data-row="attendee">
-            <span data-part="pim.editor.attendee.name">
-              {attendee.name
-                ? t("pim-attendee-named", { name: attendee.name, email: attendee.email })
-                : attendee.email}
-            </span>
-            <span data-part="pim.editor.attendee.status" data-status={attendee.status}>
-              {t(`pim-partstat-${attendee.status}`)}
-            </span>
-            <label data-part="form.label" htmlFor={`${id}-role-${index}`}>
-              {t("pim-attendee-role")}
-            </label>
-            <select
-              id={`${id}-role-${index}`}
-              data-part="form.select"
-              value={attendee.role}
-              onChange={(e) =>
-                onChange(
-                  value.map((a, i) =>
-                    i === index ? { ...a, role: e.target.value as AttendeeRole } : a,
-                  ),
-                )
-              }
-            >
-              {ATTENDEE_ROLES.map((role) => (
-                <option key={role} value={role}>
-                  {t(`pim-role-${role}`)}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              data-part="form.button"
-              data-action="remove"
-              aria-label={t("pim-attendee-remove", { email: attendee.email })}
-              onClick={() => onChange(value.filter((_, i) => i !== index))}
-            >
-              {t("pim-remove")}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div data-part="pim.editor.row" data-row="attendee-add">
-        <div data-part="form.field" data-field="attendee-email">
-          <label data-part="form.label" htmlFor={`${id}-email`}>
-            {t("pim-attendee-email")}
-          </label>
-          <input
-            id={`${id}-email`}
-            data-part="form.input"
-            type="email"
-            autoComplete="off"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add(email, name);
-              }
-            }}
-          />
-        </div>
-        <div data-part="form.field" data-field="attendee-name">
-          <label data-part="form.label" htmlFor={`${id}-name`}>
-            {t("pim-attendee-name")}
-          </label>
-          <input
-            id={`${id}-name`}
-            data-part="form.input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="add-attendee"
-          onClick={() => add(email, name)}
-        >
-          {t("pim-attendee-add")}
-        </button>
-      </div>
-      {suggestions.length > 0 && (
-        <ul data-part="pim.editor.suggestions" aria-label={t("pim-attendee-suggestions")}>
-          {suggestions.map((s) => (
-            <li key={`${s.id}-${s.address}`} data-part="pim.editor.suggestion">
-              <button type="button" data-part="form.button" onClick={() => add(s.address, s.name)}>
-                {t("pim-attendee-suggestion", { name: s.name, email: s.address })}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </fieldset>
   );
 }

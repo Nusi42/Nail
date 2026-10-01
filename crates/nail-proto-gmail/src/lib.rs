@@ -1,45 +1,69 @@
-//! The Gmail API engine (plan M3b WP82; contract ADR 0065).
+//! The Gmail API engine (plan M3b WP82; contract ADR 0065, package ADR
+//! `docs/adr/0067-gmail-engine.md`).
 //!
-//! **Stub (WP80).** WP82 fills this crate; the contract it builds against
-//! is `nail_api::gmail` (label ↔ folder / tag mapping, categories,
-//! [`nail_api::gmail::GmailFolder::move_change`],
-//! [`nail_api::gmail::LabelChange::from_flags`]), the provider-neutral
-//! [`nail_api::engine::MailApiEngine`] (folders, full listing pages,
-//! history deltas with [`nail_api::engine::DeltaOutcome::CursorExpired`],
-//! raw fetches, replayed [`nail_api::engine::RemoteWrite`]s),
-//! [`nail_api::engine::OutgoingTransport`] (`users.messages.send`),
-//! [`nail_api::engine::AdaptivePoll`] and the store's Gmail tables
-//! (`nail_store::gmail`, used by the core, not by this crate). Expected
-//! shape:
+//! A Gmail account syncs through the Gmail REST API instead of IMAP. The
+//! crate builds on the contract in `nail_api::gmail` (labels ↔ folders /
+//! tags, categories) and `nail_api::engine` ([`MailApiEngine`],
+//! [`OutgoingTransport`], [`AdaptivePoll`]):
 //!
-//! * `client` — `GmailClient` over `https://<host>/gmail/v1/users/me`
-//!   (the account's `gmail` endpoint; plain `http` only for loopback test
-//!   servers), bearer tokens from an `AccessTokenProvider` with one forced
-//!   refresh on `401`, errors → `nail_api::ErrorCode` + `gmail-*` texts
-//!   (`locales/en/core-gmail.ftl`), `429` / `403 rateLimitExceeded` /
-//!   `5xx` → `EngineError::rate_limited` with the server's `Retry-After`
-//!   and exponential backoff.
-//! * `messages` — `messages.list` (paging, `q=after:` for "recent N days"),
-//!   `messages.get?format=raw|metadata`, `modify` (labels), `trash`,
-//!   `untrash`, `delete`, `insert`, `send` (raw MIME, `threadId` for
-//!   replies), `attachments.get`; `batchModify`, and HTTP batch requests
-//!   (`multipart/mixed`, at most 100 parts) for metadata fetches.
-//! * `history` — `history.list` from a `historyId` (all history types,
-//!   paging), mapped to `SyncDelta`; `404` → `CursorExpired`.
-//! * `labels` — `labels.list` / `get` / `create` / `patch` / `delete`,
-//!   system labels → `GmailFolder`s, user labels → tags.
-//! * `engine` — `GmailEngine: MailApiEngine + OutgoingTransport`.
-//! * `testing` (feature) — `MockGmailServer` on 127.0.0.1 with an
-//!   in-memory mailbox (messages, labels, threads, history ids, quotas /
-//!   injected errors, server-side changes for tests) and recorded-response
-//!   fixtures in `tests/fixtures/`.
+//! * [`client`] — [`GmailClient`] over `https://<host>/gmail/v1/users/me`
+//!   (plain `http` only for loopback test servers): bearer tokens from an
+//!   [`AccessTokenProvider`] with one forced refresh on `401`; `429`,
+//!   `403 rateLimitExceeded` and `5xx` retried with exponential backoff or
+//!   the server's `Retry-After` ([`RetryPolicy`]), longer waits handed to
+//!   the caller as `EngineError::retry_after_secs`; errors →
+//!   `nail_api::ErrorCode` + `gmail-*` texts ([`GmailError`],
+//!   `locales/en/core-gmail.ftl`).
+//! * [`messages`] — `messages.list` / `get` (`raw`, `minimal`,
+//!   `metadata`, `full`) / `modify` / `batchModify` / `trash` / `untrash`
+//!   / `delete` / `insert` / `send` (raw MIME; media upload above 4 MB),
+//!   `drafts.create`, `attachments.get`. Attachments come with the raw
+//!   MIME.
+//! * [`batch`] — HTTP batch requests (`multipart/mixed`, at most 100
+//!   parts) for metadata fetches, with per-part retries.
+//! * [`history`] — `history.list` (paging; `404` → expired cursor) and
+//!   [`history::fold_history`].
+//! * [`labels`] — `labels.list` / `get` / `create` / `patch` / `delete`,
+//!   [`labels::LabelTable`] (user labels ↔ tags).
+//! * [`threads`] — `threads.list` / `get` / `modify`.
+//! * [`mapping`] — labels → folder, flags, tags, category.
+//! * [`engine`] — [`GmailEngine`]: [`MailApiEngine`] + [`OutgoingTransport`].
+//! * [`poll`] — [`PollTimer`]: adaptive polling (no Pub/Sub).
+//! * [`wire`] — the JSON resources.
+//! * `testing` (feature) — `MockGmailServer` on 127.0.0.1: an in-memory
+//!   Gmail (messages, labels, threads, history, drafts, batch, quotas and
+//!   injected errors, server-side changes) loaded from recorded-style
+//!   fixtures in `fixtures/`.
 //!
 //! Every socket the tests open binds 127.0.0.1 (ADR 0057).
+//!
+//! [`MailApiEngine`]: nail_api::engine::MailApiEngine
+//! [`OutgoingTransport`]: nail_api::engine::OutgoingTransport
+//! [`AdaptivePoll`]: nail_api::engine::AdaptivePoll
+//! [`AccessTokenProvider`]: nail_api::engine::AccessTokenProvider
 
 #![warn(missing_docs)]
 
+pub mod batch;
+pub mod client;
+pub mod engine;
+pub mod error;
+pub mod history;
+pub mod labels;
+pub mod mapping;
+pub mod messages;
+pub mod poll;
+pub mod threads;
+pub mod wire;
+
 #[cfg(feature = "testing")]
 pub mod testing;
+
+pub use client::{GmailAuth, GmailClient, RetryPolicy};
+pub use engine::{EngineOptions, GmailEngine};
+pub use error::GmailError;
+pub use labels::GmailLabelInfo;
+pub use poll::PollTimer;
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");
@@ -51,11 +75,27 @@ pub fn api_base(host: &str, port: u16, tls: bool) -> String {
     let scheme = if tls { "https" } else { "http" };
     let default_port = if tls { 443 } else { 80 };
     let base = nail_api::gmail::GMAIL_API_BASE_PATH;
+    let host = if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]")
+    } else {
+        host.to_owned()
+    };
     if port == default_port {
         format!("{scheme}://{host}{base}")
     } else {
         format!("{scheme}://{host}:{port}{base}")
     }
+}
+
+/// The API base URL of a `gmail` account's server settings
+/// (`tls="plaintext"` = `http`, which the client accepts for loopback
+/// hosts only).
+pub fn api_base_for(server: &nail_api::accounts::ServerEndpoint) -> String {
+    api_base(
+        &server.host,
+        server.port,
+        server.tls != nail_api::accounts::TlsMode::Plaintext,
+    )
 }
 
 #[cfg(test)]
@@ -72,6 +112,10 @@ mod tests {
         assert_eq!(
             api_base("127.0.0.1", 8099, false),
             "http://127.0.0.1:8099/gmail/v1/users/me"
+        );
+        assert_eq!(
+            api_base("::1", 9, false),
+            "http://[::1]:9/gmail/v1/users/me"
         );
     }
 }

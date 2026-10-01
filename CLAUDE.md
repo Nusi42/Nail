@@ -127,7 +127,9 @@ crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .
                        smime/ada-{work,home}.p12 are the demo-multi certificates)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers; managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
-                       sync tokens, TLS, server-side changes for tests) (ADR 0060)
+                       sync tokens, TLS, server-side changes for tests) (ADR 0060); dav/schedule.rs + ical.rs:
+                       several principals, schedule inbox / outbox, free/busy POST, switchable
+                       auto-scheduling (ADR 0068)
 crates/nail-sieve      compiler (rules + vacation → one Sieve script, placement + localized reasons),
                        parse / decompile round-trip harness, ManageSieve client (SieveSession,
                        SieveAuth), upload / remove of the managed script (ADR 0044)
@@ -154,10 +156,19 @@ crates/nail-dav        CalDAV / CardDAV client (M3a WP72): DavClient (Basic over
                        sync-collection), sync_collection (RFC 6578 with paging and token reset, ctag/ETag
                        fallback), write_object / delete_object (If-Match / If-None-Match, 412 → server wins),
                        MKCALENDAR / MKCOL / PROPPATCH; DavError → ErrorCode + dav-* texts (ADR 0060);
-                       src/scheduling.rs (M3b WP83 slot: RFC 6638 outbox / inbox, VFREEBUSY)
-crates/nail-itip       iTIP / iMIP (M3b WP81 stub; mail-parser / mail-builder + nail-ical) (ADR 0065)
-crates/nail-proto-gmail Gmail API engine (M3b WP82 stub): api_base; feature `testing` = MockGmailServer on
-                       127.0.0.1 (ADR 0065)
+                       M3b (WP83, ADR 0068): scheduling.rs (discover_scheduling, outbox free/busy POST,
+                       CalDavFreeBusy, schedule inbox, SCHEDULE-AGENT / SCHEDULE-STATUS), freebusy.rs
+                       (VFREEBUSY build / parse, own_busy_periods), icalendar.rs (content lines, patch_lines)
+crates/nail-itip       iTIP / iMIP (WP81, ADR 0066): object (METHOD wins, per-component reading), address,
+                       order (SEQUENCE/DTSTAMP), card (role, spoofing, state, actions), apply, build
+                       (REPLY/COUNTER/REFRESH/CANCEL/REQUEST/DECLINECOUNTER/delegation), imip (find_itip,
+                       OutgoingImip), texts (itip.ftl via Localizer), conflicts, server (RFC 6638
+                       SCHEDULE-AGENT); tests/fixtures = synthesized Google/Outlook/Apple/Thunderbird .eml
+crates/nail-proto-gmail Gmail API engine (WP82, ADR 0067): client.rs (GmailClient, OAuth bearer with one refresh,
+                       RetryPolicy backoff / Retry-After), messages / batch / history / labels / threads /
+                       mapping, engine.rs GmailEngine (MailApiEngine + OutgoingTransport, for_account), poll.rs
+                       PollTimer, labels::LABEL_PALETTE; feature `testing` = MockGmailServer (in-memory Gmail,
+                       injected errors, quota, request log) + fixtures/ (DEMO_MAILBOX, recorded responses)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -235,7 +246,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        (context menus, resolve.ts), customization/Editors.tsx; M2d: plugins/;
                        M3a: pim/ (calendar, contacts, tasks; lazyDialogs.ts, parts.ts PIM_BASE_CSS,
                        @internationalized/date + react-aria-components for the date / time picker;
-                       ADRs 0058, 0062); M3b: scheduling/, gmail/ (WP84 slots, ADR 0065));
+                       ADRs 0058, 0062); M3b: scheduling/ (InvitationCard, AttendeePicker, MeetingPanel,
+                       free/busy timeline), gmail/ (label list / editor, category tabs, MessageLabels)
+                       (ADR 0069));
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -257,7 +270,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/pim.spec.ts (M3a; startNail({launch}) passes `--launch`))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
-                       core-crypto.ftl (pgp-*, message-file-*) M2d); every file is embedded in nail-config l10n.rs
+                       core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
+                       every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
 ```

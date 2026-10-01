@@ -25,7 +25,7 @@ async fn mock_server_answers_the_profile_over_loopback() {
         .await
         .unwrap();
     assert_eq!(profile["emailAddress"], "ada@gmail.example");
-    assert_eq!(profile["historyId"], "1");
+    assert_eq!(profile["historyId"], "1000");
 }
 
 #[test]

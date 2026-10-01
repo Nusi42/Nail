@@ -131,7 +131,7 @@ describe("mock core", () => {
       { op: "toolbar-order" as const, toolbar: "reader", items: [{ type: "spacer" as const }] },
       {
         op: "column-order" as const,
-        node: { window: "main", breakpoint: 0, path: [2, 1] },
+        node: { window: "main", breakpoint: 0, path: [2, 1, 1] },
         columns: ["subject", "from"],
       },
     ];

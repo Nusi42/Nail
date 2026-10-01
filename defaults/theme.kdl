@@ -3614,4 +3614,147 @@ theme "default" mode="system" {
     part "task-list.subtasks" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "task-list.badge" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "task-list.empty" { color "$color.fg-muted"; }
+
+    // ---- Invitations and scheduling (M3b WP84) ----
+    part "invitation" { display "flex"; flex-direction "column"; gap "$space.sm"; margin "$space.sm" "$space.md"; padding "$space.md"; border "$border.thin"; border-left "4px solid $color.accent"; border-radius "$radius.md"; background-color "$color.bg-subtle"; }
+    part "invitation:cancelled" { border-left "4px solid $color.danger"; }
+    part "invitation:outdated" { border-left "4px solid $color.border"; }
+    part "invitation:invalid" { border-left "4px solid $color.warning"; }
+    part "invitation:error" { border-left "4px solid $color.danger"; }
+    part "invitation.header" { display "flex"; flex-wrap "wrap"; align-items "baseline"; gap "$space.sm"; }
+    part "invitation.kind" { margin 0; font-size "$font-size.xs"; font-weight "$font-weight.bold"; text-transform "uppercase"; color "$color.accent"; }
+    part "invitation.title" { margin 0; font-size "$font-size.lg"; }
+    part "invitation.state" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "invitation.state:cancelled" { color "$color.danger"; }
+    part "invitation.state:update" { color "$color.accent"; }
+    part "invitation.issues" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "invitation.issue" { padding "$space.xs" "$space.sm"; border "1px solid $color.warning"; border-radius "$radius.sm"; color "$color.warning"; }
+    part "invitation.issue[severity=\"danger\"]" { border "1px solid $color.danger"; color "$color.danger"; font-weight "$font-weight.bold"; }
+    part "invitation.details" { display "grid"; grid-template-columns "max-content 1fr"; column-gap "$space.md"; row-gap "$space.xxs"; }
+    part "invitation.detail" { display "contents"; }
+    part "invitation.detail.label" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "invitation.status" { margin 0; font-weight "$font-weight.medium"; }
+    part "invitation.transport" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "invitation.comment" { margin 0; padding "$space.xs" "$space.sm"; border-left "2px solid $color.border"; }
+    part "invitation.comment.label" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "invitation.reply" { margin 0; }
+    part "invitation.counter" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; border "1px solid $color.accent"; border-radius "$radius.md"; }
+    part "invitation.counter.intro" { margin 0; font-weight "$font-weight.medium"; }
+    part "invitation.attendees.summary" { cursor "pointer"; font-size "$font-size.sm"; }
+    part "invitation.attendee-list" { display "flex"; flex-direction "column"; gap "$space.xxs"; padding-top "$space.xs"; }
+    part "invitation.attendee" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; font-size "$font-size.sm"; }
+    part "invitation.attendee.role" { color "$color.fg-muted"; }
+    part "invitation.attendee.status" { color "$color.fg-muted"; }
+    part "invitation.conflicts" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "invitation.conflicts.title" { margin 0; font-size "$font-size.sm"; color "$color.warning"; font-weight "$font-weight.medium"; }
+    part "invitation.conflicts.none" { margin 0; font-size "$font-size.sm"; color "$color.success"; }
+    part "invitation.conflict" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; font-size "$font-size.sm"; }
+    part "invitation.conflict:tentative" { color "$color.fg-muted"; font-style "italic"; }
+    part "invitation.conflict.time" { color "$color.fg-muted"; }
+    part "invitation.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "invitation.done" { margin 0; color "$color.success"; }
+    part "scheduling.answer" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "scheduling.answer.buttons" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "scheduling.answer.confirm" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "1px solid $color.accent"; border-radius "$radius.md"; }
+    part "scheduling.answer.confirm.text" { margin 0; }
+    part "scheduling.propose" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "scheduling.propose.intro" { margin 0; }
+    part "scheduling.propose.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "scheduling.forward" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "scheduling.forward.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "scheduling.scope" { display "flex"; flex-wrap "wrap"; gap "$space.md"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "scheduling.attendees" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "scheduling.attendee-list" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "scheduling.attendee" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
+    part "scheduling.attendee.me" { margin-left "$space.xs"; font-size "$font-size.xs"; color "$color.accent"; }
+    part "scheduling.attendee.status" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "scheduling.attendee-add" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
+    part "scheduling.suggestions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+    part "scheduling.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "scheduling.meeting" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "1px solid $color.accent"; border-radius "$radius.md"; }
+    part "scheduling.meeting.summary" { margin 0; font-weight "$font-weight.medium"; }
+    part "scheduling.meeting.organizer" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "scheduling.meeting.recipients" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
+    part "scheduling.meeting.people" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "scheduling.meeting.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "scheduling.dialog" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 720; padding "$space.md"; }
+    part "scheduling.dialog.intro" { margin 0; }
+    part "scheduling.dialog.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "scheduling.cancel.scopes" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
+    part "scheduling.cancel.people" { display "flex"; flex-direction "column"; gap "$space.xxs"; padding-left "$space.lg"; }
+    part "scheduling.settings.switches" { display "flex"; flex-direction "column"; gap "$space.sm"; border 0; padding 0; }
+    part "scheduling.find-time" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 480; padding "$space.md"; }
+    part "scheduling.find-time.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "scheduling.problem" { margin 0; color "$color.danger"; }
+    part "scheduling.done" { margin 0; color "$color.success"; }
+
+    // Free/busy timeline
+    part "freebusy" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "freebusy-timeline" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; min-height 0; overflow "auto"; }
+    part "freebusy.nav" { display "flex"; align-items "center"; gap "$space.sm"; }
+    part "freebusy.nav.text" { font-size "$font-size.lg"; line-height 1; }
+    part "freebusy.day" { margin 0; font-weight "$font-weight.medium"; }
+    part "freebusy.scale" { margin-left 160; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "freebusy.hour" { padding-left "$space.xxs"; border-left "1px solid $color.border"; }
+    part "freebusy.rows" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "freebusy.row" { display "grid"; grid-template-columns "160px 1fr"; align-items "center"; gap "$space.xs"; }
+    part "freebusy.row:error" { color "$color.danger"; }
+    part "freebusy.person" { overflow "hidden"; text-overflow "ellipsis"; white-space "nowrap"; font-size "$font-size.sm"; }
+    part "freebusy.source" { display "block"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "freebusy.error" { font-size "$font-size.xs"; color "$color.danger"; }
+    part "freebusy.track" { min-height 24; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg"; }
+    part "freebusy.busy" { border-radius "$radius.sm"; background-color "$color.accent"; }
+    part "freebusy.busy[kind=\"tentative\"]" { border "1px dashed $color.accent"; background-color "$color.selection"; }
+    part "freebusy.busy[kind=\"unavailable\"]" { background-color "$color.fg-muted"; }
+    part "freebusy.meeting" { border "2px solid $color.danger"; border-radius "$radius.sm"; }
+    part "freebusy.verdict" { margin 0; font-size "$font-size.sm"; color "$color.success"; }
+    part "freebusy.verdict:busy" { color "$color.warning"; }
+    part "freebusy.empty" { margin 0; color "$color.fg-muted"; }
+    part "freebusy.suggestions" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "freebusy.suggestions.title" { margin 0; font-size "$font-size.sm"; font-weight "$font-weight.medium"; }
+    part "freebusy.suggestions.none" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "freebusy.suggestion-list" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+
+    // ---- Gmail labels and categories (M3b WP84) ----
+    part "label-list" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.xs" "$space.sm"; }
+    part "label-list.header" { display "flex"; align-items "center"; justify-content "space-between"; gap "$space.xs"; }
+    part "label-list.title" { margin 0; font-size "$font-size.sm"; font-weight "$font-weight.bold"; color "$color.fg-muted"; }
+    part "label-list.new" { border 0; padding "$space.xxs" "$space.xs"; color "$color.accent"; background-color "transparent"; cursor "pointer"; }
+    part "label-list.items" { display "flex"; flex-direction "column"; }
+    part "label-list.items[depth=\"1\"]" { padding-left "$space.lg"; }
+    part "label-list.items[depth=\"2\"]" { padding-left "$space.lg"; }
+    part "label-list.items[depth=\"3\"]" { padding-left "$space.lg"; }
+    part "label-list.row" { display "flex"; align-items "center"; gap "$space.xs"; border-radius "$radius.sm"; }
+    part "label-list.item:selected" { background-color "$color.selection"; color "$color.selection-fg"; }
+    part "label-list.view" { display "flex"; flex "1"; align-items "center"; gap "$space.xs"; min-width 0; border 0; padding "$space.xxs" "$space.xs"; text-align "left"; color "inherit"; background-color "transparent"; cursor "pointer"; }
+    part "label-list.view:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "label-list.name" { flex "1"; overflow "hidden"; text-overflow "ellipsis"; white-space "nowrap"; }
+    part "label-list.unread" { font-size "$font-size.xs"; font-weight "$font-weight.bold"; color "$color.unread"; }
+    part "label-list.pending" { font-size "$font-size.xs"; color "$color.warning"; }
+    part "label-list.edit" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "label-list.delete" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "label-list.empty" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "label-list.error" { margin 0; font-size "$font-size.sm"; color "$color.danger"; }
+    part "category-tabs" { padding 0 "$space.sm"; border-bottom "$border.thin"; }
+    part "category-tabs.list" { gap "$space.xxs"; }
+    part "category-tabs.tab" { display "flex"; align-items "center"; gap "$space.xs"; border 0; border-bottom "2px solid transparent"; padding "$space.xs" "$space.sm"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "category-tabs.tab:selected" { color "$color.fg"; border-bottom "2px solid $color.accent"; font-weight "$font-weight.medium"; }
+    part "category-tabs.tab:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "category-tabs.unread" { font-size "$font-size.xs"; color "$color.unread"; }
+    part "gmail.swatch" { width 10; height 10; border-radius "$radius.sm"; border "$border.thin"; }
+    part "gmail.labels" { gap "$space.xs"; margin "$space.xs" "$space.md"; }
+    part "gmail.chip" { display "inline-flex"; align-items "center"; gap "$space.xxs"; padding 0 "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; }
+    part "gmail.chip.swatch" { width 8; height 8; border-radius "50%"; }
+    part "gmail.category" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
+    part "gmail.colors" { display "grid"; grid-template-columns "repeat(auto-fill, minmax(120px, 1fr))"; gap "$space.xs"; border 0; padding 0; }
+    part "gmail.color" { display "flex"; align-items "center"; gap "$space.xs"; padding "$space.xxs"; border "1px solid transparent"; border-radius "$radius.sm"; cursor "pointer"; }
+    part "gmail.color:selected" { border "1px solid $color.accent"; }
+    part "gmail.color.sample" { display "inline-block"; padding 0 "$space.xs"; border-radius "$radius.sm"; }
+    part "gmail.color.name" { font-size "$font-size.sm"; }
+    part "gmail.dialog" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 640; padding "$space.md"; }
+    part "gmail.dialog.intro" { margin 0; }
+    part "gmail.dialog.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "gmail.apply.labels" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
+    part "gmail.problem" { margin 0; color "$color.danger"; }
+    part "gmail.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
 }

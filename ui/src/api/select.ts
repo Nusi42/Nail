@@ -30,6 +30,11 @@ export async function createClient(win: Window = window): Promise<NailClient> {
       const mock = new MockTransport({ latencyMs: 80 });
       // The dev mailbox shows every security badge and warning kind.
       mock.data.features.security.bySender = securityDemoBySender();
+      // Invitations (M3b) and a Gmail account with labels and categories.
+      const { seedSchedulingDemo } = await import("../features/scheduling/mockSeed");
+      const { seedGmailDemo } = await import("../features/gmail/mockSeed");
+      seedSchedulingDemo(mock.data);
+      seedGmailDemo(mock.data);
       transport = mock;
       break;
     }

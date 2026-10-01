@@ -1,0 +1,2 @@
+# The fixtures are read as written (CRLF line endings, encoded bodies).
+*.eml -text

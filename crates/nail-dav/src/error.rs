@@ -68,6 +68,10 @@ pub enum DavError {
     /// user can enter that server's address instead. Holds its host.
     #[error("redirected to {0}, which asks for the login")]
     RedirectNeedsLogin(String),
+    /// The principal offers no CalDAV scheduling (RFC 6638: no
+    /// `schedule-inbox-URL` / `schedule-outbox-URL`).
+    #[error("the server does not offer CalDAV scheduling")]
+    NoScheduling,
 }
 
 impl DavError {
@@ -86,6 +90,7 @@ impl DavError {
             Self::Status { .. } => ErrorCode::Rejected,
             Self::InsecureUrl(_) | Self::RedirectNeedsLogin(_) => ErrorCode::Config,
             Self::Token(e) => e.code,
+            Self::NoScheduling => ErrorCode::Unsupported,
         }
     }
 
@@ -121,6 +126,7 @@ impl DavError {
             Self::RedirectNeedsLogin(host) => {
                 LocalizedMessage::new("dav-redirect-login").arg("host", host.as_str())
             }
+            Self::NoScheduling => LocalizedMessage::new("dav-no-scheduling"),
             Self::Token(e) => e
                 .localized
                 .as_deref()
@@ -131,7 +137,7 @@ impl DavError {
 
     /// Every Fluent id [`DavError::localized`] can return (for the catalog
     /// coverage test).
-    pub const MESSAGE_IDS: [&'static str; 16] = [
+    pub const MESSAGE_IDS: [&'static str; 17] = [
         "dav-network",
         "dav-timeout",
         "dav-tls",
@@ -148,6 +154,7 @@ impl DavError {
         "dav-insecure-url",
         "dav-token",
         "dav-redirect-login",
+        "dav-no-scheduling",
     ];
 
     /// The error for an unexpected HTTP status of `what`.
@@ -206,6 +213,7 @@ mod tests {
             DavError::Protocol("x".into()),
             DavError::InsecureUrl("http://x".into()),
             DavError::RedirectNeedsLogin("other.example".into()),
+            DavError::NoScheduling,
             DavError::Token(Box::new(EngineError::permanent(
                 ErrorCode::AuthFailed,
                 "revoked",
@@ -270,7 +278,10 @@ mod tests {
     #[test]
     fn catalog_has_every_message() {
         let catalog = include_str!("../../../locales/en/core-dav.ftl");
-        for id in DavError::MESSAGE_IDS {
+        for id in DavError::MESSAGE_IDS
+            .into_iter()
+            .chain(crate::scheduling::MESSAGE_IDS)
+        {
             assert!(
                 catalog.lines().any(|l| l.starts_with(&format!("{id} ="))),
                 "{id} missing in locales/en/core-dav.ftl"

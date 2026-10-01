@@ -27,7 +27,11 @@ import { answerPim, isPimRequest } from "../features/pim/mock";
 import { answerPlugins, isPluginsRequest } from "../features/plugins/mock";
 import { answerRemote, decorateRemoteContent, isRemoteRequest } from "../features/remote/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
-import { answerScheduling, isSchedulingRequest } from "../features/scheduling/mock";
+import {
+  answerScheduling,
+  decorateInvitation,
+  isSchedulingRequest,
+} from "../features/scheduling/mock";
 import { answerSecurity, decorateMessageBody, isSecurityRequest } from "../features/security/mock";
 import { answerSieve, isSieveRequest } from "../features/sieve/mock";
 import { answerSync, isSyncRequest } from "../features/sync/mock";
@@ -149,7 +153,10 @@ export class MockTransport implements Transport, MockCore {
               type: "Message",
               message: decorateJunk(
                 this,
-                decorateRemoteContent(this, decorateMessageBody(this, body)),
+                decorateRemoteContent(
+                  this,
+                  decorateInvitation(this, decorateMessageBody(this, body)),
+                ),
               ),
             }
           : notFound(`message ${request.id}`);
