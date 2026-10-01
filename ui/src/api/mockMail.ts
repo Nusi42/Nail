@@ -424,6 +424,7 @@ function searchable(d: MockData, m: MessageSummary): Searchable {
     draft: m.flags.draft,
     hasAttachments: m.has_attachments,
     category: m.gmail?.category ?? null,
+    focus: m.exchange?.inference ?? null,
   };
 }
 

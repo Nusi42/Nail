@@ -11,7 +11,7 @@ publish.workspace = true
 # The mock EWS SOAP server (`nail_proto_ews::testing`): loopback only
 # (ADR 0057), recorded-response fixtures. Used by this crate's tests, the
 # core's tests and the demo-multi seed (WP95).
-testing = ["dep:axum"]
+testing = ["dep:axum", "dep:futures-util"]
 
 [dependencies]
 nail-api.workspace = true
@@ -37,6 +37,9 @@ base64.workspace = true
 chrono.workspace = true
 # The mock server (feature `testing`); MIT, already in the workspace.
 axum = { workspace = true, optional = true }
+# The mock's streaming notification answers (a chunked body from a
+# channel); MIT / Apache-2.0, already in the workspace.
+futures-util = { workspace = true, optional = true }
 
 [dev-dependencies]
 pretty_assertions.workspace = true

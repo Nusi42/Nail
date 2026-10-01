@@ -7,11 +7,15 @@ import type { Importance } from "./Importance";
  */
 export type ExchangeRuleActions = { 
 /**
- * Move to this folder (a folder of the account).
+ * Move to this folder (a folder of the account). At the engine seam
+ * (`ExchangeSettingsEngine`) this carries the folder's **remote id**
+ * (Graph / EWS folder id) wrapped in a `FolderId`; the core translates
+ * to and from its local folder ids (`exchange_folders.remote_id`).
  */
 move_to_folder: FolderId | null, 
 /**
- * Copy to this folder.
+ * Copy to this folder (remote id at the engine seam, like
+ * `move_to_folder`).
  */
 copy_to_folder: FolderId | null, 
 /**

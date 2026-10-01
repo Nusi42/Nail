@@ -4,6 +4,7 @@
  * `rules` dialog when the layout has no `window "rules"`.
  */
 import { useQueryClient } from "@tanstack/react-query";
+import { ExchangeRuleBadges } from "../exchange";
 import { useState } from "react";
 import { errorMessageIdOf } from "../../api/client";
 import type { Rule, RuleTrigger } from "../../api/generated";
@@ -86,6 +87,7 @@ function RuleList({
                   .map((id) => t(id))
                   .join(t("rules-list-separator"))}
               </span>
+              <ExchangeRuleBadges ruleId={rule.id} />
               <label data-part="form.check">
                 <input
                   data-part="form.checkbox"

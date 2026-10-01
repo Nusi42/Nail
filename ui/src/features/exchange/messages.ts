@@ -15,12 +15,30 @@ import type {
   ExchangeWarning,
   InferenceClassification,
 } from "../../api/generated";
+import { DIALOGS, WIDGETS } from "./names";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["exchange-"];
 
 /** Literals with those prefixes that are not message ids (part, widget, dialog names). */
-export const notMessages: readonly string[] = [];
+export const notMessages: readonly string[] = [
+  ...DIALOGS,
+  ...WIDGETS.filter((w) => w.startsWith("exchange-")),
+  // Form field names (`data-field`).
+  "exchange-host",
+  "exchange-server",
+  "exchange-url",
+  "exchange-server-rules",
+  // Ids of the demo data (`mockSeed.ts`).
+  "exchange-cal-calendar",
+  "exchange-cal-charles",
+  "exchange-todo-tasks",
+  "exchange-todo-groceries",
+  "exchange-todo-flagged",
+  "exchange-task-1",
+  "exchange-task-2",
+  "exchange-task-3",
+];
 
 /** Warnings (`ExchangeWarning::message_id`). */
 export const WARNINGS: readonly ExchangeWarning[] = [
@@ -79,9 +97,32 @@ export const OOF_ISSUES: readonly AutomaticRepliesIssue[] = [
   "end-before-start",
 ];
 
+/** Texts of the UI built at runtime, by prefix → values. */
+const UI_RUNTIME: Record<string, readonly string[]> = {
+  "exchange-mailbox-kind-": ["shared", "delegate", "shared-long", "delegate-long"],
+  "exchange-mailbox-show-": ["mail", "calendar", "contacts", "tasks"],
+  "exchange-move-to-": FOCUS,
+  "exchange-classify-question-": FOCUS,
+  "exchange-oof-status-": ["disabled", "always-enabled", "scheduled"],
+  "exchange-oof-audience-": ["none", "contacts-only", "all"],
+  "exchange-oof-": ["start", "end"],
+  "exchange-placement-": ["server", "client", "not-expressible"],
+  "exchange-placement-short-": ["server", "client", "not-expressible"],
+  "exchange-rules-state-": ["disabled", "pending", "syncing", "in-sync", "failed"],
+  "exchange-room-": ["free", "busy", "unknown"],
+  "exchange-room-response-": ["needs-action", "accepted", "declined", "tentative", "delegated"],
+  "exchange-tasks-kind-": ["todo", "flagged", "tasks"],
+  "exchange-setup-type-": ["auto", "graph", "ews"],
+  "exchange-sign-in-": ["windows-current", "windows-account", "password", "oauth2"],
+  "exchange-sspi-": ["negotiate", "kerberos", "ntlm"],
+  "exchange-push-": ["streaming", "polling", "none"],
+};
+
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
   return [
+    ...Object.entries(UI_RUNTIME).flatMap(([prefix, values]) => values.map((v) => prefix + v)),
+    ...DIALOGS.map((d) => `window-${d}`),
     ...WARNINGS.map((w) => `exchange-warning-${w}`),
     ...ENGINES.map((e) => `exchange-engine-${e}`),
     ...FOCUS.map((f) => `exchange-focus-${f}`),

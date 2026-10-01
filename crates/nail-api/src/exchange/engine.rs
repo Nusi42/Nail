@@ -207,12 +207,14 @@ pub trait ExchangeSettingsEngine: Send + Sync + fmt::Debug {
     ) -> BoxFuture<'a, Result<String, EngineError>>;
 
     /// Changes a category (renaming does not retag messages on the server;
-    /// the core retags them through the mail queue).
+    /// the core retags them through the mail queue). Answers the category's
+    /// new id when the change gave it one (Graph cannot rename a category:
+    /// a rename creates the new one and deletes the old), else `None`.
     fn update_category<'a>(
         &'a self,
         id: &'a str,
         settings: &'a ExchangeCategorySettings,
-    ) -> BoxFuture<'a, Result<(), EngineError>>;
+    ) -> BoxFuture<'a, Result<Option<String>, EngineError>>;
 
     /// Deletes a category (an unknown id is not an error).
     fn delete_category<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), EngineError>>;

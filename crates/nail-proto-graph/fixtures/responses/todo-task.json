@@ -1,0 +1,15 @@
+{
+  "@odata.etag": "W/\"vVwdQvxCiE6779iYhchMrAAGgwrltg==\"",
+  "importance": "high",
+  "isReminderOn": true,
+  "status": "inProgress",
+  "title": "Write the quarterly report",
+  "createdDateTime": "2026-09-28T08:00:00.0000000Z",
+  "lastModifiedDateTime": "2026-09-30T08:00:00.1234567Z",
+  "hasAttachments": false,
+  "categories": ["Work"],
+  "id": "AAkALgTask1",
+  "body": {"content": "Numbers from finance.", "contentType": "text"},
+  "dueDateTime": {"dateTime": "2026-10-09T00:00:00.0000000", "timeZone": "UTC"},
+  "reminderDateTime": {"dateTime": "2026-10-08T07:00:00.0000000", "timeZone": "UTC"}
+}

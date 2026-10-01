@@ -11,17 +11,26 @@ layout "Mine" extends="default" {
                     min-sizes="160px 280px 320px" \
                     max-sizes="480px none none" \
                     collapsible="true false true" {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto auto" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto auto auto auto" {
                         search-bar id="search" scope="account"
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
                         // Gmail accounts: labels as views (nothing for other accounts).
                         label-list id="gmail-labels"
+                        // Exchange accounts: shared / delegate mailboxes and the
+                        // master category list (nothing for other accounts).
+                        exchange-mailboxes id="exchange-mailboxes"
+                        exchange-categories id="exchange-categories"
                         smart-folders id="smart-folders" label="@saved-search-label"
                     }
-                    stack id="list-pane" label="@layout.pane.messages" sizes="auto 1fr" {
+                    stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto 1fr" {
+                        // While automatic replies (out of office) of an Exchange
+                        // account are on: a banner with Turn off / Edit.
+                        automatic-replies-banner id="automatic-replies"
                         // Gmail inbox categories (nothing for other accounts).
                         category-tabs id="gmail-categories"
+                        // Exchange Focused Inbox tabs (nothing for other accounts).
+                        focused-tabs id="exchange-focused"
                         message-list id="list" page-size=100 {
                             row "{from.name}  {date | relative}"
                             row "{subject}"
@@ -57,14 +66,18 @@ layout "Mine" extends="default" {
                 config-errors id="config-errors" hide-when-valid=#true
                 search-bar id="search" scope="account"
                 tabs id="panes" active=1 {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto auto" {
+                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto auto auto auto" {
                         account-switcher id="accounts"
                         folder-tree id="folders" show-unread=#true
                         label-list id="gmail-labels"
+                        exchange-mailboxes id="exchange-mailboxes"
+                        exchange-categories id="exchange-categories"
                         smart-folders id="smart-folders" label="@saved-search-label"
                     }
-                    stack id="list-pane" label="@layout.pane.messages" sizes="auto 1fr" {
+                    stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto 1fr" {
+                        automatic-replies-banner id="automatic-replies"
                         category-tabs id="gmail-categories"
+                        focused-tabs id="exchange-focused"
                         message-list id="list" page-size=100 {
                             row "{from.name}  {date | relative}"
                             row "{subject}"

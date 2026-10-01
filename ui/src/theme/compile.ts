@@ -15,6 +15,7 @@
  * Everything is validated defensively: a rule with an unsafe selector piece or
  * value is dropped with a warning instead of corrupting the sheet.
  */
+import { EXCHANGE_BASE_CSS } from "../features/exchange/parts";
 import { GMAIL_BASE_CSS } from "../features/gmail/parts";
 import { PIM_BASE_CSS } from "../features/pim/parts";
 import { SCHEDULING_BASE_CSS } from "../features/scheduling/parts";
@@ -233,7 +234,8 @@ ${[
 ${PLUGIN_BASE_CSS}
 ${PIM_BASE_CSS}
 ${SCHEDULING_BASE_CSS}
-${GMAIL_BASE_CSS}`;
+${GMAIL_BASE_CSS}
+${EXCHANGE_BASE_CSS}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {

@@ -35,6 +35,9 @@ export async function createClient(win: Window = window): Promise<NailClient> {
       const { seedGmailDemo } = await import("../features/gmail/mockSeed");
       seedSchedulingDemo(mock.data);
       seedGmailDemo(mock.data);
+      // An Exchange Online account (M3c): Focused Inbox, categories, shared mailboxes, rooms.
+      const { seedExchangeDemo } = await import("../features/exchange/mockSeed");
+      seedExchangeDemo(mock.data);
       transport = mock;
       break;
     }

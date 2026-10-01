@@ -466,7 +466,7 @@ mod tests {
             && k.key == "shift+f"
             && k.action == "plugin.follow-up.follow-up"));
         // The panel sits after the message list in both breakpoints (inside
-        // the list pane's stack, under the Gmail category tabs and the
+        // the list pane's stack, under the automatic-replies banner, the Gmail category / Focused tabs and the
         // list); the stack's size list grew with it.
         assert_eq!(
             placed_panels(&layout),
@@ -475,7 +475,7 @@ mod tests {
         assert_eq!(text.matches("plugin-panel \"follow-up.due\"").count(), 2);
         assert_eq!(
             text.matches(
-                "stack id=\"list-pane\" label=\"@layout.pane.messages\" sizes=\"auto 1fr auto\""
+                "stack id=\"list-pane\" label=\"@layout.pane.messages\" sizes=\"auto auto auto 1fr auto\""
             )
             .count(),
             2,

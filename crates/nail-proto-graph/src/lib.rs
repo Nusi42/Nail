@@ -1,50 +1,62 @@
 //! The Microsoft Graph engine for Exchange Online accounts (plan M3c WP91;
-//! contract ADR 0072).
+//! contract ADR 0072; this package's decisions: ADR 0073).
 //!
-//! **Stub (WP90).** WP91 fills this crate; the contract it builds against
-//! is `nail_api::exchange` (account options, Focused Inbox, categories,
-//! mailboxes, rooms, automatic replies, inbox rules), the engine seams in
-//! [`nail_api::exchange::engine`] — `GraphEngine` implements
-//! [`nail_api::exchange::engine::ExchangeEngine`] (mail per folder with
-//! delta links, settings, directory, PIM, plus
-//! [`nail_api::engine::FreeBusyProvider`] and
-//! [`nail_api::engine::OutgoingTransport`]) — and the provider-neutral
-//! item shapes of [`nail_api::exchange::pim`] (Graph JSON ↔ those; the
-//! mapping to Nail's PIM model is `nail-exchange`'s). Expected shape:
+//! [`GraphEngine`] implements
+//! [`nail_api::exchange::engine::ExchangeEngine`] over Microsoft Graph
+//! `v1.0` and converts between Graph JSON and the provider-neutral shapes
+//! of [`nail_api::exchange`] (the mapping to Nail's own models is
+//! `nail-exchange`'s):
 //!
-//! * `client` — `GraphClient` over `https://graph.microsoft.com/v1.0`
-//!   (the account's `exchange` endpoint; plain `http` only for loopback
-//!   test servers), bearer tokens from an `AccessTokenProvider` with one
-//!   forced refresh on `401`, `/me` or `/users/{mailbox}` paths, errors →
-//!   `nail_api::ErrorCode` + `graph-*` texts (`locales/en/core-graph.ftl`),
-//!   `429` / `503` / `504` → `EngineError::rate_limited` with the
-//!   `Retry-After` and backoff; non-idempotent calls are never repeated
-//!   after a 5xx; `$batch` (at most 20 requests) for metadata.
-//! * `mail` — `mailFolders/delta` (hierarchy), `mailFolders/{id}/messages/delta`
-//!   (per folder, `@odata.deltaLink` = the cursor, `410` / `syncStateNotFound`
-//!   → `CursorExpired`), `messages/{id}/$value` (MIME), `PATCH` (isRead,
-//!   flag, categories, `inferenceClassification`), `move` (new id), `DELETE`,
-//!   MIME create for appends, `sendMail` with MIME (base64 `text/plain`),
-//!   `inferenceClassification/overrides`.
-//! * `settings` — `outlook/masterCategories`, `mailboxSettings`
-//!   (`automaticRepliesSetting`, HTML ↔ text), `mailFolders/inbox/messageRules`.
-//! * `directory` — `places/microsoft.graph.roomlist`, `…/rooms`, a probe of
-//!   another mailbox; `calendar/getSchedule` (free/busy of people and rooms).
-//! * `pim` — `calendars`, `calendarView/delta` / `events` with exceptions,
-//!   `accept` / `tentativelyAccept` / `decline`, `contactFolders` + contacts
-//!   delta, `todo/lists` + tasks delta (checklist items, linked resources).
-//! * `testing` (feature) — `MockGraphServer` on 127.0.0.1 with an
-//!   in-memory tenant (mailboxes incl. a shared one, folders, messages,
-//!   delta tokens, categories, rules, automatic replies, rooms, calendars,
-//!   contacts, To Do; throttling and injected errors; a request log) and
-//!   recorded-response fixtures in `tests/fixtures/`.
+//! * [`client`] — [`GraphClient`] on the workspace reqwest with nail-auth's
+//!   rustls / ring configuration (https, or http to loopback only), OAuth2
+//!   bearer tokens from an [`nail_api::engine::AccessTokenProvider`] with
+//!   one forced refresh on `401`, throttling (`429` / `503` / `504` with
+//!   `Retry-After`) and backoff, paging links checked against the API's
+//!   origin; errors → [`GraphError`] → `ErrorCode` + `graph-*` texts.
+//! * [`batch`] — JSON batching (`$batch`, 20 requests per call, throttled
+//!   parts retried).
+//! * `mail` — `mailFolders/delta`, per-folder `messages/delta` with the
+//!   `@odata.deltaLink` as cursor and expiry handling, `$value` MIME,
+//!   `PATCH` (read, flag, categories), `move` / `copy` / `permanentDelete`,
+//!   MIME creates, Focused Inbox and overrides, attachments, `sendMail`
+//!   with base64 MIME, shared / delegate mailboxes through `/users/{upn}`.
+//! * `settings` — master categories, automatic replies (HTML ↔ text),
+//!   inbox rules.
+//! * `directory` — room lists and rooms (`places`), other mailboxes,
+//!   free/busy (`getSchedule`) and meeting suggestions (`findMeetingTimes`).
+//! * `pim` — calendars (`calendarView/delta`, events in their own zone,
+//!   series with exceptions, instances, meeting responses incl. new-time
+//!   proposals, cancellations), contacts (+ delta), Microsoft To Do (lists,
+//!   tasks + delta, checklist items, linked resources).
+//! * [`poll`] — adaptive polling ([`PollTimer`], [`FolderPoll`]); Graph
+//!   has no push for a desktop client.
+//! * [`testing`] (feature `testing`) — `MockGraphServer` on 127.0.0.1 with
+//!   an in-memory tenant, recorded-style fixtures and mutation helpers.
 //!
 //! Every socket the tests open binds 127.0.0.1 (ADR 0057).
 
 #![warn(missing_docs)]
 
+pub mod batch;
+pub mod client;
+pub mod directory;
+pub mod engine;
+pub mod error;
+pub mod mail;
+pub mod mime;
+pub mod pim;
+pub mod poll;
+pub mod settings;
+pub mod text;
+pub mod wire;
+
 #[cfg(feature = "testing")]
 pub mod testing;
+
+pub use client::{GraphAuth, GraphClient, RetryPolicy};
+pub use engine::{EngineOptions, GraphEngine};
+pub use error::GraphError;
+pub use poll::{FolderPoll, PollTimer};
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent } from "react";
 import { errorMessageIdOf } from "../api/client";
 import type { Folder } from "../api/generated";
+import { MailboxFolderBadge } from "../features/exchange";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { optionBool, type WidgetProps } from "../layout/widgetRegistry";
 import { useFolders } from "../state/queries";
@@ -99,6 +100,7 @@ export function FolderTree({ node }: WidgetProps) {
                 part="folder-tree.item.icon"
               />
               <span data-part="folder-tree.item.name">{folder.name}</span>
+              <MailboxFolderBadge folder={folder} />
               {showUnread && folder.unread > 0 && (
                 <span
                   data-part="folder-tree.item.unread-count"

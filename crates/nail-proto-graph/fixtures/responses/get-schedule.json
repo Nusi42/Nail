@@ -1,0 +1,32 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(microsoft.graph.scheduleInformation)",
+  "value": [
+    {
+      "scheduleId": "bob@contoso.example",
+      "availabilityView": "0022200001100",
+      "scheduleItems": [
+        {"isPrivate": false, "status": "busy", "subject": "Planning", "location": "Adams",
+         "start": {"dateTime": "2026-10-05T08:00:00.0000000", "timeZone": "UTC"},
+         "end": {"dateTime": "2026-10-05T09:00:00.0000000", "timeZone": "UTC"}},
+        {"isPrivate": true, "status": "busy",
+         "start": {"dateTime": "2026-10-05T08:30:00.0000000", "timeZone": "UTC"},
+         "end": {"dateTime": "2026-10-05T09:30:00.0000000", "timeZone": "UTC"}},
+        {"isPrivate": false, "status": "tentative",
+         "start": {"dateTime": "2026-10-05T13:00:00.0000000", "timeZone": "UTC"},
+         "end": {"dateTime": "2026-10-05T14:00:00.0000000", "timeZone": "UTC"}},
+        {"isPrivate": false, "status": "free",
+         "start": {"dateTime": "2026-10-05T15:00:00.0000000", "timeZone": "UTC"},
+         "end": {"dateTime": "2026-10-05T16:00:00.0000000", "timeZone": "UTC"}}
+      ],
+      "workingHours": {"daysOfWeek": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        "startTime": "08:00:00.0000000", "endTime": "17:00:00.0000000",
+        "timeZone": {"name": "W. Europe Standard Time"}}
+    },
+    {
+      "scheduleId": "nobody@contoso.example",
+      "availabilityView": "",
+      "scheduleItems": [],
+      "error": {"message": "Failed to resolve the recipient.", "responseCode": "ErrorMailRecipientNotFound"}
+    }
+  ]
+}

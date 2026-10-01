@@ -79,3 +79,70 @@ exchange-oof-issue-reply-too-long = The reply is too long.
 exchange-oof-issue-invalid-time = The start or end time is not valid.
 exchange-oof-issue-missing-schedule = Choose when the replies start and end.
 exchange-oof-issue-end-before-start = The end must be after the start.
+
+## Autodiscover (WP93, nail-exchange autodiscover)
+
+exchange-autodiscover-invalid-address = Enter a complete email address, such as name@example.com.
+exchange-autodiscover-not-found = No Exchange settings were found for this address.
+exchange-autodiscover-confirm-redirect = The server for { $domain } sends you to { $host }. Do you want to send your sign-in to { $host }?
+exchange-autodiscover-needs-login = { $host } asks you to sign in to look up your settings.
+exchange-autodiscover-too-many-redirects = The setup lookup was redirected too many times.
+exchange-autodiscover-online = Exchange Online found. The account uses Microsoft Graph.
+exchange-autodiscover-on-premises = Exchange Server found at { $host }. The account uses Exchange Web Services.
+
+## Windows and server sign-in (WP93, nail-exchange negotiate / sspi)
+
+exchange-signin-needs-login = The server asks you to sign in.
+exchange-signin-no-common-method = The server offers no sign-in method Nail can use ({ $methods }).
+exchange-signin-insecure-basic = Nail does not send your password over a connection without encryption.
+exchange-signin-rejected = The server rejected the sign-in. Check the user name and password.
+exchange-signin-windows-failed = Windows sign-in failed on this computer.
+exchange-signin-needs-password = Enter the password for this user name.
+
+## Rule placement: why a rule runs in Nail (WP93, nail-exchange mapping::rules)
+## $position is the condition's place in the rule (1 = the whole rule), $action the action's number.
+
+exchange-rule-reason-query = Condition { $position } is a search, which Exchange rules cannot run.
+exchange-rule-reason-condition = Exchange rules cannot test condition { $position }.
+exchange-rule-reason-text-test = Condition { $position } compares text in a way Exchange rules cannot (they only test "contains", without case).
+exchange-rule-reason-address-field = Exchange rules cannot test the address field of condition { $position }.
+exchange-rule-reason-header = Exchange rules cannot test the value of the header in condition { $position }.
+exchange-rule-reason-tag = Condition { $position } tests a tag, which a new message does not have yet.
+exchange-rule-reason-attachment = Exchange rules cannot test attachment names or types (condition { $position }).
+exchange-rule-reason-folder = Condition { $position } tests a folder other than the Inbox.
+exchange-rule-reason-structure = Exchange rules cannot combine the conditions this way (condition { $position }).
+exchange-rule-reason-untag = Exchange rules cannot remove a tag (action { $action }).
+exchange-rule-reason-flag = Exchange rules cannot flag or unflag messages (action { $action }).
+exchange-rule-reason-mark-unread = Exchange rules cannot mark messages as unread (action { $action }).
+exchange-rule-reason-reply = Replies with a template are sent by Nail (action { $action }).
+exchange-rule-reason-forward-identity = Forwarding from a chosen identity is done by Nail (action { $action }).
+exchange-rule-reason-notify = Notifications are shown by Nail (action { $action }).
+exchange-rule-reason-other-account = Action { $action } moves or copies into another account.
+exchange-rule-reason-targets = The rule moves, archives or deletes in more than one way (action { $action }).
+exchange-rule-reason-category-name = The tag of action { $action } cannot be an Exchange category (commas and semicolons are not allowed).
+exchange-rule-reason-address = Action { $action } forwards to something that is not an email address.
+exchange-rule-reason-no-actions = The rule has no action Exchange can run.
+exchange-rule-reason-disabled = The rule is switched off.
+exchange-rule-reason-trigger = The rule also runs at other times than on arrival.
+exchange-rule-reason-no-arrival = The rule does not run when mail arrives.
+exchange-rule-reason-scope = The rule is limited to other folders or accounts.
+exchange-rule-reason-folder-unknown = The folder "{ $folder }" is not on the server yet.
+exchange-rule-reason-server-rules-off = Server rules are switched off for this account.
+exchange-rule-reason-pending = The rule is not on the server yet.
+exchange-server-rule-unsupported = This server rule uses settings that Nail rules cannot show.
+
+## Automatic replies and the vacation settings (WP93, nail-exchange mapping::oof)
+
+exchange-oof-note-subject = Exchange chooses the subject of automatic replies; your subject is not used.
+exchange-oof-note-days = Exchange decides how often the same sender gets a reply.
+exchange-oof-note-addresses = Extra addresses and the sender address are not used for Exchange accounts.
+exchange-oof-note-external = People outside your organization get a different reply, set in Exchange.
+exchange-oof-note-open-end = Without an end date, replies stop after one year.
+exchange-oof-note-rounded = The schedule's times were rounded to whole days.
+
+## Calendars, tasks and contacts (WP93, nail-exchange mapping)
+
+exchange-pim-reason-recurrence = Exchange cannot store this repeat pattern.
+exchange-pim-reason-zone = The time zone "{ $zone }" is unknown; the time is shown in UTC.
+exchange-pim-reason-extra-dates = Exchange cannot store extra dates or several repeat rules.
+exchange-pim-reason-floating = A time without a time zone was saved in the mailbox's time zone.

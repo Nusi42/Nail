@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
 import { AttachmentWarningMark } from "../features/security";
+import { FocusMoveButton, MessageCategories } from "../features/exchange";
 import { MessageLabels } from "../features/gmail";
 import { InvitationCard } from "../features/scheduling";
 import type { Address, MessageBody } from "../api/generated";
@@ -111,10 +112,22 @@ function Body({ message }: { message: MessageBody }) {
   return <pre data-part="message-view.text">{message.text}</pre>;
 }
 
-/** Label chips / category of a Gmail message (from the cached summary). */
+/**
+ * Label chips / category of a Gmail message, or the category chips and the
+ * Focused / Other move of an Exchange message (from the cached summary).
+ */
 function summaryOf(ctx: ReturnType<typeof useComposeContext>, id: MessageBody["id"]): ReactNode {
   const summary = findSummary(ctx.queryClient, id);
-  return summary?.gmail ? <MessageLabels message={summary} /> : null;
+  if (summary?.gmail) return <MessageLabels message={summary} />;
+  if (summary?.exchange) {
+    return (
+      <>
+        <MessageCategories message={summary} />
+        <FocusMoveButton message={summary} />
+      </>
+    );
+  }
+  return null;
 }
 
 /** Headers and body of the selected message. */

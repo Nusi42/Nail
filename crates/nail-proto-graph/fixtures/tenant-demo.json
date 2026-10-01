@@ -1,0 +1,133 @@
+{
+  "me": "ada@contoso.example",
+  "mailboxes": [
+    {
+      "address": "ada@contoso.example",
+      "displayName": "Ada Lovelace",
+      "timeZone": "W. Europe Standard Time",
+      "folders": [
+        {"name": "Receipts", "parent": "inbox"},
+        {"name": "Projects"},
+        {"name": "Engine", "parent": "Projects"}
+      ],
+      "messages": [
+        {"folder": "inbox", "isRead": false, "inference": "focused", "flag": "flagged", "categories": ["Red category"],
+         "raw": "From: Bob Example <bob@contoso.example>\nTo: Ada Lovelace <ada@contoso.example>\nSubject: Engine review on Monday\nDate: Wed, 30 Sep 2026 09:12:44 +0200\nMessage-ID: <review.1@contoso.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nCan we go through the engine notes on Monday?\n"},
+        {"folder": "inbox", "isRead": true, "inference": "other",
+         "raw": "From: Fabrikam News <news@fabrikam.example>\nTo: ada@contoso.example\nSubject: Fabrikam newsletter, October\nDate: Wed, 30 Sep 2026 10:00:00 +0200\nMessage-ID: <news.10@fabrikam.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nThis month at Fabrikam.\n"},
+        {"folder": "inbox/Receipts", "isRead": true,
+         "raw": "From: Contoso Store <store@contoso.example>\nTo: ada@contoso.example\nSubject: Your receipt\nDate: Tue, 29 Sep 2026 18:30:00 +0200\nMessage-ID: <receipt.77@contoso.example>\nMIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"r77\"\n\n--r77\nContent-Type: text/plain; charset=utf-8\n\nThanks for your order.\n--r77\nContent-Type: application/pdf; name=\"receipt.pdf\"\nContent-Disposition: attachment; filename=\"receipt.pdf\"\nContent-Transfer-Encoding: base64\n\nJVBERi0xLjQKJcfsj6IKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0YK\n--r77--\n"},
+        {"folder": "sentitems", "isRead": true,
+         "raw": "From: Ada Lovelace <ada@contoso.example>\nTo: Bob Example <bob@contoso.example>\nSubject: Re: Engine review on Monday\nDate: Wed, 30 Sep 2026 11:00:00 +0200\nMessage-ID: <reply.2@contoso.example>\nIn-Reply-To: <review.1@contoso.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nMonday works.\n"}
+      ],
+      "categories": [
+        {"displayName": "Red category", "color": "preset0"},
+        {"displayName": "Partner", "color": "preset7"},
+        {"displayName": "Travel", "color": "none"}
+      ],
+      "automaticReplies": {
+        "status": "scheduled",
+        "externalAudience": "contactsOnly",
+        "scheduledStartDateTime": {"dateTime": "2026-10-19T07:00:00.0000000", "timeZone": "UTC"},
+        "scheduledEndDateTime": {"dateTime": "2026-10-23T16:00:00.0000000", "timeZone": "UTC"},
+        "internalReplyMessage": "<html><body><div>I am at the conference until Friday.<br>Bob covers for me.</div></body></html>",
+        "externalReplyMessage": "<html><body><div>Thanks for your mail. I answer after 23 October.</div></body></html>"
+      },
+      "rules": [
+        {"displayName": "Newsletters", "sequence": 1, "isEnabled": true, "hasError": false, "isReadOnly": false,
+         "conditions": {"senderContains": ["@fabrikam.example"]},
+         "actions": {"assignCategories": ["Travel"], "stopProcessingRules": true}},
+        {"displayName": "Outlook-only rule", "sequence": 2, "isEnabled": false, "hasError": false, "isReadOnly": false,
+         "conditions": {"isAutomaticReply": true},
+         "actions": {"markAsRead": true}}
+      ],
+      "calendars": [
+        {"name": "Calendar", "events": [
+          {"subject": "Weekly sync", "body": {"contentType": "text", "content": "Agenda in the doc."},
+           "start": {"dateTime": "2026-10-05T09:00:00.0000000", "timeZone": "W. Europe Standard Time"},
+           "end": {"dateTime": "2026-10-05T09:30:00.0000000", "timeZone": "W. Europe Standard Time"},
+           "isReminderOn": true, "reminderMinutesBeforeStart": 15,
+           "attendees": [{"type": "required", "status": {"response": "accepted"}, "emailAddress": {"name": "Bob Example", "address": "bob@contoso.example"}}],
+           "locations": [{"displayName": "Conf Room Adams", "locationType": "conferenceRoom", "locationEmailAddress": "adams@contoso.example"}],
+           "recurrence": {"pattern": {"type": "weekly", "interval": 1, "daysOfWeek": ["monday"], "firstDayOfWeek": "monday"},
+                          "range": {"type": "numbered", "startDate": "2026-10-05", "numberOfOccurrences": 10, "recurrenceTimeZone": "W. Europe Standard Time"}}},
+          {"subject": "Dentist", "showAs": "oof", "sensitivity": "private",
+           "start": {"dateTime": "2026-10-07T14:00:00.0000000", "timeZone": "W. Europe Standard Time"},
+           "end": {"dateTime": "2026-10-07T15:00:00.0000000", "timeZone": "W. Europe Standard Time"}},
+          {"subject": "Architecture review", "isOrganizer": false, "responseRequested": true,
+           "responseStatus": {"response": "notResponded"},
+           "organizer": {"emailAddress": {"name": "Bob Example", "address": "bob@contoso.example"}},
+           "attendees": [{"type": "required", "status": {"response": "none"}, "emailAddress": {"name": "Ada Lovelace", "address": "ada@contoso.example"}}],
+           "start": {"dateTime": "2026-10-08T13:00:00.0000000", "timeZone": "UTC"},
+           "end": {"dateTime": "2026-10-08T14:00:00.0000000", "timeZone": "UTC"}}
+        ]},
+        {"name": "Holidays", "color": "lightGreen", "canEdit": false, "events": []}
+      ],
+      "contacts": [
+        {"displayName": "Bob Example", "givenName": "Bob", "surname": "Example",
+         "emailAddresses": [{"name": "Bob Example", "address": "bob@contoso.example"}],
+         "businessPhones": ["+1 555 0102"], "companyName": "Contoso"}
+      ],
+      "contactFolders": [
+        {"displayName": "Partners", "contacts": [
+          {"displayName": "Adele Vance", "givenName": "Adele", "surname": "Vance",
+           "emailAddresses": [{"address": "adele@fabrikam.example"}], "companyName": "Fabrikam"}
+        ]}
+      ],
+      "todoLists": [
+        {"displayName": "Tasks", "wellknownListName": "defaultList", "tasks": [
+          {"title": "Write the quarterly report", "status": "inProgress", "importance": "high",
+           "dueDateTime": {"dateTime": "2026-10-09T00:00:00.0000000", "timeZone": "UTC"},
+           "checklistItems": [{"displayName": "Collect numbers", "isChecked": true}, {"displayName": "Draft", "isChecked": false}],
+           "linkedResources": [{"id": "lr1", "webUrl": "https://outlook.office.com/mail/review", "applicationName": "Outlook", "displayName": "Engine review", "externalId": "review.1"}]}
+        ]},
+        {"displayName": "Groceries", "tasks": [
+          {"title": "Coffee", "status": "notStarted"}
+        ]}
+      ]
+    },
+    {
+      "address": "support@contoso.example",
+      "displayName": "Contoso Support",
+      "timeZone": "UTC",
+      "noArchive": true,
+      "folders": [{"name": "Escalations", "parent": "inbox"}],
+      "messages": [
+        {"folder": "inbox", "isRead": false,
+         "raw": "From: Customer <customer@fabrikam.example>\nTo: support@contoso.example\nSubject: Ticket 4711: login fails\nDate: Wed, 30 Sep 2026 12:00:00 +0000\nMessage-ID: <ticket.4711@fabrikam.example>\nMIME-Version: 1.0\nContent-Type: text/plain; charset=utf-8\n\nI cannot sign in since yesterday.\n"}
+      ]
+    },
+    {
+      "address": "ceo@contoso.example",
+      "displayName": "Chief Executive"
+    }
+  ],
+  "denied": ["ceo@contoso.example"],
+  "onPremises": ["legacy@contoso.example"],
+  "rooms": [
+    {"id": "room-adams", "displayName": "Conf Room Adams", "emailAddress": "adams@contoso.example", "capacity": 12,
+     "building": "1", "floorNumber": 2, "isWheelChairAccessible": true, "videoDeviceName": "Surface Hub", "tags": ["whiteboard"]},
+    {"id": "room-baker", "displayName": "Conf Room Baker", "emailAddress": "baker@contoso.example", "capacity": 6,
+     "building": "1", "floorLabel": "Ground", "isWheelChairAccessible": false, "tags": []},
+    {"id": "room-hood", "displayName": "Conf Room Hood", "emailAddress": "hood@contoso.example", "capacity": 20,
+     "building": "2", "floorNumber": 1, "audioDeviceName": "Ceiling mics", "tags": []}
+  ],
+  "roomLists": [
+    {"place": {"id": "list-b1", "displayName": "Building 1", "emailAddress": "building1@contoso.example"},
+     "rooms": ["adams@contoso.example", "baker@contoso.example"]},
+    {"place": {"id": "list-b2", "displayName": "Building 2", "emailAddress": "building2@contoso.example"},
+     "rooms": ["hood@contoso.example"]}
+  ],
+  "schedules": {
+    "bob@contoso.example": [
+      {"status": "busy", "start": {"dateTime": "2026-10-05T07:00:00.0000000", "timeZone": "UTC"}, "end": {"dateTime": "2026-10-05T08:00:00.0000000", "timeZone": "UTC"}},
+      {"status": "tentative", "start": {"dateTime": "2026-10-05T12:00:00.0000000", "timeZone": "UTC"}, "end": {"dateTime": "2026-10-05T13:00:00.0000000", "timeZone": "UTC"}}
+    ],
+    "adams@contoso.example": [
+      {"status": "busy", "start": {"dateTime": "2026-10-05T09:00:00.0000000", "timeZone": "UTC"}, "end": {"dateTime": "2026-10-05T10:00:00.0000000", "timeZone": "UTC"}}
+    ],
+    "baker@contoso.example": [],
+    "hood@contoso.example": [],
+    "ada@contoso.example": []
+  }
+}

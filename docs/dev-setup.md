@@ -499,6 +499,14 @@ For M3c:
   `--features testing`) and `nail-exchange` (SSPI, Autodiscover, mapping; mock Autodiscover:
   `--features testing`); slots). Texts built in Rust: `locales/<lang>/core-exchange.ftl`,
   `core-graph.ftl`, `core-ews.ftl`; UI: `exchange.ftl`.
+- **0073 (WP91):** `nail-proto-graph` — the Microsoft Graph engine and the mock Graph server
+  (appended messages are drafts, category renames by replacement, To Do ids `<list>/<task>`,
+  4 MB request limit).
+- **0074 (WP92):** `nail-proto-ews` — the EWS engine and the mock EWS server (Exchange2016 with
+  a 2013 SP1 fallback, connection-bound Negotiate, streaming notifications, Windows zone ids).
+- **0075 (WP93):** `nail-exchange` — Autodiscover with engine choice and the credential rule,
+  SSPI sign-in, the Exchange ↔ Nail mapping, EWS retirement notes.
+- **0076 (WP94):** the Exchange UI (`ui/src/features/exchange/`).
 
 For M3b:
 

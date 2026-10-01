@@ -11,6 +11,7 @@
  * subtasks, Space completes, Enter opens the editor, Delete deletes.
  */
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { TaskListChooser } from "../exchange";
 import type { Calendar, LocalizedMessage, Task } from "../../api/generated";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
@@ -262,24 +263,7 @@ export function TaskList({ node }: WidgetProps) {
     <section data-part="task-list" data-key-context="tasks" aria-label={t("pim-tasks-label")}>
       <div data-part="task-list.toolbar">
         {fixed.length !== 1 && (
-          <div data-part="form.field" data-field="list">
-            <label data-part="form.label" htmlFor={ids.list}>
-              {t("pim-task-list")}
-            </label>
-            <select
-              id={ids.list}
-              data-part="form.select"
-              value={list}
-              onChange={(e) => setList(e.target.value)}
-            >
-              <option value="">{t("pim-tasks-all-lists")}</option>
-              {taskLists.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.settings.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <TaskListChooser lists={taskLists} value={list} onChange={setList} />
         )}
         <label data-part="form.check" data-field="show-completed">
           <input

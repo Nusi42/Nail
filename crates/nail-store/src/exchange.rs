@@ -284,9 +284,9 @@ pub fn exchange_op_id(id: i64) -> OpId {
 /// How replaying an Exchange operation ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExchangeOpOutcome {
-    /// Done; a created category reports the server's id.
+    /// Done; a created (or replaced) category reports the server's id.
     Done {
-        /// The category's server id (create only).
+        /// The category's server id (create, or an update that changed it).
         server_id: Option<String>,
     },
     /// Try again later (the error, for display).
@@ -1642,8 +1642,10 @@ impl Store {
     }
 
     /// Records how replaying an Exchange operation ended (see
-    /// [`ExchangeOpOutcome`]). A finished category create moves the
-    /// category (and later queued operations on it) to the server's id.
+    /// [`ExchangeOpOutcome`]). A finished category create — or an update
+    /// that gave the category a new id (Graph renames by replacement) —
+    /// moves the category (and later queued operations on it) to the
+    /// server's id.
     pub fn finish_exchange_op(&self, op_id: i64, outcome: &ExchangeOpOutcome) -> Result<()> {
         self.with_tx(|tx| {
             let (account, kind, target): (String, String, Option<String>) = tx
@@ -1673,7 +1675,7 @@ impl Store {
                 ExchangeOpOutcome::Done {
                     server_id: Some(server),
                 },
-                "create-category",
+                "create-category" | "update-category",
                 Some(local),
             ) = (outcome, kind.as_str(), &target)
                 && server != local
@@ -2231,11 +2233,31 @@ mod tests {
                 .sync,
             ExchangeSync::Pending
         );
+        // Graph renames by replacement: the update answers the new id,
+        // which the category (and later queued ops on it) moves to.
+        let rename = store.pending_exchange_ops(&account()).unwrap();
+        assert_eq!(rename[0].target.as_deref(), Some("c-blue"));
+        store
+            .finish_exchange_op(
+                rename[0].id,
+                &ExchangeOpOutcome::Done {
+                    server_id: Some("c-navy".into()),
+                },
+            )
+            .unwrap();
+        let navy = store
+            .exchange_category_by_name(&account(), "Navy")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (navy.id.as_str(), navy.sync),
+            ("c-navy", ExchangeSync::Synced)
+        );
         store
             .enqueue_exchange_op(
                 &account(),
                 &ExchangeOp::DeleteCategory {
-                    category_id: "c-blue".into(),
+                    category_id: "c-navy".into(),
                 },
             )
             .unwrap();

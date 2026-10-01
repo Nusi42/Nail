@@ -1,0 +1,9 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('ada%40contoso.example')/mailboxSettings/automaticRepliesSetting",
+  "status": "scheduled",
+  "externalAudience": "contactsOnly",
+  "scheduledStartDateTime": {"dateTime": "2026-10-05T07:00:00.0000000", "timeZone": "UTC"},
+  "scheduledEndDateTime": {"dateTime": "2026-10-09T16:00:00.0000000", "timeZone": "UTC"},
+  "internalReplyMessage": "<html>\r\n<body>\r\n<div style=\"font-family: Aptos\"><p>I am out of the office until Friday.<br>Ask Bob for urgent matters.</p></div>\r\n</body>\r\n</html>\r\n",
+  "externalReplyMessage": "<html><body><div>Thanks for your mail. I will answer next week.</div></body></html>"
+}

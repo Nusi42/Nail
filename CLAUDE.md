@@ -188,11 +188,29 @@ crates/nail-proto-gmail Gmail API engine (WP82, ADR 0067): client.rs (GmailClien
                        mapping, engine.rs GmailEngine (MailApiEngine + OutgoingTransport, for_account), poll.rs
                        PollTimer, labels::LABEL_PALETTE; feature `testing` = MockGmailServer (in-memory Gmail,
                        injected errors, quota, request log) + fixtures/ (DEMO_MAILBOX, recorded responses)
-crates/nail-proto-graph Microsoft Graph engine (M3c WP91 slot; stub: api_base, mailbox_path); feature `testing` =
-                       MockGraphServer (loopback) (ADR 0072)
-crates/nail-proto-ews  EWS engine (M3c WP92 slot; stub: SOAP envelope); feature `testing` = MockEwsServer (loopback)
-crates/nail-exchange   Exchange common layer (M3c WP93 slot): Autodiscover, sspi.rs (SSPI via the `windows` crate;
-                       stub: package_info), mapping Exchange ↔ Nail; feature `testing` = MockAutodiscoverServer
+crates/nail-proto-graph Microsoft Graph engine (WP91, ADR 0073): client.rs (GraphClient: OAuth bearer with one forced
+                       refresh, 429 / 503 / 504 with Retry-After, long waits → RateLimited, no repeat of sends / creates
+                       after a 5xx, paging / delta links checked against the API origin), batch.rs ($batch, 20 per call),
+                       mail / settings / directory / pim modules, engine.rs GraphEngine (ExchangeEngine, for_account;
+                       extra: copy_message, attachments, folders, find_meeting_times, …), poll.rs (PollTimer, FolderPoll);
+                       feature `testing` = MockGraphServer (in-memory tenant, delta tokens + expiry, $batch, injected
+                       errors, request budget, request log) + fixtures (DEMO_TENANT, recorded errors)
+crates/nail-proto-ews  EWS engine (WP92, ADR 0074): soap.rs (Exchange2016, falls back to Exchange2013_SP1; faults incl.
+                       ErrorServerBusy with back-off), client.rs (EwsClient, lanes = one HTTP/1.1 connection each, Basic /
+                       OAuth2 bearer / injected NegotiateAuth bound to the connection, RetryPolicy), mail.rs
+                       (SyncFolderHierarchy / SyncFolderItems, MimeContent, Create/Update/Move/Copy/DeleteItem), notify.rs
+                       (streaming subscriptions, StreamingWatcher), calendar / recurrence / tasks / contacts.rs
+                       (nail_api::exchange::pim shapes), settings.rs (OOF, inbox rules, CategoryList), directory.rs (rooms,
+                       GetUserAvailability, ResolveNames, GetDelegate), engine.rs EwsEngine (ExchangeEngine, for_account);
+                       feature `testing` = MockEwsServer (in-memory organization, scripted Negotiate, faults, streams,
+                       recorded answers in testing::fixtures)
+crates/nail-exchange   Exchange common layer (WP93, ADR 0075): autodiscover/ (v2 + POX + HTTP method + SRV, ConfirmRedirect /
+                       NeedsLogin, engine choice), http.rs (ExchangeHttp, ReqwestHttp::route_all_to), negotiate.rs (401
+                       handshake, Basic over TLS), sspi.rs (SspiNegotiate: NegotiateAuth over SSPI; real in-process
+                       handshake tests; ignored live test tests/sspi_live.rs with NAIL_EWS_LIVE_URL), mapping/ (categories,
+                       focus, rules, oof, events, tasks, contacts, rooms, text, time), texts.rs (exchange-autodiscover-*,
+                       -signin-*, -rule-reason-*, -oof-note-*, -pim-reason-*); feature `testing` = MockAutodiscoverServer
+                       (multi-host, Basic / scripted Negotiate, request log)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -278,7 +296,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        @internationalized/date + react-aria-components for the date / time picker;
                        ADRs 0058, 0062); M3b: scheduling/ (InvitationCard, AttendeePicker, MeetingPanel,
                        free/busy timeline), gmail/ (label list / editor, category tabs, MessageLabels)
-                       (ADR 0069)); M3c: exchange/ (WP94 slot; ADR 0072);
+                       (ADR 0069)); M3c: exchange/ (WP94, ADR 0076: mailboxes, categories, Focused tabs, automatic
+                       replies, rule badges, room finder, To Do chooser, setup / settings parts; EXCHANGE_BASE_CSS);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;

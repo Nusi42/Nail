@@ -1,0 +1,18 @@
+{
+  "429": {"error": {"code": "TooManyRequests", "message": "Application is over its MailboxConcurrency limit.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b3c-recorded", "client-request-id": "5b3c-recorded"}}},
+  "503": {"error": {"code": "ServiceUnavailable", "message": "Service Unavailable. Please retry after the time given in the Retry-After header.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b3d-recorded"}}},
+  "500": {"error": {"code": "ErrorInternalServerError", "message": "An internal server error occurred. The operation failed.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b3e-recorded"}}},
+  "410": {"error": {"code": "SyncStateNotFound", "message": "The sync state generation is not found. Please restart the sync.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b3f-recorded"}}},
+  "404": {"error": {"code": "ErrorItemNotFound", "message": "The specified object was not found in the store.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b40-recorded"}}},
+  "403": {"error": {"code": "ErrorAccessDenied", "message": "Access is denied. Check credentials and try again.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b41-recorded"}}},
+  "401": {"error": {"code": "InvalidAuthenticationToken", "message": "Access token has expired or is not yet valid.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b42-recorded"}}},
+  "mailbox-on-premises": {"error": {"code": "MailboxNotEnabledForRESTAPI", "message": "The mailbox is either inactive, soft-deleted, or is hosted on-premise.",
+    "innerError": {"date": "2026-10-01T10:00:00", "request-id": "5b43-recorded"}}}
+}

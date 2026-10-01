@@ -45,6 +45,7 @@ import { NumberField, Problem, problemOf, useChangeContext } from "./common";
 import { DateTimeInput, type Clock } from "./DateTimeInput";
 import { formatInstant } from "./fmt";
 import { deleteEvent, saveEvent, useCalendars, useEvent } from "./queries";
+import { RoomFinder } from "../exchange";
 import { AttendeePicker, MeetingPanel } from "../scheduling";
 import { useMyAddresses } from "../scheduling/queries";
 import { RecurrenceEditor } from "./RecurrenceEditor";
@@ -724,6 +725,16 @@ export function EventEditor({ target, event, calendars, close }: EditorProps) {
           }}
           organizer={event?.fields.organizer?.email ?? myAddresses[0] ?? null}
           eventId={event?.id ?? null}
+          tz={viewerTz}
+        />
+        <RoomFinder
+          calendarId={form.calendarId}
+          start={preview.start}
+          end={preview.end}
+          attendees={form.attendees}
+          onAttendeesChange={(attendees) => update({ attendees })}
+          location={form.location}
+          onLocationChange={(location) => update({ location })}
           tz={viewerTz}
         />
         {target.mode === "edit" && event !== null && event.fields.attendees.length > 0 && (

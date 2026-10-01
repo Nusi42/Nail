@@ -3757,4 +3757,123 @@ theme "default" mode="system" {
     part "gmail.apply.labels" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
     part "gmail.problem" { margin 0; color "$color.danger"; }
     part "gmail.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+
+    // ---- Exchange (M3c WP94) ----
+    part "focused-tabs" { display "flex"; align-items "center"; justify-content "space-between"; gap "$space.sm"; padding 0 "$space.sm"; border-bottom "$border.thin"; }
+    part "focused-tabs.list" { gap "$space.xxs"; }
+    part "focused-tabs.tab" { display "flex"; align-items "center"; gap "$space.xs"; border 0; border-bottom "2px solid transparent"; padding "$space.xs" "$space.sm"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "focused-tabs.tab:selected" { color "$color.fg"; border-bottom "2px solid $color.accent"; font-weight "$font-weight.medium"; }
+    part "focused-tabs.tab:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "focused-tabs.switch" { display "flex"; align-items "center"; gap "$space.xs"; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "focused-tabs.note" { margin 0; padding "$space.xs" "$space.sm"; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "automatic-replies-banner" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "automatic-replies-banner.item" { display "flex"; align-items "center"; gap "$space.sm"; padding "$space.xs" "$space.md"; color "$color.fg"; background-color "$color.selection"; border-bottom "$border.thin"; }
+    part "automatic-replies-banner.text" { flex "1"; font-size "$font-size.sm"; }
+    part "exchange-mailboxes" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.xs" "$space.sm"; }
+    part "exchange-mailboxes.header" { display "flex"; align-items "center"; justify-content "space-between"; gap "$space.xs"; }
+    part "exchange-mailboxes.title" { margin 0; font-size "$font-size.sm"; font-weight "$font-weight.bold"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.items" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "exchange-mailboxes.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; padding "$space.xxs" "$space.xs"; border-radius "$radius.sm"; }
+    part "exchange-mailboxes.open" { display "flex"; flex "1"; align-items "center"; gap "$space.xs"; min-width 0; border 0; padding "$space.xxs" "$space.xs"; text-align "left"; color "inherit"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-mailboxes.name" { flex "1"; overflow "hidden"; text-overflow "ellipsis"; white-space "nowrap"; }
+    part "exchange-mailboxes.address" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.kind" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.shows" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.state" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.new" { border 0; padding "$space.xxs" "$space.xs"; color "$color.accent"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-mailboxes.edit" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-mailboxes.remove" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-mailboxes.empty" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "exchange-mailboxes.error" { margin 0; font-size "$font-size.sm"; color "$color.danger"; }
+    part "exchange-categories" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.xs" "$space.sm"; }
+    part "exchange-categories.header" { display "flex"; align-items "center"; justify-content "space-between"; gap "$space.xs"; }
+    part "exchange-categories.title" { margin 0; font-size "$font-size.sm"; font-weight "$font-weight.bold"; color "$color.fg-muted"; }
+    part "exchange-categories.items" { display "flex"; flex-direction "column"; }
+    part "exchange-categories.item" { display "flex"; align-items "center"; gap "$space.xs"; border-radius "$radius.sm"; }
+    part "exchange-categories.item:selected" { background-color "$color.selection"; color "$color.selection-fg"; }
+    part "exchange-categories.view" { display "flex"; flex "1"; align-items "center"; gap "$space.xs"; min-width 0; border 0; padding "$space.xxs" "$space.xs"; text-align "left"; color "inherit"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-categories.view:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "exchange-categories.name" { flex "1"; overflow "hidden"; text-overflow "ellipsis"; white-space "nowrap"; }
+    part "exchange-categories.unread" { font-size "$font-size.xs"; font-weight "$font-weight.bold"; color "$color.unread"; }
+    part "exchange-categories.pending" { font-size "$font-size.xs"; color "$color.warning"; }
+    part "exchange-categories.new" { border 0; padding "$space.xxs" "$space.xs"; color "$color.accent"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-categories.edit" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-categories.delete" { border 0; padding "$space.xxs"; color "$color.fg-muted"; background-color "transparent"; cursor "pointer"; }
+    part "exchange-categories.empty" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "exchange-categories.error" { margin 0; font-size "$font-size.sm"; color "$color.danger"; }
+    part "exchange-rules" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; }
+    part "exchange-rules.intro" { margin 0; color "$color.fg-muted"; }
+    part "exchange-rules.account" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "exchange-rules.head" { display "flex"; align-items "center"; justify-content "space-between"; gap "$space.sm"; }
+    part "exchange-rules.state" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "exchange-rules.placements" { width "100%"; border-collapse "collapse"; font-size "$font-size.sm"; }
+    part "exchange-rules.caption" { text-align "left"; font-weight "$font-weight.medium"; padding "$space.xxs" 0; }
+    part "exchange-rules.rule" { border-bottom "$border.thin"; }
+    part "exchange-rules.rule.name" { padding "$space.xxs" "$space.xs"; }
+    part "exchange-rules.rule.placement" { padding "$space.xxs" "$space.xs"; color "$color.fg-muted"; }
+    part "exchange-rules.rule.reasons" { padding "$space.xxs" "$space.xs"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-rules.server.title" { margin 0; font-size "$font-size.sm"; font-weight "$font-weight.medium"; }
+    part "exchange-rules.server.items" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "exchange-rules.server.item" { display "flex"; align-items "center"; gap "$space.sm"; }
+    part "exchange-rules.server.origin" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange-rules.server.note" { font-size "$font-size.xs"; color "$color.warning"; }
+    part "exchange-rules.server.confirm" { display "flex"; align-items "center"; gap "$space.xs"; }
+    part "exchange-rules.empty" { margin 0; color "$color.fg-muted"; }
+    part "exchange.categories" { gap "$space.xxs"; margin "$space.xxs" 0; }
+    part "exchange.chip" { display "inline-flex"; align-items "center"; gap "$space.xxs"; padding 0 "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; }
+    part "exchange.chip.swatch" { width 8; height 8; border-radius "50%"; }
+    part "exchange.chip.name" { white-space "nowrap"; }
+    part "exchange.swatch" { width 10; height 10; border-radius "$radius.sm"; border "$border.thin"; }
+    part "exchange.colors" { gap "$space.xs"; border 0; padding 0; }
+    part "exchange.color" { display "flex"; align-items "center"; gap "$space.xs"; padding "$space.xxs"; border "1px solid transparent"; border-radius "$radius.sm"; cursor "pointer"; }
+    part "exchange.color:selected" { border "1px solid $color.accent"; }
+    part "exchange.color.name" { font-size "$font-size.sm"; }
+    part "exchange.mailbox-badge" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
+    part "exchange.rule-badges" { gap "$space.xxs"; }
+    part "exchange.rule-badge" { padding 0 "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.rule-badge.reasons" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.task-list-badge" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; background-color "$color.bg-raised"; }
+    part "exchange.focus-move" { border "$border.thin"; border-radius "$radius.sm"; padding "$space.xxs" "$space.sm"; color "$color.fg"; background-color "transparent"; cursor "pointer"; }
+    part "exchange.rooms" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "exchange.rooms.panel" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "exchange.rooms.filters" { display "flex"; flex-wrap "wrap"; align-items "flex-end"; gap "$space.sm"; }
+    part "exchange.rooms.items" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "exchange.rooms.empty" { margin 0; color "$color.fg-muted"; }
+    part "exchange.rooms.booked" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+    part "exchange.rooms.booked.item" { display "flex"; align-items "center"; gap "$space.xxs"; }
+    part "exchange.room" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; padding "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "exchange.room.name" { font-weight "$font-weight.medium"; }
+    part "exchange.room.capacity" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.room.place" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.room.accessible" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.room.features" { gap "$space.xxs"; }
+    part "exchange.room.feature" { padding 0 "$space.xs"; border-radius "$radius.sm"; font-size "$font-size.xs"; background-color "$color.bg-raised"; }
+    part "exchange.room.availability" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.room.busy" { display "flex"; flex-wrap "wrap"; gap "$space.xxs"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.room.response" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "exchange.oof" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "exchange.oof.schedule" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; border 0; padding 0; }
+    part "exchange.oof.sync" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "exchange.setup.type" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
+    part "exchange.setup.review" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "exchange.setup.title" { margin 0; font-size "$font-size.md"; font-weight "$font-weight.medium"; }
+    part "exchange.setup.details" { display "grid"; grid-template-columns "max-content 1fr"; gap "$space.xxs" "$space.sm"; margin 0; }
+    part "exchange.setup.term" { color "$color.fg-muted"; }
+    part "exchange.setup.value" { margin 0; overflow-wrap "anywhere"; }
+    part "exchange.setup.warning" { margin 0; color "$color.warning"; }
+    part "exchange.setup.redirect" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; border "1px solid $color.warning"; border-radius "$radius.sm"; }
+    part "exchange.setup.sign-in" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "exchange.status" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "exchange.status.details" { display "grid"; grid-template-columns "max-content 1fr"; gap "$space.xxs" "$space.sm"; margin 0; }
+    part "exchange.status.term" { color "$color.fg-muted"; }
+    part "exchange.status.value" { margin 0; }
+    part "exchange.status.warnings" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "exchange.status.warning" { color "$color.warning"; }
+    part "exchange.dialog" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 640; padding "$space.md"; }
+    part "exchange.intro" { margin 0; }
+    part "exchange.question" { margin 0; font-weight "$font-weight.medium"; }
+    part "exchange.notice" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "exchange.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "exchange.problem" { margin 0; color "$color.danger"; }
+    part "exchange.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
 }

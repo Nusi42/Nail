@@ -75,6 +75,8 @@
                     "auto",
                     "1fr",
                     "auto",
+                    "auto",
+                    "auto",
                     "auto"
                   ],
                   "children": [
@@ -120,6 +122,24 @@
                     },
                     {
                       "type": "widget",
+                      "id": "exchange-mailboxes",
+                      "label": null,
+                      "kind": "exchange-mailboxes",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "exchange-categories",
+                      "label": null,
+                      "kind": "exchange-categories",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
                       "id": "smart-folders",
                       "label": "@saved-search-label",
                       "kind": "smart-folders",
@@ -135,14 +155,34 @@
                   "label": "@layout.pane.messages",
                   "sizes": [
                     "auto",
+                    "auto",
+                    "auto",
                     "1fr"
                   ],
                   "children": [
                     {
                       "type": "widget",
+                      "id": "automatic-replies",
+                      "label": null,
+                      "kind": "automatic-replies-banner",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
                       "id": "gmail-categories",
                       "label": null,
                       "kind": "category-tabs",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "exchange-focused",
+                      "label": null,
+                      "kind": "focused-tabs",
                       "options": {},
                       "rows": [],
                       "source": null
@@ -347,6 +387,8 @@
                     "auto",
                     "1fr",
                     "auto",
+                    "auto",
+                    "auto",
                     "auto"
                   ],
                   "children": [
@@ -381,6 +423,24 @@
                     },
                     {
                       "type": "widget",
+                      "id": "exchange-mailboxes",
+                      "label": null,
+                      "kind": "exchange-mailboxes",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "exchange-categories",
+                      "label": null,
+                      "kind": "exchange-categories",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
                       "id": "smart-folders",
                       "label": "@saved-search-label",
                       "kind": "smart-folders",
@@ -396,14 +456,34 @@
                   "label": "@layout.pane.messages",
                   "sizes": [
                     "auto",
+                    "auto",
+                    "auto",
                     "1fr"
                   ],
                   "children": [
                     {
                       "type": "widget",
+                      "id": "automatic-replies",
+                      "label": null,
+                      "kind": "automatic-replies-banner",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
                       "id": "gmail-categories",
                       "label": null,
                       "kind": "category-tabs",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "exchange-focused",
+                      "label": null,
+                      "kind": "focused-tabs",
                       "options": {},
                       "rows": [],
                       "source": null
@@ -937,6 +1017,15 @@
               "id": "sieve-status",
               "label": "@sieve.settings.tab",
               "kind": "sieve-status",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "exchange-rules",
+              "label": "@exchange.settings.tab.rules",
+              "kind": "exchange-rules",
               "options": {},
               "rows": [],
               "source": null
@@ -1530,6 +1619,42 @@
       "icon": null,
       "alias_of": null,
       "args": []
+    },
+    "exchange.automatic-replies": {
+      "label": "@exchange.action.automatic-replies",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "exchange.add-mailbox": {
+      "label": "@exchange.action.add-mailbox",
+      "icon": "plus",
+      "alias_of": null,
+      "args": []
+    },
+    "exchange.new-category": {
+      "label": "@exchange.action.new-category",
+      "icon": "plus",
+      "alias_of": null,
+      "args": []
+    },
+    "exchange.focus": {
+      "label": "@exchange.action.focus",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "exchange.classify": {
+      "label": "@exchange.action.classify",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "exchange.toggle-focused": {
+      "label": "@exchange.action.toggle-focused",
+      "icon": null,
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
@@ -1585,6 +1710,12 @@
       "context": "reader",
       "key": "shift+n",
       "action": "scheduling.decline",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "shift+o",
+      "action": "exchange.classify",
       "args": []
     },
     {
@@ -2019,6 +2150,13 @@
       },
       {
         "type": "action",
+        "action": "exchange.classify",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "security.autocrypt.import",
         "args": [],
         "label": null,
@@ -2231,6 +2369,13 @@
         "args": [],
         "label": null,
         "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.classify",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "context:thread-view.message": [
@@ -2345,6 +2490,20 @@
       {
         "type": "action",
         "action": "gmail.new-label",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.add-mailbox",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.new-category",
         "args": [],
         "label": null,
         "icon": null

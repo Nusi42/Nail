@@ -1,89 +1,71 @@
 //! The Exchange Web Services engine for Exchange Server on-premises
-//! accounts (plan M3c WP92; contract ADR 0072).
+//! accounts (plan M3c WP92; contract ADR 0072, decisions ADR 0074).
 //!
-//! **Stub (WP90).** WP92 fills this crate; the contract it builds against
-//! is `nail_api::exchange` (account options incl. the EWS URL and
-//! streaming, Focused Inbox, categories, mailboxes, rooms, automatic
-//! replies, inbox rules), the engine seams in
-//! [`nail_api::exchange::engine`] — `EwsEngine` implements
-//! [`nail_api::exchange::engine::ExchangeEngine`] (mail per folder with
-//! sync states, streaming notifications through `wait_for_changes`,
-//! settings, directory, PIM, plus [`nail_api::engine::FreeBusyProvider`]
-//! and [`nail_api::engine::OutgoingTransport`]) — the provider-neutral
-//! item shapes of [`nail_api::exchange::pim`] (EWS XML ↔ those; mapping to
-//! Nail's PIM model is `nail-exchange`'s), and the Windows sign-in seam
-//! [`nail_api::exchange::engine::NegotiateAuth`] (SSPI is implemented by
-//! `nail-exchange`; tests use a scripted fake). Expected shape:
+//! [`EwsEngine`] implements [`nail_api::exchange::engine::ExchangeEngine`]
+//! (mail per folder with sync states, streaming notifications through
+//! `wait_for_changes`, settings, directory, PIM, free/busy and sending)
+//! on an [`EwsClient`]:
 //!
-//! * `soap` — envelopes with `RequestServerVersion` (default
-//!   `Exchange2013_SP1`), `ExchangeImpersonation` never, `X-AnchorMailbox`
-//!   for other mailboxes, faults → `nail_api::ErrorCode` + `ews-*` texts
-//!   (`locales/en/core-ews.ftl`), `ErrorServerBusy` → `rate_limited` with
-//!   the back-off the server names.
-//! * `client` — `EwsClient` over the account's EWS URL (plain `http` only
-//!   for loopback test servers): Basic over TLS, OAuth2 bearer with one
-//!   refresh, Negotiate (`401` + `WWW-Authenticate: Negotiate` handshake on
-//!   one kept-alive connection — NTLM binds to the connection).
-//! * `mail` — `SyncFolderHierarchy`, `SyncFolderItems` (the sync state is
-//!   the cursor; `ErrorInvalidSyncStateData` → `CursorExpired`),
-//!   `GetItem` with `MimeContent`, `CreateItem` (`MimeContent` appends,
-//!   `SendAndSaveCopy` for sending), `UpdateItem` (read, flag,
-//!   categories), `MoveItem` (new id), `DeleteItem`; `Subscribe` +
-//!   `GetStreamingEvents` for push.
-//! * `settings` — `GetUserOofSettings` / `SetUserOofSettings`,
-//!   `GetInboxRules` / `UpdateInboxRules`, the category list
-//!   (`GetUserConfiguration` `CategoryList` on the calendar folder).
-//! * `directory` — `GetRoomLists`, `GetRooms`, `GetUserAvailability`
-//!   (free/busy of people and rooms), `ResolveNames`, `GetDelegate`.
-//! * `pim` — `CalendarItem` (with `ModifiedOccurrences` /
-//!   `DeletedOccurrences`), `AcceptItem` / `TentativelyAcceptItem` /
-//!   `DeclineItem`, `Contact` / `DistributionList`, `Task`.
-//! * `testing` (feature) — `MockEwsServer` on 127.0.0.1: an in-memory
-//!   mailbox (folders, items with change keys and sync states, a shared
-//!   mailbox, OOF, rules, categories, rooms, calendar, contacts, tasks,
-//!   streaming notifications), Basic and a scripted Negotiate handshake,
-//!   injected faults, recorded-response fixtures in `tests/fixtures/`.
+//! * [`soap`] — envelopes with `RequestServerVersion` (`Exchange2016`,
+//!   falling back to `Exchange2013_SP1` when a server refuses it) and
+//!   `TimeZoneContext`, `ServerVersionInfo`, response messages, faults
+//!   (`ErrorServerBusy` → [`EwsError::RateLimited`] with the back-off the
+//!   server names).
+//! * [`client`] — the endpoint (plain `http` only for loopback test
+//!   servers), Basic over TLS, OAuth2 bearer with one refresh, Negotiate
+//!   through the injected [`nail_api::exchange::engine::NegotiateAuth`]
+//!   (SSPI lives in `nail-exchange`; the handshake shares one kept-alive
+//!   connection because NTLM binds to it), `X-AnchorMailbox`, inline
+//!   retries.
+//! * [`mail`] — `SyncFolderHierarchy`, `SyncFolderItems`, `GetItem` with
+//!   `MimeContent`, `CreateItem` (appends, `SendAndSaveCopy`),
+//!   `UpdateItem` (read, flag, answered, categories with change keys),
+//!   `MoveItem` / `CopyItem` (new ids), `DeleteItem`.
+//! * [`notify`] — streaming notifications: `Subscribe` +
+//!   `GetStreamingEvents` with reconnects and re-subscription.
+//! * [`calendar`], [`recurrence`], [`tasks`], [`contacts`] — calendar items
+//!   (`FindItem` `CalendarView`, exceptions, meeting responses), tasks and
+//!   contacts ↔ [`nail_api::exchange::pim`] shapes.
+//! * [`settings`] — `GetUserOofSettings` / `SetUserOofSettings`,
+//!   `GetInboxRules` / `UpdateInboxRules`, the master category list
+//!   (`CategoryList` user configuration on the calendar).
+//! * [`directory`] — `GetRoomLists`, `GetRooms`, `GetUserAvailability`,
+//!   `ResolveNames`, `GetDelegate`.
+//! * `testing` (feature) — [`testing::MockEwsServer`] on 127.0.0.1.
 //!
 //! Every socket the tests open binds 127.0.0.1 (ADR 0057).
 
 #![warn(missing_docs)]
 
+pub mod auth;
+pub mod calendar;
+pub mod client;
+pub mod contacts;
+pub mod directory;
+pub mod engine;
+pub mod error;
+pub mod html;
+pub mod mail;
+pub mod notify;
+pub mod recurrence;
+pub mod settings;
+pub mod soap;
+pub mod tasks;
 #[cfg(feature = "testing")]
 pub mod testing;
+pub mod types;
+pub mod xml;
+
+pub use auth::{EwsAuth, Password};
+pub use client::{EwsClient, RetryPolicy};
+pub use engine::{EwsEngine, EwsOptions};
+pub use error::EwsError;
+pub use soap::{
+    DEFAULT_SERVER_VERSION, FALLBACK_SERVER_VERSION, MESSAGES_NS, SOAP_NS, TYPES_NS, envelope,
+};
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");
-
-/// The SOAP namespace of EWS messages (`m:`).
-pub const MESSAGES_NS: &str = "http://schemas.microsoft.com/exchange/services/2006/messages";
-
-/// The SOAP namespace of EWS types (`t:`).
-pub const TYPES_NS: &str = "http://schemas.microsoft.com/exchange/services/2006/types";
-
-/// The SOAP 1.1 envelope namespace.
-pub const SOAP_NS: &str = "http://schemas.xmlsoap.org/soap/envelope/";
-
-/// The server version Nail asks for unless the server is older
-/// (`RequestServerVersion`).
-pub const DEFAULT_SERVER_VERSION: &str = "Exchange2013_SP1";
-
-/// Wraps an EWS operation body in a SOAP envelope with the
-/// `RequestServerVersion` header.
-pub fn envelope(server_version: &str, body: &str) -> String {
-    format!(
-        concat!(
-            r#"<?xml version="1.0" encoding="utf-8"?>"#,
-            r#"<soap:Envelope xmlns:soap="{soap}" xmlns:t="{types}" xmlns:m="{messages}">"#,
-            r#"<soap:Header><t:RequestServerVersion Version="{version}"/></soap:Header>"#,
-            r#"<soap:Body>{body}</soap:Body></soap:Envelope>"#
-        ),
-        soap = SOAP_NS,
-        types = TYPES_NS,
-        messages = MESSAGES_NS,
-        version = server_version,
-        body = body,
-    )
-}
 
 #[cfg(test)]
 mod tests {
@@ -94,7 +76,7 @@ mod tests {
         assert_eq!(CRATE, "nail-proto-ews");
         let soap = envelope(DEFAULT_SERVER_VERSION, "<m:GetFolder/>");
         assert!(soap.starts_with("<?xml"));
-        assert!(soap.contains(r#"Version="Exchange2013_SP1""#));
+        assert!(soap.contains(r#"Version="Exchange2016""#));
         assert!(soap.contains("<soap:Body><m:GetFolder/></soap:Body>"));
     }
 }

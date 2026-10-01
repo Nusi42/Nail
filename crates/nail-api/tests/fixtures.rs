@@ -224,8 +224,18 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
     assert_eq!(sizes.len(), children.len());
     let pane_kinds: Vec<Vec<String>> = children.iter().map(widget_kinds).collect();
     assert!(pane_kinds[0].contains(&"folder-tree".to_owned()));
-    // The list pane: the Gmail category tabs (M3b) above the message list.
-    assert_eq!(pane_kinds[1], ["category-tabs", "message-list"]);
+    // The list pane: the Exchange automatic-replies banner, the Gmail
+    // category tabs (M3b) and the Exchange Focused tabs (M3c) above the
+    // message list.
+    assert_eq!(
+        pane_kinds[1],
+        [
+            "automatic-replies-banner",
+            "category-tabs",
+            "focused-tabs",
+            "message-list"
+        ]
+    );
     assert!(pane_kinds[2].contains(&"message-view".to_owned()));
     assert!(pane_kinds[2].contains(&"toolbar".to_owned()));
     assert!(widget_kinds(&wide.root).contains(&"status-bar".to_owned()));

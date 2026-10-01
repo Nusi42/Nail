@@ -1,0 +1,28 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('ada%40contoso.example')/mailFolders('inbox')/messageRules/$entity",
+  "id": "AQAAAJ5dZqA=",
+  "displayName": "From partner",
+  "sequence": 2,
+  "isEnabled": true,
+  "hasError": false,
+  "isReadOnly": false,
+  "conditions": {
+    "senderContains": ["adele"],
+    "fromAddresses": [
+      {"emailAddress": {"name": "Partner", "address": "partner@fabrikam.example"}}
+    ],
+    "withinSizeRange": {"minimumSize": 10, "maximumSize": null},
+    "isAutomaticReply": false
+  },
+  "exceptions": {
+    "subjectContains": ["Urgent"]
+  },
+  "actions": {
+    "moveToFolder": "AAMkPartners",
+    "assignCategories": ["Partner"],
+    "forwardTo": [
+      {"emailAddress": {"name": "Ada Lovelace", "address": "ada@contoso.example"}}
+    ],
+    "stopProcessingRules": true
+  }
+}

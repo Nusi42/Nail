@@ -1,0 +1,17 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(message)",
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/mailFolders/AQMkInbox/messages/delta?$skiptoken=GwcBoTmPuoTQWfcsAbkYM",
+  "value": [
+    {"@odata.type": "#microsoft.graph.message", "@odata.etag": "W/\"CQAAABYAAADHcgC8Hl9tRZ/hc1wEUs1TAAAwR4Hg\"",
+     "id": "AAMkAGI2THVSAAA=", "changeKey": "CQAAABYAAADHcgC8Hl9tRZ/hc1wEUs1TAAAwR4Hg",
+     "receivedDateTime": "2026-09-30T07:12:44Z", "internetMessageId": "<abc@contoso.example>",
+     "parentFolderId": "AQMkInbox", "conversationId": "AAQkAGI2Conv=", "isRead": false, "isDraft": false,
+     "flag": {"flagStatus": "flagged"}, "categories": ["Red category"], "inferenceClassification": "focused"},
+    {"@odata.type": "#microsoft.graph.message", "id": "AAMkAGI2THVTAAA=", "changeKey": "CQAAABYAAADHcgC8",
+     "receivedDateTime": "2026-09-30T08:00:00Z", "parentFolderId": "AQMkInbox", "conversationId": "AAQkAGI2Conv2=",
+     "isRead": true, "isDraft": false, "flag": {"flagStatus": "notFlagged"}, "categories": [],
+     "inferenceClassification": "other"},
+    {"@odata.type": "#microsoft.graph.message", "id": "AAMkAGI2THVUAAA=", "isRead": true},
+    {"@odata.type": "#microsoft.graph.message", "id": "AAMkAGI2THVVAAA=", "@removed": {"reason": "deleted"}}
+  ]
+}
