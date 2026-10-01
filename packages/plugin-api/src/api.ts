@@ -18,6 +18,7 @@ import type {
   PluginCommandContext,
   PluginDialogResult,
   PluginDialogSpec,
+  PluginCalendarEvent,
   PluginId,
   PluginMessage,
   PluginMessageBody,
@@ -82,6 +83,29 @@ export interface NailMailApi {
   search(query: string, options?: PluginMailSearchOptions): Promise<PluginMessage[]>;
   /** The messages of a thread, oldest first. */
   thread(threadId: ThreadId): Promise<PluginMessage[]>;
+}
+
+/** Options of {@link NailCalendarApi.events}. */
+export interface PluginCalendarEventsOptions {
+  /** At most this many events (the host clamps it to 500). */
+  limit?: number;
+}
+
+/**
+ * `nail.calendar`: read access to the user's calendars. Needs
+ * `calendar.read`.
+ */
+export interface NailCalendarApi {
+  /**
+   * The event occurrences overlapping `[from, to)` (RFC 3339 times, at
+   * most 92 days apart) in every calendar the user shows, by start.
+   * Recurring events come as one entry per occurrence.
+   */
+  events(
+    from: string,
+    to: string,
+    options?: PluginCalendarEventsOptions,
+  ): Promise<PluginCalendarEvent[]>;
 }
 
 /** A click on a `button` node, with the current values of the tree's inputs. */
@@ -266,6 +290,8 @@ export interface NailApi {
   readonly apiVersion: string;
   /** Mail (read only in the preview). */
   readonly mail: NailMailApi;
+  /** Calendars (read only). */
+  readonly calendar: NailCalendarApi;
   /** Commands, panels, dialogs and notifications. */
   readonly ui: NailUiApi;
   /** Command handlers. */

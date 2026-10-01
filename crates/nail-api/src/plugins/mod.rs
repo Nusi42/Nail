@@ -14,7 +14,7 @@
 //!   placements, keys, panels, a settings schema, locales) and its
 //!   validation ([`PluginManifest::parse`], [`PluginManifestIssue`]).
 //! * [`permission`]: the preview's permission names ([`PluginPermission`]:
-//!   `mail.read`, `mail.read.body`, `calendar.read` (placeholder),
+//!   `mail.read`, `mail.read.body`, `calendar.read` (M3a),
 //!   `ui.dialogs`, `notifications`, `storage`, `network:<domain>`) and
 //!   grants ([`PluginGrant`]).
 //! * [`ui`]: the declarative component set ([`PluginUiNode`]) with its
@@ -54,7 +54,8 @@ pub use manifest::{
 };
 pub use permission::{PluginGrant, PluginPermission, PluginPermissionError};
 pub use runtime::{
-    PluginAttachment, PluginCommandContext, PluginCommandSurface, PluginDialog, PluginDialogButton,
+    MAX_PLUGIN_CALENDAR_DAYS, MAX_PLUGIN_CALENDAR_EVENTS, PluginAttachment, PluginCalendarEvent,
+    PluginCommandContext, PluginCommandSurface, PluginDialog, PluginDialogButton,
     PluginDialogResult, PluginDialogSize, PluginDialogSpec, PluginMessage, PluginMessageBody,
     PluginNotification, PluginNotificationLevel, PluginNotificationSpec, PluginSelection,
     PluginUiTarget,

@@ -160,6 +160,8 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     if let Some(demo) = &demo_multi {
         demo.seed_security(&service).await?;
     }
+    // Files and links to open, as the desktop shell hands them over (M3a).
+    service.push_launch_requests(nail_core::launch_args::from_args(&args.launch));
 
     // Keeps the mock IMAP server alive for the lifetime of `serve`.
     let mut _demo_imap = None;

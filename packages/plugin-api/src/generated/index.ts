@@ -2,12 +2,15 @@
 
 export type * from "./AccountId";
 export type * from "./Address";
+export type * from "./CalendarId";
 export type * from "./DraftId";
+export type * from "./EventId";
 export type * from "./Flags";
 export type * from "./FolderId";
 export type * from "./MessageId";
 export type * from "./PluginAttachment";
 export type * from "./PluginButtonVariant";
+export type * from "./PluginCalendarEvent";
 export type * from "./PluginCommandContext";
 export type * from "./PluginCommandDef";
 export type * from "./PluginCommandSurface";

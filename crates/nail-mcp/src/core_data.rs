@@ -187,6 +187,31 @@ impl<C: CoreAccess> McpData for CoreData<C> {
         self.0.is_encrypted(id).await
     }
 
+    async fn pim(&self, request: Request) -> DataResult<Response> {
+        match self.0.handle(request).await {
+            Response::Error {
+                code,
+                message,
+                localized,
+            } => Err(ApiError {
+                code,
+                message,
+                localized,
+            }),
+            other => Ok(other),
+        }
+    }
+
+    async fn pim_raw(&self, item: &nail_api::pim::PimItemRef) -> DataResult<Option<String>> {
+        let item = item.clone();
+        Ok(self
+            .0
+            .store()
+            .call(move |s| s.pim_object(&item))
+            .await?
+            .map(|o| o.raw))
+    }
+
     async fn thread(&self, id: &ThreadId) -> DataResult<ThreadData> {
         let request = Request::GetThread {
             thread_id: id.clone(),

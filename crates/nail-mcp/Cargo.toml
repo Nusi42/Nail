@@ -25,6 +25,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 base64.workspace = true
+# M3a: calendar ranges and working hours of the PIM tools.
+chrono.workspace = true
+chrono-tz.workspace = true
 # Bearer tokens (32 random bytes from the OS).
 getrandom = "0.3.4"
 

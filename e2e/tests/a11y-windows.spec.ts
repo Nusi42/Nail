@@ -33,6 +33,15 @@ const FEATURE_DIALOGS = [
   "security-autocrypt-import",
   "snooze",
   "sync-folder",
+  // M3a: calendars, contacts and tasks.
+  "pim-event-editor",
+  "pim-edit-scope",
+  "pim-contact-editor",
+  "pim-contact-groups",
+  "pim-merge-contacts",
+  "pim-task-editor",
+  "pim-import",
+  "pim-sources",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -187,6 +196,54 @@ for (const mode of MODES) {
       await toolbar.getByRole("button", { name: "Snoozed messages" }).click();
       await sweep.scanWindow("snoozed");
       await sweep.close("snoozed");
+
+      // M3a: the calendar, contacts and tasks windows and their dialogs.
+      await toolbar.getByRole("button", { name: "Calendar", exact: true }).click();
+      const calendar = sweep.window("calendar");
+      await expect(calendar.getByRole("button", { name: /^Team sync,/ }).first()).toBeVisible();
+      await sweep.scanWindow("calendar", "calendar (week)");
+      await calendar.getByRole("button", { name: "Month", exact: true }).click();
+      await sweep.scan("calendar (month)");
+      await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
+      const teamSync = calendar.getByRole("button", { name: /^Team sync,/ }).first();
+      await expect(teamSync).toBeVisible();
+      await sweep.scan("calendar (agenda)");
+      await teamSync.click();
+      await sweep.scanWindow("pim-event-editor");
+      await sweep.close("pim-event-editor");
+      await teamSync.focus();
+      await page.keyboard.press("Delete");
+      await sweep.scanWindow("pim-edit-scope");
+      await sweep.close("pim-edit-scope");
+      const calendarActions = page.getByRole("toolbar", { name: "Calendar actions" });
+      for (const [button, name] of [
+        ["New task", "pim-task-editor"],
+        ["New contact", "pim-contact-editor"],
+        ["Import calendar or contacts", "pim-import"],
+        ["Calendars and address books", "pim-sources"],
+      ] as const) {
+        await calendarActions.getByRole("button", { name: button, exact: true }).click();
+        await sweep.scanWindow(name);
+        await sweep.close(name);
+      }
+      await sweep.close("calendar");
+
+      await toolbar.getByRole("button", { name: "Contacts", exact: true }).click();
+      const contactsWindow = sweep.window("contacts");
+      await contactsWindow.getByRole("option", { name: /Grace Hopper/ }).click();
+      await expect(contactsWindow.getByRole("heading", { name: "Grace Hopper" })).toBeVisible();
+      await sweep.scanWindow("contacts");
+      await contactsWindow.getByRole("button", { name: "Groups…" }).click();
+      await sweep.scanWindow("pim-contact-groups");
+      await sweep.close("pim-contact-groups");
+      await contactsWindow.getByRole("button", { name: "Find duplicates…" }).click();
+      await sweep.scanWindow("pim-merge-contacts");
+      await sweep.close("pim-merge-contacts");
+      await sweep.close("contacts");
+
+      await toolbar.getByRole("button", { name: "Tasks", exact: true }).click();
+      await sweep.scanWindow("tasks");
+      await sweep.close("tasks");
 
       // Dialogs of the selected message.
       await rows.filter({ hasText: "Welcome to Nail" }).click();

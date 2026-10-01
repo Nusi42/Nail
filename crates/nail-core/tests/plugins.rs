@@ -1118,3 +1118,84 @@ async fn search_needs_mail_read_body_for_text_and_hides_decrypted_mail() {
         assert!(subjects(&found["subject"]).contains(&"Welcome to Nail".to_owned()));
     }
 }
+
+const CALENDAR_JS: &str = r#"
+export default {
+  activate(ctx) {
+    ctx.commands.register("body", async () => {
+      try {
+        const events = await nail.calendar.events("2026-10-01T00:00:00Z", "2026-10-31T00:00:00Z");
+        nail.log.info("EVENTS " + events.map((e) => e.title + "@" + e.start).join(","));
+      } catch (e) {
+        nail.log.warn("DENIED " + e.code);
+      }
+    });
+  },
+};
+"#;
+
+/// M3a (ADR 0063): `calendar.read` is real — the occurrences of the
+/// user's calendars; without it the call is refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn calendar_read_gives_event_occurrences() {
+    let f = setup();
+    let mut events = f.service.subscribe();
+    let calendar = match f
+        .service
+        .handle(Request::ListCalendars { source_id: None })
+        .await
+    {
+        Response::Calendars { calendars } => {
+            calendars.into_iter().find(|c| c.has_events()).unwrap().id
+        }
+        other => panic!("{other:?}"),
+    };
+    let mut rule = nail_api::pim::RecurrenceRule::new(nail_api::pim::calendar::Frequency::Weekly);
+    rule.end = nail_api::pim::RecurrenceEnd::Count { count: 2 };
+    let created = f
+        .service
+        .handle(Request::CreateEvent {
+            calendar_id: calendar,
+            fields: Box::new(nail_api::pim::EventFields::new(
+                "Yoga",
+                nail_api::pim::PimTime::utc("2026-10-06T17:00:00"),
+                nail_api::pim::PimTime::utc("2026-10-06T18:00:00"),
+            )),
+            recurrence: Some(nail_api::pim::Recurrence::rule(rule)),
+        })
+        .await;
+    assert!(
+        matches!(created, Response::EventSaved { .. }),
+        "{created:?}"
+    );
+    let run = |plugin: &str| Request::RunPluginCommand {
+        command: format!("plugin.{plugin}.body"),
+        surface: PluginCommandSurface::List,
+        context: UiContext::default(),
+        client_id: None,
+    };
+    install(&f, "cal", &["calendar.read"], CALENDAR_JS).await;
+    assert_eq!(f.service.handle(run("cal")).await, Response::Done);
+    let line = wait_event(&mut events, "the events", |e| match e {
+        Event::PluginLogLine { entry } if entry.message.starts_with("EVENTS ") => {
+            Some(entry.message.clone())
+        }
+        _ => None,
+    })
+    .await;
+    assert_eq!(
+        line,
+        "EVENTS Yoga@2026-10-06T17:00:00Z,Yoga@2026-10-13T17:00:00Z"
+    );
+    install(&f, "nocal", &["storage"], CALENDAR_JS).await;
+    f.service.handle(run("nocal")).await;
+    wait_event(&mut events, "the refusal", |e| match e {
+        Event::PluginLogLine { entry }
+            if entry.plugin_id.as_str() == "nocal" && entry.message == "DENIED forbidden" =>
+        {
+            Some(())
+        }
+        _ => None,
+    })
+    .await;
+}

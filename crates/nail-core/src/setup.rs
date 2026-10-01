@@ -124,6 +124,8 @@ impl Service {
             // Sieve settings, identities or the login may have changed.
             self.queue_sieve(None);
         }
+        // PIM sources live in the same file (M3a).
+        self.reconcile_pim_sources().await;
         self.broadcast(Event::AccountsChanged);
         Ok(())
     }

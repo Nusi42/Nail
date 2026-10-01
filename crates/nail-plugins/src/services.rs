@@ -12,7 +12,8 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use nail_api::plugins::{
-    PluginLogLevel, PluginLogSource, PluginMessage, PluginMessageBody, PluginStorageUsage,
+    PluginCalendarEvent, PluginLogLevel, PluginLogSource, PluginMessage, PluginMessageBody,
+    PluginStorageUsage,
 };
 use nail_api::{AccountId, ApiError, Event, LocalizedMessage, MessageId, PluginId, ThreadId};
 use serde_json::Value;
@@ -154,6 +155,19 @@ pub trait PluginServices: Send + Sync + 'static {
         &self,
         thread: ThreadId,
     ) -> BoxFuture<'static, ServiceResult<Vec<PluginMessage>>>;
+
+    /// Event occurrences overlapping `[from, to)` (RFC 3339) in the
+    /// calendars the user shows, by start, at most `limit` (M3a,
+    /// `calendar.read`). The default answers `unsupported`.
+    fn calendar_events(
+        &self,
+        from: String,
+        to: String,
+        limit: u32,
+    ) -> BoxFuture<'static, ServiceResult<Vec<PluginCalendarEvent>>> {
+        let _ = (from, to, limit);
+        Box::pin(async { Err(ApiError::unsupported("no calendars")) })
+    }
 
     /// A storage value.
     fn storage_get(

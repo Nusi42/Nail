@@ -38,6 +38,7 @@ pub mod data;
 pub mod endpoint;
 pub mod http;
 pub mod messages;
+pub mod pim;
 pub mod server;
 mod subscriptions;
 pub mod tools;

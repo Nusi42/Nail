@@ -255,6 +255,7 @@ pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::Ex
     plugins::PluginCommandContext::export_all(&cfg)?;
     plugins::PluginMessage::export_all(&cfg)?;
     plugins::PluginMessageBody::export_all(&cfg)?;
+    plugins::PluginCalendarEvent::export_all(&cfg)?;
     PluginPermission::export_all(&cfg)?;
     plugins::PluginLogLevel::export_all(&cfg)?;
     write_index(out_dir)

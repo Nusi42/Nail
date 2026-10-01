@@ -10,7 +10,7 @@
 
 plugin-permission-mail-read = Read your mail: accounts, folders, senders and subjects
 plugin-permission-mail-read-body = Read the text of your messages
-plugin-permission-calendar-read = Read your calendars (not available yet)
+plugin-permission-calendar-read = Read your calendar events
 plugin-permission-ui-dialogs = Show dialogs
 plugin-permission-notifications = Show notifications
 plugin-permission-storage = Store its own data on this device

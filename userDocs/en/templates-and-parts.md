@@ -93,6 +93,15 @@ States (`part "x:state"`):
 | `toolbar.button` | `disabled` |
 | `status-bar.item` (sync) | `idle`, `syncing`, `error`, `offline` |
 
+Calendar, contact and task widgets (M3a) render parts starting with
+`calendar.`, `mini-month.`, `agenda.`, `calendar-list.`, `task-list.`,
+`contact-list.`, `contact-card.` and `pim.` (editors, dialogs, reminder
+toasts); their events carry the states `selected`, `today`, `outside`,
+`busy`, `recurring`, `overridden`, `read-only`, `tentative`, `free`,
+`all-day` and `dragging`, tasks `done` and `overdue`. Positions and
+calendar colours come from the theme's geometry rules; see the default
+theme (`defaults/theme.kdl`) for every part.
+
 Conditions (`part "x[key=\"value\"]"`): `folder-tree.item[role="inbox"]`,
 `folder-tree.item[depth="1"]` (nesting level), `message-list.row[account="…"]`,
 `toolbar.button[action="mail.reply"]`, `status-bar.item[item="folder-counts"]`,

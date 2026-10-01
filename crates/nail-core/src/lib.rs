@@ -35,6 +35,7 @@ mod imap_engine;
 mod ingest;
 mod junk;
 mod launch;
+pub mod launch_args;
 mod mail;
 mod mcp;
 mod notify;

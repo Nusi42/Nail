@@ -163,6 +163,10 @@
         request("mail.search", { query, limit: options && options.limit }),
       thread: (threadId) => request("mail.thread", { threadId }),
     },
+    calendar: {
+      events: (from, to, options) =>
+        request("calendar.events", { from, to, limit: options && options.limit }),
+    },
     ui: {
       registerCommand,
       registerPanel,

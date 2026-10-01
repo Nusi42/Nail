@@ -86,6 +86,7 @@ The SDK's `nail` object (see `NailApi` for the host side).
 | `plugin` | `PluginIdentity` | The plug-in's id and version. |
 | `apiVersion` | `string` | The API version of the host. |
 | `mail` | `NailMailApi` | Mail (read only in the preview). |
+| `calendar` | `NailCalendarApi` | Calendars (read only; `calendar.read`). |
 | `ui` | `SdkUiApi` | Commands, panels, dialogs and notifications. |
 | `commands` | `NailCommandsApi` | Command handlers. |
 | `storage` | `NailStorageApi` | Key-value storage. |
@@ -111,6 +112,22 @@ Options of `NailMailApi.search`.
 | Member | Type | Description |
 | --- | --- | --- |
 | `limit?` | `number` | At most this many messages (the host clamps it). |
+
+### `NailCalendarApi`
+
+`nail.calendar`: read access to the user's calendars. Needs `calendar.read`.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `events` | `(from: string, to: string, options?: PluginCalendarEventsOptions) => Promise<PluginCalendarEvent[]>` | The event occurrences overlapping `[from, to)` (RFC 3339 times, at most 92 days apart) in every calendar the user shows, by start. Recurring events come as one entry per occurrence. |
+
+### `PluginCalendarEventsOptions`
+
+Options of `NailCalendarApi.events`.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `limit?` | `number` | At most this many events (the host clamps it to 500). |
 
 ### `SdkUiApi`
 
@@ -483,6 +500,41 @@ type FolderId = string;
 type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]: JsonValue } | null;
 ```
 
+## Calendars
+
+What `nail.calendar` returns (needs `calendar.read`).
+
+### `PluginCalendarEvent`
+
+An event occurrence as a plug-in with `calendar.read` sees it (`nail.calendar.events`; M3a).
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `eventId` | `EventId` | The event (series). |
+| `calendarId` | `CalendarId` | Its calendar. |
+| `title` | `string` | Title. |
+| `start` | `string` | Start (RFC 3339 UTC; all-day events at local midnight). |
+| `end` | `string` | End (RFC 3339 UTC). |
+| `allDay` | `boolean` | An all-day event. |
+| `location?` | `string` | Location, if any. |
+| `recurring` | `boolean` | Part of a recurring series. |
+
+### `EventId`
+
+Identifies a calendar event, the whole series of a recurring one (`CalendarEvent`). Opaque; not the iCalendar `UID`.
+
+```ts
+type EventId = string;
+```
+
+### `CalendarId`
+
+Identifies a calendar (`Calendar`). Task lists are calendars that hold tasks (CalDAV keeps both in one collection). Opaque, made by the core.
+
+```ts
+type CalendarId = string;
+```
+
 ## JSX and trees
 
 ### `toNodes`
@@ -540,6 +592,7 @@ Options of `createTestHost`.
 | `permissions?` | `PluginPermission[]` | The granted permissions (default: the manifest's, else `ALL_FIXED_PERMISSIONS`). |
 | `messages?` | `PluginMessage[]` | Messages `nail.mail` can see. |
 | `bodies?` | `Record<string, PluginMessageBody>` | Bodies by message id. |
+| `events?` | `PluginCalendarEvent[]` | Event occurrences `nail.calendar.events` can see. |
 | `settings?` | `Record<string, JsonValue>` | Setting values. |
 | `dialog?` | `DialogResponder` | Answers dialogs (default: dismissed, `{button: null, values: {}}`). |
 | `fetch?` | `(url: string, request: PluginHttpRequest) => TestHttpResponse \| Promise<TestHttpResponse>` | Answers `nail.http.fetch` for allowed hosts (default 404). |

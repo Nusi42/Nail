@@ -30,7 +30,7 @@ async fn the_bridge_forwards_stdio_to_the_app() {
         .await
         .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 5);
+    assert_eq!(tools.len(), nail_mcp::tools::TOOL_NAMES.len());
     let result = client
         .read_resource(ReadResourceRequestParams::new("nail://messages/m1"))
         .await

@@ -3,7 +3,7 @@
 //! Ids are opaque strings and may contain `/` or other reserved characters,
 //! so every id is one percent-encoded path segment.
 
-use nail_api::{AccountId, FolderId, MessageId, ThreadId};
+use nail_api::{AccountId, CalendarId, ContactId, FolderId, MessageId, ThreadId};
 
 /// The URI scheme prefix.
 pub const SCHEME: &str = "nail://";
@@ -14,6 +14,12 @@ pub const ACCOUNTS: &str = "nail://accounts";
 pub const RULES: &str = "nail://rules";
 /// `nail://ui/context`
 pub const UI_CONTEXT: &str = "nail://ui/context";
+/// `nail://calendars` (M3a)
+pub const CALENDARS: &str = nail_api::pim::mcp::MCP_CALENDARS_URI;
+/// `nail://contacts` (M3a)
+pub const CONTACTS: &str = nail_api::pim::mcp::MCP_CONTACTS_URI;
+/// `nail://tasks` (M3a)
+pub const TASKS: &str = nail_api::pim::mcp::MCP_TASKS_URI;
 
 /// URI templates (RFC 6570) of the parameterized resources, with a short
 /// name and description for `resources/templates/list`.
@@ -48,6 +54,16 @@ pub const TEMPLATES: &[(&str, &str, &str)] = &[
         "thread",
         "All messages of a thread, oldest first.",
     ),
+    (
+        "nail://calendars/{calendar_id}/events{?from,to}",
+        "calendar-events",
+        "Events of a calendar in a range (RFC 3339 `from` / `to`; default the next 30 days, at most 366): the occurrences, the event series and their iCalendar text.",
+    ),
+    (
+        "nail://contacts/{contact_id}",
+        "contact",
+        "One contact with all fields and its vCard text.",
+    ),
 ];
 
 /// A parsed resource URI.
@@ -78,6 +94,23 @@ pub enum ResourceRef {
     Rules,
     /// `nail://ui/context`
     UiContext,
+    /// `nail://calendars`
+    Calendars,
+    /// `nail://calendars/{id}/events[?from=&to=]`
+    CalendarEvents {
+        /// The calendar.
+        calendar: CalendarId,
+        /// Range start (RFC 3339), if given.
+        from: Option<String>,
+        /// Range end (RFC 3339), if given.
+        to: Option<String>,
+    },
+    /// `nail://contacts`
+    Contacts,
+    /// `nail://contacts/{id}`
+    Contact(ContactId),
+    /// `nail://tasks`
+    Tasks,
 }
 
 /// Default page size of `nail://folders/{id}/messages`.
@@ -114,9 +147,21 @@ impl ResourceRef {
             ["threads", id] if !id.is_empty() => Self::Thread(ThreadId::new(*id)),
             ["rules"] => Self::Rules,
             ["ui", "context"] => Self::UiContext,
+            ["calendars"] => Self::Calendars,
+            ["calendars", id, "events"] if !id.is_empty() => {
+                let (from, to) = range(query)?;
+                return Some(Self::CalendarEvents {
+                    calendar: CalendarId::new(*id),
+                    from,
+                    to,
+                });
+            }
+            ["contacts"] => Self::Contacts,
+            ["contacts", id] if !id.is_empty() => Self::Contact(ContactId::new(*id)),
+            ["tasks"] => Self::Tasks,
             _ => return None,
         };
-        // Only the folder listing takes a query.
+        // Only the folder listing and calendar events take a query.
         query.is_none().then_some(parsed)
     }
 
@@ -132,6 +177,11 @@ impl ResourceRef {
             Self::Thread(id) => format!("{SCHEME}threads/{}", encode(id.as_str())),
             Self::Rules => RULES.to_owned(),
             Self::UiContext => UI_CONTEXT.to_owned(),
+            Self::Calendars => CALENDARS.to_owned(),
+            Self::CalendarEvents { calendar, .. } => calendar_events(calendar),
+            Self::Contacts => CONTACTS.to_owned(),
+            Self::Contact(id) => format!("{SCHEME}contacts/{}", encode(id.as_str())),
+            Self::Tasks => TASKS.to_owned(),
         }
     }
 
@@ -152,6 +202,29 @@ pub fn folders(account: &AccountId) -> String {
 /// `nail://folders/{id}/messages`
 pub fn folder_messages(folder: &FolderId) -> String {
     format!("{SCHEME}folders/{}/messages", encode(folder.as_str()))
+}
+
+/// `nail://calendars/{id}/events`
+pub fn calendar_events(calendar: &CalendarId) -> String {
+    format!("{SCHEME}calendars/{}/events", encode(calendar.as_str()))
+}
+
+/// `?from=&to=` of a calendar's events (both optional, percent-encoded).
+fn range(query: Option<&str>) -> Option<(Option<String>, Option<String>)> {
+    let (mut from, mut to) = (None, None);
+    for pair in query
+        .unwrap_or_default()
+        .split('&')
+        .filter(|p| !p.is_empty())
+    {
+        let (key, value) = pair.split_once('=')?;
+        match key {
+            "from" => from = Some(decode(value)?),
+            "to" => to = Some(decode(value)?),
+            _ => return None,
+        }
+    }
+    Some((from, to))
 }
 
 /// `nail://messages/{id}`
@@ -236,6 +309,18 @@ mod tests {
             ("nail://threads/t1", ResourceRef::Thread("t1".into())),
             ("nail://rules", ResourceRef::Rules),
             ("nail://ui/context", ResourceRef::UiContext),
+            ("nail://calendars", ResourceRef::Calendars),
+            (
+                "nail://calendars/c%2F1/events",
+                ResourceRef::CalendarEvents {
+                    calendar: "c/1".into(),
+                    from: None,
+                    to: None,
+                },
+            ),
+            ("nail://contacts", ResourceRef::Contacts),
+            ("nail://contacts/k1", ResourceRef::Contact("k1".into())),
+            ("nail://tasks", ResourceRef::Tasks),
         ];
         for (uri, expected) in cases {
             let parsed = ResourceRef::parse(uri).unwrap_or_else(|| panic!("{uri}"));
@@ -258,6 +343,25 @@ mod tests {
             ResourceRef::parse("nail://folders/inbox/messages?x=1"),
             None
         );
+    }
+
+    #[test]
+    fn calendar_events_take_a_range() {
+        assert_eq!(
+            ResourceRef::parse(
+                "nail://calendars/work/events?from=2026-10-01T00%3A00%3A00Z&to=2026-10-08T00:00:00Z"
+            ),
+            Some(ResourceRef::CalendarEvents {
+                calendar: "work".into(),
+                from: Some("2026-10-01T00:00:00Z".into()),
+                to: Some("2026-10-08T00:00:00Z".into()),
+            })
+        );
+        assert_eq!(
+            ResourceRef::parse("nail://calendars/work/events?tz=x"),
+            None
+        );
+        assert_eq!(ResourceRef::parse("nail://tasks?x=1"), None);
     }
 
     #[test]

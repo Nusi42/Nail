@@ -258,13 +258,19 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 .await?,
         },
         Request::SuggestAddresses { prefix, limit } => {
+            // Contacts (books with autocomplete on), the Collected book and
+            // addresses used recently, ranked (M3a, ADR 0061).
             let limit = limit.clamp(1, MAX_SUGGESTIONS);
+            let now = service.pim_now();
             Response::AddressSuggestions {
                 addresses: service
                     .inner
                     .store
-                    .call(move |s| s.suggest_addresses(&prefix, limit))
-                    .await?,
+                    .call(move |s| s.suggest_recipients(&prefix, limit, now))
+                    .await?
+                    .into_iter()
+                    .map(|r| r.address)
+                    .collect(),
             }
         }
         other => {
@@ -286,7 +292,7 @@ impl Service {
     }
 
     /// Every address of the user's identities (left out of reply-all).
-    fn own_addresses(&self) -> Vec<String> {
+    pub(crate) fn own_addresses(&self) -> Vec<String> {
         self.inner
             .accounts
             .config()
@@ -765,10 +771,15 @@ impl Service {
             return;
         }
         let at = crate::engine::unix_now();
+        // Counted for ranking; unknown ones go to the Collected book (M3a).
+        let book = message(
+            self.inner.locale.as_deref(),
+            nail_store::pim::COLLECTED_BOOK_NAME_ID,
+        );
         if let Err(err) = self
             .inner
             .store
-            .call(move |s| s.record_addresses(&addresses, at))
+            .call(move |s| s.collect_addresses(&addresses, at, &book).map(|_| ()))
             .await
         {
             tracing::debug!(%err, "cannot record addresses");

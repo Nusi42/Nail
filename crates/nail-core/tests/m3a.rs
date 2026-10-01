@@ -1,6 +1,6 @@
-//! Wave M3a contract (ADR 0058): every calendar, contact and task request
-//! is routed and answered with `unsupported` until the integration (WP75)
-//! wires the store, `nail-ical`, `nail-dav` and the reminder scheduler.
+//! Wave M3a (ADRs 0058, 0063): every calendar, contact and task request is
+//! served by the core (none answers `unsupported` any more). The flows are
+//! tested in `pim.rs` (local data) and `pim_sync.rs` (sources, reminders).
 
 use nail_api::pim::{
     AddressBookSettings, CalendarComponent, CalendarSettings, ConflictChoice, ContactFields,
@@ -36,7 +36,8 @@ fn every_pim_request() -> Vec<Request> {
             name: None,
             enabled: true,
             settings: PimSourceSettings::Ics {
-                url: "https://example.org/holidays.ics".into(),
+                // Loopback (refused at once): tests never reach the network.
+                url: "http://127.0.0.1:9/holidays.ics".into(),
                 color: None,
                 alarms: false,
                 refresh_minutes: None,
@@ -255,7 +256,7 @@ fn every_pim_request() -> Vec<Request> {
 }
 
 #[tokio::test]
-async fn every_pim_request_answers_unsupported_until_wp75() {
+async fn every_pim_request_is_served() {
     let (service, _data, _config) = setup();
     let requests = every_pim_request();
     assert_eq!(requests.len(), 52);
@@ -264,12 +265,13 @@ async fn every_pim_request_answers_unsupported_until_wp75() {
             .as_str()
             .unwrap()
             .to_owned();
-        match service.handle(request).await {
-            Response::Error { code, message, .. } => {
-                assert_eq!(code, ErrorCode::Unsupported, "{name}: {message}");
-                assert!(message.starts_with(&name), "{message}");
-            }
-            other => panic!("{name}: {other:?}"),
+        if let Response::Error { code, message, .. } = service.handle(request).await {
+            // Unknown ids and invalid data are fine here; `unsupported` or
+            // an internal error is not.
+            assert!(
+                !matches!(code, ErrorCode::Unsupported | ErrorCode::Internal),
+                "{name}: {code:?} {message}"
+            );
         }
     }
 }

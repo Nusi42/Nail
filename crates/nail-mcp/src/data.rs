@@ -146,6 +146,27 @@ pub trait McpData: Send + Sync + 'static {
     /// A saved draft ([`nail_api::Request::GetDraft`]).
     fn draft(&self, id: &DraftId) -> impl Future<Output = DataResult<Draft>> + Send;
 
+    /// Answers a calendar, contact or task read (M3a: `ListCalendars`,
+    /// `ListEventInstances`, `GetEvent`, `FindFreeTime`, `ListAddressBooks`,
+    /// `ListContacts`, `GetContact`, `SearchContacts`, `ListTasks`). The
+    /// default answers `unsupported` (fakes without PIM data).
+    fn pim(
+        &self,
+        request: nail_api::Request,
+    ) -> impl Future<Output = DataResult<nail_api::Response>> + Send {
+        let _ = request;
+        async { Err(ApiError::unsupported("no calendar data")) }
+    }
+
+    /// The stored iCalendar / vCard text of a PIM item, if any.
+    fn pim_raw(
+        &self,
+        item: &nail_api::pim::PimItemRef,
+    ) -> impl Future<Output = DataResult<Option<String>>> + Send {
+        let _ = item;
+        async { Ok(None) }
+    }
+
     /// Pushes an event to the connected UIs ([`Event::McpContextAccess`],
     /// [`Event::McpClientsChanged`]).
     fn emit(&self, event: Event);

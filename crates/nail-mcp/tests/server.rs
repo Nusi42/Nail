@@ -276,7 +276,7 @@ async fn tools_filter_by_grant_and_mark_content() {
     let (client, _) = connect(env.server.url(), &token).await;
 
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 5);
+    assert_eq!(tools.len(), nail_mcp::tools::TOOL_NAMES.len());
 
     let result = tool(&client, "search_messages", json!({"query": "plan"})).await;
     assert_ne!(result.is_error, Some(true));

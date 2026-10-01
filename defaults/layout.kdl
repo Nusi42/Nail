@@ -109,6 +109,29 @@ layout "default" {
     window "snoozed" {
         snooze-list id="snoozed"
     }
+    // Calendars, contacts and tasks (M3a; userDocs/en/calendar-contacts-tasks.md).
+    window "calendar" {
+        stack id="calendar-root" sizes="auto 1fr" {
+            toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
+            split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
+                stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto auto 1fr" {
+                    mini-month id="calendar-mini-month"
+                    calendar-list id="calendar-list"
+                    task-list id="calendar-tasks" sort="due"
+                }
+                calendar id="calendar-main" view="week" views="day work-week week month year agenda free-time" scroll-to=8
+            }
+        }
+    }
+    window "contacts" {
+        split "horizontal" id="contacts-panes" sizes="360px 1fr" {
+            contact-list id="contacts-list" label="@pim.pane.contacts"
+            contact-card id="contacts-card" label="@pim.pane.contact"
+        }
+    }
+    window "tasks" {
+        task-list id="tasks"
+    }
     window "settings" {
         tabs id="settings-tabs" {
             account-settings id="account-settings" label="@settings.tab.accounts"
@@ -196,6 +219,25 @@ layout "default" {
         action "plugins.manage"   label="@plugin.action.manage"
         action "plugins.install"  label="@plugin.action.install"
         action "plugins.load-dev" label="@plugin.action.load-dev"
+        // Calendars, contacts and tasks (M3a).
+        action "pim.calendar.open" label="@pim.action.open-calendar" icon="calendar" alias-of="window.open" "calendar"
+        action "pim.contacts.open" label="@pim.action.open-contacts" alias-of="window.open" "contacts"
+        action "pim.tasks.open"   label="@pim.action.open-tasks"   alias-of="window.open" "tasks"
+        action "calendar.goto-today" label="@pim.action.calendar-today"
+        action "calendar.next"    label="@pim.action.calendar-next" icon="chevron-right"
+        action "calendar.previous" label="@pim.action.calendar-previous" icon="chevron-left"
+        action "calendar.view"    label="@pim.action.calendar-view"
+        action "calendar.new-event" label="@pim.action.new-event"  icon="plus"
+        action "calendar.event-from-message" label="@pim.action.event-from-message" icon="calendar"
+        action "calendar.calendars" label="@pim.action.sources"
+        action "tasks.new"        label="@pim.action.new-task"
+        action "tasks.from-message" label="@pim.action.task-from-message"
+        action "contacts.new"     label="@pim.action.new-contact"
+        action "contacts.groups"  label="@pim.action.contact-groups"
+        action "contacts.merge"   label="@pim.action.merge-contacts"
+        action "pim.import"       label="@pim.action.import"
+        action "pim.sources"      label="@pim.action.sources"
+        action "pim.sync"         label="@pim.action.sync"         icon="sync"
     }
 
     keys context="list" {
@@ -220,6 +262,18 @@ layout "default" {
         bind "escape" "search.clear"
     }
 
+    keys context="calendar" {
+        bind "t" "calendar.goto-today"
+        bind "n" "calendar.next"
+        bind "p" "calendar.previous"
+        bind "d" "calendar.view \"day\""
+        bind "w" "calendar.view \"week\""
+        bind "m" "calendar.view \"month\""
+        bind "y" "calendar.view \"year\""
+        bind "a" "calendar.view \"agenda\""
+        bind "c" "calendar.new-event"
+    }
+
     keys context="window" {
         bind "escape" "window.close"
     }
@@ -240,6 +294,9 @@ layout "default" {
         bind "ctrl+b" "view.toggle \"sidebar\""
         bind "g r" "view.toggle \"reader\""
         bind "g o" "outbox.open"
+        bind "g c" "pim.calendar.open"
+        bind "g p" "pim.contacts.open"
+        bind "g t" "pim.tasks.open"
         bind "ctrl+," "settings.open"
         bind "ctrl+shift+i" "inspector.toggle"
         bind "b" "snooze.open"
@@ -256,6 +313,10 @@ layout "default" {
         item "outbox.open"
         item "rules.open"
         item "snooze.list"
+        separator
+        item "pim.calendar.open"
+        item "pim.contacts.open"
+        item "pim.tasks.open"
         spacer
         item "account.add"
         item "settings.open"
@@ -275,7 +336,20 @@ layout "default" {
         item "snooze.open"
         item "junk.mark"
         item "rules.create-from-message"
+        item "calendar.event-from-message"
+        item "tasks.from-message"
         item "security.autocrypt.import"
+    }
+
+    // The calendar window's toolbar (M3a).
+    toolbar "calendar" {
+        item "pim.sync"
+        separator
+        item "tasks.new"
+        item "contacts.new"
+        spacer
+        item "pim.import"
+        item "pim.sources"
     }
 
     toolbar "customize" {
@@ -303,6 +377,8 @@ layout "default" {
         item "sync.download-message"
         separator
         item "rules.create-from-message"
+        item "calendar.event-from-message"
+        item "tasks.from-message"
     }
 
     menu "context:thread-view.message" {

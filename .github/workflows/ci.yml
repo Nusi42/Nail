@@ -202,11 +202,13 @@ jobs:
   # the checkout, not as `services:`, because the containers need the
   # config files and certificates from the repository.
   interop:
-    name: Interop (Dovecot, Stalwart)
+    name: Interop (Dovecot, Stalwart, Radicale)
     runs-on: ubuntu-latest
     env:
       DOVECOT_IMAGE: dovecot/dovecot:2.3.21
       STALWART_IMAGE: stalwartlabs/stalwart:latest
+      # CalDAV / CardDAV (M3a, ADR 0060); NAIL_INTEROP_RADICALE=0 skips it.
+      RADICALE_IMAGE: tomsquest/docker-radicale:latest
       CERTS: ${{ github.workspace }}/.nail-build/interop-certs
     steps:
       - uses: actions/checkout@v7
@@ -214,7 +216,7 @@ jobs:
       - name: Certificates
         run: bash scripts/interop/gen-certs.sh "$CERTS"
 
-      - name: Start Dovecot and Stalwart
+      - name: Start Dovecot, Stalwart and Radicale
         run: bash scripts/interop/start-servers.sh "$CERTS"
 
       - name: Rust toolchain
@@ -235,6 +237,7 @@ jobs:
           NAIL_INTEROP: "1"
           NAIL_INTEROP_CA: ${{ env.CERTS }}/ca.pem
           NAIL_INTEROP_SERVERS: dovecot=localhost:10000:sieve,stalwart=localhost:20000:smtp:sieve
+          NAIL_INTEROP_DAV: radicale=https://localhost:5232/
           NAIL_INTEROP_USER: ada@example.org
           NAIL_INTEROP_PASSWORD: nail-interop
 
@@ -243,3 +246,4 @@ jobs:
         run: |
           docker logs nail-dovecot || true
           docker logs nail-stalwart || true
+          docker logs nail-radicale || true

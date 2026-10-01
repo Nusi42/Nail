@@ -258,6 +258,9 @@ pub(crate) struct Inner {
     pub(crate) notify: crate::notify::NotifyCtl,
     /// The plug-in host, packages and catalogs (M2d).
     pub(crate) plugins: crate::plugin_host::PluginsCtl,
+    /// Calendars, contacts and tasks: source engines, reminders, the PIM
+    /// search index (M3a).
+    pub(crate) pim: crate::pim::PimCtl,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -414,6 +417,7 @@ impl Service {
                     (!options.data_dir.as_os_str().is_empty()).then(|| options.data_dir.clone()),
                     options.plugin_limits.clone(),
                 ),
+                pim: crate::pim::PimCtl::default(),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -449,6 +453,8 @@ impl Service {
         background.push(tokio::spawn(async move {
             plugins.start_enabled_plugins().await;
         }));
+        // M3a: local calendars, source engines, reminders.
+        background.extend(crate::pim::start(self));
         let service = self.clone();
         background.push(tokio::spawn(async move {
             // At start, then daily (M2b follow-up: the remote security log
@@ -492,6 +498,7 @@ impl Service {
             task.abort();
         }
         crate::plugin_host::shutdown(self);
+        crate::pim::stop(self);
         self.inner.engines.stop_all().await;
     }
 

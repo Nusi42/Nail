@@ -6,6 +6,7 @@
  */
 import type {
   NailApi,
+  NailCalendarApi,
   NailCommandsApi,
   NailHttpApi,
   NailLogApi,
@@ -75,6 +76,8 @@ export interface SdkNail {
   readonly apiVersion: string;
   /** Mail (read only in the preview). */
   readonly mail: NailMailApi;
+  /** Calendars (read only; `calendar.read`). */
+  readonly calendar: NailCalendarApi;
   /** Commands, panels, dialogs and notifications. */
   readonly ui: SdkUiApi;
   /** Command handlers. */
@@ -175,6 +178,7 @@ export const nail: SdkNail = {
     return host().apiVersion;
   },
   mail: forward((api) => api.mail),
+  calendar: forward((api) => api.calendar),
   ui,
   commands: forward((api) => api.commands),
   storage: forward((api) => api.storage),

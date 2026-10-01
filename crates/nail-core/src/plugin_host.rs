@@ -916,6 +916,52 @@ impl PluginServices for CoreServices {
         })
     }
 
+    fn calendar_events(
+        &self,
+        from: String,
+        to: String,
+        limit: u32,
+    ) -> BoxFuture<'static, ServiceResult<Vec<nail_api::plugins::PluginCalendarEvent>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let service = service?;
+            let request = Request::ListEventInstances {
+                from,
+                to,
+                calendar_ids: None,
+                tz: crate::pim::local_zone_name(),
+            };
+            match service.handle(request).await {
+                Response::EventInstances { instances, .. } => Ok(instances
+                    .into_iter()
+                    .take(limit as usize)
+                    .map(|i| nail_api::plugins::PluginCalendarEvent {
+                        event_id: i.event_id,
+                        calendar_id: i.calendar_id,
+                        title: i.title,
+                        start: i.start_utc,
+                        end: i.end_utc,
+                        all_day: i.all_day,
+                        location: i.location,
+                        recurring: i.recurring,
+                    })
+                    .collect()),
+                Response::Error {
+                    code,
+                    message,
+                    localized,
+                } => Err(ApiError {
+                    code,
+                    message,
+                    localized,
+                }),
+                _ => Err(ApiError::internal(
+                    "unexpected answer to ListEventInstances",
+                )),
+            }
+        })
+    }
+
     fn storage_get(
         &self,
         plugin: PluginId,

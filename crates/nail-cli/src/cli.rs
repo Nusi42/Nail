@@ -116,6 +116,11 @@ pub struct ServeArgs {
     /// Do not start the MCP server.
     #[arg(long)]
     pub no_mcp: bool,
+    /// What to open, as the desktop app does when Windows starts it with a
+    /// file or link: an `.ics`, `.vcf` or `.eml` file, a `mailto:` or
+    /// `webcal:` link (repeatable). The UI takes them at start.
+    #[arg(long, value_name = "FILE_OR_LINK")]
+    pub launch: Vec<String>,
     /// More log output (-v debug, -vv trace). NAIL_LOG overrides.
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
@@ -184,6 +189,7 @@ mod tests {
                 no_watch: false,
                 mcp_port: None,
                 no_mcp: false,
+                launch: Vec::new(),
                 verbose: 0,
             }
         );
@@ -211,6 +217,10 @@ mod tests {
                 "--mcp-port",
                 "4799",
                 "--no-mcp",
+                "--launch",
+                "C:/cal.ics",
+                "--launch",
+                "webcal://example.org/h.ics",
                 "-vv",
             ]),
             ServeArgs {
@@ -224,6 +234,7 @@ mod tests {
                 no_watch: true,
                 mcp_port: Some(4799),
                 no_mcp: true,
+                launch: vec!["C:/cal.ics".into(), "webcal://example.org/h.ics".into()],
                 verbose: 2,
             }
         );

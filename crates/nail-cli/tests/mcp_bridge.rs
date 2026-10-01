@@ -131,7 +131,7 @@ async fn nail_mcp_bridges_stdio_to_the_server() {
     assert_eq!(initialized["id"], 1);
     assert_eq!(initialized["result"]["serverInfo"]["name"], "nail");
     assert_eq!(tools["id"], 2);
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 5);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 9); // 5 mail + 4 PIM (M3a)
     assert!(exited_cleanly, "closing stdin ends the bridge");
 }
 
@@ -245,7 +245,7 @@ async fn nail_mcp_starts_nail_headless_when_it_is_not_running() {
         .unwrap();
 
     assert_eq!(initialized["result"]["serverInfo"]["name"], "nail");
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 5);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 9); // 5 mail + 4 PIM (M3a)
     let locked = locked.expect("the headless core holds the lock");
     assert!(locked.contains("mcp"), "{locked}");
     let endpoint = endpoint.expect("the endpoint file is written");

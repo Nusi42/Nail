@@ -549,6 +549,26 @@ impl<D: McpData> Shared<D> {
             ResourceRef::UiContext => {
                 untrusted_json_resource(uri, self.ui_context_json(access, client).await?)
             }
+            // M3a: calendars, contacts and tasks (read-only).
+            ResourceRef::Calendars => {
+                untrusted_json_resource(uri, self.calendars_json(access).await?)
+            }
+            ResourceRef::CalendarEvents { calendar, from, to } => untrusted_json_resource(
+                uri,
+                self.calendar_events_json(access, calendar, from.as_deref(), to.as_deref())
+                    .await?,
+            ),
+            ResourceRef::Contacts => {
+                untrusted_json_resource(uri, self.contacts_json(access).await?)
+            }
+            ResourceRef::Contact(id) => {
+                untrusted_json_resource(uri, self.contact_json(access, id).await?)
+            }
+            ResourceRef::Tasks => untrusted_json_resource(
+                uri,
+                self.tasks_json(access, crate::pim::ListTasksArgs::default())
+                    .await?,
+            ),
         };
         Ok(ReadResourceResult::new(vec![contents]))
     }
@@ -691,6 +711,25 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
                         .with_mime_type("application/json"),
                     );
                 }
+            }
+            for (uri, name, description) in [
+                (
+                    uri::CALENDARS,
+                    "calendars",
+                    "Calendars and task lists this client may read (M3a).",
+                ),
+                (
+                    uri::CONTACTS,
+                    "contacts",
+                    "Address books and contacts this client may read.",
+                ),
+                (uri::TASKS, "tasks", "Open tasks of the visible task lists."),
+            ] {
+                resources.push(
+                    Resource::new(uri, name)
+                        .with_description(description)
+                        .with_mime_type("application/json"),
+                );
             }
             if access.all_accounts() {
                 resources.push(

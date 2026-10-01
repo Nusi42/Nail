@@ -1,8 +1,9 @@
 //! The permission gate: every `nail.*` call of a plug-in is checked here
 //! against its grants before the core ([`crate::PluginServices`]) is asked.
 //!
-//! * Grants count only for permissions the manifest declares; the
-//!   `calendar.read` placeholder grants nothing.
+//! * Grants count only for permissions the manifest declares.
+//! * `calendar.read` (M3a) gives the event occurrences of every calendar
+//!   the user shows; it is not limited to accounts.
 //! * `mail.read` gives headers in the granted accounts (virtual accounts
 //!   expanded); a message outside them is reported as not found, so a
 //!   plug-in cannot probe for it. `mail.read.body` needs `mail.read` too and
@@ -322,7 +323,7 @@ mod tests {
         );
         assert!(gate.has(&PluginPermission::MailRead));
         assert!(!gate.has(&PluginPermission::UiDialogs));
-        assert!(!gate.has(&PluginPermission::CalendarRead));
+        assert!(gate.has(&PluginPermission::CalendarRead));
         assert_eq!(
             gate.grant(&PluginPermission::Storage).unwrap().accounts,
             None

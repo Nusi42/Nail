@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEnv, renderWithProviders } from "../../test/harness";
+import { IMPORT_DIALOG, pimStoreFor, SOURCES_DIALOG } from "../pim";
 import { remoteStore } from "../remote";
 import { LaunchRequests } from "./LaunchRequests";
 
@@ -75,13 +76,33 @@ describe("launch requests", () => {
     expect(env.store.getState().activeFolderId).toBe(message.folder_id);
   });
 
-  it("says what it cannot open yet and can be dismissed with the keyboard", async () => {
+  it("opens the import dialog for .ics / .vcf files and the sources for webcal links", async () => {
     const env = createEnv();
-    env.transport.data.launches.push({ type: "ImportContactsFile", path: "C:\\a.vcf" });
+    env.transport.data.launches.push({ type: "ImportCalendarFile", path: "C:\\cal\\team.ics" });
     renderWithProviders(<LaunchRequests />, env);
-    const notice = await screen.findByRole("status", { name: "Opening links and files" });
-    expect(notice).toHaveTextContent("Contacts cannot be imported yet");
+    await waitFor(() => expect(env.store.getState().windows).toContain(IMPORT_DIALOG));
+    expect(pimStoreFor(env.store).getState().importPath).toBe("C:\\cal\\team.ics");
+    act(() =>
+      env.transport.pushLaunch([
+        {
+          type: "SubscribeCalendar",
+          url: "webcal://example.org/h.ics",
+          https_url: "https://example.org/h.ics",
+        },
+      ]),
+    );
+    await waitFor(() => expect(env.store.getState().windows).toContain(SOURCES_DIALOG));
+    expect(pimStoreFor(env.store).getState().subscribeUrl).toBe("webcal://example.org/h.ics");
+  });
+
+  it("says when a file cannot be opened and can be dismissed with the keyboard", async () => {
+    const env = createEnv();
+    renderWithProviders(<LaunchRequests />, env);
+    await waitFor(() =>
+      expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(true),
+    );
     act(() => env.transport.pushLaunch([{ type: "OpenMessageFile", path: "C:\\missing.eml" }]));
+    const notice = await screen.findByRole("status", { name: "Opening links and files" });
     await waitFor(() => expect(notice).toHaveTextContent("The file could not be opened"));
     // The core's localized reason, not its English diagnostic.
     expect(notice).toHaveTextContent(/The file .?C:\\missing\.eml.? cannot be read/);

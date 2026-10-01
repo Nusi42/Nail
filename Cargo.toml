@@ -251,6 +251,8 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 calcard = { version = "0.3.14", default-features = false }
 # IANA zones for chrono (the same version calcard uses).
 chrono-tz = "0.10.4"
+# The OS zone as an IANA name (already in the lock through chrono; MIT OR Apache-2.0; M3a).
+iana-time-zone = "0.1.65"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

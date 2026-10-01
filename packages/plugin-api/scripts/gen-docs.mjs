@@ -48,6 +48,8 @@ const API_SECTIONS = [
       ["nail.ts", "SdkNail"],
       ["api.ts", "NailMailApi"],
       ["api.ts", "PluginMailSearchOptions"],
+      ["api.ts", "NailCalendarApi"],
+      ["api.ts", "PluginCalendarEventsOptions"],
       ["nail.ts", "SdkUiApi"],
       ["nail.ts", "DialogSpec"],
       ["api.ts", "PluginDialogOptions"],
@@ -109,6 +111,15 @@ const API_SECTIONS = [
       ["generated/AccountId.ts", "AccountId"],
       ["generated/FolderId.ts", "FolderId"],
       ["generated/serde_json/JsonValue.ts", "JsonValue"],
+    ],
+  ],
+  [
+    "Calendars",
+    "What `nail.calendar` returns (needs `calendar.read`).",
+    [
+      ["generated/PluginCalendarEvent.ts", "PluginCalendarEvent"],
+      ["generated/EventId.ts", "EventId"],
+      ["generated/CalendarId.ts", "CalendarId"],
     ],
   ],
   [

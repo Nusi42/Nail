@@ -33,6 +33,8 @@ rand.workspace = true
 # `%fluent-id%` texts of manifests from the plug-in's own catalogs.
 fluent-bundle.workspace = true
 unic-langid.workspace = true
+# Ranges of `nail.calendar.events` (M3a).
+chrono.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

@@ -112,8 +112,15 @@ mod tests {
         ]
         .into_iter()
         .chain(nail_triage::FLUENT_IDS.iter().copied())
+        .chain(nail_triage::reminders::FLUENT_IDS.iter().copied())
         .chain(nail_sieve::reasons::ALL.iter().copied())
-        {
+        // M3a: the core's own PIM texts.
+        .chain([
+            nail_store::pim::COLLECTED_BOOK_NAME_ID,
+            "pim-calendar-default-name",
+            "pim-task-list-default-name",
+            "pim-address-book-default-name",
+        ]) {
             assert!(catalog.has(id), "{id} is missing in locales/en");
         }
         let rendered = render(

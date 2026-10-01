@@ -144,6 +144,11 @@ Agents see Nail's data as MCP **resources** and **tools**.
 | `nail://threads/{thread}` | All messages of a conversation |
 | `nail://rules` | Your filter rules (needs all accounts) |
 | `nail://ui/context` | What is on screen (needs *What is on screen*) |
+| `nail://calendars` | Calendars and task lists |
+| `nail://calendars/{calendar}/events` | A calendar's events, by default the next 30 days (add `?from=…&to=…`, at most a year): every occurrence of repeating events, plus the events with their iCalendar text |
+| `nail://contacts` | Address books and contacts |
+| `nail://contacts/{contact}` | One contact with all fields and its vCard text |
+| `nail://tasks` | Open tasks of the task lists |
 
 | Tool | Purpose |
 | --- | --- |
@@ -152,6 +157,17 @@ Agents see Nail's data as MCP **resources** and **tools**.
 | `get_thread` | One conversation |
 | `list_folders` | An account's folders |
 | `get_ui_context` | What is on screen |
+| `list_events` | Events in a range (default: the next 30 days), occurrences of repeating events listed one by one |
+| `find_free_time` | Free stretches of at least a given length, optionally within working hours (`day_start` / `day_end`) |
+| `search_contacts` | Contacts by name, address, phone number or organization |
+| `list_tasks` | Tasks, open ones by default, optionally only those due before a time |
+
+Calendars, contacts and tasks need *Read mail* like messages, and agents
+cannot change them (that comes later). A client granted **all accounts**
+sees every calendar and address book; a client granted only some accounts
+sees the calendars and contacts of those accounts' servers (sources set up
+with "use the login of" an account), not those on this computer or of
+subscriptions.
 
 Agents can **subscribe** to an account's folders, a folder's messages and
 what is on screen; Nail then tells them when new mail arrives or when you

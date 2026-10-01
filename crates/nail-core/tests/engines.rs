@@ -1047,7 +1047,8 @@ async fn accounts_are_discovered_tested_added_and_removed() {
     );
     let kdl = std::fs::read_to_string(f.config_dir.path().join("accounts.kdl")).unwrap();
     assert!(!kdl.contains("bob-new.example"));
-    assert_eq!(f.demo.secrets.len(), 2, "its keychain entry is gone");
+    // Left: the two demo accounts' passwords and the two demo DAV sources'.
+    assert_eq!(f.demo.secrets.len(), 4, "its keychain entry is gone");
     assert!(matches!(
         request(
             &f.service,

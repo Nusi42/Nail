@@ -595,6 +595,165 @@
         }
       }
     ],
+    "calendar": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "stack",
+          "id": "calendar-root",
+          "label": null,
+          "sizes": [
+            "auto",
+            "1fr"
+          ],
+          "children": [
+            {
+              "type": "widget",
+              "id": "calendar-toolbar",
+              "label": "@pim.toolbar.calendar",
+              "kind": "toolbar",
+              "options": {
+                "toolbar": "calendar"
+              },
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "split",
+              "id": "calendar-panes",
+              "label": null,
+              "orientation": "horizontal",
+              "sizes": [
+                "260px",
+                "1fr"
+              ],
+              "min_sizes": [
+                "200px",
+                "480px"
+              ],
+              "max_sizes": [],
+              "collapsible": [
+                true,
+                false
+              ],
+              "resizable": true,
+              "children": [
+                {
+                  "type": "stack",
+                  "id": "calendar-sidebar",
+                  "label": "@pim.pane.calendars",
+                  "sizes": [
+                    "auto",
+                    "auto",
+                    "1fr"
+                  ],
+                  "children": [
+                    {
+                      "type": "widget",
+                      "id": "calendar-mini-month",
+                      "label": null,
+                      "kind": "mini-month",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "calendar-list",
+                      "label": null,
+                      "kind": "calendar-list",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "calendar-tasks",
+                      "label": null,
+                      "kind": "task-list",
+                      "options": {
+                        "sort": "due"
+                      },
+                      "rows": [],
+                      "source": null
+                    }
+                  ]
+                },
+                {
+                  "type": "widget",
+                  "id": "calendar-main",
+                  "label": null,
+                  "kind": "calendar",
+                  "options": {
+                    "scroll-to": 8,
+                    "view": "week",
+                    "views": "day work-week week month year agenda free-time"
+                  },
+                  "rows": [],
+                  "source": null
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "contacts": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "split",
+          "id": "contacts-panes",
+          "label": null,
+          "orientation": "horizontal",
+          "sizes": [
+            "360px",
+            "1fr"
+          ],
+          "min_sizes": [],
+          "max_sizes": [],
+          "collapsible": [],
+          "resizable": true,
+          "children": [
+            {
+              "type": "widget",
+              "id": "contacts-list",
+              "label": "@pim.pane.contacts",
+              "kind": "contact-list",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "contacts-card",
+              "label": "@pim.pane.contact",
+              "kind": "contact-card",
+              "options": {},
+              "rows": [],
+              "source": null
+            }
+          ]
+        }
+      }
+    ],
+    "tasks": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "widget",
+          "id": "tasks",
+          "label": null,
+          "kind": "task-list",
+          "options": {},
+          "rows": [],
+          "source": null
+        }
+      }
+    ],
     "settings": [
       {
         "min_width": null,
@@ -1143,6 +1302,120 @@
       "icon": null,
       "alias_of": null,
       "args": []
+    },
+    "pim.calendar.open": {
+      "label": "@pim.action.open-calendar",
+      "icon": "calendar",
+      "alias_of": "window.open",
+      "args": [
+        "calendar"
+      ]
+    },
+    "pim.contacts.open": {
+      "label": "@pim.action.open-contacts",
+      "icon": null,
+      "alias_of": "window.open",
+      "args": [
+        "contacts"
+      ]
+    },
+    "pim.tasks.open": {
+      "label": "@pim.action.open-tasks",
+      "icon": null,
+      "alias_of": "window.open",
+      "args": [
+        "tasks"
+      ]
+    },
+    "calendar.goto-today": {
+      "label": "@pim.action.calendar-today",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "calendar.next": {
+      "label": "@pim.action.calendar-next",
+      "icon": "chevron-right",
+      "alias_of": null,
+      "args": []
+    },
+    "calendar.previous": {
+      "label": "@pim.action.calendar-previous",
+      "icon": "chevron-left",
+      "alias_of": null,
+      "args": []
+    },
+    "calendar.view": {
+      "label": "@pim.action.calendar-view",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "calendar.new-event": {
+      "label": "@pim.action.new-event",
+      "icon": "plus",
+      "alias_of": null,
+      "args": []
+    },
+    "calendar.event-from-message": {
+      "label": "@pim.action.event-from-message",
+      "icon": "calendar",
+      "alias_of": null,
+      "args": []
+    },
+    "calendar.calendars": {
+      "label": "@pim.action.sources",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "tasks.new": {
+      "label": "@pim.action.new-task",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "tasks.from-message": {
+      "label": "@pim.action.task-from-message",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "contacts.new": {
+      "label": "@pim.action.new-contact",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "contacts.groups": {
+      "label": "@pim.action.contact-groups",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "contacts.merge": {
+      "label": "@pim.action.merge-contacts",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "pim.import": {
+      "label": "@pim.action.import",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "pim.sources": {
+      "label": "@pim.action.sources",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "pim.sync": {
+      "label": "@pim.action.sync",
+      "icon": "sync",
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
@@ -1204,6 +1477,70 @@
       "context": "search",
       "key": "escape",
       "action": "search.clear",
+      "args": []
+    },
+    {
+      "context": "calendar",
+      "key": "t",
+      "action": "calendar.goto-today",
+      "args": []
+    },
+    {
+      "context": "calendar",
+      "key": "n",
+      "action": "calendar.next",
+      "args": []
+    },
+    {
+      "context": "calendar",
+      "key": "p",
+      "action": "calendar.previous",
+      "args": []
+    },
+    {
+      "context": "calendar",
+      "key": "d",
+      "action": "calendar.view",
+      "args": [
+        "day"
+      ]
+    },
+    {
+      "context": "calendar",
+      "key": "w",
+      "action": "calendar.view",
+      "args": [
+        "week"
+      ]
+    },
+    {
+      "context": "calendar",
+      "key": "m",
+      "action": "calendar.view",
+      "args": [
+        "month"
+      ]
+    },
+    {
+      "context": "calendar",
+      "key": "y",
+      "action": "calendar.view",
+      "args": [
+        "year"
+      ]
+    },
+    {
+      "context": "calendar",
+      "key": "a",
+      "action": "calendar.view",
+      "args": [
+        "agenda"
+      ]
+    },
+    {
+      "context": "calendar",
+      "key": "c",
+      "action": "calendar.new-event",
       "args": []
     },
     {
@@ -1308,6 +1645,24 @@
     },
     {
       "context": "global",
+      "key": "g c",
+      "action": "pim.calendar.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g p",
+      "action": "pim.contacts.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g t",
+      "action": "pim.tasks.open",
+      "args": []
+    },
+    {
+      "context": "global",
       "key": "ctrl+,",
       "action": "settings.open",
       "args": []
@@ -1379,6 +1734,30 @@
       {
         "type": "action",
         "action": "snooze.list",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "pim.calendar.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "pim.contacts.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "pim.tasks.open",
         "args": [],
         "label": null,
         "icon": null
@@ -1487,7 +1866,64 @@
       },
       {
         "type": "action",
+        "action": "calendar.event-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "tasks.from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "security.autocrypt.import",
+        "args": [],
+        "label": null,
+        "icon": null
+      }
+    ],
+    "calendar": [
+      {
+        "type": "action",
+        "action": "pim.sync",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "tasks.new",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "contacts.new",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "spacer"
+      },
+      {
+        "type": "action",
+        "action": "pim.import",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "pim.sources",
         "args": [],
         "label": null,
         "icon": null
@@ -1618,6 +2054,20 @@
       {
         "type": "action",
         "action": "rules.create-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "calendar.event-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "tasks.from-message",
         "args": [],
         "label": null,
         "icon": null

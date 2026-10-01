@@ -75,13 +75,18 @@ pub struct FoldersArgs {
 #[schemars(crate = "rmcp::schemars")]
 pub struct NoArgs {}
 
-/// Names of the tools.
-pub const TOOL_NAMES: [&str; 5] = [
+/// Names of the tools (M3a adds the read-only PIM tools,
+/// [`nail_api::pim::mcp::MCP_PIM_TOOLS`]).
+pub const TOOL_NAMES: [&str; 9] = [
     "search_messages",
     "get_message",
     "get_thread",
     "list_folders",
     "get_ui_context",
+    "list_events",
+    "find_free_time",
+    "search_contacts",
+    "list_tasks",
 ];
 
 fn read_only(name: &'static str, description: &'static str, schema: Arc<JsonObject>) -> Tool {
@@ -126,6 +131,26 @@ pub fn definitions() -> Vec<Tool> {
             "What the user has on screen now: the open message (with selected text), the selected \
              messages and the open draft (needs the context grant; Nail shows an indicator).",
             schema_for_type::<NoArgs>(),
+        ),
+        read_only(
+            "list_events",
+            "Calendar events in a range (default: the next 30 days): occurrences of recurring              events expanded, plus the event series and their iCalendar text (read grant).",
+            schema_for_type::<crate::pim::ListEventsArgs>(),
+        ),
+        read_only(
+            "find_free_time",
+            "Free stretches of at least duration_minutes between busy events, optionally within              working hours (day_start / day_end) in a time zone (read grant).",
+            schema_for_type::<crate::pim::FreeTimeArgs>(),
+        ),
+        read_only(
+            "search_contacts",
+            "Contacts whose name, email address, phone number or organization matches (read grant).",
+            schema_for_type::<crate::pim::SearchContactsArgs>(),
+        ),
+        read_only(
+            "list_tasks",
+            "Tasks of the task lists, open ones by default, optionally only those due before a              time (read grant).",
+            schema_for_type::<crate::pim::ListTasksArgs>(),
         ),
     ]
 }
@@ -224,6 +249,37 @@ async fn dispatch<D: McpData>(
             .ui_context_json(&access, client)
             .await
             .map(untrusted_result),
+        "list_events" => {
+            let a: crate::pim::ListEventsArgs = args(request)?;
+            match shared
+                .chosen_calendars_for_tool(&access, &a.calendar_ids)
+                .await
+            {
+                Ok(ids) => shared
+                    .events_json(&access, ids, a.from.as_deref(), a.to.as_deref(), a.tz)
+                    .await
+                    .map(untrusted_result),
+                Err(f) => Err(f),
+            }
+        }
+        "find_free_time" => {
+            let a: crate::pim::FreeTimeArgs = args(request)?;
+            shared
+                .free_time_json(&access, a)
+                .await
+                .map(CallToolResult::structured)
+        }
+        "search_contacts" => {
+            let a: crate::pim::SearchContactsArgs = args(request)?;
+            shared
+                .search_contacts_json(&access, a)
+                .await
+                .map(untrusted_result)
+        }
+        "list_tasks" => {
+            let a: crate::pim::ListTasksArgs = args(request)?;
+            shared.tasks_json(&access, a).await.map(untrusted_result)
+        }
         _ => {
             return Err(ErrorData::invalid_params(
                 format!("unknown tool {}", crate::http::audited_path(name)),

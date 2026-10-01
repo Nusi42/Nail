@@ -190,9 +190,10 @@ A widget is a node named after its kind. Its properties are its options.
 | `plugin-panel` | the panel as argument: `plugin-panel "<plugin-id>.<panel>"` (or `panel="…"`); see [Plug-ins](plugins/README.md) |
 | `plugin-manager` | — (the installed plug-ins; the Plug-ins tab of the settings window) |
 
-The widgets `calendar`, `agenda`, `mini-month`, `task-list`,
-`contact-list` and `contact-card` are accepted in the file but not
-available yet (they arrive with calendars, contacts and tasks). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
+The calendar, contact and task widgets (`calendar`, `agenda`,
+`mini-month`, `task-list`, `contact-list`, `contact-card`, `calendar-list`)
+and their options are described in
+[Calendar, contacts and tasks](calendar-contacts-tasks.md#layout-options). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
 the older form `plugin.<plugin-id>.<panel>` is refused with a hint to it.
 
 ```kdl

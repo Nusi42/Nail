@@ -89,6 +89,13 @@ the Tauri CLI version changes, so re-copy it on upgrades.
 `scripts/interop/` is its own Cargo workspace (copy the root `Cargo.lock`
 into it first); see `scripts/interop/README.md`. It needs Docker, so it runs
 in CI only; without `NAIL_INTEROP=1` the server tests return at once.
+The servers are Dovecot and Stalwart (mail, ManageSieve) and, since M3a,
+**Radicale** on port 5232 over TLS for CalDAV / CardDAV
+(`NAIL_INTEROP_DAV=radicale=https://localhost:5232/`; `start-servers.sh`
+starts `tomsquest/docker-radicale`, `NAIL_INTEROP_RADICALE=0` skips it;
+ADR 0060). The DAV checks of `tests/dav.rs` also run locally without
+Docker against the in-process mock (`MockDavServer` over TLS), and can be
+pointed at a Radicale installed from PyPI (see the interop README).
 
 ### Dependency rules
 
@@ -195,6 +202,7 @@ How it works:
 | `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed; "Load once" loads without adding an allow-list entry |
 | `e2e/tests/plugins.spec.ts` | M2d plug-ins (private `--seed demo` each): the example installed through Settings → Plug-ins with its permissions, placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, stored reminder, notification; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
 | `e2e/tests/a11y-windows.spec.ts` | axe on every layout window, settings tab (nested ones too) and feature dialog (incl. the plug-in install dialog) in default, high-contrast and dark mode against `--seed demo-multi`; checks its own coverage against the layout |
+| `e2e/tests/pim.spec.ts` | `--seed demo-multi` (M3a): a weekly event edited "this and following" (two series); an event created in the CalDAV calendar reaches the mock CalDAV server and another client's event (`dav-put`) appears after "Sync"; the ICS subscription's holiday is read-only and a second feed is added from the sources dialog; a reminder fires at the controlled clock time (`clock-set`) and is dismissed; a contact created in the CardDAV book reaches the server and is suggested in the composer; duplicate contacts (local + CardDAV) merged into one linked person; a task with a subtask completed; an `.ics` given with `--launch` previewed and imported; an MCP client lists events only after a grant |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 
 ### Generated files and snapshots
@@ -231,7 +239,7 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 | --- | --- |
 | `--seed demo` | Load the demo mail corpus as a local account (no network). Every seeded run keeps secrets in memory, trusts only the corpus' S/MIME test root and looks up no keys online |
 | `--seed demo-imap` | Serve the demo corpus from an in-process mock IMAP server and sync it like a real account |
-| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"` |
+| `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"`. M3a: a mock CalDAV / CardDAV server (sources `work-calendars` / `work-contacts`, user `ada`, password `dav-secret` in the memory keychain) with sample events ("Team sync" weekly, "Quarterly review" tomorrow) and contacts (Grace Hopper, Charles Babbage), and the ICS subscription `holidays` on the mock HTTP server |
 | `--port 0` | Use a free port; the URL is the only line printed on stdout |
 | `--data-dir DIR` | Store location (default `%LOCALAPPDATA%\Nail`; with `--seed`, a temporary directory) |
 | `--config-dir DIR` | `theme.kdl` / `layout.kdl` location (default `%APPDATA%\Nail`; with `--seed`, a temporary directory) |
@@ -240,6 +248,7 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 | `--no-watch` | Do not watch the config files |
 | `--mcp-port PORT` | Port of the MCP server on 127.0.0.1 (default: the MCP settings' fixed port, else a free one; written to `<data-dir>/mcp-endpoint.json`) |
 | `--no-mcp` | Do not start the MCP server |
+| `--launch FILE_OR_LINK` | Open a file or link as the desktop app does when Windows starts it (`.ics` / `.vcf` → import dialog, `.eml` → reader, `mailto:` → composer, `webcal:` → new subscription); repeatable (M3a) |
 | `-v`, `-vv` | More logging; `NAIL_LOG=nail_core=debug` sets the filter precisely |
 
 A seeded run never uses your real profile: without `--data-dir` /
@@ -321,7 +330,11 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `smtp-messages` | – | What the SMTP server received: `{from, to, data}` |
 | `remote-content` | – | `{images, private, requests}`: base URLs of the made-up image hosts (`images.nail.example` → the mock HTTP server, `private.nail.example` → a private address the proxy refuses) and the paths the image host was asked for |
 | `sieve-scripts` | – | `{active, uploads, scripts: [{name, active, content}]}` of the mock ManageSieve server (M2c) |
-| `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications), Unix seconds |
+| `dav-objects` | `collection?` | `[{name, etag, data}]` of the mock CalDAV / CardDAV server: `personal` (default), `tasks`, `holidays` (read-only) or `contacts` (M3a) |
+| `dav-put` | `collection?`, `name`, `data` | Stores an iCalendar / vCard object as another client would; `{etag}` |
+| `dav-delete` | `collection?`, `name` | Deletes an object as another client would |
+| `feeds` | – | `{holidays, town}`: URLs of the demo ICS feeds (`holidays` is configured, `town` is for adding a subscription) |
+| `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications, reminders), Unix seconds |
 | `clock-set` | `at` | Sets that clock to `at` (Unix seconds); it keeps running |
 | `clock-advance` | `seconds` | Moves that clock forward (or back, negative) |
 
@@ -474,3 +487,16 @@ For M3a:
   payloads; PIM sources as `calendar-subscription` / `caldav` / `carddav` nodes in
   `accounts.kdl`; store v10; the `nail-ical` (calcard) / `nail-dav` stubs; slots). Texts built
   in Rust: `locales/<lang>/core-pim.ftl`, `core-ical.ftl`, `core-dav.ftl`.
+- **0059:** `nail-ical` — own lossless content-line layer and patching writers, own
+  recurrence engine (`recur.rs`, `expand.rs`, edit scopes in `edit.rs`), zones (IANA /
+  Windows / custom `VTIMEZONE`), alarms, feeds, import previews; the calendar corpus
+  (`crates/nail-ical/tests/corpus`, byte-exact: nested `.gitattributes -text`)
+- **0060:** `nail-dav` — CalDAV / CardDAV client (discovery, sync-collection with ctag /
+  ETag fallback, conditional writes, server wins), `MockDavServer` in `nail-testkit-net`,
+  Radicale in `scripts/interop`
+- **0061:** PIM store APIs (items + PIM queue, instance cache, contacts / duplicates /
+  merge / Collected / autocomplete ranking, reminders), `PimIndex`, the reminder scheduler
+- **0062:** the PIM UI (`ui/src/features/pim/`)
+- **0063:** M3a integration (`nail-core/src/pim/`: requests, source engines, reminders,
+  search; MCP PIM resources / tools; plug-in `calendar.read`; `nail serve --launch`;
+  default layout windows; demo-multi DAV / ICS mocks)

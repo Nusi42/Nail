@@ -22,7 +22,10 @@ use ts_rs::TS;
 use super::ui::PluginUiNode;
 use crate::context::UiContext;
 use crate::domain::{Address, Flags};
-use crate::ids::{AccountId, DraftId, FolderId, MessageId, PluginDialogId, PluginId, ThreadId};
+use crate::ids::{
+    AccountId, CalendarId, DraftId, EventId, FolderId, MessageId, PluginDialogId, PluginId,
+    ThreadId,
+};
 
 /// Longest `client_id` a UI may send.
 pub const MAX_CLIENT_ID_LEN: usize = 64;
@@ -314,6 +317,38 @@ pub struct PluginMessage {
     #[serde(default)]
     pub encrypted: bool,
 }
+
+/// An event occurrence as a plug-in with `calendar.read` sees it
+/// (`nail.calendar.events`; M3a).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCalendarEvent {
+    /// The event (series).
+    pub event_id: EventId,
+    /// Its calendar.
+    pub calendar_id: CalendarId,
+    /// Title.
+    pub title: String,
+    /// Start (RFC 3339 UTC; all-day events at local midnight).
+    pub start: String,
+    /// End (RFC 3339 UTC).
+    pub end: String,
+    /// An all-day event.
+    pub all_day: bool,
+    /// Location, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub location: Option<String>,
+    /// Part of a recurring series.
+    #[serde(default)]
+    pub recurring: bool,
+}
+
+/// Most events one `nail.calendar.events` call returns.
+pub const MAX_PLUGIN_CALENDAR_EVENTS: u32 = 500;
+
+/// Longest range of one `nail.calendar.events` call, in days.
+pub const MAX_PLUGIN_CALENDAR_DAYS: i64 = 92;
 
 /// A message body as a plug-in with `mail.read.body` sees it
 /// (`nail.mail.getBody`). Never of end-to-end encrypted mail in the

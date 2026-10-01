@@ -741,6 +741,36 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 to_json(found)
             })
         }
+        "calendar.events" => {
+            let call = "nail.calendar.events";
+            if let Err(d) = s.gate().require(&PluginPermission::CalendarRead, call) {
+                return Ok(s.deny(&d));
+            }
+            let from = str_field(payload, "from")?.to_owned();
+            let to = str_field(payload, "to")?.to_owned();
+            let parse = |t: &str| {
+                chrono::DateTime::parse_from_rfc3339(t)
+                    .map_err(|_| invalid(format!("not an RFC 3339 time: {t}")))
+            };
+            let (start, end) = (parse(&from)?, parse(&to)?);
+            if end < start
+                || end - start > chrono::Duration::days(nail_api::plugins::MAX_PLUGIN_CALENDAR_DAYS)
+            {
+                return Err(invalid(format!(
+                    "the range must be at most {} days",
+                    nail_api::plugins::MAX_PLUGIN_CALENDAR_DAYS
+                )));
+            }
+            let max = nail_api::plugins::MAX_PLUGIN_CALENDAR_EVENTS;
+            let limit = payload
+                .get("limit")
+                .and_then(serde_json::Value::as_u64)
+                .map_or(max, |l| u32::try_from(l).unwrap_or(max))
+                .clamp(1, max);
+            s.spawn(call, payload, async move {
+                to_json(services.calendar_events(from, to, limit).await?)
+            })
+        }
         "storage.get" | "storage.set" | "storage.delete" | "storage.keys" | "storage.clear"
         | "storage.usage" => storage_call(s, op, payload)?,
         "http.fetch" => fetch_call(s, payload)?,

@@ -41,8 +41,9 @@ use nail_testkit::{
     CryptoFixtures, MailStore, MockImapConfig, MockImapServer, crypto_fixture, demo_corpus,
 };
 use nail_testkit_net::{
-    DnsZone, MockDnsServer, MockHttpServer, MockPop3Config, MockPop3Server, MockResponse,
-    MockSieveConfig, MockSieveServer, MockSmtpConfig, MockSmtpServer, Pop3Message,
+    DnsZone, MockDavConfig, MockDavServer, MockDnsServer, MockHttpServer, MockPop3Config,
+    MockPop3Server, MockResponse, MockSieveConfig, MockSieveServer, MockSmtpConfig, MockSmtpServer,
+    Pop3Message,
 };
 use serde_json::{Value, json};
 
@@ -314,6 +315,63 @@ fn autoconfig_xml(imap_port: u16, smtp_port: u16) -> String {
     )
 }
 
+/// The CalDAV source of `--seed demo-multi` (M3a; mock CalDAV server).
+pub const MULTI_CALDAV_ID: &str = "work-calendars";
+/// The CardDAV source of `--seed demo-multi` (same mock server).
+pub const MULTI_CARDDAV_ID: &str = "work-contacts";
+/// The ICS subscription of `--seed demo-multi` (the mock HTTP server).
+pub const MULTI_HOLIDAYS_ID: &str = "holidays";
+/// User name of the mock CalDAV / CardDAV server.
+pub const MULTI_DAV_USER: &str = "ada";
+/// Password of the mock CalDAV / CardDAV server.
+pub const MULTI_DAV_PASSWORD: &str = "dav-secret";
+
+/// An all-day event of a demo feed `days` after today.
+fn feed_event(uid: &str, title: &str, days: i64) -> String {
+    let day = chrono::Utc::now().date_naive() + chrono::Duration::days(days);
+    let next = day + chrono::Duration::days(1);
+    format!(
+        "BEGIN:VEVENT\r\nUID:{uid}\r\nDTSTAMP:20260101T000000Z\r\nDTSTART;VALUE=DATE:{}\r\n\
+         DTEND;VALUE=DATE:{}\r\nSUMMARY:{title}\r\nTRANSP:TRANSPARENT\r\nEND:VEVENT\r\n",
+        day.format("%Y%m%d"),
+        next.format("%Y%m%d")
+    )
+}
+
+/// A demo ICS feed.
+fn feed(name: &str, events: &[String]) -> Vec<u8> {
+    format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nail demo//EN\r\nX-WR-CALNAME:{name}\r\n{}END:VCALENDAR\r\n",
+        events.concat()
+    )
+    .into_bytes()
+}
+
+/// A timed demo event `days` after today at `hour`:00 UTC for an hour,
+/// weekly (12 times) when `weekly`.
+fn dav_event(uid: &str, title: &str, days: i64, hour: u32, weekly: bool) -> String {
+    let day = chrono::Utc::now().date_naive() + chrono::Duration::days(days);
+    let stamp = |h: u32| format!("{}T{h:02}0000Z", day.format("%Y%m%d"));
+    format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Nail demo//EN\r\nBEGIN:VEVENT\r\nUID:{uid}\r\n\
+         DTSTAMP:20260101T000000Z\r\nDTSTART:{}\r\nDTEND:{}\r\nSUMMARY:{title}\r\n{}END:VEVENT\r\nEND:VCALENDAR\r\n",
+        stamp(hour),
+        stamp(hour + 1),
+        if weekly {
+            "RRULE:FREQ=WEEKLY;COUNT=12\r\n"
+        } else {
+            ""
+        }
+    )
+}
+
+/// A demo vCard 3.0.
+fn dav_card(uid: &str, name: &str, email: &str) -> String {
+    format!(
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:{uid}\r\nFN:{name}\r\nEMAIL;TYPE=INTERNET:{email}\r\nEND:VCARD\r\n"
+    )
+}
+
 /// The running mock servers of `--seed demo-multi` and the settings that
 /// point at them. Everything stops when this is dropped.
 #[derive(Debug)]
@@ -332,6 +390,9 @@ pub struct DemoMulti {
     pub dns: MockDnsServer,
     /// ManageSieve server of the "work" account (M2c).
     pub sieve: MockSieveServer,
+    /// CalDAV / CardDAV server of the PIM sources (M3a), with sample
+    /// events and contacts.
+    pub dav: MockDavServer,
     /// The clock snooze, quiet hours and notifications see; moved by the
     /// `clock-set` / `clock-advance` controls (M2c).
     pub clock: Arc<crate::AdjustableClock>,
@@ -488,7 +549,80 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     .with_timeout(Duration::from_secs(4))
     .with_guessing(false);
 
+    // M3a: a CalDAV / CardDAV server with sample data, and ICS feeds.
+    let dav = MockDavServer::start(MockDavConfig {
+        username: MULTI_DAV_USER.to_owned(),
+        password: MULTI_DAV_PASSWORD.to_owned(),
+        ..MockDavConfig::default()
+    })
+    .await
+    .map_err(io_error)?;
+    let personal = dav.calendar_path("personal");
+    for (name, data) in [
+        (
+            "team-sync.ics",
+            dav_event("team-sync@nail.example", "Team sync", 0, 9, true),
+        ),
+        (
+            "quarterly-review.ics",
+            dav_event("review@nail.example", "Quarterly review", 1, 14, false),
+        ),
+    ] {
+        dav.put_object(&personal, name, &data);
+    }
+    let book = dav.address_book_path("contacts");
+    for (name, data) in [
+        (
+            "grace.vcf",
+            dav_card("grace-hopper", "Grace Hopper", "grace@navy.example"),
+        ),
+        (
+            "charles.vcf",
+            dav_card(
+                "charles-babbage",
+                "Charles Babbage",
+                "charles@engine.example",
+            ),
+        ),
+    ] {
+        dav.put_object(&book, name, &data);
+    }
+    let calendar = |body: Vec<u8>| MockResponse {
+        status: 200,
+        content_type: "text/calendar; charset=utf-8".to_owned(),
+        body,
+        headers: Vec::new(),
+        delay: None,
+    };
+    http.get(
+        None,
+        "/holidays.ics",
+        calendar(feed(
+            "Holidays",
+            &[
+                feed_event("founders@holidays", "Founders' Day", 2),
+                feed_event("harvest@holidays", "Harvest Festival", 9),
+            ],
+        )),
+    );
+    http.get(
+        None,
+        "/town.ics",
+        calendar(feed(
+            "Town events",
+            &[feed_event("fair@town", "Town fair", 1)],
+        )),
+    );
+
     let secrets = Arc::new(MemorySecretStore::new());
+    for source in [MULTI_CALDAV_ID, MULTI_CARDDAV_ID] {
+        secrets
+            .set(
+                &SecretRef(format!("keychain:nail/pim/{source}/password")),
+                MULTI_DAV_PASSWORD,
+            )
+            .map_err(io_error)?;
+    }
     for (account, password) in [
         (MULTI_WORK_ID, MULTI_WORK_PASSWORD),
         (MULTI_HOME_ID, MULTI_HOME_PASSWORD),
@@ -508,6 +642,7 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         http,
         dns,
         sieve,
+        dav,
         clock: Arc::new(crate::AdjustableClock::new()),
         secrets,
         discoverer: Arc::new(discoverer),
@@ -524,8 +659,9 @@ impl DemoMulti {
     pub fn accounts_kdl(&self) -> String {
         let (imap, pop3, smtp) = (self.work.port(), self.home.port(), self.smtp.port());
         let sieve = self.sieve.port();
+        let (dav, http) = (self.dav.addr().port(), self.http.addr().port());
         format!(
-            r#"{MULTI_CONFIG_MARKER}
+            r##"{MULTI_CONFIG_MARKER}
 undo-send-delay 5
 
 account "{MULTI_WORK_ID}" email="{MULTI_WORK_EMAIL}" name="Work" {{
@@ -549,7 +685,17 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     }}
     authserv-id "{MULTI_AUTHSERV_ID}"
 }}
-"#
+
+caldav "{MULTI_CALDAV_ID}" name="Work calendars" url="http://127.0.0.1:{dav}/" {{
+    auth "password" username="{MULTI_DAV_USER}"
+}}
+
+carddav "{MULTI_CARDDAV_ID}" name="Work contacts" url="http://127.0.0.1:{dav}/" {{
+    auth "password" username="{MULTI_DAV_USER}"
+}}
+
+calendar-subscription "{MULTI_HOLIDAYS_ID}" name="Holidays" url="http://127.0.0.1:{http}/holidays.ics" color="#d33"
+"##
         )
     }
 
@@ -629,6 +775,16 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
         )
     }
 
+    /// The mock DAV path of a collection: `personal`, `tasks`, `holidays`
+    /// (calendars) or `contacts` (address book).
+    fn dav_path(&self, collection: &str) -> std::result::Result<String, String> {
+        match collection {
+            "personal" | "tasks" | "holidays" => Ok(self.dav.calendar_path(collection)),
+            "contacts" => Ok(self.dav.address_book_path(collection)),
+            other => Err(format!("no mock DAV collection {other:?}")),
+        }
+    }
+
     fn imap(&self, account: &str) -> std::result::Result<&MockImapServer, String> {
         match account {
             MULTI_WORK_ID => Ok(&self.work),
@@ -653,6 +809,12 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
     ///   made-up image hosts and the paths the image host was asked for
     /// * `sieve-scripts` → `{active, scripts: [{name, active, content}],
     ///   uploads}` of the ManageSieve server (M2c)
+    /// * `dav-objects {collection?}` → `[{name, etag, data}]` of the mock
+    ///   CalDAV / CardDAV server (`personal` (default), `tasks`,
+    ///   `holidays`, `contacts`); `dav-put {collection?, name, data}` →
+    ///   `{etag}` and `dav-delete {collection?, name}` change it as another
+    ///   client would (M3a)
+    /// * `feeds` → `{holidays, town}`: URLs of the demo ICS feeds (M3a)
     /// * `clock` → `{now}`; `clock-set {at}` (Unix seconds);
     ///   `clock-advance {seconds}`: the clock of snooze, quiet hours and
     ///   notifications (M2c)
@@ -774,6 +936,42 @@ account "{MULTI_HOME_ID}" email="{MULTI_HOME_EMAIL}" name="Home" {{
                     .map(|s| json!({ "name": s.name, "active": s.active, "content": s.content }))
                     .collect::<Vec<_>>(),
             })),
+            "dav-objects" => {
+                let path = self.dav_path(text("collection").unwrap_or("personal"))?;
+                let collection = self
+                    .dav
+                    .collection(&path)
+                    .ok_or_else(|| format!("no collection {path}"))?;
+                Ok(Value::Array(
+                    collection
+                        .objects
+                        .iter()
+                        .map(|(name, o)| json!({ "name": name, "etag": o.etag, "data": o.data }))
+                        .collect(),
+                ))
+            }
+            "dav-put" => {
+                let path = self.dav_path(text("collection").unwrap_or("personal"))?;
+                let name = text("name").ok_or("name is required")?;
+                let data = text("data").ok_or("data is required")?;
+                let etag = self
+                    .dav
+                    .put_object(&path, name, &crlf(data))
+                    .ok_or_else(|| format!("no collection {path}"))?;
+                Ok(json!({ "etag": etag }))
+            }
+            "dav-delete" => {
+                let path = self.dav_path(text("collection").unwrap_or("personal"))?;
+                let name = text("name").ok_or("name is required")?;
+                Ok(json!({ "deleted": self.dav.delete_object(&path, name) }))
+            }
+            "feeds" => {
+                let base = self.http.base_url();
+                Ok(json!({
+                    "holidays": format!("{base}/holidays.ics"),
+                    "town": format!("{base}/town.ics"),
+                }))
+            }
             "clock" => Ok(json!({ "now": nail_triage::Clock::unix(&*self.clock) })),
             "clock-set" => {
                 let at = args

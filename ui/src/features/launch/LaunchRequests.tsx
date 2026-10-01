@@ -1,8 +1,9 @@
 /**
  * Launch requests (M2b, ADR 0041): what the desktop app was asked to open
  * when Windows started it — a `mailto:` link opens the composer, a `.eml`
- * file is imported into "Opened files" and shown; calendars and contacts
- * are not supported yet and say so. Taken from the core once at start-up
+ * file is imported into "Opened files" and shown; an `.ics` / `.vcf` file
+ * opens the import dialog with its preview, a `webcal:` link the
+ * subscription form (M3a). Taken from the core once at start-up
  * and again after every `LaunchRequested` event (a second start forwarded
  * its targets). Never in a remote-UI session (desktop only).
  */
@@ -13,6 +14,7 @@ import { useT } from "../../i18n/I18nProvider";
 import type { ComposeContext } from "../../state/compose";
 import { useComposeContext } from "../../state/hooks";
 import { startMailtoCompose } from "../composer";
+import { IMPORT_DIALOG, pimStoreFor, SOURCES_DIALOG } from "../pim";
 import { remoteStore } from "../remote";
 
 /** A notice the user dismisses: message id and arguments. */
@@ -48,10 +50,14 @@ export async function handleLaunch(
         return { id: "launch-open-failed", reason: errorMessageOf(error) };
       }
     case "SubscribeCalendar":
+      pimStoreFor(ctx.store).getState().setSubscribeUrl(request.url);
+      ctx.store.getState().openWindow(SOURCES_DIALOG);
+      return null;
     case "ImportCalendarFile":
-      return { id: "launch-unsupported-calendar" };
     case "ImportContactsFile":
-      return { id: "launch-unsupported-contacts" };
+      pimStoreFor(ctx.store).getState().setImportPath(request.path);
+      ctx.store.getState().openWindow(IMPORT_DIALOG);
+      return null;
   }
 }
 

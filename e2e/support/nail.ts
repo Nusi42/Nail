@@ -79,6 +79,8 @@ export interface StartOptions {
    * (`demo-multi`, with the test controls of {@link control}).
    */
   seed?: "demo" | "demo-imap" | "demo-multi";
+  /** Files / links to open, as Windows hands them to the desktop app (`--launch`). */
+  launch?: string[];
 }
 
 /**
@@ -104,6 +106,7 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
     path.join(repoRoot, "ui", "dist"),
   ];
   if (options.locale) args.push("--locale", options.locale);
+  for (const target of options.launch ?? []) args.push("--launch", target);
   const child: ChildProcess = spawn(nailBinary(), args, {
     cwd: repoRoot,
     stdio: ["ignore", "pipe", "inherit"],

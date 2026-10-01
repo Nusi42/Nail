@@ -29,6 +29,7 @@ import type {
   PluginDialogSpec,
   PluginLogLevel,
   PluginManifest,
+  PluginCalendarEvent,
   PluginMessage,
   PluginMessageBody,
   PluginNotificationSpec,
@@ -77,6 +78,8 @@ export interface TestHostOptions {
   messages?: PluginMessage[];
   /** Bodies by message id. */
   bodies?: Record<string, PluginMessageBody>;
+  /** Event occurrences `nail.calendar.events` can see. */
+  events?: PluginCalendarEvent[];
   /** Setting values. */
   settings?: Record<string, JsonValue>;
   /** Answers dialogs (default: dismissed, `{button: null, values: {}}`). */
@@ -286,6 +289,15 @@ export function createTestHost(options: TestHostOptions = {}): TestHost {
         return [...messages.values()]
           .filter((m) => m.threadId === threadId)
           .sort((a, b) => a.date.localeCompare(b.date));
+      },
+    },
+    calendar: {
+      async events(from, to, eventOptions = {}) {
+        need("calendar.read");
+        return (options.events ?? [])
+          .filter((e) => e.start < to && e.end > from)
+          .sort((a, b) => a.start.localeCompare(b.start))
+          .slice(0, eventOptions.limit ?? 500);
       },
     },
     ui: {

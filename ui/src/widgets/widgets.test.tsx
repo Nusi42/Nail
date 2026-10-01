@@ -288,6 +288,9 @@ describe("toolbar", () => {
       "Mark as read/unread",
       "Flag",
       "Create rule from message",
+      // M3a: calendars and tasks.
+      "Create event from email",
+      "Create task from email",
       "Import Autocrypt setup message",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");

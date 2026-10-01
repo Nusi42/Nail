@@ -31,8 +31,8 @@ pub enum PluginPermission {
     /// the decrypted content of end-to-end encrypted mail (that is
     /// `mail.read.encrypted`, M4). Can be limited to accounts.
     MailReadBody,
-    /// `calendar.read`: a placeholder until the PIM API (M3); accepted in
-    /// manifests and grants, grants nothing yet.
+    /// `calendar.read`: the event occurrences of the user's calendars
+    /// (`nail.calendar.events`; M3a, ADR 0063). Not limited to accounts.
     CalendarRead,
     /// `ui.dialogs`: open dialogs (`nail.ui.showDialog`).
     UiDialogs,
@@ -135,9 +135,10 @@ impl PluginPermission {
         matches!(self, Self::MailRead | Self::MailReadBody)
     }
 
-    /// Whether this permission is accepted but grants nothing yet.
+    /// Whether this permission is accepted but grants nothing yet. None
+    /// since M3a (`calendar.read` became real); kept for later previews.
     pub fn is_placeholder(&self) -> bool {
-        matches!(self, Self::CalendarRead)
+        false
     }
 
     /// Whether a `network:` permission allows requests to `host` (a host
@@ -352,7 +353,8 @@ mod tests {
         assert!(PluginPermission::MailRead.takes_accounts());
         assert!(PluginPermission::MailReadBody.takes_accounts());
         assert!(!PluginPermission::Storage.takes_accounts());
-        assert!(PluginPermission::CalendarRead.is_placeholder());
+        assert!(!PluginPermission::CalendarRead.is_placeholder());
+        assert!(!PluginPermission::CalendarRead.takes_accounts());
         assert_eq!(
             PluginPermission::MailRead.label().id,
             "plugin-permission-mail-read"

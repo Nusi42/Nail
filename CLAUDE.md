@@ -49,7 +49,8 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        M3a: pim (PimTime, calendars / events as series + overrides + EditScope,
                        recurrence, attendees, alarms, contacts vCard 3/4, groups, merge links,
                        tasks, reminders, sources = PimSourceConfig in AccountsConfig.pim_sources,
-                       import, read-only MCP payloads; issues() + pim-issue-* ids) (ADR 0058)
+                       import, read-only MCP payloads; issues() + pim-issue-* ids) (ADR 0058);
+                       WP75: EventOverride.this_and_future, plugins::PluginCalendarEvent (ADR 0063)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -62,8 +63,9 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        (`preview_merge_with`, `ConfigManager::set_installed_plugins / preview_placements`)
                        (ADRs 0050, 0055);
                        M3a: accounts.kdl `calendar-subscription` / `caldav` / `carddav` nodes (read, write,
-                       schema; upsert/remove_pim_source), widgets/pim.rs (PIM widget kinds) (ADR 0058)
-crates/nail-store      SQLite metadata (v9), blob store, per-account operation queue with sync-side
+                       schema; upsert/remove_pim_source), widgets/pim.rs (typed options of the PIM widgets
+                       incl. `calendar-list`) (ADRs 0058, 0062)
+crates/nail-store      SQLite metadata (v10), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -85,7 +87,10 @@ crates/nail-store      SQLite metadata (v9), blob store, per-account operation q
                        sealed at rest (ADR 0050);
                        v10: PIM — sources (local row), collections, raw objects (sealed), events /
                        tasks / contacts (data sealed), groups, links, instance cache, reminders,
-                       pim_ops queue; src/pim.rs (WP73 slot) (ADR 0058)
+                       pim_ops queue (ADR 0058); src/pim/ (WP73): collections, items (user writes + PIM
+                       queue in one transaction, server merge with conflict copies), ops (replay), instances
+                       (InstanceExpander, 90-day chunks, note_zone_data), contacts (duplicates, merge links,
+                       Collected book, suggest_recipients), reminders, time (ADR 0061)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -102,32 +107,49 @@ crates/nail-discovery  autoconfig / ISPDB / SRV / Autodiscover (ADR 0017); syste
                        (DnsQuery_W on Windows, no DNS sockets; mock DNS bound to loopback; ADR 0057)
 crates/nail-search     Tantivy index + query language parser (ADR 0016); open_with(DirectoryWrapper)
                        for the sealed index, IndexPolicy (decrypted indexing opt-in) (ADR 0032);
-                       imap.rs: query → IMAP SEARCH key (needs_server, server_search) (ADR 0046)
+                       imap.rs: query → IMAP SEARCH key (needs_server, server_search) (ADR 0046);
+                       pim.rs: PimIndex (events, tasks, contacts, groups; the core keeps it in memory)
+                       (ADRs 0061, 0063)
 crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .eml corpus, demo seed;
                        corpus/crypto/{pgp,smime}: end-to-end
                        test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
                        smime/ada-{work,home}.p12 are the demo-multi certificates)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 / HTTP / DNS servers; managesieve.rs:
-                       MockSieveServer + validate_script (ADR 0044)
+                       MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
+                       sync tokens, TLS, server-side changes for tests) (ADR 0060)
 crates/nail-sieve      compiler (rules + vacation → one Sieve script, placement + localized reasons),
                        parse / decompile round-trip harness, ManageSieve client (SieveSession,
                        SieveAuth), upload / remove of the managed script (ADR 0044)
 crates/nail-triage     pure logic: tokenizer, junk classifier, snooze scheduler (timer wheel),
-                       notification policy + batcher, local times; writes as TriageOp (ADR 0045)
+                       notification policy + batcher, local times; writes as TriageOp (ADR 0045);
+                       reminders.rs: plan_alarms, ReminderScheduler (restart catch-up, snooze / dismiss
+                       as ReminderOps), reminder notifications (ADR 0061)
 crates/nail-plugins    plug-in host (M2d WP61): PluginHost (one thread + QuickJS runtime per plug-in, CPU
                        budget per call, memory limit, crash isolation), gate.rs permission gate, services.rs
                        PluginServices (implemented by nail-core), prelude.js (`nail.*` API), package.rs
                        (.nailplugin checks, PackageStore keeps approved archives packed and verified by
-                       hash), dev.rs (hot reload), l10n.rs (PluginCatalogs) (ADR 0051)
-crates/nail-ical       iCalendar / vCard (calcard), recurrence, zones (chrono-tz), alarms, ICS feeds
-                       (M3a WP71; stub + library smoke tests at the contract, ADR 0058)
-crates/nail-dav        CalDAV / CardDAV client: discovery (SRV + well-known), PROPFIND / REPORT,
-                       sync-collection, conditional writes (M3a WP72; stub at the contract, ADR 0058)
+                       hash), dev.rs (hot reload), l10n.rs (PluginCatalogs) (ADR 0051); M3a:
+                       `nail.calendar.events` behind `calendar.read` (ADR 0063)
+crates/nail-ical       iCalendar / vCard (own lossless content-line layer + patching writers; calcard
+                       only for the Windows zone table and VTIMEZONE generation), own recurrence engine
+                       (recur.rs, expand.rs instances, edit.rs scopes), tz.rs (IANA/Windows/custom VTIMEZONE
+                       matching), alarm.rs, feed.rs (webcal), import.rs previews, issues.rs (ical-*/vcard-*
+                       in core-ical.ftl); tests/corpus (synthesized Google/Outlook/Apple/Thunderbird exports,
+                       nested .gitattributes -text: edit byte-preserving) (ADR 0059)
+crates/nail-dav        CalDAV / CardDAV client (M3a WP72): DavClient (Basic over TLS / OAuth2 bearer with one
+                       refresh, https-or-loopback URL policy, own redirect handling), discovery (configured
+                       URL, _caldavs/_carddavs SRV via DnsLookup, /.well-known/, principal + home sets, Google
+                       endpoints), PROPFIND / REPORT (calendar-query + time-range, multiget, addressbook-query,
+                       sync-collection), sync_collection (RFC 6578 with paging and token reset, ctag/ETag
+                       fallback), write_object / delete_object (If-Match / If-None-Match, 412 → server wins),
+                       MKCALENDAR / MKCOL / PROPPATCH; DavError → ErrorCode + dav-* texts (ADR 0060)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
                        CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025);
-                       messages.rs (localized texts), configured_port (ADR 0046)
+                       messages.rs (localized texts), configured_port (ADR 0046); pim.rs: read-only PIM
+                       resources (nail://calendars, …/events, contacts, tasks) and tools (list_events,
+                       find_free_time, search_contacts, list_tasks) via McpData::pim / pim_raw (ADR 0063)
 crates/nail-pgp        OpenPGP (rPGP): keyring (S2K secrets: passphrase or keychain:nail/openpgp/<FPR>),
                        PGP/MIME sign/encrypt/decrypt/verify, inline read, header protection, Autocrypt
                        L1, WKD + keys.openpgp.org via injected HttpClient (ADR 0030); Error::localized()
@@ -167,7 +189,13 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        <data-dir>/plugins, catalogs; CoreServices = PluginServices over store / search, never
                        decrypted bodies, ordered log writer, crash errors recorded, quiet hours for `system`
                        notifications), plugin_http.rs (SSRF-safe `nail.http.fetch`), plugins.rs (every
-                       plug-in request; commands / UI actions answer Done at once)
+                       plug-in request; commands / UI actions answer Done at once);
+                       M3a (ADR 0063): pim/ (mod.rs routing + PimCtl, sources.rs (accounts.kdl sources,
+                       collections, local defaults, conflicts), engine.rs (ICS / CalDAV / CardDAV engines,
+                       PimReplayer), events.rs (edit scopes, instances, free time, tasks), contacts.rs,
+                       import.rs (imports, event / task from email), reminders.rs (scheduler + task),
+                       search.rs (in-memory PimIndex)); launch_args.rs (launch-argument parser, shared with
+                       app/src-tauri and `nail serve --launch`)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -176,7 +204,8 @@ crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (dem
 crates/nail-cli        `nail` binary; messages.rs (localized stderr), headless `nail mcp`
                        (`--config-dir`, `--no-start`, `--mcp-port`), serve holds the data-dir lock;
                        plugin.rs: `nail plugin dev <folder> [--url|--data-dir]` over the running serve's
-                       WebSocket (`nail serve` writes <data-dir>/ui-endpoint.json) (ADR 0055)
+                       WebSocket (`nail serve` writes <data-dir>/ui-endpoint.json) (ADR 0055);
+                       `nail serve --launch <file-or-link>` (M3a)
 app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the settings' port and
                        restarts it on change, and the remote-UI host; data-dir lock; OS notifications
                        for NotificationRequested; main window created in code; nail-proxy protocol;
@@ -186,7 +215,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
                        triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
                        (context menus, resolve.ts), customization/Editors.tsx; M2d: plugins/;
-                       M3a: pim/ (calendar, contacts, tasks; ADR 0058));
+                       M3a: pim/ (calendar, contacts, tasks; lazyDialogs.ts, parts.ts PIM_BASE_CSS,
+                       @internationalized/date + react-aria-components for the date / time picker;
+                       ADRs 0058, 0062));
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -204,7 +235,8 @@ examples/              example plug-ins (M2d): follow-up (not a workspace; its t
 e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke test; support/mcp.ts;
                        support/plugins.ts + global-setup.ts build the follow-up example outside the repo;
                        tests/plugins.spec.ts (M2d), tests/a11y-windows.spec.ts (axe on every window, tab and
-                       dialog in default / high-contrast / dark, self-checked coverage; ADR 0054))
+                       dialog in default / high-contrast / dark, self-checked coverage; ADR 0054),
+                       tests/pim.spec.ts (M3a; startNail({launch}) passes `--launch`))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); every file is embedded in nail-config l10n.rs
@@ -246,7 +278,8 @@ bash crates/nail-testkit/corpus/crypto/pgp/generate.sh     # OpenPGP interop vec
 bash crates/nail-testkit/corpus/crypto/smime/generate.sh   # S/MIME test CA + vectors (OpenSSL 3.4+ = /mingw64/bin/openssl)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
-cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts (test controls at /api/test/…)
+cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts, mock CalDAV / CardDAV + ICS feeds (test controls at /api/test/…)
+cargo run -p nail-cli -- serve --seed demo --launch C:/path/x.ics  # hand a file / link to the UI like the desktop shell (M3a)
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist (temp dirs)
 NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]   # stdio bridge to the running app's MCP server
 nail mcp --client <name> [--config-dir DIR] [--mcp-port N] [--no-start]   # starts a headless Nail when none runs
@@ -336,7 +369,18 @@ npm run tauri dev                          # desktop app with Vite hot reload
   stub crates `nail-ical` (calcard 0.3, chrono-tz) / `nail-dav`; slots `nail-testkit-net/src/dav.rs`,
   `nail-store/src/pim.rs`, `nail-search/src/pim.rs`, `nail-triage/src/reminders.rs`,
   `nail-config/src/widgets/pim.rs`, `ui/src/features/pim/`, `locales/*/{pim,core-pim,core-ical,core-dav}.ftl`).
-  The core answers every PIM request `unsupported` until WP75; remote PIM needs a full grant until then.
+  Packages: ADRs 0059 (`nail-ical`), 0060 (`nail-dav`, mock DAV, Radicale), 0061 (PIM store, search,
+  reminders), 0062 (PIM UI).
+- M3a integration (ADR 0063): `nail-core/src/pim/` serves every PIM request; items are stored as the contract
+  type plus the raw text `nail-ical` writes by patching the stored original; writes queue in the PIM queue
+  (never for the local source) and wake the source's engine; engines poll ICS (conditional GET) and
+  CalDAV / CardDAV (discovery stored on the source row, sync-collection, replay before sync, 412 = server wins
+  with a conflict copy) with backoff; reminders run on the triage clock (`ServiceOptions::clock`), notify
+  through `NotificationRequested` (quiet hours mute the sound); the PIM search index is in memory; MCP PIM
+  resources / tools need `read` and the grant's account per source (`all_accounts` for local / subscriptions);
+  remote PIM still needs a grant for every account. Core tests: `tests/pim.rs`, `tests/pim_sync.rs` (mock DAV /
+  HTTP servers, `AdjustableClock`). demo-multi adds `work-calendars` / `work-contacts` (mock DAV, password
+  `dav-secret`) and the `holidays` feed, controls `dav-objects` / `dav-put` / `dav-delete` / `feeds`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

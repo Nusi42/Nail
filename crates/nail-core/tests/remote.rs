@@ -1477,12 +1477,12 @@ async fn plugins_need_full_grants_remotely() {
     }
 }
 
-/// M3a contract (ADR 0058): until WP75 narrows answers per PIM source,
-/// remote sessions reach calendars, contacts and tasks only with a grant
-/// for every account; desktop files are never imported for them; PIM
-/// events and reminder notifications go to full grants only.
+/// M3a (ADRs 0058, 0063): remote sessions reach calendars, contacts and
+/// tasks only with a grant for every account (answers are not narrowed per
+/// source yet); desktop files are never imported for them; PIM events and
+/// reminder notifications go to full grants only.
 #[tokio::test]
-async fn remote_pim_needs_a_full_grant_until_sources_are_narrowed() {
+async fn remote_pim_needs_a_full_grant() {
     use nail_api::pim::{PimImportSource, PimTime};
     let f = setup();
     let service = &f.service;
@@ -1500,11 +1500,10 @@ async fn remote_pim_needs_a_full_grant_until_sources_are_narrowed() {
         error_code(&service.handle_remote(&narrow, list()).await),
         Some(ErrorCode::Forbidden)
     );
-    // A full read grant passes the checks; the contract stage answers
-    // `unsupported`.
+    // A full read grant passes the checks.
     assert_eq!(
         error_code(&service.handle_remote(&reader, list()).await),
-        Some(ErrorCode::Unsupported)
+        None
     );
     // Writes need their scope.
     let create = Request::CreateTask {
@@ -1534,7 +1533,7 @@ async fn remote_pim_needs_a_full_grant_until_sources_are_narrowed() {
     };
     assert_eq!(
         error_code(&service.handle_remote(&reader, data).await),
-        Some(ErrorCode::Unsupported)
+        None
     );
     // "Create event from email" checks the message like any read.
     let from_message = Request::EventFromMessage {
@@ -1546,7 +1545,7 @@ async fn remote_pim_needs_a_full_grant_until_sources_are_narrowed() {
     );
     assert_eq!(
         error_code(&service.handle_remote(&reader, from_message).await),
-        Some(ErrorCode::Unsupported)
+        None
     );
 
     // Events.
