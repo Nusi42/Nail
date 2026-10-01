@@ -24,6 +24,7 @@ pub mod clock;
 pub mod localtime;
 pub mod notify;
 pub mod ops;
+pub mod reminders;
 pub mod snooze;
 pub mod tokenize;
 pub mod wheel;

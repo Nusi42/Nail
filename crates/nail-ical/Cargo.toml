@@ -1,0 +1,27 @@
+[package]
+name = "nail-ical"
+description = "iCalendar (RFC 5545) and vCard (3.0 / 4.0) for Nail: lossless parsing and writing, recurrence expansion, time zones, alarms, ICS feeds"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+# iCalendar / vCard parsing and writing, RRULE expansion (a port of
+# rust-rrule), IANA zone detection for custom / Windows TZIDs.
+# Apache-2.0 OR MIT (Stalwart Labs); `jmap` (JSCalendar / JSContact) off.
+calcard.workspace = true
+# Dates and IANA zones (DST edge cases; calcard uses the same versions).
+chrono.workspace = true
+chrono-tz.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+# Property tests (round trips, expansion invariants).
+proptest = "1.11"
+
+[lints]
+workspace = true

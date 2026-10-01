@@ -11,9 +11,13 @@ use nail_api::accounts::{
     SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode,
     VirtualAccountConfig, default_port,
 };
+use nail_api::pim::source::{MIN_REFRESH_MINUTES, is_valid_pim_source_id};
+use nail_api::pim::{
+    PimSourceConfig, PimSourceSettings, has_url_scheme, is_color, is_https_or_loopback_url,
+};
 use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
 use nail_api::sieve::{ManageSieveConfig, is_script_name};
-use nail_api::{AccountId, FolderRole, IdentityId, LocalizedMessage};
+use nail_api::{AccountId, FolderRole, IdentityId, LocalizedMessage, PimSourceId};
 
 use super::{
     MAX_UNDO_SEND_SECS, MIN_POLL_INTERVAL_SECS, is_valid_account_id, is_valid_identity_pattern,
@@ -24,6 +28,9 @@ use crate::kdl_util::{
     describe, name, prop_str, props, what_arg, what_key,
 };
 use crate::l10n::msg;
+
+/// Longest `refresh` of a PIM source, minutes (one week).
+pub(crate) const MAX_REFRESH_MINUTES: u32 = 7 * 24 * 60;
 
 /// Property names that would put a secret into the file. They are refused
 /// with a hint to the keychain instead of a generic "unknown property".
@@ -53,6 +60,7 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
     let mut provider_ids: HashSet<String> = HashSet::new();
     let mut undo_seen = false;
     let mut virtual_nodes = Vec::new();
+    let mut pim_nodes = Vec::new();
     let mut oauth_refs: Vec<(String, &KdlNode)> = Vec::new();
 
     for node in doc.nodes() {
@@ -85,6 +93,7 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
                     config.accounts.push(account);
                 }
                 "virtual-account" => virtual_nodes.push(node),
+                "calendar-subscription" | "caldav" | "carddav" => pim_nodes.push(node),
                 "oauth-provider" => {
                     let provider = reader.oauth_provider(node)?;
                     if !provider_ids.insert(provider.id.clone()) {
@@ -110,7 +119,8 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
                         node,
                         msg("config-unknown-node").arg("node", other).arg(
                             "expected",
-                            "account, virtual-account, oauth-provider, undo-send-delay",
+                            "account, virtual-account, oauth-provider, undo-send-delay, \
+                             calendar-subscription, caldav, carddav",
                         ),
                     ));
                 }
@@ -118,6 +128,24 @@ pub(crate) fn read_all(src: &Source<'_>) -> Result<AccountsConfig, Vec<ConfigErr
             Ok(())
         })();
         errors.ok(result);
+    }
+
+    // PIM sources (M3a, ADR 0058) are read after the accounts they may
+    // name; they keep their file order.
+    let mut pim_ids: HashSet<String> = HashSet::new();
+    for node in pim_nodes {
+        let Some((source, provider)) = errors.ok(reader.pim_source(node, &config)) else {
+            continue;
+        };
+        if !pim_ids.insert(source.id.to_string()) {
+            errors.push(src.node_err(
+                node,
+                msg("config-pim-source-duplicate").arg("name", source.id.as_str()),
+            ));
+            continue;
+        }
+        oauth_refs.extend(provider.map(|p| (p, node)));
+        config.pim_sources.push(source);
     }
 
     for (provider, node) in oauth_refs {
@@ -1411,6 +1439,175 @@ impl Reader<'_, '_> {
             token_url,
             scopes,
         })
+    }
+
+    // --- PIM sources (M3a) -----------------------------------------------
+
+    /// Reads a `calendar-subscription`, `caldav` or `carddav` node; also
+    /// returns the OAuth provider id its login uses.
+    fn pim_source(
+        &self,
+        node: &KdlNode,
+        config: &AccountsConfig,
+    ) -> Result<(PimSourceConfig, Option<String>), ConfigError> {
+        let kind = name(node);
+        let subscription = kind == "calendar-subscription";
+        if subscription {
+            self.check_props(
+                node,
+                &["name", "url", "color", "alarms", "refresh", "enabled"],
+            )?;
+        } else {
+            self.check_props(node, &["name", "account", "url", "refresh", "enabled"])?;
+        }
+        self.check_unique_props(node)?;
+        check_max_args(self.src, node, 1)?;
+        let (id, id_entry) = arg_str(self.src, node, 0)?;
+        if id == PimSourceId::LOCAL {
+            return Err(self.src.entry_err(
+                id_entry,
+                msg("config-pim-source-reserved").arg("name", PimSourceId::LOCAL),
+            ));
+        }
+        if !is_valid_pim_source_id(id) {
+            return Err(self
+                .src
+                .entry_err(id_entry, msg("config-pim-source-invalid").arg("name", id)));
+        }
+        let name_prop = self.prop_nonempty(node, "name")?;
+        let enabled = self.prop_bool(node, "enabled")?.unwrap_or(true);
+        let refresh =
+            self.prop_u32_range(node, "refresh", MIN_REFRESH_MINUTES, MAX_REFRESH_MINUTES)?;
+        let url = match prop_str(self.src, node, "url")? {
+            None => None,
+            Some((text, entry)) => {
+                let ok = is_https_or_loopback_url(text)
+                    || (subscription && has_url_scheme(text, &["webcal", "webcals"]));
+                if !ok {
+                    return Err(self.src.entry_err(
+                        entry,
+                        msg("config-expected-url")
+                            .arg("what", what_key("url"))
+                            .arg("found", format!("{text:?}")),
+                    ));
+                }
+                Some(text.to_owned())
+            }
+        };
+        let account = match prop_str(self.src, node, "account")? {
+            None => None,
+            Some((text, entry)) => {
+                let id = AccountId::new(text);
+                if config.account(&id).is_none() {
+                    return Err(self
+                        .src
+                        .entry_err(entry, msg("config-pim-account-unknown").arg("name", text)));
+                }
+                Some(id)
+            }
+        };
+        let account_email = account
+            .as_ref()
+            .and_then(|a| config.account(a))
+            .map(|a| a.email.clone());
+
+        let mut auth = None;
+        let mut provider = None;
+        for child in children(node) {
+            if name(child) != "auth" {
+                return Err(self.src.node_err(
+                    child,
+                    msg("config-unknown-child")
+                        .arg("node", name(child))
+                        .arg("parent", kind)
+                        .arg("expected", "auth"),
+                ));
+            }
+            if auth.is_some() {
+                return Err(self
+                    .src
+                    .node_err(child, msg("config-set-twice").arg("node", "auth")));
+            }
+            let (parsed, used) = self.auth(
+                child,
+                MailProtocol::Imap,
+                account_email.as_deref().unwrap_or(""),
+            )?;
+            let username_missing = match &parsed {
+                AuthConfig::Password { username, .. } | AuthConfig::OAuth2 { username, .. } => {
+                    username.is_empty()
+                }
+                _ => false,
+            };
+            if username_missing {
+                return Err(self
+                    .src
+                    .node_err(child, msg("config-pim-needs-username").arg("name", id)));
+            }
+            auth = Some(parsed);
+            provider = used;
+        }
+
+        let settings = if subscription {
+            let url = url.ok_or_else(|| {
+                self.src
+                    .node_err(node, msg("config-pim-needs-url").arg("name", id))
+            })?;
+            let color = match prop_str(self.src, node, "color")? {
+                Some((text, entry)) if !is_color(text) => {
+                    return Err(self.src.entry_err(
+                        entry,
+                        msg("config-pim-color-invalid").arg("found", format!("{text:?}")),
+                    ));
+                }
+                other => other.map(|(t, _)| t.to_owned()),
+            };
+            PimSourceSettings::Ics {
+                url,
+                color,
+                alarms: self.prop_bool(node, "alarms")?.unwrap_or(false),
+                refresh_minutes: refresh,
+                auth,
+            }
+        } else {
+            if account.is_none() && url.is_none() {
+                return Err(self
+                    .src
+                    .node_err(node, msg("config-pim-needs-url-or-account").arg("name", id)));
+            }
+            if account.is_none() && auth.is_none() {
+                return Err(self
+                    .src
+                    .node_err(node, msg("config-pim-needs-auth").arg("name", id)));
+            }
+            if kind == "caldav" {
+                PimSourceSettings::Caldav {
+                    account,
+                    url,
+                    auth,
+                    refresh_minutes: refresh,
+                }
+            } else {
+                PimSourceSettings::Carddav {
+                    account,
+                    url,
+                    auth,
+                    refresh_minutes: refresh,
+                }
+            }
+        };
+        let source = PimSourceConfig {
+            id: PimSourceId::new(id),
+            name: name_prop,
+            enabled,
+            settings,
+        };
+        // The checks above cover the contract; this guards against the
+        // two drifting apart.
+        if let Some(issue) = source.issues().first() {
+            return Err(self.src.node_err(node, msg(issue.message_id())));
+        }
+        Ok((source, provider))
     }
 
     fn undo_send_delay(&self, node: &KdlNode) -> Result<u32, ConfigError> {

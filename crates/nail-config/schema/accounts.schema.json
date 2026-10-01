@@ -11,6 +11,27 @@
         "$ref": "#/$defs/AccountSchema"
       }
     },
+    "caldav": {
+      "description": "`caldav \"<name>\" account=… url=… { auth … }`: CalDAV servers\n(calendars and task lists).",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/DavSourceSchema"
+      }
+    },
+    "calendar-subscription": {
+      "description": "`calendar-subscription \"<name>\" url=… { auth … }`: read-only ICS /\nwebcal calendar subscriptions. Names: like account names, unique\namong calendar and contact sources; `local` is reserved.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/CalendarSubscriptionSchema"
+      }
+    },
+    "carddav": {
+      "description": "`carddav \"<name>\" account=… url=… { auth … }`: CardDAV servers\n(address books).",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/DavSourceSchema"
+      }
+    },
     "oauth-provider": {
       "description": "`oauth-provider \"<id>\" client-id=… { scopes … }`: OAuth2 client\nregistrations. `google` and `microsoft` are built in and need only\n`client-id`.",
       "type": "object",
@@ -293,6 +314,68 @@
         }
       ]
     },
+    "CalendarSubscriptionSchema": {
+      "description": "`calendar-subscription \"<name>\" name=… url=… color=… alarms=… refresh=… enabled=… { auth … }`.",
+      "type": "object",
+      "properties": {
+        "alarms": {
+          "description": "Fire the feed's own reminders (default #false).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auth": {
+          "description": "Login for protected feeds (no `username` default).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "color": {
+          "description": "Colour: #RGB, #RRGGBB, #RRGGBBAA or a CSS colour name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "description": "`#false` stops refreshing without removing the calendar (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Display name (default: the calendar name of the feed).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh": {
+          "description": "Refresh interval in minutes, 5 to 10080 (default: the feed's\nsuggestion, else 360).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 10080,
+          "minimum": 5
+        },
+        "url": {
+          "description": "The feed: https:, webcal: or webcals: (http: only for localhost).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
     "ComposerSchema": {
       "description": "Composer mode.",
       "oneOf": [
@@ -379,6 +462,61 @@
             {
               "type": "null"
             }
+          ]
+        }
+      }
+    },
+    "DavSourceSchema": {
+      "description": "`caldav \"<name>\"` / `carddav \"<name>\"` `name=… account=… url=… refresh=… enabled=… { auth … }`.",
+      "type": "object",
+      "properties": {
+        "account": {
+          "description": "The mail account whose login this server uses (and whose email\ndomain finds it when `url` is missing).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "auth": {
+          "description": "Login (default: the account's incoming-server login; required\nwithout `account`, with a `username`). Secret default:\n`keychain:nail/pim/<name>/password`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "description": "`#false` stops syncing without removing the data (default `#true`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Display name (default: the server name).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh": {
+          "description": "Poll interval in minutes, 5 to 10080 (default 15).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "maximum": 10080,
+          "minimum": 5
+        },
+        "url": {
+          "description": "Server URL, https: (http: only for localhost). Required without\n`account`; default: discovered from the account's email domain.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       }

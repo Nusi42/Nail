@@ -243,6 +243,33 @@ pub const SEALED_COLUMNS: &[SealedColumn] = &[
         column: "message",
         key: "seq",
     },
+    // Calendar, contact and task data (M3a, ADR 0058): the iCalendar /
+    // vCard resources, kept conflict copies and the parsed items.
+    SealedColumn {
+        table: "pim_objects",
+        column: "raw",
+        key: "id",
+    },
+    SealedColumn {
+        table: "pim_objects",
+        column: "conflict_raw",
+        key: "id",
+    },
+    SealedColumn {
+        table: "pim_events",
+        column: "data",
+        key: "id",
+    },
+    SealedColumn {
+        table: "pim_contacts",
+        column: "data",
+        key: "id",
+    },
+    SealedColumn {
+        table: "pim_tasks",
+        column: "data",
+        key: "id",
+    },
 ];
 
 /// Progress of the sealed columns: how many values are sealed and how many

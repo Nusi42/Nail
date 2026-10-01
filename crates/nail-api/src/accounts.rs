@@ -38,6 +38,11 @@ pub struct AccountsConfig {
     /// when the request does not give one. `null` means
     /// [`AccountsConfig::DEFAULT_UNDO_SEND_SECS`].
     pub undo_send_secs: Option<u32>,
+    /// Calendar, contact and task sources: ICS subscriptions, CalDAV and
+    /// CardDAV servers (`calendar-subscription`, `caldav`, `carddav` nodes;
+    /// M3a, ADR 0058), in file order. The built-in local source is not
+    /// listed.
+    pub pim_sources: Vec<crate::pim::PimSourceConfig>,
 }
 
 impl AccountsConfig {
@@ -52,6 +57,11 @@ impl AccountsConfig {
     /// The virtual account with this id.
     pub fn virtual_account(&self, id: &AccountId) -> Option<&VirtualAccountConfig> {
         self.virtual_accounts.iter().find(|v| &v.id == id)
+    }
+
+    /// The PIM source with this id.
+    pub fn pim_source(&self, id: &crate::ids::PimSourceId) -> Option<&crate::pim::PimSourceConfig> {
+        self.pim_sources.iter().find(|s| &s.id == id)
     }
 
     /// The identity with this id, in any account.

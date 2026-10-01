@@ -192,7 +192,7 @@ A widget is a node named after its kind. Its properties are its options.
 
 The widgets `calendar`, `agenda`, `mini-month`, `task-list`,
 `contact-list` and `contact-card` are accepted in the file but not
-available yet. Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
+available yet (they arrive with calendars, contacts and tasks). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
 the older form `plugin.<plugin-id>.<panel>` is refused with a hint to it.
 
 ```kdl

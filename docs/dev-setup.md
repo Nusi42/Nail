@@ -466,3 +466,11 @@ For M2c:
 - **0048:** M2c integration (Sieve upload task, junk / snooze / notifications in the core,
   headers-only sync + on-demand bodies + server search, replay connection, localized
   messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)
+
+For M3a:
+
+- **0058:** the M3a contract (calendars, events with recurrence / overrides / edit scopes,
+  contacts, groups, merge links, tasks, reminders, `.ics` / `.vcf` import, read-only MCP
+  payloads; PIM sources as `calendar-subscription` / `caldav` / `carddav` nodes in
+  `accounts.kdl`; store v10; the `nail-ical` (calcard) / `nail-dav` stubs; slots). Texts built
+  in Rust: `locales/<lang>/core-pim.ftl`, `core-ical.ftl`, `core-dav.ftl`.

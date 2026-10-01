@@ -42,6 +42,11 @@ oauth-provider "<id>" client-id="…" { … }
 account "<name>" email="…" { … }
 
 virtual-account "<name>" { … }
+
+calendar-subscription "<name>" url="…"
+
+caldav "<name>" account="…"
+carddav "<name>" account="…"
 ```
 
 All parts are optional and may appear in any order. Accounts and virtual
@@ -374,6 +379,71 @@ oauth-provider "corp" client-id="nail" auth-url="https://login.corp.example/auth
 | `client-secret` | Keychain reference of a client secret, if the provider issued one |
 | `auth-url`, `token-url` | The provider's endpoints (`https://` only); required for providers other than `google` and `microsoft` |
 | `scopes "…" …` | Permissions to request, if not the provider's mail scopes |
+
+## Calendars and contacts
+
+Nail always has **local** calendars, task lists and address books on your
+computer (including the "Collected" address book of people you wrote to);
+they need nothing in this file. Calendar subscriptions and calendar or
+contacts servers are added here, next to your mail accounts.
+
+### Calendar subscriptions (`calendar-subscription`)
+
+A subscription shows a published calendar (holidays, a team schedule) as
+a read-only calendar and refreshes it regularly:
+
+```kdl
+calendar-subscription "holidays" name="Holidays" url="webcal://example.org/holidays.ics" color="#d33"
+```
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `url` | The calendar's address: `https://`, `webcal://` or `webcals://` (required) | — |
+| `name` | Name shown in Nail | the name the calendar gives itself |
+| `color` | `#RGB`, `#RRGGBB`, `#RRGGBBAA` or a colour name | the theme's |
+| `alarms` | `#true` shows the reminders the published calendar contains | `#false` |
+| `refresh` | Minutes between refreshes (5 to 10080) | what the calendar suggests, else 360 |
+| `enabled` | `#false` stops refreshing without removing the calendar | `#true` |
+
+A protected calendar takes an `auth` node like a server (below).
+
+### Calendar and contacts servers (`caldav`, `carddav`)
+
+`caldav` connects your calendars and task lists on a CalDAV server,
+`carddav` your address books on a CardDAV server. Most providers offer
+both next to mail; then name the mail account, and Nail signs in with the
+same login and finds the servers from your address:
+
+```kdl
+account "work" email="ada@work.example" {
+    imap host="imap.work.example"
+}
+caldav "work-calendars" account="work"
+carddav "work-contacts" account="work"
+```
+
+A server without a mail account needs its address and a login:
+
+```kdl
+caldav "home-calendars" url="https://dav.home.example/" {
+    auth "password" username="ada" secret="keychain:nail/pim/home-calendars/password"
+}
+```
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `account` | The mail account whose login the server uses | — |
+| `url` | The server's address (`https://`; `http://` only for `localhost`) | found from the account's email address |
+| `name` | Name shown in Nail | the server's name |
+| `refresh` | Minutes between checks for changes (5 to 10080) | 15 |
+| `enabled` | `#false` stops syncing without removing your data in Nail | `#true` |
+| `auth` | How to sign in, as for mail servers ([Signing in](#signing-in-auth)) | the account's login; required without `account`, with a `username` |
+
+Without `account`, the password is looked up in the keychain under
+`keychain:nail/pim/<name>/password`. The names after `caldav`, `carddav`
+and `calendar-subscription` follow the account-name rules, must be unique
+among them, and `local` is reserved. Removing a mail account also removes
+the servers that use its login (your data on the servers stays).
 
 ## Undo send
 

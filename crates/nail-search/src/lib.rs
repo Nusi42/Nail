@@ -29,6 +29,7 @@ mod error;
 mod exec;
 pub mod imap;
 mod index;
+pub mod pim;
 mod policy;
 pub mod query;
 

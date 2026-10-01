@@ -37,6 +37,12 @@
 //!   notifications, the read-only mail view, installed plug-ins, logs and
 //!   settings. Its plug-in-facing types are also exported for the SDK
 //!   (`@nail/plugin-api`) by [`export_plugin_typescript`].
+//! * M3a (ADR 0058): [`pim`] — calendars, events (recurrence, overrides,
+//!   attendees, alarms, time zones, conferencing links, attachments),
+//!   contacts (vCard 3 / 4, groups, photos, merging), tasks (VTODO),
+//!   sources (local, ICS subscriptions, CalDAV, CardDAV; configured in
+//!   `accounts.kdl`), reminders, `.ics` / `.vcf` import and the read-only
+//!   MCP payloads.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -66,6 +72,7 @@ pub mod localized;
 pub mod mcp;
 pub mod menus;
 pub mod ops;
+pub mod pim;
 pub mod plugins;
 pub mod protocol;
 pub mod remote;
@@ -104,15 +111,19 @@ pub use domain::{
 };
 pub use error::{ApiError, ErrorCode};
 pub use ids::{
-    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PluginDialogId, PluginId, RemoteDeviceId,
-    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
+    EventId, FolderId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId, OutboxId,
+    PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId, RemoteDeviceId,
+    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId, ThreadId,
 };
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
 pub use mcp::{McpClient, McpGrant, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
+pub use pim::{
+    Calendar, CalendarEvent, Contact, PimSource, PimSourceConfig, PimTime, Reminder, Task,
+};
 pub use plugins::{PluginGrant, PluginInfo, PluginManifest, PluginPermission, PluginUiNode};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
@@ -198,6 +209,27 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     plugins::PluginUiIssue::export_all(&cfg)?;
     plugins::PluginDialogResult::export_all(&cfg)?;
     plugins::PluginCommandContext::export_all(&cfg)?;
+    // M3a: PIM types the UI names but that are reachable only through
+    // optional fields, or not at all (validation issues, MCP payloads,
+    // contact entry kinds).
+    pim::PimIssue::export_all(&cfg)?;
+    pim::source::PimSourceIssue::export_all(&cfg)?;
+    pim::source::PimSourceKind::export_all(&cfg)?;
+    pim::source::PimSourceState::export_all(&cfg)?;
+    pim::PimLink::export_all(&cfg)?;
+    pim::contact::ContactPhoto::export_all(&cfg)?;
+    pim::import::PimFormat::export_all(&cfg)?;
+    pim::mcp::McpListEventsArgs::export_all(&cfg)?;
+    pim::mcp::McpFindFreeTimeArgs::export_all(&cfg)?;
+    pim::mcp::McpSearchContactsArgs::export_all(&cfg)?;
+    pim::mcp::McpListTasksArgs::export_all(&cfg)?;
+    pim::mcp::McpCalendarsResource::export_all(&cfg)?;
+    pim::mcp::McpEventsResource::export_all(&cfg)?;
+    pim::mcp::McpFreeTimeResult::export_all(&cfg)?;
+    pim::mcp::McpContactsResource::export_all(&cfg)?;
+    pim::mcp::McpContactResource::export_all(&cfg)?;
+    pim::mcp::McpContactSearchResult::export_all(&cfg)?;
+    pim::mcp::McpTasksResource::export_all(&cfg)?;
 
     write_index(out_dir)
 }

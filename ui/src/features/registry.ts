@@ -13,6 +13,7 @@ import * as customization from "./customization";
 import * as launch from "./launch";
 import * as mcp from "./mcp";
 import * as menus from "./menus";
+import * as pim from "./pim";
 import * as plugins from "./plugins";
 import * as remote from "./remote";
 import * as rules from "./rules";
@@ -36,6 +37,7 @@ export const features: Readonly<Record<string, Feature>> = {
   sync,
   menus,
   plugins,
+  pim,
 };
 
 /** The merged registries. */

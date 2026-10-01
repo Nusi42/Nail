@@ -1,7 +1,7 @@
 //! The built-in widgets of M0 / M1a (and the PIM widgets reserved for
 //! later milestones).
 
-use super::{OptionType, WidgetSpec, future_widget, widget};
+use super::{OptionType, WidgetSpec, widget};
 
 /// Built-in widgets. Implemented widgets have typed options; future ones
 /// accept any options until they exist.
@@ -85,10 +85,4 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     widget("status-bar", &[("items", OptionType::Str)], &[], false),
     widget("text", &[("text", OptionType::Str)], &[], false),
     widget("spacer", &[], &[], false),
-    future_widget("calendar", false),
-    future_widget("agenda", true),
-    future_widget("mini-month", false),
-    future_widget("task-list", true),
-    future_widget("contact-list", true),
-    future_widget("contact-card", false),
 ];

@@ -71,6 +71,7 @@ mod filter;
 pub mod lock;
 mod mail;
 mod mcp;
+pub mod pim;
 mod plugins;
 mod pop3;
 mod queue;

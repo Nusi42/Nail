@@ -6,18 +6,30 @@ import type { AccountStatus } from "./AccountStatus";
 import type { AccountTestResult } from "./AccountTestResult";
 import type { AccountsConfig } from "./AccountsConfig";
 import type { Address } from "./Address";
+import type { AddressBook } from "./AddressBook";
+import type { Calendar } from "./Calendar";
+import type { CalendarEvent } from "./CalendarEvent";
 import type { ConfigBackup } from "./ConfigBackup";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ConfigMergePreview } from "./ConfigMergePreview";
+import type { Contact } from "./Contact";
+import type { ContactGroup } from "./ContactGroup";
+import type { ContactId } from "./ContactId";
+import type { ContactMatch } from "./ContactMatch";
+import type { ContactSummary } from "./ContactSummary";
 import type { CryptoKey } from "./CryptoKey";
 import type { DiscoveredAccount } from "./DiscoveredAccount";
 import type { Draft } from "./Draft";
 import type { DraftAttachment } from "./DraftAttachment";
 import type { DraftId } from "./DraftId";
+import type { DuplicateGroup } from "./DuplicateGroup";
 import type { ErrorCode } from "./ErrorCode";
+import type { EventFields } from "./EventFields";
+import type { EventInstance } from "./EventInstance";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { FolderSyncPolicy } from "./FolderSyncPolicy";
+import type { FreeSlot } from "./FreeSlot";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
 import type { JunkStatus } from "./JunkStatus";
@@ -40,6 +52,11 @@ import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { OutboxId } from "./OutboxId";
 import type { PairingCode } from "./PairingCode";
+import type { PimImportPreview } from "./PimImportPreview";
+import type { PimImportResult } from "./PimImportResult";
+import type { PimSearchHit } from "./PimSearchHit";
+import type { PimSource } from "./PimSource";
+import type { PimSourceTestResult } from "./PimSourceTestResult";
 import type { PluginId } from "./PluginId";
 import type { PluginInfo } from "./PluginInfo";
 import type { PluginInstallPreview } from "./PluginInstallPreview";
@@ -47,6 +64,7 @@ import type { PluginLogEntry } from "./PluginLogEntry";
 import type { PluginSettingDef } from "./PluginSettingDef";
 import type { PluginUiNode } from "./PluginUiNode";
 import type { RecipientKeysReport } from "./RecipientKeysReport";
+import type { Reminder } from "./Reminder";
 import type { RemoteAuditEntry } from "./RemoteAuditEntry";
 import type { RemoteContentAllow } from "./RemoteContentAllow";
 import type { RemoteDevice } from "./RemoteDevice";
@@ -67,6 +85,8 @@ import type { SecuritySettings } from "./SecuritySettings";
 import type { ServerSearch } from "./ServerSearch";
 import type { SieveAccountStatus } from "./SieveAccountStatus";
 import type { SnoozedMessage } from "./SnoozedMessage";
+import type { Task } from "./Task";
+import type { TaskFields } from "./TaskFields";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TotpEnrollment } from "./TotpEnrollment";
 import type { UiContext } from "./UiContext";
@@ -641,7 +661,176 @@ panel: string,
 /**
  * Its content (empty while the plug-in has not rendered it).
  */
-tree: Array<PluginUiNode>, } | { "type": "Error", 
+tree: Array<PluginUiNode>, } | { "type": "PimSources", 
+/**
+ * The sources, the local one first, then in file order.
+ */
+sources: Array<PimSource>, } | { "type": "PimSourceSaved", 
+/**
+ * The saved source.
+ */
+source: PimSource, } | { "type": "PimSourceTested", 
+/**
+ * The result.
+ */
+result: PimSourceTestResult, } | { "type": "Calendars", 
+/**
+ * The calendars and task lists.
+ */
+calendars: Array<Calendar>, } | { "type": "CalendarSaved", 
+/**
+ * The calendar.
+ */
+calendar: Calendar, 
+/**
+ * The queued operations (empty for local-only changes).
+ */
+op_ids: Array<OpId>, } | { "type": "PimDeleted", 
+/**
+ * The queued operations (empty for local items).
+ */
+op_ids: Array<OpId>, } | { "type": "EventInstances", 
+/**
+ * Range start as asked.
+ */
+from: string, 
+/**
+ * Range end as asked.
+ */
+to: string, 
+/**
+ * The occurrences, by start.
+ */
+instances: Array<EventInstance>, } | { "type": "PimEvent", 
+/**
+ * The event.
+ */
+event: CalendarEvent, } | { "type": "EventSaved", 
+/**
+ * The event (series) as saved.
+ */
+event: CalendarEvent, 
+/**
+ * The new series a `this-and-following` edit split off.
+ */
+split: CalendarEvent | null, 
+/**
+ * The queued operations.
+ */
+op_ids: Array<OpId>, } | { "type": "EventSuggested", 
+/**
+ * The pre-filled fields (unsaved).
+ */
+fields: EventFields, } | { "type": "FreeTime", 
+/**
+ * Free slots, by start.
+ */
+slots: Array<FreeSlot>, } | { "type": "AddressBooks", 
+/**
+ * The address books.
+ */
+address_books: Array<AddressBook>, } | { "type": "AddressBookSaved", 
+/**
+ * The address book.
+ */
+address_book: AddressBook, 
+/**
+ * The queued operations.
+ */
+op_ids: Array<OpId>, } | { "type": "Contacts", 
+/**
+ * Contacts matching the filter in total.
+ */
+total: number, 
+/**
+ * Index of the first contact of the page.
+ */
+offset: number, 
+/**
+ * The page.
+ */
+contacts: Array<ContactSummary>, } | { "type": "PimContact", 
+/**
+ * The contact.
+ */
+contact: Contact, } | { "type": "ContactSaved", 
+/**
+ * The contact.
+ */
+contact: Contact, 
+/**
+ * The queued operations.
+ */
+op_ids: Array<OpId>, } | { "type": "ContactMatches", 
+/**
+ * Best first.
+ */
+matches: Array<ContactMatch>, } | { "type": "ContactDuplicates", 
+/**
+ * Groups of likely duplicates.
+ */
+groups: Array<DuplicateGroup>, } | { "type": "ContactPhoto", 
+/**
+ * The contact.
+ */
+contact_id: ContactId, 
+/**
+ * MIME type.
+ */
+mime_type: string, 
+/**
+ * The image (base64).
+ */
+data: string, } | { "type": "ContactGroups", 
+/**
+ * The groups.
+ */
+groups: Array<ContactGroup>, } | { "type": "ContactGroupSaved", 
+/**
+ * The group.
+ */
+group: ContactGroup, 
+/**
+ * The queued operations.
+ */
+op_ids: Array<OpId>, } | { "type": "Tasks", 
+/**
+ * The tasks.
+ */
+tasks: Array<Task>, } | { "type": "PimTask", 
+/**
+ * The task.
+ */
+task: Task, } | { "type": "TaskSaved", 
+/**
+ * The task.
+ */
+task: Task, 
+/**
+ * The queued operations.
+ */
+op_ids: Array<OpId>, } | { "type": "TaskSuggested", 
+/**
+ * The pre-filled fields (unsaved).
+ */
+fields: TaskFields, } | { "type": "PimSearchResults", 
+/**
+ * Best first.
+ */
+hits: Array<PimSearchHit>, } | { "type": "PimImportPreview", 
+/**
+ * What importing would do.
+ */
+preview: PimImportPreview, } | { "type": "PimImported", 
+/**
+ * What it did.
+ */
+result: PimImportResult, } | { "type": "Reminders", 
+/**
+ * Fired and snoozed reminders (and pending ones up to `until`),
+ * by fire time.
+ */
+reminders: Array<Reminder>, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

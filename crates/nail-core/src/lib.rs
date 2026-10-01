@@ -41,6 +41,7 @@ mod notify;
 mod oauth;
 mod outbox;
 pub mod paths;
+mod pim;
 mod plugin_host;
 mod plugin_http;
 mod plugins;

@@ -369,6 +369,12 @@ pub enum NotificationKind {
     SnoozeWoke,
     /// [`crate::Request::TestNotification`].
     Test,
+    /// A calendar or task reminder fired (M3a, ADR 0058). `id` is
+    /// `reminder:<reminder id>`, `account_id` / `folder_id` are `null` and
+    /// `message_ids` is empty; the UI opens the reminder from
+    /// [`crate::Event::ReminderDue`]. Quiet hours do not hold reminders
+    /// back.
+    Reminder,
 }
 
 /// A notification the UI (or the desktop shell) should show. The texts

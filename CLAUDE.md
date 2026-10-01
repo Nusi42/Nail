@@ -46,6 +46,10 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        declarative UI component set `PluginUiNode` + validate_tree, dialogs,
                        notifications, command contexts, the plug-in mail view, admin types);
                        export_plugin_typescript → packages/plugin-api/src/generated (ADR 0050)
+                       M3a: pim (PimTime, calendars / events as series + overrides + EditScope,
+                       recurrence, attendees, alarms, contacts vCard 3/4, groups, merge links,
+                       tasks, reminders, sources = PimSourceConfig in AccountsConfig.pim_sources,
+                       import, read-only MCP payloads; issues() + pim-issue-* ids) (ADR 0058)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -56,7 +60,9 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        the pre-M2d `plugin.<id>.<name>` kind is refused), src/plugins.rs placement writer
                        (`placement_layout`, format preserving) + `InstalledPlugins` for merge conflicts
                        (`preview_merge_with`, `ConfigManager::set_installed_plugins / preview_placements`)
-                       (ADRs 0050, 0055)
+                       (ADRs 0050, 0055);
+                       M3a: accounts.kdl `calendar-subscription` / `caldav` / `carddav` nodes (read, write,
+                       schema; upsert/remove_pim_source), widgets/pim.rs (PIM widget kinds) (ADR 0058)
 crates/nail-store      SQLite metadata (v9), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -76,7 +82,10 @@ crates/nail-store      SQLite metadata (v9), blob store, per-account operation q
                        transaction), orphaned_in_folder, bounded junk training (ADR 0049);
                        v9: plugins.rs — installed plug-ins, grants, settings, per-plug-in KV storage
                        with quotas (QuotaExceeded), bounded logs; storage values + log messages
-                       sealed at rest (ADR 0050)
+                       sealed at rest (ADR 0050);
+                       v10: PIM — sources (local row), collections, raw objects (sealed), events /
+                       tasks / contacts (data sealed), groups, links, instance cache, reminders,
+                       pim_ops queue; src/pim.rs (WP73 slot) (ADR 0058)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -110,6 +119,10 @@ crates/nail-plugins    plug-in host (M2d WP61): PluginHost (one thread + QuickJS
                        PluginServices (implemented by nail-core), prelude.js (`nail.*` API), package.rs
                        (.nailplugin checks, PackageStore keeps approved archives packed and verified by
                        hash), dev.rs (hot reload), l10n.rs (PluginCatalogs) (ADR 0051)
+crates/nail-ical       iCalendar / vCard (calcard), recurrence, zones (chrono-tz), alarms, ICS feeds
+                       (M3a WP71; stub + library smoke tests at the contract, ADR 0058)
+crates/nail-dav        CalDAV / CardDAV client: discovery (SRV + well-known), PROPFIND / REPORT,
+                       sync-collection, conditional writes (M3a WP72; stub at the contract, ADR 0058)
 crates/nail-compose    composer: MIME (mail-builder), Markdown (comrak), CSS inlining, quoting (ADR 0023)
 crates/nail-rules      rules engine: conditions, actions → planned queue ops with inverses, dry runs (ADR 0024)
 crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, audit; McpData trait +
@@ -172,7 +185,8 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
                        M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
                        triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
-                       (context menus, resolve.ts), customization/Editors.tsx; M2d: plugins/);
+                       (context menus, resolve.ts), customization/Editors.tsx; M2d: plugins/;
+                       M3a: pim/ (calendar, contacts, tasks; ADR 0058));
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -314,6 +328,15 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `ui/src/features/plugins/`, `locales/*/{plugins,core-plugins}.ftl`, `packages/*`, `examples/`,
   `userDocs/en/plugins/`). Remote sessions use plug-ins only with a grant for every account; plug-in
   administration is `admin`, dev loading desktop only. Host requests answer `unsupported` until WP64.
+- M3a contract: ADR 0058 (`nail_api::pim`: series + overrides, `EditScope` this / this-and-following
+  / all, `PimTime` date / floating / zoned, contacts with merge links, tasks, reminders; 52 requests,
+  9 events, `NotificationKind::Reminder`; sources in `accounts.kdl` as top-level
+  `calendar-subscription` / `caldav` / `carddav` nodes (DAV may name `account=` to share its login;
+  built-in `local` source); store v10 (PIM tables, instance cache, `pim_ops` queue, sealed data);
+  stub crates `nail-ical` (calcard 0.3, chrono-tz) / `nail-dav`; slots `nail-testkit-net/src/dav.rs`,
+  `nail-store/src/pim.rs`, `nail-search/src/pim.rs`, `nail-triage/src/reminders.rs`,
+  `nail-config/src/widgets/pim.rs`, `ui/src/features/pim/`, `locales/*/{pim,core-pim,core-ical,core-dav}.ftl`).
+  The core answers every PIM request `unsupported` until WP75; remote PIM needs a full grant until then.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

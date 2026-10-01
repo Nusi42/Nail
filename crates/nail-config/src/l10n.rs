@@ -44,6 +44,18 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/core-crypto.ftl"),
     ),
     (
+        "core-dav.ftl",
+        include_str!("../../../locales/en/core-dav.ftl"),
+    ),
+    (
+        "core-ical.ftl",
+        include_str!("../../../locales/en/core-ical.ftl"),
+    ),
+    (
+        "core-pim.ftl",
+        include_str!("../../../locales/en/core-pim.ftl"),
+    ),
+    (
         "core-plugins.ftl",
         include_str!("../../../locales/en/core-plugins.ftl"),
     ),
@@ -62,6 +74,7 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ),
     ("mcp.ftl", include_str!("../../../locales/en/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/en/menus.ftl")),
+    ("pim.ftl", include_str!("../../../locales/en/pim.ftl")),
     (
         "plugins.ftl",
         include_str!("../../../locales/en/plugins.ftl"),
@@ -97,6 +110,18 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/core-crypto.ftl"),
     ),
     (
+        "core-dav.ftl",
+        include_str!("../../../locales/de/core-dav.ftl"),
+    ),
+    (
+        "core-ical.ftl",
+        include_str!("../../../locales/de/core-ical.ftl"),
+    ),
+    (
+        "core-pim.ftl",
+        include_str!("../../../locales/de/core-pim.ftl"),
+    ),
+    (
         "core-plugins.ftl",
         include_str!("../../../locales/de/core-plugins.ftl"),
     ),
@@ -115,6 +140,7 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ),
     ("mcp.ftl", include_str!("../../../locales/de/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/de/menus.ftl")),
+    ("pim.ftl", include_str!("../../../locales/de/pim.ftl")),
     (
         "plugins.ftl",
         include_str!("../../../locales/de/plugins.ftl"),

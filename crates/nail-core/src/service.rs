@@ -1087,6 +1087,59 @@ impl Service {
             | Request::RespondPluginDialog { .. }
             | Request::PluginUiAction { .. }
             | Request::GetPluginPanel { .. }) => crate::plugins::handle(self, request).await?,
+            // M3a PIM (ADR 0058): one arm, wired by WP75.
+            request @ (Request::ListPimSources
+            | Request::AddPimSource { .. }
+            | Request::UpdatePimSource { .. }
+            | Request::RemovePimSource { .. }
+            | Request::TestPimSource { .. }
+            | Request::SyncPimSources { .. }
+            | Request::ListCalendars { .. }
+            | Request::CreateCalendar { .. }
+            | Request::UpdateCalendar { .. }
+            | Request::DeleteCalendar { .. }
+            | Request::ListEventInstances { .. }
+            | Request::GetEvent { .. }
+            | Request::CreateEvent { .. }
+            | Request::UpdateEvent { .. }
+            | Request::DeleteEvent { .. }
+            | Request::MoveEvent { .. }
+            | Request::EventFromMessage { .. }
+            | Request::FindFreeTime { .. }
+            | Request::ListAddressBooks { .. }
+            | Request::CreateAddressBook { .. }
+            | Request::UpdateAddressBook { .. }
+            | Request::DeleteAddressBook { .. }
+            | Request::ListContacts { .. }
+            | Request::GetContact { .. }
+            | Request::CreateContact { .. }
+            | Request::UpdateContact { .. }
+            | Request::DeleteContacts { .. }
+            | Request::MoveContact { .. }
+            | Request::SearchContacts { .. }
+            | Request::FindDuplicateContacts { .. }
+            | Request::MergeContacts { .. }
+            | Request::UnlinkContact { .. }
+            | Request::GetContactPhoto { .. }
+            | Request::ListContactGroups { .. }
+            | Request::CreateContactGroup { .. }
+            | Request::UpdateContactGroup { .. }
+            | Request::DeleteContactGroup { .. }
+            | Request::ListTasks { .. }
+            | Request::GetTask { .. }
+            | Request::CreateTask { .. }
+            | Request::UpdateTask { .. }
+            | Request::CompleteTask { .. }
+            | Request::MoveTask { .. }
+            | Request::DeleteTask { .. }
+            | Request::TaskFromMessage { .. }
+            | Request::SearchPim { .. }
+            | Request::PreviewPimImport { .. }
+            | Request::ImportPim { .. }
+            | Request::ResolvePimConflict { .. }
+            | Request::ListReminders { .. }
+            | Request::SnoozeReminders { .. }
+            | Request::DismissReminders { .. }) => crate::pim::handle(self, request).await?,
         })
     }
 }

@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 use nail_api::ErrorCode;
 use nail_api::mcp::McpSettingsIssue;
+use nail_api::pim::PimIssue;
+use nail_api::pim::source::{PimSourceIssue, PimSourceState};
 use nail_api::plugins::{
     PluginManifestIssueKind, PluginPermission, PluginStopReason, PluginUiIssueKind,
 };
@@ -81,6 +83,27 @@ fn contract_message_ids_exist_in_english() {
     );
     wanted.extend(PluginPermission::label_ids().into_iter().map(str::to_owned));
     wanted.push("plugin-settings-invalid".to_owned());
+    // M3a (ADR 0058): PIM validation issues, source issues and states, the
+    // reminder notification.
+    wanted.extend(PimIssue::ALL.iter().map(|i| i.message_id().to_owned()));
+    wanted.extend(
+        PimSourceIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(
+        PimSourceState::ALL
+            .iter()
+            .map(|s| s.message_id().to_owned()),
+    );
+    wanted.extend(
+        [
+            "notification-reminder-title",
+            "notification-reminder-body",
+            "notification-reminder-body-location",
+        ]
+        .map(str::to_owned),
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -108,6 +131,10 @@ fn german_catalogs_are_the_same_files() {
         "core-triage.ftl",
         "core-plugins.ftl",
         "plugins.ftl",
+        "core-pim.ftl",
+        "core-ical.ftl",
+        "core-dav.ftl",
+        "pim.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

@@ -88,6 +88,9 @@ fn accounts_schema_snapshot() {
         properties(&schema),
         [
             "account",
+            "caldav",
+            "calendar-subscription",
+            "carddav",
             "oauth-provider",
             "undo-send-delay",
             "virtual-account"

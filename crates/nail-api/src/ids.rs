@@ -158,6 +158,60 @@ string_id!(
     PluginDialogId
 );
 
+string_id!(
+    /// Identifies a calendar, contact or task source (M3a,
+    /// [`crate::pim::PimSource`]): the name of its node in `accounts.kdl`
+    /// (`caldav "work-dav"`), or [`PimSourceId::LOCAL`] for the built-in
+    /// local source. A separate name space from accounts.
+    PimSourceId
+);
+string_id!(
+    /// Identifies a calendar ([`crate::pim::Calendar`]). Task lists are
+    /// calendars that hold tasks (CalDAV keeps both in one collection).
+    /// Opaque, made by the core.
+    CalendarId
+);
+string_id!(
+    /// Identifies an address book ([`crate::pim::AddressBook`]). Opaque.
+    AddressBookId
+);
+string_id!(
+    /// Identifies a calendar event, the whole series of a recurring one
+    /// ([`crate::pim::CalendarEvent`]). Opaque; not the iCalendar `UID`.
+    EventId
+);
+string_id!(
+    /// Identifies a contact ([`crate::pim::Contact`]). Opaque; not the
+    /// vCard `UID`.
+    ContactId
+);
+string_id!(
+    /// Identifies a contact group ([`crate::pim::ContactGroup`]). Opaque.
+    ContactGroupId
+);
+string_id!(
+    /// Identifies a task ([`crate::pim::Task`]). Opaque; not the
+    /// iCalendar `UID`.
+    TaskId
+);
+string_id!(
+    /// Identifies one reminder: an alarm of an event occurrence or a task
+    /// ([`crate::pim::Reminder`]). Opaque.
+    ReminderId
+);
+
+impl PimSourceId {
+    /// Id of the built-in local source (local calendars, task lists and
+    /// address books, including the "Collected" address book). Reserved:
+    /// `accounts.kdl` cannot define a source with this name.
+    pub const LOCAL: &'static str = "local";
+
+    /// The built-in local source.
+    pub fn local() -> Self {
+        Self::new(Self::LOCAL)
+    }
+}
+
 impl AccountId {
     /// Id of the built-in "All accounts" virtual account (the unified
     /// inbox). It is reserved: `accounts.kdl` cannot define an account or a
@@ -183,6 +237,11 @@ mod tests {
         assert_eq!(id.to_string(), "acc-1");
         assert_eq!(MessageId::from("m").as_str(), "m");
         assert_eq!(AccountId::all().as_str(), "all");
+        assert_eq!(PimSourceId::local().as_str(), "local");
+        assert_eq!(
+            serde_json::to_value(EventId::new("ev-1")).unwrap(),
+            serde_json::json!("ev-1")
+        );
         assert_eq!(
             serde_json::to_value(OpId::new("op-7")).unwrap(),
             serde_json::json!("op-7")

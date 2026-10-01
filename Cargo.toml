@@ -24,6 +24,8 @@ members = [
     "crates/nail-sieve",
     "crates/nail-triage",
     "crates/nail-plugins",
+    "crates/nail-ical",
+    "crates/nail-dav",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -56,6 +58,8 @@ default-members = [
     "crates/nail-sieve",
     "crates/nail-triage",
     "crates/nail-plugins",
+    "crates/nail-ical",
+    "crates/nail-dav",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -94,6 +98,8 @@ nail-proxy = { path = "crates/nail-proxy" }
 nail-sieve = { path = "crates/nail-sieve" }
 nail-triage = { path = "crates/nail-triage" }
 nail-plugins = { path = "crates/nail-plugins" }
+nail-ical = { path = "crates/nail-ical" }
+nail-dav = { path = "crates/nail-dav" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -235,6 +241,16 @@ rquickjs = { version = "0.14.0", features = ["futures", "loader", "macro", "clas
 # `.nailplugin` archives (zip): deflate through zlib-rs (pure Rust, Zlib
 # licence); no bzip2 / zstd / lzma C code, no AES.
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+# M3a (ADR 0058). Calendars, contacts and tasks. Licences: Apache-2.0 / MIT.
+# iCalendar / vCard parsing and writing, RRULE expansion and zone detection
+# (nail-ical, WP71): calcard from Stalwart Labs (Apache-2.0 OR MIT); the
+# JSCalendar / JSContact (`jmap`) feature is off. Its RRULE engine is a port
+# of rust-rrule. CalDAV / CardDAV (nail-dav, WP72) uses the workspace
+# reqwest + quick-xml; no new HTTP or XML library.
+calcard = { version = "0.3.14", default-features = false }
+# IANA zones for chrono (the same version calcard uses).
+chrono-tz = "0.10.4"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

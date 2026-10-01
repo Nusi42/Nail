@@ -98,6 +98,15 @@ config-member-virtual = unknown account "{ $name }" (virtual accounts cannot be 
 config-member-duplicate = account "{ $name }" is listed twice
 config-members-empty = `members` needs at least one account
 config-virtual-needs-members = virtual account "{ $name }" needs `members "<account>" …`
+config-pim-source-duplicate = a calendar or contact source named "{ $name }" is already defined
+config-pim-source-reserved = "{ $name }" is reserved for the built-in local calendars and address books
+config-pim-source-invalid = invalid source name "{ $name }": use 1 to 64 lowercase letters, digits, `-`, `_` or `.`, starting with a letter or digit
+config-pim-account-unknown = unknown account "{ $name }"
+config-pim-needs-url = calendar subscription "{ $name }" needs url="…"
+config-pim-needs-url-or-account = "{ $name }" needs url="…" or account="…" (to use that account's login and find its server)
+config-pim-needs-auth = "{ $name }" has no account="…", so it needs an `auth` node
+config-pim-needs-username = the `auth` node of "{ $name }" needs username="…"
+config-pim-color-invalid = `color` must be #RGB, #RRGGBB, #RRGGBBAA or a colour name, found { $found }
 config-map-folder-duplicate = folder "{ $name }" is mapped twice
 config-map-not-member = account "{ $name }" is not a member of this virtual account
 config-map-entry-duplicate = this folder is listed twice

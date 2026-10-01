@@ -2,7 +2,7 @@
 
 Parallel work packages each own one directory here, so no two packages edit
 the same UI file (M1b: ADR 0022; M2a: ADR 0029; M2b: ADR 0036; M2c: ADR 0043;
-M2d: ADR 0050):
+M2d: ADR 0050; M3a: ADR 0058):
 
 | Directory        | Work package | Owns                                                                          |
 | ---------------- | ------------ | ----------------------------------------------------------------------------- |
@@ -18,6 +18,7 @@ M2d: ADR 0050):
 | `sync/`          | M2c WP54     | per-folder sync policy, bodies on demand                                      |
 | `menus/`         | M2c WP54     | right-click context menus from `layout.kdl` (`resolve.ts`)                    |
 | `plugins/`       | M2d WP62     | plug-in UI trees, dialogs, panels, commands, install dialog, plug-in manager  |
+| `pim/`           | M3a WP74     | calendar views, event / contact / task editors, groups, merge, reminders      |
 
 ## Files of a slot
 

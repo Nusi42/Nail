@@ -22,7 +22,7 @@ use ts_rs::TS;
 use crate::accounts::BodyPolicy;
 use crate::accounts::{
     AccountConfig, AccountStatus, AccountTestResult, AccountsConfig, DiscoveredAccount, Identity,
-    SecretInput, VirtualAccountConfig,
+    SecretInput, SecretValue, VirtualAccountConfig,
 };
 use crate::compose::{
     ComposerMode, Draft, DraftAttachment, DraftContext, OutboxEntry, OutboxState,
@@ -36,14 +36,25 @@ use crate::customize::{
 use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
 use crate::ids::{
-    AccountId, ConfigBackupId, DraftId, FolderId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PluginDialogId, PluginId, RemoteDeviceId,
-    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, ThreadId,
+    AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
+    EventId, FolderId, IdentityId, KeyId, McpClientId, MessageId, OAuthFlowId, OpId, OutboxId,
+    PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId, ReminderId, RemoteDeviceId,
+    RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId, TaskId, ThreadId,
 };
 use crate::launch::LaunchRequest;
 use crate::localized::LocalizedMessage;
 use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
+use crate::pim::calendar::FreeSlot;
+use crate::pim::contact::DuplicateGroup;
+use crate::pim::import::{PimImportPreview, PimImportResult, PimImportSource};
+use crate::pim::source::{PimOpStatus, PimSourceTestResult};
+use crate::pim::{
+    AddressBook, AddressBookSettings, Calendar, CalendarComponent, CalendarEvent, CalendarSettings,
+    ConflictChoice, Contact, ContactFields, ContactGroup, ContactMatch, ContactSummary, EditScope,
+    EventFields, EventInstance, PimItemKind, PimItemRef, PimSearchHit, PimSource, PimSourceConfig,
+    PimTime, Recurrence, Reminder, Task, TaskFields,
+};
 use crate::plugins::runtime::PluginCommandSurface;
 use crate::plugins::{
     PluginDialog, PluginGrant, PluginInfo, PluginInstallPreview, PluginLogEntry,
@@ -1348,6 +1359,489 @@ pub enum Request {
         #[serde(default)]
         client_id: Option<String>,
     },
+
+    // --- PIM sources (M3a WP70, ADR 0058) ---
+    /// Every source (the local one first), with its status. Answered with
+    /// [`Response::PimSources`].
+    ListPimSources,
+    /// Add a subscription or DAV source to `accounts.kdl` and start
+    /// syncing it. Answered with [`Response::PimSourceSaved`], followed by
+    /// [`Event::PimSourcesChanged`] and [`Event::AccountsChanged`];
+    /// `invalid_request` with a `pim-source-issue-*` id, `conflict` for a
+    /// taken id.
+    AddPimSource {
+        /// The source; an empty `id` lets the core derive one.
+        config: Box<PimSourceConfig>,
+        /// Its secret (password or finished OAuth flow), stored in the
+        /// keychain under the source's reference.
+        #[serde(default)]
+        secret: Option<SecretValue>,
+    },
+    /// Replace a source's configuration (matched by `config.id`).
+    /// Answered with [`Response::PimSourceSaved`].
+    UpdatePimSource {
+        /// The new configuration.
+        config: Box<PimSourceConfig>,
+        /// A changed secret, `null` = keep.
+        #[serde(default)]
+        secret: Option<SecretValue>,
+    },
+    /// Remove a source from `accounts.kdl` with all its local data and
+    /// queued writes (nothing changes on the server). Answered with
+    /// [`Response::Done`]; `invalid_request` for the local source.
+    RemovePimSource {
+        /// The source.
+        source_id: PimSourceId,
+    },
+    /// Try a configuration without saving it: discovery (RFC 6764 for DAV
+    /// sources without URL), login, the collections found. Answered with
+    /// [`Response::PimSourceTested`].
+    TestPimSource {
+        /// The configuration.
+        config: Box<PimSourceConfig>,
+        /// A secret to try.
+        #[serde(default)]
+        secret: Option<SecretValue>,
+    },
+    /// Sync now. Answered with [`Response::Done`] at once; progress arrives
+    /// as [`Event::PimSourcesChanged`].
+    SyncPimSources {
+        /// One source; `null` = all.
+        #[serde(default)]
+        source_id: Option<PimSourceId>,
+    },
+
+    // --- Calendars and task lists (M3a) ---
+    /// Answered with [`Response::Calendars`] (by `order`, then name).
+    ListCalendars {
+        /// One source; `null` = all.
+        #[serde(default)]
+        source_id: Option<PimSourceId>,
+    },
+    /// Create a calendar or task list (local, or `MKCALENDAR` on a CalDAV
+    /// source). Answered with [`Response::CalendarSaved`];
+    /// `invalid_request` for ICS sources and CardDAV sources.
+    CreateCalendar {
+        /// The source.
+        source_id: PimSourceId,
+        /// Its settings.
+        settings: CalendarSettings,
+        /// What it holds (at least one).
+        components: Vec<CalendarComponent>,
+    },
+    /// Change a calendar's settings. Answered with
+    /// [`Response::CalendarSaved`] (works for read-only calendars too:
+    /// colour, visibility and reminders are local).
+    UpdateCalendar {
+        /// The calendar.
+        calendar_id: CalendarId,
+        /// The new settings.
+        settings: CalendarSettings,
+    },
+    /// Delete a calendar with its events and tasks (on the server too).
+    /// Answered with [`Response::PimDeleted`]; `forbidden` for
+    /// subscriptions (remove the source instead).
+    DeleteCalendar {
+        /// The calendar.
+        calendar_id: CalendarId,
+    },
+
+    // --- Events (M3a) ---
+    /// The occurrences overlapping `[from, to)`, by start, from the instance
+    /// cache (cancelled occurrences and hidden calendars left out).
+    /// Answered with [`Response::EventInstances`]; `invalid_request` for a
+    /// range over 400 days.
+    ListEventInstances {
+        /// Range start (RFC 3339).
+        from: String,
+        /// Range end (RFC 3339).
+        to: String,
+        /// Calendars; `null` = every visible one.
+        #[serde(default)]
+        calendar_ids: Option<Vec<CalendarId>>,
+        /// IANA zone that all-day and floating events are placed in (the
+        /// UI's zone).
+        tz: String,
+    },
+    /// One event (the whole series). Answered with [`Response::PimEvent`].
+    GetEvent {
+        /// The event.
+        event_id: EventId,
+    },
+    /// Create an event. Answered with [`Response::EventSaved`];
+    /// `invalid_request` with a `pim-issue-*` id, `forbidden` for a
+    /// read-only calendar.
+    CreateEvent {
+        /// Its calendar.
+        calendar_id: CalendarId,
+        /// The fields.
+        fields: Box<EventFields>,
+        /// Recurrence, `null` = single.
+        #[serde(default)]
+        recurrence: Option<Recurrence>,
+    },
+    /// Change an event, one occurrence, or an occurrence and the following
+    /// ones (see [`EditScope`]). Answered with [`Response::EventSaved`]
+    /// (`split` holds the new series of a `this-and-following` edit);
+    /// `invalid_request` (`pim-issue-invalid-scope`) for `this` /
+    /// `this-and-following` without `recurrence_id`.
+    UpdateEvent {
+        /// The event (series).
+        event_id: EventId,
+        /// Which occurrences.
+        #[serde(default)]
+        scope: EditScope,
+        /// The occurrence (its recurrence id from [`EventInstance`]) for
+        /// `this` / `this-and-following`.
+        #[serde(default)]
+        recurrence_id: Option<PimTime>,
+        /// The new fields (of the series, the occurrence, or the new
+        /// series).
+        fields: Box<EventFields>,
+        /// The new recurrence (scope `all` and `this-and-following`);
+        /// ignored for `this`.
+        #[serde(default)]
+        recurrence: Option<Recurrence>,
+    },
+    /// Delete an event, one occurrence (an exception) or an occurrence and
+    /// the following ones (the series ends before it). Answered with
+    /// [`Response::PimDeleted`].
+    DeleteEvent {
+        /// The event (series).
+        event_id: EventId,
+        /// Which occurrences.
+        #[serde(default)]
+        scope: EditScope,
+        /// The occurrence for `this` / `this-and-following`.
+        #[serde(default)]
+        recurrence_id: Option<PimTime>,
+    },
+    /// Move an event (with all occurrences) to another calendar. Answered
+    /// with [`Response::EventSaved`].
+    MoveEvent {
+        /// The event.
+        event_id: EventId,
+        /// The target calendar.
+        calendar_id: CalendarId,
+    },
+    /// "Create event from email": unsaved fields pre-filled from a message
+    /// (subject as title, sender and recipients as attendees, a link to the
+    /// message, an attached `.ics` when there is one). Save with
+    /// [`Request::CreateEvent`]. Answered with [`Response::EventSuggested`].
+    EventFromMessage {
+        /// The message.
+        message_id: MessageId,
+    },
+    /// Free stretches of at least `duration_minutes` in `[from, to)`,
+    /// counting busy (opaque, not cancelled) occurrences of the calendars.
+    /// Answered with [`Response::FreeTime`].
+    FindFreeTime {
+        /// Range start (RFC 3339).
+        from: String,
+        /// Range end (RFC 3339).
+        to: String,
+        /// Shortest slot, minutes.
+        duration_minutes: u32,
+        /// Calendars that count; `null` = every visible one.
+        #[serde(default)]
+        calendar_ids: Option<Vec<CalendarId>>,
+        /// IANA zone for all-day and floating events.
+        tz: String,
+    },
+
+    // --- Address books, contacts and groups (M3a) ---
+    /// Answered with [`Response::AddressBooks`].
+    ListAddressBooks {
+        /// One source; `null` = all.
+        #[serde(default)]
+        source_id: Option<PimSourceId>,
+    },
+    /// Create an address book (local, or extended `MKCOL` on CardDAV).
+    /// Answered with [`Response::AddressBookSaved`].
+    CreateAddressBook {
+        /// The source.
+        source_id: PimSourceId,
+        /// Its settings.
+        settings: AddressBookSettings,
+    },
+    /// Change an address book's settings. Answered with
+    /// [`Response::AddressBookSaved`].
+    UpdateAddressBook {
+        /// The address book.
+        address_book_id: AddressBookId,
+        /// The new settings.
+        settings: AddressBookSettings,
+    },
+    /// Delete an address book with its contacts (on the server too).
+    /// Answered with [`Response::PimDeleted`]; `forbidden` for the
+    /// Collected book.
+    DeleteAddressBook {
+        /// The address book.
+        address_book_id: AddressBookId,
+    },
+    /// A page of contacts by sort name (linked contacts once, under the
+    /// first of them). Answered with [`Response::Contacts`].
+    ListContacts {
+        /// Address books; `null` = every visible one.
+        #[serde(default)]
+        address_book_ids: Option<Vec<AddressBookId>>,
+        /// Only members of this group.
+        #[serde(default)]
+        group_id: Option<ContactGroupId>,
+        /// Index of the first contact.
+        offset: u32,
+        /// At most this many.
+        limit: u32,
+    },
+    /// One contact. Answered with [`Response::PimContact`].
+    GetContact {
+        /// The contact.
+        contact_id: ContactId,
+    },
+    /// Create a contact. Answered with [`Response::ContactSaved`];
+    /// `invalid_request` with a `pim-issue-*` id.
+    CreateContact {
+        /// Its address book.
+        address_book_id: AddressBookId,
+        /// The fields.
+        fields: Box<ContactFields>,
+    },
+    /// Change a contact. Answered with [`Response::ContactSaved`].
+    UpdateContact {
+        /// The contact.
+        contact_id: ContactId,
+        /// The new fields.
+        fields: Box<ContactFields>,
+    },
+    /// Delete contacts. Answered with [`Response::PimDeleted`].
+    DeleteContacts {
+        /// The contacts.
+        contact_ids: Vec<ContactId>,
+    },
+    /// Move a contact to another address book. Answered with
+    /// [`Response::ContactSaved`].
+    MoveContact {
+        /// The contact.
+        contact_id: ContactId,
+        /// The target address book.
+        address_book_id: AddressBookId,
+    },
+    /// Contacts whose name, email, phone or organization contains `query`
+    /// (case-insensitive), best first. Answered with
+    /// [`Response::ContactMatches`].
+    SearchContacts {
+        /// What to look for.
+        query: String,
+        /// Address books; `null` = all (hidden ones too).
+        #[serde(default)]
+        address_book_ids: Option<Vec<AddressBookId>>,
+        /// At most this many.
+        limit: u32,
+    },
+    /// Contacts that look like the same person (shared email or phone,
+    /// same name), across books. Answered with
+    /// [`Response::ContactDuplicates`].
+    FindDuplicateContacts {
+        /// Address books; `null` = all.
+        #[serde(default)]
+        address_book_ids: Option<Vec<AddressBookId>>,
+    },
+    /// Merge contacts into `primary_id` with the merged `fields` (chosen in
+    /// the merge dialog): contacts in the primary's address book are folded
+    /// into it and deleted, contacts in other books are linked to it and
+    /// keep their cards. Answered with [`Response::ContactSaved`].
+    MergeContacts {
+        /// The contact that remains.
+        primary_id: ContactId,
+        /// The others (at least one).
+        contact_ids: Vec<ContactId>,
+        /// The merged fields for the primary.
+        fields: Box<ContactFields>,
+    },
+    /// Undo a link from a merge: the contact shows on its own again.
+    /// Answered with [`Response::Done`].
+    UnlinkContact {
+        /// The contact.
+        contact_id: ContactId,
+    },
+    /// A contact's stored photo. Answered with [`Response::ContactPhoto`];
+    /// `not_found` when it has none.
+    GetContactPhoto {
+        /// The contact.
+        contact_id: ContactId,
+    },
+    /// Answered with [`Response::ContactGroups`] (by name).
+    ListContactGroups {
+        /// Address books; `null` = all.
+        #[serde(default)]
+        address_book_ids: Option<Vec<AddressBookId>>,
+    },
+    /// Create a group. Answered with [`Response::ContactGroupSaved`].
+    CreateContactGroup {
+        /// Its address book (members must be in it).
+        address_book_id: AddressBookId,
+        /// Name.
+        name: String,
+        /// Member contacts.
+        member_ids: Vec<ContactId>,
+        /// Members that are only addresses.
+        #[serde(default)]
+        member_emails: Vec<String>,
+    },
+    /// Rename a group or change its members. Answered with
+    /// [`Response::ContactGroupSaved`].
+    UpdateContactGroup {
+        /// The group.
+        group_id: ContactGroupId,
+        /// Name.
+        name: String,
+        /// Member contacts.
+        member_ids: Vec<ContactId>,
+        /// Members that are only addresses.
+        #[serde(default)]
+        member_emails: Vec<String>,
+    },
+    /// Delete a group (its members stay). Answered with
+    /// [`Response::PimDeleted`].
+    DeleteContactGroup {
+        /// The group.
+        group_id: ContactGroupId,
+    },
+
+    // --- Tasks (M3a) ---
+    /// Tasks of the lists, parents before their subtasks, by due date /
+    /// manual order. Answered with [`Response::Tasks`].
+    ListTasks {
+        /// Task lists; `null` = every visible one.
+        #[serde(default)]
+        calendar_ids: Option<Vec<CalendarId>>,
+        /// Include completed and cancelled tasks.
+        #[serde(default)]
+        include_completed: bool,
+    },
+    /// One task. Answered with [`Response::PimTask`].
+    GetTask {
+        /// The task.
+        task_id: TaskId,
+    },
+    /// Create a task. Answered with [`Response::TaskSaved`];
+    /// `invalid_request` with a `pim-issue-*` id (`pim-issue-task-cycle`).
+    CreateTask {
+        /// Its task list.
+        calendar_id: CalendarId,
+        /// The fields.
+        fields: Box<TaskFields>,
+        /// Recurrence, `null` = single.
+        #[serde(default)]
+        recurrence: Option<Recurrence>,
+    },
+    /// Change a task. Answered with [`Response::TaskSaved`].
+    UpdateTask {
+        /// The task.
+        task_id: TaskId,
+        /// The new fields.
+        fields: Box<TaskFields>,
+        /// The new recurrence.
+        #[serde(default)]
+        recurrence: Option<Recurrence>,
+    },
+    /// Mark a task done (recurring: the current occurrence, the task moves
+    /// to the next) or open again. Answered with [`Response::TaskSaved`].
+    CompleteTask {
+        /// The task.
+        task_id: TaskId,
+        /// Done or open.
+        completed: bool,
+    },
+    /// Move a task (with its subtasks) to another list. Answered with
+    /// [`Response::TaskSaved`].
+    MoveTask {
+        /// The task.
+        task_id: TaskId,
+        /// The target list.
+        calendar_id: CalendarId,
+    },
+    /// Delete a task. Answered with [`Response::PimDeleted`].
+    DeleteTask {
+        /// The task.
+        task_id: TaskId,
+        /// Delete its subtasks too (else they move up a level).
+        #[serde(default)]
+        with_subtasks: bool,
+    },
+    /// "Create task from email": unsaved fields pre-filled from a message
+    /// (subject as title, a link to the message). Save with
+    /// [`Request::CreateTask`]. Answered with [`Response::TaskSuggested`].
+    TaskFromMessage {
+        /// The message.
+        message_id: MessageId,
+    },
+
+    // --- PIM search, import, conflicts (M3a) ---
+    /// Full-text search over events, tasks and contacts. Answered with
+    /// [`Response::PimSearchResults`].
+    SearchPim {
+        /// Free text.
+        query: String,
+        /// What to search; empty = everything.
+        #[serde(default)]
+        kinds: Vec<PimItemKind>,
+        /// At most this many hits.
+        limit: u32,
+    },
+    /// Read `.ics` / `.vcf` data and say what importing it would do.
+    /// Answered with [`Response::PimImportPreview`]; `invalid_request` when
+    /// it is neither, `too_large`.
+    PreviewPimImport {
+        /// The data.
+        source: PimImportSource,
+    },
+    /// Import `.ics` data into a calendar (events) / task list (tasks) and
+    /// `.vcf` data into an address book. Answered with
+    /// [`Response::PimImported`].
+    ImportPim {
+        /// The data.
+        source: PimImportSource,
+        /// Target for events and tasks (a calendar with the right
+        /// components); `null` = the default calendar.
+        #[serde(default)]
+        calendar_id: Option<CalendarId>,
+        /// Target for contacts; `null` = the default address book.
+        #[serde(default)]
+        address_book_id: Option<AddressBookId>,
+    },
+    /// Resolve a sync conflict ([`crate::pim::PimItemSync::Conflict`]).
+    /// Answered with [`Response::Done`].
+    ResolvePimConflict {
+        /// The item.
+        item: PimItemRef,
+        /// Which version wins.
+        keep: ConflictChoice,
+    },
+
+    // --- Reminders (M3a) ---
+    /// Reminders that fired or are snoozed, plus pending ones up to
+    /// `until`. Answered with [`Response::Reminders`].
+    ListReminders {
+        /// Also pending reminders firing before this instant (RFC 3339).
+        #[serde(default)]
+        until: Option<String>,
+    },
+    /// Snooze reminders until a time. Answered with [`Response::Done`],
+    /// followed by [`Event::RemindersChanged`].
+    SnoozeReminders {
+        /// The reminders.
+        reminder_ids: Vec<ReminderId>,
+        /// When they come back (RFC 3339, in the future).
+        until: String,
+    },
+    /// Dismiss reminders (acknowledged on the server where supported).
+    /// Answered with [`Response::Done`], followed by
+    /// [`Event::RemindersChanged`].
+    DismissReminders {
+        /// The reminders.
+        reminder_ids: Vec<ReminderId>,
+    },
 }
 
 /// The core's answer to one [`Request`].
@@ -1941,6 +2435,183 @@ pub enum Response {
         /// Its content (empty while the plug-in has not rendered it).
         tree: Vec<PluginUiNode>,
     },
+    /// Answer to [`Request::ListPimSources`].
+    PimSources {
+        /// The sources, the local one first, then in file order.
+        sources: Vec<PimSource>,
+    },
+    /// Answer to [`Request::AddPimSource`] and [`Request::UpdatePimSource`].
+    PimSourceSaved {
+        /// The saved source.
+        source: Box<PimSource>,
+    },
+    /// Answer to [`Request::TestPimSource`].
+    PimSourceTested {
+        /// The result.
+        result: Box<PimSourceTestResult>,
+    },
+    /// Answer to [`Request::ListCalendars`].
+    Calendars {
+        /// The calendars and task lists.
+        calendars: Vec<Calendar>,
+    },
+    /// Answer to [`Request::CreateCalendar`] and [`Request::UpdateCalendar`].
+    CalendarSaved {
+        /// The calendar.
+        calendar: Box<Calendar>,
+        /// The queued operations (empty for local-only changes).
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to the PIM delete requests.
+    PimDeleted {
+        /// The queued operations (empty for local items).
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::ListEventInstances`].
+    EventInstances {
+        /// Range start as asked.
+        from: String,
+        /// Range end as asked.
+        to: String,
+        /// The occurrences, by start.
+        instances: Vec<EventInstance>,
+    },
+    /// Answer to [`Request::GetEvent`].
+    PimEvent {
+        /// The event.
+        event: Box<CalendarEvent>,
+    },
+    /// Answer to [`Request::CreateEvent`], [`Request::UpdateEvent`] and
+    /// [`Request::MoveEvent`].
+    EventSaved {
+        /// The event (series) as saved.
+        event: Box<CalendarEvent>,
+        /// The new series a `this-and-following` edit split off.
+        split: Option<Box<CalendarEvent>>,
+        /// The queued operations.
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::EventFromMessage`].
+    EventSuggested {
+        /// The pre-filled fields (unsaved).
+        fields: Box<EventFields>,
+    },
+    /// Answer to [`Request::FindFreeTime`].
+    FreeTime {
+        /// Free slots, by start.
+        slots: Vec<FreeSlot>,
+    },
+    /// Answer to [`Request::ListAddressBooks`].
+    AddressBooks {
+        /// The address books.
+        address_books: Vec<AddressBook>,
+    },
+    /// Answer to [`Request::CreateAddressBook`] and
+    /// [`Request::UpdateAddressBook`].
+    AddressBookSaved {
+        /// The address book.
+        address_book: Box<AddressBook>,
+        /// The queued operations.
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::ListContacts`].
+    Contacts {
+        /// Contacts matching the filter in total.
+        total: u32,
+        /// Index of the first contact of the page.
+        offset: u32,
+        /// The page.
+        contacts: Vec<ContactSummary>,
+    },
+    /// Answer to [`Request::GetContact`].
+    PimContact {
+        /// The contact.
+        contact: Box<Contact>,
+    },
+    /// Answer to [`Request::CreateContact`], [`Request::UpdateContact`],
+    /// [`Request::MoveContact`] and [`Request::MergeContacts`].
+    ContactSaved {
+        /// The contact.
+        contact: Box<Contact>,
+        /// The queued operations.
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::SearchContacts`].
+    ContactMatches {
+        /// Best first.
+        matches: Vec<ContactMatch>,
+    },
+    /// Answer to [`Request::FindDuplicateContacts`].
+    ContactDuplicates {
+        /// Groups of likely duplicates.
+        groups: Vec<DuplicateGroup>,
+    },
+    /// Answer to [`Request::GetContactPhoto`].
+    ContactPhoto {
+        /// The contact.
+        contact_id: ContactId,
+        /// MIME type.
+        mime_type: String,
+        /// The image (base64).
+        data: String,
+    },
+    /// Answer to [`Request::ListContactGroups`].
+    ContactGroups {
+        /// The groups.
+        groups: Vec<ContactGroup>,
+    },
+    /// Answer to [`Request::CreateContactGroup`] and
+    /// [`Request::UpdateContactGroup`].
+    ContactGroupSaved {
+        /// The group.
+        group: Box<ContactGroup>,
+        /// The queued operations.
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::ListTasks`].
+    Tasks {
+        /// The tasks.
+        tasks: Vec<Task>,
+    },
+    /// Answer to [`Request::GetTask`].
+    PimTask {
+        /// The task.
+        task: Box<Task>,
+    },
+    /// Answer to [`Request::CreateTask`], [`Request::UpdateTask`],
+    /// [`Request::CompleteTask`] and [`Request::MoveTask`].
+    TaskSaved {
+        /// The task.
+        task: Box<Task>,
+        /// The queued operations.
+        op_ids: Vec<OpId>,
+    },
+    /// Answer to [`Request::TaskFromMessage`].
+    TaskSuggested {
+        /// The pre-filled fields (unsaved).
+        fields: Box<TaskFields>,
+    },
+    /// Answer to [`Request::SearchPim`].
+    PimSearchResults {
+        /// Best first.
+        hits: Vec<PimSearchHit>,
+    },
+    /// Answer to [`Request::PreviewPimImport`].
+    PimImportPreview {
+        /// What importing would do.
+        preview: Box<PimImportPreview>,
+    },
+    /// Answer to [`Request::ImportPim`].
+    PimImported {
+        /// What it did.
+        result: Box<PimImportResult>,
+    },
+    /// Answer to [`Request::ListReminders`].
+    Reminders {
+        /// Fired and snoozed reminders (and pending ones up to `until`),
+        /// by fire time.
+        reminders: Vec<Reminder>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -2251,6 +2922,45 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         localized: Option<Box<LocalizedMessage>>,
+    },
+    /// PIM sources were added, removed, reconfigured, or changed sync
+    /// state; clients refetch [`Request::ListPimSources`] (M3a).
+    PimSourcesChanged,
+    /// Calendars or task lists were added, removed or changed; clients
+    /// refetch [`Request::ListCalendars`].
+    CalendarsChanged,
+    /// Address books were added, removed or changed.
+    AddressBooksChanged,
+    /// Events of these calendars changed (local edits, sync, imports);
+    /// clients refetch the instances they show.
+    EventsChanged {
+        /// The calendars.
+        calendar_ids: Vec<CalendarId>,
+    },
+    /// Tasks of these lists changed.
+    TasksChanged {
+        /// The task lists.
+        calendar_ids: Vec<CalendarId>,
+    },
+    /// Contacts or groups of these address books changed.
+    ContactsChanged {
+        /// The address books.
+        address_book_ids: Vec<AddressBookId>,
+    },
+    /// A reminder fired (or a snoozed one came back): the UI shows it with
+    /// snooze / dismiss. The desktop shell also gets a
+    /// [`Event::NotificationRequested`] of kind `reminder`.
+    ReminderDue {
+        /// The reminder.
+        reminder: Box<Reminder>,
+    },
+    /// Reminders were snoozed, dismissed or recomputed; clients refetch
+    /// [`Request::ListReminders`].
+    RemindersChanged,
+    /// A queued PIM operation changed state.
+    PimOpStatus {
+        /// The new status.
+        status: PimOpStatus,
     },
 }
 
@@ -2984,5 +3694,124 @@ mod tests {
             serde_json::to_value(Event::SnoozeChanged).unwrap(),
             json!({"type": "SnoozeChanged"})
         );
+    }
+
+    #[test]
+    fn m3a_requests_serialize() {
+        use crate::pim::{EventFields, PimTime};
+        let start = PimTime::zoned("2026-10-01T09:00:00", "Europe/Berlin");
+        let end = PimTime::zoned("2026-10-01T10:00:00", "Europe/Berlin");
+        let update = Request::UpdateEvent {
+            event_id: "ev1".into(),
+            scope: EditScope::ThisAndFollowing,
+            recurrence_id: Some(start.clone()),
+            fields: Box::new(EventFields::new("Planning", start.clone(), end)),
+            recurrence: None,
+        };
+        let value = serde_json::to_value(&update).unwrap();
+        assert_eq!(value["type"], "UpdateEvent");
+        assert_eq!(value["scope"], "this-and-following");
+        assert_eq!(value["recurrence_id"]["tz"], "Europe/Berlin");
+        assert_eq!(serde_json::from_value::<Request>(value).unwrap(), update);
+
+        // Optional fields may be left out; the scope defaults to `all`.
+        let delete: Request =
+            serde_json::from_value(json!({"type": "DeleteEvent", "event_id": "ev1"})).unwrap();
+        assert_eq!(
+            delete,
+            Request::DeleteEvent {
+                event_id: "ev1".into(),
+                scope: EditScope::All,
+                recurrence_id: None
+            }
+        );
+        let list: Request = serde_json::from_value(json!({
+            "type": "ListEventInstances",
+            "from": "2026-10-01T00:00:00Z", "to": "2026-11-01T00:00:00Z", "tz": "Europe/Berlin"
+        }))
+        .unwrap();
+        assert!(matches!(
+            list,
+            Request::ListEventInstances {
+                calendar_ids: None,
+                ..
+            }
+        ));
+        assert_eq!(
+            serde_json::to_value(Request::ListPimSources).unwrap(),
+            json!({"type": "ListPimSources"})
+        );
+        let import = Request::ImportPim {
+            source: PimImportSource::File {
+                path: r"C:\cal\team.ics".into(),
+            },
+            calendar_id: Some("c1".into()),
+            address_book_id: None,
+        };
+        let value = serde_json::to_value(&import).unwrap();
+        assert_eq!(value["source"]["type"], "file");
+        assert_eq!(serde_json::from_value::<Request>(value).unwrap(), import);
+        let snooze = Request::SnoozeReminders {
+            reminder_ids: vec!["r1".into()],
+            until: "2026-10-01T09:10:00Z".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&snooze).unwrap(),
+            json!({"type": "SnoozeReminders", "reminder_ids": ["r1"], "until": "2026-10-01T09:10:00Z"})
+        );
+        let resolve = Request::ResolvePimConflict {
+            item: PimItemRef::Contact {
+                contact_id: "k1".into(),
+            },
+            keep: ConflictChoice::Server,
+        };
+        assert_eq!(
+            serde_json::to_value(&resolve).unwrap(),
+            json!({"type": "ResolvePimConflict", "item": {"type": "contact", "contact_id": "k1"}, "keep": "server"})
+        );
+    }
+
+    #[test]
+    fn m3a_responses_and_events_serialize() {
+        let deleted = Response::PimDeleted {
+            op_ids: vec!["op-1".into()],
+        };
+        assert_eq!(
+            serde_json::to_value(&deleted).unwrap(),
+            json!({"type": "PimDeleted", "op_ids": ["op-1"]})
+        );
+        let changed = Event::EventsChanged {
+            calendar_ids: vec!["c1".into()],
+        };
+        assert_eq!(
+            serde_json::to_value(&changed).unwrap(),
+            json!({"type": "EventsChanged", "calendar_ids": ["c1"]})
+        );
+        let status = Event::PimOpStatus {
+            status: PimOpStatus {
+                op_id: "op-1".into(),
+                source_id: "work-dav".into(),
+                state: crate::ops::OpState::Failed,
+                error: Some(ErrorCode::Conflict),
+                message: Some("412 Precondition Failed".into()),
+                localized: None,
+            },
+        };
+        let value = serde_json::to_value(&status).unwrap();
+        assert_eq!(value["status"]["state"], "failed");
+        assert!(value["status"].get("localized").is_none());
+        assert_eq!(serde_json::from_value::<Event>(value).unwrap(), status);
+        assert_eq!(
+            serde_json::to_value(Event::RemindersChanged).unwrap(),
+            json!({"type": "RemindersChanged"})
+        );
+        let free = Response::FreeTime {
+            slots: vec![FreeSlot {
+                start: "2026-10-01T10:00:00Z".into(),
+                end: "2026-10-01T11:00:00Z".into(),
+            }],
+        };
+        let value = serde_json::to_value(&free).unwrap();
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), free);
     }
 }

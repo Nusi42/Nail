@@ -23,6 +23,7 @@
 
 #![warn(missing_docs)]
 
+pub mod dav;
 pub mod dns;
 pub mod http;
 pub mod managesieve;

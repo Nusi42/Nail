@@ -7,7 +7,7 @@
 //! and property order:
 //!
 //! * top-level nodes (accounts, virtual accounts, OAuth providers,
-//!   `undo-send-delay`) are matched by kind and name; a node whose meaning
+//!   `undo-send-delay`, PIM sources) are matched by kind and name; a node whose meaning
 //!   did not change is not touched at all, even if it is written
 //!   differently than the renderer would write it;
 //! * a changed node is updated in place: properties and arguments whose
@@ -28,6 +28,7 @@ use nail_api::accounts::{
     IncomingServer, MailProtocol, OAuthProviderConfig, OutgoingServer, QuotePosting,
     ServerEndpoint, SyncPolicy, TlsMode, VirtualAccountConfig, default_port,
 };
+use nail_api::pim::{PimSourceConfig, PimSourceSettings};
 use nail_api::security::{AutocryptPreference, CryptoPreference, IdentityCrypto};
 
 use super::read::{mechanism_name, role_name};
@@ -46,6 +47,9 @@ pub(crate) fn render(config: &AccountsConfig, indent: &str) -> String {
     }
     for virtual_account in &config.virtual_accounts {
         blocks.push(render_virtual_account(virtual_account, indent));
+    }
+    for source in &config.pim_sources {
+        blocks.push(render_pim_source(source, indent));
     }
     blocks.join("\n")
 }
@@ -425,6 +429,54 @@ fn render_oauth_provider(p: &OAuthProviderConfig, indent: &str) -> String {
         .finish(0, indent, &children)
 }
 
+/// Renders a `calendar-subscription`, `caldav` or `carddav` node (M3a).
+fn render_pim_source(source: &PimSourceConfig, indent: &str) -> String {
+    let node = source
+        .kind()
+        .node_name()
+        .expect("configured sources have a node name");
+    let mut line = Line::new(node).arg(source.id.as_str());
+    let auth = match &source.settings {
+        PimSourceSettings::Ics {
+            url,
+            color,
+            alarms,
+            refresh_minutes,
+            auth,
+        } => {
+            line = line
+                .prop_opt("name", source.name.as_deref())
+                .prop("url", url)
+                .prop_opt("color", color.as_deref())
+                .bool_opt("alarms", alarms.then_some(true))
+                .num_opt("refresh", *refresh_minutes);
+            auth
+        }
+        PimSourceSettings::Caldav {
+            account,
+            url,
+            auth,
+            refresh_minutes,
+        }
+        | PimSourceSettings::Carddav {
+            account,
+            url,
+            auth,
+            refresh_minutes,
+        } => {
+            line = line
+                .prop_opt("name", source.name.as_deref())
+                .prop_opt("account", account.as_ref().map(|a| a.as_str()))
+                .prop_opt("url", url.as_deref())
+                .num_opt("refresh", *refresh_minutes);
+            auth
+        }
+    };
+    let line = line.bool_opt("enabled", (!source.enabled).then_some(false));
+    let children: Vec<String> = auth.iter().map(|a| render_auth(a, 1, indent)).collect();
+    line.finish(0, indent, &children)
+}
+
 /// Renders a single undo-send node (used when the file gains one).
 pub(crate) fn render_undo(secs: u32) -> String {
     Line::new("undo-send-delay")
@@ -461,6 +513,8 @@ enum TopKey {
     Virtual(String),
     Provider(String),
     Undo,
+    /// A PIM source: node name and id.
+    Pim(String, String),
     Other(String),
 }
 
@@ -477,6 +531,9 @@ fn top_key(node: &KdlNode) -> TopKey {
         "virtual-account" => TopKey::Virtual(arg0),
         "oauth-provider" => TopKey::Provider(arg0),
         "undo-send-delay" => TopKey::Undo,
+        kind @ ("calendar-subscription" | "caldav" | "carddav") => {
+            TopKey::Pim(kind.to_owned(), arg0)
+        }
         other => TopKey::Other(format!("{other}:{arg0}")),
     }
 }
@@ -643,9 +700,9 @@ fn is_default_prop(node: &KdlNode, key: &str, value: &KdlValue, ctx: &Ctx<'_>) -
             ctx.account_email.is_some() && value.as_string() == ctx.account_email
         }
         ("account" | "virtual-account", "name") => first_arg(node) == Some(value),
-        ("account", "enabled") | ("virtual-account", "merge-roles") => {
-            value == &KdlValue::Bool(true)
-        }
+        ("account" | "calendar-subscription" | "caldav" | "carddav", "enabled")
+        | ("virtual-account", "merge-roles") => value == &KdlValue::Bool(true),
+        ("calendar-subscription", "alarms") => value == &KdlValue::Bool(false),
         _ => false,
     }
 }
@@ -1004,6 +1061,10 @@ pub(crate) fn update_text(old_text: &str, old: &AccountsConfig, new: &AccountsCo
                 find(old).is_some() && find(old) == find(new)
             }
             (TopKey::Undo, TopKey::Undo) => old.undo_send_secs == new.undo_send_secs,
+            (TopKey::Pim(kx, x), TopKey::Pim(ky, y)) if kx == ky && x == y => {
+                let id = x.as_str().into();
+                old.pim_source(&id).is_some() && old.pim_source(&id) == new.pim_source(&id)
+            }
             _ => false,
         }
     };

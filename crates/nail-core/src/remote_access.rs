@@ -463,6 +463,70 @@ impl Service {
             Request::LoadDevPlugin { .. } => {
                 Err(forbidden("dev plug-ins are loaded on the desktop only".into()).into())
             }
+
+            // M3a PIM (ADR 0058): until WP75 narrows answers per source,
+            // PIM data needs a grant for every account; files on the
+            // desktop's disk are never read for a remote session.
+            Request::EventFromMessage { message_id } | Request::TaskFromMessage { message_id } => {
+                self.check_readable(access, message_id).await
+            }
+            Request::PreviewPimImport { source } | Request::ImportPim { source, .. } => {
+                match source {
+                    nail_api::pim::PimImportSource::Data { .. } => check_full_pim(access),
+                    nail_api::pim::PimImportSource::File { .. } => Err(forbidden(
+                        "remote sessions import uploaded data only, not desktop files".into(),
+                    )
+                    .into()),
+                }
+            }
+            Request::ListPimSources
+            | Request::AddPimSource { .. }
+            | Request::UpdatePimSource { .. }
+            | Request::RemovePimSource { .. }
+            | Request::TestPimSource { .. }
+            | Request::SyncPimSources { .. }
+            | Request::ListCalendars { .. }
+            | Request::CreateCalendar { .. }
+            | Request::UpdateCalendar { .. }
+            | Request::DeleteCalendar { .. }
+            | Request::ListEventInstances { .. }
+            | Request::GetEvent { .. }
+            | Request::CreateEvent { .. }
+            | Request::UpdateEvent { .. }
+            | Request::DeleteEvent { .. }
+            | Request::MoveEvent { .. }
+            | Request::FindFreeTime { .. }
+            | Request::ListAddressBooks { .. }
+            | Request::CreateAddressBook { .. }
+            | Request::UpdateAddressBook { .. }
+            | Request::DeleteAddressBook { .. }
+            | Request::ListContacts { .. }
+            | Request::GetContact { .. }
+            | Request::CreateContact { .. }
+            | Request::UpdateContact { .. }
+            | Request::DeleteContacts { .. }
+            | Request::MoveContact { .. }
+            | Request::SearchContacts { .. }
+            | Request::FindDuplicateContacts { .. }
+            | Request::MergeContacts { .. }
+            | Request::UnlinkContact { .. }
+            | Request::GetContactPhoto { .. }
+            | Request::ListContactGroups { .. }
+            | Request::CreateContactGroup { .. }
+            | Request::UpdateContactGroup { .. }
+            | Request::DeleteContactGroup { .. }
+            | Request::ListTasks { .. }
+            | Request::GetTask { .. }
+            | Request::CreateTask { .. }
+            | Request::UpdateTask { .. }
+            | Request::CompleteTask { .. }
+            | Request::MoveTask { .. }
+            | Request::DeleteTask { .. }
+            | Request::SearchPim { .. }
+            | Request::ResolvePimConflict { .. }
+            | Request::ListReminders { .. }
+            | Request::SnoozeReminders { .. }
+            | Request::DismissReminders { .. } => check_full_pim(access),
         }
     }
 
@@ -1069,6 +1133,11 @@ impl Service {
             Event::SieveStatusChanged { .. } => full(&access),
             Event::JunkStatusChanged { account_id } => access.allows_account(account_id),
             Event::SnoozeChanged | Event::NotificationSettingsChanged => true,
+            Event::NotificationRequested { notification }
+                if notification.kind == nail_api::triage::NotificationKind::Reminder =>
+            {
+                full(&access)
+            }
             Event::NotificationRequested { notification } => {
                 let account_ok = notification
                     .account_id
@@ -1092,6 +1161,16 @@ impl Service {
             | Event::PluginNotification { .. }
             | Event::PluginPanelChanged { .. } => full(&access),
             Event::PluginLogLine { .. } | Event::PluginStopped { .. } => admin,
+            // M3a PIM: full grants only until WP75 narrows per source.
+            Event::PimSourcesChanged
+            | Event::CalendarsChanged
+            | Event::AddressBooksChanged
+            | Event::EventsChanged { .. }
+            | Event::TasksChanged { .. }
+            | Event::ContactsChanged { .. }
+            | Event::ReminderDue { .. }
+            | Event::RemindersChanged
+            | Event::PimOpStatus { .. } => full(&access),
         };
         allowed.then_some(event)
     }
@@ -1102,6 +1181,17 @@ fn check_account(access: &Access, id: &AccountId) -> Result<()> {
         Ok(())
     } else {
         Err(forbidden(format!("account {id} is not granted")).into())
+    }
+}
+
+fn check_full_pim(access: &Access) -> Result<()> {
+    if full(access) {
+        Ok(())
+    } else {
+        Err(
+            forbidden("calendars, contacts and tasks need a grant for all accounts (M3a)".into())
+                .into(),
+        )
     }
 }
 

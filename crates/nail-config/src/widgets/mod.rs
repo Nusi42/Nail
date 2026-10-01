@@ -6,7 +6,8 @@
 //! [`rules`], [`mcp`] and [`customization`] the widgets of WP21–WP24,
 //! [`security`] those of M2a WP34 (ADR 0029), [`remote`] those of M2b
 //! WP43 (ADR 0036), [`sieve`], [`triage`] and [`sync`] those of M2c WP54
-//! (ADR 0043), [`plugins`] those of M2d (plug-in panels; WP62, ADR 0050). The
+//! (ADR 0043), [`plugins`] those of M2d (plug-in panels; WP62, ADR 0050),
+//! [`pim`] those of M3a (calendars, contacts, tasks; WP74, ADR 0058). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -14,6 +15,7 @@ mod composer;
 mod core;
 mod customization;
 mod mcp;
+mod pim;
 mod plugins;
 mod remote;
 mod rules;
@@ -84,6 +86,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     triage::WIDGETS,
     sync::WIDGETS,
     plugins::WIDGETS,
+    pim::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {
@@ -119,7 +122,7 @@ mod tests {
         }
         assert!(find("message-list").is_some_and(|w| w.rows));
         assert!(find("toolbar").is_some_and(|w| w.required == ["toolbar"]));
-        assert!(find("calendar").is_some_and(|w| w.options.is_none()));
+        assert!(find("calendar").is_some());
         assert!(find("nope").is_none());
     }
 }

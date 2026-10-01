@@ -1,0 +1,36 @@
+[package]
+name = "nail-dav"
+description = "CalDAV (RFC 4791) and CardDAV (RFC 6352) client for Nail: discovery, PROPFIND / REPORT, sync-collection, conditional writes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nail-api.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+# HTTP: the workspace reqwest (rustls without a default provider; the TLS
+# configuration with ring and the platform verifier comes from nail-auth,
+# like the OAuth2 and discovery clients). Custom methods (PROPFIND, REPORT,
+# MKCALENDAR) through reqwest::Method.
+reqwest.workspace = true
+nail-auth.workspace = true
+# WebDAV XML (multistatus, namespaces DAV: / caldav / carddav / cs).
+quick-xml.workspace = true
+url.workspace = true
+# Basic authentication over TLS.
+base64.workspace = true
+# RFC 6764 discovery: SRV through the OS resolver (DnsLookup / SystemDns;
+# no DNS sockets of Nail's own, ADR 0057), then /.well-known/ URIs.
+nail-discovery.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+nail-testkit-net.workspace = true
+
+[lints]
+workspace = true

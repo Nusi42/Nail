@@ -91,6 +91,15 @@ impl McpGrant {
     pub fn has(&self, scope: McpScope) -> bool {
         self.scopes.contains(&scope)
     }
+
+    /// Whether the grant reaches a PIM source (M3a, ADR 0058) that belongs
+    /// to `account` (`None` for the local source, subscriptions and
+    /// standalone DAV servers): a granted account's sources, or every
+    /// source with `all_accounts`. `self.accounts` must already be
+    /// resolved to real accounts (virtual accounts to their members).
+    pub fn allows_pim_source(&self, account: Option<&AccountId>) -> bool {
+        self.all_accounts || account.is_some_and(|a| self.accounts.contains(a))
+    }
 }
 
 /// A registered MCP client.
@@ -243,6 +252,15 @@ mod tests {
         };
         assert!(!granted.is_empty() && granted.has(McpScope::Read));
         assert!(!granted.has(McpScope::RawSource));
+        assert!(granted.allows_pim_source(None));
+        let work = McpGrant {
+            scopes: vec![McpScope::Read],
+            accounts: vec!["work".into()],
+            ..McpGrant::default()
+        };
+        assert!(work.allows_pim_source(Some(&"work".into())));
+        assert!(!work.allows_pim_source(Some(&"home".into())));
+        assert!(!work.allows_pim_source(None));
         assert_eq!(
             serde_json::to_value(McpScope::PermanentDelete).unwrap(),
             json!("permanent-delete")

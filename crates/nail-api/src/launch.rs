@@ -7,8 +7,10 @@
 //! [`crate::Request::TakeLaunchRequests`] (at start-up and after
 //! [`crate::Event::LaunchRequested`]) and acts: a `mailto:` link opens the
 //! composer, a `.eml` file is imported and shown
-//! ([`crate::Request::ImportMessageFile`]); calendars and contacts answer
-//! "not supported yet" until M3.
+//! ([`crate::Request::ImportMessageFile`]); `.ics` / `.vcf` files go
+//! through [`crate::Request::PreviewPimImport`] / [`crate::Request::ImportPim`]
+//! and `webcal:` links become ICS subscriptions
+//! ([`crate::Request::AddPimSource`]) (M3a, ADR 0058).
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -40,7 +42,7 @@ pub enum LaunchRequest {
         /// The decoded link.
         mailto: MailtoLink,
     },
-    /// `webcal:` / `webcals:`: offer to subscribe to a calendar (M3).
+    /// `webcal:` / `webcals:`: offer to subscribe to a calendar.
     SubscribeCalendar {
         /// The link as given.
         url: String,
@@ -52,12 +54,12 @@ pub enum LaunchRequest {
         /// Absolute path as Windows passed it.
         path: String,
     },
-    /// A `.ics` file: offer to import the events (M3).
+    /// A `.ics` file: offer to import the events and tasks.
     ImportCalendarFile {
         /// Absolute path as Windows passed it.
         path: String,
     },
-    /// A `.vcf` file: offer to import the contacts (M3).
+    /// A `.vcf` file: offer to import the contacts.
     ImportContactsFile {
         /// Absolute path as Windows passed it.
         path: String,

@@ -3,4 +3,4 @@
 /**
  * Why a notification was requested.
  */
-export type NotificationKind = "new-mail" | "snooze-woke" | "test";
+export type NotificationKind = "new-mail" | "snooze-woke" | "test" | "reminder";

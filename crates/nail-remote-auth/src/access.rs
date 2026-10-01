@@ -298,6 +298,63 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::RespondPluginDialog { .. } => ("RespondPluginDialog", Scope(S::Read)),
         Request::PluginUiAction { .. } => ("PluginUiAction", Scope(S::Read)),
         Request::GetPluginPanel { .. } => ("GetPluginPanel", Scope(S::Read)),
+
+        // --- Calendars, contacts and tasks (M3a, ADR 0058): reads are
+        // `read`, event / calendar / reminder writes `calendar`, contact
+        // and task writes `pim` (an import of events also needs `calendar`,
+        // checked by the core), sources are administration. ---
+        Request::ListPimSources => ("ListPimSources", Scope(S::Read)),
+        Request::AddPimSource { .. } => ("AddPimSource", Admin),
+        Request::UpdatePimSource { .. } => ("UpdatePimSource", Admin),
+        Request::RemovePimSource { .. } => ("RemovePimSource", Admin),
+        Request::TestPimSource { .. } => ("TestPimSource", Admin),
+        Request::SyncPimSources { .. } => ("SyncPimSources", Scope(S::Read)),
+        Request::ListCalendars { .. } => ("ListCalendars", Scope(S::Read)),
+        Request::CreateCalendar { .. } => ("CreateCalendar", Scope(S::Calendar)),
+        Request::UpdateCalendar { .. } => ("UpdateCalendar", Scope(S::Calendar)),
+        Request::DeleteCalendar { .. } => ("DeleteCalendar", Sensitive(S::Calendar)),
+        Request::ListEventInstances { .. } => ("ListEventInstances", Scope(S::Read)),
+        Request::GetEvent { .. } => ("GetEvent", Scope(S::Read)),
+        Request::CreateEvent { .. } => ("CreateEvent", Scope(S::Calendar)),
+        Request::UpdateEvent { .. } => ("UpdateEvent", Scope(S::Calendar)),
+        Request::DeleteEvent { .. } => ("DeleteEvent", Scope(S::Calendar)),
+        Request::MoveEvent { .. } => ("MoveEvent", Scope(S::Calendar)),
+        Request::EventFromMessage { .. } => ("EventFromMessage", Scope(S::Read)),
+        Request::FindFreeTime { .. } => ("FindFreeTime", Scope(S::Read)),
+        Request::ListAddressBooks { .. } => ("ListAddressBooks", Scope(S::Read)),
+        Request::CreateAddressBook { .. } => ("CreateAddressBook", Scope(S::Pim)),
+        Request::UpdateAddressBook { .. } => ("UpdateAddressBook", Scope(S::Pim)),
+        Request::DeleteAddressBook { .. } => ("DeleteAddressBook", Sensitive(S::Pim)),
+        Request::ListContacts { .. } => ("ListContacts", Scope(S::Read)),
+        Request::GetContact { .. } => ("GetContact", Scope(S::Read)),
+        Request::CreateContact { .. } => ("CreateContact", Scope(S::Pim)),
+        Request::UpdateContact { .. } => ("UpdateContact", Scope(S::Pim)),
+        Request::DeleteContacts { .. } => ("DeleteContacts", Scope(S::Pim)),
+        Request::MoveContact { .. } => ("MoveContact", Scope(S::Pim)),
+        Request::SearchContacts { .. } => ("SearchContacts", Scope(S::Read)),
+        Request::FindDuplicateContacts { .. } => ("FindDuplicateContacts", Scope(S::Read)),
+        Request::MergeContacts { .. } => ("MergeContacts", Scope(S::Pim)),
+        Request::UnlinkContact { .. } => ("UnlinkContact", Scope(S::Pim)),
+        Request::GetContactPhoto { .. } => ("GetContactPhoto", Scope(S::Read)),
+        Request::ListContactGroups { .. } => ("ListContactGroups", Scope(S::Read)),
+        Request::CreateContactGroup { .. } => ("CreateContactGroup", Scope(S::Pim)),
+        Request::UpdateContactGroup { .. } => ("UpdateContactGroup", Scope(S::Pim)),
+        Request::DeleteContactGroup { .. } => ("DeleteContactGroup", Scope(S::Pim)),
+        Request::ListTasks { .. } => ("ListTasks", Scope(S::Read)),
+        Request::GetTask { .. } => ("GetTask", Scope(S::Read)),
+        Request::CreateTask { .. } => ("CreateTask", Scope(S::Pim)),
+        Request::UpdateTask { .. } => ("UpdateTask", Scope(S::Pim)),
+        Request::CompleteTask { .. } => ("CompleteTask", Scope(S::Pim)),
+        Request::MoveTask { .. } => ("MoveTask", Scope(S::Pim)),
+        Request::DeleteTask { .. } => ("DeleteTask", Scope(S::Pim)),
+        Request::TaskFromMessage { .. } => ("TaskFromMessage", Scope(S::Read)),
+        Request::SearchPim { .. } => ("SearchPim", Scope(S::Read)),
+        Request::PreviewPimImport { .. } => ("PreviewPimImport", Scope(S::Read)),
+        Request::ImportPim { .. } => ("ImportPim", Scope(S::Pim)),
+        Request::ResolvePimConflict { .. } => ("ResolvePimConflict", Scope(S::Pim)),
+        Request::ListReminders { .. } => ("ListReminders", Scope(S::Read)),
+        Request::SnoozeReminders { .. } => ("SnoozeReminders", Scope(S::Calendar)),
+        Request::DismissReminders { .. } => ("DismissReminders", Scope(S::Calendar)),
     };
     RequestAccess { name, access }
 }
@@ -565,5 +622,53 @@ mod plugin_tests {
         });
         assert_eq!(run.access, Access::Scope(McpScope::Read));
         assert!(!run.audited(), "reads are not audited");
+    }
+}
+
+#[cfg(test)]
+mod pim_tests {
+    use super::*;
+    use nail_api::pim::{ContactFields, EditScope};
+
+    #[test]
+    fn pim_reads_writes_and_sources() {
+        let read = required_access(&Request::ListEventInstances {
+            from: "2026-10-01T00:00:00Z".into(),
+            to: "2026-10-08T00:00:00Z".into(),
+            calendar_ids: None,
+            tz: "UTC".into(),
+        });
+        assert_eq!(read.access, Access::Scope(McpScope::Read));
+        assert!(!read.audited());
+        let delete = required_access(&Request::DeleteEvent {
+            event_id: "ev1".into(),
+            scope: EditScope::All,
+            recurrence_id: None,
+        });
+        assert_eq!(delete.access, Access::Scope(McpScope::Calendar));
+        assert!(delete.audited());
+        let contact = required_access(&Request::CreateContact {
+            address_book_id: "ab1".into(),
+            fields: Box::new(ContactFields::named("Ada")),
+        });
+        assert_eq!(contact.access, Access::Scope(McpScope::Pim));
+        assert_eq!(
+            required_access(&Request::RemovePimSource {
+                source_id: "work-dav".into()
+            })
+            .access,
+            Access::Admin
+        );
+        assert_eq!(
+            required_access(&Request::DeleteCalendar {
+                calendar_id: "c1".into()
+            })
+            .access,
+            Access::Sensitive(McpScope::Calendar)
+        );
+        assert_eq!(
+            required_access(&Request::ListPimSources).name,
+            "ListPimSources"
+        );
     }
 }

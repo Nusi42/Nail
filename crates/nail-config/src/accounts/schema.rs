@@ -46,6 +46,64 @@ struct AccountsFileSchema {
     /// one.
     #[serde(default)]
     virtual_account: IndexMap<String, VirtualAccountSchema>,
+    /// `calendar-subscription "<name>" url=… { auth … }`: read-only ICS /
+    /// webcal calendar subscriptions. Names: like account names, unique
+    /// among calendar and contact sources; `local` is reserved.
+    #[serde(default)]
+    calendar_subscription: IndexMap<String, CalendarSubscriptionSchema>,
+    /// `caldav "<name>" account=… url=… { auth … }`: CalDAV servers
+    /// (calendars and task lists).
+    #[serde(default)]
+    caldav: IndexMap<String, DavSourceSchema>,
+    /// `carddav "<name>" account=… url=… { auth … }`: CardDAV servers
+    /// (address books).
+    #[serde(default)]
+    carddav: IndexMap<String, DavSourceSchema>,
+}
+
+/// `calendar-subscription "<name>" name=… url=… color=… alarms=… refresh=… enabled=… { auth … }`.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct CalendarSubscriptionSchema {
+    /// Display name (default: the calendar name of the feed).
+    name: Option<String>,
+    /// The feed: https:, webcal: or webcals: (http: only for localhost).
+    url: String,
+    /// Colour: #RGB, #RRGGBB, #RRGGBBAA or a CSS colour name.
+    color: Option<String>,
+    /// Fire the feed's own reminders (default #false).
+    alarms: Option<bool>,
+    /// Refresh interval in minutes, 5 to 10080 (default: the feed's
+    /// suggestion, else 360).
+    #[schemars(range(min = 5, max = 10080))]
+    refresh: Option<u32>,
+    /// `#false` stops refreshing without removing the calendar (default `#true`).
+    enabled: Option<bool>,
+    /// Login for protected feeds (no `username` default).
+    auth: Option<AuthSchema>,
+}
+
+/// `caldav "<name>"` / `carddav "<name>"` `name=… account=… url=… refresh=… enabled=… { auth … }`.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+struct DavSourceSchema {
+    /// Display name (default: the server name).
+    name: Option<String>,
+    /// The mail account whose login this server uses (and whose email
+    /// domain finds it when `url` is missing).
+    account: Option<String>,
+    /// Server URL, https: (http: only for localhost). Required without
+    /// `account`; default: discovered from the account's email domain.
+    url: Option<String>,
+    /// Poll interval in minutes, 5 to 10080 (default 15).
+    #[schemars(range(min = 5, max = 10080))]
+    refresh: Option<u32>,
+    /// `#false` stops syncing without removing the data (default `#true`).
+    enabled: Option<bool>,
+    /// Login (default: the account's incoming-server login; required
+    /// without `account`, with a `username`). Secret default:
+    /// `keychain:nail/pim/<name>/password`.
+    auth: Option<AuthSchema>,
 }
 
 /// A keychain reference: `keychain:<service>/<name>`.

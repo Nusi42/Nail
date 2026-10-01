@@ -35,6 +35,7 @@ import {
   type CustomizationMockState,
 } from "../features/customization/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
+import { createPimMockState, type PimMockState } from "../features/pim/mock";
 import { createPluginsMockState, type PluginsMockState } from "../features/plugins/mock";
 import { createRemoteMockState, type RemoteMockState } from "../features/remote/mock";
 import { createRulesMockState, type RulesMockState } from "../features/rules/mock";
@@ -87,6 +88,7 @@ export interface MockFeatures {
   sieve: SieveMockState;
   triage: TriageMockState;
   plugins: PluginsMockState;
+  pim: PimMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -393,6 +395,7 @@ export function createMockData(inboxSize = 250): MockData {
         },
       ],
       undo_send_secs: 10,
+      pim_sources: [],
     },
     statuses: accounts.map((a) => ({
       account_id: a.id,
@@ -459,6 +462,7 @@ export function createMockData(inboxSize = 250): MockData {
       sieve: createSieveMockState(),
       triage: createTriageMockState(),
       plugins: createPluginsMockState(),
+      pim: createPimMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

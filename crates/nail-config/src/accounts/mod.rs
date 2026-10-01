@@ -1,5 +1,6 @@
-//! `accounts.kdl`: accounts, identities, virtual accounts and OAuth2
-//! providers.
+//! `accounts.kdl`: accounts, identities, virtual accounts, OAuth2
+//! providers and (M3a, ADR 0058) calendar / contact sources:
+//! `calendar-subscription`, `caldav` and `carddav` nodes.
 //!
 //! * [`parse_accounts`] reads and validates a file into
 //!   [`nail_api::AccountsConfig`], with the same compiler-like errors
@@ -22,7 +23,8 @@ pub(crate) mod write;
 use std::path::Path;
 
 use nail_api::accounts::{AccountConfig, AccountsConfig, VirtualAccountConfig};
-use nail_api::{AccountId, IdentityId};
+use nail_api::pim::PimSourceConfig;
+use nail_api::{AccountId, IdentityId, PimSourceId};
 
 use crate::error::{ConfigError, ConfigErrorKind};
 use crate::kdl_util::Source;
@@ -241,8 +243,9 @@ impl AccountsDocument {
 
     /// Removes an account and every reference to it: it leaves the virtual
     /// accounts it was a member of (a virtual account without members is
-    /// removed), their folder mappings and identity settings. Returns
-    /// whether the account existed.
+    /// removed), their folder mappings and identity settings, and the
+    /// CalDAV / CardDAV sources that use its login are removed too.
+    /// Returns whether the account existed.
     pub fn remove_account(&mut self, id: &AccountId) -> Result<bool, ConfigError> {
         let Some(account) = self.config.account(id).cloned() else {
             return Ok(false);
@@ -250,6 +253,7 @@ impl AccountsDocument {
         let gone: Vec<IdentityId> = account.identities.iter().map(|i| i.id.clone()).collect();
         let mut config = self.config.clone();
         config.accounts.retain(|a| &a.id != id);
+        config.pim_sources.retain(|s| s.account() != Some(id));
         config.virtual_accounts.retain_mut(|v| {
             v.members.retain(|m| m != id);
             for mapping in &mut v.folder_mappings {
@@ -295,6 +299,37 @@ impl AccountsDocument {
         config.virtual_accounts.retain(|v| &v.id != id);
         self.set_config(config)?;
         Ok(true)
+    }
+
+    /// Adds a PIM source (appended) or replaces the one with its id.
+    pub fn upsert_pim_source(&mut self, source: PimSourceConfig) -> Result<(), ConfigError> {
+        let mut config = self.config.clone();
+        match config.pim_sources.iter_mut().find(|s| s.id == source.id) {
+            Some(existing) => *existing = source,
+            None => config.pim_sources.push(source),
+        }
+        self.set_config(config)
+    }
+
+    /// Removes a PIM source. Returns whether it existed.
+    pub fn remove_pim_source(&mut self, id: &PimSourceId) -> Result<bool, ConfigError> {
+        if self.config.pim_source(id).is_none() {
+            return Ok(false);
+        }
+        let mut config = self.config.clone();
+        config.pim_sources.retain(|s| &s.id != id);
+        self.set_config(config)?;
+        Ok(true)
+    }
+
+    /// A free PIM source id derived from `hint` (a URL host or a name), by
+    /// the account-name rules; `local` is never returned.
+    pub fn derive_pim_source_id(&self, hint: &str) -> PimSourceId {
+        let taken = |id: &str| {
+            id == PimSourceId::LOCAL || self.config.pim_sources.iter().any(|s| s.id.as_str() == id)
+        };
+        let derived = derive_account_id(hint, taken);
+        PimSourceId::new(derived.0)
     }
 
     /// Whether `id` is used by an account or virtual account.

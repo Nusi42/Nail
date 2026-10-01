@@ -1476,3 +1476,123 @@ async fn plugins_need_full_grants_remotely() {
         );
     }
 }
+
+/// M3a contract (ADR 0058): until WP75 narrows answers per PIM source,
+/// remote sessions reach calendars, contacts and tasks only with a grant
+/// for every account; desktop files are never imported for them; PIM
+/// events and reminder notifications go to full grants only.
+#[tokio::test]
+async fn remote_pim_needs_a_full_grant_until_sources_are_narrowed() {
+    use nail_api::pim::{PimImportSource, PimTime};
+    let f = setup();
+    let service = &f.service;
+    let message = demo_messages(&f)[0].clone();
+    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+
+    let list = || Request::ListEventInstances {
+        from: "2026-10-01T00:00:00Z".into(),
+        to: "2026-10-08T00:00:00Z".into(),
+        calendar_ids: None,
+        tz: "UTC".into(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, list()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // A full read grant passes the checks; the contract stage answers
+    // `unsupported`.
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, list()).await),
+        Some(ErrorCode::Unsupported)
+    );
+    // Writes need their scope.
+    let create = Request::CreateTask {
+        calendar_id: "c1".into(),
+        fields: Box::new(nail_api::pim::TaskFields::titled("Pay rent")),
+        recurrence: None,
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, create).await),
+        Some(ErrorCode::Forbidden)
+    );
+    // Desktop files are never read for a remote session.
+    let file = Request::PreviewPimImport {
+        source: PimImportSource::File {
+            path: r"C:\Users\ada\cal.ics".into(),
+        },
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, file).await),
+        Some(ErrorCode::Forbidden)
+    );
+    let data = Request::PreviewPimImport {
+        source: PimImportSource::Data {
+            file_name: None,
+            content: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n".into(),
+        },
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, data).await),
+        Some(ErrorCode::Unsupported)
+    );
+    // "Create event from email" checks the message like any read.
+    let from_message = Request::EventFromMessage {
+        message_id: message.id.clone(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, from_message.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, from_message).await),
+        Some(ErrorCode::Unsupported)
+    );
+
+    // Events.
+    let changed = nail_api::Event::EventsChanged {
+        calendar_ids: vec!["c1".into()],
+    };
+    assert_eq!(service.remote_event(&narrow, changed.clone()).await, None);
+    assert_eq!(
+        service.remote_event(&reader, changed.clone()).await,
+        Some(changed)
+    );
+    let reminder = nail_api::Event::NotificationRequested {
+        notification: nail_api::triage::MailNotification {
+            id: "reminder:r1".into(),
+            tag: "reminder:r1".into(),
+            kind: nail_api::triage::NotificationKind::Reminder,
+            account_id: None,
+            folder_id: None,
+            message_ids: vec![],
+            title: nail_api::LocalizedMessage::new("notification-reminder-title"),
+            body: None,
+            sound: true,
+        },
+    };
+    assert_eq!(service.remote_event(&narrow, reminder.clone()).await, None);
+    assert_eq!(
+        service.remote_event(&reader, reminder.clone()).await,
+        Some(reminder)
+    );
+    let due = nail_api::Event::ReminderDue {
+        reminder: Box::new(nail_api::pim::Reminder {
+            id: "r1".into(),
+            target: nail_api::pim::ReminderTarget::Event {
+                event_id: "ev1".into(),
+                recurrence_id: Some(PimTime::utc("2026-10-01T09:00:00")),
+            },
+            calendar_id: "c1".into(),
+            title: "Standup".into(),
+            location: None,
+            description: None,
+            starts_at: None,
+            all_day: false,
+            fire_at: "2026-10-01T08:45:00Z".into(),
+            state: nail_api::pim::ReminderState::Fired,
+            snoozed_until: None,
+        }),
+    };
+    assert_eq!(service.remote_event(&narrow, due).await, None);
+}
