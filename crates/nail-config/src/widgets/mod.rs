@@ -63,7 +63,9 @@ pub(crate) const fn widget(
     }
 }
 
-/// A widget that is not implemented yet (any options are accepted).
+/// A widget that is not implemented yet (any options are accepted). No kind
+/// uses it since M3a; kept for the slots of later waves.
+#[allow(dead_code)]
 pub(crate) const fn future_widget(kind: &'static str, rows: bool) -> WidgetSpec {
     WidgetSpec {
         kind,

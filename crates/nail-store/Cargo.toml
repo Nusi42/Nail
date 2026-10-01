@@ -22,6 +22,10 @@ sha2.workspace = true
 hex.workspace = true
 base64.workspace = true
 futures-util.workspace = true
+# PIM (M3a WP73): calendar times to instants for the instance cache and
+# range columns (IANA zones, DST gaps / repeats).
+chrono.workspace = true
+chrono-tz.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

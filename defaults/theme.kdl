@@ -2081,6 +2081,10 @@ theme "default" mode="system" {
         icon "snooze"    svg="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M11 7h2v5l4 2.3-1 1.7-5-3z"
         icon "download"  svg="M11 3h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6z M4 18h16v2H4z"
         icon "chevron-right" svg="M9 5l7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6z"
+        icon "calendar"      svg="M7 2h2v2h6V2h2v2h4v18H3V4h4z M5 9v11h14V9z M7 11h4v4H7z"
+        icon "chevron-left"  svg="M15 5 8 12l7 7 1.4-1.4-5.6-5.6 5.6-5.6z"
+        icon "chevron-down"  svg="M5 9l7 7 7-7-1.4-1.4-5.6 5.6-5.6-5.6z"
+        icon "plus"          svg="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"
     }
 
     // ---- Reading mail ----
@@ -3288,4 +3292,326 @@ theme "default" mode="system" {
     part "plugin-placements.conflict" { color "$color.warning"; }
     part "plugin-placements.error" { color "$color.danger"; }
     part "plugin-placements.actions" { gap "$space.sm"; }
+
+    // ---- Calendars, contacts and tasks (M3a WP74, ADR 0062) ----
+
+    // ---- Shared ----
+    part "pim.nav.text" { font-size "$font-size.lg"; line-height 1; }
+    part "pim.swatch" {
+        display "inline-block"
+        width 10
+        height 10
+        border-radius "50%"
+        background-color "$color.accent"
+    }
+    part "pim.problem" { margin 0; color "$color.danger"; }
+
+    // ---- Calendar widget ----
+    part "calendar" {
+        display "grid"
+        grid-template-rows "auto auto minmax(0, 1fr)"
+        min-height 0
+        height "100%"
+        color "$color.fg"
+        background-color "$color.bg"
+    }
+    part "calendar.header" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.sm" "$space.md"
+        border-bottom "$border.thin"
+    }
+    part "calendar.nav" { display "flex"; gap "$space.xs"; }
+    part "calendar.nav.previous" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
+    part "calendar.nav.next" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
+    part "calendar.nav.today" { padding "$space.xs" "$space.md"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
+    part "calendar.nav.icon" { display "none"; }
+    part "calendar.title" { flex "1"; margin 0; font-size "$font-size.lg"; font-weight "$font-weight.medium"; }
+    part "calendar.views" { display "flex"; gap "$space.xxs"; }
+    part "calendar.views.button" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg"; color "$color.fg"; }
+    part "calendar.views.button:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
+    part "calendar.new" { display "inline-flex"; align-items "center"; gap "$space.xs"; padding "$space.xs" "$space.md"; border-radius "$radius.sm"; border "1px solid $color.accent"; color "$color.accent-fg"; background-color "$color.accent"; }
+    part "calendar.new.icon" { width "$size.icon"; height "$size.icon"; }
+
+    // Time grid (day, multi-day, week, work week)
+    part "calendar.time-grid" { display "grid"; grid-template-rows "auto auto minmax(0, 1fr)"; min-height 0; }
+    part "calendar.head" { display "grid"; grid-template-columns "56px minmax(0, 1fr)"; border-bottom "$border.thin"; }
+    part "calendar.head[zones=\"2\"]" { grid-template-columns "112px minmax(0, 1fr)"; }
+    part "calendar.corner" { display "flex"; align-items "end"; justify-content "space-around"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "calendar.head.days" { display "grid"; }
+    part "calendar.day-head" { display "flex"; flex-direction "column"; align-items "center"; padding "$space.xs"; border 0; background-color "transparent"; color "$color.fg"; }
+    part "calendar.day-head:today" { color "$color.accent"; font-weight "$font-weight.bold"; }
+    part "calendar.day-head.date" { font-size "$font-size.lg"; }
+    part "calendar.all-day" { display "grid"; grid-template-columns "56px minmax(0, 1fr)"; border-bottom "$border.thin"; }
+    part "calendar.all-day[zones=\"2\"]" { grid-template-columns "112px minmax(0, 1fr)"; }
+    part "calendar.all-day.label" { font-size "$font-size.xs"; color "$color.fg-muted"; padding "$space.xs"; }
+    part "calendar.all-day.days" { display "grid"; min-height 24; }
+    part "calendar.all-day.cell" { border 0; border-left "$border.thin"; background-color "transparent"; }
+    part "calendar.all-day.events" { display "contents"; }
+    part "calendar.all-day.item" { display "contents"; }
+    part "calendar.scroll" { overflow-y "auto"; min-height 0; }
+    part "calendar.body" { display "grid"; grid-template-columns "56px minmax(0, 1fr)"; }
+    part "calendar.body[zones=\"2\"]" { grid-template-columns "56px 56px minmax(0, 1fr)"; }
+    part "calendar.gutter" { display "flex"; flex-direction "column"; }
+    part "calendar.hour" { display "block"; height 48; padding-right "$space.xs"; font-size "$font-size.xs"; color "$color.fg-muted"; text-align "right"; }
+    part "calendar.canvas" { position "relative"; }
+    part "calendar.slots" { display "grid"; }
+    part "calendar.slot-row" { display "contents"; }
+    part "calendar.slot" { height 48; border-top "$border.thin"; border-left "$border.thin"; }
+    part "calendar.slot:today" { background-color "$color.bg-subtle"; }
+    part "calendar.slot:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "calendar.columns" { position "absolute"; top 0; right 0; bottom 0; left 0; display "grid"; pointer-events "none"; }
+    part "calendar.column" { position "relative"; margin 0; padding 0; }
+    part "calendar.column.item" { display "contents"; }
+    part "calendar.event" {
+        position "absolute"
+        box-sizing "border-box"
+        display "flex"
+        flex-direction "column"
+        overflow "hidden"
+        padding "$space.xxs" "$space.xs"
+        border 0
+        border-left "4px solid $color.accent"
+        border-radius "$radius.sm"
+        pointer-events "auto"
+        text-align "left"
+        font-size "$font-size.sm"
+        color "$color.fg"
+        background-color "$color.bg-raised"
+        cursor "grab"
+    }
+    part "calendar.event:focus-visible" { outline "2px solid $color.focus-ring"; z-index 2; }
+    part "calendar.event:selected" { box-shadow "$shadow.overlay"; z-index 1; }
+    part "calendar.event:tentative" { opacity 0.8; }
+    part "calendar.event:dragging" { opacity 0.4; }
+    part "calendar.event.time" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "calendar.event.title" { font-weight "$font-weight.medium"; }
+    part "calendar.event.location" { font-size "$font-size.xs"; }
+    part "calendar.event.badge" { display "none"; }
+    part "calendar.event.resize" { position "absolute"; left 0; right 0; bottom 0; height 6; cursor "ns-resize"; }
+    part "calendar.ghost" { position "absolute"; box-sizing "border-box"; border "2px dashed $color.accent"; border-radius "$radius.sm"; pointer-events "none"; }
+    part "calendar.now" { position "absolute"; height 2; background-color "$color.danger"; pointer-events "none"; }
+    part "calendar.zone" { padding "$space.xxs"; }
+
+    // Chips: all-day row, month, agenda
+    part "calendar.chip" {
+        display "flex"
+        gap "$space.xs"
+        min-width 0
+        overflow "hidden"
+        margin "1px"
+        padding "0" "$space.xs"
+        border 0
+        border-left "4px solid $color.accent"
+        border-radius "$radius.sm"
+        text-align "left"
+        white-space "nowrap"
+        font-size "$font-size.sm"
+        color "$color.fg"
+        background-color "$color.bg-raised"
+    }
+    part "calendar.chip:focus-visible" { outline "2px solid $color.focus-ring"; }
+    part "calendar.chip:dragging" { opacity 0.4; }
+    part "calendar.chip.time" { color "$color.fg-muted"; }
+    part "calendar.chip.location" { display "none"; }
+    part "calendar.chip.badge" { display "none"; }
+
+    // Month
+    part "calendar.month" { width "100%"; border-collapse "collapse"; }
+    part "calendar.month.weekday" { padding "$space.xs"; font-size "$font-size.xs"; color "$color.fg-muted"; font-weight "$font-weight.regular"; }
+    part "calendar.month.day" { height 96; padding "$space.xxs"; vertical-align "top"; border "$border.thin"; }
+    part "calendar.month.day:outside" { color "$color.fg-muted"; background-color "$color.bg-subtle"; }
+    part "calendar.month.day:today" { box-shadow "inset 0 0 0 2px $color.accent"; }
+    part "calendar.month.day:drop-target" { background-color "$color.selection"; }
+    part "calendar.month.day:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "calendar.month.date" { display "block"; font-size "$font-size.sm"; }
+    part "calendar.month.events" { display "flex"; flex-direction "column"; margin 0; padding 0; }
+    part "calendar.month.more" { border 0; padding 0; color "$color.accent"; background-color "transparent"; font-size "$font-size.xs"; }
+
+    // Year
+    part "calendar.year" { display "grid"; grid-template-columns "repeat(auto-fill, minmax(200px, 1fr))"; gap "$space.lg"; padding "$space.md"; overflow-y "auto"; }
+    part "calendar.year.month" { border-collapse "collapse"; font-size "$font-size.xs"; }
+    part "calendar.year.month.day" { padding "$space.xxs"; text-align "center"; cursor "pointer"; }
+    part "calendar.year.month.day:outside" { color "$color.fg-muted"; }
+    part "calendar.year.month.day:busy" { font-weight "$font-weight.bold"; }
+    part "calendar.year.month.day:today" { color "$color.accent-fg"; background-color "$color.accent"; border-radius "50%"; }
+
+    // Agenda (view and widget)
+    part "calendar.agenda" { overflow-y "auto"; padding "$space.sm" "$space.md"; }
+    part "calendar.agenda.date" { margin "$space.md" 0 "$space.xs"; font-size "$font-size.md"; }
+    part "calendar.agenda.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
+    part "calendar.agenda.event" { display "flex"; gap "$space.sm"; width "100%"; padding "$space.xs"; border 0; border-left "4px solid $color.accent"; text-align "left"; color "$color.fg"; background-color "$color.bg-subtle"; }
+    part "calendar.agenda.event.badge" { color "$color.fg-muted"; font-size "$font-size.xs"; }
+    part "agenda" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; }
+    part "agenda.title" { margin 0; font-size "$font-size.md"; }
+    part "agenda.list.date" { margin "$space.xs" 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "agenda.list.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
+    part "agenda.list.event" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; width "100%"; padding "$space.xxs" "$space.xs"; border 0; border-left "3px solid $color.accent"; text-align "left"; color "$color.fg"; background-color "$color.bg-subtle"; }
+    part "agenda.list.event.badge" { display "none"; }
+    part "agenda.list.empty" { margin 0; color "$color.fg-muted"; }
+
+    // Free time
+    part "calendar.free-time" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.md"; overflow-y "auto"; }
+    part "calendar.free-time.track" { position "relative"; height 32; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; }
+    part "calendar.free-time.busy" { position "absolute"; top 0; bottom 0; background-color "$color.bg-raised"; }
+    part "calendar.free-time.slot" { position "absolute"; top 2; bottom 2; overflow "hidden"; border "1px solid $color.success"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg"; background-color "$color.bg"; white-space "nowrap"; }
+    part "calendar.free-time.date" { margin 0; font-size "$font-size.sm"; }
+
+    // Mini-month and the date picker's month
+    part "mini-month" { padding "$space.sm"; }
+    part "mini-month.header" { display "flex"; align-items "center"; gap "$space.xs"; }
+    part "mini-month.title" { flex "1"; margin 0; font-size "$font-size.sm"; text-align "center"; }
+    part "mini-month.previous" { border 0; background-color "transparent"; color "$color.fg"; }
+    part "mini-month.next" { border 0; background-color "transparent"; color "$color.fg"; }
+    part "mini-month.icon" { display "none"; }
+    part "mini-month.grid" { width "100%"; border-collapse "collapse"; font-size "$font-size.xs"; }
+    part "mini-month.grid.weekday" { font-weight "$font-weight.regular"; color "$color.fg-muted"; }
+    part "mini-month.grid.day" { padding "$space.xxs"; text-align "center"; cursor "pointer"; border-radius "$radius.sm"; }
+    part "mini-month.grid.day:outside" { color "$color.fg-muted"; }
+    part "mini-month.grid.day:busy" { font-weight "$font-weight.bold"; }
+    part "mini-month.grid.day:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
+    part "mini-month.grid.day:today" { color "$color.accent"; text-decoration "underline"; }
+    part "mini-month.grid.day:focus-visible" { outline "2px solid $color.focus-ring"; }
+
+    // Date / time picker
+    part "pim.datetime" { position "relative"; display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "pim.datetime.label" { font-size "$font-size.sm"; }
+    part "pim.datetime.controls" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; }
+    part "pim.datetime.input" { display "inline-flex"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg"; color "$color.fg"; }
+    part "pim.datetime:invalid" { color "$color.danger"; }
+    part "pim.datetime.segment" { padding "0" "1px"; border-radius "$radius.sm"; }
+    part "pim.datetime.segment:focus" { color "$color.selection-fg"; background-color "$color.selection"; outline "none"; }
+    part "pim.datetime.pick" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
+    part "pim.datetime.pick.icon" { width "$size.icon"; height "$size.icon"; }
+    part "pim.datetime.popup" { position "absolute"; top "100%"; z-index 20; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; background-color "$color.bg"; box-shadow "$shadow.overlay"; }
+    part "pim.datetime.popup.nav" { display "flex"; justify-content "space-between"; }
+    part "pim.datetime.popup.icon" { display "none"; }
+    part "pim.datetime.month" { border-collapse "collapse"; font-size "$font-size.sm"; }
+    part "pim.datetime.month.day" { padding "$space.xs"; text-align "center"; cursor "pointer"; border-radius "$radius.sm"; }
+    part "pim.datetime.month.day:outside" { color "$color.fg-muted"; }
+    part "pim.datetime.month.day:selected" { color "$color.accent-fg"; background-color "$color.accent"; }
+    part "pim.datetime.month.day:focus-visible" { outline "2px solid $color.focus-ring"; }
+
+    // Editors and dialogs
+    part "pim.editor" { display "flex"; flex-direction "column"; gap "$space.md"; min-width 360; max-width 720; padding "$space.md"; }
+    part "pim.editor.main" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; border 0; }
+    part "pim.editor.when" { display "flex"; flex-direction "column"; gap "$space.sm"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
+    part "pim.editor.section" { display "flex"; flex-direction "column"; gap "$space.xs"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
+    part "pim.editor.scope" { display "flex"; flex-wrap "wrap"; gap "$space.md"; border "1px solid $color.accent"; border-radius "$radius.md"; padding "$space.sm"; }
+    part "pim.editor.row" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
+    part "pim.editor.attendee-list" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
+    part "pim.editor.attendee.status" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "pim.editor.suggestions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; margin 0; padding 0; }
+    part "pim.editor.secondary" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "pim.editor.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "pim.editor.read-only" { margin 0; color "$color.warning"; }
+    part "pim.editor.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "pim.editor.photo" { width 96; height 96; border-radius "50%"; }
+    part "pim.editor.subtask-list" { margin 0; padding 0; }
+    part "pim.editor.subtask" { display "flex"; align-items "center"; gap "$space.sm"; }
+    part "pim.recurrence" { display "flex"; flex-direction "column"; gap "$space.xs"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
+    part "pim.recurrence.weekdays" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; border 0; padding 0; }
+    part "pim.recurrence.summary" { margin 0; font-style "italic"; }
+    part "pim.scope" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; min-width 320; }
+    part "pim.scope.choices" { display "flex"; flex-direction "column"; gap "$space.xs"; border 0; padding 0; }
+    part "pim.scope.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
+    part "pim.merge" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; min-width 400; }
+    part "pim.merge.groups" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
+    part "pim.merge.group" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "pim.merge.group.reasons" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "pim.merge.field" { display "flex"; flex-direction "column"; gap "$space.xxs"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
+    part "pim.groups" { display "grid"; grid-template-columns "minmax(180px, 240px) minmax(0, 1fr)"; gap "$space.md"; padding "$space.md"; }
+    part "pim.groups.items" { margin 0; padding 0; }
+    part "pim.groups.choose" { width "100%"; border 0; padding "$space.xs"; text-align "left"; color "$color.fg"; background-color "transparent"; }
+    part "pim.groups.choose:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
+    part "pim.groups.members" { display "flex"; flex-direction "column"; gap "$space.xxs"; max-height 240; overflow-y "auto"; }
+    part "pim.import" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; min-width 360; }
+    part "pim.sources" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; min-width 420; }
+    part "pim.sources.list" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
+    part "pim.sources.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "pim.sources.kind" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "pim.sources.state" { font-size "$font-size.xs"; }
+    part "pim.sources.item[state=\"error\"]" { color "$color.danger"; }
+    part "pim.sources.item[state=\"auth-error\"]" { color "$color.danger"; }
+    part "pim.sources.add" { display "flex"; flex-direction "column"; gap "$space.sm"; border "$border.thin"; border-radius "$radius.md"; padding "$space.sm"; }
+
+    // Reminder toasts
+    part "pim.toasts" { position "fixed"; left "$space.lg"; bottom "$space.lg"; z-index 900; display "flex"; flex-direction "column"; gap "$space.sm"; max-width 380; }
+    part "pim.toasts.list" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
+    part "pim.toast" { padding "$space.sm" "$space.md"; border "$border.thin"; border-radius "$radius.md"; color "$color.fg"; background-color "$color.bg"; box-shadow "$shadow.overlay"; }
+    part "pim.toast[kind=\"problem\"]" { border-color "$color.danger"; }
+    part "pim.toast.title" { margin 0; font-weight "$font-weight.medium"; }
+    part "pim.toast.time" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "pim.toast.location" { margin 0; font-size "$font-size.sm"; }
+    part "pim.toast.actions" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; margin-top "$space.xs"; }
+
+    // Calendar list
+    part "calendar-list" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; }
+    part "calendar-list.source.name" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; text-transform "uppercase"; }
+    part "calendar-list.items" { margin 0; padding 0; }
+    part "calendar-list.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; }
+    part "calendar-list.item:hidden" { color "$color.fg-muted"; }
+    part "calendar-list.kind" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "calendar-list.actions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+
+    // Contacts
+    part "contact-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.sm"; }
+    part "contact-list.toolbar" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
+    part "contact-list.actions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+    part "contact-list.count" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-list.items" { flex "1"; overflow-y "auto"; margin 0; padding 0; }
+    part "contact-list.item" { display "grid"; grid-template-columns "32px minmax(0, 1fr) auto"; column-gap "$space.sm"; align-items "center"; padding "$space.xs" "$space.sm"; cursor "pointer"; }
+    part "contact-list.item:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
+    part "contact-list.item:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "contact-list.avatar" { grid-row "span 2"; display "flex"; align-items "center"; justify-content "center"; width 32; height 32; border-radius "50%"; font-size "$font-size.xs"; color "$color.accent-fg"; background-color "$color.accent"; }
+    part "contact-list.email" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-list.organization" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-list.book" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-list.linked" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-list.item:selected contact-list.email" { color "inherit"; }
+    part "contact-list.item:selected contact-list.organization" { color "inherit"; }
+    part "contact-list.item:selected contact-list.book" { color "inherit"; }
+    part "contact-list.item:selected contact-list.linked" { color "inherit"; }
+    part "contact-card" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "contact-card.header" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.md"; }
+    part "contact-card.photo" { width 72; height 72; border-radius "50%"; }
+    part "contact-card.avatar" { display "flex"; align-items "center"; justify-content "center"; width 72; height 72; border-radius "50%"; font-size "$font-size.xl"; color "$color.accent-fg"; background-color "$color.accent"; }
+    part "contact-card.names" { flex "1"; }
+    part "contact-card.name" { margin 0; font-size "$font-size.xl"; }
+    part "contact-card.organization" { margin 0; color "$color.fg-muted"; }
+    part "contact-card.book" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-card.actions" { display "flex"; gap "$space.xs"; }
+    part "contact-card.heading" { margin 0 0 "$space.xs"; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "contact-card.values" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
+    part "contact-card.value" { display "flex"; gap "$space.sm"; }
+    part "contact-card.kind" { min-width 64; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-card.address" { display "flex"; flex-direction "column"; font-style "normal"; }
+    part "contact-card.sync" { padding "$space.sm"; border "1px solid $color.warning"; border-radius "$radius.md"; }
+    part "contact-card.term" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "contact-card.detail" { margin 0 0 "$space.xs"; }
+    part "contact-card.empty" { color "$color.fg-muted"; }
+
+    // Tasks
+    part "task-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.sm"; }
+    part "task-list.toolbar" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
+    part "task-list.add" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.xs"; }
+    part "task-list.items" { flex "1"; overflow-y "auto"; margin 0; padding 0; }
+    part "task-list.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; padding "$space.xxs" "$space.xs"; }
+    part "task-list.item[level=\"2\"]" { padding-left 28; }
+    part "task-list.item[level=\"3\"]" { padding-left 48; }
+    part "task-list.item:current" { background-color "$color.bg-subtle"; }
+    part "task-list.item:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
+    part "task-list.item:done" { color "$color.fg-muted"; text-decoration "line-through"; }
+    part "task-list.title" { flex "1"; border 0; padding 0; text-align "left"; color "inherit"; background-color "transparent"; }
+    part "task-list.toggle" { border 0; padding 0; color "inherit"; background-color "transparent"; }
+    part "task-list.toggle.icon" { width "$size.icon"; height "$size.icon"; }
+    part "task-list.due" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "task-list.due:overdue" { color "$color.danger"; }
+    part "task-list.priority" { font-size "$font-size.xs"; }
+    part "task-list.priority[priority=\"high\"]" { color "$color.danger"; font-weight "$font-weight.bold"; }
+    part "task-list.subtasks" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "task-list.badge" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "task-list.empty" { color "$color.fg-muted"; }
 }

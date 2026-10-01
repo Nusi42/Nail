@@ -442,6 +442,7 @@ async fn managesieve_checks_pass_against_the_mock_server() {
             smtp: false,
             sieve: true,
         }],
+        dav: Vec::new(),
         roots: vec![mock.ca_der().unwrap().to_vec()],
         user: "ada@example.org".into(),
         password: "nail-interop".into(),

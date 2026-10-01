@@ -63,7 +63,7 @@ const VERSION_FILE: &str = VERSION_FILE_NAME;
 /// Wraps the on-disk index directory, e.g. in `nail-vault`'s encrypting
 /// directory.
 pub type DirectoryWrapper = Arc<dyn Fn(Box<dyn Directory>) -> Box<dyn Directory> + Send + Sync>;
-const TOKENIZER: &str = "nail";
+pub(crate) const TOKENIZER: &str = "nail";
 const WRITER_MEMORY: usize = 50_000_000;
 
 /// When staged changes are committed.
@@ -140,7 +140,7 @@ fn schema() -> (Schema, Fields) {
     (b.build(), fields)
 }
 
-fn analyzer() -> TextAnalyzer {
+pub(crate) fn analyzer() -> TextAnalyzer {
     TextAnalyzer::builder(SimpleTokenizer::default())
         .filter(RemoveLongFilter::limit(64))
         .filter(LowerCaser)

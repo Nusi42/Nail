@@ -1,11 +1,11 @@
 /**
  * Feature slot of M3a WP74 for calendars, contacts and tasks (contract
- * ADR 0058): calendar views (day, multi-day, week, work week, month,
- * year, agenda, free-time timeline) and the mini-month / agenda widgets,
- * the event editor (recurrence with "this / this and following / all",
- * attendees, alarms, time zones), contacts (list, card, editor, groups,
- * merge dialog), the task list and editor, reminders (snooze / dismiss),
- * sources and `.ics` / `.vcf` import.
+ * ADR 0058; UI ADR 0062): calendar views (day, multi-day, week, work
+ * week, month, year, agenda, free-time timeline) and the mini-month /
+ * agenda widgets, the event editor (recurrence with "this / this and
+ * following / all", attendees, alarms, time zones), contacts (list, card,
+ * editor, groups, merge dialog), the task list and editor, reminder toasts
+ * (snooze / dismiss), calendars and sources, and `.ics` / `.vcf` import.
  *
  * Only WP74 edits the files in this directory (plus
  * `crates/nail-config/src/widgets/pim.rs` and `locales/{en,de}/pim.ftl`).
@@ -13,12 +13,55 @@
  * app; see `../README.md`.
  */
 import type { Event as NailEvent } from "../../api/generated";
+import type { ActionContext } from "../../actions/registry";
 import type { Feature, FeatureEventHandler } from "../types";
+import { CalendarWidget } from "./Calendar";
+import { GroupsDialog, MergeDialog } from "./ContactDialogs";
+import { ContactCard } from "./ContactCard";
+import { ContactList } from "./ContactList";
+import { ImportDialog } from "./ImportDialog";
+import { ContactEditorDialog, EventEditorDialog, TaskEditorDialog } from "./lazyDialogs";
+import {
+  CONTACT_DIALOG,
+  EVENT_DIALOG,
+  GROUPS_DIALOG,
+  IMPORT_DIALOG,
+  MERGE_DIALOG,
+  SCOPE_DIALOG,
+  SOURCES_DIALOG,
+  TASK_DIALOG,
+} from "./names";
+import { openNewEvent, openNewTask } from "./newEvent";
+import { pimKeys } from "./queries";
+import { PimToasts } from "./Reminders";
+import { ScopeDialog } from "./ScopeDialog";
+import { Agenda, MiniMonth } from "./SmallWidgets";
+import { CalendarList, SourcesDialog } from "./Sources";
+import { pimStoreFor } from "./store";
+import { TaskList } from "./TaskList";
+import {
+  isViewKind,
+  localZone,
+  parseDay,
+  stepAnchor,
+  todayIn,
+  dateString,
+  DEFAULT_VIEW_OPTIONS,
+} from "./time";
 
-/** Query keys of this feature. */
-export const pimKeys = {
-  all: ["pim"] as const,
-};
+export { pimKeys } from "./queries";
+export {
+  CONTACT_DIALOG,
+  EVENT_DIALOG,
+  GROUPS_DIALOG,
+  IMPORT_DIALOG,
+  MERGE_DIALOG,
+  SCOPE_DIALOG,
+  SOURCES_DIALOG,
+  TASK_DIALOG,
+} from "./names";
+export { pimStoreFor } from "./store";
+export { loadPimEditors } from "./lazyDialogs";
 
 /** The core's PIM events (sources, collections, items, reminders, queue). */
 export const PIM_EVENTS = [
@@ -34,22 +77,145 @@ export const PIM_EVENTS = [
 ] as const satisfies readonly NailEvent["type"][];
 
 /** Layout widget kinds → components. */
-export const widgets: Feature["widgets"] = {};
+export const widgets: Feature["widgets"] = {
+  calendar: CalendarWidget,
+  agenda: Agenda,
+  "mini-month": MiniMonth,
+  "task-list": TaskList,
+  "contact-list": ContactList,
+  "contact-card": ContactCard,
+  "calendar-list": CalendarList,
+};
+
+function pimOf(ctx: ActionContext) {
+  return pimStoreFor(ctx.store);
+}
+
+/** Moves the calendar views a page (`1`) or back (`-1`). */
+function step(ctx: ActionContext, direction: 1 | -1): void {
+  const pim = pimOf(ctx).getState();
+  const tz = localZone();
+  const anchor = (pim.anchor ? parseDay(pim.anchor) : null) ?? todayIn(tz);
+  const shown = pim.shown ?? { view: pim.view ?? "week", days: DEFAULT_VIEW_OPTIONS.days };
+  const next = stepAnchor(pim.view ?? shown.view, anchor, direction, {
+    ...DEFAULT_VIEW_OPTIONS,
+    days: shown.days,
+  });
+  pim.setAnchor(dateString(next));
+}
+
+const hasMessage = (ctx: ActionContext) => ctx.store.getState().selectedMessageId !== null;
 
 /** Action ids → handlers. */
-export const actions: Feature["actions"] = {};
+export const actions: Feature["actions"] = {
+  /** Shows today in the calendar views. */
+  "calendar.goto-today": { run: (ctx) => pimOf(ctx).getState().setAnchor(null) },
+  "calendar.next": { run: (ctx) => step(ctx, 1) },
+  "calendar.previous": { run: (ctx) => step(ctx, -1) },
+  /** `calendar.view "month"`: switches the calendar views. */
+  "calendar.view": {
+    run: (ctx, args) => {
+      const view = args[0];
+      if (isViewKind(view)) pimOf(ctx).getState().setView(view);
+    },
+    enabled: (_ctx, args) => isViewKind(args[0]),
+  },
+  /** A new event on the day shown, 09:00. */
+  "calendar.new-event": {
+    run: (ctx) => {
+      const pim = pimOf(ctx);
+      const tz = localZone();
+      const day =
+        (pim.getState().anchor ? parseDay(pim.getState().anchor ?? "") : null) ?? todayIn(tz);
+      openNewEvent({ store: ctx.store, pim }, day, { hour: 9, minute: 0 }, tz);
+    },
+  },
+  "calendar.calendars": { run: (ctx) => ctx.store.getState().openWindow(SOURCES_DIALOG) },
+  "pim.import": { run: (ctx) => ctx.store.getState().openWindow(IMPORT_DIALOG) },
+  "pim.sources": { run: (ctx) => ctx.store.getState().openWindow(SOURCES_DIALOG) },
+  "pim.sync": {
+    run: async (ctx) => {
+      await ctx.client.request({ type: "SyncPimSources", source_id: null }, "Done");
+    },
+  },
+  "tasks.new": { run: (ctx) => openNewTask({ store: ctx.store, pim: pimOf(ctx) }, null) },
+  "contacts.new": {
+    run: (ctx) => {
+      pimOf(ctx).getState().editContact({ mode: "new", addressBookId: null, fields: null });
+      ctx.store.getState().openWindow(CONTACT_DIALOG);
+    },
+  },
+  "contacts.groups": { run: (ctx) => ctx.store.getState().openWindow(GROUPS_DIALOG) },
+  /** Merges the selected contacts, or finds duplicates. */
+  "contacts.merge": {
+    run: (ctx) => {
+      const pim = pimOf(ctx).getState();
+      pim.setMergeIds(pim.selectedContacts.length >= 2 ? pim.selectedContacts : []);
+      ctx.store.getState().openWindow(MERGE_DIALOG);
+    },
+  },
+  /** "Create event from email": the core suggests the fields, the editor opens. */
+  "calendar.event-from-message": {
+    run: async (ctx) => {
+      const id = ctx.store.getState().selectedMessageId;
+      if (id === null) return;
+      const { fields } = await ctx.client.request(
+        { type: "EventFromMessage", message_id: id },
+        "EventSuggested",
+      );
+      const tz = localZone();
+      openNewEvent({ store: ctx.store, pim: pimOf(ctx) }, todayIn(tz), null, tz, null, fields);
+    },
+    enabled: hasMessage,
+  },
+  /** "Create task from email": keeps a link to the message. */
+  "tasks.from-message": {
+    run: async (ctx) => {
+      const id = ctx.store.getState().selectedMessageId;
+      if (id === null) return;
+      const { fields } = await ctx.client.request(
+        { type: "TaskFromMessage", message_id: id },
+        "TaskSuggested",
+      );
+      openNewTask({ store: ctx.store, pim: pimOf(ctx) }, null, null, fields);
+    },
+    enabled: hasMessage,
+  },
+};
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
+export const dialogs: Feature["dialogs"] = {
+  [EVENT_DIALOG]: EventEditorDialog,
+  [SCOPE_DIALOG]: ScopeDialog,
+  [CONTACT_DIALOG]: ContactEditorDialog,
+  [GROUPS_DIALOG]: GroupsDialog,
+  [MERGE_DIALOG]: MergeDialog,
+  [TASK_DIALOG]: TaskEditorDialog,
+  [IMPORT_DIALOG]: ImportDialog,
+  [SOURCES_DIALOG]: SourcesDialog,
+};
 
-/** PIM data changed: refetch what shows it. */
-export const handlePimEvent: FeatureEventHandler = (event, { queryClient }) => {
-  if ((PIM_EVENTS as readonly string[]).includes(event.type)) {
-    void queryClient.invalidateQueries({ queryKey: pimKeys.all });
+/** PIM data changed: refetch what shows it; reminders and failed writes become toasts. */
+export const handlePimEvent: FeatureEventHandler = (event, { queryClient, store }) => {
+  if (!(PIM_EVENTS as readonly string[]).includes(event.type)) return;
+  void queryClient.invalidateQueries({ queryKey: pimKeys.all });
+  const pim = pimStoreFor(store).getState();
+  if (event.type === "ReminderDue") {
+    pim.pushToast({
+      kind: "reminder",
+      id: `reminder-${event.reminder.id}`,
+      reminder: event.reminder,
+    });
+  } else if (event.type === "PimOpStatus" && event.status.state === "failed") {
+    pim.pushToast({
+      kind: "problem",
+      id: `op-${event.status.op_id}`,
+      message: event.status.localized ?? { id: "pim-op-failed" },
+    });
   }
 };
 
 /** Handlers for the core's events. */
 export const events: Feature["events"] = [handlePimEvent];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+/** Background components: the reminder toasts. */
+export const effects: Feature["effects"] = [PimToasts];

@@ -468,10 +468,13 @@ pub enum AlarmAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum AlarmRelated {
-    /// The start (event) or due time (task) — the default.
+    /// The start — the default. For tasks (RFC 5545): `DTSTART`, or the
+    /// due time when the task has no start.
     #[default]
     Start,
-    /// The end.
+    /// The end. For tasks: the due time (`DUE`), or the start when the
+    /// task has no due time — so "n minutes before due" on a task with a
+    /// start is `End`.
     End,
 }
 
@@ -810,6 +813,11 @@ pub struct EventOverride {
     pub recurrence_id: PimTime,
     /// Its fields.
     pub fields: EventFields,
+    /// `RECURRENCE-ID;RANGE=THISANDFUTURE` (RFC 5545): the override also
+    /// applies to every later occurrence (written by other clients; Nail
+    /// splits the series instead).
+    #[serde(default)]
+    pub this_and_future: bool,
 }
 
 /// An event: a single event, or the whole series of a recurring one.
@@ -1134,6 +1142,7 @@ mod tests {
                     title: "Standup (moved)".into(),
                     ..meeting()
                 },
+                this_and_future: false,
             }],
             sequence: 1,
             created_at: None,

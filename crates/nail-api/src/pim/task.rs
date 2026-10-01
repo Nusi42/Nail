@@ -77,7 +77,8 @@ pub struct TaskFields {
     /// `CLASS`.
     #[serde(default)]
     pub visibility: Visibility,
-    /// `VALARM`s (relative ones are relative to the due time).
+    /// `VALARM`s; relative ones count from the due time with
+    /// [`AlarmRelated::End`](super::calendar::AlarmRelated::End) (see there).
     #[serde(default)]
     pub alarms: Vec<Alarm>,
     /// The parent task (in the same list), `null` = top level.

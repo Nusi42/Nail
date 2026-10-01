@@ -52,6 +52,14 @@
 //!   [`Store::body_fetch_targets`], [`Store::bodies_before`]); the
 //!   single-instance lock of a data directory ([`DataDirLock`]); the MCP
 //!   settings ([`Store::mcp_settings`]).
+//! * M3a (schema v10, ADRs 0058 / 0061): calendars, contacts and
+//!   tasks ([`pim`]): sources and collections, items with their raw
+//!   iCalendar / vCard (sealed), user writes through the PIM queue
+//!   ([`Store::save_pim_item`], [`Store::replay_pim_source`]), server
+//!   merges with conflict copies ([`Store::apply_server_item`]), the
+//!   instance cache ([`Store::list_event_instances`]), reminders, duplicate
+//!   detection and merging ([`Store::merge_contacts`]), the Collected book
+//!   and address autocomplete ([`Store::suggest_recipients`]).
 //! * M2d (schema v9, ADR 0050): installed plug-ins ([`PluginRecord`],
 //!   [`Store::install_plugin`]), their grants, settings, key-value storage
 //!   with quotas ([`Store::plugin_storage_set`]) and bounded logs

@@ -1,6 +1,6 @@
 [package]
 name = "nail-interop"
-description = "Nail's mail engines against real servers (Dovecot, Stalwart); runs with NAIL_INTEROP=1"
+description = "Nail's mail and DAV engines against real servers (Dovecot, Stalwart, Radicale); runs with NAIL_INTEROP=1"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
@@ -18,12 +18,15 @@ base64 = "0.23.1"
 
 [dev-dependencies]
 nail-api = { path = "../../crates/nail-api" }
+nail-dav = { path = "../../crates/nail-dav" }
+nail-discovery = { path = "../../crates/nail-discovery" }
 nail-proto-imap = { path = "../../crates/nail-proto-imap" }
 nail-proto-pop3 = { path = "../../crates/nail-proto-pop3" }
 nail-proto-smtp = { path = "../../crates/nail-proto-smtp" }
 nail-sieve = { path = "../../crates/nail-sieve" }
 nail-testkit = { path = "../../crates/nail-testkit" }
 nail-testkit-net = { path = "../../crates/nail-testkit-net" }
+url = "2.5.8"
 tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "time"] }
 
 [lints.rust]

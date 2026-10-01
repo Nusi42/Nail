@@ -1,0 +1,28 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Charles Babbage
+N:Babbage;Charles;;;
+EMAIL;TYPE=INTERNET;TYPE=WORK:charles@example.org
+EMAIL;TYPE=INTERNET;TYPE=HOME:cb@home.example
+TEL;TYPE=CELL:+44 7700 900123
+TEL;TYPE=WORK:+44 20 7946 0958
+ADR;TYPE=WORK:;;1 Dorset Street;London;;W1U 4EQ;United Kingdom
+ORG:Difference Engines;
+TITLE:Mathematician
+BDAY:1791-12-26
+item1.URL:https\://babbage.example
+item1.X-ABLabel:PROFILE
+NOTE:Met at the Royal Society.\nPrefers letters.
+CATEGORIES:myContacts,Starred in Android
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Mary Somerville
+N:Somerville;Mary;;;
+EMAIL;TYPE=INTERNET:mary@example.net
+item1.X-ABDATE:1780-12-26
+item1.X-ABLabel:_$!<Anniversary>!$_
+item2.X-ABRELATEDNAMES:William Somerville
+item2.X-ABLabel:_$!<Spouse>!$_
+CATEGORIES:myContacts
+END:VCARD

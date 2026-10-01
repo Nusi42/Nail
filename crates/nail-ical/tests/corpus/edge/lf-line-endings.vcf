@@ -1,0 +1,8 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Line Feed Only
+N:Only;Line Feed;;;
+EMAIL:lf@edge.example
+NOTE:This card uses bare LF line endings\, as some web exports do.
+UID:lf-only@edge.example
+END:VCARD

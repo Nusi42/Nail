@@ -1,28 +1,86 @@
-//! Widgets of M3a WP74 (calendars, contacts and tasks; contract ADR 0058).
-//! Rendered by `ui/src/features/pim/`.
+//! Widgets of M3a WP74 (calendars, contacts and tasks; contract ADR 0058,
+//! UI ADR 0062). Rendered by `ui/src/features/pim/`.
 //!
-//! Slot created by WP70 with the PIM widget kinds design.md names, still
-//! as future widgets (any options accepted); WP74 gives them typed options
-//! (calendar views, mini-month, agenda, task list, contact list / card)
-//! and adds the editors, dialogs and settings widgets it needs.
+//! None of them takes `row` children; options are the views' settings
+//! (`userDocs/en/calendar-contacts-tasks.md#layout-options`).
 
-use super::{WidgetSpec, future_widget};
+use super::OptionType::{Bool, OneOf, Str, UInt};
+use super::{WidgetSpec, widget};
+
+/// The calendar views (`view` / `views` of the `calendar` widget).
+pub(crate) const VIEWS: &[&str] = &[
+    "day",
+    "multi-day",
+    "week",
+    "work-week",
+    "month",
+    "year",
+    "agenda",
+    "free-time",
+];
 
 /// Widgets of this feature.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // A calendar view (day, multi-day, week, work week, month, year,
     // agenda, free-time timeline).
-    future_widget("calendar", false),
+    widget(
+        "calendar",
+        &[
+            ("view", OneOf(VIEWS)),
+            ("views", Str),
+            ("days", UInt),
+            ("calendars", Str),
+            ("time-zone", Str),
+            ("secondary-zone", Str),
+            ("hour-start", UInt),
+            ("hour-end", UInt),
+            ("scroll-to", UInt),
+            ("max-events", UInt),
+            ("duration", UInt),
+            ("work-start", UInt),
+            ("work-end", UInt),
+            ("header", Bool),
+        ],
+        &[],
+        false,
+    ),
     // Today's (or the next days') agenda.
-    future_widget("agenda", true),
+    widget(
+        "agenda",
+        &[("days", UInt), ("time-zone", Str), ("calendars", Str)],
+        &[],
+        false,
+    ),
     // A small month for navigation.
-    future_widget("mini-month", false),
+    widget(
+        "mini-month",
+        &[("time-zone", Str), ("calendars", Str)],
+        &[],
+        false,
+    ),
     // A task list.
-    future_widget("task-list", true),
+    widget(
+        "task-list",
+        &[
+            ("lists", Str),
+            ("show-completed", Bool),
+            ("sort", OneOf(&["due", "priority", "title", "manual"])),
+            ("quick-add", Bool),
+        ],
+        &[],
+        false,
+    ),
     // A contact list.
-    future_widget("contact-list", true),
+    widget(
+        "contact-list",
+        &[("address-books", Str), ("page-size", UInt)],
+        &[],
+        false,
+    ),
     // A contact's card.
-    future_widget("contact-card", false),
+    widget("contact-card", &[], &[], false),
+    // Calendars and task lists by source (show / hide, colour, new).
+    widget("calendar-list", &[], &[], false),
 ];
 
 #[cfg(test)]
@@ -32,21 +90,44 @@ mod tests {
         for spec in super::WIDGETS {
             assert!(crate::kdl_util::is_kebab(spec.kind), "{}", spec.kind);
             assert!(crate::widgets::find(spec.kind).is_some());
+            assert!(spec.options.is_some(), "{} has typed options", spec.kind);
         }
     }
 
     #[test]
     fn pim_widgets_parse_in_a_layout() {
         let text = "layout \"x\" extends=\"default\" {
-    window \"calendar\" {
+    window \"calendar-test\" {
         stack {
-            mini-month
-            calendar
-            task-list
+            mini-month time-zone=\"Europe/Berlin\"
+            calendar-list
+            calendar view=\"week\" views=\"day week month\" scroll-to=8 header=#true
+            agenda days=3
+            task-list sort=\"due\" show-completed=#false
+            contact-list page-size=50
+            contact-card
         }
     }
 }
 ";
         crate::parse_layout(text, "layout.kdl").unwrap();
+    }
+
+    #[test]
+    fn pim_widget_options_are_checked() {
+        for bad in [
+            "calendar view=\"fortnight\"",
+            "task-list sort=\"random\"",
+            "agenda colour=\"red\"",
+            "calendar scroll-to=\"eight\"",
+        ] {
+            let text = format!(
+                "layout \"x\" extends=\"default\" {{\n    window \"w\" {{\n        {bad}\n    }}\n}}\n"
+            );
+            assert!(
+                crate::parse_layout(&text, "layout.kdl").is_err(),
+                "{bad} should be refused"
+            );
+        }
     }
 }

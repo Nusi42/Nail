@@ -1,6 +1,6 @@
 [package]
 name = "nail-testkit-net"
-description = "Test support: mock SMTP, POP3, OAuth2, HTTP, DNS and ManageSieve servers on localhost"
+description = "Test support: mock SMTP, POP3, OAuth2, HTTP, DNS, ManageSieve and CalDAV / CardDAV servers on localhost"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -21,6 +21,7 @@ serde_json.workspace = true
 hickory-proto.workspace = true
 url.workspace = true
 sha2.workspace = true
+quick-xml.workspace = true
 md5 = { package = "md-5", version = "0.11" }
 
 [dev-dependencies]

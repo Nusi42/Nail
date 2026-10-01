@@ -16,6 +16,9 @@
 //! * [`notify`] — the notification policy (settings, overrides, rules,
 //!   quiet hours across midnight and time zones) and burst batching.
 //! * [`localtime`] — local wall-clock times across DST changes.
+//! * [`reminders`] (M3a WP73) — calendar and task alarms: planning across
+//!   zones and DST, the reminder scheduler with restart catch-up, snooze
+//!   and dismiss as RFC 9074 writes, reminder notifications.
 
 #![warn(missing_docs)]
 
@@ -35,6 +38,10 @@ pub use classifier::{
 pub use clock::{Clock, ManualClock, SystemClock};
 pub use notify::{Arrival, Decision, NotificationBatcher};
 pub use ops::{FolderTarget, TriageOp};
+pub use reminders::{
+    MemoryReminderStore, Occurrence, OccurrenceTime, PlannedAlarm, ReminderEntry, ReminderItem,
+    ReminderOp, ReminderPolicy, ReminderScheduler, ReminderStore,
+};
 pub use snooze::{MemorySnoozeStore, SnoozeEntry, SnoozeScheduler, SnoozeStore};
 pub use tokenize::{TokenSource, Tokenizer};
 

@@ -10,16 +10,24 @@ publish.workspace = true
 [dependencies]
 nail-api.workspace = true
 thiserror.workspace = true
-# iCalendar / vCard parsing and writing, RRULE expansion (a port of
-# rust-rrule), IANA zone detection for custom / Windows TZIDs.
-# Apache-2.0 OR MIT (Stalwart Labs); `jmap` (JSCalendar / JSContact) off.
+# Windows / Outlook zone names -> IANA, VTIMEZONE generation from
+# chrono-tz (the content-line layer, recurrence engine and model mapping
+# are Nail's own, ADR 0059). Apache-2.0 OR MIT (Stalwart Labs); `jmap` off.
 calcard.workspace = true
 # Dates and IANA zones (DST edge cases; calcard uses the same versions).
 chrono.workspace = true
 chrono-tz.workspace = true
+# Inline attachments and vCard photos (base64), their blob-store hashes.
+base64.workspace = true
+sha2.workspace = true
+hex.workspace = true
+# Charsets of old vCard 2.1 / Outlook exports (CHARSET=, Windows-1252,
+# UTF-16 BOMs). (Apache-2.0 OR MIT) AND BSD-3-Clause; already in the lock.
+encoding_rs = "0.8.42"
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+serde_json.workspace = true
 # Property tests (round trips, expansion invariants).
 proptest = "1.11"
 

@@ -20,6 +20,10 @@
 //! * [`imap`] — the server-side search fallback (M2c WP53): a query as an
 //!   IMAP search key for messages without a local body
 //!   ([`imap::server_search`], [`imap::needs_server`]).
+//! * [`pim`] — PIM search (M3a WP73): [`PimIndex`], its own Tantivy index
+//!   of events, tasks, contacts and groups ([`PIM_INDEX_DIR_NAME`]),
+//!   type-ahead word-prefix queries, phone numbers by digits, sealed with
+//!   the same directory wrapper as the mail index; [`contact_match`].
 
 #![warn(missing_docs)]
 
@@ -40,6 +44,7 @@ pub use exec::{
     matching_ids, run_request, search,
 };
 pub use index::{CommitPolicy, DirectoryWrapper, INDEX_DIR_NAME, SearchIndex, VERSION_FILE_NAME};
+pub use pim::{PIM_INDEX_DIR_NAME, PimDocument, PimIndex, contact_match};
 pub use policy::IndexPolicy;
 pub use query::{Query, parse_query};
 

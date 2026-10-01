@@ -64,8 +64,9 @@ impl std::fmt::Debug for Store {
 
 impl Store {
     /// Opens (creating if needed) the database at `path`, switches it to WAL
-    /// mode, applies pending migrations and recovers the operation queue
-    /// (operations left `in_flight` by a crash go back to `pending`).
+    /// mode, applies pending migrations and recovers the operation queues
+    /// (mail and PIM operations left `in_flight` by a crash go back to
+    /// `pending`).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -108,7 +109,7 @@ impl Store {
                 path,
             }),
         };
-        let recovered = store.recover_in_flight()?;
+        let recovered = store.recover_in_flight()? + store.recover_pim_in_flight()?;
         store.recover_sending()?;
         tracing::debug!(path = ?store.inner.path, version, recovered, "store opened");
         Ok(store)

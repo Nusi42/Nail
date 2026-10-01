@@ -16,4 +16,10 @@ recurrence_id: PimTime,
 /**
  * Its fields.
  */
-fields: EventFields, };
+fields: EventFields, 
+/**
+ * `RECURRENCE-ID;RANGE=THISANDFUTURE` (RFC 5545): the override also
+ * applies to every later occurrence (written by other clients; Nail
+ * splits the series instead).
+ */
+this_and_future: boolean, };

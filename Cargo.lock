@@ -4360,13 +4360,17 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
+ "chrono-tz",
  "dirs",
  "hex",
+ "iana-time-zone",
  "nail-api",
  "nail-auth",
  "nail-compose",
  "nail-config",
+ "nail-dav",
  "nail-discovery",
+ "nail-ical",
  "nail-mcp",
  "nail-mime",
  "nail-pgp",
@@ -4388,6 +4392,7 @@ dependencies = [
  "notify-debouncer-mini",
  "open",
  "pretty_assertions",
+ "rand 0.8.8",
  "reqwest",
  "rmcp",
  "rustls",
@@ -4441,12 +4446,17 @@ dependencies = [
 name = "nail-ical"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "calcard",
  "chrono",
  "chrono-tz",
+ "encoding_rs",
+ "hex",
  "nail-api",
  "pretty_assertions",
  "proptest",
+ "serde_json",
+ "sha2 0.11.0",
  "thiserror 2.0.21",
 ]
 
@@ -4456,6 +4466,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
+ "chrono",
+ "chrono-tz",
  "getrandom 0.3.4",
  "nail-api",
  "nail-auth",
@@ -4514,6 +4526,7 @@ name = "nail-plugins"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "chrono",
  "fluent-bundle",
  "hex",
  "nail-api",
@@ -4756,6 +4769,8 @@ name = "nail-store"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "chrono",
+ "chrono-tz",
  "futures-util",
  "hex",
  "nail-api",
@@ -4797,6 +4812,7 @@ dependencies = [
  "md-5 0.11.0",
  "nail-api",
  "nail-testkit",
+ "quick-xml",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -4812,6 +4828,7 @@ name = "nail-triage"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "chrono-tz",
  "hex",
  "nail-api",
  "pretty_assertions",

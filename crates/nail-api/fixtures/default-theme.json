@@ -10095,6 +10095,3063 @@
         "gap": "var(--nail-space-sm)"
       },
       "source": null
+    },
+    {
+      "selector": "pim.nav.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-lg)",
+        "line-height": "1"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.swatch",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-block",
+        "width": "10px",
+        "height": "10px",
+        "border-radius": "50%",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.problem",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-rows": "auto auto minmax(0, 1fr)",
+        "min-height": "0",
+        "height": "100%",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm) var(--nail-space-md)",
+        "border-bottom": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.nav",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.nav.previous",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.nav.next",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.nav.today",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.nav.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex": "1",
+        "margin": "0",
+        "font-size": "var(--nail-font-size-lg)",
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.views",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.views.button",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg)",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.views.button",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.new",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-xs) var(--nail-space-md)",
+        "border-radius": "var(--nail-radius-sm)",
+        "border": "1px solid var(--nail-color-accent)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.new.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.time-grid",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-rows": "auto auto minmax(0, 1fr)",
+        "min-height": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.head",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "56px minmax(0, 1fr)",
+        "border-bottom": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.head",
+      "states": [],
+      "conditions": [
+        {
+          "key": "zones",
+          "value": "2"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "grid-template-columns": "112px minmax(0, 1fr)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.corner",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "end",
+        "justify-content": "space-around",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.head.days",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.day-head",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "padding": "var(--nail-space-xs)",
+        "border": "0",
+        "background-color": "transparent",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.day-head",
+      "states": [
+        "today"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-accent)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.day-head.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "56px minmax(0, 1fr)",
+        "border-bottom": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day",
+      "states": [],
+      "conditions": [
+        {
+          "key": "zones",
+          "value": "2"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "grid-template-columns": "112px minmax(0, 1fr)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)",
+        "padding": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day.days",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "min-height": "24px"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day.cell",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border": "0",
+        "border-left": "var(--nail-border-thin)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day.events",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "contents"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.all-day.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "contents"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.scroll",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "overflow-y": "auto",
+        "min-height": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.body",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "56px minmax(0, 1fr)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.body",
+      "states": [],
+      "conditions": [
+        {
+          "key": "zones",
+          "value": "2"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "grid-template-columns": "56px 56px minmax(0, 1fr)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.gutter",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.hour",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "block",
+        "height": "48px",
+        "padding-right": "var(--nail-space-xs)",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)",
+        "text-align": "right"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.canvas",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "relative"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.slots",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.slot-row",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "contents"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.slot",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "height": "48px",
+        "border-top": "var(--nail-border-thin)",
+        "border-left": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.slot",
+      "states": [
+        "today"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.slot",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)",
+        "outline-offset": "-2px"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.columns",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "top": "0",
+        "right": "0",
+        "bottom": "0",
+        "left": "0",
+        "display": "grid",
+        "pointer-events": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.column",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "relative",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.column.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "contents"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "box-sizing": "border-box",
+        "display": "flex",
+        "flex-direction": "column",
+        "overflow": "hidden",
+        "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
+        "border": "0",
+        "border-left": "4px solid var(--nail-color-accent)",
+        "border-radius": "var(--nail-radius-sm)",
+        "pointer-events": "auto",
+        "text-align": "left",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-raised)",
+        "cursor": "grab"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)",
+        "z-index": "2"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "box-shadow": "var(--nail-shadow-overlay)",
+        "z-index": "1"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event",
+      "states": [
+        "tentative"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "opacity": "0.8"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event",
+      "states": [
+        "dragging"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "opacity": "0.4"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event.time",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event.location",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event.badge",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.event.resize",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "bottom": "0",
+        "height": "6px",
+        "cursor": "ns-resize"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.ghost",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "box-sizing": "border-box",
+        "border": "2px dashed var(--nail-color-accent)",
+        "border-radius": "var(--nail-radius-sm)",
+        "pointer-events": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.now",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "height": "2px",
+        "background-color": "var(--nail-color-danger)",
+        "pointer-events": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.zone",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.chip",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-xs)",
+        "min-width": "0",
+        "overflow": "hidden",
+        "margin": "1px",
+        "padding": "0 var(--nail-space-xs)",
+        "border": "0",
+        "border-left": "4px solid var(--nail-color-accent)",
+        "border-radius": "var(--nail-radius-sm)",
+        "text-align": "left",
+        "white-space": "nowrap",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.chip",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.chip",
+      "states": [
+        "dragging"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "opacity": "0.4"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.chip.time",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.chip.location",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.chip.badge",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "100%",
+        "border-collapse": "collapse"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.weekday",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs)",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)",
+        "font-weight": "var(--nail-font-weight-regular)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.day",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "height": "96px",
+        "padding": "var(--nail-space-xxs)",
+        "vertical-align": "top",
+        "border": "var(--nail-border-thin)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.day",
+      "states": [
+        "outside"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.day",
+      "states": [
+        "today"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "box-shadow": "inset 0 0 0 2px var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.day",
+      "states": [
+        "drop-target"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.day",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)",
+        "outline-offset": "-2px"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "block",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.events",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.month.more",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border": "0",
+        "padding": "0",
+        "color": "var(--nail-color-accent)",
+        "background-color": "transparent",
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.year",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "repeat(auto-fill, minmax(200px, 1fr))",
+        "gap": "var(--nail-space-lg)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.year.month",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border-collapse": "collapse",
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.year.month.day",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xxs)",
+        "text-align": "center",
+        "cursor": "pointer"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.year.month.day",
+      "states": [
+        "outside"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.year.month.day",
+      "states": [
+        "busy"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.year.month.day",
+      "states": [
+        "today"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)",
+        "border-radius": "50%"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.agenda",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "overflow-y": "auto",
+        "padding": "var(--nail-space-sm) var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.agenda.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "var(--nail-space-md) 0 var(--nail-space-xs)",
+        "font-size": "var(--nail-font-size-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.agenda.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.agenda.event",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)",
+        "width": "100%",
+        "padding": "var(--nail-space-xs)",
+        "border": "0",
+        "border-left": "4px solid var(--nail-color-accent)",
+        "text-align": "left",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.agenda.event.badge",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda.list.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "var(--nail-space-xs) 0",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda.list.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda.list.event",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)",
+        "width": "100%",
+        "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
+        "border": "0",
+        "border-left": "3px solid var(--nail-color-accent)",
+        "text-align": "left",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda.list.event.badge",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "agenda.list.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.free-time",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.free-time.track",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "relative",
+        "height": "32px",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.free-time.busy",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "top": "0",
+        "bottom": "0",
+        "background-color": "var(--nail-color-bg-raised)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.free-time.slot",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "top": "2px",
+        "bottom": "2px",
+        "overflow": "hidden",
+        "border": "1px solid var(--nail-color-success)",
+        "border-radius": "var(--nail-radius-sm)",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)",
+        "white-space": "nowrap"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar.free-time.date",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex": "1",
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)",
+        "text-align": "center"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.previous",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border": "0",
+        "background-color": "transparent",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.next",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border": "0",
+        "background-color": "transparent",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "100%",
+        "border-collapse": "collapse",
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.weekday",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-regular)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.day",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xxs)",
+        "text-align": "center",
+        "cursor": "pointer",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.day",
+      "states": [
+        "outside"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.day",
+      "states": [
+        "busy"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.day",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.day",
+      "states": [
+        "today"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-accent)",
+        "text-decoration": "underline"
+      },
+      "source": null
+    },
+    {
+      "selector": "mini-month.grid.day",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "relative",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.controls",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.input",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "inline-flex",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg)",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime",
+      "states": [
+        "invalid"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.segment",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "0 1px",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.segment",
+      "states": [
+        "focus"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)",
+        "outline": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.pick",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)",
+        "color": "var(--nail-color-fg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.pick.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.popup",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "absolute",
+        "top": "100%",
+        "z-index": "20",
+        "padding": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.popup.nav",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "justify-content": "space-between"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.popup.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "none"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.month",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border-collapse": "collapse",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.month.day",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-xs)",
+        "text-align": "center",
+        "cursor": "pointer",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.month.day",
+      "states": [
+        "outside"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.month.day",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.datetime.month.day",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "min-width": "360px",
+        "max-width": "720px",
+        "padding": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.main",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "margin": "0",
+        "padding": "0",
+        "border": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.when",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.section",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.scope",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-md)",
+        "border": "1px solid var(--nail-color-accent)",
+        "border-radius": "var(--nail-radius-md)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.row",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "end",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.attendee-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.attendee.status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.suggestions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.secondary",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.hint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.read-only",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)",
+        "justify-content": "flex-end"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.photo",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "96px",
+        "height": "96px",
+        "border-radius": "50%"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.subtask-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.editor.subtask",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.recurrence",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.recurrence.weekdays",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-sm)",
+        "border": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.recurrence.summary",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-style": "italic"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.scope",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "min-width": "320px"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.scope.choices",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "border": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.scope.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)",
+        "justify-content": "flex-end"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.merge",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "min-width": "400px"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.merge.groups",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.merge.group",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.merge.group.reasons",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.merge.field",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.groups",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "minmax(180px, 240px) minmax(0, 1fr)",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.groups.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.groups.choose",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "100%",
+        "border": "0",
+        "padding": "var(--nail-space-xs)",
+        "text-align": "left",
+        "color": "var(--nail-color-fg)",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.groups.choose",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.groups.members",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "max-height": "240px",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.import",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "min-width": "360px"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "min-width": "420px"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.kind",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.item",
+      "states": [],
+      "conditions": [
+        {
+          "key": "state",
+          "value": "error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.item",
+      "states": [],
+      "conditions": [
+        {
+          "key": "state",
+          "value": "auth-error"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.sources.add",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toasts",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "position": "fixed",
+        "left": "var(--nail-space-lg)",
+        "bottom": "var(--nail-space-lg)",
+        "z-index": "900",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "max-width": "380px"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toasts.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toast",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm) var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "color": "var(--nail-color-fg)",
+        "background-color": "var(--nail-color-bg)",
+        "box-shadow": "var(--nail-shadow-overlay)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toast",
+      "states": [],
+      "conditions": [
+        {
+          "key": "kind",
+          "value": "problem"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toast.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toast.time",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toast.location",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "pim.toast.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "margin-top": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list.source.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)",
+        "text-transform": "uppercase"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list.item",
+      "states": [
+        "hidden"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list.kind",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "calendar-list.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "min-height": "0",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "end",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.count",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex": "1",
+        "overflow-y": "auto",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "grid",
+        "grid-template-columns": "32px minmax(0, 1fr) auto",
+        "column-gap": "var(--nail-space-sm)",
+        "align-items": "center",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "cursor": "pointer"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.item",
+      "states": [
+        "selected"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-selection-fg)",
+        "background-color": "var(--nail-color-selection)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.item",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)",
+        "outline-offset": "-2px"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.avatar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "grid-row": "span 2",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "width": "32px",
+        "height": "32px",
+        "border-radius": "50%",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.email",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.organization",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.book",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.linked",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.email",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "contact-list.item",
+          "states": [
+            "selected"
+          ],
+          "conditions": []
+        }
+      ],
+      "declarations": {
+        "color": "inherit"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.organization",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "contact-list.item",
+          "states": [
+            "selected"
+          ],
+          "conditions": []
+        }
+      ],
+      "declarations": {
+        "color": "inherit"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.book",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "contact-list.item",
+          "states": [
+            "selected"
+          ],
+          "conditions": []
+        }
+      ],
+      "declarations": {
+        "color": "inherit"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-list.linked",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "contact-list.item",
+          "states": [
+            "selected"
+          ],
+          "conditions": []
+        }
+      ],
+      "declarations": {
+        "color": "inherit"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.header",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.photo",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "72px",
+        "height": "72px",
+        "border-radius": "50%"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.avatar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "width": "72px",
+        "height": "72px",
+        "border-radius": "50%",
+        "font-size": "var(--nail-font-size-xl)",
+        "color": "var(--nail-color-accent-fg)",
+        "background-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.names",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex": "1"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.name",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-xl)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.organization",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.book",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.actions",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.heading",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0 0 var(--nail-space-xs)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.values",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.value",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.kind",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "min-width": "64px",
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.address",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "font-style": "normal"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.sync",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "padding": "var(--nail-space-sm)",
+        "border": "1px solid var(--nail-color-warning)",
+        "border-radius": "var(--nail-radius-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.term",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.detail",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0 0 var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "contact-card.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "min-height": "0",
+        "padding": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.toolbar",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "end",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.add",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "end",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.items",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex": "1",
+        "overflow-y": "auto",
+        "margin": "0",
+        "padding": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-wrap": "wrap",
+        "align-items": "center",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-xxs) var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.item",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "2"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "padding-left": "28px"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.item",
+      "states": [],
+      "conditions": [
+        {
+          "key": "level",
+          "value": "3"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "padding-left": "48px"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.item",
+      "states": [
+        "current"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.item",
+      "states": [
+        "focus-visible"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "outline": "2px solid var(--nail-color-focus-ring)",
+        "outline-offset": "-2px"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.item",
+      "states": [
+        "done"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)",
+        "text-decoration": "line-through"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "flex": "1",
+        "border": "0",
+        "padding": "0",
+        "text-align": "left",
+        "color": "inherit",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.toggle",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "border": "0",
+        "padding": "0",
+        "color": "inherit",
+        "background-color": "transparent"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.toggle.icon",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "var(--nail-size-icon)",
+        "height": "var(--nail-size-icon)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.due",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.due",
+      "states": [
+        "overdue"
+      ],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.priority",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.priority",
+      "states": [],
+      "conditions": [
+        {
+          "key": "priority",
+          "value": "high"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)",
+        "font-weight": "var(--nail-font-weight-bold)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.subtasks",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.badge",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "task-list.empty",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
     }
   ],
   "icons": {
@@ -10200,6 +13257,22 @@
     },
     "chevron-right": {
       "path": "M9 5l7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6z",
+      "view_box": "0 0 24 24"
+    },
+    "calendar": {
+      "path": "M7 2h2v2h6V2h2v2h4v18H3V4h4z M5 9v11h14V9z M7 11h4v4H7z",
+      "view_box": "0 0 24 24"
+    },
+    "chevron-left": {
+      "path": "M15 5 8 12l7 7 1.4-1.4-5.6-5.6 5.6-5.6z",
+      "view_box": "0 0 24 24"
+    },
+    "chevron-down": {
+      "path": "M5 9l7 7 7-7-1.4-1.4-5.6 5.6-5.6-5.6z",
+      "view_box": "0 0 24 24"
+    },
+    "plus": {
+      "path": "M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z",
       "view_box": "0 0 24 24"
     }
   },

@@ -1,9 +1,10 @@
 //! Configuration of the real-server interop tests (plan M2b WP44).
 //!
-//! The tests in `tests/servers.rs` run only with `NAIL_INTEROP=1`; without
+//! The tests in `tests/servers.rs` and `tests/dav.rs` run only with
+//! `NAIL_INTEROP=1` (the checks against the mock servers always run); without
 //! it they return at once, so a plain `cargo test` passes anywhere. The CI
-//! job "interop" (`.github/workflows/ci.yml`) starts Dovecot and Stalwart in
-//! containers and sets:
+//! job "interop" (`.github/workflows/ci.yml`) starts Dovecot, Stalwart and
+//! Radicale in containers and sets:
 //!
 //! * `NAIL_INTEROP_SERVERS`: `name=host:base[:feature…]`, comma-separated,
 //!   e.g. `dovecot=localhost:10000,stalwart=localhost:20000:smtp`. A server
@@ -16,6 +17,10 @@
 //!   certificates (trusted as the only root).
 //! * `NAIL_INTEROP_USER`, `NAIL_INTEROP_PASSWORD`: an account that exists on
 //!   every server, with an email address as the user name.
+//! * `NAIL_INTEROP_DAV` (optional, M3a WP72): CalDAV / CardDAV servers as
+//!   `name=url`, comma-separated, e.g. `radicale=https://localhost:5232/`
+//!   (the same user and CA). Unset = the DAV tests run against the mock
+//!   server only.
 
 use std::fmt;
 
@@ -67,11 +72,22 @@ impl Server {
     }
 }
 
+/// A CalDAV / CardDAV server under test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DavServer {
+    /// Label for messages ("radicale").
+    pub name: String,
+    /// The server URL discovery starts from.
+    pub url: String,
+}
+
 /// Everything the tests need.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Interop {
     /// The servers.
     pub servers: Vec<Server>,
+    /// The CalDAV / CardDAV servers (`NAIL_INTEROP_DAV`).
+    pub dav: Vec<DavServer>,
     /// DER certificates of the trusted CA.
     pub roots: Vec<Vec<u8>>,
     /// Account user name (an email address).
@@ -84,6 +100,7 @@ impl fmt::Debug for Interop {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Interop")
             .field("servers", &self.servers)
+            .field("dav", &self.dav)
             .field("roots", &self.roots.len())
             .field("user", &self.user)
             .finish_non_exhaustive()
@@ -134,6 +151,26 @@ pub fn parse_servers(spec: &str) -> Result<Vec<Server>, String> {
     Ok(servers)
 }
 
+/// Parses `NAIL_INTEROP_DAV` (`name=url`, comma-separated; `https:` or
+/// `http:` URLs).
+pub fn parse_dav_servers(spec: &str) -> Result<Vec<DavServer>, String> {
+    let mut out = Vec::new();
+    for item in spec.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let (name, url) = item
+            .split_once('=')
+            .ok_or_else(|| format!("{item:?}: expected name=url"))?;
+        let (name, url) = (name.trim(), url.trim());
+        if name.is_empty() || !(url.starts_with("https://") || url.starts_with("http://")) {
+            return Err(format!("{item:?}: expected name=https://host:port/"));
+        }
+        out.push(DavServer {
+            name: name.to_owned(),
+            url: url.to_owned(),
+        });
+    }
+    Ok(out)
+}
+
 /// The DER certificates in a PEM text.
 pub fn pem_certificates(pem: &str) -> Result<Vec<Vec<u8>>, String> {
     const BEGIN: &str = "-----BEGIN CERTIFICATE-----";
@@ -170,8 +207,13 @@ pub fn from_env() -> Option<Interop> {
     let servers = parse_servers(&var("NAIL_INTEROP_SERVERS")).unwrap();
     let ca_path = var("NAIL_INTEROP_CA");
     let pem = std::fs::read_to_string(&ca_path).unwrap_or_else(|e| panic!("{ca_path}: {e}"));
+    let dav = match std::env::var("NAIL_INTEROP_DAV") {
+        Ok(spec) => parse_dav_servers(&spec).unwrap(),
+        Err(_) => Vec::new(),
+    };
     Some(Interop {
         servers,
+        dav,
         roots: pem_certificates(&pem).unwrap(),
         user: var("NAIL_INTEROP_USER"),
         password: var("NAIL_INTEROP_PASSWORD"),
@@ -262,6 +304,30 @@ mod tests {
             "d=h:62000:sieve",
         ] {
             assert!(parse_servers(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn dav_servers_parse() {
+        assert_eq!(
+            parse_dav_servers(
+                "radicale=https://localhost:5232/, other = http://127.0.0.1:8080/dav/"
+            )
+            .unwrap(),
+            [
+                DavServer {
+                    name: "radicale".into(),
+                    url: "https://localhost:5232/".into(),
+                },
+                DavServer {
+                    name: "other".into(),
+                    url: "http://127.0.0.1:8080/dav/".into(),
+                },
+            ]
+        );
+        assert_eq!(parse_dav_servers("").unwrap(), []);
+        for bad in ["radicale", "=https://x/", "r=ftp://x/", "r=localhost:5232"] {
+            assert!(parse_dav_servers(bad).is_err(), "{bad:?}");
         }
     }
 

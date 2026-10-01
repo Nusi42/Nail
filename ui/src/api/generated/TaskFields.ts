@@ -59,7 +59,8 @@ url: string | null,
  */
 visibility: Visibility, 
 /**
- * `VALARM`s (relative ones are relative to the due time).
+ * `VALARM`s; relative ones count from the due time with
+ * [`AlarmRelated::End`](super::calendar::AlarmRelated::End) (see there).
  */
 alarms: Array<Alarm>, 
 /**

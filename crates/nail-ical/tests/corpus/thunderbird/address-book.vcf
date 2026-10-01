@@ -1,0 +1,29 @@
+BEGIN:VCARD
+VERSION:4.0
+PRODID:-//Thunderbird 128.3//EN
+FN:Alan Turing
+N:Turing;Alan;Mathison;;OBE
+EMAIL;PREF=1;TYPE=work:alan@bletchley.example
+EMAIL;TYPE=home:alan@home.example
+TEL;TYPE=work;VALUE=TEXT:+44 1908 640404
+TEL;TYPE=cell;VALUE=TEXT:+44 7700 900404
+ADR;TYPE=work:;;The Mansion, Bletchley Park;Milton Keynes;;MK3 6EB;United Kingdom
+URL;VALUE=URL:https://bletchley.example/turing
+IMPP:xmpp:alan@bletchley.example
+BDAY;VALUE=DATE:19120623
+ANNIVERSARY:--0612
+NOTE:Codebreaker.
+TITLE:Cryptanalyst
+ORG:Government Code and Cypher School;Hut 8
+UID:8f4a1c2b-3d5e-4f60-8a71-92b3c4d5e6f7
+X-CUSTOM1:Hut 8 lead
+END:VCARD
+BEGIN:VCARD
+VERSION:4.0
+PRODID:-//Thunderbird 128.3//EN
+KIND:group
+FN:Codebreakers
+MEMBER:urn:uuid:8f4a1c2b-3d5e-4f60-8a71-92b3c4d5e6f7
+MEMBER:mailto:joan@bletchley.example
+UID:1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7a8b
+END:VCARD

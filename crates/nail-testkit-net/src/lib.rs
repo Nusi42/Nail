@@ -16,7 +16,11 @@
 //!   ([`hickory_proto`] messages) or in memory;
 //! * [`MockSieveServer`]: ManageSieve (RFC 5804: STARTTLS, AUTHENTICATE
 //!   PLAIN / XOAUTH2 / OAUTHBEARER, the script commands, minimal script
-//!   validation, recorded uploads, fault injection; M2c WP51).
+//!   validation, recorded uploads, fault injection; M2c WP51);
+//! * [`MockDavServer`]: CalDAV / CardDAV (RFC 4791 / 6352: discovery,
+//!   PROPFIND, REPORT incl. sync-collection, conditional writes,
+//!   MKCALENDAR, Basic / bearer auth, optional TLS, server-side changes
+//!   for tests, fault injection; M3a WP72).
 //!
 //! TLS certificates come from [`nail_testkit::tls`]; clients trust
 //! `ca_der()` of the server. The mock IMAP server stays in `nail-testkit`.
@@ -33,6 +37,9 @@ mod sasl;
 pub mod smtp;
 mod stream;
 
+pub use dav::{
+    DavRequest, MockCollection, MockCollectionKind, MockDavConfig, MockDavServer, MockObject,
+};
 pub use dns::{DnsZone, MockDnsServer, MxAnswer, SrvAnswer, ZoneAnswer};
 pub use http::{MockHttpServer, MockResponse, RecordedRequest};
 pub use managesieve::{

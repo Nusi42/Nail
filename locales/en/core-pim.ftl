@@ -49,3 +49,19 @@ pim-source-state-disabled = Turned off
 notification-reminder-title = { $title }
 notification-reminder-body = { $when }
 notification-reminder-body-location = { $when } · { $location }
+
+## Snoozing reminders (nail-triage reminders)
+
+reminder-error-not-in-future = Choose a time in the future.
+reminder-error-too-far = Reminders can be snoozed for up to a year.
+reminder-error-store = The reminder could not be saved.
+
+## Built-in address books
+
+pim-address-book-collected = Collected
+
+## Default local collections (made on first start; M3a WP75)
+
+pim-calendar-default-name = My calendar
+pim-task-list-default-name = My tasks
+pim-address-book-default-name = My contacts
