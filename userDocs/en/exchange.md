@@ -79,6 +79,22 @@ this mailbox** (ask the owner or your administrator for permission),
 of Nail; nothing changes on the server. A mailbox your organization added
 is hidden instead, and comes back when you add it again.
 
+**Moving messages** between your mailbox and a shared or delegate mailbox
+works like any move (drag, **Move to…**): Exchange moves the message on
+the server. Moving a message into another account works too between
+Exchange and Gmail accounts (and from IMAP or POP3 accounts into them):
+Nail copies it with its read and flagged state into the other account and
+then removes it from the first. Categories and labels are not carried
+over.
+
+**Sending from a shared mailbox**: add an identity with the mailbox's
+address to the account and choose how it sends (`send-as` in
+`accounts.kdl`, see [Accounts reference](accounts-reference.md)): **as**
+the mailbox (recipients see only the mailbox; needs the "Send As"
+permission) or **on behalf of** it (recipients see "you on behalf of the
+mailbox"; needs "Send on Behalf"). The sent copy is filed in the shared
+mailbox's Sent Items.
+
 ## Categories
 
 Exchange categories are Nail tags with the category's colour. The
@@ -180,10 +196,14 @@ is saved and comes back with the next sync (Exchange gives it its id).
 - Calendars are synced from one year back to two years ahead.
 - The room finder needs the `Place.Read.All` permission, which your
   administrator grants once for the organization.
-- Messages larger than about 3 MB (4 MB once encoded) cannot be sent
-  through Microsoft Graph yet.
-- Sending "as" a shared mailbox is not offered yet: mail goes out from
-  your own address.
+- **Large messages**: Exchange Online takes messages up to its own size
+  limit (usually 25–150 MB, set by your organization). Nail uploads
+  messages over 4 MB in pieces and shows the upload progress in the
+  outbox. Signed or encrypted messages over 4 MB cannot be sent through
+  Microsoft Graph; use a smaller attachment or a link.
+- Sending a large message (over 4 MB) as a shared mailbox needs full
+  access to that mailbox (the upload goes through its drafts); "Send As"
+  alone is enough for smaller messages.
 
 ## Good to know (Exchange Server)
 
@@ -212,6 +232,12 @@ is saved and comes back with the next sync (Exchange gives it its id).
 - The first sync of a large mailbox can take several rounds (Exchange
   limits how fast it may be read). Mail found during that first sync is
   never treated as new: no notifications and no rules run on it.
+- **Folder sync policies** (**Synchronization…** in a folder's menu:
+  everything, headers only, or the last N days) apply to Exchange folders
+  too: messages outside the policy keep their headers, and their body is
+  downloaded when you open them.
+- Messages of one Exchange conversation are shown as one conversation in
+  Nail, also when they have no reply headers linking them.
 
 ## Moving from EWS to Microsoft Graph
 

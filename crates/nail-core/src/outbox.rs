@@ -476,8 +476,28 @@ impl Service {
                 .flatten()
         };
         let transport = self.transport(&account).await.map_err(EngineError::from)?;
+        // M4c: upload progress (Graph upload sessions for large messages)
+        // as `SendProgress`, at most a few per second.
+        let events = self.inner.events.clone();
+        let outbox_id = entry.id.clone();
+        let last = std::sync::Mutex::new(None::<std::time::Instant>);
+        let progress = move |sent_bytes: u64, total_bytes: u64| {
+            let mut last = crate::service::lock(&last);
+            let due = sent_bytes >= total_bytes
+                || last.is_none_or(|at| at.elapsed() >= Duration::from_millis(250));
+            if due {
+                *last = Some(std::time::Instant::now());
+                let _ = events.send(Event::SendProgress {
+                    outbox_id: outbox_id.clone(),
+                    sent_bytes,
+                    total_bytes,
+                });
+            }
+        };
         for message in &messages {
-            transport.send(&message.envelope, &message.raw).await?;
+            transport
+                .send_with_progress(&message.envelope, &message.raw, &progress)
+                .await?;
         }
         // The first message is the one to the visible recipients (for an
         // encrypted message also encrypted to the sender): the Sent copy.

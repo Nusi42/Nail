@@ -358,4 +358,11 @@ fn settings_are_json() {
     );
     store.set_setting("other", &5u32).unwrap();
     assert_eq!(store.setting::<u32>("other").unwrap(), Some(5));
+    // M4c backups read them all, by key.
+    let all = store.all_settings().unwrap();
+    assert_eq!(all.get("other"), Some(&serde_json::json!(5)));
+    assert_eq!(
+        all.keys().cloned().collect::<Vec<_>>(),
+        vec!["other".to_owned(), SECURITY_SETTINGS_KEY.to_owned()]
+    );
 }

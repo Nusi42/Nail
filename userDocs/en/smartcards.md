@@ -21,13 +21,13 @@ available in the browser when you use Nail remotely.
 
 ## Setting it up
 
-1. In the security settings, add the PKCS#11 module with its full path.
+1. In **Settings → Smartcards**, add the PKCS#11 module with its full path (**Add module**; in the desktop app **Browse…** opens the file dialog) and **Save**.
    Nail shows the modules it could not load and why.
 2. Insert the card. Nail lists the card with its keys and certificates:
    the algorithm, what each key may do (sign, decrypt) and, for
    certificates, the owner, the issuer, the e-mail addresses and the
    validity.
-3. Choose **use this key** on a key and pick OpenPGP or S/MIME. The key
+3. Choose **Use for S/MIME** or **Use for OpenPGP** on a key. The key
    then appears in your keyring as your own key, marked as being on a
    smartcard. For an OpenPGP card, use both its signing key and its
    encryption key; they belong to the same OpenPGP key.
@@ -43,7 +43,7 @@ many wrong PINs the card locks its PIN, and you need the card's own tool
 
 **PINs are never stored.** Instead, Nail keeps the card unlocked for a
 while after you entered the PIN, so you are not asked for every message.
-Set how long in the security settings (from "ask every time" to 8 hours).
+Set how long in **Settings → Smartcards** (**Keep a card unlocked for**, from 0 = ask every time to 480 minutes).
 Removing the card ends it at once.
 
 If you cancel the PIN prompt or the card is not inserted, the message is

@@ -54,6 +54,16 @@ const FEATURE_DIALOGS = [
   // M4b: About Nail (says "desktop app only" here; the desktop smoke test
   // shows its facts).
   "about-nail",
+  // M4c: the command palette, printing, the import / export / backup /
+  // restore wizards and the diagnostics bundle. The recovery-key dialogs
+  // are scanned in vault-recovery.spec.ts (they need encrypted data).
+  "command-palette",
+  "print",
+  "import-wizard",
+  "export-wizard",
+  "backup-wizard",
+  "restore-wizard",
+  "diagnostics-bundle",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -283,6 +293,10 @@ for (const mode of MODES) {
       await actions.getByRole("button", { name: "Import Autocrypt setup message" }).click();
       await sweep.scanWindow("security-autocrypt-import");
       await sweep.close("security-autocrypt-import");
+      // M4c: printing the selected message.
+      await actions.getByRole("button", { name: "Print the message…" }).click();
+      await sweep.scanWindow("print");
+      await sweep.close("print");
 
       // Context menus, the move window and a folder's sync dialog.
       await rows.filter({ hasText: "Welcome to Nail" }).click({ button: "right" });
@@ -311,6 +325,12 @@ for (const mode of MODES) {
       await sweep.scanWindow("about-nail");
       await sweep.close("about-nail");
 
+      // M4c: the command palette (Ctrl+K toggles it).
+      await page.keyboard.press("Control+k");
+      await sweep.scanWindow("command-palette");
+      await page.keyboard.press("Escape");
+      await expect(sweep.window("command-palette")).toBeHidden();
+
       // Every settings tab, nested ones included.
       await toolbar.getByRole("button", { name: "Settings" }).click();
       const settings = sweep.window("settings");
@@ -332,6 +352,19 @@ for (const mode of MODES) {
       await customize.getByRole("button", { name: "Configuration errors" }).click();
       await sweep.scanWindow("config-errors");
       await sweep.close("config-errors");
+      // M4c: the wizards and the diagnostics bundle, from their tabs.
+      for (const [tab, button, name] of [
+        ["Import and export", "Import…", "import-wizard"],
+        ["Import and export", "Export…", "export-wizard"],
+        ["Backups", "Back up…", "backup-wizard"],
+        ["Backups", "Restore…", "restore-wizard"],
+        ["Diagnostics", "Create diagnostics bundle…", "diagnostics-bundle"],
+      ] as const) {
+        await top.getByRole("tab", { name: tab, exact: true }).click();
+        await settings.getByRole("button", { name: button }).click();
+        await sweep.scanWindow(name);
+        await sweep.close(name);
+      }
       // The plug-in install dialog (M2d), from the Plug-ins tab.
       await top.getByRole("tab", { name: "Plug-ins", exact: true }).click();
       await settings.getByRole("button", { name: "Install a plug-in…" }).click();

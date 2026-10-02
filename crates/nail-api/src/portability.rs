@@ -593,6 +593,14 @@ labeled_enum! {
         /// Restoring this item needs the user's attention (an account's
         /// password, a plug-in's grants).
         NeedsAttention = "needs-attention",
+        /// Deleted in the source program but still in its files (a
+        /// Thunderbird folder not compacted yet, a Maildir message marked
+        /// `T`): not imported (WP125).
+        DeletedInSource = "deleted-in-source",
+        /// The folder does not exist in the target account; its messages
+        /// went into the chosen folder (imports into an account create no
+        /// folders on the server; WP125, ADR 0099).
+        FolderMerged = "folder-merged",
     }
 }
 

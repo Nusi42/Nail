@@ -771,6 +771,7 @@ async fn store_messages(
                 raw,
                 headers_only: false,
                 size: m.size,
+                remote_thread_id: m.thread_id.clone(),
             };
             let blobs = service.blobs().clone();
             let index = service.inner.search.get();
@@ -897,10 +898,23 @@ impl GmailExecutor<'_> {
                     None => return Ok(()),
                 };
                 if target.account_id != self.account {
-                    return Err(EngineError::permanent(
-                        ErrorCode::Unsupported,
-                        "moving Gmail messages to another account is not supported yet",
-                    ));
+                    // M4c: into another Gmail or an Exchange account.
+                    let Some(api) =
+                        crate::api_moves::api_target(self.service, target_folder_id).await?
+                    else {
+                        return Err(crate::api_moves::unsupported_target());
+                    };
+                    let source = nail_exchange::transfer::ApiMailbox::Api(
+                        self.engine.as_ref() as &dyn MailApiEngine
+                    );
+                    return crate::api_moves::move_out(
+                        self.service,
+                        message_id,
+                        source,
+                        &remote_id,
+                        &api,
+                    )
+                    .await;
                 }
                 self.write(RemoteWrite::Move {
                     remote_id,

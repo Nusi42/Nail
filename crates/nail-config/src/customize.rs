@@ -166,6 +166,26 @@ impl ConfigManager {
         Ok((saved, self.updates_after_write(file)))
     }
 
+    /// The current text of a configuration file (`None` = no file).
+    pub fn file_text(&self, file: ConfigFile) -> Result<Option<String>, ApiError> {
+        self.read_file(file)
+    }
+
+    /// Replaces a whole file (restoring a backup archive, M4c): the
+    /// current file is backed up first (also when there is none, so the
+    /// restore can be reverted), then `text` is written. Returns the backup
+    /// and the resulting updates (theme / layout).
+    pub fn replace_file(
+        &self,
+        file: ConfigFile,
+        text: &str,
+    ) -> Result<(ConfigBackup, Vec<ConfigUpdate>), ApiError> {
+        let _guard = self.lock_writes();
+        let saved = backup::take(self.dir(), file).map_err(|e| io_error(file, &e))?;
+        backup::write_atomic(&self.file_path(file), text).map_err(|e| io_error(file, &e))?;
+        Ok((saved, self.updates_after_write(file)))
+    }
+
     /// Backups of a file, newest first.
     pub fn list_backups(&self, file: ConfigFile) -> Result<Vec<ConfigBackup>, ApiError> {
         backup::list(self.dir(), file).map_err(|e| io_error(file, &e))

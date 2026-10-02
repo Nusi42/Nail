@@ -59,3 +59,8 @@ recovery-kit-intro = This key opens your encrypted Nail data if the key in the W
 recovery-kit-key = Recovery key: { $key }
 recovery-kit-created = Created: { $created }
 recovery-kit-advice = Keep this file somewhere safe and away from this computer, or print it and delete the file. Anyone with this key and a copy of your data can read your mail.
+
+## The core (WP125)
+
+vault-restart-needed = The key is back in the Credential Manager. Restart Nail to open your data.
+smartcard-prompt-gone = This PIN request is no longer waiting.

@@ -153,8 +153,9 @@ export function buildPalette(input: PaletteInput): PaletteEntry[] {
         args: [],
         title: def.label.startsWith("@") ? t(labelMessageId(def.label)) : def.label,
         shortcuts: shortcutsFor(layout, id),
-        available:
-          (input.enabled ? input.enabled(def.alias_of) : true) && availableIn(target, contexts),
+        // The alias itself: the dispatcher adds the alias's arguments
+        // (`window.open "settings"` is only enabled with its window).
+        available: (input.enabled ? input.enabled(id) : true) && availableIn(target, contexts),
         recentRank: rank.get(id) ?? null,
         source: "layout",
       },

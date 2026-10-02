@@ -59,6 +59,15 @@ describe("command palette model", () => {
   it("uses layout labels and lists aliases", () => {
     const l = layout();
     l.actions["mail.reply"] = { label: "@mail.action.reply", icon: null, alias_of: null, args: [] };
+    l.actions["settings.open"] = {
+      label: "Settings",
+      icon: null,
+      alias_of: "window.open",
+      args: ["settings"],
+    };
+    // Like the dispatcher: an alias is asked by its own id (it adds the
+    // alias's arguments); `window.open` alone, without a window, is not
+    // enabled, nor is `mail.move-to` without a folder.
     const entries = buildPalette({
       actionIds: ["mail.reply"],
       infos,
@@ -66,8 +75,9 @@ describe("command palette model", () => {
       contexts: new Set(["list"]),
       recent: [],
       t,
-      enabled: (id) => id !== "mail.move-to",
+      enabled: (id) => !["mail.move-to", "my.archive", "window.open"].includes(id),
     });
+    expect(entries.find((e) => e.id === "settings.open")?.available).toBe(true);
     const reply = entries.find((e) => e.id === "mail.reply");
     expect(reply?.title).toBe("T(mail-action-reply)");
     expect(reply?.available).toBe(true);

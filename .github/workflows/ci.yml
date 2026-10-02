@@ -124,7 +124,7 @@ jobs:
         run: npx -w e2e playwright install --with-deps chromium
 
       - name: Playwright (desktop)
-        run: npm run e2e:only -- tests/desktop.spec.ts tests/desktop-m4b.spec.ts
+        run: npm run e2e:only -- tests/desktop.spec.ts tests/desktop-m4b.spec.ts tests/desktop-m4c.spec.ts
         env:
           NAIL_E2E_DESKTOP: "1"
 
@@ -367,6 +367,58 @@ jobs:
             .nail-build/dist/*.cdx.json
             .nail-build/dist/*-SHA256SUMS.txt
           if-no-files-found: error
+          retention-days: 30
+
+  # The 100k-message performance benchmark (M4c WP123 / WP125, ADR 0097):
+  # sync from the mock IMAP server, search, list pages, cold start, memory,
+  # then first render and scrolling in Playwright, checked against
+  # e2e/perf/budgets.json with the CI tolerance. The exit code of
+  # run-perf.mjs is the result (1 = a budget exceeded or a scenario failed,
+  # 2 = setup error); the reports are uploaded either way.
+  perf:
+    name: Performance budgets (100k messages)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx -w e2e playwright install --with-deps chromium
+
+      - name: Build UI
+        run: npm run build -w ui
+
+      - name: Build nail and nail-bench (release)
+        run: cargo build --release -p nail-cli -p nail-bench
+
+      - name: Benchmark
+        run: node e2e/perf/run-perf.mjs --corpus standard --tolerant
+        env:
+          NAIL_BUILD_DIR: ${{ runner.temp }}/nail-build
+
+      - name: Upload performance reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-report
+          path: |
+            ${{ runner.temp }}/nail-build/perf/standard/report*.json
+            ${{ runner.temp }}/nail-build/perf/standard/scroll-trace.json
           retention-days: 30
 
   # Licences (no GPL / LGPL / AGPL), advisories (RustSec; the rsa 0.9

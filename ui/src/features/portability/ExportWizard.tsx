@@ -158,7 +158,11 @@ export function ExportWizard({ close }: { close(): void }) {
             >
               {real.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {t("portability-account-option", { name: a.name, email: a.email })}
+                  {t("portability-account-option", {
+                    name: a.name,
+                    email: a.email,
+                    hasEmail: a.email ? "yes" : "no",
+                  })}
                 </option>
               ))}
             </SelectField>

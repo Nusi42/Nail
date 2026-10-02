@@ -4,22 +4,24 @@ A Nail backup is one file (`.nailbackup`) that holds your settings and
 local data, encrypted with a passphrase you choose. Use it to move Nail to
 another computer or to get back to a known state.
 
-Backups are only available in the desktop app and in the local browser
-window, not in remote sessions.
+Back up and restore in **Settings → Backups** (**Back up…**,
+**Restore…**) or from the [command palette](command-palette.md). Backups
+are only available in the desktop app and in the local browser window, not
+in remote sessions.
 
 ## What a backup can hold
 
 | Item | What it is | In new backups |
 | --- | --- | --- |
 | Settings | Nail's settings (security, notifications, sync, desktop and update settings, recent commands) | yes |
-| Theme | `theme.kdl` and the themes it builds on | yes |
+| Theme | your `theme.kdl` | yes |
 | Layout | `layout.kdl` | yes |
 | Rules and saved searches | `rules.kdl` and your saved searches | yes |
 | Accounts (without passwords) | `accounts.kdl`: accounts, identities, signatures, calendar and contact sources | yes |
 | Local folders | the mail of *Local Folders* and of opened files, with read state, flags and tags | yes |
 | Local calendars, contacts and tasks | the calendars, task lists and address books kept on this computer | yes |
-| Plug-ins | installed plug-ins with their permissions, settings and data | yes |
-| Encryption keys | your OpenPGP and S/MIME keyring **including secret keys** | **no** — choose it yourself |
+| Plug-ins | the packages of your installed plug-ins | yes |
+| Encryption keys | your OpenPGP and S/MIME keyring **including secret keys** (a key protected by the Credential Manager takes its protection secret along, so it works on another computer; keys on smartcards stay on the card) | **no** — choose it yourself |
 
 Never in a backup: account passwords and sign-in tokens (they stay in the
 Windows Credential Manager; `accounts.kdl` only refers to them), remote
@@ -54,7 +56,8 @@ not check out.
 
 ## Checking a backup
 
-*Check backup* reads every part of a backup and compares it with the
+**Check this backup** (after making one) or **Check the backup first**
+(when restoring) reads every part of a backup and compares it with the
 checksum recorded when it was made. Do this for backups you keep for a
 long time or copied to another drive. The report names each damaged or
 missing part.
@@ -71,7 +74,9 @@ shows, for each item, what would happen, without changing anything:
 | Add | there is nothing yet; everything is added |
 | Leave as is | not chosen, not in the backup, or already the same |
 
-Then choose the items to restore and start. Details:
+In the restore assistant: open the backup with its passphrase, optionally
+check it, choose the items, then **Show what would change** (the dry run)
+and **Restore now**. Details:
 
 * **Configuration** (settings, theme, layout, rules, accounts) is replaced
   file by file; files that are already identical are left alone.
@@ -82,8 +87,12 @@ Then choose the items to restore and start. Details:
   are updated, the others added.
 * **Accounts need their passwords again**: after restoring accounts, sign
   in to each of them (the report lists them).
+* **Plug-ins** that are not installed are installed from the backup
+  **switched off and without permissions**: turn them on in Settings →
+  Plug-ins and grant what they ask for. Plug-ins already installed stay as
+  they are.
 * **Restart** Nail when the report says so (after restoring settings or
-  plug-ins). Check the plug-ins' permissions afterwards.
+  plug-ins).
 * Damaged parts of a backup are listed and left out; the rest is restored.
 
 A backup made by a newer version of Nail cannot be restored by an older

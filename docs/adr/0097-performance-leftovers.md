@@ -142,3 +142,23 @@ No new crates. New edges inside the workspace lock: `nail-bench` →
 - The budgets for initial and incremental sync have little headroom; CI
   runs with the 1.5 tolerance. Budgets are tightened, not loosened,
   without an ADR.
+
+## Results in the repository (WP125)
+
+With the threading fix in `nail-store` (ADR 0099), `node e2e/perf/run-perf.mjs
+--corpus standard` on the development machine (release build, 100,000
+messages / 1.67 GB, sync at about 349 messages per second, data directory
+1.13 GB) passes every budget:
+
+| Metric | Value | Budget |
+| --- | --- | --- |
+| initial-sync-secs | 286.4 | 300 |
+| incremental-sync-ms (200 new) | 2732.3 | 3000 |
+| search-p95-ms | 107.7 | 250 |
+| list-page-p95-ms | 3.7 | 50 |
+| cold-start-ms | 69.4 | 3000 |
+| peak-memory-mib | 125.1 | 800 |
+| first-render-ms | 413.4 | 3000 |
+| scroll-frame-p95-ms | 18.1 | 20 |
+| scroll-long-frames | 0 | 5 |
+

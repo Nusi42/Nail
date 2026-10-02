@@ -84,7 +84,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0-rc.1"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-Proprietary"
@@ -321,6 +321,8 @@ schemars = "1.2.2"
 windows-sys = "0.61.2"
 # Registry (installation facts, Run key, default apps; the desktop shell).
 windows-registry = "0.6.1"
+# M4c: WebView2 PrintToPdf in the desktop shell (MIT; the version wry uses).
+webview2-com = "0.39.1"
 # In-app updater (desktop shell, WP113): signed manifests (minisign),
 # stable / beta channels. Default features off: `rustls-tls` only (reqwest
 # `rustls-no-provider`; the plug-in installs ring as the process default

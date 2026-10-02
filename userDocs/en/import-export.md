@@ -7,6 +7,11 @@ at any time (what was already imported or written stays). At the end you
 get a **report**: what was imported or written, and every item that was
 changed or left out, with the reason.
 
+Start an import or export from **Settings → Import and export**
+(**Import…**, **Export…**), from the welcome screen, or from the
+[command palette](command-palette.md). In the desktop app **Browse…** opens
+the Windows file dialog; in the browser you type the full path.
+
 Paths are paths on the computer running Nail, so importing and exporting
 is only available in the desktop app and in the local browser window, not
 in remote sessions.
@@ -28,11 +33,19 @@ address books, and the first problems it found. You choose which folders
 and collections to import and where they go:
 
 * **Mail** goes into **Local Folders**, a local account that is never
-  synchronized, or into a folder of one of your accounts. Into an account,
-  each message is uploaded like any other change you make, so it works
-  offline and is sent to the server when the account is online. You can
-  have Nail create a folder for the import (for example "Thunderbird
-  import"); otherwise folders with the same name are merged.
+  synchronized (Nail creates it the first time), or into a folder of one
+  of your accounts.
+  * Into **Local Folders** the source's folder tree is created. You can
+    have Nail create a folder for the import (for example "Import from
+    Thunderbird"); otherwise folders with the same name are merged.
+  * Into an **account**, Nail uses the account's **existing** folders:
+    each source folder goes into the folder with the same name below the
+    folder you choose (**Into the folder**, the Inbox by default), else
+    into the chosen folder itself; the report lists folders filed that way.
+    Nail creates no new folders on your server during an import — create
+    them first, or import into Local Folders and move the messages. Each
+    message is uploaded like any other change you make, so it works
+    offline and is sent to the server when the account is online.
 * **Events and tasks** go into the calendar you choose, **contacts** into
   the address book you choose. An item that is already there (same `UID`)
   is updated instead of added twice.
@@ -58,6 +71,7 @@ and keywords from Maildir file names and from the `Status`, `X-Status`,
 | Left out: deleted in the other program | the other program had deleted the message but not yet removed it from the file (Thunderbird does this until a folder is compacted; Maildir marks it `T`) |
 | Changed: unknown flag dropped | a Maildir flag or keyword letter Nail does not know |
 | Changed: folder name changed | a folder name Nail cannot use (for example one containing `/`) |
+| Changed: filed into the chosen folder | importing into an account: the source folder does not exist in the account, so its messages went into the folder you chose |
 | Left out / changed: calendar or contact data | details from the calendar or contact reader, e.g. an event without a start |
 | Already there | skipped because of *Skip messages that are already there* (not counted as a problem) |
 

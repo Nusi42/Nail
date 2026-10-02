@@ -190,7 +190,11 @@ function TargetFields({
         <option value="">{t("portability-import-target-local")}</option>
         {real.map((a) => (
           <option key={a.id} value={a.id}>
-            {t("portability-account-option", { name: a.name, email: a.email })}
+            {t("portability-account-option", {
+              name: a.name,
+              email: a.email,
+              hasEmail: a.email ? "yes" : "no",
+            })}
           </option>
         ))}
       </SelectField>
@@ -208,7 +212,7 @@ function TargetFields({
           value={parentId ?? ""}
           onChange={(v) => setParentId(v === "" ? null : v)}
         >
-          <option value="">{t("portability-import-target-top")}</option>
+          <option value="">{t("portability-import-target-inbox")}</option>
           {(folders.data ?? []).map((f) => (
             <option key={f.id} value={f.id}>
               {f.path}
@@ -216,13 +220,15 @@ function TargetFields({
           ))}
         </SelectField>
       )}
-      <TextField
-        label={t("portability-import-folder-name")}
-        field="folder-name"
-        value={folderName}
-        onChange={setFolderName}
-        hint={t("portability-import-folder-name-hint")}
-      />
+      {target === null && (
+        <TextField
+          label={t("portability-import-folder-name")}
+          field="folder-name"
+          value={folderName}
+          onChange={setFolderName}
+          hint={t("portability-import-folder-name-hint")}
+        />
+      )}
     </fieldset>
   );
 }
@@ -521,6 +527,7 @@ export function Proposals({
                     {t("portability-account-option", {
                       name: a.config.name,
                       email: a.config.email,
+                      hasEmail: a.config.email ? "yes" : "no",
                     })}
                   </span>
                 </label>
@@ -648,7 +655,10 @@ export function ImportWizard({ close }: { close(): void }) {
             mail: {
               account_id: o.target,
               parent_folder_id: o.parentId,
-              folder_name: o.folderName.trim() === "" ? null : o.folderName.trim(),
+              // New folders only in Local Folders: into an account, mail
+              // goes into its existing folders (ADR 0099).
+              folder_name:
+                o.target !== null || o.folderName.trim() === "" ? null : o.folderName.trim(),
             },
             folders: o.folders,
             collections: o.collections,

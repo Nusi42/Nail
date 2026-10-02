@@ -81,6 +81,12 @@ export interface StartOptions {
   seed?: "demo" | "demo-imap" | "demo-multi";
   /** Files / links to open, as Windows hands them to the desktop app (`--launch`). */
   launch?: string[];
+  /**
+   * Existing data and config directories (a restart of an earlier run,
+   * M4c); they are not deleted by `stop()`. Seeded runs keep their secrets
+   * in `<dataDir>/demo-keychain.json`, so a restart finds them again.
+   */
+  dirs?: { dataDir: string; configDir: string };
 }
 
 /**
@@ -88,8 +94,9 @@ export interface StartOptions {
  * and config directories (for tests that change the configuration).
  */
 export async function startNail(options: StartOptions = {}): Promise<NailServer> {
-  const dataDir = tempDir("data");
-  const configDir = tempDir("config");
+  const dataDir = options.dirs?.dataDir ?? tempDir("data");
+  const configDir = options.dirs?.configDir ?? tempDir("config");
+  const keepDirs = options.dirs !== undefined;
   const args = [
     "serve",
     "--port",
@@ -134,6 +141,7 @@ export async function startNail(options: StartOptions = {}): Promise<NailServer>
         child.kill();
         await exited;
       }
+      if (keepDirs) return;
       for (const dir of [dataDir, configDir]) {
         rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
       }

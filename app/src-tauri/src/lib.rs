@@ -35,11 +35,13 @@
 
 pub mod default_apps;
 pub mod dev_endpoint;
+pub mod dialog;
 pub mod host;
 pub mod install;
 pub mod launch;
 pub mod mapi_server;
 pub mod portable;
+pub mod printing;
 pub mod registry;
 pub mod setup_helper;
 pub mod shell;
@@ -519,6 +521,8 @@ pub fn run() {
             tracing_subscriber::EnvFilter::try_from_env("NAIL_LOG")
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
+        // Recent lines for the diagnostics bundle (M4c).
+        .with_writer(|| nail_core::logs::TeeWriter)
         .try_init();
     let args = AppArgs::from_process_args(
         std::env::args_os()
@@ -643,6 +647,12 @@ pub fn run() {
                 window = window.data_directory(base.join("webview"));
             }
             let window = window.build()?;
+            // M4c: file dialogs (owned by this window) and hidden print
+            // windows (sharing its WebView2 data folder).
+            host.bind_app(
+                app.handle().clone(),
+                base.as_ref().map(|b| b.join("webview")),
+            );
             if args.autostart
                 && !hidden
                 && let Err(err) = window.minimize()

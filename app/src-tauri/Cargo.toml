@@ -55,8 +55,11 @@ futures-util.workspace = true
 # Authorization, Threading), random tokens (Cryptography, from the
 # workspace), opening Settings → Default apps (Shell).
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { workspace = true, features = ["Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging"] }
 windows-registry.workspace = true
+# M4c: WebView2's PrintToPdf for PDF files of print jobs (MIT; the same
+# version wry uses, so the interfaces match Tauri's webview handle).
+webview2-com.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

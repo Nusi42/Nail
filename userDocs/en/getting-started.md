@@ -72,6 +72,8 @@ is narrow, the panes become tabs.
 | `F5` | Check for new mail |
 | `Ctrl+B` | Show or hide the folder pane |
 | `g` then `r` | Show or hide the message pane |
+| `Ctrl+K` | The command palette: find and run any action by typing |
+| `Ctrl+P` | Print the selected message |
 
 You can change every shortcut in `layout.kdl`; see the
 [layout reference](layout-reference.md#keys).
@@ -148,22 +150,31 @@ Windows and follow their language.
 
 | Folder | Contents |
 | --- | --- |
-| `%APPDATA%\Nail` | Your settings: `theme.kdl`, `layout.kdl` |
-| `%LOCALAPPDATA%\Nail` | Your mail: a local copy of your folders and messages, so reading works offline |
+| `%APPDATA%\Nail` | Your settings: `theme.kdl`, `layout.kdl`, `accounts.kdl`, `rules.kdl` (and their backups) |
+| `%LOCALAPPDATA%\Nail` | Your mail, calendars and contacts: a local copy, so reading works offline; with encryption at rest also `vault.json` |
 
 `nail serve --data-dir <folder> --config-dir <folder>` uses other folders,
 which is handy for trying things out without touching your real setup.
+To move Nail to another computer, make a [backup](backup-restore.md) and
+restore it there.
 
-## What the preview can do
+## What Nail can do
 
-The M0 preview can:
+- **Mail** with IMAP, POP3, Gmail and Microsoft Exchange accounts, a unified
+  inbox and combined accounts, conversations, search, rules, snooze, junk
+  filtering, undo send ([Reading and organizing mail](mail.md),
+  [Writing mail](composer.md), [Accounts](accounts.md)).
+- **Calendars, contacts and tasks**, invitations and free/busy
+  ([Calendar, contacts and tasks](calendar-contacts-tasks.md)).
+- **Signing and encryption** with OpenPGP, S/MIME and smartcards, and
+  encryption at rest of everything stored ([Signing and encryption](security.md)).
+- **Bringing your data along**: import from Thunderbird and standard files,
+  export, encrypted backups ([Importing and exporting](import-export.md),
+  [Backups and restoring](backup-restore.md)).
+- **Your own look and layout** in `theme.kdl` and `layout.kdl`, changed live
+  ([Customizing](customization.md)), plug-ins ([Plug-ins](plugins/README.md))
+  and AI agents through MCP ([Connecting AI agents](mcp.md)).
+- **Remote access** from your phone or another computer
+  ([Remote access](remote-access.md)).
 
-- show the demo mailbox, or an IMAP mailbox that Nail has been set up to
-  read (setting up your own account comes in the next version);
-- read messages safely, including HTML mail, attachments listed with their
-  sizes, and mail in older character sets;
-- be reshaped completely with `theme.kdl` and `layout.kdl`, live.
-
-The next version adds adding your own accounts, replying and writing mail,
-archiving, deleting and flagging, search, and conversation view. Until then,
-the toolbar buttons for these actions are shown but disabled.
+What is new in this version is in the [release notes](release-notes.md).

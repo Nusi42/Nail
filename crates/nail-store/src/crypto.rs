@@ -818,6 +818,24 @@ impl Store {
         })
     }
 
+    /// Every JSON setting by key (backups, M4c). A value that is not JSON
+    /// any more is left out.
+    pub fn all_settings(&self) -> Result<std::collections::BTreeMap<String, serde_json::Value>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare("SELECT key, value FROM app_settings ORDER BY key")?;
+            let rows =
+                stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            let mut out = std::collections::BTreeMap::new();
+            for row in rows {
+                let (key, text) = row?;
+                if let Ok(value) = serde_json::from_str(&text) {
+                    out.insert(key, value);
+                }
+            }
+            Ok(out)
+        })
+    }
+
     /// Stores a JSON setting.
     pub fn set_setting<T: Serialize + ?Sized>(&self, key: &str, value: &T) -> Result<()> {
         let text = serde_json::to_string(value)?;

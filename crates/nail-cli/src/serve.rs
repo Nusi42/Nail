@@ -134,9 +134,15 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     options.watch_config = !args.no_watch;
     browser_mode(&mut options, args.seed);
 
-    // Seeded runs keep secrets in memory, trust only the test CA and look
-    // up no keys online.
+    // Seeded runs keep secrets in the data directory's demo keychain file,
+    // trust only the test CA and look up no keys online.
     if args.seed.is_some() {
+        // Kept in the (temporary or given) data directory so a restart of
+        // a seeded run finds them again (M4c recovery-key scenario); never
+        // the OS keychain.
+        options.secrets = Some(Arc::new(nail_core::demo::FileSecretStore::open(
+            data_dir.join(nail_core::demo::DEMO_KEYCHAIN_FILE),
+        )) as Arc<dyn nail_api::engine::SecretStore>);
         options = nail_core::demo::demo_options(options);
     }
     // demo-multi: mock servers first, the service is pointed at them.

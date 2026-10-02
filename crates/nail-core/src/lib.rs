@@ -20,6 +20,7 @@
 
 mod accounts;
 mod agents;
+mod api_moves;
 mod bodies;
 mod clock;
 mod composer;
@@ -40,6 +41,7 @@ mod ingest;
 mod junk;
 mod launch;
 pub mod launch_args;
+pub mod logs;
 mod mail;
 mod mcp;
 mod notify;

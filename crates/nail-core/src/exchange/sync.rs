@@ -1444,6 +1444,11 @@ async fn store_messages(
         let id = folder.folder_id.clone();
         service.store().call(move |s| s.get_folder(&id)).await?
     };
+    // M4c: the folder's sync policy decides per message whether the body
+    // is downloaded now or when it is opened.
+    let policy =
+        nail_exchange::policy::effective(&account.sync, &local_folder.path, local_folder.role);
+    let now = unix_now();
     let mut new_ids: Vec<MessageId> = Vec::new();
     for chunk in messages.chunks(INGEST_CHUNK) {
         for m in chunk {
@@ -1459,16 +1464,27 @@ async fn store_messages(
             if apply_change(service, &account.id, folder, &change, master).await? {
                 continue;
             }
+            let headers_only = m.raw.is_none()
+                && nail_exchange::policy::body_fetch(policy.bodies, m.internal_date, now)
+                    == nail_exchange::policy::BodyFetch::HeadersOnly;
             let raw = match &m.raw {
                 Some(raw) => raw.clone(),
-                None => match engine
-                    .fetch_mime(folder.mailbox.as_deref(), &m.remote_id)
-                    .await
-                {
-                    Ok(raw) => raw,
-                    Err(err) if err.code == ErrorCode::NotFound => continue,
-                    Err(err) => return Err(err.into()),
-                },
+                None => {
+                    let fetched = if headers_only {
+                        engine
+                            .fetch_headers(folder.mailbox.as_deref(), &m.remote_id)
+                            .await
+                    } else {
+                        engine
+                            .fetch_mime(folder.mailbox.as_deref(), &m.remote_id)
+                            .await
+                    };
+                    match fetched {
+                        Ok(raw) => raw,
+                        Err(err) if err.code == ErrorCode::NotFound => continue,
+                        Err(err) => return Err(err.into()),
+                    }
+                }
             };
             if let Some(moved) =
                 moved_copy(service, &account.id, engine, folder, &raw, arrivals).await?
@@ -1497,8 +1513,9 @@ async fn store_messages(
                         .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
                 }),
                 raw,
-                headers_only: false,
+                headers_only,
                 size: m.size,
+                remote_thread_id: m.thread_id.clone(),
             };
             let blobs = service.blobs().clone();
             let index = service.inner.search.get();
@@ -1840,17 +1857,64 @@ impl ExchangeExecutor<'_> {
                 }) else {
                     return Ok(());
                 };
+                // M4c: into another account (Exchange or Gmail).
+                let accounts = {
+                    let (a, b) = (from.folder_id.clone(), target_folder_id.clone());
+                    self.service
+                        .store()
+                        .call(move |s| {
+                            Ok((s.get_folder(&a)?.account_id, s.get_folder(&b)?.account_id))
+                        })
+                        .await
+                        .map_err(|e| EngineError::from(CoreError::from(e)))?
+                };
+                if accounts.0 != accounts.1 {
+                    let Some(target) =
+                        crate::api_moves::api_target(self.service, target_folder_id).await?
+                    else {
+                        return Err(crate::api_moves::unsupported_target());
+                    };
+                    let source = nail_exchange::transfer::ApiMailbox::Exchange {
+                        engine: self.engine.as_ref()
+                            as &dyn nail_api::exchange::engine::ExchangeMailEngine,
+                        mailbox: from.mailbox.as_deref(),
+                    };
+                    return crate::api_moves::move_out(
+                        self.service,
+                        message_id,
+                        source,
+                        &remote_id,
+                        &target,
+                    )
+                    .await;
+                }
                 let Some(to) = self.folder(target_folder_id).await? else {
                     return Err(EngineError::permanent(
                         ErrorCode::Unsupported,
-                        "moving Exchange messages out of the account is not supported yet",
+                        "the target folder is not an Exchange folder",
                     ));
                 };
                 if from.mailbox != to.mailbox {
-                    return Err(EngineError::permanent(
-                        ErrorCode::Unsupported,
-                        "moving messages between Exchange mailboxes is not supported yet",
-                    ));
+                    // M4c: into another mailbox of the same account.
+                    let id = message_id.clone();
+                    let flags = self
+                        .service
+                        .store()
+                        .call(move |s| Ok(s.get_message(&id)?.summary.flags))
+                        .await
+                        .map_err(|e| EngineError::from(CoreError::from(e)))?;
+                    let new = self
+                        .engine
+                        .move_to_mailbox(
+                            from.mailbox.as_deref(),
+                            &remote_id,
+                            to.mailbox.as_deref(),
+                            &to.remote_id,
+                            flags,
+                        )
+                        .await?;
+                    self.set_remote(message_id, &new, Some(&to)).await;
+                    return Ok(());
                 }
                 let write = RemoteWrite::Move {
                     remote_id,

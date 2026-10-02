@@ -281,6 +281,37 @@ impl ExchangeMailEngine for GraphEngine {
         // Graph pushes only to webhooks: the core polls (PollTimer).
         Box::pin(async { Ok(None) })
     }
+
+    fn fetch_headers<'a>(
+        &'a self,
+        mailbox: Option<&'a str>,
+        remote_id: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<u8>, EngineError>> {
+        Box::pin(async move { engine(GraphEngine::fetch_headers(self, mailbox, remote_id).await) })
+    }
+
+    fn move_to_mailbox<'a>(
+        &'a self,
+        from_mailbox: Option<&'a str>,
+        remote_id: &'a str,
+        to_mailbox: Option<&'a str>,
+        to_folder: &'a str,
+        flags: nail_api::domain::Flags,
+    ) -> BoxFuture<'a, Result<String, EngineError>> {
+        Box::pin(async move {
+            engine(
+                GraphEngine::move_to_mailbox(
+                    self,
+                    from_mailbox,
+                    remote_id,
+                    to_mailbox,
+                    to_folder,
+                    flags,
+                )
+                .await,
+            )
+        })
+    }
 }
 
 impl ExchangeSettingsEngine for GraphEngine {

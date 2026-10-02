@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities of the main window",
-  "windows": ["main"],
+  "description": "Capabilities of the main window and the hidden print windows (PDF files, M4c)",
+  "windows": ["main", "print-*"],
   "permissions": ["core:default"]
 }

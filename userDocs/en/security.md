@@ -63,6 +63,9 @@ Use the buttons above the list:
 - **Windows certificates** — uses certificates Windows already has
   (*My certificates* and *Other people*). The private key of your own
   certificate stays in the Windows store.
+- **Smartcards** — keys on a smartcard or USB token (PKCS#11) sign and
+  decrypt on the card; Nail asks for the PIN when it needs it. See
+  [Smartcards](smartcards.md).
 
 ### Protecting your secret keys
 
@@ -178,16 +181,17 @@ Each link warning shows the link's **real target**.
 
 **Settings → Data protection**:
 
-- **Encryption at rest** encrypts the mail Nail stores on your computer —
-  messages, drafts, message previews and the search index — with a key
-  kept in the Windows Credential Manager (subjects, addresses and dates
-  stay readable in the database so that lists and searches stay fast;
-  see [Data protection in detail](data-protection.md)). It protects your mail if the disk is copied or a laptop is
+- **Encryption at rest** encrypts the data Nail stores on your computer —
+  the whole database file, messages, drafts and the search index — with a
+  key kept in the Windows Credential Manager (see
+  [Data protection in detail](data-protection.md)). It protects your mail if the disk is copied or a laptop is
   stolen, even without BitLocker. It is **off by default for now; we
   recommend turning it on.** Turning it on (or off) converts your existing
   data; the progress is shown, you can keep working, and if Nail closes it
   continues on the next start. If it stops with an error, choose **Try
-  again**.
+  again**. Afterwards create a **[recovery key](recovery-key.md)**
+  (**Settings → Recovery key**): it is the only way back to your data if
+  the key in the Credential Manager is ever lost.
 - **Finding keys online** — *Never*, *When I ask* (default), or
   *Automatically while writing*, and which directories to ask. Automatic
   lookups tell those servers which addresses you write to.

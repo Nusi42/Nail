@@ -200,14 +200,26 @@ fn source() -> Source {
             },
             vec![EVENT.into()],
         )]),
-        books: MemoryPim(vec![(
-            ExportCollection {
-                key: "book-1".into(),
-                name: "Friends".into(),
-                items: None,
-            },
-            vec![CARD.into()],
-        )]),
+        books: MemoryPim(vec![
+            (
+                ExportCollection {
+                    key: "book-1".into(),
+                    name: "Friends".into(),
+                    items: None,
+                },
+                vec![CARD.into()],
+            ),
+            // An empty address book is an empty entry; restoring it is no
+            // problem (WP125).
+            (
+                ExportCollection {
+                    key: "book-2".into(),
+                    name: "Empty".into(),
+                    items: None,
+                },
+                Vec::new(),
+            ),
+        ]),
         unstable: false,
         calls: 0,
     }
@@ -397,6 +409,7 @@ fn backup_inspect_verify_plan_restore() {
             "mail/opened-files/index.json",
             "pim/1.ics",
             "pim/2.vcf",
+            "pim/3.vcf",
             "pim/index.json",
             "plugins/hello/manifest.json",
         ]

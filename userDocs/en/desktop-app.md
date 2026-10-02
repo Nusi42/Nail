@@ -18,8 +18,9 @@ things to set up. You can change all of them later in Settings.
 - **Start with Windows.** Nail then starts when you sign in, in the
   notification area without a window, so new mail, rules and reminders
   work from the start.
-- **Bring your mail along.** Importing mail, contacts and calendars from
-  another mail program comes with a later version of Nail.
+- **Bring your mail along.** *Import…* opens the import assistant: mail,
+  contacts and calendars from Thunderbird, mbox or Maildir files and
+  calendar and contact files (see [Importing and exporting](import-export.md)).
 
 *Get started* and *Skip* both close the screen for good. If you close it
 with ×, it comes back at the next start. To see it again, use the
@@ -138,6 +139,17 @@ composer's attachment limit (25 MB); a larger file is refused and the
 program reports that the attachment is too large. If Nail has no e-mail
 account yet, the program is told to set one up first. If Nail is not
 running, it is started.
+
+## File dialogs, printing and PDF files
+
+Wherever Nail needs a file or folder — importing, exporting, backups, the
+recovery kit, a PDF — **Browse…** opens the usual Windows dialog. In a
+browser (the local web mode) you type the full path instead.
+
+**Print** (Ctrl+P on a message) uses the Windows print dialog. **Save as
+PDF** writes the message, conversation, event or agenda straight to a PDF
+file with the page size and orientation you chose, without a printer
+dialog (see [Printing](printing.md)).
 
 ## Layout options
 

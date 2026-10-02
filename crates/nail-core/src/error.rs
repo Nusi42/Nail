@@ -85,6 +85,11 @@ impl CoreError {
             Self::Engine(err) => err.localized.as_deref().cloned(),
             Self::Config(err) => Some((*err.localized).clone()),
             Self::Pgp(err) => err.localized(),
+            // M4c: vault and recovery-key texts, smartcard texts.
+            Self::Vault(err) => err.localized(),
+            Self::Smime(nail_smime::Error::Smartcard(card)) => {
+                ApiError::from(card.clone()).localized.map(|l| *l)
+            }
             // A confirmed send whose draft was edited after the approval
             // (post-M4a, ADR 0086).
             Self::Store(nail_store::Error::DraftChanged(_)) => {
@@ -137,6 +142,9 @@ impl From<CoreError> for ApiError {
             CoreError::Api(api) => api,
             CoreError::Config(config) => config.into(),
             CoreError::Pgp(err) => err.into(),
+            // M4c: recovery-key and vault texts, smartcard texts.
+            CoreError::Vault(err) => err.into(),
+            CoreError::Smime(err) => err.into(),
             CoreError::Store(err @ nail_store::Error::DraftChanged(_)) => {
                 ApiError::new(ErrorCode::Conflict, err.to_string())
                     .with_localized(nail_api::LocalizedMessage::new(DRAFT_CHANGED))

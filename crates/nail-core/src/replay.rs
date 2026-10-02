@@ -392,6 +392,29 @@ async fn append_to_account(
     header_message_id: Option<&str>,
 ) -> Result<(Option<u32>, Option<u32>), EngineError> {
     let Some(settings) = service.imap_settings(&target.account_id) else {
+        // M4c: into an Exchange or Gmail account through its engine.
+        if let Some(api) = crate::api_moves::api_target(service, &target.id).await? {
+            let message = op.operation.message_id();
+            let Some((raw, _)) = raw_message(service, message).await? else {
+                return Err(EngineError::permanent(
+                    ErrorCode::NotFound,
+                    format!("message {message} is gone locally; it cannot be copied"),
+                ));
+            };
+            let id = message.clone();
+            let flags = service
+                .store()
+                .call(move |s| Ok(s.get_message(&id)?.summary.flags))
+                .await
+                .map_err(store_error)?;
+            if let Some(remote) = crate::api_moves::append_raw(&api, raw, flags).await? {
+                let id = message.clone();
+                let _ = service
+                    .store()
+                    .call(move |s| s.set_message_remote_id(&id, Some(&remote)))
+                    .await;
+            }
+        }
         return Ok((None, None));
     };
     let message = op.operation.message_id();

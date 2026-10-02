@@ -78,6 +78,7 @@ CI (`.github/workflows/ci.yml`) runs these jobs:
 | `installer-arm64` | `windows-latest` | the ARM64 installers, cross-built (not run: no ARM64 runner) |
 | `deny` | `ubuntu-latest` | `cargo deny check` |
 | `interop` | `ubuntu-latest` | the engines against real Dovecot and Stalwart (below) |
+| `perf` | `windows-latest` | the 100k-message benchmark (`node e2e/perf/run-perf.mjs --corpus standard --tolerant` after release builds of `nail-cli` / `nail-bench` and the UI); uploads `report*.json` and the scroll trace; 60 minutes at most (M4c, ADR 0097) |
 
 `.github/workflows/release.yml` (tags / manual) builds the signed x64 and
 ARM64 packages with the release update key, writes the per-channel update
@@ -322,7 +323,7 @@ This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
 
 | Option | Meaning |
 | --- | --- |
-| `--seed demo` | Load the demo mail corpus as a local account (no network). Every seeded run keeps secrets in memory, trusts only the corpus' S/MIME test root and looks up no keys online |
+| `--seed demo` | Load the demo mail corpus as a local account (no network). Every seeded run keeps its secrets in `<data-dir>/demo-keychain.json` (a plain demo keychain file, never the OS keychain; a restart with the same `--data-dir` finds them — M4c, the recovery-key scenario), trusts only the corpus' S/MIME test root and looks up no keys online |
 | `--seed demo-imap` | Serve the demo corpus from an in-process mock IMAP server and sync it like a real account |
 | `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"`. M3a: a mock CalDAV / CardDAV server (sources `work-calendars` / `work-contacts`, user `ada`, password `dav-secret` in the memory keychain) with sample events ("Team sync" weekly, "Quarterly review" tomorrow) and contacts (Grace Hopper, Charles Babbage), and the ICS subscription `holidays` on the mock HTTP server. M3b: the mock CalDAV server's user address is `ada@work.example`, a second principal `bob` (`bob@example.org`, busy tomorrow 10:00 and 14:00 UTC) answers free/busy through the schedule outbox, "Project kickoff" (in two days) is a meeting the work identity organizes with bob invited; a Gmail API account "Gmail" (`ada@gmail.example`, mock Gmail server with the demo mailbox, signed in through a mock OAuth2 server, polls every 10 s) is configured but **switched off** (`enabled=#false`) so the other suites keep their counts — Settings → Accounts → Gmail → "Synchronize this account" turns it on |
 | `--port 0` | Use a free port; the URL is the only line printed on stdout |

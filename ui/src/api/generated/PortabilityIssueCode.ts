@@ -3,4 +3,4 @@
 /**
  * What went wrong with one item (`portability-issue-*`).
  */
-export type PortabilityIssueCode = "unreadable-file" | "malformed-message" | "too-large" | "truncated" | "duplicate" | "unknown-flag" | "invalid-folder-name" | "invalid-calendar-data" | "invalid-contact-data" | "unsupported-format" | "filter-not-expressible" | "account-not-expressible" | "secret-not-imported" | "write-failed" | "target-exists" | "checksum-mismatch" | "entry-missing" | "newer-format" | "needs-attention";
+export type PortabilityIssueCode = "unreadable-file" | "malformed-message" | "too-large" | "truncated" | "duplicate" | "unknown-flag" | "invalid-folder-name" | "invalid-calendar-data" | "invalid-contact-data" | "unsupported-format" | "filter-not-expressible" | "account-not-expressible" | "secret-not-imported" | "write-failed" | "target-exists" | "checksum-mismatch" | "entry-missing" | "newer-format" | "needs-attention" | "deleted-in-source" | "folder-merged";

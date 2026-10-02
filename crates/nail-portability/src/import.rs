@@ -11,7 +11,6 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use nail_api::Flags;
-use nail_api::LocalizedMessage;
 use nail_api::domain::FolderRole;
 use nail_api::portability::{
     ImportCollectionPreview, ImportFolderPreview, ImportFormat, ImportOptions, ImportPreview,
@@ -572,14 +571,12 @@ pub fn import_message(
         }
     }
     if message.deleted {
-        let mut issue = ItemIssue::new(
-            PortabilityIssueCode::UnknownFlag,
+        ctx.issue(ItemIssue::new(
+            PortabilityIssueCode::DeletedInSource,
             IssueSeverity::Skipped,
             message.origin,
             "deleted in the source (not compacted / expunged yet)",
-        );
-        issue.localized = LocalizedMessage::new(DELETED_IN_SOURCE_ID);
-        ctx.issue(issue);
+        ));
         return Ok(());
     }
     for (code, detail) in std::mem::take(&mut message.warnings) {
@@ -715,7 +712,7 @@ pub(crate) mod tests {
         assert_eq!(
             codes,
             vec![
-                (PortabilityIssueCode::UnknownFlag, Some(2)),
+                (PortabilityIssueCode::DeletedInSource, Some(2)),
                 (PortabilityIssueCode::MalformedMessage, Some(3)),
                 (PortabilityIssueCode::WriteFailed, Some(4)),
             ]

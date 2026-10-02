@@ -5,9 +5,10 @@ calendars, and saves any of them as a PDF file.
 
 ## Printing
 
-Use **Print** in the reader's toolbar or menu, or the command palette
-(**Print the message…**, **Print the conversation…**, **Print the
-event…**, **Print an agenda…**). The print dialog shows what will be
+Press **Ctrl+P** on a selected message, use **Print the message…** in the
+reader's toolbar, **Print the conversation…** in a message's right-click
+menu, **Print the event…** / **Print an agenda…** in the calendar's
+toolbar, or the command palette. The print dialog shows what will be
 printed and lets you choose:
 
 | Option | What it does |

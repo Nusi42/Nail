@@ -127,7 +127,7 @@ portability-error-invalid-options = These settings cannot be used.
 portability-error-store = Nail could not save the imported data.
 portability-error-source-changed = Your data changed while the backup was written. Try again.
 
-# A more specific text for an item issue.
+# Messages deleted in the source program (PortabilityIssueCode::DeletedInSource).
 portability-issue-deleted-in-source = Deleted in the other program and not imported.
 
 # Notes of a restore plan or report (RestoreAction.note).
@@ -136,3 +136,16 @@ restore-note-accounts-need-passwords = { $count ->
    *[other] { $count } accounts need their passwords again.
 }
 restore-note-plugins-review = Check the plug-ins' permissions after the restore.
+
+## The core (WP125)
+
+portability-issue-folder-merged = This folder does not exist in the account; its messages went into the chosen folder.
+portability-error-account-folders = Nail creates new folders only in Local Folders. To import into this account, choose one of its existing folders.
+portability-error-virtual-target = Mail cannot be imported into a combined account. Choose one of its accounts.
+portability-error-path-not-absolute = Type the full path of the file or folder.
+portability-error-missing-path = There is no file or folder at this path.
+portability-error-format-mismatch = This format cannot export what you chose.
+portability-error-nothing-chosen = Choose what to export.
+portability-job-unknown = This job is not known (any more).
+local-folders-account = Local Folders
+portability-export-messages-folder = Messages

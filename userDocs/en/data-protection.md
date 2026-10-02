@@ -20,14 +20,17 @@ Windows edition has it.
 | The search index | yes |
 | Drafts (text, recipients, attachment list) | yes |
 | The preview line of each message in the list | yes |
-| Subjects, sender and recipient addresses, dates, flags, folder names | **no** |
-| Collected addresses (for suggestions while writing) | **no** |
+| Subjects, sender and recipient addresses, dates, flags, folder names | yes — the whole database file is encrypted |
+| Collected addresses (for suggestions while writing), calendars, contacts, tasks, settings | yes — the whole database file is encrypted |
 | Your secret OpenPGP keys and S/MIME private keys | always, whether encryption at rest is on or not |
 
-Subjects, addresses and dates stay readable in the database because Nail
-sorts, threads and filters by them. Someone with the disk could see *who*
-wrote to you *when* and about *which subject*, but not what the messages
-say.
+Since version 1.0 Nail encrypts the **whole database file**, not only the
+contents of the messages: someone with the disk sees neither *who* wrote
+to you nor *when* nor *about what*. What stays readable beside the data is
+the small file `vault.json` (which keychain entry holds the key, a check
+value and — if you created one — the key wrapped by your recovery key;
+none of it opens your data). Data encrypted with an earlier version gets
+its database file encrypted the next time Nail starts.
 
 ### The key
 
@@ -39,9 +42,12 @@ elsewhere.
 
 > **Important:** if the key is removed from the Credential Manager (for
 > example by resetting your Windows profile), the encrypted data cannot
-> be read any more. Mail that is still on your mail server is downloaded
-> again; local drafts and mail fetched with POP3 and deleted from the
-> server are lost. Keep backups.
+> be read any more — unless you created a **[recovery key](recovery-key.md)**:
+> with it Nail puts the key back. Create one right after turning
+> encryption on, and keep [backups](backup-restore.md). Without both, mail
+> that is still on your mail server is downloaded again, but local drafts,
+> Local Folders and mail fetched with POP3 and deleted from the server are
+> lost.
 
 If Nail cannot find the key at start, it says that your data is locked
 instead of showing empty folders.

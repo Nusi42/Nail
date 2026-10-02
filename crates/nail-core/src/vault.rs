@@ -18,15 +18,16 @@
 
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use nail_api::engine::SecretStore;
 use nail_api::security::{VaultPhase, VaultStatus};
-use nail_api::{ApiError, Event};
+use nail_api::{ApiError, Event, LocalizedMessage};
 use nail_search::{CommitPolicy, SearchIndex};
 use nail_store::{BlobStore, MessageFilter, Store};
-use nail_vault::Vault;
+use nail_vault::{LockedVault, Vault, VaultError};
 
 use crate::error::Result;
 use crate::service::{Service, lock};
@@ -45,11 +46,19 @@ pub(crate) struct VaultCtl {
     open_error: Mutex<Option<ApiError>>,
     /// Held while a migration runs.
     running: tokio::sync::Mutex<()>,
+    /// M4c: the data directory's encrypted database could not be opened
+    /// (its key is gone from the keychain). The service then runs on an
+    /// empty in-memory store; only the recovery key works
+    /// ([`LockedVault::restore_key`]), and a restart opens the data.
+    locked: Option<LockedVault>,
+    /// The key was put back while locked: restarting Nail opens the data.
+    restart_needed: AtomicBool,
 }
 
 impl VaultCtl {
     /// Opens the vault of a data directory (`index_dir` = its search index
-    /// directory, `None` for an in-memory index).
+    /// directory, `None` for an in-memory index). Column sealing only (the
+    /// M2a vault): tests and embedders building a service from parts.
     pub(crate) fn open(
         store: Store,
         blobs: BlobStore,
@@ -57,16 +66,29 @@ impl VaultCtl {
         secrets: Arc<dyn SecretStore>,
     ) -> Self {
         let vault = Vault::new(store, blobs, index_dir.clone(), secrets);
-        let open_error = match vault.open() {
-            Ok(status) => {
-                if status.state != nail_api::security::VaultState::Plain {
+        let open_error = vault.open().err();
+        Self::from_vault(vault, open_error, index_dir)
+    }
+
+    /// A vault [`nail_vault::open_data_dir`] opened (full-file encryption
+    /// on; `open_error` = why the data key is not available).
+    pub(crate) fn from_vault(
+        vault: Vault,
+        open_error: Option<VaultError>,
+        index_dir: Option<PathBuf>,
+    ) -> Self {
+        let open_error = match open_error {
+            None => {
+                if let Ok(status) = vault.status()
+                    && status.state != nail_api::security::VaultState::Plain
+                {
                     tracing::info!(state = status.state.as_str(), "encryption at rest is on");
                 }
                 None
             }
-            Err(err) => {
+            Some(err) => {
                 tracing::error!(%err, "the data key of the encrypted data is not available");
-                Some(ApiError::new(err.code(), err.to_string()))
+                Some(ApiError::from(err))
             }
         };
         Self {
@@ -74,7 +96,28 @@ impl VaultCtl {
             index_dir,
             open_error: Mutex::new(open_error),
             running: tokio::sync::Mutex::new(()),
+            locked: None,
+            restart_needed: AtomicBool::new(false),
         }
+    }
+
+    /// A locked data directory: `stand_in` is a vault over the in-memory
+    /// stand-in store (so the rest of the service works on empty data).
+    pub(crate) fn locked(locked: LockedVault, stand_in: Vault) -> Self {
+        let error = ApiError::from(VaultError::Locked(locked.error().to_string()));
+        Self {
+            vault: Arc::new(stand_in),
+            index_dir: None,
+            open_error: Mutex::new(Some(error)),
+            running: tokio::sync::Mutex::new(()),
+            locked: Some(locked),
+            restart_needed: AtomicBool::new(false),
+        }
+    }
+
+    /// Whether the data directory could not be opened (see [`Self::locked`]).
+    pub(crate) fn is_locked(&self) -> bool {
+        self.locked.is_some()
     }
 
     /// Opens the search index in `dir` as the vault state needs it
@@ -112,10 +155,22 @@ impl VaultCtl {
 
     /// The status; a failed open is reported as its error.
     pub(crate) fn status(&self) -> Result<VaultStatus> {
+        if let Some(locked) = &self.locked {
+            let mut status = locked.status();
+            if self.restart_needed.load(Ordering::Acquire) {
+                status.key_in_keychain = true;
+                status.needs_recovery = false;
+                status.error = None;
+                status.message = Some("restart Nail to open the data".into());
+                status.localized = Some(LocalizedMessage::new(RESTART_NEEDED));
+            }
+            return Ok(status);
+        }
         let mut status = self.vault.status()?;
         if let Some(err) = lock(&self.open_error).clone() {
             status.error = Some(err.code);
             status.message = Some(err.message);
+            status.localized = err.localized.map(|l| *l);
         }
         Ok(status)
     }
@@ -125,6 +180,9 @@ impl VaultCtl {
         &self.vault
     }
 }
+
+/// The text of a vault whose key was restored while it was locked.
+pub(crate) const RESTART_NEEDED: &str = "vault-restart-needed";
 
 /// Emits [`Event::VaultProgress`] at most every [`PROGRESS_EVERY`] (and
 /// on every phase change).
@@ -263,15 +321,182 @@ impl Service {
     }
 }
 
-/// Resumes an interrupted migration when the service starts.
+/// Resumes an interrupted migration when the service starts; afterwards
+/// encrypts the database file of a vault encrypted before M4c (column
+/// sealing only) once.
 pub(crate) async fn resume_migration(service: Service) {
     let vault = Arc::clone(service.inner.vault.vault());
     let pending = tokio::task::spawn_blocking(move || vault.needs_migration()).await;
-    if !matches!(pending, Ok(Ok(true))) || service.inner.vault.check().is_err() {
+    if service.inner.vault.check().is_err() {
+        return;
+    }
+    if !matches!(pending, Ok(Ok(true))) {
+        let _running = service.inner.vault.running.lock().await;
+        let vault = Arc::clone(service.inner.vault.vault());
+        match tokio::task::spawn_blocking(move || vault.encrypt_database_file()).await {
+            Ok(Ok(true)) => tracing::info!("the database file is encrypted now"),
+            Ok(Ok(false)) => {}
+            Ok(Err(err)) => tracing::warn!(%err, "cannot encrypt the database file"),
+            Err(err) => tracing::warn!(%err, "encrypting the database file stopped"),
+        }
         return;
     }
     tracing::info!("resuming the switch of encryption at rest");
     if let Err(err) = service.run_vault_migration().await {
         tracing::warn!(%err, "resuming the switch of encryption at rest failed");
     }
+}
+
+impl Service {
+    /// `CreateRecoveryKey`: a new recovery key (shown once), optionally
+    /// with a recovery-kit text file.
+    pub(crate) async fn create_recovery_key(
+        &self,
+        save_to: Option<String>,
+    ) -> Result<nail_api::Response> {
+        if self.inner.vault.is_locked() {
+            self.inner.vault.check()?;
+        }
+        let path = match save_to.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+            Some(p) => {
+                let path = PathBuf::from(p);
+                if !path.is_absolute() {
+                    return Err(
+                        ApiError::invalid_request("the recovery kit needs a full path")
+                            .with_localized(LocalizedMessage::new(
+                                "portability-error-path-not-absolute",
+                            ))
+                            .into(),
+                    );
+                }
+                Some(path)
+            }
+            None => None,
+        };
+        let vault = Arc::clone(self.inner.vault.vault());
+        let locale = self.inner.locale.clone();
+        tokio::task::spawn_blocking(move || -> Result<nail_api::Response> {
+            let (key, status) = vault.create_recovery_key()?;
+            let saved_to = match path {
+                Some(path) => {
+                    let created = status.created_at.clone().unwrap_or_default();
+                    let text = recovery_kit(locale.as_deref(), key.as_str(), &created);
+                    write_kit(&path, &text)?;
+                    Some(path.display().to_string())
+                }
+                None => None,
+            };
+            Ok(nail_api::Response::RecoveryKeyCreated {
+                key: key.as_str().to_owned(),
+                saved_to,
+                status,
+            })
+        })
+        .await?
+    }
+
+    /// `VerifyRecoveryKey`.
+    pub(crate) async fn verify_recovery_key(&self, key: String) -> Result<nail_api::Response> {
+        let key = zeroize::Zeroizing::new(key);
+        let ctl = &self.inner.vault;
+        if let Some(locked) = &ctl.locked {
+            let valid = locked.verify_recovery_key(&key)?;
+            return Ok(nail_api::Response::RecoveryKeyVerified {
+                valid,
+                status: ctl.status()?.recovery,
+            });
+        }
+        let vault = Arc::clone(ctl.vault());
+        let (valid, status) =
+            tokio::task::spawn_blocking(move || vault.verify_recovery_key(&key)).await??;
+        Ok(nail_api::Response::RecoveryKeyVerified { valid, status })
+    }
+
+    /// `RestoreVaultKey`: puts the data key back into the keychain. A
+    /// locked data directory opens after a restart; a vault whose sealed
+    /// columns were locked opens at once (the search index is opened again).
+    pub(crate) async fn restore_vault_key(&self, key: String) -> Result<VaultStatus> {
+        let key = zeroize::Zeroizing::new(key);
+        let ctl = &self.inner.vault;
+        if let Some(locked) = &ctl.locked {
+            locked.restore_key(&key)?;
+            ctl.restart_needed.store(true, Ordering::Release);
+            let status = ctl.status()?;
+            self.broadcast(Event::VaultProgress {
+                status: status.clone(),
+            });
+            return Ok(status);
+        }
+        let vault = Arc::clone(ctl.vault());
+        tokio::task::spawn_blocking(move || vault.restore_key(&key)).await??;
+        let was_locked = lock(&ctl.open_error).take().is_some();
+        if was_locked && let Some(dir) = ctl.index_dir.clone() {
+            let service = self.clone();
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                let index = service.inner.vault.open_index(&dir)?;
+                service.inner.search.replace(index);
+                let index = service.inner.search.get();
+                let stored = u64::from(service.store().count_messages(&MessageFilter::All)?);
+                if index.was_rebuilt() || index.doc_count()? < stored {
+                    crate::ingest::reindex_all(service.store(), service.blobs(), &index)?;
+                }
+                Ok(())
+            })
+            .await??;
+        }
+        let status = ctl.status()?;
+        self.broadcast(Event::VaultProgress {
+            status: status.clone(),
+        });
+        Ok(status)
+    }
+
+    /// `RemoveRecoveryKey`.
+    pub(crate) async fn remove_recovery_key(&self) -> Result<VaultStatus> {
+        self.inner.vault.check()?;
+        let vault = Arc::clone(self.inner.vault.vault());
+        Ok(tokio::task::spawn_blocking(move || vault.remove_recovery_key()).await??)
+    }
+}
+
+/// The recovery kit's text (the user's language; English fallback).
+pub(crate) fn recovery_kit(locale: Option<&str>, key: &str, created: &str) -> String {
+    let line = |id: &str, args: &[(&str, &str)]| crate::strings::message_with(locale, id, args);
+    [
+        line("recovery-kit-title", &[]),
+        String::new(),
+        line("recovery-kit-intro", &[]),
+        String::new(),
+        line("recovery-kit-key", &[("key", key)]),
+        line("recovery-kit-created", &[("created", created)]),
+        String::new(),
+        line("recovery-kit-advice", &[]),
+        String::new(),
+    ]
+    .join("\r\n")
+}
+
+/// Writes the kit (never over an existing file).
+fn write_kit(path: &Path, text: &str) -> Result<()> {
+    use std::io::Write as _;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                ApiError::new(
+                    nail_api::ErrorCode::Conflict,
+                    format!("{} exists", path.display()),
+                )
+                .with_localized(LocalizedMessage::new("portability-error-target-exists"))
+            } else {
+                ApiError::internal(format!("cannot write {}: {e}", path.display()))
+            }
+        })?;
+    file.write_all(text.as_bytes())?;
+    Ok(())
 }

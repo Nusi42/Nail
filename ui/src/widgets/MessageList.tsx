@@ -256,14 +256,20 @@ export function MessageList({ node }: WidgetProps) {
     height: `${Math.max(0, virtualizer.getTotalSize() - (last?.end ?? 0))}px`,
   });
 
-  // Load the next page when the end comes into view.
+  // Load the next page one rendered window before the end comes into view
+  // (M4c: with only a few rows left, fast scrolling stalled at every page
+  // end).
   const lastIndex = last?.index ?? -1;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && lastIndex >= rows.length - 5) {
+    if (
+      hasNextPage &&
+      !isFetchingNextPage &&
+      lastIndex >= rows.length - Math.max(5, items.length)
+    ) {
       void fetchNextPage();
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, rows.length]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, lastIndex, rows.length, items.length]);
 
   // Keep the selection visible (keyboard navigation).
   const selectedIndex =

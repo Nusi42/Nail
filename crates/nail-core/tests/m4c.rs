@@ -1,8 +1,8 @@
 //! Wave M4c contract (ADR 0094): what the core serves at the contract
 //! stage — the palette's recent actions (stored, capped, validated), print
 //! jobs (made, read back, ready signal, PDF through the desktop host), the
-//! desktop file dialog, smartcard settings (validated, stored) — and that
-//! everything else answers `unsupported` (`m4c-not-ready`) until WP125.
+//! desktop file dialog, smartcard settings (validated, stored); since WP125
+//! also smartcards (soft token) and the rest of the M4c requests.
 
 use std::sync::{Arc, Mutex};
 
@@ -15,7 +15,8 @@ use nail_api::engine::BoxFuture;
 use nail_api::palette::MAX_RECENT_ACTIONS;
 use nail_api::portability::{ImportFormat, ImportSource};
 use nail_api::print::{AgendaLayout, PrintJob, PrintOptions, PrintTarget};
-use nail_api::smartcard::{Pkcs11Module, SmartcardSettings};
+use nail_api::security::CryptoTechnology;
+use nail_api::smartcard::{Pkcs11Module, SmartcardKeyRef, SmartcardSettings};
 use nail_api::{ApiError, ErrorCode, PrintJobId, Request, Response};
 use nail_core::{Service, ServiceOptions};
 use pretty_assertions::assert_eq;
@@ -369,43 +370,164 @@ async fn smartcard_settings_are_validated_and_stored() {
     );
 }
 
-#[tokio::test]
-async fn the_rest_waits_for_the_integration() {
+/// WP125: what the contract stage answered `m4c-not-ready` is served
+/// now (the details are in m4c_portability.rs / m4c_vault.rs).
+#[tokio::test(flavor = "multi_thread")]
+async fn the_m4c_requests_are_served() {
     let (service, _d, _c) = open(None);
+    let Response::ImportSources { .. } = service.handle(Request::FindImportSources).await else {
+        panic!("import sources expected");
+    };
+    let Response::PortabilityJobs { jobs } = service.handle(Request::ListPortabilityJobs).await
+    else {
+        panic!("jobs expected");
+    };
+    assert!(jobs.is_empty());
     let source = ImportSource {
         format: ImportFormat::Mbox,
-        path: "C:/mail.mbox".into(),
+        path: std::env::temp_dir()
+            .join("nail-no-such-file.mbox")
+            .display()
+            .to_string(),
     };
-    for request in [
-        Request::FindImportSources,
-        Request::PreviewImport {
-            source: source.clone(),
-        },
-        Request::StartImport {
-            source,
+    assert_eq!(
+        error_of(service.handle(Request::PreviewImport { source }).await).0,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        error_of(
+            service
+                .handle(Request::CreateBackup {
+                    path: "relative.nailbackup".into(),
+                    contents: BackupContents::default(),
+                    passphrase: "a long passphrase".into(),
+                })
+                .await
+        )
+        .1,
+        Some("portability-error-path-not-absolute".into())
+    );
+    let Response::DiagnosticsPreview { .. } = service
+        .handle(Request::PreviewDiagnostics {
             options: Default::default(),
-        },
-        Request::CreateBackup {
-            path: "C:/b.nailbackup".into(),
-            contents: BackupContents::default(),
-            passphrase: "a long passphrase".into(),
-        },
-        Request::ListPortabilityJobs,
-        Request::PreviewDiagnostics {
-            options: Default::default(),
-        },
-        Request::CreateRecoveryKey { save_to: None },
-        Request::ListSmartcards,
-    ] {
-        assert_eq!(
-            error_of(service.handle(request).await),
-            (ErrorCode::Unsupported, Some("m4c-not-ready".into()))
-        );
-    }
-    // The vault status carries the recovery-key fields.
+        })
+        .await
+    else {
+        panic!("diagnostics preview expected");
+    };
+    // A plain vault has no recovery key.
+    assert_eq!(
+        error_of(
+            service
+                .handle(Request::CreateRecoveryKey { save_to: None })
+                .await
+        ),
+        (ErrorCode::Conflict, Some("vault-not-encrypted".into()))
+    );
     let Response::VaultStatus { status } = service.handle(Request::GetVaultStatus).await else {
         panic!("vault status expected");
     };
     assert!(!status.needs_recovery);
     assert!(!status.recovery.configured);
+    // No modules: no tokens.
+    let Response::Smartcards { tokens, problems } = service.handle(Request::ListSmartcards).await
+    else {
+        panic!("smartcards expected");
+    };
+    assert!(tokens.is_empty() && problems.is_empty());
+}
+
+const SOFT_MODULE: &str = r"C:\test\soft-pkcs11.dll";
+
+fn corpus(name: &str) -> String {
+    std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../nail-testkit/corpus/crypto/smime")
+            .join(name),
+    )
+    .unwrap()
+}
+
+fn pem_body(pem: &str) -> Vec<u8> {
+    use base64::Engine as _;
+    let body: String = pem.lines().filter(|l| !l.starts_with("-----")).collect();
+    base64::engine::general_purpose::STANDARD
+        .decode(body)
+        .unwrap()
+}
+
+/// WP125: smartcard keys are listed, used for S/MIME (the keyring entry
+/// keeps a reference only) and shown with their keyring entry.
+#[tokio::test(flavor = "multi_thread")]
+async fn smartcard_keys_are_listed_and_used_for_smime() {
+    use nail_pkcs11::testing::{SoftKey, SoftToken};
+    use rsa::pkcs8::DecodePrivateKey as _;
+    let token = Arc::new(SoftToken::new(SOFT_MODULE));
+    token.add_token(3, "PIV card", "PIV-0042", "123456");
+    let alice = rsa::RsaPrivateKey::from_pkcs8_pem(&corpus("alice.key")).unwrap();
+    token.add_key(
+        3,
+        &[0x9c],
+        "Alice signature",
+        SoftKey::Rsa(Box::new(alice)),
+        Some(pem_body(&corpus("alice.crt"))),
+        false,
+    );
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    let mut options = ServiceOptions::new(data.path(), config.path());
+    options.watch_config = false;
+    options.start_engines = false;
+    options.smartcard_modules = Some(vec![token as Arc<dyn nail_pkcs11::Module>]);
+    let service = Service::open(nail_core::demo::demo_options(options)).unwrap();
+
+    let Response::Smartcards { tokens, .. } = service.handle(Request::ListSmartcards).await else {
+        panic!("smartcards expected");
+    };
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].label, "PIV card");
+    let key_object = tokens[0]
+        .objects
+        .iter()
+        .find(|o| o.id == "9c" && o.certificate.is_some())
+        .expect("the key with its certificate");
+    assert!(key_object.key_id.is_none());
+    let reference = SmartcardKeyRef {
+        module: SOFT_MODULE.into(),
+        token_serial: "PIV-0042".into(),
+        object_id: "9c".into(),
+    };
+    let Response::Key { key } = service
+        .handle(Request::UseSmartcardKey {
+            key: reference.clone(),
+            technology: CryptoTechnology::Smime,
+        })
+        .await
+    else {
+        panic!("key expected");
+    };
+    assert_eq!(key.smartcard.as_ref(), Some(&reference));
+    assert!(key.emails.iter().any(|e| e == "alice@example.org"));
+    let Response::Smartcards { tokens, .. } = service.handle(Request::ListSmartcards).await else {
+        panic!("smartcards expected");
+    };
+    assert!(
+        tokens[0]
+            .objects
+            .iter()
+            .any(|o| o.key_id.as_ref() == Some(&key.id)),
+        "the card's key shows its keyring entry"
+    );
+    // Unknown prompts cannot be answered.
+    assert_eq!(
+        error_of(
+            service
+                .handle(Request::AnswerPinPrompt {
+                    prompt_id: "pin-404".into(),
+                    pin: None,
+                })
+                .await
+        ),
+        (ErrorCode::NotFound, Some("smartcard-prompt-gone".into()))
+    );
 }

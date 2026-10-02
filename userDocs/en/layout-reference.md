@@ -189,6 +189,11 @@ A widget is a node named after its kind. Its properties are its options.
 | `spacer` | — |
 | `plugin-panel` | the panel as argument: `plugin-panel "<plugin-id>.<panel>"` (or `panel="…"`); see [Plug-ins](plugins/README.md) |
 | `plugin-manager` | — (the installed plug-ins; the Plug-ins tab of the settings window) |
+| `import-export` | `show-jobs` (`#true`/`#false`, default `#true`): the recent imports and exports with their reports (see [Importing and exporting](import-export.md)) |
+| `backup-restore` | `show-jobs` (`#true`/`#false`, default `#true`): the recent backups, checks and restores (see [Backups and restoring](backup-restore.md)) |
+| `diagnostics` | — (the diagnostics bundle for support; see [Diagnostics bundle](diagnostics.md)) |
+| `security-recovery-key` | — (the recovery key of encrypted data: create, check, replace, remove; see [Recovery key](recovery-key.md)) |
+| `security-smartcards` | — (PKCS#11 modules, the PIN cache, cards and their keys; see [Smartcards](smartcards.md)) |
 
 The calendar, contact and task widgets (`calendar`, `agenda`,
 `mini-month`, `task-list`, `contact-list`, `contact-card`, `calendar-list`)
@@ -280,6 +285,11 @@ Actions in the default layout:
 | `snooze.open`, `snooze.list` | Snooze the selected message; show the snoozed messages |
 | `sync.download-message` | Download the full message when only its headers are stored |
 | `sync.folder-policy` | What a folder downloads (in a folder's menu: that folder; elsewhere the open folder) |
+| `palette.open` | Open (or close) the command palette (default `ctrl+k` and `ctrl+shift+p`, also over dialogs; see [Command palette](command-palette.md)) |
+| `print.message`, `print.thread`, `print.event`, `print.agenda`, `print.save-pdf` | Print the selected message, its conversation, the selected event or an agenda; save the message as PDF (default `ctrl+p` in the list and the reader; see [Printing](printing.md)) |
+| `import.open`, `export.open` | The import and export assistants |
+| `backup.create`, `backup.restore` | Back up Nail; restore from a backup |
+| `diagnostics.open` | Create a diagnostics bundle |
 
 ```kdl
 actions {

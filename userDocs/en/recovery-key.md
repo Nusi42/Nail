@@ -41,20 +41,21 @@ A recovery key is a second way in that only you hold.
 
 ## Creating the recovery key
 
-In the security settings, choose to create a recovery key. Nail shows it
+In **Settings → Recovery key**, choose **Create recovery key**. Nail shows it
 **once**, as 56 characters in groups of four, for example:
 
 ```
 K7Q2-M4XA-…-9TPW
 ```
 
-Write it down or print it, or let Nail save a recovery kit text file —
+Copy it, **Print** it, or let Nail save a recovery kit text file —
 then move that file somewhere safe (a password manager, a USB stick in a
 drawer) and away from this computer. Nail never stores the recovery key
 itself, so it cannot show it again.
 
-Creating a new recovery key replaces the old one: the old key stops
-working. Do this if you think someone saw your recovery key.
+To finish, Nail asks you to type the key back from your copy, so you know
+the copy is right. Creating a new recovery key replaces the old one: the
+old key stops working. Do this if you think someone saw your recovery key.
 
 ## Checking the recovery key
 
@@ -69,9 +70,13 @@ tried.
 ## Restoring access with the recovery key
 
 If Nail starts and cannot find the key, it says that your data is
-encrypted and its key is missing, and asks for the recovery key instead
-of showing empty folders. Type the recovery key: Nail puts the key back
-into the Windows Credential Manager and opens your data. If the key in
+encrypted and its key is missing, and opens the dialog **Open your data
+with the recovery key** by itself instead of showing your folders. Type
+the recovery key and choose **Open with recovery key**: Nail puts the key
+back into the Windows Credential Manager. Because the whole database
+could not be opened, Nail then asks you to **restart it**; after the
+restart your data is there as before. (A wrong key is refused and nothing
+changes; you can try again.) If the key in
 the Credential Manager is there but wrong (for example after copying a
 data folder between computers), the same restore puts the right key in.
 
@@ -82,6 +87,6 @@ lost. Keep backups as well.
 
 ## Removing the recovery key
 
-You can remove the recovery key in the security settings. Turning
+You can remove the recovery key in **Settings → Recovery key**. Turning
 encryption at rest off removes it automatically, because the key it
 protects no longer exists.

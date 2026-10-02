@@ -211,7 +211,7 @@ test("the updater finds a newer version on a loopback server and installs it on 
   const key = updateKey();
   const server = await startUpdateServer({
     installer: fakeInstaller(),
-    version: "0.1.1",
+    version: "1.0.1",
     notes: "## What's new\n\n- Faster sync",
     key,
   });
@@ -232,7 +232,7 @@ test("the updater finds a newer version on a loopback server and installs it on 
     const check = settings.getByRole("button", { name: "Check now" });
     if (await check.isVisible()) await check.click();
     await expect(status).toHaveAttribute("data-state", "ready-to-install", { timeout: 60_000 });
-    await expect(status).toContainText("Version 0.1.1 is ready.");
+    await expect(status).toContainText("Version 1.0.1 is ready.");
     expect(server.requests).toContain("/stable/latest.json");
     expect(existsSync(record)).toBe(false);
 

@@ -1505,3 +1505,87 @@ mod tests {
         assert_eq!(store.list_accounts().unwrap(), vec![seed.account]);
     }
 }
+
+/// File name of the demo keychain of a seeded run ([`FileSecretStore`]).
+pub const DEMO_KEYCHAIN_FILE: &str = "demo-keychain.json";
+
+/// A keychain in a JSON file, for seeded runs with their own data
+/// directory only (`nail serve --seed demo --data-dir …`; M4c): secrets
+/// survive a restart (the vault recovery-key scenario stops and starts
+/// Nail and loses the data key in between by editing the file) and never
+/// touch the OS keychain. Demo data only — the file is plain text.
+#[derive(Debug)]
+pub struct FileSecretStore {
+    path: std::path::PathBuf,
+    entries: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+}
+
+impl FileSecretStore {
+    /// Opens (or starts) the keychain file; an unreadable file starts empty.
+    pub fn open(path: impl Into<std::path::PathBuf>) -> Self {
+        let path = path.into();
+        let entries = std::fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+        Self {
+            path,
+            entries: std::sync::Mutex::new(entries),
+        }
+    }
+
+    fn save(&self, entries: &std::collections::BTreeMap<String, String>) -> std::io::Result<()> {
+        let text = serde_json::to_vec_pretty(entries).map_err(std::io::Error::other)?;
+        let tmp = self.path.with_extension("json.tmp");
+        std::fs::write(&tmp, text)?;
+        std::fs::rename(&tmp, &self.path)
+    }
+}
+
+impl SecretStore for FileSecretStore {
+    fn get(&self, secret: &SecretRef) -> Result<Option<String>, nail_api::engine::EngineError> {
+        Ok(crate::service::lock(&self.entries).get(&secret.0).cloned())
+    }
+
+    fn set(&self, secret: &SecretRef, value: &str) -> Result<(), nail_api::engine::EngineError> {
+        let mut entries = crate::service::lock(&self.entries);
+        entries.insert(secret.0.clone(), value.to_owned());
+        self.save(&entries).map_err(|e| {
+            nail_api::engine::EngineError::permanent(nail_api::ErrorCode::Internal, e.to_string())
+        })
+    }
+
+    fn delete(&self, secret: &SecretRef) -> Result<bool, nail_api::engine::EngineError> {
+        let mut entries = crate::service::lock(&self.entries);
+        let existed = entries.remove(&secret.0).is_some();
+        if existed {
+            self.save(&entries).map_err(|e| {
+                nail_api::engine::EngineError::permanent(
+                    nail_api::ErrorCode::Internal,
+                    e.to_string(),
+                )
+            })?;
+        }
+        Ok(existed)
+    }
+}
+
+#[cfg(test)]
+mod file_secret_tests {
+    use super::*;
+
+    #[test]
+    fn secrets_survive_reopening_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DEMO_KEYCHAIN_FILE);
+        let store = FileSecretStore::open(&path);
+        let key = SecretRef("keychain:nail/demo/a".into());
+        assert_eq!(store.get(&key).unwrap(), None);
+        store.set(&key, "one").unwrap();
+        let again = FileSecretStore::open(&path);
+        assert_eq!(again.get(&key).unwrap().as_deref(), Some("one"));
+        assert!(again.delete(&key).unwrap());
+        assert!(!again.delete(&key).unwrap());
+        assert_eq!(FileSecretStore::open(&path).get(&key).unwrap(), None);
+    }
+}

@@ -160,6 +160,11 @@ are in the [accounts reference](accounts-reference.md#gmail-gmail).
   change its shortest and longest check intervals.
 - Chats are not synced.
 - Gmail has no "answered" mark, so the replied mark exists only in Nail.
+- Conversations are Gmail's own: messages Gmail puts in one conversation
+  are one conversation in Nail, also without reply headers.
+- Moving a message to another Gmail or an Exchange account copies it there
+  (with its read and starred state) and removes it from this account;
+  labels are not carried over.
 
 ## Gmail labels
 

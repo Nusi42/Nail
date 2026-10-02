@@ -828,6 +828,7 @@ fn incoming(message: FetchedMessage) -> IncomingMessage {
         raw: message.raw,
         headers_only: message.headers_only,
         size: message.size.map(u64::from),
+        remote_thread_id: None,
     }
 }
 

@@ -165,6 +165,10 @@ pub struct ServiceOptions {
     /// updater, Run key, dev endpoint, default apps; ADR 0087). `None`
     /// (`nail serve`, tests): those requests answer `unsupported`.
     pub desktop: Option<Arc<dyn nail_api::DesktopHost>>,
+    /// PKCS#11 modules to use instead of the settings' module files (M4c):
+    /// tests and demos pass the soft token; `None` = load the configured
+    /// DLLs.
+    pub smartcard_modules: Option<Vec<Arc<dyn nail_pkcs11::Module>>>,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -187,6 +191,10 @@ impl std::fmt::Debug for ServiceOptions {
             .field("loopback_feeds", &self.loopback_feeds)
             .field("exchange", &self.exchange)
             .field("desktop", &self.desktop.is_some())
+            .field(
+                "smartcard_modules",
+                &self.smartcard_modules.as_ref().map(Vec::len),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -214,6 +222,7 @@ impl ServiceOptions {
             loopback_feeds: false,
             exchange: crate::exchange::ExchangeHooks::default(),
             desktop: None,
+            smartcard_modules: None,
         }
     }
 }
@@ -287,6 +296,12 @@ pub(crate) struct Inner {
     pub(crate) agents: crate::agents::AgentsCtl,
     /// Print jobs of this run (M4c).
     pub(crate) print: crate::print::PrintCtl,
+    /// Import / export / backup / restore jobs (M4c).
+    pub(crate) portability: crate::portability::PortabilityCtl,
+    /// The last diagnostics preview (the bundle writes exactly it).
+    pub(crate) diagnostics: crate::portability::DiagnosticsCache,
+    /// PKCS#11 smartcards and PIN prompts (M4c).
+    pub(crate) smartcard: crate::smartcard::SmartcardCtl,
     /// The desktop shell's side of the M4b requests (ADR 0087).
     pub(crate) desktop: Option<Arc<dyn nail_api::DesktopHost>>,
     watcher: Mutex<Option<ConfigWatcher>>,
@@ -328,17 +343,43 @@ impl Service {
     /// engines.
     pub fn open(options: ServiceOptions) -> Result<Self> {
         std::fs::create_dir_all(&options.data_dir)?;
-        let (store, blobs) = nail_store::open_data_dir(&options.data_dir)?;
         let secrets = resolve_secrets(&options);
         let index_dir = options.data_dir.join(nail_search::INDEX_DIR_NAME);
-        // Encryption at rest first: the store and blob store get their
-        // cipher before anything reads messages or drafts (ADR 0032).
-        let vault = crate::vault::VaultCtl::open(
-            store.clone(),
-            blobs.clone(),
+        // Encryption at rest first: the database file is opened with its
+        // key, the store and blob store get their cipher before anything
+        // reads messages or drafts (ADRs 0032, 0095). When the encrypted
+        // database cannot be opened (its key is gone from the keychain),
+        // the service runs on an empty in-memory store and offers only the
+        // recovery key (M4c, ADR 0099).
+        let opened = nail_vault::open_data_dir(
+            &options.data_dir,
             Some(index_dir.clone()),
             Arc::clone(&secrets),
-        );
+        )?;
+        let (store, blobs, vault) = match opened {
+            nail_vault::OpenedDataDir::Ready(ready) => {
+                let vault = crate::vault::VaultCtl::from_vault(
+                    ready.vault,
+                    ready.open_error,
+                    Some(index_dir.clone()),
+                );
+                (ready.store, ready.blobs, vault)
+            }
+            nail_vault::OpenedDataDir::Locked(locked) => {
+                let store = Store::open_in_memory()?;
+                let blob_dir =
+                    std::env::temp_dir().join(format!("nail-locked-{}", std::process::id()));
+                let blobs = BlobStore::open(&blob_dir)?;
+                let stand_in = nail_vault::Vault::new(
+                    store.clone(),
+                    blobs.clone(),
+                    None,
+                    Arc::clone(&secrets),
+                );
+                let vault = crate::vault::VaultCtl::locked(locked, stand_in);
+                (store, blobs, vault)
+            }
+        };
         let search = vault.open_index(&index_dir)?;
         let config = ConfigManager::load(&options.config_dir);
         let service = Self::build(store, blobs, config, search, vault, secrets, &options)?;
@@ -409,7 +450,7 @@ impl Service {
                 blobs,
                 config,
                 locale: options.locale.clone(),
-                events,
+                events: events.clone(),
                 search: Arc::new(crate::search::SearchSlot::new(search)),
                 manual: SyncEngine::default(),
                 running: RunningPasses::default(),
@@ -449,6 +490,12 @@ impl Service {
                 exchange: crate::exchange::ExchangeCtl::new(options.exchange.clone()),
                 agents: crate::agents::AgentsCtl::default(),
                 print: crate::print::PrintCtl::default(),
+                portability: crate::portability::PortabilityCtl::default(),
+                diagnostics: crate::portability::DiagnosticsCache::default(),
+                smartcard: crate::smartcard::SmartcardCtl::new(
+                    events.clone(),
+                    options.smartcard_modules.clone(),
+                ),
                 desktop: options.desktop.clone(),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
@@ -465,6 +512,12 @@ impl Service {
     /// rebuild of the search index. Must be called within a tokio runtime.
     /// Calling it again only reconciles the engines.
     pub fn start(&self) {
+        if self.inner.vault.is_locked() {
+            // M4c: the data could not be opened; only the recovery key
+            // works until a restart (nothing syncs into the stand-in).
+            tracing::warn!("the encrypted data is locked: engines stay off");
+            return;
+        }
         self.inner
             .started
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -483,7 +536,8 @@ impl Service {
         background.push(tokio::spawn(crate::snooze::run_snoozes(self.clone())));
         background.push(tokio::spawn(crate::notify::run_notifications(self.clone())));
         background.push(tokio::spawn(crate::sieve::run_sieve(self.clone())));
-        // An interrupted switch of encryption at rest resumes (ADR 0032).
+        // An interrupted switch of encryption at rest resumes (ADR 0032);
+        // a vault encrypted before M4c gets its database file encrypted.
         background.push(tokio::spawn(crate::vault::resume_migration(self.clone())));
         // M2d: the enabled plug-ins.
         let plugins = self.clone();
@@ -492,6 +546,8 @@ impl Service {
         }));
         // M3a: local calendars, source engines, reminders.
         background.extend(crate::pim::start(self));
+        // M4c: inserted / removed smartcards, PIN-cache logins.
+        background.push(tokio::spawn(crate::smartcard::run_poller(self.clone())));
         let service = self.clone();
         background.push(tokio::spawn(async move {
             // At start, then daily (M2b follow-up: the remote security log
@@ -536,6 +592,7 @@ impl Service {
         }
         crate::plugin_host::shutdown(self);
         crate::pim::stop(self);
+        self.inner.smartcard.logout_all();
         self.inner.engines.stop_all().await;
     }
 

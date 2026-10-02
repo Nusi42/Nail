@@ -308,3 +308,34 @@ fn opening_a_file_creates_a_sparse_one_first() {
         dir.path().join("rules.kdl")
     );
 }
+
+/// M4c: restoring a backup replaces whole files, keeping the old one as a
+/// configuration backup (also when there was none).
+#[test]
+fn replace_file_backs_up_and_can_be_reverted() {
+    let dir = tempfile::tempdir().unwrap();
+    let manager = ConfigManager::load(dir.path());
+    assert_eq!(manager.file_text(ConfigFile::Theme).unwrap(), None);
+    let (first, updates) = manager.replace_file(ConfigFile::Theme, ACCENT).unwrap();
+    assert!(matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]));
+    assert_eq!(
+        manager.file_text(ConfigFile::Theme).unwrap().as_deref(),
+        Some(ACCENT)
+    );
+    assert_eq!(
+        manager.theme().tokens.get("color", "accent"),
+        Some("#ff0000")
+    );
+    let other = ACCENT.replace("#ff0000", "#00ff00");
+    let (second, _) = manager.replace_file(ConfigFile::Theme, &other).unwrap();
+    assert_ne!(first.id, second.id);
+    assert_eq!(manager.list_backups(ConfigFile::Theme).unwrap().len(), 2);
+    manager.revert(ConfigFile::Theme, Some(&second.id)).unwrap();
+    assert_eq!(
+        manager.file_text(ConfigFile::Theme).unwrap().as_deref(),
+        Some(ACCENT)
+    );
+    // The first backup recorded "no file": reverting to it removes it.
+    manager.revert(ConfigFile::Theme, Some(&first.id)).unwrap();
+    assert_eq!(manager.file_text(ConfigFile::Theme).unwrap(), None);
+}

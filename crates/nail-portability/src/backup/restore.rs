@@ -708,6 +708,12 @@ impl BackupArchive {
                     continue;
                 }
             };
+            if bytes.iter().all(u8::is_ascii_whitespace) {
+                // An empty calendar / address book was backed up as an
+                // empty file: nothing to restore (WP125).
+                ctx.advance(1, entry.size_bytes);
+                continue;
+            }
             let source = SourceCollection {
                 key: collection.key.clone(),
                 name: collection.name.clone(),

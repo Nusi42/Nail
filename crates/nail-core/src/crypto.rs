@@ -162,6 +162,8 @@ impl Service {
             self.inner.secrets.as_ref(),
             &self.inner.crypto.pgp_unlock,
         )
+        // M4c: keys on smartcards sign and decrypt on the card.
+        .with_smartcards(self.smartcards())
     }
 
     /// The S/MIME keyring (blocking calls).
@@ -172,6 +174,14 @@ impl Service {
             self.inner.crypto.anchors.as_ref(),
             &self.inner.crypto.smime_unlock,
         )
+        .with_smartcards(self.smartcards())
+    }
+
+    /// The smartcards as the keyrings' key resolver: the modules are
+    /// loaded on first use (blocking).
+    pub(crate) fn smartcards(&self) -> &crate::smartcard::SmartcardCtl {
+        self.inner.smartcard.cards(&self.inner.store);
+        &self.inner.smartcard
     }
 
     /// Runs blocking keyring work on the blocking pool.

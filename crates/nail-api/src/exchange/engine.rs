@@ -181,6 +181,84 @@ pub trait ExchangeMailEngine: Send + Sync + fmt::Debug {
         folders: &'a [String],
         timeout_secs: u32,
     ) -> BoxFuture<'a, Result<Option<Vec<String>>, EngineError>>;
+
+    /// Only the header section of a message (folder sync policies "headers
+    /// only" / "recent N days", M4c). Default: the whole MIME, cut after the
+    /// header section; Graph and EWS ask the server for the headers only.
+    fn fetch_headers<'a>(
+        &'a self,
+        mailbox: Option<&'a str>,
+        remote_id: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<u8>, EngineError>> {
+        Box::pin(async move {
+            let raw = self.fetch_mime(mailbox, remote_id).await?;
+            Ok(header_section(&raw).to_vec())
+        })
+    }
+
+    /// Moves a message into a folder of another mailbox of the same
+    /// account (a shared or delegate mailbox, M4c); answers its new remote
+    /// id. Default: copy the MIME into the target with its flags, then
+    /// delete the original; Graph and EWS move on the server where they
+    /// can.
+    fn move_to_mailbox<'a>(
+        &'a self,
+        from_mailbox: Option<&'a str>,
+        remote_id: &'a str,
+        to_mailbox: Option<&'a str>,
+        to_folder: &'a str,
+        flags: crate::domain::Flags,
+    ) -> BoxFuture<'a, Result<String, EngineError>> {
+        Box::pin(async move {
+            let raw = self.fetch_mime(from_mailbox, remote_id).await?;
+            let appended = self
+                .write(
+                    to_mailbox,
+                    &RemoteWrite::Append {
+                        folder: to_folder.to_owned(),
+                        raw,
+                        flags,
+                    },
+                )
+                .await?;
+            self.write(
+                from_mailbox,
+                &RemoteWrite::Delete {
+                    remote_id: remote_id.to_owned(),
+                },
+            )
+            .await?;
+            match appended {
+                WriteOutcome::Done {
+                    remote_id: Some(new),
+                } => Ok(new),
+                _ => Err(EngineError::permanent(
+                    crate::ErrorCode::Internal,
+                    "the server did not say where the message went",
+                )),
+            }
+        })
+    }
+}
+
+/// The header section of a raw message (up to and including the empty
+/// line; the whole input when there is none).
+pub fn header_section(raw: &[u8]) -> &[u8] {
+    if let Some(i) = raw.windows(4).position(|w| {
+        w == b"
+
+"
+    }) {
+        return &raw[..i + 4];
+    }
+    if let Some(i) = raw.windows(2).position(|w| {
+        w == b"
+
+"
+    }) {
+        return &raw[..i + 2];
+    }
+    raw
 }
 
 /// A category of the master list as the server has it.

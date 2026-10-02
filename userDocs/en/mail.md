@@ -8,6 +8,9 @@ first. Click a message's line to open it in place (quoted text stays
 folded; **Show quoted text** unfolds it), or **Open** to show it in the
 reader.
 
+For Gmail and Exchange accounts the server's own conversations count too:
+messages the server keeps together stay together in Nail.
+
 To list whole conversations instead of single messages, set
 `threads="collapsed"` on the `message-list` in your
 [`layout.kdl`](layout-reference.md#widgets).
@@ -32,6 +35,8 @@ the selected message.
 | `b` | Snooze (see below) |
 | `Shift+J` | Mark as junk |
 | `Shift+F10`, menu key | The context menu of the selected message or focused folder |
+| `Ctrl+P` | Print the selected message (see [Printing](printing.md)) |
+| `Ctrl+K` | The command palette: every action, searchable (see [Command palette](command-palette.md)) |
 
 Opening a message marks it as read. The next message is selected after you
 archive, move or delete one.
@@ -63,7 +68,8 @@ folder), or **Synchronization…** in a folder's right-click menu. "As the
 account" removes the folder's own setting. Such messages are marked in the
 list; opening one downloads it. If that fails (for example offline), the
 reader says so and offers **Download full message** to try again. POP3
-accounts always keep full messages.
+accounts always keep full messages; Exchange accounts follow these
+settings too.
 
 ## Working offline
 

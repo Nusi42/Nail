@@ -131,7 +131,7 @@ impl Service {
             .ok_or_else(|| super::not_found("a calendar for the import"))
     }
 
-    async fn import_pim(
+    pub(crate) async fn import_pim(
         &self,
         data: ImportData,
         calendar_id: Option<CalendarId>,

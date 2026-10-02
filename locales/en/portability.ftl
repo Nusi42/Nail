@@ -44,7 +44,10 @@ portability-path-hint = Type the full path or browse.
 portability-path-type-hint = Type the full path of the file or folder on the computer running Nail.
 portability-path-not-absolute = Type the full path, for example C:\Users\you\Documents\mail.mbox.
 portability-path-missing = There is no file or folder at this path.
-portability-account-option = { $name } ({ $email })
+portability-account-option = { $hasEmail ->
+    [yes] { $name } ({ $email })
+   *[no] { $name }
+}
 portability-filter-mbox = mbox files
 portability-filter-all = All files
 portability-filter-ics = Calendar files
@@ -162,8 +165,9 @@ portability-import-target = Where the mail goes
 portability-import-target-account = Account
 portability-import-target-local = Local Folders (on this computer only)
 portability-import-target-local-hint = Local Folders are never synchronized with a server.
-portability-import-target-account-hint = The messages are uploaded to the server like any change, one by one through the account’s queue. Large imports take a while.
-portability-import-target-parent = Under the folder
+portability-import-target-account-hint = The messages go into an existing folder of the account (a source folder with the same name below it, else the chosen folder) and are uploaded to the server like any change, one by one through the account’s queue. Large imports take a while. New folders are only created in Local Folders.
+portability-import-target-parent = Into the folder
+portability-import-target-inbox = The Inbox
 portability-import-target-top = The account’s top level
 portability-import-folder-name = New folder for the import
 portability-import-folder-name-hint = Leave empty to put the folders directly there; folders with the same name are merged.

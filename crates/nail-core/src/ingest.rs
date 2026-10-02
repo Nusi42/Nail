@@ -29,6 +29,10 @@ pub(crate) struct IncomingMessage {
     pub headers_only: bool,
     /// The full message's size (`RFC822.SIZE`), when known.
     pub size: Option<u64>,
+    /// The server's thread / conversation id (Gmail `threadId`, Graph /
+    /// EWS conversation id; M4c): messages with the same one are one
+    /// thread ([`MessageMeta::remote_thread_id`]).
+    pub remote_thread_id: Option<String>,
 }
 
 /// What [`ingest`] wrote.
@@ -155,15 +159,18 @@ pub(crate) fn ingest(
                 blob_hash: Some(blob_hash),
                 thread_key: thread_key(&parsed),
             },
-            meta: Some(meta_of(
-                &parsed,
-                message
-                    .size
-                    .filter(|_| message.headers_only)
-                    .map_or(message.raw.len(), |s| {
-                        usize::try_from(s).unwrap_or(usize::MAX)
-                    }),
-            )),
+            meta: Some(MessageMeta {
+                remote_thread_id: message.remote_thread_id.clone(),
+                ..meta_of(
+                    &parsed,
+                    message
+                        .size
+                        .filter(|_| message.headers_only)
+                        .map_or(message.raw.len(), |s| {
+                            usize::try_from(s).unwrap_or(usize::MAX)
+                        }),
+                )
+            }),
         });
     }
     let mut merged = nail_store::MergeReport::default();

@@ -438,6 +438,7 @@ export function RecoveryKeyRestore({ close }: { close(): void }) {
   const vault = useVaultStatus();
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
+  const [restartNeeded, setRestartNeeded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const needed = vault.data?.needs_recovery ?? false;
@@ -449,6 +450,8 @@ export function RecoveryKeyRestore({ close }: { close(): void }) {
       const answer = await client.request({ type: "RestoreVaultKey", key: typed }, "VaultStatus");
       queryClient.setQueryData(securityKeys.vault, answer.status);
       setTyped("");
+      // A locked data directory opens after a restart (WP125, ADR 0099).
+      setRestartNeeded(answer.status.localized?.id === "vault-restart-needed");
       setDone(true);
     } catch (error) {
       setProblem(errorMessageOf(error));
@@ -461,7 +464,7 @@ export function RecoveryKeyRestore({ close }: { close(): void }) {
     return (
       <div data-part="recovery" data-step="restored">
         <p data-part="recovery.text" role="status" data-tone="success">
-          {t("security-recovery-restored")}
+          {t(restartNeeded ? "vault-restart-needed" : "security-recovery-restored")}
         </p>
         <div data-part="wizard.buttons">
           <button type="button" data-part="form.button" data-action="close" onClick={close}>

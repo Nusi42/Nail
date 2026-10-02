@@ -28,6 +28,7 @@ demo = [
 ]
 
 [dependencies]
+zeroize.workspace = true
 # M4c (ADR 0094): imports / exports / backups / diagnostics (WP121) and
 # smartcards (WP122), wired by WP125.
 nail-portability.workspace = true
@@ -101,6 +102,8 @@ nail-exchange = { workspace = true, features = ["testing"] }
 # in-memory PKCS#11 token for smartcard tests (M4c).
 nail-portability = { workspace = true, features = ["testing"] }
 nail-pkcs11 = { workspace = true, features = ["testing"] }
+# The soft token's RSA key from the S/MIME corpus (PKCS#8 PEM).
+rsa.workspace = true
 tempfile.workspace = true
 zeroize.workspace = true
 pretty_assertions.workspace = true

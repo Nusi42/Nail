@@ -353,8 +353,20 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M4b (ADR 0087): desktop.rs (desktop requests: app_settings `desktop.*` + the shell's
                        DesktopHost from ServiceOptions::desktop, `unsupported` without; Service::submit_mapi =
                        Simple MAPI → saved draft + LaunchRequest::ComposeDraft, never sent; desktop_settings())
-                       M4c (ADR 0094): palette.rs (recent actions), print.rs (PrintCtl jobs, PDF via the host),
-                       smartcard.rs (settings), portability.rs (PickPath via the host; the rest `m4c-not-ready`)
+                       M4c (ADRs 0094, 0099): palette.rs (recent actions), print.rs (PrintCtl jobs, PDF via the host),
+                       portability/ (mod.rs requests; jobs.rs PortabilityCtl: jobs on the blocking pool + async finish,
+                       progress / finished events; mail.rs ImportTarget = MailImportSink (Local Folders tree, or an
+                       account's existing folders + AppendMessage, `folder-merged`) and StoreMailSource; pim.rs PimBuffer
+                       → import_pim, StorePimSource; backup.rs CoreBackupSource / CoreRestoreTarget (settings.json,
+                       keyring.json with keychain secrets, plug-in packages reinstalled disabled); diagnostics.rs
+                       collection + DiagnosticsCache (the bundle = the preview)), logs.rs (TeeWriter ring of recent log
+                       lines; the binaries tee tracing through it), smartcard.rs (SmartcardCtl = the keyrings'
+                       KeyResolver, CorePinSource over PinRequested / AnswerPinPrompt / PinPromptClosed, poller →
+                       SmartcardsChanged; recovery-key requests), vault.rs (open via nail_vault::open_data_dir, locked
+                       mode = in-memory stand-in store, engines off, restart after RestoreVaultKey
+                       (`vault-restart-needed`), encrypt_database_file once after start), api_moves.rs (moves between
+                       Exchange / Gmail accounts via nail_exchange::transfer, IMAP/POP3 → API accounts), demo.rs
+                       FileSecretStore (`<data-dir>/demo-keychain.json` for seeded runs)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -418,6 +430,9 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        client to close before disconnecting), win.rs, host.rs (ShellHost: DesktopHost), tray.rs,
                        shell.rs (tray menu, second start, seeded-only test control `nail_test_shell`);
                        tests/mapi_wired.rs (DLL client → pipe server → core; ADR 0092);
+                       M4c (ADR 0099): printing.rs (PDF: hidden window `print-<job>` on `#/print/<job>`, waits for
+                       PrintViewReady, WebView2 PrintToPdf via webview2-com), dialog.rs (PickPath: Windows common item
+                       dialog on an STA thread); capabilities cover `print-*` windows;
                        M4b deps: tauri tray-icon, tauri-plugin-updater (rustls / ring) (ADR 0087)
 packaging/             M4b WP112 (ADR 0089): updater/dev.pub (development update key; private keys never in the
                        repo), winget/ facts, release-notes/<version>.md (written before a release); README =
@@ -478,7 +493,10 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/gmail.spec.ts (M3b), tests/agents.spec.ts + tests/extensions.spec.ts (M4a),
                        tests/desktop-m4b.spec.ts (M4b on the desktop app: MAPI harness, tray / start hidden via
                        shellControl, loopback updater with support/updates.ts, MSI facts via NAIL_REGISTRY_ROOT,
-                       nail plugin dev, first run; ADR 0092); perf/ (M4c WP123, ADR 0097: budgets.json,
+                       nail plugin dev, first run; ADR 0092); M4c: tests/m4c.spec.ts (mbox / Maildir / Thunderbird
+                       imports, export + re-import byte-identical, backup → new Nail → restore, palette),
+                       tests/vault-recovery.spec.ts (startNail({dirs}) restarts on the same directories, the demo
+                       keychain file loses the data key), tests/desktop-m4c.spec.ts (Save as PDF); perf/ (M4c WP123, ADR 0097: budgets.json,
                        list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
                        = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
@@ -747,6 +765,15 @@ npm run tauri dev                          # desktop app with Vite hot reload
   the DLLs to `%ProgramFiles%\Nail MAPI` in one elevated `cmd.exe` and registers the copy); nothing elevated reads
   from `%TEMP%`; secrets go to the one step that needs them (the update key reaches only `tauri bundle`);
   release / signing / update-key procedures live in `docs/release.md`.
+- M4c integration (ADR 0099; packages ADRs 0095 data protection + smartcards, 0096 portability, 0097
+  performance + leftovers, 0098 UI): imports into an account use its existing folders only
+  (`folder-merged`; new folders only in Local Folders); restores replace config files through
+  `ConfigManager::replace_file` (configuration backups) and merge the rest; a locked data directory
+  (encrypted database, key gone) runs on an in-memory stand-in with engines off and opens after a restart;
+  smartcard keys sign / decrypt wherever software keys do (`SmartcardCtl` is both keyrings' resolver; PIN
+  prompts over events, card work on blocking threads); PDF files through a hidden print window; seeded runs
+  keep secrets in `<data-dir>/demo-keychain.json`. Version `1.0.0-rc.1`; `CHANGELOG.md`,
+  `docs/release-checklist.md` (human gates).
 - M4c contract: ADR 0094 (`nail_api::portability` — import mbox / EML / Maildir / Thunderbird / ICS / vCard,
   export, jobs with `PortabilityJobProgress` / `PortabilityJobFinished` and per-item reports, mail into "Local
   Folders" or through the account's queue, Thunderbird accounts / filters only proposed; `backup` — encrypted

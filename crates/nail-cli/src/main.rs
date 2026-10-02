@@ -91,7 +91,7 @@ fn init_tracing_quiet() {
     let filter = EnvFilter::try_from_env("NAIL_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
-        .with_writer(std::io::stderr)
+        .with_writer(|| nail_core::logs::TeeWriter)
         .init();
 }
 
@@ -107,7 +107,7 @@ fn init_tracing(verbose: u8) {
     let filter = EnvFilter::try_from_env("NAIL_LOG").unwrap_or_else(|_| EnvFilter::new(default));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
-        .with_writer(std::io::stderr)
+        .with_writer(|| nail_core::logs::TeeWriter)
         .init();
 }
 

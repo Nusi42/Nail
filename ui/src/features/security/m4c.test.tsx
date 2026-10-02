@@ -176,6 +176,23 @@ describe("recovery key", () => {
     stop();
   });
 
+  it("asks for a restart when the locked data directory gets its key back", async () => {
+    const env = createEnv();
+    const key = simulateLostVaultKey(env.transport);
+    env.transport.data.features.vault.restartAfterRestore = true;
+    const stop = listen(env);
+    const user = userEvent.setup();
+    render(env, <RecoveryGate />);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Open your data with the recovery key",
+    });
+    await user.type(within(dialog).getByLabelText("Recovery key"), key);
+    await user.click(within(dialog).getByRole("button", { name: "Open with recovery key" }));
+    expect(await within(dialog).findByText(/Restart Nail to open your data/)).toBeVisible();
+    expect(within(dialog).queryByText(/Your data is open again/)).toBeNull();
+    stop();
+  });
+
   it("lets the create dialog explain the vault state when it is plain", async () => {
     const env = createEnv();
     const user = userEvent.setup();

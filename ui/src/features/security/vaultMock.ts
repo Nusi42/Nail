@@ -70,6 +70,11 @@ export interface VaultMockState {
   prompts: Record<string, PinPrompt>;
   /** PINs answered (tests check they are never kept elsewhere). */
   answered: number;
+  /**
+   * The data directory itself is locked (full-file encryption, WP125):
+   * restoring the key needs a restart, as the core says.
+   */
+  restartAfterRestore: boolean;
 }
 
 export function createVaultMockState(): VaultMockState {
@@ -81,6 +86,7 @@ export function createVaultMockState(): VaultMockState {
     correctPin: "123456",
     prompts: {},
     answered: 0,
+    restartAfterRestore: false,
   };
 }
 
@@ -336,6 +342,10 @@ export function answerVault(core: MockCore, request: VaultRequest): Response {
       vault.needs_recovery = false;
       vault.key_in_keychain = true;
       vault.recovery = { ...vault.recovery, verified_at: now() };
+      if (state.restartAfterRestore) {
+        vault.error = null;
+        vault.localized = { id: "vault-restart-needed", args: {} };
+      }
       core.emit({ type: "VaultProgress", status: structuredClone(vault) });
       return { type: "VaultStatus", status: structuredClone(vault) };
     }

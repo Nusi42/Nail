@@ -4,6 +4,7 @@ Guides and references for people using Nail.
 
 | Page | What it covers |
 | --- | --- |
+| [Release notes](release-notes.md) | What is new in Nail 1.0, what changed for existing data, known limits |
 | [Getting started](getting-started.md) | Starting Nail (desktop or browser), the demo mailbox, finding your way around, privacy when reading mail, where settings and mail are kept |
 | [Accounts](accounts.md) | Adding an account, signing in, account and identity settings, the unified inbox, virtual accounts, connection states |
 | [Reading and organizing mail](mail.md) | Conversations, flags, archive, move, delete, keyboard shortcuts, snooze, junk mail and the junk filter, messages downloaded on demand, the offline queue |
@@ -41,7 +42,7 @@ Guides and references for people using Nail.
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
 | [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities (formats, signatures, mail style), what to synchronize, virtual accounts, OAuth2 providers, undo send |
 
-These pages describe the current preview (milestone M4: changes by AI agents and plug-ins with confirmations, and the Windows desktop app — installers, updates, tray, default apps, "Send to → Mail recipient" — are new).
+These pages describe Nail 1.0 (release candidate `1.0.0-rc.1`); what is new is in the [release notes](release-notes.md).
 
 Internal material (design, plan, decisions) lives in [`docs/`](../../docs/)
 instead. Translations go to `userDocs/<language>/`; a page without a

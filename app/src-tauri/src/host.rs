@@ -13,9 +13,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use nail_api::desktop::{
     DefaultAppsStatus, DesktopChange, DesktopHost, DesktopNotifier, DesktopSettings,
-    HostUpdateState, InstallationInfo, UpdateSettings, default_apps_settings_uri,
+    HostUpdateState, InstallationInfo, PathPick, UpdateSettings, default_apps_settings_uri,
 };
-use nail_api::{ApiError, ErrorCode, LocalizedMessage};
+use nail_api::engine::BoxFuture;
+use nail_api::print::PrintJob;
+use nail_api::{ApiError, ErrorCode, LocalizedMessage, PrintJobId};
 use nail_core::Service;
 
 use crate::dev_endpoint::DevEndpoint;
@@ -40,6 +42,11 @@ pub struct ShellHost {
     close_to_tray: AtomicBool,
     /// Settings → Default apps was opened: re-read when the user comes back.
     awaiting_default_apps: AtomicBool,
+    /// M4c: the app (file dialogs' owner, hidden print windows) and the
+    /// WebView2 data folder its windows share.
+    app: OnceLock<(tauri::AppHandle, Option<PathBuf>)>,
+    /// Print views waiting for `PrintViewReady`.
+    print_ready: crate::printing::ReadySignals,
 }
 
 impl std::fmt::Debug for ShellHost {
@@ -85,7 +92,94 @@ impl ShellHost {
             dev: Mutex::new(None),
             close_to_tray: AtomicBool::new(DesktopSettings::default().close_to_tray),
             awaiting_default_apps: AtomicBool::new(false),
+            app: OnceLock::new(),
+            print_ready: crate::printing::ReadySignals::default(),
         }
+    }
+
+    /// The app, once built (`webview_dir` = the WebView2 data folder of
+    /// its windows, `None` = the default).
+    pub fn bind_app(&self, app: tauri::AppHandle, webview_dir: Option<PathBuf>) {
+        let _ = self.app.set((app, webview_dir));
+    }
+
+    /// The main window's handle (the owner of file dialogs).
+    fn main_window_handle(&self) -> Option<isize> {
+        #[cfg(windows)]
+        {
+            use tauri::Manager as _;
+            let (app, _) = self.app.get()?;
+            let window = app.get_webview_window(crate::shell::MAIN_WINDOW)?;
+            window.hwnd().ok().map(|h| h.0 as isize)
+        }
+        #[cfg(not(windows))]
+        {
+            None
+        }
+    }
+
+    fn localize(&self, id: &str) -> String {
+        match self.service.get() {
+            Some(service) => service.render_localized(&LocalizedMessage::new(id)),
+            None => id.to_owned(),
+        }
+    }
+
+    /// Loads the print view in a hidden window and writes it as PDF.
+    async fn write_pdf(&self, job: &PrintJob, path: &str) -> Result<u64, ApiError> {
+        use crate::printing::{PDF_TIMEOUT, READY_TIMEOUT, pdf_error};
+        let target = crate::printing::check_target(path)?;
+        let (app, webview_dir) =
+            self.app.get().cloned().ok_or_else(|| {
+                ApiError::new(ErrorCode::Unavailable, "the app is not running yet")
+            })?;
+        let label = crate::printing::window_label(&job.job_id);
+        let ready = self.print_ready.expect(&job.job_id);
+        let url = tauri::WebviewUrl::App(crate::printing::view_url(job).into());
+        let mut builder = tauri::WebviewWindowBuilder::new(&app, &label, url)
+            .visible(false)
+            .focused(false)
+            .skip_taskbar(true);
+        if let Some(dir) = webview_dir {
+            builder = builder.data_directory(dir);
+        }
+        let window = builder.build().map_err(pdf_error)?;
+        let outcome: Result<(), ApiError> = async {
+            tokio::time::timeout(READY_TIMEOUT, ready)
+                .await
+                .map_err(|_| pdf_error("the print view did not finish loading"))?
+                .map_err(|_| pdf_error("the print view went away"))?;
+            #[cfg(windows)]
+            {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                let options = job.options.clone();
+                let file = target.clone();
+                window
+                    .with_webview(move |webview| {
+                        crate::printing::print_webview_to_pdf(&webview, &file, &options, tx);
+                    })
+                    .map_err(pdf_error)?;
+                tokio::time::timeout(PDF_TIMEOUT, rx)
+                    .await
+                    .map_err(|_| pdf_error("WebView2 did not finish the PDF"))?
+                    .map_err(|_| pdf_error("WebView2 went away"))?
+                    .map_err(pdf_error)?;
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err(pdf_error("PDF files need WebView2 (Windows)"))
+            }
+        }
+        .await;
+        self.print_ready.forget(&job.job_id);
+        if let Err(err) = window.destroy() {
+            tracing::warn!(%err, "cannot close the print window");
+        }
+        outcome?;
+        std::fs::metadata(&target)
+            .map(|m| m.len())
+            .map_err(pdf_error)
     }
 
     /// The service, once opened (the dev endpoint serves it).
@@ -196,6 +290,45 @@ impl DesktopHost for ShellHost {
 
     fn dev_endpoint_url(&self) -> Option<String> {
         self.lock_dev().as_ref().map(|d| d.url().to_owned())
+    }
+
+    fn pick_path<'a>(
+        &'a self,
+        pick: &'a PathPick,
+    ) -> BoxFuture<'a, Result<Option<String>, ApiError>> {
+        Box::pin(async move {
+            let spec = crate::dialog::spec(pick, |id| self.localize(id));
+            let owner = self.main_window_handle();
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            std::thread::Builder::new()
+                .name("nail-file-dialog".into())
+                .spawn(move || {
+                    #[cfg(windows)]
+                    let answer = crate::dialog::show(&spec, owner);
+                    #[cfg(not(windows))]
+                    let answer: Result<Option<String>, String> = {
+                        let _ = (spec, owner);
+                        Err("file dialogs need Windows".to_owned())
+                    };
+                    let _ = tx.send(answer);
+                })
+                .map_err(|e| ApiError::internal(format!("cannot open the file dialog: {e}")))?;
+            rx.await
+                .map_err(|_| ApiError::internal("the file dialog went away"))?
+                .map_err(|e| ApiError::internal(format!("the file dialog failed: {e}")))
+        })
+    }
+
+    fn print_to_pdf<'a>(
+        &'a self,
+        job: &'a PrintJob,
+        path: &'a str,
+    ) -> BoxFuture<'a, Result<u64, ApiError>> {
+        Box::pin(self.write_pdf(job, path))
+    }
+
+    fn print_view_ready(&self, job_id: &PrintJobId) {
+        self.print_ready.ready(job_id);
     }
 
     fn default_apps(&self) -> DefaultAppsStatus {
