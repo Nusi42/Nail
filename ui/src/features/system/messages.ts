@@ -39,6 +39,18 @@ export function runtimeIds(): string[] {
     "update-channel-locked",
     "desktop-unavailable",
     "mapi-draft-from-program",
+    "system-program-draft-unknown",
+    // Dialog titles (`window-<name>`).
+    "window-about-nail",
+    "window-first-run",
+    // Layout labels for the integrator's default layout (`@system.…`).
+    "system-settings-tab-updates",
+    "system-settings-tab-desktop",
+    "system-settings-tab-default-apps",
+    "system-action-about",
+    "system-action-check-updates",
+    "system-action-first-run",
+    "system-action-default-apps",
     ...INSTALL_KINDS.map(installKindMessageId),
     ...INSTALL_SCOPES.map(installScopeMessageId),
     ...UPDATE_CHANNELS.map(channelMessageId),

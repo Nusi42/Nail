@@ -33,6 +33,12 @@ use crate::ids::{AccountId, DraftId, IdentityId, MessageId, OutboxId};
 use crate::localized::LocalizedMessage;
 use crate::security::SendCrypto;
 
+/// Largest attachment the composer accepts (decoded bytes, 25 MiB): the
+/// core's `UploadAttachment` limit, also what Simple MAPI requests may hand
+/// over (the core checks it, and `NailMapi.dll` refuses larger files before
+/// copying them; M4b, ADR 0092).
+pub const MAX_ATTACHMENT_BYTES: u64 = 25 * 1024 * 1024;
+
 /// A message being written.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Draft {

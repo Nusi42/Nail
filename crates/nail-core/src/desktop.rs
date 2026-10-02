@@ -219,7 +219,7 @@ fn read_attachments(
         if !meta.is_file() {
             return Err(MapiResult::AttachmentOpenFailure);
         }
-        if meta.len() > crate::composer::MAX_ATTACHMENT_BYTES as u64 {
+        if meta.len() > nail_api::compose::MAX_ATTACHMENT_BYTES {
             return Err(MapiResult::AttachmentTooLarge);
         }
         let bytes = std::fs::read(path).map_err(|_| MapiResult::AttachmentOpenFailure)?;

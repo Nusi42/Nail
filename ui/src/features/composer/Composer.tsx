@@ -42,6 +42,7 @@ import {
 } from "./flows";
 import { LazyHtmlEditor, LazyMarkdownEditor, prefetchEditors } from "./lazyEditors";
 import { ComposerPlugins, PluginBlocks } from "./pluginExtensions";
+import { ProgramDraftNotice } from "../system/ProgramDraft";
 import { Preview } from "./Preview";
 import { needsReminder, parseKeywords } from "./reminder";
 import { AUTOSAVE_MS, richStoreFor, useRich, useRichStoreApi, type RichState } from "./store";
@@ -341,6 +342,7 @@ export function Composer({ node }: WidgetProps) {
       }}
       onDrop={onDrop}
     >
+      <ProgramDraftNotice />
       <div data-part="composer.field" data-field="identity">
         <label data-part="composer.field.label" htmlFor={`${ids}-identity`}>
           {t("composer-field-from")}

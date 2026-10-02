@@ -1,14 +1,26 @@
-//! Consistency of the Windows installer sources (plan M2b WP44): the
-//! bundle section of `tauri.conf.json`, Nail's copy of the Tauri NSIS
-//! template, the hooks and their strings, and the app code they call.
-//! The installer itself is built and exercised by
-//! `scripts/build-installer.mjs` and `scripts/installer-smoke.ps1`.
+//! Consistency of the Windows installer sources (plan M2b WP44, M4b WP112):
+//! the bundle section of `tauri.conf.json` plus `windows/bundle.json`, Nail's
+//! copy of the Tauri NSIS template, the hooks and their strings, the WiX
+//! fragment of the MSI and its strings, the registry facts both installers
+//! write (`nail_api::desktop::registry`, `nail_api::mapi::registry`), and
+//! the app code they call. The installers themselves are built and
+//! exercised by `scripts/build-installer.mjs`, `scripts/installer-smoke.ps1`
+//! and `scripts/msi-smoke.ps1`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use nail_api::desktop::{
+    InstallKind, InstallScope, REGISTERED_APP_NAME, WindowsArch, default_apps_settings_uri,
+    registry,
+};
+use nail_api::mapi::{self, MAPI_DLL_FILE, mapi_dll_relative_path};
 use nail_app_lib::AppArgs;
 use nail_app_lib::launch::{FILE_EXTENSIONS, URL_SCHEMES, parse};
+
+/// The MSI's upgrade code: never changes (another code makes Windows
+/// install a second copy next to the first).
+const UPGRADE_CODE: &str = "4B724EE5-4370-4C05-BE94-9D606D52D37B";
 
 fn app_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -31,6 +43,37 @@ fn template() -> String {
     read(app_dir().join("windows/nsis/installer.nsi"))
 }
 
+fn wix() -> String {
+    read(app_dir().join("windows/wix/nail.wxs"))
+}
+
+/// `windows/bundle.json`: the bundle settings every release build merges
+/// over tauri.conf.json (scripts/build-installer.mjs).
+fn bundle_overlay() -> serde_json::Value {
+    serde_json::from_str(&read(app_dir().join("windows/bundle.json"))).unwrap()
+}
+
+/// The value of attribute `name` on an XML line.
+fn attr<'a>(line: &'a str, name: &str) -> Option<&'a str> {
+    let head = format!(" {name}=\"");
+    let start = line.find(&head)? + head.len();
+    let rest = &line[start..];
+    Some(&rest[..rest.find('"')?])
+}
+
+/// From the line containing `start` to the next `end` (inclusive).
+fn section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let from = source
+        .find(start)
+        .unwrap_or_else(|| panic!("{start} missing"));
+    let rest = &source[from..];
+    &rest[..rest.find(end).unwrap() + end.len()]
+}
+
+fn parse_args(args: &[&str]) -> AppArgs {
+    AppArgs::from_process_args(args.iter().map(|a| (*a).to_owned()).collect())
+}
+
 /// The body of `!macro NAME` … `!macroend`.
 fn macro_body<'a>(source: &'a str, name: &str) -> &'a str {
     let start = [format!("!macro {name}\n"), format!("!macro {name} ")]
@@ -42,13 +85,35 @@ fn macro_body<'a>(source: &'a str, name: &str) -> &'a str {
 }
 
 #[test]
-fn the_bundle_builds_a_per_user_nsis_installer() {
+fn the_bundle_builds_a_per_user_nsis_installer_and_an_msi() {
     let config = config();
     assert_eq!(config["productName"], "Nail");
     assert_eq!(config["mainBinaryName"], "Nail");
     let bundle = &config["bundle"];
     assert_eq!(bundle["active"], true);
-    assert_eq!(bundle["targets"], serde_json::json!(["nsis"]));
+    // `tauri build` alone makes the NSIS installer; release builds ask for
+    // both (scripts/build-installer.mjs --bundles nsis,msi).
+    let targets = bundle["targets"].as_array().unwrap();
+    assert!(targets.contains(&serde_json::json!("nsis")), "{targets:?}");
+
+    // The MSI: Nail's fragment and a fixed upgrade code.
+    let overlay = bundle_overlay();
+    let wix = &overlay["bundle"]["windows"]["wix"];
+    assert_eq!(wix["upgradeCode"], UPGRADE_CODE);
+    assert_eq!(wix["language"], "en-US");
+    assert_eq!(
+        wix["fragmentPaths"],
+        serde_json::json!(["windows/wix/nail.wxs"])
+    );
+    assert!(app_dir().join("windows/wix/nail.wxs").is_file());
+    assert_eq!(wix["featureRefs"], serde_json::json!(["NailIntegration"]));
+    assert!(self::wix().contains(r#"<Feature Id="NailIntegration""#));
+    // Only bundle settings: the overlay never touches the app's own config.
+    assert_eq!(
+        overlay.as_object().unwrap().keys().collect::<Vec<_>>(),
+        vec!["bundle"]
+    );
+
     let windows = &bundle["windows"];
     assert_eq!(
         windows["webviewInstallMode"],
@@ -152,11 +217,16 @@ fn every_registered_scheme_and_type_is_handled_by_the_app() {
         unregister.contains(r#"DeleteRegValue HKCU "${NAIL_REGISTERED_APPS}" "${PRODUCTNAME}""#)
     );
     assert!(unregister.contains(r#"DeleteRegKey HKCU "${NAIL_CAPABILITIES}""#));
-    // Only per-user keys.
-    assert!(
-        !hooks.contains("HKLM"),
-        "the per-user installer never writes HKLM"
-    );
+    // Only per-user keys: the machine hive is read (MAPI ownership) but
+    // changed only through the elevated reg.exe import of the MAPI step.
+    for line in hooks.lines().map(str::trim) {
+        if line.starts_with("WriteReg") || line.starts_with("DeleteReg") {
+            assert!(
+                !line.contains("HKLM"),
+                "the per-user installer writes HKLM: {line}"
+            );
+        }
+    }
     // The user's own choice for a type is never overwritten: only
     // OpenWithProgids entries are added to the extensions.
     let file_progid = macro_body(&hooks, "NAIL_FILE_PROGID");
@@ -170,9 +240,16 @@ fn open_commands_pass_the_target_after_the_end_of_options() {
     let hooks = hooks();
     let commands: Vec<&str> = hooks
         .lines()
-        .filter(|l| l.contains(r"\shell\open\command"))
+        .filter(|l| l.contains(r"\shell\open\command") && l.contains("WriteRegStr"))
         .collect();
     assert_eq!(commands.len(), 2, "URL and file ProgIDs");
+    // The Simple MAPI client's start command takes no target at all.
+    for line in hooks
+        .lines()
+        .filter(|l| l.contains(r"\shell\open\command]"))
+    {
+        assert!(!line.contains("%1"), "{line}");
+    }
     for command in commands {
         assert!(
             command.ends_with(r#""$\"$INSTDIR\${MAINBINARYNAME}.exe$\" -- $\"%1$\"""#),
@@ -287,4 +364,447 @@ fn the_portable_zip_uses_the_apps_marker() {
         r#"{{ content: "", to: "{}" }}"#,
         nail_app_lib::portable::MARKER
     )));
+}
+
+#[test]
+fn the_build_puts_the_mapi_dlls_where_nail_api_expects_them() {
+    let build = read(app_dir().join("../../scripts/lib/build.mjs"));
+    // `mapi/<arch>/NailMapi.dll` in the bundle = mapi_dll_relative_path.
+    assert!(build.contains(&format!("return `mapi/${{arch}}/{MAPI_DLL_FILE}`;")));
+    for arch in WindowsArch::ALL {
+        assert_eq!(
+            mapi_dll_relative_path(arch),
+            format!(r"mapi\{}\{MAPI_DLL_FILE}", arch.as_str())
+        );
+    }
+    // The channel manifests the release scripts write are the ones the app
+    // reads (`UpdateChannel::manifest_path`).
+    let manifests = read(app_dir().join("../../scripts/lib/update-manifest.mjs"));
+    for channel in nail_api::desktop::UpdateChannel::ALL {
+        assert!(
+            manifests.contains(&format!("\"{}\"", channel.as_str())),
+            "{channel:?}"
+        );
+        assert_eq!(
+            channel.manifest_path(),
+            format!(
+                "{}/{}",
+                channel.as_str(),
+                nail_api::desktop::UPDATE_MANIFEST_FILE
+            )
+        );
+    }
+    assert!(manifests.contains(&format!(
+        "export const MANIFEST_FILE = \"{}\";",
+        nail_api::desktop::UPDATE_MANIFEST_FILE
+    )));
+}
+
+#[test]
+fn the_per_user_installer_writes_the_installation_facts() {
+    let hooks = hooks();
+    assert!(hooks.contains(&format!(
+        r#"!define NAIL_INSTALL_KEY "{}""#,
+        registry::INSTALL_KEY
+    )));
+    let facts = macro_body(&hooks, "NAIL_WRITE_INSTALL_FACTS");
+    for (name, value) in [
+        (registry::INSTALLER_VALUE, InstallKind::Nsis.as_str()),
+        (registry::SCOPE_VALUE, InstallScope::PerUser.as_str()),
+        (registry::INSTALL_DIR_VALUE, "$INSTDIR"),
+        (registry::VERSION_VALUE, "${VERSION}"),
+    ] {
+        assert!(
+            facts.contains(&format!(
+                r#"WriteRegStr HKCU "${{NAIL_INSTALL_KEY}}" "{name}" "{value}""#
+            )),
+            "{name}"
+        );
+    }
+    // Written on every install and every update (before the update guard).
+    let post = macro_body(&hooks, "NSIS_HOOK_POSTINSTALL");
+    let facts_at = post.find("!insertmacro NAIL_WRITE_INSTALL_FACTS").unwrap();
+    assert!(facts_at < post.find("${If} $UpdateMode <> 1").unwrap());
+    // The MAPI fact follows what the registry says after the elevated step.
+    assert!(hooks.contains(&format!(
+        r#"WriteRegDWORD HKCU "${{NAIL_INSTALL_KEY}}" "{}" $0"#,
+        registry::MAPI_VALUE
+    )));
+    // A per-user install never disables its own updates (only the MSI or a
+    // policy does).
+    assert!(
+        !hooks
+            .lines()
+            .any(|l| l.contains("WriteReg") && l.contains(registry::DISABLE_UPDATES_VALUE))
+    );
+    // Uninstall removes the facts before the now empty Software\Nail.
+    let unregister = macro_body(&hooks, "NAIL_UNREGISTER");
+    let facts_gone = unregister
+        .find(r#"DeleteRegKey HKCU "${NAIL_INSTALL_KEY}""#)
+        .unwrap();
+    assert!(
+        facts_gone
+            < unregister
+                .find(r#"DeleteRegKey /ifempty HKCU "Software\Nail""#)
+                .unwrap()
+    );
+    // The keys the app reads.
+    assert!(hooks.contains(&format!(r#"!define NAIL_RUN_KEY "{}""#, registry::RUN_KEY)));
+    assert!(hooks.contains(&format!(
+        r#"!define NAIL_CAPABILITIES "{}""#,
+        registry::CAPABILITIES_KEY
+    )));
+    assert!(hooks.contains(&format!(
+        r#"!define NAIL_REGISTERED_APPS "{}""#,
+        registry::REGISTERED_APPLICATIONS_KEY
+    )));
+    assert_eq!(registry::RUN_VALUE, "Nail");
+    assert_eq!(REGISTERED_APP_NAME, "Nail");
+    assert!(
+        default_apps_settings_uri(Some(InstallScope::PerUser)).ends_with("registeredAppUser=Nail")
+    );
+}
+
+#[test]
+fn the_per_user_mapi_option_registers_only_with_elevation_and_only_its_own_dll() {
+    let hooks = hooks();
+    assert!(hooks.contains(&format!(
+        r#"!define NAIL_MAPI_CLIENT_KEY "{}""#,
+        mapi::registry::NAIL_MAIL_CLIENT_KEY
+    )));
+    assert!(hooks.contains(&format!(
+        r#"!define NAIL_MAPI_REG_NATIVE "HKEY_LOCAL_MACHINE\SOFTWARE\{}""#,
+        mapi::registry::NAIL_MAIL_CLIENT_KEY.trim_start_matches(r"Software\")
+    )));
+    assert!(hooks.contains(
+        r#"!define NAIL_MAPI_REG_WOW "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Clients\Mail\Nail""#
+    ));
+    // The DLL paths are nail_api's (+ x86 for the 32-bit view).
+    let native = format!(r#""$INSTDIR\mapi\${{ARCH}}\{MAPI_DLL_FILE}""#);
+    let wow = format!(r#""$INSTDIR\{}""#, mapi_dll_relative_path(WindowsArch::X86));
+    assert!(hooks.contains(&native), "{native}");
+    assert!(hooks.contains(&wow), "{wow}");
+    for value in [
+        mapi::registry::DLL_PATH_VALUE,
+        mapi::registry::DLL_PATH_EX_VALUE,
+    ] {
+        for register in ["$5", "$6"] {
+            assert!(
+                hooks.contains(&format!(r#"$\"{value}$\"=$\"{register}$\""#)),
+                "{value} {register}"
+            );
+        }
+    }
+    // One elevated reg.exe per change, told to use the 64-bit view.
+    let elevated: Vec<&str> = hooks
+        .lines()
+        .filter(|l| l.contains("ExecShellWait"))
+        .collect();
+    assert_eq!(elevated.len(), 2, "register + unregister");
+    for line in elevated {
+        assert!(
+            line.contains(r#""runas" "$SYSDIR\reg.exe" 'import "#),
+            "{line}"
+        );
+        assert!(line.contains("/reg:64'"), "{line}");
+    }
+    // Removal only when the registration points into this installation.
+    let unregister = macro_body(&hooks, "NAIL_UNREGISTER_MAPI");
+    let guard = unregister
+        .find(&format!("${{If}} $1 == {native}"))
+        .expect("ownership check");
+    assert!(guard < unregister.find("ExecShellWait").unwrap());
+    // Option: off by default, remembered, /MAPI=0|1; updates keep the
+    // registration; uninstall removes it.
+    let read_options = macro_body(&hooks, "NAIL_OPTIONS_FUNCTIONS");
+    assert!(read_options.contains("StrCpy $NailMapi 0"));
+    assert!(read_options.contains(&format!(
+        r#"ReadRegDWORD $0 HKCU "${{NAIL_INSTALL_KEY}}" "{}""#,
+        registry::MAPI_VALUE
+    )));
+    assert!(read_options.contains(r#"NAIL_OPTION_FROM_CMDLINE "/MAPI=" $NailMapi"#));
+    let post = macro_body(&hooks, "NSIS_HOOK_POSTINSTALL");
+    let guarded = post.split("${If} $UpdateMode <> 1").nth(1).unwrap();
+    assert!(guarded.contains("Call NailRegisterMapi"));
+    assert!(guarded.contains("!insertmacro NAIL_UNREGISTER_MAPI"));
+    let pre = macro_body(&hooks, "NSIS_HOOK_PREUNINSTALL");
+    let pre_guarded = pre.split("${If} $UpdateMode <> 1").nth(1).unwrap();
+    assert!(pre_guarded.contains("!insertmacro NAIL_UNREGISTER_MAPI"));
+    // The DLLs go with the app on uninstall.
+    let post_uninstall = macro_body(&hooks, "NSIS_HOOK_POSTUNINSTALL");
+    for arch in WindowsArch::ALL {
+        assert!(post_uninstall.contains(&format!(
+            r#"Delete "$INSTDIR\{}""#,
+            mapi_dll_relative_path(arch)
+        )));
+    }
+}
+
+#[test]
+fn the_msi_writes_the_installation_facts_with_its_properties() {
+    let wix = wix();
+    for property in ["AUTOSTART", "ADDTOPATH", "DISABLEUPDATES", "MAPI"] {
+        // Public, passed to the server side of managed installs, remembered
+        // from the previous installation, the command line winning.
+        assert!(
+            wix.contains(&format!(r#"<Property Id="{property}" Secure="yes">"#)),
+            "{property}"
+        );
+        assert!(wix.contains(&format!(
+            r#"<SetProperty Id="NAIL_CMD_{property}" Value="[{property}]" Before="AppSearch" Sequence="both" />"#
+        )));
+        assert!(wix.contains(&format!(
+            r#"<SetProperty Id="{property}" Value="[NAIL_CMD_{property}]" After="AppSearch" Sequence="both">NAIL_CMD_{property}</SetProperty>"#
+        )));
+        assert!(wix.contains(&format!(r#"After="Set{property}" Sequence="both">"#)));
+    }
+    // Remembered values come from the facts key.
+    let searches: Vec<&str> = wix
+        .lines()
+        .filter(|l| l.contains("<RegistrySearch"))
+        .collect();
+    assert_eq!(searches.len(), 4);
+    for line in searches {
+        assert_eq!(attr(line, "Root"), Some("HKLM"), "{line}");
+        assert_eq!(attr(line, "Key"), Some(registry::INSTALL_KEY), "{line}");
+    }
+    // DISABLEUPDATES defaults to 1 (IT deploys updates); the rest to 0.
+    assert!(wix.contains(r#"<Property Id="NAIL_DISABLEUPDATES" Value="1" />"#));
+    for off in ["NAIL_AUTOSTART", "NAIL_ADDTOPATH", "NAIL_MAPI"] {
+        assert!(
+            wix.contains(&format!(r#"<Property Id="{off}" Value="0" />"#)),
+            "{off}"
+        );
+    }
+
+    // The facts (nail_api::desktop::registry).
+    let facts = section(&wix, r#"<Component Id="NailInstallFacts""#, "</Component>");
+    assert!(facts.contains(&format!(
+        r#"<RegistryKey Root="HKLM" Key="{}">"#,
+        registry::INSTALL_KEY
+    )));
+    for (name, value) in [
+        (registry::INSTALLER_VALUE, InstallKind::Msi.as_str()),
+        (registry::SCOPE_VALUE, InstallScope::PerMachine.as_str()),
+        (registry::INSTALL_DIR_VALUE, "[INSTALLDIR]"),
+        (registry::VERSION_VALUE, "[ProductVersion]"),
+        (registry::DISABLE_UPDATES_VALUE, "[NAIL_DISABLEUPDATES]"),
+        (registry::MAPI_VALUE, "[NAIL_MAPI]"),
+    ] {
+        let line = facts
+            .lines()
+            .find(|l| attr(l, "Name") == Some(name))
+            .unwrap_or_else(|| panic!("{name} missing"));
+        assert_eq!(attr(line, "Value"), Some(value), "{name}");
+    }
+    for dword in [registry::DISABLE_UPDATES_VALUE, registry::MAPI_VALUE] {
+        let line = facts
+            .lines()
+            .find(|l| attr(l, "Name") == Some(dword))
+            .unwrap();
+        assert_eq!(attr(line, "Type"), Some("integer"), "{dword} is a DWORD");
+    }
+
+    // AUTOSTART: the machine Run key with the app's flag.
+    let run = section(&wix, r#"<Component Id="NailAutostart""#, "</Component>");
+    assert!(run.contains(r#"NAIL_AUTOSTART = "1""#));
+    assert!(run.contains(&format!(
+        r#"Key="{}" Name="{}" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; --autostart""#,
+        registry::RUN_KEY,
+        registry::RUN_VALUE
+    )));
+    assert!(parse_args(&["--autostart"]).autostart);
+    // ADDTOPATH: only bin\ on the machine PATH, removed on uninstall.
+    let path = section(&wix, r#"<Component Id="NailAddToPath""#, "</Component>");
+    assert!(path.contains(r#"NAIL_ADDTOPATH = "1""#));
+    assert!(path.contains(
+        r#"Name="PATH" Value="[INSTALLDIR]bin" Permanent="no" Part="last" Action="set" System="yes""#
+    ));
+}
+
+#[test]
+fn the_msi_registers_the_same_types_as_the_per_user_installer() {
+    let wix = wix();
+    let registration = section(&wix, r#"<Component Id="NailRegistration""#, "</Component>");
+    for line in registration.lines().filter(|l| l.contains(" Root=")) {
+        assert_eq!(attr(line, "Root"), Some("HKLM"), "{line}");
+    }
+    // Same schemes and extensions as the app parses and NSIS registers.
+    let schemes: BTreeSet<&str> = registration
+        .lines()
+        .filter(|l| attr(l, "Key") == Some("URLAssociations"))
+        .filter_map(|l| attr(l, "Name"))
+        .collect();
+    assert_eq!(schemes, URL_SCHEMES.into_iter().collect());
+    let extensions: BTreeSet<&str> = registration
+        .lines()
+        .filter(|l| attr(l, "Key") == Some("FileAssociations"))
+        .filter_map(|l| attr(l, "Name"))
+        .map(|e| e.trim_start_matches('.'))
+        .collect();
+    assert_eq!(extensions, FILE_EXTENSIONS.into_iter().collect());
+    for extension in FILE_EXTENSIONS {
+        // "Open with" only; the extension's default is never touched.
+        assert!(registration.contains(&format!(
+            r#"Key="Software\Classes\.{extension}\OpenWithProgids" Name="Nail.{extension}""#
+        )));
+        assert!(!registration.contains(&format!(r#"Key="Software\Classes\.{extension}">"#)));
+    }
+    // Every open command ends the options with `--`.
+    let commands: Vec<&str> = registration
+        .lines()
+        .filter(|l| attr(l, "Key") == Some(r"shell\open\command"))
+        .collect();
+    assert_eq!(commands.len(), 5, "mailto, webcal, eml, ics, vcf");
+    for line in commands {
+        assert_eq!(
+            attr(line, "Value"),
+            Some("&quot;[INSTALLDIR]Nail.exe&quot; -- &quot;%1&quot;"),
+            "{line}"
+        );
+    }
+    // Listed under RegisteredApplications → Settings > Default apps
+    // (registeredAppMachine for this scope).
+    assert!(registration.contains(&format!(
+        r#"Key="{}" Name="{REGISTERED_APP_NAME}" Type="string" Value="{}""#,
+        registry::REGISTERED_APPLICATIONS_KEY,
+        registry::CAPABILITIES_KEY
+    )));
+    assert!(registration.contains(&format!(
+        r#"<RegistryKey Root="HKLM" Key="{}">"#,
+        registry::CAPABILITIES_KEY
+    )));
+    assert!(
+        default_apps_settings_uri(Some(InstallScope::PerMachine))
+            .ends_with("registeredAppMachine=Nail")
+    );
+    // The same ProgIDs as the per-user installer.
+    let hooks = hooks();
+    for progid in [
+        "Nail.Url.mailto",
+        "Nail.Url.webcal",
+        "Nail.eml",
+        "Nail.ics",
+        "Nail.vcf",
+    ] {
+        assert!(hooks.contains(&format!(r#""{progid}""#)), "{progid} (NSIS)");
+        assert!(
+            registration.contains(&format!(r#"Key="Software\Classes\{progid}">"#)),
+            "{progid} (MSI)"
+        );
+    }
+}
+
+#[test]
+fn the_msi_mapi_component_registers_both_views_on_request() {
+    let wix = wix();
+    let native = section(&wix, r#"<Component Id="NailMapiNative""#, "</Component>");
+    let wow = section(&wix, r#"<Component Id="NailMapiWow""#, "</Component>");
+    assert!(!native.lines().next().unwrap().contains("Win64="));
+    assert!(wow.lines().next().unwrap().contains(r#"Win64="no""#));
+    for (component, dll) in [
+        (
+            native,
+            format!(r"[INSTALLDIR]mapi\$(var.NailArch)\{MAPI_DLL_FILE}"),
+        ),
+        (
+            wow,
+            format!("[INSTALLDIR]{}", mapi_dll_relative_path(WindowsArch::X86)),
+        ),
+    ] {
+        assert!(component.contains(r#"NAIL_MAPI = "1""#));
+        assert!(component.contains(&format!(
+            r#"<RegistryKey Root="HKLM" Key="{}">"#,
+            mapi::registry::NAIL_MAIL_CLIENT_KEY
+        )));
+        for value in [
+            mapi::registry::DLL_PATH_VALUE,
+            mapi::registry::DLL_PATH_EX_VALUE,
+        ] {
+            let line = component
+                .lines()
+                .find(|l| attr(l, "Name") == Some(value))
+                .unwrap_or_else(|| panic!("{value} missing"));
+            assert_eq!(attr(line, "Value"), Some(dll.as_str()), "{value}");
+        }
+        assert!(component.contains(&format!(
+            r#"Value="{}" KeyPath="yes""#,
+            mapi::registry::CLIENT_NAME
+        )));
+    }
+    // $(var.NailArch) is the package's architecture, as nail_api names it.
+    for arch in [WindowsArch::X64, WindowsArch::Arm64] {
+        assert!(wix.contains(&format!(r#"<?define NailArch = "{}" ?>"#, arch.as_str())));
+    }
+    // The installer never makes Nail the default client (Clients\Mail's
+    // default value): the user chooses.
+    assert!(!wix.contains(&format!(r#"Key="{}">"#, mapi::registry::MAIL_CLIENTS_KEY)));
+}
+
+#[test]
+fn every_msi_component_is_in_the_feature_and_has_its_own_guid() {
+    let wix = wix();
+    let components: Vec<&str> = wix
+        .lines()
+        .filter(|l| l.trim_start().starts_with("<Component "))
+        .collect();
+    let ids: BTreeSet<&str> = components.iter().filter_map(|l| attr(l, "Id")).collect();
+    let guids: BTreeSet<&str> = components.iter().filter_map(|l| attr(l, "Guid")).collect();
+    assert_eq!(ids.len(), components.len());
+    assert_eq!(guids.len(), components.len(), "unique fixed GUIDs");
+    for guid in &guids {
+        assert_eq!(guid.len(), 36, "{guid}");
+    }
+    assert!(!guids.contains(UPGRADE_CODE));
+    let feature = section(&wix, r#"<Feature Id="NailIntegration""#, "</Feature>");
+    let refs: BTreeSet<&str> = feature
+        .lines()
+        .filter(|l| l.contains("<ComponentRef"))
+        .filter_map(|l| attr(l, "Id"))
+        .collect();
+    assert_eq!(refs, ids);
+}
+
+#[test]
+fn every_msi_string_is_defined_once_and_used_and_matches_nsis() {
+    let strings = read(app_dir().join("windows/wix/languages/en-US.wxi"));
+    let mut defined = BTreeMap::new();
+    for line in strings.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("<?define ") {
+            let (name, value) = rest.split_once(" = ").unwrap();
+            let value = value.trim_end_matches("?>").trim().trim_matches('"');
+            assert!(
+                defined.insert(name.to_owned(), value.to_owned()).is_none(),
+                "duplicate {name}"
+            );
+        }
+    }
+    let wix = wix();
+    assert!(wix.contains(r"<?include languages\en-US.wxi ?>"));
+    let used: BTreeSet<String> = wix
+        .split("$(var.")
+        .skip(1)
+        .filter_map(|s| s.split(')').next())
+        .filter(|name| *name != "NailArch")
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(used, defined.keys().cloned().collect::<BTreeSet<_>>());
+    // The registration texts read the same in both installers.
+    let english = read(app_dir().join("windows/nsis/languages/English.nsh"));
+    for (wix_name, nsis_name) in [
+        ("NailAppDescription", "nailAppDescription"),
+        ("NailMailtoName", "nailMailtoName"),
+        ("NailWebcalName", "nailWebcalName"),
+        ("NailEmlName", "nailEmlName"),
+        ("NailIcsName", "nailIcsName"),
+        ("NailVcfName", "nailVcfName"),
+    ] {
+        let value = &defined[wix_name];
+        assert!(
+            english.contains(&format!(
+                r#"LangString {nsis_name} ${{LANG_ENGLISH}} "{value}""#
+            )),
+            "{wix_name} differs from {nsis_name}"
+        );
+    }
 }

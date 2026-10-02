@@ -186,6 +186,11 @@ layout "default" {
             sync-folder-policies id="sync-policies" label="@sync.settings.tab"
             // Installed plug-ins: on / off, permissions, settings, logs, placements.
             plugin-manager id="plugin-manager" label="@plugin.manager.tab"
+            // The desktop app (Windows): updates and the installation, tray and
+            // startup, default apps. In a browser they say "desktop app only".
+            update-settings id="update-settings" label="@system.settings.tab.updates"
+            desktop-settings id="desktop-settings" label="@system.settings.tab.desktop"
+            default-apps id="default-apps" label="@system.settings.tab.default-apps"
             stack id="customize" label="@settings.tab.customize" sizes="auto auto 1fr" {
                 toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 config-errors id="settings-config-errors"
@@ -287,6 +292,12 @@ layout "default" {
         action "exchange.classify" label="@exchange.action.classify"
         action "exchange.toggle-focused" label="@exchange.action.toggle-focused"
         action "exchange.apply-categories" label="@exchange.action.apply-categories"
+        // The desktop app (M4b): About Nail, check for updates, the welcome
+        // screen, Windows Settings → Default apps.
+        action "system.about"     label="@system.action.about"
+        action "system.check-updates" label="@system.action.check-updates"
+        action "system.first-run" label="@system.action.first-run"
+        action "system.default-apps" label="@system.action.default-apps"
     }
 
     keys context="list" {
@@ -353,6 +364,7 @@ layout "default" {
         bind "g a" "agents.open-center"
         bind "ctrl+," "settings.open"
         bind "ctrl+shift+i" "inspector.toggle"
+        bind "f1" "system.about"
         bind "b" "snooze.open"
         bind "shift+j" "junk.mark"
         // The context menu of the focused item (list row, folder, message).

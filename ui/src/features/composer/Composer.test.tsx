@@ -5,6 +5,7 @@ import { createEnv, renderNode, widget, type Env } from "../../test/harness";
 import { htmlEditorIn } from "./HtmlEditor";
 import { markdownViewIn } from "./MarkdownEditor";
 import { composerCryptoStore } from "../security";
+import { systemStoreFor } from "../system";
 import { acceptRichDrafts } from "./mock";
 import { AUTOSAVE_MS, richStoreFor, type RichState } from "./store";
 import { loadHtmlEditor, loadMarkdownEditor } from "./lazyEditors";
@@ -345,6 +346,30 @@ describe("rich composer", () => {
     await within(from).findByRole("option", { name: "Ada Lovelace <ada@work.example>" });
     await user.selectOptions(from, "ada@work.example");
     expect(env.store.getState().composer?.text).toBe("Hi\n\n-- \nAda Lovelace\nAnalyst");
+  });
+});
+
+describe("drafts from other programs", () => {
+  it("shows which program prepared the draft until dismissed", async () => {
+    const user = userEvent.setup();
+    const env = composerEnv({ draftId: "d-mapi", subject: "Quarterly report" });
+    systemStoreFor(env.store).getState().noteProgramDraft("d-mapi", "EXCEL.EXE");
+    renderNode(widget("composer"), env);
+    const note = await screen.findByRole("note");
+    expect(note).toHaveAttribute("data-part", "program-draft");
+    expect(note).toHaveTextContent("EXCEL.EXE prepared this message");
+    // The notice comes before the fields.
+    const form = note.closest('[data-part="composer"]');
+    expect(form?.firstElementChild).toBe(note);
+    await user.click(within(note).getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(systemStoreFor(env.store).getState().programDrafts).toEqual({});
+  });
+
+  it("shows nothing for an ordinary draft", () => {
+    const env = composerEnv({ draftId: "d-own" });
+    renderNode(widget("composer"), env);
+    expect(screen.queryByRole("note")).toBeNull();
   });
 });
 

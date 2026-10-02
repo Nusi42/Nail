@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nail's per-machine MSI additions (plan M4b WP112, ADR 0087), a WiX 3
+  fragment the Tauri bundler compiles next to its own main.wxs template
+  (`bundle.windows.wix.fragmentPaths` / `featureRefs` in ../bundle.json).
+  Tauri's template already makes the package per-machine (Program Files),
+  installs the app, the resources (ui\, bin\nail.exe, mapi\<arch>\NailMapi.dll),
+  shortcuts and WebView2. This fragment adds, under HKLM:
+
+    * the installation facts the app reads (nail_api::desktop::registry):
+      Software\Nail\Install with Installer = msi, Scope = per-machine,
+      InstallDir, Version, DisableUpdates, Mapi (and the remembered
+      Autostart / AddToPath choices);
+    * the Windows registration (ProgIDs, "Open with", Capabilities,
+      RegisteredApplications) like the per-user installer, machine-wide;
+    * properties for silent installs (msiexec /i Nail.msi /qn …):
+        AUTOSTART=1      start Nail for every user at sign-in (HKLM Run key)
+        ADDTOPATH=1      put <install dir>\bin on the machine PATH
+        DISABLEUPDATES=0 allow the in-app updater (default 1: IT deploys
+                         updates; Software\Nail\Install\DisableUpdates)
+        MAPI=1           register NailMapi.dll as a Simple MAPI client
+                         (Software\Clients\Mail\Nail, both registry views;
+                         nail_api::mapi::registry)
+      A value given on the command line wins; otherwise an upgrade keeps the
+      previous installation's choice (read back from Software\Nail\Install),
+      so the Tauri updater's `msiexec /i … /passive` changes nothing.
+
+  Every user-visible text is a preprocessor variable from
+  languages\en-US.wxi. ../../tests/installer.rs checks this file against
+  nail_api and the per-user installer.
+-->
+<?include languages\en-US.wxi ?>
+<?if $(sys.BUILDARCH)="x64"?>
+  <?define NailArch = "x64" ?>
+<?elseif $(sys.BUILDARCH)="arm64"?>
+  <?define NailArch = "arm64" ?>
+<?else?>
+  <?error Nail ships x64 and arm64 MSIs only (sys.BUILDARCH=$(sys.BUILDARCH)) ?>
+<?endif?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <!-- Public properties, remembered from the previous installation. -->
+    <Property Id="AUTOSTART" Secure="yes">
+      <RegistrySearch Id="NailPreviousAutostart" Root="HKLM" Key="Software\Nail\Install" Name="Autostart" Type="raw" />
+    </Property>
+    <Property Id="ADDTOPATH" Secure="yes">
+      <RegistrySearch Id="NailPreviousAddToPath" Root="HKLM" Key="Software\Nail\Install" Name="AddToPath" Type="raw" />
+    </Property>
+    <Property Id="DISABLEUPDATES" Secure="yes">
+      <RegistrySearch Id="NailPreviousDisableUpdates" Root="HKLM" Key="Software\Nail\Install" Name="DisableUpdates" Type="raw" />
+    </Property>
+    <Property Id="MAPI" Secure="yes">
+      <RegistrySearch Id="NailPreviousMapi" Root="HKLM" Key="Software\Nail\Install" Name="Mapi" Type="raw" />
+    </Property>
+
+    <!-- The command line wins over the remembered value: save it before
+         AppSearch, put it back afterwards (both sequences). -->
+    <SetProperty Id="NAIL_CMD_AUTOSTART" Value="[AUTOSTART]" Before="AppSearch" Sequence="both" />
+    <SetProperty Id="AUTOSTART" Value="[NAIL_CMD_AUTOSTART]" After="AppSearch" Sequence="both">NAIL_CMD_AUTOSTART</SetProperty>
+    <SetProperty Id="NAIL_CMD_ADDTOPATH" Value="[ADDTOPATH]" Before="AppSearch" Sequence="both" />
+    <SetProperty Id="ADDTOPATH" Value="[NAIL_CMD_ADDTOPATH]" After="AppSearch" Sequence="both">NAIL_CMD_ADDTOPATH</SetProperty>
+    <SetProperty Id="NAIL_CMD_DISABLEUPDATES" Value="[DISABLEUPDATES]" Before="AppSearch" Sequence="both" />
+    <SetProperty Id="DISABLEUPDATES" Value="[NAIL_CMD_DISABLEUPDATES]" After="AppSearch" Sequence="both">NAIL_CMD_DISABLEUPDATES</SetProperty>
+    <SetProperty Id="NAIL_CMD_MAPI" Value="[MAPI]" Before="AppSearch" Sequence="both" />
+    <SetProperty Id="MAPI" Value="[NAIL_CMD_MAPI]" After="AppSearch" Sequence="both">NAIL_CMD_MAPI</SetProperty>
+
+    <!-- Normalized 0 / 1 values ("#1" is how AppSearch reads a DWORD).
+         Everything but an explicit 1 is off; DISABLEUPDATES is on unless 0. -->
+    <Property Id="NAIL_AUTOSTART" Value="0" />
+    <SetProperty Id="NAIL_AUTOSTART" Value="1" After="SetAUTOSTART" Sequence="both"><![CDATA[AUTOSTART = "1" OR AUTOSTART = "#1"]]></SetProperty>
+    <Property Id="NAIL_ADDTOPATH" Value="0" />
+    <SetProperty Id="NAIL_ADDTOPATH" Value="1" After="SetADDTOPATH" Sequence="both"><![CDATA[ADDTOPATH = "1" OR ADDTOPATH = "#1"]]></SetProperty>
+    <Property Id="NAIL_DISABLEUPDATES" Value="1" />
+    <SetProperty Id="NAIL_DISABLEUPDATES" Value="0" After="SetDISABLEUPDATES" Sequence="both"><![CDATA[DISABLEUPDATES = "0" OR DISABLEUPDATES = "#0"]]></SetProperty>
+    <Property Id="NAIL_MAPI" Value="0" />
+    <SetProperty Id="NAIL_MAPI" Value="1" After="SetMAPI" Sequence="both"><![CDATA[MAPI = "1" OR MAPI = "#1"]]></SetProperty>
+
+    <DirectoryRef Id="INSTALLDIR">
+      <!-- Installation facts (nail_api::desktop::registry). -->
+      <Component Id="NailInstallFacts" Guid="F02B9F20-32E2-4A15-A2EF-BF37F0FE4AF8">
+        <RegistryKey Root="HKLM" Key="Software\Nail\Install">
+          <RegistryValue Name="Installer" Type="string" Value="msi" KeyPath="yes" />
+          <RegistryValue Name="Scope" Type="string" Value="per-machine" />
+          <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLDIR]" />
+          <RegistryValue Name="Version" Type="string" Value="[ProductVersion]" />
+          <RegistryValue Name="DisableUpdates" Type="integer" Value="[NAIL_DISABLEUPDATES]" />
+          <RegistryValue Name="Mapi" Type="integer" Value="[NAIL_MAPI]" />
+          <RegistryValue Name="Autostart" Type="integer" Value="[NAIL_AUTOSTART]" />
+          <RegistryValue Name="AddToPath" Type="integer" Value="[NAIL_ADDTOPATH]" />
+        </RegistryKey>
+      </Component>
+
+      <!-- Registration for links and file types; the user picks Nail in
+           Settings > Default apps (ms-settings:defaultapps?registeredAppMachine=Nail).
+           Open commands end the options with a double dash (see hooks.nsh). -->
+      <Component Id="NailRegistration" Guid="196E8DFE-1BA2-434D-BAB9-6318490A8497">
+        <RegistryKey Root="HKLM" Key="Software\Classes\Nail.Url.mailto">
+          <RegistryValue Type="string" Value="$(var.NailMailtoName)" KeyPath="yes" />
+          <RegistryValue Name="FriendlyTypeName" Type="string" Value="$(var.NailMailtoName)" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+          <RegistryValue Name="EditFlags" Type="integer" Value="2" />
+          <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;,0" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; -- &quot;%1&quot;" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\Nail.Url.webcal">
+          <RegistryValue Type="string" Value="$(var.NailWebcalName)" />
+          <RegistryValue Name="FriendlyTypeName" Type="string" Value="$(var.NailWebcalName)" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+          <RegistryValue Name="EditFlags" Type="integer" Value="2" />
+          <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;,0" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; -- &quot;%1&quot;" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\Nail.eml">
+          <RegistryValue Type="string" Value="$(var.NailEmlName)" />
+          <RegistryValue Name="FriendlyTypeName" Type="string" Value="$(var.NailEmlName)" />
+          <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;,0" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; -- &quot;%1&quot;" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\Nail.ics">
+          <RegistryValue Type="string" Value="$(var.NailIcsName)" />
+          <RegistryValue Name="FriendlyTypeName" Type="string" Value="$(var.NailIcsName)" />
+          <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;,0" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; -- &quot;%1&quot;" />
+        </RegistryKey>
+        <RegistryKey Root="HKLM" Key="Software\Classes\Nail.vcf">
+          <RegistryValue Type="string" Value="$(var.NailVcfName)" />
+          <RegistryValue Name="FriendlyTypeName" Type="string" Value="$(var.NailVcfName)" />
+          <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;,0" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; -- &quot;%1&quot;" />
+        </RegistryKey>
+        <!-- "Open with" entries; the extension's default is never touched. -->
+        <RegistryValue Root="HKLM" Key="Software\Classes\.eml\OpenWithProgids" Name="Nail.eml" Type="string" Value="" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.ics\OpenWithProgids" Name="Nail.ics" Type="string" Value="" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.vcf\OpenWithProgids" Name="Nail.vcf" Type="string" Value="" />
+        <RegistryKey Root="HKLM" Key="Software\Nail\Capabilities">
+          <RegistryValue Name="ApplicationName" Type="string" Value="Nail" />
+          <RegistryValue Name="ApplicationDescription" Type="string" Value="$(var.NailAppDescription)" />
+          <RegistryValue Name="ApplicationIcon" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;,0" />
+          <RegistryValue Key="URLAssociations" Name="mailto" Type="string" Value="Nail.Url.mailto" />
+          <RegistryValue Key="URLAssociations" Name="webcal" Type="string" Value="Nail.Url.webcal" />
+          <RegistryValue Key="URLAssociations" Name="webcals" Type="string" Value="Nail.Url.webcal" />
+          <RegistryValue Key="FileAssociations" Name=".eml" Type="string" Value="Nail.eml" />
+          <RegistryValue Key="FileAssociations" Name=".ics" Type="string" Value="Nail.ics" />
+          <RegistryValue Key="FileAssociations" Name=".vcf" Type="string" Value="Nail.vcf" />
+        </RegistryKey>
+        <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="Nail" Type="string" Value="Software\Nail\Capabilities" />
+      </Component>
+
+      <!-- AUTOSTART=1: every user's sign-in starts Nail in the tray. -->
+      <Component Id="NailAutostart" Guid="BF684113-DE27-4107-864C-1C6C4753B36C">
+        <Condition><![CDATA[NAIL_AUTOSTART = "1"]]></Condition>
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="Nail" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot; --autostart" KeyPath="yes" />
+      </Component>
+
+      <!-- ADDTOPATH=1: <install dir>\bin (only the CLI) on the machine PATH. -->
+      <Component Id="NailAddToPath" Guid="E415C23C-B42D-4B26-BA03-E856B73B3FCA">
+        <Condition><![CDATA[NAIL_ADDTOPATH = "1"]]></Condition>
+        <Environment Id="NailPathEntry" Name="PATH" Value="[INSTALLDIR]bin" Permanent="no" Part="last" Action="set" System="yes" />
+        <RegistryValue Root="HKLM" Key="Software\Nail\Install" Name="PathEntry" Type="string" Value="[INSTALLDIR]bin" KeyPath="yes" />
+      </Component>
+
+      <!-- MAPI=1: the Simple MAPI client (nail_api::mapi::registry). The
+           native view gets the DLL of the package's architecture, the 32-bit
+           view the x86 DLL (32-bit Office). Not made the default: the user
+           chooses the mail program. -->
+      <Component Id="NailMapiNative" Guid="617B0A9F-EA29-43FB-8C6A-52A74F1D160B">
+        <Condition><![CDATA[NAIL_MAPI = "1"]]></Condition>
+        <RegistryKey Root="HKLM" Key="Software\Clients\Mail\Nail">
+          <RegistryValue Type="string" Value="Nail" KeyPath="yes" />
+          <RegistryValue Name="DLLPath" Type="string" Value="[INSTALLDIR]mapi\$(var.NailArch)\NailMapi.dll" />
+          <RegistryValue Name="DLLPathEx" Type="string" Value="[INSTALLDIR]mapi\$(var.NailArch)\NailMapi.dll" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <!-- The 32-bit view's registration is a 32-bit component, which may not
+         live in the 64-bit INSTALLDIR (ICE80): it is registry only and sits
+         at TARGETDIR. -->
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="NailMapiWow" Guid="DD63FB82-51CB-4B6C-BFE9-D71BCD1A040C" Win64="no">
+        <Condition><![CDATA[NAIL_MAPI = "1"]]></Condition>
+        <RegistryKey Root="HKLM" Key="Software\Clients\Mail\Nail">
+          <RegistryValue Type="string" Value="Nail" KeyPath="yes" />
+          <RegistryValue Name="DLLPath" Type="string" Value="[INSTALLDIR]mapi\x86\NailMapi.dll" />
+          <RegistryValue Name="DLLPathEx" Type="string" Value="[INSTALLDIR]mapi\x86\NailMapi.dll" />
+          <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLDIR]Nail.exe&quot;" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="NailIntegration" Title="$(var.NailIntegrationTitle)" Level="1" Display="hidden" AllowAdvertise="no" Absent="disallow">
+      <ComponentRef Id="NailInstallFacts" />
+      <ComponentRef Id="NailRegistration" />
+      <ComponentRef Id="NailAutostart" />
+      <ComponentRef Id="NailAddToPath" />
+      <ComponentRef Id="NailMapiNative" />
+      <ComponentRef Id="NailMapiWow" />
+    </Feature>
+  </Fragment>
+</Wix>

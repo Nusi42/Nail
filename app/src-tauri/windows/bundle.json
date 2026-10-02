@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "windows": {
+      "wix": {
+        "upgradeCode": "4B724EE5-4370-4C05-BE94-9D606D52D37B",
+        "language": "en-US",
+        "fragmentPaths": ["windows/wix/nail.wxs"],
+        "featureRefs": ["NailIntegration"]
+      }
+    }
+  }
+}

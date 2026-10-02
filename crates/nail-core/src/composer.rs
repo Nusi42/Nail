@@ -34,8 +34,9 @@ use crate::ingest::{IncomingMessage, ingest};
 use crate::service::{Service, lock};
 use crate::strings::{message, message_with};
 
-/// Largest attachment `UploadAttachment` accepts (decoded bytes).
-pub(crate) const MAX_ATTACHMENT_BYTES: usize = 25 * 1024 * 1024;
+/// Largest attachment `UploadAttachment` accepts (decoded bytes;
+/// `nail_api::compose::MAX_ATTACHMENT_BYTES`, 25 MiB on every target).
+pub(crate) const MAX_ATTACHMENT_BYTES: usize = nail_api::compose::MAX_ATTACHMENT_BYTES as usize;
 
 /// Longest address suggestion list.
 const MAX_SUGGESTIONS: u32 = 50;

@@ -4059,4 +4059,83 @@ theme "default" mode="system" {
     part "mcp-rate-limits.issue" { color "$color.danger"; font-size "$font-size.sm"; }
     part "mcp-rate-limits.actions" { display "flex"; gap "$space.sm"; }
     part "mcp-clients.pending" { color "$color.warning"; }
+
+    // ---- The desktop app: updates, About, tray and startup, default apps, first run (ADRs 0091, 0092) ----
+
+    part "update-settings" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "update-settings.title" { margin 0; font-size "$font-size.lg"; }
+    part "update-settings.installation" { margin 0; color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "update-settings.error" { color "$color.danger"; }
+    part "update-status" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+    }
+    part "update-status[state=\"available\"]" { border-color "$color.accent"; }
+    part "update-status[state=\"ready-to-install\"]" { border-color "$color.success"; }
+    part "update-status[state=\"failed\"]" { border-color "$color.danger"; }
+    part "update-status.text" { margin 0; }
+    part "update-status.text[tone=\"policy\"]" { color "$color.fg-muted"; }
+    part "update-status.progress.text" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "update-status.checked" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "update-status.buttons" { gap "$space.sm"; }
+    part "update-status.error" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "release-notes" { display "flex"; flex-direction "column"; gap "$space.xs"; max-height 320; overflow-y "auto"; font-size "$font-size.sm"; }
+    part "release-notes.heading" { margin 0; font-size "$font-size.md"; }
+    part "release-notes.text" { margin 0; }
+    part "release-notes.list" { margin 0; padding-left "$space.lg"; }
+
+    part "about-nail" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "about-nail.title" { margin 0; font-size "$font-size.xl"; }
+    part "about-nail.tagline" { margin 0; color "$color.fg-muted"; }
+    part "about-nail.facts" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "about-nail.fact" { gap "$space.sm"; }
+    part "about-nail.fact.label" { color "$color.fg-muted"; }
+    part "about-nail.fact.value" { font-weight "$font-weight.medium"; }
+    part "about-nail.section.title" { margin 0; font-size "$font-size.md"; }
+    part "about-nail.updates" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "about-nail.unavailable" { color "$color.fg-muted"; }
+
+    part "desktop-settings" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.md"; overflow-y "auto"; }
+    part "desktop-settings.title" { margin 0; font-size "$font-size.lg"; }
+    part "desktop-settings.endpoint" { font-family "$font.mono"; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "desktop-settings.error" { color "$color.danger"; }
+
+    part "default-apps" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "default-apps.title" { margin 0; font-size "$font-size.lg"; }
+    part "default-apps.intro" { margin 0; color "$color.fg-muted"; }
+    part "default-apps.list" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "default-apps.item" { gap "$space.sm"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "default-apps.item.state" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "default-apps.item[state=\"default\"] default-apps.item.state" { color "$color.success"; }
+    part "default-apps.item[state=\"unregistered\"] default-apps.item.state" { color "$color.warning"; }
+    part "default-apps.buttons" { gap "$space.sm"; }
+    part "default-apps.opened" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "default-apps.unregistered" { color "$color.warning"; }
+    part "default-apps.error" { color "$color.danger"; }
+
+    part "first-run" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.lg"; overflow-y "auto"; }
+    part "first-run.title" { margin 0; font-size "$font-size.xl"; }
+    part "first-run.intro" { margin 0; color "$color.fg-muted"; }
+    part "first-run.steps" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "first-run.step" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.md"; border "$border.thin"; border-radius "$radius.md"; }
+    part "first-run.step.title" { margin 0; font-size "$font-size.md"; }
+    part "first-run.step.text" { margin 0; }
+    part "first-run.step.state" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "first-run.later" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "first-run.buttons" { gap "$space.sm"; justify-content "flex-end"; }
+    part "first-run.error" { color "$color.danger"; }
+
+    part "program-draft" {
+        gap "$space.sm"
+        padding "$space.sm" "$space.md"
+        border-left "3px solid $color.accent"
+        border-radius "$radius.sm"
+        background-color "$color.bg-subtle"
+    }
+    part "program-draft.text" { margin 0; }
 }

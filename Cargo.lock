@@ -4306,6 +4306,7 @@ dependencies = [
  "futures-util",
  "nail-api",
  "nail-core",
+ "nail-mapi",
  "nail-proxy",
  "nail-server",
  "pretty_assertions",
@@ -4564,6 +4565,7 @@ dependencies = [
  "pretty_assertions",
  "serde_json",
  "tempfile",
+ "windows-registry",
  "windows-sys 0.61.2",
 ]
 

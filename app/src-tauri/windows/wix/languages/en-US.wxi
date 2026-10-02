@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nail's MSI strings (English), used by ../nail.wxs as $(var.Name).
+     Every variable used there must be defined here
+     (app/src-tauri/tests/installer.rs checks it). Tauri's own MSI strings
+     come from the Tauri CLI. Keep them in line with ../../nsis/languages/English.nsh. -->
+<Include>
+  <?define NailAppDescription = "Mail, calendar and contacts" ?>
+  <?define NailMailtoName = "Email link (Nail)" ?>
+  <?define NailWebcalName = "Calendar subscription (Nail)" ?>
+  <?define NailEmlName = "Email message" ?>
+  <?define NailIcsName = "Calendar file" ?>
+  <?define NailVcfName = "Contact card" ?>
+  <?define NailIntegrationTitle = "Windows integration" ?>
+</Include>

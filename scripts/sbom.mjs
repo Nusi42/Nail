@@ -30,7 +30,12 @@ function timestamp() {
   return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-export function writeSboms({ outDir, target = "x86_64-pc-windows-msvc", arch = "x64" }) {
+export function writeSboms({
+  outDir,
+  target = "x86_64-pc-windows-msvc",
+  arch = "x64",
+  version: versionOverride,
+}) {
   assertOutsideRepo(outDir, repoRoot);
   mkdirSync(outDir, { recursive: true });
   const metadata = JSON.parse(
@@ -48,7 +53,9 @@ export function writeSboms({ outDir, target = "x86_64-pc-windows-msvc", arch = "
       { cwd: repoRoot, maxBuffer: 256 * 1024 * 1024, encoding: "utf8" },
     ),
   );
-  const version = metadata.packages.find((p) => p.name === "nail-app").version;
+  // A build of another version (build-installer.mjs --version) names its
+  // SBOMs after that version.
+  const version = versionOverride ?? metadata.packages.find((p) => p.name === "nail-app").version;
   const names = artifactNames(version, arch);
   const rust = cargoSbom({
     metadata,

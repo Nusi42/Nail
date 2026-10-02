@@ -14,9 +14,10 @@ import type { LaunchRequest, LocalizedMessage } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { ComposeContext } from "../../state/compose";
 import { useComposeContext } from "../../state/hooks";
-import { openRichDraft, startMailtoCompose } from "../composer";
+import { startMailtoCompose } from "../composer";
 import { IMPORT_DIALOG, pimStoreFor, SOURCES_DIALOG } from "../pim";
 import { remoteStore } from "../remote";
+import { openProgramDraft } from "../system";
 
 /** A notice the user dismisses: message id and arguments. */
 export interface LaunchNotice {
@@ -60,10 +61,9 @@ export async function handleLaunch(
       ctx.store.getState().openWindow(IMPORT_DIALOG);
       return null;
     case "ComposeDraft":
-      // M4b (ADR 0087): recipients, text and files are in the draft;
-      // WP114 adds the notice naming the program (mapi-draft-from-program).
-      await openRichDraft(ctx, request.draft_id);
-      return null;
+      // M4b (ADR 0087): recipients, text and files are in the draft; the
+      // composer notes the program (mapi-draft-from-program).
+      return openProgramDraft(ctx, request);
   }
 }
 

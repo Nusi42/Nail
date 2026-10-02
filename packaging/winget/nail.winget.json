@@ -1,0 +1,10 @@
+{
+  "identifier": "Nail.Nail",
+  "publisher": "Nail",
+  "name": "Nail",
+  "moniker": "nail",
+  "license": "Proprietary",
+  "shortDescription": "Mail, calendar and contacts",
+  "description": "Nail is an email and PIM client with a Rust core, a customizable UI and MCP access to your data.",
+  "tags": ["email", "calendar", "contacts", "mcp"]
+}

@@ -42,14 +42,22 @@ axum.workspace = true
 futures-util.workspace = true
 
 # Installer helper (setup_helper.rs): per-user PATH, Credential Manager.
+# M4b (win.rs): the user's SID and the Simple MAPI pipe's ACL (Security,
+# Authorization, Threading), random tokens (Cryptography, from the
+# workspace), opening Settings → Default apps (Shell).
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_Security_Credentials", "Win32_UI_WindowsAndMessaging"] }
+windows = { workspace = true, features = ["Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-registry.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# M4b WP115: tests/mapi_wired.rs drives the shell's pipe server with the
+# DLL's own client logic (staging, same-user check, frames).
+nail-mapi.workspace = true
 # M4b: dev-endpoint tests connect like `nail plugin dev`.
 tokio-tungstenite.workspace = true
+# M4b: the updater's schedule runs on a paused clock in tests.
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

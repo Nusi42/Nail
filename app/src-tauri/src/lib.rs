@@ -23,16 +23,42 @@
 //! content through the core's proxy ([`PROXY_PROTOCOL`]), and the remote
 //! UI (TLS + login) runs when enabled in the settings
 //! ([`nail_server::RemoteUiHost`]).
+//!
+//! M4b (WP113, ADR 0087): the shell implements the core's
+//! [`nail_api::DesktopHost`] ([`host`]): installation facts from the
+//! registry ([`install`], [`registry`]), the updater ([`updater`] over
+//! tauri-plugin-updater, [`updater_tauri`]), "Start with Windows"
+//! ([`startup`]), default apps ([`default_apps`]) and the `nail plugin dev`
+//! endpoint ([`dev_endpoint`]). It shows a tray icon ([`tray`]) with close
+//! to tray and start hidden, forwards a second start's arguments to the
+//! running app, and serves the Simple MAPI pipe ([`mapi_server`]).
 
+pub mod default_apps;
+pub mod dev_endpoint;
+pub mod host;
+pub mod install;
 pub mod launch;
+pub mod mapi_server;
 pub mod portable;
+pub mod registry;
 pub mod setup_helper;
+pub mod shell;
+pub mod startup;
+pub mod tray;
+pub mod updater;
+pub mod updater_tauri;
+pub mod win;
+
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use clap::Parser;
 use nail_api::{Event, Request, Response};
 use nail_core::{Service, ServiceOptions, paths};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::broadcast;
+
+use crate::shell::{MAIN_WINDOW, ShellState};
 
 /// Name of the Tauri event channel carrying `nail_api::Event`s.
 pub const EVENT_CHANNEL: &str = "nail://event";
@@ -192,7 +218,7 @@ impl AppArgs {
 
 /// The app's MCP server, restarted when its settings change (M2c: a fixed
 /// port in the settings).
-pub type McpSlot = std::sync::Arc<tokio::sync::Mutex<Option<nail_core::McpRunning>>>;
+pub type McpSlot = Arc<tokio::sync::Mutex<Option<nail_core::McpRunning>>>;
 
 /// Things the app keeps alive for its lifetime: the MCP server, the lock on
 /// the data directory and the temporary directory of a demo run.
@@ -289,6 +315,14 @@ async fn nail_call(
     Ok(response)
 }
 
+/// Test control of seeded runs only (the desktop smoke test; see
+/// [`shell::test_control`]): a tray menu entry, or whether the window shows.
+/// Registered only with `--seed`, never for a real profile.
+#[tauri::command]
+fn nail_test_shell(app: AppHandle, op: String) -> Result<serde_json::Value, String> {
+    shell::test_control(&app, &op)
+}
+
 fn emit(app: &AppHandle, event: &Event) {
     if let Err(err) = app.emit(EVENT_CHANNEL, event) {
         tracing::warn!(%err, "cannot emit an event to the webview");
@@ -323,7 +357,16 @@ pub fn open_service_in(
     args: &AppArgs,
     temp: Option<&std::path::Path>,
 ) -> Result<Service, Box<dyn std::error::Error>> {
-    let service = Service::open(args.service_options_in(temp)?)?;
+    open_service_with(args, args.service_options_in(temp)?)
+}
+
+/// Opens the service with prepared options (M4b: the desktop host set),
+/// seeding demo data if `args` ask.
+pub fn open_service_with(
+    args: &AppArgs,
+    options: ServiceOptions,
+) -> Result<Service, Box<dyn std::error::Error>> {
+    let service = Service::open(options)?;
     if args.seed.as_deref() == Some("demo") {
         nail_core::demo::seed_demo(service.store(), service.blobs())?;
         service.rebuild_search_index()?;
@@ -486,6 +529,7 @@ pub fn run() {
     if let Some(action) = args.setup_action() {
         std::process::exit(setup_helper::run(&action));
     }
+    let seeded = args.seed.is_some();
     let launch_requests = args.launch_requests();
     if !launch_requests.is_empty() {
         tracing::info!(count = launch_requests.len(), "launch requests pending");
@@ -493,11 +537,12 @@ pub fn run() {
 
     let mut builder = tauri::Builder::default();
     // One Nail per profile: a second start (a mailto: click, an opened
-    // file) hands its targets to this one. Seeded runs (tests, demos) have
-    // their own temporary profile and stay independent.
+    // file, the Run key) hands its targets to this one, which comes to the
+    // front (also from the tray). Seeded runs (tests, demos) have their own
+    // temporary profile and stay independent.
     if args.seed.is_none() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            let requests = launch::from_args(argv.iter().skip(1));
+            let (requests, show) = shell::second_start(&argv);
             tracing::info!(
                 count = requests.len(),
                 "another start forwarded its targets"
@@ -505,9 +550,8 @@ pub fn run() {
             if let Some(service) = app.try_state::<Service>() {
                 service.push_launch_requests(requests);
             }
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+            if show {
+                shell::show_main_window(app);
             }
         }));
     }
@@ -515,7 +559,10 @@ pub fn run() {
     // `NotificationRequested` events from Rust (wired by WP55); the web
     // content gets no notification permission.
     builder = builder.plugin(tauri_plugin_notification::init());
-    builder
+    // M4b: the updater (signed manifests; driven from Rust only — the web
+    // content gets no updater permission).
+    builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    let builder = builder
         .register_asynchronous_uri_scheme_protocol(PROXY_PROTOCOL, |ctx, request, responder| {
             let proxy = ctx
                 .app_handle()
@@ -532,7 +579,8 @@ pub fn run() {
             // watcher can apply changes).
             let temp = args.demo_dir()?;
             let base = args.base_dir(temp.as_ref().map(tempfile::TempDir::path), portable::root());
-            let data_dir = args.service_options_in(base.as_deref())?.data_dir;
+            let mut options = args.service_options_in(base.as_deref())?;
+            let data_dir = options.data_dir.clone();
             // One Nail per data directory (M2c): a headless `nail mcp` or a
             // `nail serve` on the same data refuses to start while the app
             // runs, and the app while one of them runs.
@@ -543,16 +591,37 @@ pub fn run() {
                     std::process::exit(1);
                 }
             };
+            // M4b: the desktop host (installation facts, updater, Run key,
+            // dev endpoint, default apps) for the core's desktop requests.
+            let host = shell::desktop_host(app.handle(), &args, &data_dir);
+            options.desktop = Some(Arc::clone(&host) as Arc<dyn nail_api::DesktopHost>);
             let service =
-                tauri::async_runtime::block_on(async { open_service_in(&args, base.as_deref()) })?;
-            let mcp: McpSlot = std::sync::Arc::new(tokio::sync::Mutex::new(
-                tauri::async_runtime::block_on(start_mcp(&service, &data_dir)),
-            ));
+                tauri::async_runtime::block_on(async { open_service_with(&args, options) })?;
+            host.bind_service(service.clone());
+            let desktop = tauri::async_runtime::block_on(service.desktop_settings())
+                .unwrap_or_else(|err| {
+                    tracing::warn!(%err, "cannot read the desktop settings");
+                    nail_api::desktop::DesktopSettings::default()
+                });
+            if let Err(err) = nail_api::DesktopHost::apply_desktop_settings(&*host, &desktop) {
+                tracing::warn!(%err, "cannot apply the desktop settings");
+            }
+            host.updater().spawn_schedule(updater::Schedule::default());
+            let mcp: McpSlot = Arc::new(tokio::sync::Mutex::new(tauri::async_runtime::block_on(
+                start_mcp(&service, &data_dir),
+            )));
             tauri::async_runtime::spawn(restart_mcp_on_change(
                 service.clone(),
-                std::sync::Arc::clone(&mcp),
+                Arc::clone(&mcp),
                 data_dir.clone(),
             ));
+            let tray = match shell::build_tray(app.handle(), &service) {
+                Ok(tray) => Some(tray),
+                Err(err) => {
+                    tracing::warn!(%err, "cannot create the tray icon");
+                    None
+                }
+            };
             // The window is created here (not from the config) so that a
             // seeded run keeps its WebView2 profile in the temporary
             // directory too, apart from the real one (and a portable run
@@ -562,20 +631,28 @@ pub fn run() {
                 .app
                 .windows
                 .iter()
-                .find(|w| w.label == "main")
+                .find(|w| w.label == MAIN_WINDOW)
                 .cloned()
                 .ok_or("tauri.conf.json has no main window")?;
-            let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+            // Started with Windows and "start hidden": only the tray icon.
+            let hidden =
+                startup::starts_hidden(args.autostart, desktop.start_hidden, tray.is_some());
+            let mut window =
+                tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?.visible(!hidden);
             if let Some(base) = &base {
                 window = window.data_directory(base.join("webview"));
             }
             let window = window.build()?;
             if args.autostart
+                && !hidden
                 && let Err(err) = window.minimize()
             {
                 tracing::warn!(%err, "cannot start minimized");
             }
             service.push_launch_requests(launch_requests.clone());
+            // Simple MAPI ("Send to → Mail recipient"): the per-user pipe.
+            let mapi = shell::mapi_pipe(&args, std::env::var(nail_api::mapi::MAPI_PIPE_ENV).ok())
+                .and_then(|name| shell::start_mapi(app.handle(), &service, &name));
             let ui_dir = remote_ui_dir(
                 std::env::var_os("NAIL_UI_DIR").map(std::path::PathBuf::from),
                 app.path().resource_dir().ok(),
@@ -593,6 +670,12 @@ pub fn run() {
                 temp,
                 _remote_ui: remote_ui,
             });
+            app.manage(ShellState {
+                host,
+                quitting: AtomicBool::new(false),
+                tray,
+                mapi,
+            });
             tauri::async_runtime::spawn(show_notifications(app.handle().clone(), service.clone()));
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(forward_events(
@@ -603,9 +686,41 @@ pub fn run() {
             app.manage(service);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![nail_call])
-        .run(tauri::generate_context!())
-        .expect("failed to run the Tauri application");
+        .on_window_event(|window, event| {
+            if window.label() != MAIN_WINDOW {
+                return;
+            }
+            let Some(shell) = window.try_state::<ShellState>() else {
+                return;
+            };
+            match event {
+                // Close to tray: Nail keeps syncing; "Quit" in the tray ends it.
+                tauri::WindowEvent::CloseRequested { api, .. } if shell.hides_on_close() => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                tauri::WindowEvent::Focused(true) => shell.host.window_focused(),
+                _ => {}
+            }
+        });
+    // Seeded runs (demos, the desktop smoke test) also get the test control.
+    let builder = if seeded {
+        builder.invoke_handler(tauri::generate_handler![nail_call, nail_test_shell])
+    } else {
+        builder.invoke_handler(tauri::generate_handler![nail_call])
+    };
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("failed to build the Tauri application");
+    app.run(|app, event| {
+        // Quitting with a downloaded update installs it (no restart).
+        if let tauri::RunEvent::Exit = event
+            && let Some(shell) = app.try_state::<ShellState>()
+            && shell.host.updater().install_on_exit()
+        {
+            tracing::info!("installing the downloaded update");
+        }
+    });
 }
 
 #[cfg(test)]
@@ -800,10 +915,10 @@ mod tests {
             matches!(response, Response::McpSettings { .. }),
             "{response:?}"
         );
-        let slot: McpSlot = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+        let slot: McpSlot = Arc::new(tokio::sync::Mutex::new(None));
         let task = tokio::spawn(restart_mcp_on_change(
             service.clone(),
-            std::sync::Arc::clone(&slot),
+            Arc::clone(&slot),
             data.path().to_path_buf(),
         ));
         tokio::task::yield_now().await;
@@ -883,8 +998,8 @@ mod tests {
                 folder_ids: Vec::new(),
             });
         }
-        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let sink = std::sync::Arc::clone(&seen);
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
         let task = tokio::spawn(forward_events(service.clone(), events, move |event| {
             sink.lock().unwrap().push(event.clone());
         }));

@@ -5,6 +5,7 @@ import { createEnv, renderWithProviders } from "../../test/harness";
 import { IMPORT_DIALOG, pimStoreFor, SOURCES_DIALOG } from "../pim";
 import { remoteStore } from "../remote";
 import { LaunchRequests } from "./LaunchRequests";
+import { systemStoreFor } from "../system";
 
 afterEach(() => remoteStore.getState().clear());
 
@@ -61,6 +62,10 @@ describe("launch requests", () => {
     await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Quarterly report"));
     expect(env.store.getState().composer?.to).toContain("ada@example.org");
     expect(env.store.getState().windows).toContain("composer");
+    // The program is noted for the composer's notice (WP114 / WP115).
+    expect(systemStoreFor(env.store).getState().programDrafts).toEqual({
+      [saved.draft_id]: "EXCEL.EXE",
+    });
   });
 
   it("fills the plain composer when the core has no rich composer", async () => {

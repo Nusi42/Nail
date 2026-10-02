@@ -136,17 +136,64 @@ jobs:
           path: .nail-build/e2e/
           retention-days: 14
 
-  # Per-user NSIS installer + portable zip + CycloneDX SBOMs
-  # (scripts/build-installer.mjs), then install -> launch -> uninstall in a
-  # temporary directory (scripts/installer-smoke.ps1). Unsigned until M4.
-  installer:
-    name: Installer (Windows)
+  # The Simple MAPI DLL (plan M4b WP111, ADR 0088) for every architecture
+  # it ships for: the unit and DLL tests as x86 (32-bit Office) under WOW64
+  # (x64 runs in build-test), release builds for x64, x86 and ARM64, and
+  # every export checked on the built x64 and x86 DLLs by loading them like
+  # a program does (an ARM64 DLL cannot be loaded on the x64 runner).
+  mapi:
+    name: Simple MAPI DLL (x64, x86, ARM64)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc, i686-pc-windows-msvc, aarch64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Tests (x86 under WOW64)
+        run: cargo test -p nail-mapi --target i686-pc-windows-msvc
+
+      - name: Release builds
+        run: |
+          cargo build -p nail-mapi --release
+          cargo build -p nail-mapi --release --target i686-pc-windows-msvc
+          cargo build -p nail-mapi --release --lib --target aarch64-pc-windows-msvc
+
+      - name: Exports
+        shell: pwsh
+        run: |
+          ./target/release/nail-mapi-harness.exe exports --dll target/release/nail_mapi.dll
+          if ($LASTEXITCODE -ne 0) { throw 'x64 DLL: an export is missing' }
+          ./target/i686-pc-windows-msvc/release/nail-mapi-harness.exe exports --dll target/i686-pc-windows-msvc/release/nail_mapi.dll
+          if ($LASTEXITCODE -ne 0) { throw 'x86 DLL: an export is missing' }
+          if (-not (Test-Path target/aarch64-pc-windows-msvc/release/nail_mapi.dll)) { throw 'no ARM64 DLL' }
+
+  # The installers (plan M4b WP112, ADR 0089): per-user NSIS, the
+  # per-machine MSI, the offline-WebView2 NSIS variant, portable zip, SBOMs,
+  # update signatures. Then install -> launch -> update -> uninstall for the
+  # NSIS installer and install -> launch -> upgrade -> uninstall for the MSI,
+  # against a loopback update server (scripts/update-server.mjs). These CI
+  # builds carry the loopback update URL and a throwaway update key, so they
+  # are test builds; releases come from release.yml. Signed only when the
+  # NAIL_SIGN_PFX_BASE64 secret exists.
+  installer:
+    name: Installers + install/update smoke (Windows x64)
+    runs-on: windows-latest
+    env:
+      NAIL_SMOKE_UPDATE_BASE: http://127.0.0.1:47811
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # x86 for the 32-bit NailMapi.dll (32-bit Office).
+          targets: x86_64-pc-windows-msvc, i686-pc-windows-msvc
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -162,21 +209,149 @@ jobs:
       - name: npm ci
         run: npm ci
 
-      # Builds the UI, the static-CRT nail CLI and Nail.exe, then bundles.
-      # The Tauri bundler downloads NSIS and the WebView2 bootstrapper.
-      - name: Build installer
-        run: node scripts/build-installer.mjs
-
-      - name: Installer smoke test
+      - name: Code-signing certificate (only when configured)
         shell: pwsh
-        run: ./scripts/installer-smoke.ps1
+        run: ./scripts/import-signing-cert.ps1
+        env:
+          NAIL_SIGN_PFX_BASE64: ${{ secrets.NAIL_SIGN_PFX_BASE64 }}
+          NAIL_SIGN_PFX_PASSWORD: ${{ secrets.NAIL_SIGN_PFX_PASSWORD }}
 
-      - name: Upload installer
+      # A key made for this run only: the smoke test checks signed updates
+      # without any secret. The release key never appears in this workflow.
+      - name: Throwaway update key, versions
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:NAIL_BUILD_DIR 'smoke-key'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $password = [Guid]::NewGuid().ToString('N')
+          Write-Host "::add-mask::$password"
+          npx tauri signer generate --ci -p $password -w "$dir\smoke.key"
+          if ($LASTEXITCODE -ne 0) { throw 'tauri signer generate failed' }
+          "TAURI_SIGNING_PRIVATE_KEY=$dir\smoke.key" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$password" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "NAIL_UPDATER_PUBKEY_FILE=$dir\smoke.key.pub" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $version = node scripts/release-version.mjs
+          $next = node scripts/release-version.mjs --next
+          "NAIL_VERSION=$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "NAIL_NEXT_VERSION=$next" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      # Builds the UI, the static-CRT CLI and MAPI DLLs, Nail.exe, then
+      # bundles. The bundler downloads NSIS, WiX 3.14 and the WebView2
+      # bootstrapper / offline runtime.
+      - name: Build installers
+        run: node scripts/build-installer.mjs --offline-webview --update-base ${{ env.NAIL_SMOKE_UPDATE_BASE }} --insecure-loopback-updates --out .nail-build/dist
+
+      - name: Build the next version (the update)
+        run: node scripts/build-installer.mjs --skip-ui --no-portable --version ${{ env.NAIL_NEXT_VERSION }} --update-base ${{ env.NAIL_SMOKE_UPDATE_BASE }} --insecure-loopback-updates --out .nail-build/dist-next
+
+      - name: Authenticode signatures
+        if: env.NAIL_SIGN_THUMBPRINT != ''
+        shell: pwsh
+        run: ./scripts/verify-signatures.ps1 -Folder .nail-build/dist
+
+      - name: Loopback update server
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:NAIL_BUILD_DIR 'update-server'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          node scripts/update-manifest.mjs --version $env:NAIL_NEXT_VERSION --channel stable `
+            --artifacts .nail-build/dist-next --download-base $env:NAIL_SMOKE_UPDATE_BASE --out $root
+          if ($LASTEXITCODE -ne 0) { throw 'update manifest failed' }
+          Copy-Item .nail-build/dist-next/*-setup.exe, .nail-build/dist-next/*.msi -Destination $root
+          $port = Join-Path $env:NAIL_BUILD_DIR 'update-server.port'
+          Start-Process node -ArgumentList @('scripts/update-server.mjs', '--root', $root, '--port', '47811', '--port-file', $port, '--log', (Join-Path $env:NAIL_BUILD_DIR 'update-server.log'))
+          $deadline = (Get-Date).AddSeconds(30)
+          while (-not (Test-Path $port) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
+          if (-not (Test-Path $port)) { throw 'update server did not start' }
+          Get-Content (Join-Path $root 'stable/latest.json')
+
+      - name: NSIS smoke (install, launch, update, uninstall)
+        shell: pwsh
+        run: ./scripts/installer-smoke.ps1 -Installer ".nail-build/dist/Nail_${env:NAIL_VERSION}_x64-setup.exe" -UpdateEndpoint "$env:NAIL_SMOKE_UPDATE_BASE/stable/latest.json" -UpdatePubkey $env:NAIL_UPDATER_PUBKEY_FILE
+
+      - name: MSI smoke (silent install with properties, launch, upgrade, uninstall)
+        shell: pwsh
+        run: ./scripts/msi-smoke.ps1 -Msi ".nail-build/dist/Nail_${env:NAIL_VERSION}_x64_en-US.msi" -UpgradeMsi ".nail-build/dist-next/Nail_${env:NAIL_NEXT_VERSION}_x64_en-US.msi"
+        env:
+          NAIL_MSI_SMOKE_LOGS: ${{ github.workspace }}/.nail-build
+
+      - name: winget manifests
+        run: node scripts/winget-manifest.mjs --version ${{ env.NAIL_VERSION }} --artifacts .nail-build/dist --installer-url-template "https://github.com/${{ github.repository }}/releases/download/v{{version}}/{{file}}" --out .nail-build/winget
+
+      - name: Upload installers
         uses: actions/upload-artifact@v7
         with:
-          name: nail-windows-x64
+          name: nail-windows-x64-ci
           path: |
-            .nail-build/dist/*-setup.exe
+            .nail-build/dist/*.exe
+            .nail-build/dist/*.msi
+            .nail-build/dist/*.sig
+            .nail-build/dist/*-portable.zip
+            .nail-build/dist/*.cdx.json
+            .nail-build/dist/*-SHA256SUMS.txt
+            .nail-build/winget/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload smoke logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-smoke-logs
+          path: .nail-build/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ARM64 installers, cross-built on x64 (ring needs clang, preinstalled on
+  # windows-latest). Not run here (no ARM64 runner); the x64 smoke covers
+  # the installer logic, which is the same.
+  installer-arm64:
+    name: Installers (Windows ARM64, cross-built)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc, i686-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> .nail-build/installer-target"
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Code-signing certificate (only when configured)
+        shell: pwsh
+        run: ./scripts/import-signing-cert.ps1
+        env:
+          NAIL_SIGN_PFX_BASE64: ${{ secrets.NAIL_SIGN_PFX_BASE64 }}
+          NAIL_SIGN_PFX_PASSWORD: ${{ secrets.NAIL_SIGN_PFX_PASSWORD }}
+
+      - name: Build installers
+        run: node scripts/build-installer.mjs --arch arm64 --out .nail-build/dist
+
+      - name: Authenticode signatures
+        if: env.NAIL_SIGN_THUMBPRINT != ''
+        shell: pwsh
+        run: ./scripts/verify-signatures.ps1 -Folder .nail-build/dist
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: nail-windows-arm64-ci
+          path: |
+            .nail-build/dist/*.exe
+            .nail-build/dist/*.msi
             .nail-build/dist/*-portable.zip
             .nail-build/dist/*.cdx.json
             .nail-build/dist/*-SHA256SUMS.txt

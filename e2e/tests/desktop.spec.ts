@@ -1,5 +1,5 @@
 import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
-import { startDesktop, type DesktopApp } from "../support/desktop";
+import { skipFirstRun, startDesktop, type DesktopApp } from "../support/desktop";
 import { freePort } from "../support/nail";
 
 /**
@@ -31,6 +31,8 @@ test.beforeAll(async () => {
     .poll(() => browser.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
     .toBeGreaterThan(0);
   page = browser.contexts().flatMap((c) => c.pages())[0]!;
+  // M4b: a fresh profile gets the first-run screen once.
+  await skipFirstRun(page);
 });
 
 test.afterAll(async () => {
@@ -54,6 +56,19 @@ test("the desktop app shows the demo mail through Tauri IPC", async () => {
   await search.press("Enter");
   await expect(rows.filter({ hasText: "Project Nightingale kickoff" }).first()).toBeVisible();
   await expect(rows.filter({ hasText: "Welcome to Nail" })).toHaveCount(0);
+});
+
+test("Shift+F10 opens the context menu of the selected message", async () => {
+  // The desktop's keyboard path (WebView2 could take Shift+F10 for its own
+  // menu): Nail's menu for the focused row, closed with Escape.
+  const row = page.locator('[data-part="message-list.row"]').first();
+  await row.click();
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Reply", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
 });
 
 test("the rich composer renders Markdown in the core and the MCP server runs", async () => {
@@ -96,6 +111,7 @@ test("a mailto: link the app is started with opens the composer", async () => {
       .poll(() => cdp.contexts().flatMap((c) => c.pages()).length, { timeout: 60_000 })
       .toBeGreaterThan(0);
     const window = cdp.contexts().flatMap((c) => c.pages())[0]!;
+    // The composer opened by the link comes first (no first-run screen over it).
     const dialog = window.getByRole("dialog", { name: "New message" });
     await expect(dialog).toBeVisible({ timeout: 60_000 });
     await expect(dialog.getByRole("textbox", { name: "Subject" })).toHaveValue("Hello from a link");

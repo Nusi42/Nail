@@ -17945,6 +17945,693 @@
         "color": "var(--nail-color-warning)"
       },
       "source": null
+    },
+    {
+      "selector": "update-settings",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-settings.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-settings.installation",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-fg-muted)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-settings.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)",
+        "background-color": "var(--nail-color-bg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status",
+      "states": [],
+      "conditions": [
+        {
+          "key": "state",
+          "value": "available"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status",
+      "states": [],
+      "conditions": [
+        {
+          "key": "state",
+          "value": "ready-to-install"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status",
+      "states": [],
+      "conditions": [
+        {
+          "key": "state",
+          "value": "failed"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "border-color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status.text",
+      "states": [],
+      "conditions": [
+        {
+          "key": "tone",
+          "value": "policy"
+        }
+      ],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status.progress.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status.checked",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-xs)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status.buttons",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "update-status.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "release-notes",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "max-height": "320px",
+        "overflow-y": "auto",
+        "font-size": "var(--nail-font-size-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "release-notes.heading",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "release-notes.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "release-notes.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "padding-left": "var(--nail-space-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-xl)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.tagline",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.facts",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xxs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.fact",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.fact.label",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.fact.value",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-weight": "var(--nail-font-weight-medium)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.section.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.updates",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "about-nail.unavailable",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "desktop-settings",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "desktop-settings.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "desktop-settings.endpoint",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-family": "var(--nail-font-mono)",
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "desktop-settings.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-md)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-lg)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.intro",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.list",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.item",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.item.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.item.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "default-apps.item",
+          "states": [],
+          "conditions": [
+            {
+              "key": "state",
+              "value": "default"
+            }
+          ]
+        }
+      ],
+      "declarations": {
+        "color": "var(--nail-color-success)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.item.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [
+        {
+          "selector": "default-apps.item",
+          "states": [],
+          "conditions": [
+            {
+              "key": "state",
+              "value": "unregistered"
+            }
+          ]
+        }
+      ],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.buttons",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.opened",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.unregistered",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-warning)"
+      },
+      "source": null
+    },
+    {
+      "selector": "default-apps.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)",
+        "padding": "var(--nail-space-lg)",
+        "overflow-y": "auto"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-xl)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.intro",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.steps",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.step",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--nail-space-xs)",
+        "padding": "var(--nail-space-md)",
+        "border": "var(--nail-border-thin)",
+        "border-radius": "var(--nail-radius-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.step.title",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0",
+        "font-size": "var(--nail-font-size-md)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.step.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.step.state",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.later",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "font-size": "var(--nail-font-size-sm)",
+        "color": "var(--nail-color-fg-muted)"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.buttons",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)",
+        "justify-content": "flex-end"
+      },
+      "source": null
+    },
+    {
+      "selector": "first-run.error",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "color": "var(--nail-color-danger)"
+      },
+      "source": null
+    },
+    {
+      "selector": "program-draft",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "gap": "var(--nail-space-sm)",
+        "padding": "var(--nail-space-sm) var(--nail-space-md)",
+        "border-left": "3px solid var(--nail-color-accent)",
+        "border-radius": "var(--nail-radius-sm)",
+        "background-color": "var(--nail-color-bg-subtle)"
+      },
+      "source": null
+    },
+    {
+      "selector": "program-draft.text",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "margin": "0"
+      },
+      "source": null
     }
   ],
   "icons": {

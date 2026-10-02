@@ -1105,6 +1105,33 @@
               "source": null
             },
             {
+              "type": "widget",
+              "id": "update-settings",
+              "label": "@system.settings.tab.updates",
+              "kind": "update-settings",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "desktop-settings",
+              "label": "@system.settings.tab.desktop",
+              "kind": "desktop-settings",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "default-apps",
+              "label": "@system.settings.tab.default-apps",
+              "kind": "default-apps",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
               "type": "stack",
               "id": "customize",
               "label": "@settings.tab.customize",
@@ -1691,6 +1718,30 @@
       "alias_of": null,
       "args": []
     },
+    "system.about": {
+      "label": "@system.action.about",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "system.check-updates": {
+      "label": "@system.action.check-updates",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "system.first-run": {
+      "label": "@system.action.first-run",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "system.default-apps": {
+      "label": "@system.action.default-apps",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
     "agents.open-center": {
       "label": null,
       "icon": null,
@@ -1981,6 +2032,12 @@
       "context": "global",
       "key": "ctrl+shift+i",
       "action": "inspector.toggle",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "f1",
+      "action": "system.about",
       "args": []
     },
     {

@@ -51,6 +51,9 @@ const FEATURE_DIALOGS = [
   "gmail-apply-labels",
   // M4a: the confirmation center of AI agents and plug-ins.
   "confirmation-center",
+  // M4b: About Nail (says "desktop app only" here; the desktop smoke test
+  // shows its facts).
+  "about-nail",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -302,6 +305,11 @@ for (const mode of MODES) {
       await page.keyboard.press("a");
       await sweep.scanWindow("confirmation-center");
       await sweep.close("confirmation-center");
+
+      // M4b: About Nail (F1).
+      await page.keyboard.press("F1");
+      await sweep.scanWindow("about-nail");
+      await sweep.close("about-nail");
 
       // Every settings tab, nested ones included.
       await toolbar.getByRole("button", { name: "Settings" }).click();

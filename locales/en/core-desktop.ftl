@@ -71,3 +71,12 @@ mapi-result-not-supported = Nail does not support this request.
 mapi-result-attachment-too-large = An attachment is too large.
 
 ## Desktop shell (WP113: tray menu, dialogs)
+
+# The tray icon's tooltip (the product name).
+tray-tooltip = Nail
+tray-open = Open Nail
+tray-new-message = New message
+tray-check-mail = Check mail
+tray-quit = Quit Nail
+desktop-run-key-failed = Nail could not change “Start with Windows”.
+desktop-open-settings-failed = Nail could not open Settings → Default apps.
