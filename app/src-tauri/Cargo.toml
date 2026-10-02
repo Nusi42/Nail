@@ -35,14 +35,21 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tempfile.workspace = true
+# M4b (ADR 0087; WP113): the updater, the `nail plugin dev` endpoint
+# (loopback WebSocket, token), the Simple MAPI pipe protocol (nail_api::mapi).
+tauri-plugin-updater.workspace = true
+axum.workspace = true
+futures-util.workspace = true
 
 # Installer helper (setup_helper.rs): per-user PATH, Credential Manager.
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = ["Win32_Security_Credentials", "Win32_UI_WindowsAndMessaging"] }
-windows-registry = "0.6.1"
+windows-registry.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# M4b: dev-endpoint tests connect like `nail plugin dev`.
+tokio-tungstenite.workspace = true
 
 [lints]
 workspace = true

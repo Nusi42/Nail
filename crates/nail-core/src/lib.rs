@@ -29,6 +29,7 @@ mod crypto;
 mod customize;
 #[cfg(feature = "demo")]
 pub mod demo;
+mod desktop;
 mod engine;
 mod error;
 mod exchange;

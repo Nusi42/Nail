@@ -31,6 +31,7 @@ members = [
     "crates/nail-proto-graph",
     "crates/nail-proto-ews",
     "crates/nail-exchange",
+    "crates/nail-mapi",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -70,6 +71,7 @@ default-members = [
     "crates/nail-proto-graph",
     "crates/nail-proto-ews",
     "crates/nail-exchange",
+    "crates/nail-mapi",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -115,6 +117,7 @@ nail-proto-gmail = { path = "crates/nail-proto-gmail" }
 nail-proto-graph = { path = "crates/nail-proto-graph" }
 nail-proto-ews = { path = "crates/nail-proto-ews" }
 nail-exchange = { path = "crates/nail-exchange" }
+nail-mapi = { path = "crates/nail-mapi" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -302,6 +305,20 @@ iana-time-zone = "0.1.65"
 # GPL / LGPL / AGPL, no OpenSSL / aws-lc).
 schemars = "1.2.2"
 
+# M4b (ADR 0087). Windows integration and distribution. Licences: MIT /
+# Apache-2.0; no OpenSSL / aws-lc (the updater's TLS is rustls + ring).
+# Simple MAPI DLL (nail-mapi, WP111): raw Win32 bindings (named pipes,
+# process start, the MAPI structures); MIT OR Apache-2.0, already in the lock.
+windows-sys = "0.61.2"
+# Registry (installation facts, Run key, default apps; the desktop shell).
+windows-registry = "0.6.1"
+# In-app updater (desktop shell, WP113): signed manifests (minisign),
+# stable / beta channels. Default features off: `rustls-tls` only (reqwest
+# `rustls-no-provider`; the plug-in installs ring as the process default
+# when none is set), no `zip` (Windows updates are the NSIS / MSI packages
+# themselves), no system proxy probing.
+tauri-plugin-updater = { version = "2.13.1", default-features = false, features = ["rustls-tls"] }
+
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"
 hex = "0.4.3"
@@ -323,7 +340,8 @@ dirs = "7.0.0"
 open = "5.4.4"
 
 # Desktop shell
-tauri = { version = "2.12", features = [] }
+# M4b: `tray-icon` (tray menu, close to tray), `image-png` (tray icons).
+tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 tauri-build = { version = "2.7", features = [] }
 # A second start (a mailto: click while Nail runs) hands its arguments to
 # the running app (MIT / Apache-2.0; ADR 0041).

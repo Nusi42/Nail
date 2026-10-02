@@ -11,7 +11,8 @@
 //! [`scheduling`] and [`gmail`] those of M3b (invitations, free/busy,
 //! Gmail labels and categories; WP84, ADR 0065), [`exchange`] those of M3c
 //! (Focused Inbox, automatic replies; WP94, ADR 0072), [`agents`] those of
-//! M4a (the confirmation center; WP104, ADR 0079). The
+//! M4a (the confirmation center; WP104, ADR 0079), [`system`] those of M4b
+//! (updates, desktop settings, default apps; WP114, ADR 0087). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -30,6 +31,7 @@ mod scheduling;
 mod security;
 mod sieve;
 mod sync;
+mod system;
 mod triage;
 
 /// Type of a widget option.
@@ -102,6 +104,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     gmail::WIDGETS,
     exchange::WIDGETS,
     agents::WIDGETS,
+    system::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

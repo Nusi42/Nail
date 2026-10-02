@@ -36,6 +36,7 @@ import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
 import type { RuleRun } from "./RuleRun";
 import type { SessionEndReason } from "./SessionEndReason";
+import type { UpdateStatus } from "./UpdateStatus";
 import type { VaultStatus } from "./VaultStatus";
 
 /**
@@ -331,4 +332,8 @@ edit: ComposerEdit, } | { "type": "PluginActivityChanged",
 /**
  * The plug-in.
  */
-plugin_id: PluginId, };
+plugin_id: PluginId, } | { "type": "UpdateStatusChanged", 
+/**
+ * Settings and state.
+ */
+status: UpdateStatus, } | { "type": "DesktopSettingsChanged" } | { "type": "DefaultAppsChanged" };

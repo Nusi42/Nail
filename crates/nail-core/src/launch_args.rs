@@ -2,7 +2,7 @@
 //! handler of a URL scheme or a file type (plan M2b WP44; ADRs 0040, 0041).
 //!
 //! The installer registers Nail for `mailto:`, `webcal:` / `webcals:` and
-//! the `.eml`, `.ics` and `.vcf` file types (`installer/hooks.nsh`); Windows
+//! the `.eml`, `.ics` and `.vcf` file types (`windows/nsis/hooks.nsh`); Windows
 //! then starts `Nail.exe -- "<url or path>"`. [`parse`] turns such an
 //! argument into a [`LaunchRequest`] (the contract type in
 //! [`nail_api::launch`]); the shell hands them to the core

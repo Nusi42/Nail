@@ -37,6 +37,10 @@ use crate::context::UiContext;
 use crate::customize::{
     ConfigBackup, ConfigFile, ConfigIssue, ConfigMergePreview, LayoutPatch, MergeChoice, MergeTake,
 };
+use crate::desktop::{
+    DefaultAppsStatus, DesktopSettings, FirstRunState, InstallationInfo, UpdateSettings,
+    UpdateStatus,
+};
 use crate::domain::{Account, Address, Folder, MessageBody, MessageSummary, ThreadSummary};
 use crate::error::{ApiError, ErrorCode};
 use crate::exchange::rules::ExchangeRulesStatus;
@@ -2382,6 +2386,62 @@ pub enum Request {
         /// The veto ([`Response::SendVetoed`]).
         veto_id: SendVetoId,
     },
+
+    // --- Desktop: installation, updates, tray, default apps, first run
+    // (M4b WP110, ADR 0087; desktop only: `forbidden` remotely,
+    // `unsupported` without the desktop shell unless noted) ---
+    /// Facts about this installation (version, installer, scope,
+    /// architecture, update policy, MAPI component). Answered with
+    /// [`Response::Installation`].
+    GetInstallation,
+    /// The updater's settings and state. Answered with
+    /// [`Response::UpdateStatus`].
+    GetUpdateStatus,
+    /// Store the update settings. Answered with [`Response::UpdateStatus`],
+    /// followed by [`Event::UpdateStatusChanged`]; `forbidden`
+    /// (`update-channel-locked`) for another channel than the one policy
+    /// forces.
+    SetUpdateSettings {
+        /// The new settings.
+        settings: UpdateSettings,
+    },
+    /// Check for an update now. Answered with [`Response::UpdateStatus`]
+    /// (state `checking`); progress arrives as
+    /// [`Event::UpdateStatusChanged`]. `forbidden` when updates are
+    /// disabled, `conflict` while a check, download or install runs.
+    CheckForUpdates,
+    /// Download the available update (when `auto_download` is off).
+    /// Answered with [`Response::UpdateStatus`]; `conflict` without an
+    /// available update, `forbidden` when updates are disabled.
+    DownloadUpdate,
+    /// "Restart to install": quit, run the downloaded update's installer
+    /// and restart. Answered with [`Response::Done`] just before Nail
+    /// quits; `conflict` unless an update is ready, `forbidden` when
+    /// updates are disabled.
+    InstallUpdate,
+    /// The tray / startup / dev-endpoint settings. Answered with
+    /// [`Response::DesktopSettings`].
+    GetDesktopSettings,
+    /// Store and apply them (Run key, dev endpoint). Answered with
+    /// [`Response::DesktopSettings`], followed by
+    /// [`Event::DesktopSettingsChanged`].
+    SetDesktopSettings {
+        /// The new settings.
+        settings: DesktopSettings,
+    },
+    /// Default-app registration and status. Answered with
+    /// [`Response::DefaultApps`].
+    GetDefaultApps,
+    /// Open Settings → Default apps on Nail's page. Answered with
+    /// [`Response::Done`].
+    OpenDefaultAppsSettings,
+    /// Whether the first-run screen was completed. Served from the store
+    /// in every mode (also `nail serve`). Answered with
+    /// [`Response::FirstRun`].
+    GetFirstRun,
+    /// Mark the first-run screen completed (finished or skipped). Answered
+    /// with [`Response::FirstRun`].
+    CompleteFirstRun,
 }
 
 fn default_true() -> bool {
@@ -3321,6 +3381,37 @@ pub enum Response {
         /// The vetoes.
         vetoes: Vec<PluginSendVeto>,
     },
+    /// Answer to [`Request::GetInstallation`].
+    Installation {
+        /// The facts.
+        info: Box<InstallationInfo>,
+    },
+    /// Answer to [`Request::GetUpdateStatus`], [`Request::SetUpdateSettings`],
+    /// [`Request::CheckForUpdates`] and [`Request::DownloadUpdate`].
+    UpdateStatus {
+        /// Settings and state.
+        status: Box<UpdateStatus>,
+    },
+    /// Answer to [`Request::GetDesktopSettings`] and
+    /// [`Request::SetDesktopSettings`].
+    DesktopSettings {
+        /// The settings (`start_with_windows` as the Run key says).
+        settings: DesktopSettings,
+        /// The running `nail plugin dev` endpoint, when on.
+        dev_endpoint_url: Option<String>,
+    },
+    /// Answer to [`Request::GetDefaultApps`].
+    DefaultApps {
+        /// Registration and status.
+        status: Box<DefaultAppsStatus>,
+        /// The Settings page [`Request::OpenDefaultAppsSettings`] opens.
+        settings_uri: String,
+    },
+    /// Answer to [`Request::GetFirstRun`] and [`Request::CompleteFirstRun`].
+    FirstRun {
+        /// The state.
+        state: FirstRunState,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -3730,6 +3821,17 @@ pub enum Event {
         /// The plug-in.
         plugin_id: PluginId,
     },
+    /// The updater's settings, state or progress changed (M4b).
+    UpdateStatusChanged {
+        /// Settings and state.
+        status: Box<UpdateStatus>,
+    },
+    /// The desktop settings changed (or the Run key / dev endpoint did);
+    /// clients refetch [`Request::GetDesktopSettings`] (M4b).
+    DesktopSettingsChanged,
+    /// Default-app registration may have changed; clients refetch
+    /// [`Request::GetDefaultApps`] (M4b).
+    DefaultAppsChanged,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).

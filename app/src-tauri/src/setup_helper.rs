@@ -1,5 +1,5 @@
 //! Work the NSIS installer delegates to `Nail.exe` (plan M2b WP44,
-//! `installer/hooks.nsh`), because NSIS cannot do it safely:
+//! `windows/nsis/hooks.nsh`), because NSIS cannot do it safely:
 //!
 //! * `--setup-path-add <DIR>` / `--setup-path-remove <DIR>`: add or remove
 //!   one entry of the per-user `PATH` (`HKCU\Environment\Path`). NSIS

@@ -2,7 +2,7 @@
 
 The per-user NSIS installer of the desktop app (plan M2b WP44, ADR 0040),
 built by the Tauri bundler from the `bundle` section of
-`../tauri.conf.json`. Build it with `node scripts/build-installer.mjs`
+`../../tauri.conf.json`. Build it with `node scripts/build-installer.mjs`
 (also makes the portable zip and the SBOMs), test it with
 `scripts/installer-smoke.ps1`.
 

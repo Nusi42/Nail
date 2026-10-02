@@ -67,6 +67,14 @@
 //!   and hook permissions, mail hooks ([`plugins::hooks`]), composer /
 //!   attachment / link / MCP extensions ([`plugins::extensions`]) and
 //!   background jobs ([`plugins::jobs`]).
+//! * M4b (ADR 0087): [`desktop`] — Windows integration of the desktop app:
+//!   installation facts (installer, scope, architecture, update policy),
+//!   updater settings and state (channels, check, download, restart to
+//!   install, policy-disabled), tray / startup settings, the `nail plugin
+//!   dev` endpoint, default-app status, first run, and the
+//!   [`desktop::DesktopHost`] trait the shell implements; [`mapi`] — Simple
+//!   MAPI requests from other programs (recipients, subject, body, files,
+//!   UI flag), their result codes and the DLL ↔ app pipe frames.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -88,6 +96,7 @@ pub mod compose;
 pub mod config;
 pub mod context;
 pub mod customize;
+pub mod desktop;
 pub mod domain;
 pub mod engine;
 pub mod error;
@@ -96,6 +105,7 @@ pub mod gmail;
 pub mod ids;
 pub mod launch;
 pub mod localized;
+pub mod mapi;
 pub mod mcp;
 pub mod menus;
 pub mod ops;
@@ -137,6 +147,10 @@ pub use config::theme::{
 };
 pub use context::UiContext;
 pub use customize::{ConfigFile, ConfigIssue, LayoutNodeRef, LayoutPatch};
+pub use desktop::{
+    DefaultAppsStatus, DesktopHost, DesktopSettings, FirstRunState, InstallationInfo,
+    UpdateSettings, UpdateState, UpdateStatus,
+};
 pub use domain::{
     Account, AccountKind, Address, AttachmentInfo, Flags, Folder, FolderRole, MessageBody,
     MessageHeaders, MessageLocation, MessageSummary, ThreadSummary,
@@ -156,6 +170,7 @@ pub use ids::{
 };
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
+pub use mapi::{MapiMessage, MapiResult};
 pub use mcp::{McpClient, McpGrant, McpRateLimits, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
@@ -316,6 +331,12 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     plugins::jobs::CronIssue::export_all(&cfg)?;
     plugins::ComposerEdit::export_all(&cfg)?;
     plugins::PluginPreview::export_all(&cfg)?;
+    // M4b: desktop types the UI names but that are reachable only through
+    // optional fields or tagged states, or not at all.
+    desktop::UpdateFailure::export_all(&cfg)?;
+    desktop::UpdateDisabledReason::export_all(&cfg)?;
+    desktop::UiEndpointFile::export_all(&cfg)?;
+    MapiResult::export_all(&cfg)?;
 
     write_index(out_dir)
 }

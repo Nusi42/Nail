@@ -53,6 +53,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/core-dav.ftl"),
     ),
     (
+        "core-desktop.ftl",
+        include_str!("../../../locales/en/core-desktop.ftl"),
+    ),
+    (
         "core-ews.ftl",
         include_str!("../../../locales/en/core-ews.ftl"),
     ),
@@ -126,6 +130,7 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ),
     ("sieve.ftl", include_str!("../../../locales/en/sieve.ftl")),
     ("sync.ftl", include_str!("../../../locales/en/sync.ftl")),
+    ("system.ftl", include_str!("../../../locales/en/system.ftl")),
     ("triage.ftl", include_str!("../../../locales/en/triage.ftl")),
 ];
 
@@ -156,6 +161,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "core-dav.ftl",
         include_str!("../../../locales/de/core-dav.ftl"),
+    ),
+    (
+        "core-desktop.ftl",
+        include_str!("../../../locales/de/core-desktop.ftl"),
     ),
     (
         "core-ews.ftl",
@@ -231,6 +240,7 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ),
     ("sieve.ftl", include_str!("../../../locales/de/sieve.ftl")),
     ("sync.ftl", include_str!("../../../locales/de/sync.ftl")),
+    ("system.ftl", include_str!("../../../locales/de/system.ftl")),
     ("triage.ftl", include_str!("../../../locales/de/triage.ftl")),
 ];
 

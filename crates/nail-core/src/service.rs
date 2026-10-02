@@ -161,6 +161,10 @@ pub struct ServiceOptions {
     /// HTTP and Windows sign-in; the defaults use the real network and
     /// SSPI. Seeded demos and tests point them at mock servers.
     pub exchange: crate::exchange::ExchangeHooks,
+    /// The desktop shell's side of the M4b requests (installation facts,
+    /// updater, Run key, dev endpoint, default apps; ADR 0087). `None`
+    /// (`nail serve`, tests): those requests answer `unsupported`.
+    pub desktop: Option<Arc<dyn nail_api::DesktopHost>>,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -182,6 +186,7 @@ impl std::fmt::Debug for ServiceOptions {
             .field("plugin_limits", &self.plugin_limits)
             .field("loopback_feeds", &self.loopback_feeds)
             .field("exchange", &self.exchange)
+            .field("desktop", &self.desktop.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -208,6 +213,7 @@ impl ServiceOptions {
             plugin_limits: nail_plugins::HostLimits::default(),
             loopback_feeds: false,
             exchange: crate::exchange::ExchangeHooks::default(),
+            desktop: None,
         }
     }
 }
@@ -279,6 +285,8 @@ pub(crate) struct Inner {
     pub(crate) exchange: crate::exchange::ExchangeCtl,
     /// Confirmations broker, before-send vetoes and headers (M4a).
     pub(crate) agents: crate::agents::AgentsCtl,
+    /// The desktop shell's side of the M4b requests (ADR 0087).
+    pub(crate) desktop: Option<Arc<dyn nail_api::DesktopHost>>,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -393,7 +401,7 @@ impl Service {
             Arc::clone(&secrets),
             http,
         ));
-        Ok(Self {
+        let service = Self {
             inner: Arc::new(Inner {
                 store,
                 blobs,
@@ -438,11 +446,15 @@ impl Service {
                 pim: crate::pim::PimCtl::new(options.loopback_feeds),
                 exchange: crate::exchange::ExchangeCtl::new(options.exchange.clone()),
                 agents: crate::agents::AgentsCtl::default(),
+                desktop: options.desktop.clone(),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
             }),
-        })
+        };
+        // M4b: the desktop shell reports updater / Run-key changes.
+        crate::desktop::attach(&service);
+        Ok(service)
     }
 
     /// Starts the background work: an engine per enabled account, the
@@ -1239,6 +1251,20 @@ impl Service {
             | Request::RenderAttachmentPreview { .. }
             | Request::RunPluginAction { .. }
             | Request::OverrideSendVeto { .. }) => crate::agents::handle(self, request).await?,
+            // M4b desktop requests (ADR 0087): store-backed settings plus
+            // the shell's DesktopHost.
+            request @ (Request::GetInstallation
+            | Request::GetUpdateStatus
+            | Request::SetUpdateSettings { .. }
+            | Request::CheckForUpdates
+            | Request::DownloadUpdate
+            | Request::InstallUpdate
+            | Request::GetDesktopSettings
+            | Request::SetDesktopSettings { .. }
+            | Request::GetDefaultApps
+            | Request::OpenDefaultAppsSettings
+            | Request::GetFirstRun
+            | Request::CompleteFirstRun) => crate::desktop::handle(self, request).await?,
         })
     }
 }

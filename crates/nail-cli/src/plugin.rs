@@ -5,7 +5,9 @@
 //!
 //! It talks to the running `nail serve` over its local WebSocket
 //! (`/api/ws` on 127.0.0.1; the URL comes from `--url` or from
-//! `<data-dir>/ui-endpoint.json`, which `nail serve` writes). The plug-in
+//! `<data-dir>/ui-endpoint.json`, which `nail serve` writes — and, M4b, the
+//! desktop app when its "nail plugin dev" endpoint is on, with a token the
+//! command sends as `Authorization: Bearer`; ADR 0087). The plug-in
 //! is loaded with `Request::LoadDevPlugin`, every permission its manifest
 //! declares granted for all accounts; then the command tails
 //! `Event::PluginLogLine` for that plug-in until Ctrl+C. The plug-in stays
@@ -27,7 +29,8 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::messages::{self, Localized};
 
 /// The file `nail serve` writes into its data directory with its URL.
-pub const UI_ENDPOINT_FILE: &str = "ui-endpoint.json";
+pub use nail_api::desktop::UI_ENDPOINT_FILE;
+use nail_api::desktop::UiEndpointFile;
 
 /// `nail plugin …`
 #[derive(Debug, Subcommand)]
@@ -68,8 +71,12 @@ impl UiEndpoint {
     /// Writes the file.
     pub fn write(data_dir: &Path, url: &str) -> std::io::Result<Self> {
         let path = data_dir.join(UI_ENDPOINT_FILE);
-        let body = serde_json::json!({ "url": url, "pid": std::process::id() });
-        std::fs::write(&path, body.to_string())?;
+        let body = UiEndpointFile {
+            url: url.to_owned(),
+            pid: std::process::id(),
+            token: None,
+        };
+        std::fs::write(&path, serde_json::to_string(&body)?)?;
         Ok(Self(path))
     }
 }
@@ -80,10 +87,11 @@ impl Drop for UiEndpoint {
     }
 }
 
-/// The URL to connect to.
-fn resolve_url(args: &PluginDevArgs) -> anyhow::Result<String> {
+/// Where to connect: the URL and, for the desktop app's endpoint, its
+/// token.
+fn resolve_url(args: &PluginDevArgs) -> anyhow::Result<(String, Option<String>)> {
     if let Some(url) = &args.url {
-        return Ok(url.clone());
+        return Ok((url.clone(), None));
     }
     let data_dir = args
         .data_dir
@@ -92,13 +100,9 @@ fn resolve_url(args: &PluginDevArgs) -> anyhow::Result<String> {
         .localized(|| LocalizedMessage::new("cli-plugin-dev-no-nail"))?;
     let text = std::fs::read_to_string(data_dir.join(UI_ENDPOINT_FILE))
         .localized(|| LocalizedMessage::new("cli-plugin-dev-no-nail"))?;
-    let value: serde_json::Value = serde_json::from_str(&text)
+    let file: UiEndpointFile = serde_json::from_str(&text)
         .localized(|| LocalizedMessage::new("cli-plugin-dev-no-nail"))?;
-    value
-        .get("url")
-        .and_then(|u| u.as_str())
-        .map(str::to_owned)
-        .localized(|| LocalizedMessage::new("cli-plugin-dev-no-nail"))
+    Ok((file.url, file.token))
 }
 
 /// `ws://host:port/api/ws` of a UI URL.
@@ -120,12 +124,20 @@ pub fn socket_url(url: &str) -> Option<String> {
 /// text; only the network library's reason is an English `detail`.
 async fn connect(
     url: &str,
+    token: Option<&str>,
 ) -> anyhow::Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 > {
     let socket = socket_url(url)
         .localized(|| LocalizedMessage::new("cli-plugin-dev-not-http").arg("url", url))?;
-    match tokio_tungstenite::connect_async(socket.as_str()).await {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let mut request = socket.as_str().into_client_request()?;
+    if let Some(token) = token {
+        request
+            .headers_mut()
+            .insert("authorization", format!("Bearer {token}").parse()?);
+    }
+    match tokio_tungstenite::connect_async(request).await {
         Ok((ws, _)) => Ok(ws),
         Err(err) => Err(messages::error(
             LocalizedMessage::new("cli-plugin-dev-connect")
@@ -180,8 +192,8 @@ async fn dev(args: PluginDevArgs) -> anyhow::Result<()> {
         .ok()
         .and_then(|bytes| PluginManifest::parse(&bytes).ok());
     let grants = manifest.as_ref().map(declared_grants).unwrap_or_default();
-    let url = resolve_url(&args)?;
-    let mut ws = connect(&url).await?;
+    let (url, token) = resolve_url(&args)?;
+    let mut ws = connect(&url, token.as_deref()).await?;
     let request = RpcRequest {
         id: 1,
         request: Request::LoadDevPlugin {
@@ -306,7 +318,7 @@ mod tests {
     #[tokio::test]
     async fn connect_failures_are_localized_with_the_library_reason() {
         let catalog = Catalog::english();
-        let err = connect("ftp://127.0.0.1/").await.unwrap_err();
+        let err = connect("ftp://127.0.0.1/", None).await.unwrap_err();
         let text = messages::render_error(&err, &catalog);
         assert_eq!(
             text.lines().next().unwrap(),
@@ -322,7 +334,7 @@ mod tests {
             .unwrap()
             .port();
         let url = format!("http://127.0.0.1:{port}/");
-        let err = connect(&url).await.unwrap_err();
+        let err = connect(&url, None).await.unwrap_err();
         let cli = err
             .downcast_ref::<messages::CliError>()
             .expect("a CliError");
@@ -345,9 +357,47 @@ mod tests {
         assert!(text.contains("nail serve"), "{text}");
         {
             let _endpoint = UiEndpoint::write(dir.path(), "http://127.0.0.1:5000/").unwrap();
-            assert_eq!(resolve_url(&args).unwrap(), "http://127.0.0.1:5000/");
+            assert_eq!(
+                resolve_url(&args).unwrap(),
+                ("http://127.0.0.1:5000/".to_owned(), None)
+            );
         }
         assert!(!dir.path().join(UI_ENDPOINT_FILE).exists());
+        // M4b: the desktop app's endpoint file carries a token.
+        std::fs::write(
+            dir.path().join(UI_ENDPOINT_FILE),
+            r#"{"url":"http://127.0.0.1:5001/","pid":1,"token":"s3cret"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_url(&args).unwrap(),
+            (
+                "http://127.0.0.1:5001/".to_owned(),
+                Some("s3cret".to_owned())
+            )
+        );
+    }
+
+    /// M4b: the token goes out as a bearer header on the upgrade.
+    #[tokio::test]
+    async fn the_desktop_token_is_sent_on_the_upgrade() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = vec![0u8; 4096];
+            let n = socket.read(&mut buffer).await.unwrap();
+            let _ = socket.write_all(b"HTTP/1.1 403 Forbidden\r\n\r\n").await;
+            String::from_utf8_lossy(&buffer[..n]).into_owned()
+        });
+        assert!(connect(&url, Some("s3cret")).await.is_err());
+        let head = server.await.unwrap();
+        assert!(
+            head.to_ascii_lowercase()
+                .contains("authorization: bearer s3cret"),
+            "{head}"
+        );
     }
 
     #[test]

@@ -220,6 +220,18 @@ impl Service {
             | Request::ListRemoteAudit { .. }
             | Request::TakeLaunchRequests
             | Request::ImportMessageFile { .. }
+            | Request::GetInstallation
+            | Request::GetUpdateStatus
+            | Request::SetUpdateSettings { .. }
+            | Request::CheckForUpdates
+            | Request::DownloadUpdate
+            | Request::InstallUpdate
+            | Request::GetDesktopSettings
+            | Request::SetDesktopSettings { .. }
+            | Request::GetDefaultApps
+            | Request::OpenDefaultAppsSettings
+            | Request::GetFirstRun
+            | Request::CompleteFirstRun
             | Request::SyncSieve { .. }
             | Request::UpdateNotificationSettings { .. }
             | Request::SetFolderSyncPolicy { .. }
@@ -1290,6 +1302,10 @@ impl Service {
             | Event::ActionPoliciesChanged { .. } => admin && full(&access),
             Event::ComposerEditRequested { .. } => full(&access),
             Event::PluginActivityChanged { .. } => admin,
+            // M4b: the desktop's updater, settings and default apps.
+            Event::UpdateStatusChanged { .. }
+            | Event::DesktopSettingsChanged
+            | Event::DefaultAppsChanged => false,
         };
         allowed.then_some(event)
     }

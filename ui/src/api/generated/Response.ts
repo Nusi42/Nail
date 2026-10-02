@@ -22,6 +22,8 @@ import type { ContactId } from "./ContactId";
 import type { ContactMatch } from "./ContactMatch";
 import type { ContactSummary } from "./ContactSummary";
 import type { CryptoKey } from "./CryptoKey";
+import type { DefaultAppsStatus } from "./DefaultAppsStatus";
+import type { DesktopSettings } from "./DesktopSettings";
 import type { DiscoveredAccount } from "./DiscoveredAccount";
 import type { Draft } from "./Draft";
 import type { DraftAttachment } from "./DraftAttachment";
@@ -35,6 +37,7 @@ import type { ExchangeDiscoveryInfo } from "./ExchangeDiscoveryInfo";
 import type { ExchangeMailbox } from "./ExchangeMailbox";
 import type { ExchangeRulesStatus } from "./ExchangeRulesStatus";
 import type { ExchangeStatus } from "./ExchangeStatus";
+import type { FirstRunState } from "./FirstRunState";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { FolderSyncPolicy } from "./FolderSyncPolicy";
@@ -43,6 +46,7 @@ import type { FreeSlot } from "./FreeSlot";
 import type { GmailLabel } from "./GmailLabel";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
+import type { InstallationInfo } from "./InstallationInfo";
 import type { Invitation } from "./Invitation";
 import type { JunkStatus } from "./JunkStatus";
 import type { KeyEncoding } from "./KeyEncoding";
@@ -112,6 +116,7 @@ import type { TaskFields } from "./TaskFields";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TotpEnrollment } from "./TotpEnrollment";
 import type { UiContext } from "./UiContext";
+import type { UpdateStatus } from "./UpdateStatus";
 import type { VacationSettings } from "./VacationSettings";
 import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
@@ -1018,7 +1023,35 @@ veto_id: SendVetoId,
 /**
  * The vetoes.
  */
-vetoes: Array<PluginSendVeto>, } | { "type": "Error", 
+vetoes: Array<PluginSendVeto>, } | { "type": "Installation", 
+/**
+ * The facts.
+ */
+info: InstallationInfo, } | { "type": "UpdateStatus", 
+/**
+ * Settings and state.
+ */
+status: UpdateStatus, } | { "type": "DesktopSettings", 
+/**
+ * The settings (`start_with_windows` as the Run key says).
+ */
+settings: DesktopSettings, 
+/**
+ * The running `nail plugin dev` endpoint, when on.
+ */
+dev_endpoint_url: string | null, } | { "type": "DefaultApps", 
+/**
+ * Registration and status.
+ */
+status: DefaultAppsStatus, 
+/**
+ * The Settings page [`Request::OpenDefaultAppsSettings`] opens.
+ */
+settings_uri: string, } | { "type": "FirstRun", 
+/**
+ * The state.
+ */
+state: FirstRunState, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

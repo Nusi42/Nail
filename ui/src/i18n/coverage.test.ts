@@ -33,6 +33,7 @@ import * as pimMessages from "../features/pim/messages";
 import * as pluginsMessages from "../features/plugins/messages";
 import * as sieveMessages from "../features/sieve/messages";
 import * as syncMessages from "../features/sync/messages";
+import * as systemMessages from "../features/system/messages";
 import * as triageMessages from "../features/triage/messages";
 import { shippedCatalogs } from "./catalogs";
 
@@ -54,6 +55,7 @@ const FEATURE_MESSAGES = [
   gmailMessages,
   exchangeMessages,
   agentsMessages,
+  systemMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

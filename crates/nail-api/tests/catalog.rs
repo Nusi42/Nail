@@ -10,12 +10,17 @@ use nail_api::ErrorCode;
 use nail_api::agents::{
     ACTION_FIELD_IDS, ActionKind, ActionPolicyIssue, CONFIRMATION_SUMMARY_IDS, ConfirmationState,
 };
+use nail_api::desktop::{
+    DefaultAppState, DefaultAppTarget, InstallKind, InstallScope, UpdateChannel,
+    UpdateDisabledReason, UpdateFailure,
+};
 use nail_api::exchange::oof::AutomaticRepliesIssue;
 use nail_api::exchange::{
     CategoryColor, ExchangeCategoryIssue, ExchangeConfigIssue, ExchangeEngine,
     ExchangeMailboxIssue, ExchangeMailboxState, ExchangeWarning, InferenceClassification,
 };
 use nail_api::gmail::{GmailCategory, GmailLabelIssue};
+use nail_api::mapi::MapiResult;
 use nail_api::mcp::prompts::McpPrompt;
 use nail_api::mcp::{McpRateLimitIssue, McpSettingsIssue};
 use nail_api::pim::PimIssue;
@@ -212,6 +217,36 @@ fn contract_message_ids_exist_in_english() {
         .iter()
         .map(|o| o.message_id()),
     );
+    // M4b (ADR 0087): installation facts, update channels / failures /
+    // disabled reasons, default apps, MAPI results, core-built desktop texts.
+    wanted.extend(InstallKind::ALL.iter().map(|k| k.message_id()));
+    wanted.extend(InstallScope::ALL.iter().map(|s| s.message_id()));
+    wanted.extend(UpdateChannel::ALL.iter().map(|c| c.message_id()));
+    wanted.extend(
+        UpdateDisabledReason::ALL
+            .iter()
+            .map(|r| r.message_id().to_owned()),
+    );
+    wanted.extend(UpdateFailure::ALL.iter().map(|f| f.message_id().to_owned()));
+    wanted.extend(
+        DefaultAppTarget::ALL
+            .iter()
+            .map(|t| t.message_id().to_owned()),
+    );
+    wanted.extend(
+        DefaultAppState::ALL
+            .iter()
+            .map(|s| s.message_id().to_owned()),
+    );
+    wanted.extend(MapiResult::ALL.iter().map(|r| r.message_id()));
+    wanted.extend(
+        [
+            "update-channel-locked",
+            "desktop-unavailable",
+            "mapi-draft-from-program",
+        ]
+        .map(str::to_owned),
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -254,6 +289,8 @@ fn german_catalogs_are_the_same_files() {
         "core-agents.ftl",
         "core-mcp.ftl",
         "agents.ftl",
+        "core-desktop.ftl",
+        "system.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

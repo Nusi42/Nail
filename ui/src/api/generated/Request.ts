@@ -23,6 +23,7 @@ import type { ConflictChoice } from "./ConflictChoice";
 import type { ContactFields } from "./ContactFields";
 import type { ContactGroupId } from "./ContactGroupId";
 import type { ContactId } from "./ContactId";
+import type { DesktopSettings } from "./DesktopSettings";
 import type { Draft } from "./Draft";
 import type { DraftContext } from "./DraftContext";
 import type { DraftId } from "./DraftId";
@@ -103,6 +104,7 @@ import type { TaskId } from "./TaskId";
 import type { ThreadId } from "./ThreadId";
 import type { TrustDecision } from "./TrustDecision";
 import type { UiContext } from "./UiContext";
+import type { UpdateSettings } from "./UpdateSettings";
 import type { VacationSettings } from "./VacationSettings";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
 import type { WindowsCertStore } from "./WindowsCertStore";
@@ -1958,4 +1960,12 @@ client_id: string | null, } | { "type": "OverrideSendVeto",
 /**
  * The veto ([`Response::SendVetoed`]).
  */
-veto_id: SendVetoId, };
+veto_id: SendVetoId, } | { "type": "GetInstallation" } | { "type": "GetUpdateStatus" } | { "type": "SetUpdateSettings", 
+/**
+ * The new settings.
+ */
+settings: UpdateSettings, } | { "type": "CheckForUpdates" } | { "type": "DownloadUpdate" } | { "type": "InstallUpdate" } | { "type": "GetDesktopSettings" } | { "type": "SetDesktopSettings", 
+/**
+ * The new settings.
+ */
+settings: DesktopSettings, } | { "type": "GetDefaultApps" } | { "type": "OpenDefaultAppsSettings" } | { "type": "GetFirstRun" } | { "type": "CompleteFirstRun" };

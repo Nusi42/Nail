@@ -73,6 +73,11 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        hooks.rs (hook defs, results, vetoes, banners / badges, stats), extensions.rs
                        (composer actions, Markdown blocks, previews, attachment / link actions, MCP tools,
                        ComposerEdit), jobs.rs (CronSchedule, events, job status, PluginActivity) (ADR 0079)
+                       M4b: desktop (InstallationInfo + registry facts, UpdateSettings / UpdateState /
+                       UpdateStatus::compose (policy wins), DesktopSettings, DefaultAppsStatus, FirstRunState,
+                       UiEndpointFile + dev-endpoint allow-list, DesktopHost trait + DesktopNotifier), mapi
+                       (MapiMessage / MapiResult codes, pipe name + frames, registry, DLL paths);
+                       LaunchRequest::ComposeDraft (ADR 0087)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -92,7 +97,8 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        M3c: account `exchange` node (engine, host / url, polling, streaming, server-rules;
                        `auth "windows"` only there), widgets/exchange.rs (WP94 slot) (ADR 0072);
                        M4a: widgets/agents.rs (confirmation-center show-history, confirmation-indicator
-                       hide-when-empty; ADRs 0079, 0084)
+                       hide-when-empty; ADRs 0079, 0084); M4b: widgets/system.rs (future widgets
+                       update-settings, desktop-settings, default-apps; ADR 0087)
 crates/nail-store      SQLite metadata (v13), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -317,7 +323,12 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        / actions / job runs through the host; `forget_actor` on revoke / uninstall;
                        render_plugin_blocks at send time), plugin_host.rs CoreServices M4a methods +
                        `Service::clock_moved` (due jobs), rules.rs plugin_arrivals (hooks after the user's rules),
-                       context.rs / outbox.rs / pim/reminders.rs plug-in events
+                       context.rs / outbox.rs / pim/reminders.rs plug-in events;
+                       M4b (ADR 0087): desktop.rs (desktop requests: app_settings `desktop.*` + the shell's
+                       DesktopHost from ServiceOptions::desktop, `unsupported` without; Service::submit_mapi =
+                       Simple MAPI → saved draft + LaunchRequest::ComposeDraft, never sent; desktop_settings())
+crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as
+                       mapi\<arch>\NailMapi.dll) + rlib + bin nail-mapi-harness; windows-sys (ADR 0087)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -333,7 +344,10 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        restarts it on change, and the remote-UI host; data-dir lock; OS notifications
                        for NotificationRequested; main window created in code; nail-proxy protocol;
                        single instance); launch.rs,
-                       portable.rs, setup_helper.rs; installer/ (NSIS template copy + hooks; ADR 0040)
+                       portable.rs, setup_helper.rs; windows/ (installer sources: nsis/ template copy +
+                       hooks + strings (ADR 0040), wix/ MSI (M4b WP112); tests/installer.rs checks them);
+                       M4b deps: tauri tray-icon, tauri-plugin-updater (rustls / ring) (ADR 0087)
+packaging/             M4b WP112: winget manifests, per-channel update manifests (ADR 0087)
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
                        M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
                        triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
@@ -348,7 +362,9 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        AGENTS_BASE_CSS; model.ts mirrors nail_api::agents, mock.ts), plugins/ extensions
                        (extensions.ts, MessageAnnotations, AttachmentPreview, ActionMenus, ComposerExtensions,
                        SendVeto (sendDraftChecked), Activity; extensionsMock simulates the host, extensionsSeed),
-                       mcp/ write scopes + RateLimits; WP105 mounts: composer/pluginExtensions.tsx, reader in
+                       mcp/ write scopes + RateLimits; M4b: system/ (updates, about, tray / startup, default
+                       apps, first run, ComposeDraft notice; mock.ts simulates the desktop host; ADR 0087);
+                       WP105 mounts: composer/pluginExtensions.tsx, reader in
                        widgets/MessageView.tsx (ADR 0084);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
@@ -384,6 +400,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        (WP92), exchange.ftl (WP94); M4a: core-agents.ftl (contract ids: kinds, states,
                        summaries, fields), core-mcp.ftl (WP101: prompts, tool fields / values, elicitation,
                        audit texts), agents.ftl (WP104), core-plugins.ftl (WP102 host texts, plugin-write-log);
+                       M4b: core-desktop.ftl (contract ids: install kinds, update channels / failures / reasons,
+                       default apps, mapi-result-*; WP113 shell texts), system.ftl (WP114);
                        every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
@@ -603,6 +621,17 @@ npm run tauri dev                          # desktop app with Vite hot reload
   revision (`nail_store::draft_revision`, `SendDraft.expected_revision`), checked in the store transaction of each
   draft write on the send path (`Store::save_draft_at`, `Store::schedule_send_at`; mismatch = `DraftChanged` →
   `conflict` / `mcp-tool-error-draft-changed`).
+- M4b contract: ADR 0087 (`nail_api::desktop`: installation facts from the installers' registry values,
+  updater settings / state machine with the policy winning (MSI-managed / group policy / portable / dev),
+  tray / startup settings (Run key wins), default apps + Settings URI, first run, the desktop `nail plugin
+  dev` endpoint (LoadDevPlugin only, bearer token in `ui-endpoint.json`), `DesktopHost` trait passed as
+  `ServiceOptions::desktop`; 12 desktop-only requests, 3 events; `nail_api::mapi`: Simple MAPI messages,
+  MAPI.h result codes, named pipe `\\.\pipe\nail-mapi-<SID>` with length-prefixed JSON frames,
+  `Service::submit_mapi` → draft + `LaunchRequest::ComposeDraft`, never sent for a program; slots:
+  `crates/nail-mapi` (WP111), `app/src-tauri/windows/` + `tests/installer.rs` + `packaging/` + `scripts/` +
+  `.github/workflows/` (WP112), rest of `app/src-tauri` (WP113), `ui/src/features/system/` + `system.ftl`
+  (WP114); new deps tauri-plugin-updater (rustls only), tauri tray-icon / image-png, windows-sys,
+  windows-registry).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

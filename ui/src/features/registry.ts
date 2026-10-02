@@ -24,6 +24,7 @@ import * as scheduling from "./scheduling";
 import * as security from "./security";
 import * as sieve from "./sieve";
 import * as sync from "./sync";
+import * as system from "./system";
 import * as triage from "./triage";
 import type { Feature } from "./types";
 
@@ -46,6 +47,7 @@ export const features: Readonly<Record<string, Feature>> = {
   gmail,
   exchange,
   agents,
+  system,
 };
 
 /** The merged registries. */

@@ -81,7 +81,7 @@ node scripts/sbom.mjs                             # CycloneDX SBOMs of the Rust 
 ```
 
 Nothing is written into the repository. The installer's NSIS template is a
-copy of Tauri's (`app/src-tauri/installer/installer.nsi`); a test fails when
+copy of Tauri's (`app/src-tauri/windows/nsis/installer.nsi`); a test fails when
 the Tauri CLI version changes, so re-copy it on upgrades.
 
 ### Interop tests (real servers, CI job `interop`)
@@ -340,8 +340,11 @@ nail plugin dev <folder> [--url URL | --data-dir DIR]
 `nail plugin dev` finds it there (or takes `--url`), loads the folder with
 every declared permission over the local WebSocket (`LoadDevPlugin`),
 reloads it on changes and prints its log (host lines, its own lines, API
-calls) until Ctrl+C. The desktop app has no such endpoint: use "Load a
-development folder…" in Settings → Plug-ins there.
+calls) until Ctrl+C. In the desktop app use "Load a development folder…" in
+Settings → Plug-ins, or (M4b, ADR 0087) switch on the local endpoint in the
+desktop settings: the app then writes the same file with a token, which
+`nail plugin dev` sends as `Authorization: Bearer` (that endpoint loads
+development folders and streams their logs, nothing else).
 
 #### Test controls (`--seed demo-multi` only)
 
@@ -528,6 +531,17 @@ For M2c:
 - **0048:** M2c integration (Sieve upload task, junk / snooze / notifications in the core,
   headers-only sync + on-demand bodies + server search, replay connection, localized
   messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)
+
+For M4b:
+
+- **0087:** the M4b contract (`nail_api::desktop`: installation facts from the installers'
+  registry values, the updater's settings / states with the policy winning (MSI-managed, group
+  policy, portable, development), tray / startup settings, default apps, first run, the desktop
+  `nail plugin dev` endpoint, the `DesktopHost` trait; `nail_api::mapi`: Simple MAPI messages,
+  result codes, the named pipe and its frames; `Service::submit_mapi` → a draft the composer
+  opens, never sent for a program; slots `crates/nail-mapi`, `app/src-tauri/windows/` (was
+  `installer/`), `packaging/`, `ui/src/features/system/`). Texts built in Rust:
+  `locales/<lang>/core-desktop.ftl`; UI: `system.ftl`.
 
 For M4a:
 

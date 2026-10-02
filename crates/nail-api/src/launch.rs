@@ -10,10 +10,14 @@
 //! ([`crate::Request::ImportMessageFile`]); `.ics` / `.vcf` files go
 //! through [`crate::Request::PreviewPimImport`] / [`crate::Request::ImportPim`]
 //! and `webcal:` links become ICS subscriptions
-//! ([`crate::Request::AddPimSource`]) (M3a, ADR 0058).
+//! ([`crate::Request::AddPimSource`]) (M3a, ADR 0058). A program's Simple
+//! MAPI "send mail" becomes a saved draft the composer opens
+//! ([`LaunchRequest::ComposeDraft`]; M4b, ADR 0087).
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use crate::ids::DraftId;
 
 /// A `mailto:` link (RFC 6068), decoded. Addresses are not validated here;
 /// the composer does that like for typed input.
@@ -63,6 +67,16 @@ pub enum LaunchRequest {
     ImportContactsFile {
         /// Absolute path as Windows passed it.
         path: String,
+    },
+    /// A draft the core saved for another program (Simple MAPI "send
+    /// mail", M4b): open it in the composer. Recipients, subject, body and
+    /// attachments are already in the draft; nothing is sent until the
+    /// user presses Send.
+    ComposeDraft {
+        /// The saved draft.
+        draft_id: DraftId,
+        /// The program that asked (executable file name), when known.
+        program: Option<String>,
     },
 }
 

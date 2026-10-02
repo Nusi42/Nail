@@ -21,6 +21,7 @@ import {
   isComposerRequest,
 } from "../features/composer/mock";
 import { answerAgents, isAgentsRequest } from "../features/agents/mock";
+import { answerSystem, isSystemRequest } from "../features/system/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerExchange, isExchangeRequest } from "../features/exchange/mock";
 import { answerGmail, isGmailRequest } from "../features/gmail/mock";
@@ -133,6 +134,7 @@ export class MockTransport implements Transport, MockCore {
     if (isGmailRequest(request)) return answerGmail(this, request);
     if (isExchangeRequest(request)) return answerExchange(this, request);
     if (isAgentsRequest(request)) return answerAgents(this, request);
+    if (isSystemRequest(request)) return answerSystem(this, request);
     if (isPluginExtensionRequest(request)) return answerPluginExtensions(this, request);
     switch (request.type) {
       case "Ping":

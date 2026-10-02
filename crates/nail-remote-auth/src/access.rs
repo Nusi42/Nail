@@ -429,6 +429,21 @@ pub fn required_access(request: &Request) -> RequestAccess {
         }
         Request::RunPluginAction { .. } => ("RunPluginAction", Scope(S::Read)),
         Request::OverrideSendVeto { .. } => ("OverrideSendVeto", Scope(S::Send)),
+
+        // --- M4b desktop (ADR 0087): installation, updater, tray, default
+        // apps and first run belong to the desktop that runs them ---
+        Request::GetInstallation => ("GetInstallation", DesktopOnly),
+        Request::GetUpdateStatus => ("GetUpdateStatus", DesktopOnly),
+        Request::SetUpdateSettings { .. } => ("SetUpdateSettings", DesktopOnly),
+        Request::CheckForUpdates => ("CheckForUpdates", DesktopOnly),
+        Request::DownloadUpdate => ("DownloadUpdate", DesktopOnly),
+        Request::InstallUpdate => ("InstallUpdate", DesktopOnly),
+        Request::GetDesktopSettings => ("GetDesktopSettings", DesktopOnly),
+        Request::SetDesktopSettings { .. } => ("SetDesktopSettings", DesktopOnly),
+        Request::GetDefaultApps => ("GetDefaultApps", DesktopOnly),
+        Request::OpenDefaultAppsSettings => ("OpenDefaultAppsSettings", DesktopOnly),
+        Request::GetFirstRun => ("GetFirstRun", DesktopOnly),
+        Request::CompleteFirstRun => ("CompleteFirstRun", DesktopOnly),
     };
     RequestAccess { name, access }
 }
@@ -916,5 +931,34 @@ mod m4a_tests {
             .access,
             Access::Admin
         );
+    }
+
+    #[test]
+    fn m4b_desktop_requests_are_desktop_only() {
+        use nail_api::desktop::{DesktopSettings, UpdateSettings};
+        for request in [
+            Request::GetInstallation,
+            Request::GetUpdateStatus,
+            Request::SetUpdateSettings {
+                settings: UpdateSettings::default(),
+            },
+            Request::CheckForUpdates,
+            Request::DownloadUpdate,
+            Request::InstallUpdate,
+            Request::GetDesktopSettings,
+            Request::SetDesktopSettings {
+                settings: DesktopSettings::default(),
+            },
+            Request::GetDefaultApps,
+            Request::OpenDefaultAppsSettings,
+            Request::GetFirstRun,
+            Request::CompleteFirstRun,
+        ] {
+            assert_eq!(
+                required_access(&request).access,
+                Access::DesktopOnly,
+                "{request:?}"
+            );
+        }
     }
 }

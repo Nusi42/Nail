@@ -51,8 +51,8 @@
       },
       "allowDowngrades": false,
       "nsis": {
-        "template": "installer/installer.nsi",
-        "installerHooks": "installer/hooks.nsh",
+        "template": "windows/nsis/installer.nsi",
+        "installerHooks": "windows/nsis/hooks.nsh",
         "installMode": "currentUser",
         "languages": ["English"],
         "displayLanguageSelector": false,

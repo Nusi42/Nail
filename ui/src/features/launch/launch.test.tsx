@@ -33,6 +33,36 @@ describe("launch requests", () => {
     expect(env.transport.data.launches).toEqual([]);
   });
 
+  it("opens a draft another program prepared (Simple MAPI, M4b)", async () => {
+    const env = createEnv();
+    const created = await env.transport.send({
+      type: "NewDraft",
+      identity_id: null,
+      account_id: null,
+      mode: "plain",
+      context: null,
+    });
+    if (created.type !== "Draft") throw new Error(created.type);
+    const saved = await env.transport.send({
+      type: "SaveDraft",
+      draft: {
+        ...created.draft,
+        subject: "Quarterly report",
+        to: [{ name: "Ada", email: "ada@example.org" }],
+      },
+    });
+    if (saved.type !== "DraftSaved") throw new Error(saved.type);
+    env.transport.data.launches.push({
+      type: "ComposeDraft",
+      draft_id: saved.draft_id,
+      program: "EXCEL.EXE",
+    });
+    renderWithProviders(<LaunchRequests />, env);
+    await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Quarterly report"));
+    expect(env.store.getState().composer?.to).toContain("ada@example.org");
+    expect(env.store.getState().windows).toContain("composer");
+  });
+
   it("fills the plain composer when the core has no rich composer", async () => {
     const env = createEnv();
     const send = env.transport.send.bind(env.transport);

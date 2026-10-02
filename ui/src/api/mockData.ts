@@ -35,6 +35,7 @@ import {
   type CustomizationMockState,
 } from "../features/customization/mock";
 import { createAgentsMockState, type AgentsMockState } from "../features/agents/mock";
+import { createSystemMockState, type SystemMockState } from "../features/system/mock";
 import { createExchangeMockState, type ExchangeMockState } from "../features/exchange/mock";
 import { createGmailMockState, type GmailMockState } from "../features/gmail/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
@@ -97,6 +98,7 @@ export interface MockFeatures {
   gmail: GmailMockState;
   exchange: ExchangeMockState;
   agents: AgentsMockState;
+  system: SystemMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -475,6 +477,7 @@ export function createMockData(inboxSize = 250): MockData {
       gmail: createGmailMockState(),
       exchange: createExchangeMockState(),
       agents: createAgentsMockState(),
+      system: createSystemMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

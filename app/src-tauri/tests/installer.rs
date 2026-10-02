@@ -24,11 +24,11 @@ fn config() -> serde_json::Value {
 }
 
 fn hooks() -> String {
-    read(app_dir().join("installer/hooks.nsh"))
+    read(app_dir().join("windows/nsis/hooks.nsh"))
 }
 
 fn template() -> String {
-    read(app_dir().join("installer/installer.nsi"))
+    read(app_dir().join("windows/nsis/installer.nsi"))
 }
 
 /// The body of `!macro NAME` … `!macroend`.
@@ -83,7 +83,7 @@ fn the_template_copy_matches_the_installed_tauri_cli() {
     assert_eq!(
         base, installed,
         "the Tauri CLI changed: copy its NSIS template again and re-apply the NAIL blocks \
-         (app/src-tauri/installer/README.md)"
+         (app/src-tauri/windows/nsis/README.md)"
     );
     // The NAIL changes are all there.
     assert!(template.contains(r#"StrCpy $INSTDIR "$LOCALAPPDATA\Programs\${PRODUCTNAME}""#));
@@ -258,7 +258,7 @@ fn uninstall_keeps_data_unless_asked() {
 
 #[test]
 fn every_installer_string_is_defined_once_and_used() {
-    let english = read(app_dir().join("installer/languages/English.nsh"));
+    let english = read(app_dir().join("windows/nsis/languages/English.nsh"));
     let defined: Vec<&str> = english
         .lines()
         .filter_map(|l| l.strip_prefix("LangString "))

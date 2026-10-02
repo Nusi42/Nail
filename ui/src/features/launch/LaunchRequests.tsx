@@ -3,7 +3,8 @@
  * when Windows started it — a `mailto:` link opens the composer, a `.eml`
  * file is imported into "Opened files" and shown; an `.ics` / `.vcf` file
  * opens the import dialog with its preview, a `webcal:` link the
- * subscription form (M3a). Taken from the core once at start-up
+ * subscription form (M3a); a draft another program prepared (Simple MAPI,
+ * M4b) opens in the composer. Taken from the core once at start-up
  * and again after every `LaunchRequested` event (a second start forwarded
  * its targets). Never in a remote-UI session (desktop only).
  */
@@ -13,7 +14,7 @@ import type { LaunchRequest, LocalizedMessage } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import type { ComposeContext } from "../../state/compose";
 import { useComposeContext } from "../../state/hooks";
-import { startMailtoCompose } from "../composer";
+import { openRichDraft, startMailtoCompose } from "../composer";
 import { IMPORT_DIALOG, pimStoreFor, SOURCES_DIALOG } from "../pim";
 import { remoteStore } from "../remote";
 
@@ -57,6 +58,11 @@ export async function handleLaunch(
     case "ImportContactsFile":
       pimStoreFor(ctx.store).getState().setImportPath(request.path);
       ctx.store.getState().openWindow(IMPORT_DIALOG);
+      return null;
+    case "ComposeDraft":
+      // M4b (ADR 0087): recipients, text and files are in the draft;
+      // WP114 adds the notice naming the program (mapi-draft-from-program).
+      await openRichDraft(ctx, request.draft_id);
       return null;
   }
 }
