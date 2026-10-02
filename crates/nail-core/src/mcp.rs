@@ -61,6 +61,17 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             service.forget_actor(&actor).await;
             return Ok(response);
         }
+        // Review M4a: pending writes were checked under the old grant.
+        Request::UpdateMcpGrants { ref client_id, .. } => {
+            let actor = nail_api::agents::ActionActor::mcp_client(client_id.clone());
+            let events = service.clone();
+            let response = nail_mcp::admin::handle(service.store(), info, request, move |event| {
+                events.broadcast(event);
+            })
+            .await?;
+            service.cancel_confirmations_of(&actor).await;
+            return Ok(response);
+        }
         Request::UpdateMcpSettings { settings } => {
             if let Some(issue) = settings.issues().first() {
                 return Err(ApiError::invalid_request(format!(
@@ -142,6 +153,10 @@ impl CoreAccess for McpCore {
         Some(self.0.confirmation_broker())
     }
 
+    fn rate_limiter(&self) -> Option<Arc<nail_mcp::limits::RateLimiter>> {
+        Some(self.0.mcp_rate_limiter())
+    }
+
     fn render(&self, message: &LocalizedMessage) -> String {
         crate::strings::render(self.0.inner.locale.as_deref(), message)
     }
@@ -174,11 +189,22 @@ impl CoreAccess for McpCore {
     ) -> impl Future<Output = std::result::Result<serde_json::Value, ApiError>> + Send {
         let host = self.0.inner.plugins.existing_host().cloned();
         let name = name.to_owned();
+        let store = self.0.store().clone();
         async move {
-            match host {
-                Some(host) => host.call_mcp_tool(&name, arguments, client).await,
-                None => Err(ApiError::not_found(format!("no plug-in tool {name}"))),
-            }
+            let Some(host) = host else {
+                return Err(ApiError::not_found(format!("no plug-in tool {name}")));
+            };
+            // The plug-in serves the client within the client's grant too
+            // (review M4a): read fresh, so a narrowed or revoked grant
+            // applies at once.
+            let id = client.client_id.clone();
+            let grant = store
+                .call(move |s| s.get_mcp_client(&id))
+                .await
+                .map(|c| c.grant)
+                .map_err(ApiError::from)?;
+            let limit = nail_plugins::ClientLimit::from_grant(&grant);
+            host.call_mcp_tool(&name, arguments, client, limit).await
         }
     }
 

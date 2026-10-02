@@ -38,7 +38,7 @@ use nail_api::plugins::{
 use nail_api::{ApiError, ErrorCode, LocalizedMessage, MessageId, PluginId};
 use serde_json::{Value, json};
 
-use crate::gate::Denied;
+use crate::gate::{ClientLimit, Denied};
 use crate::host::{Inner, PluginHost, Running};
 use crate::l10n;
 use crate::runtime::{Invoke, Origin, Registry};
@@ -522,7 +522,9 @@ impl PluginHost {
     }
 
     /// Calls an exposed tool for an MCP client (the MCP server checked the
-    /// client's scopes against [`PluginMcpTool::scopes`]). Arguments are
+    /// client's scopes against [`PluginMcpTool::scopes`]). While the handler
+    /// runs, the plug-in's permissions are narrowed to what the client's
+    /// grant reaches (`limit`; review M4a). Arguments are
     /// checked against the tool's schema ([`check_arguments`]); the result
     /// is the handler's JSON value (at most
     /// [`crate::HostLimits::max_tool_result_bytes`]), within
@@ -532,6 +534,7 @@ impl PluginHost {
         name: &str,
         arguments: Value,
         client: McpClientRef,
+        limit: ClientLimit,
     ) -> Result<Value, ApiError> {
         let inner = Arc::clone(self.inner());
         let (plugin, tool) = parse_plugin_mcp_tool_name(name)
@@ -564,6 +567,7 @@ impl PluginHost {
         call.origin = Origin {
             client: None,
             on_behalf: Some(client),
+            limit: Some(Arc::new(limit)),
         };
         let rx = inner.invoke(&plugin, Some(running.generation), call)?;
         let what = format!("mcpTool {tool}");

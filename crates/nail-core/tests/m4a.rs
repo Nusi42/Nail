@@ -386,3 +386,125 @@ async fn plugin_activity_and_host_requests() {
         .await;
     assert_eq!(error_of(anyway).0, ErrorCode::NotFound);
 }
+
+fn pending(actor: &ActionActor) -> NewConfirmation {
+    NewConfirmation {
+        requested_by: ActionAttribution {
+            actor: actor.clone(),
+            name: "Someone".into(),
+            on_behalf_of: None,
+        },
+        kind: ActionKind::Send,
+        operation: "send_message".into(),
+        summary: LocalizedMessage::new("confirmation-summary-send"),
+        targets: vec![],
+        changes: vec![],
+        account_ids: vec![],
+        payload: json!({}),
+        idempotency_key: None,
+        timeout_secs: 300,
+    }
+}
+
+fn state_of(service: &Service, actor: &ActionActor) -> ConfirmationState {
+    service
+        .store()
+        .list_confirmations(ConfirmationFilter::All, Some(actor), None, 1)
+        .unwrap()[0]
+        .state
+}
+
+/// Review M4a: nothing waits for a confirmation of an earlier run, so
+/// starting Nail cancels them (approving one would run nothing).
+#[tokio::test]
+async fn starting_cancels_confirmations_of_an_earlier_run() {
+    let (service, _data, _config) = setup();
+    let client = create_client(&service).await;
+    let actor = ActionActor::mcp_client(client);
+    let now = chrono::Utc::now().timestamp();
+    service
+        .store()
+        .insert_confirmation(pending(&actor), now, 20)
+        .unwrap();
+    service.start();
+    assert_eq!(state_of(&service, &actor), ConfirmationState::Cancelled);
+    service.shutdown().await;
+}
+
+/// Review M4a: pending writes were checked under the permissions of the
+/// time; changing an MCP client's grant, a plug-in's grants or disabling
+/// the plug-in cancels them.
+#[tokio::test]
+async fn grant_changes_and_disabling_cancel_pending_confirmations() {
+    let (service, _data, _config) = setup();
+    let now = chrono::Utc::now().timestamp();
+    let client = create_client(&service).await;
+    let client_actor = ActionActor::mcp_client(client.clone());
+    service
+        .store()
+        .insert_confirmation(pending(&client_actor), now, 20)
+        .unwrap();
+    let saved = service
+        .handle(Request::UpdateMcpGrants {
+            client_id: client,
+            grant: McpGrant::default(),
+        })
+        .await;
+    assert!(!matches!(saved, Response::Error { .. }), "{saved:?}");
+    assert_eq!(
+        state_of(&service, &client_actor),
+        ConfirmationState::Cancelled
+    );
+
+    let manifest = PluginManifest::parse(
+        json!({
+            "id": "crm", "name": "CRM", "version": "1.0.0", "apiVersion": "1",
+            "main": "index.js", "permissions": ["mail.send"]
+        })
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap();
+    service
+        .store()
+        .install_plugin(&PluginInstall {
+            manifest: &manifest,
+            source: &PluginPackageSource::Dev {
+                folder: "/dev/crm".into(),
+            },
+            package_sha256: None,
+            grants: &[],
+            enabled: false,
+        })
+        .unwrap();
+    let plugin_actor = ActionActor::plugin("crm");
+    service
+        .store()
+        .insert_confirmation(pending(&plugin_actor), now, 20)
+        .unwrap();
+    let saved = service
+        .handle(Request::UpdatePluginGrants {
+            plugin_id: "crm".into(),
+            grants: vec![],
+        })
+        .await;
+    assert!(!matches!(saved, Response::Error { .. }), "{saved:?}");
+    assert_eq!(
+        state_of(&service, &plugin_actor),
+        ConfirmationState::Cancelled
+    );
+    service
+        .store()
+        .insert_confirmation(pending(&plugin_actor), now, 20)
+        .unwrap();
+    let saved = service
+        .handle(Request::DisablePlugin {
+            plugin_id: "crm".into(),
+        })
+        .await;
+    assert!(!matches!(saved, Response::Error { .. }), "{saved:?}");
+    assert_eq!(
+        state_of(&service, &plugin_actor),
+        ConfirmationState::Cancelled
+    );
+}

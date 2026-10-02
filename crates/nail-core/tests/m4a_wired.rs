@@ -355,7 +355,11 @@ export default {
       const n = (await nail.storage.get("ticks")) || 0;
       await nail.storage.set("ticks", n + 1);
     });
-    ctx.mcp.registerTool("lookup", async (args) => ({ found: args.q }));
+    ctx.mcp.registerTool("lookup", async (args) => {
+      let mail = "ok";
+      try { await nail.mail.get(args.id); } catch (e) { mail = e.code; }
+      return { found: args.q, mail };
+    });
   },
 };
 "#;
@@ -516,18 +520,83 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
     let tools = core.plugin_tools();
     assert_eq!(tools.len(), 1, "{tools:?}");
     assert_eq!(tools[0].name, "writer__lookup");
+    let Response::McpClientCreated { client, .. } = f
+        .service
+        .handle(Request::CreateMcpClient {
+            name: "Agent".into(),
+            grant: McpGrant {
+                scopes: vec![nail_api::mcp::McpScope::Read],
+                all_accounts: true,
+                ..Default::default()
+            },
+        })
+        .await
+    else {
+        panic!("client expected")
+    };
+    let by = McpClientRef {
+        client_id: client.id.clone(),
+        name: "Agent".into(),
+    };
+    let message = inbox(&f, FolderRole::Inbox).await.remove(0);
+    let args = json!({"q": "ada", "id": message.id.as_str()});
     let answer = core
+        .call_plugin_tool("writer__lookup", args.clone(), by.clone())
+        .await
+        .unwrap();
+    assert_eq!(answer, json!({"found": "ada", "mail": "ok"}));
+    // Review M4a: the plug-in reads within the client's grant too — with
+    // another account only, the message is not found.
+    let saved = f
+        .service
+        .handle(Request::UpdateMcpGrants {
+            client_id: client.id.clone(),
+            grant: McpGrant {
+                scopes: vec![nail_api::mcp::McpScope::Read],
+                accounts: vec!["somewhere-else".into()],
+                ..Default::default()
+            },
+        })
+        .await;
+    assert!(!matches!(saved, Response::Error { .. }), "{saved:?}");
+    let answer = core
+        .call_plugin_tool("writer__lookup", args, by)
+        .await
+        .unwrap();
+    assert_eq!(answer, json!({"found": "ada", "mail": "not_found"}));
+    // An unknown client reaches nothing.
+    let err = core
         .call_plugin_tool(
             "writer__lookup",
-            json!({"q": "ada"}),
+            json!({"q": "x"}),
             McpClientRef {
-                client_id: "7".into(),
-                name: "Agent".into(),
+                client_id: "999".into(),
+                name: "Ghost".into(),
             },
         )
         .await
-        .unwrap();
-    assert_eq!(answer, json!({"found": "ada"}));
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+
+    // Review M4a: plug-in writes are in the MCP audit log, which the
+    // plug-in cannot push out like its own log.
+    let Response::McpAudit { entries } = f
+        .service
+        .handle(Request::ListMcpAudit {
+            client_id: None,
+            before: None,
+            limit: 100,
+        })
+        .await
+    else {
+        panic!("audit expected")
+    };
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+    assert!(
+        names.contains(&"plugin:writer nail.tasks.create")
+            && names.contains(&"plugin:writer nail.mail.delete"),
+        "{names:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

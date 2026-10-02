@@ -173,6 +173,29 @@ impl Store {
                     )
                     .optional()?;
                 if let Some(n) = existing {
+                    // The key names one request: another operation, kind
+                    // or payload under it would let an approval of the
+                    // first run the second (review M4a).
+                    let (operation, kind, payload): (String, String, Option<String>) = tx
+                        .query_row(
+                            "SELECT operation, kind, nail_open('confirmations.payload', payload)
+                             FROM confirmations WHERE id = ?1",
+                            [n],
+                            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                        )?;
+                    let same_payload = match payload {
+                        // Decided: the payload is gone; it never runs again.
+                        None => true,
+                        Some(stored) => {
+                            serde_json::from_str::<Value>(&stored).ok().as_ref()
+                                == Some(&new.payload)
+                        }
+                    };
+                    if operation != new.operation || kind != new.kind.as_str() || !same_payload {
+                        return Err(Error::InvalidData(format!(
+                            "the idempotency key {key:?} was used for another request"
+                        )));
+                    }
                     return Ok(InsertedConfirmation::Existing(get_in_tx(tx, n)?));
                 }
             }
@@ -221,6 +244,21 @@ impl Store {
             )?;
             let n = tx.last_insert_rowid();
             Ok(InsertedConfirmation::New(get_in_tx(tx, n)?))
+        })
+    }
+
+    /// Whether the actor has a confirmation under this idempotency key.
+    pub fn has_confirmation_key(&self, actor: &ActionActor, key: &str) -> Result<bool> {
+        self.with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT 1 FROM confirmations
+                     WHERE actor_kind = ?1 AND actor_id = ?2 AND idempotency_key = ?3",
+                    params![actor.kind_str(), actor.id_str(), key],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some())
         })
     }
 
@@ -400,6 +438,32 @@ impl Store {
                      WHERE actor_kind = ?1 AND actor_id = ?2 AND state = 'pending'",
                 )?;
                 stmt.query_map(params![actor.kind_str(), actor.id_str()], |r| r.get(0))?
+                    .collect::<rusqlite::Result<_>>()?
+            };
+            let mut out = Vec::new();
+            for n in ids {
+                tx.execute(
+                    "UPDATE confirmations SET state = 'cancelled', decided_at = ?2,
+                         decided_via = 'system', payload = NULL
+                     WHERE id = ?1",
+                    params![n, now],
+                )?;
+                out.push(get_in_tx(tx, n)?);
+            }
+            prune(tx)?;
+            Ok(out)
+        })
+    }
+
+    /// Cancels every pending confirmation (at start: nothing waits for a
+    /// confirmation of an earlier run, so approving it would run nothing);
+    /// returns them.
+    pub fn cancel_pending_confirmations(&self, now: i64) -> Result<Vec<Confirmation>> {
+        self.with_tx(|tx| {
+            let ids: Vec<i64> = {
+                let mut stmt =
+                    tx.prepare("SELECT id FROM confirmations WHERE state = 'pending'")?;
+                stmt.query_map([], |r| r.get(0))?
                     .collect::<rusqlite::Result<_>>()?
             };
             let mut out = Vec::new();
@@ -750,6 +814,91 @@ mod tests {
             )
             .unwrap();
         assert!(matches!(other, InsertedConfirmation::New(_)));
+        assert!(store.has_confirmation_key(&client, "k1").unwrap());
+        assert!(!store.has_confirmation_key(&client, "k2").unwrap());
+    }
+
+    /// Review M4a: a key reused for another operation, kind or payload is
+    /// refused, so approving the first request can never run the second.
+    #[test]
+    fn idempotency_keys_refuse_another_request() {
+        let store = store();
+        let client = ActionActor::mcp_client("mcp-1");
+        let first = store
+            .insert_confirmation(new(client.clone(), ActionKind::Trash, Some("k")), NOW, 20)
+            .unwrap();
+        let mut other_payload = new(client.clone(), ActionKind::Trash, Some("k"));
+        other_payload.payload = json!({"message_ids": ["m9"]});
+        assert!(matches!(
+            store.insert_confirmation(other_payload, NOW, 20),
+            Err(Error::InvalidData(_))
+        ));
+        assert!(matches!(
+            store.insert_confirmation(
+                new(client.clone(), ActionKind::PermanentDelete, Some("k")),
+                NOW,
+                20
+            ),
+            Err(Error::InvalidData(_))
+        ));
+        let mut other_operation = new(client.clone(), ActionKind::Trash, Some("k"));
+        other_operation.operation = "update_messages".into();
+        assert!(matches!(
+            store.insert_confirmation(other_operation, NOW, 20),
+            Err(Error::InvalidData(_))
+        ));
+        // Once decided the payload is gone; the same operation and kind
+        // still find the decided confirmation (it never runs again).
+        store
+            .decide_confirmation(
+                &first.confirmation().id,
+                false,
+                ConfirmationSource::Nail,
+                NOW,
+            )
+            .unwrap();
+        let mut decided = new(client, ActionKind::Trash, Some("k"));
+        decided.payload = json!({"message_ids": ["m9"]});
+        let again = store.insert_confirmation(decided, NOW, 20).unwrap();
+        assert!(
+            matches!(again, InsertedConfirmation::Existing(ref c) if c.state == ConfirmationState::Denied)
+        );
+    }
+
+    #[test]
+    fn pending_confirmations_are_cancelled_at_start() {
+        let store = store();
+        let client = ActionActor::mcp_client("mcp-1");
+        let pending = store
+            .insert_confirmation(new(client.clone(), ActionKind::Send, None), NOW, 20)
+            .unwrap();
+        let decided = store
+            .insert_confirmation(new(client, ActionKind::Send, None), NOW, 20)
+            .unwrap();
+        store
+            .decide_confirmation(
+                &decided.confirmation().id,
+                false,
+                ConfirmationSource::Nail,
+                NOW,
+            )
+            .unwrap();
+        let cancelled = store.cancel_pending_confirmations(NOW + 5).unwrap();
+        assert_eq!(cancelled.len(), 1);
+        assert_eq!(cancelled[0].id, pending.confirmation().id);
+        assert_eq!(cancelled[0].state, ConfirmationState::Cancelled);
+        assert_eq!(
+            store
+                .take_confirmation_payload(&pending.confirmation().id)
+                .unwrap(),
+            None
+        );
+        assert!(
+            store
+                .cancel_pending_confirmations(NOW + 6)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

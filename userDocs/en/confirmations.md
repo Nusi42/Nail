@@ -17,7 +17,13 @@ Choose **Approve** or **Deny**. Nothing happens until you approve; a request tha
 
 ### Always allow
 
-For changes that do not delete anything you can tick **From now on, let … do this without asking** before approving. Deleting — moving mail to Trash, deleting mail permanently, deleting events, contacts or tasks — always asks, every time, and cannot be allowed without asking.
+For changes that do not delete anything you can tick **From now on, let … do this without asking** before approving. Deleting — moving mail to Trash or Junk (also by "moving" it there), deleting mail permanently, deleting events, contacts or tasks — always asks, every time, and cannot be allowed without asking.
+
+### What you approve is what runs
+
+- **Sending:** you approve the message as the request shows it. If the draft changes before you approve (another recipient, other text), Nail does not send it and the request ends as failed; look at the draft and send it yourself.
+- **Repeated requests:** an agent that repeats a request has to repeat exactly the same request. A different request under the same key is refused.
+- When Nail starts, requests from before are cancelled: nothing would run them any more. The same happens when you change what an agent or plug-in may do, or switch a plug-in off.
 
 ## Confirmation policies
 
@@ -27,7 +33,7 @@ Each MCP client (Settings → MCP clients) and each plug-in that may change data
 | --- | --- |
 | Deleting (always), sending mail, invitations and answers, filter rules | Flags, tags, moving and archiving, drafts, calendar, contact and task changes |
 
-Every change still goes through Nail like your own, appears in the activity log and can be undone.
+Every change still goes through Nail like your own, appears in the activity log and can be undone. Changes plug-ins make are in the MCP activity log too (named "plugin:" and the plug-in's id), where a plug-in cannot remove them.
 
 ## MCP clients: what they may change and how often
 
@@ -37,7 +43,7 @@ Under Settings → MCP clients, **What it may change** grants the writing permis
 
 - Plug-ins that check messages you open can show a **note above the message** or a **badge** in its header. Each one names the plug-in; plug-ins never change the message itself.
 - Plug-ins can **preview attachments** (for example a CSV file as a table); the preview names the plug-in that drew it.
-- Attachments and links can have **plug-in actions** in their menus.
+- Attachments can have **plug-in actions** in their menu. (Plug-ins can already declare actions for links, but the reader does not offer them yet.)
 - In the composer, **Plug-in actions** insert or change text, and **Insert block** adds a block a plug-in turns into formatted content when the message is sent. When a plug-in or an agent edits your draft, Nail says who did it.
 
 ## When a plug-in stops a message

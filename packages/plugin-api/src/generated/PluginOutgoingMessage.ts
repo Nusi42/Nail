@@ -43,11 +43,14 @@ bcc: Array<Address>,
  */
 subject: string, 
 /**
- * The body as plain text (the text rendering of HTML / Markdown).
+ * The body as plain text (the text rendering of HTML / Markdown);
+ * empty when the message will be end-to-end encrypted (hooks never see
+ * encrypted content).
  */
 text: string, 
 /**
- * The HTML body as it will be sent, if any.
+ * The HTML body as it will be sent, if any (never for a message that
+ * will be end-to-end encrypted).
  */
 html?: string, 
 /**

@@ -61,4 +61,4 @@ pub use data::{
 pub use http::{McpServer, ServerOptions, configured_port};
 pub use server::{AuthedClient, ClientSource, NailMcp};
 pub use writes::WriteSettings;
-pub use writes::actor::{ActorWrite, ActorWriteRequest, ActorWrites, PimDelete};
+pub use writes::actor::{ActorWrite, ActorWriteRequest, ActorWrites, PimDelete, actor_audit_name};

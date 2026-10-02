@@ -458,6 +458,8 @@ impl Service {
         if !background.is_empty() {
             return;
         }
+        // M4a review: nothing of this run waits for earlier confirmations.
+        self.cancel_orphaned_confirmations();
         background.push(tokio::spawn(crate::outbox::run_sender(self.clone())));
         background.push(tokio::spawn(crate::search::run_committer(self.clone())));
         background.push(tokio::spawn(crate::search::run_maintenance(self.clone())));

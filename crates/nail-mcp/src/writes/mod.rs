@@ -55,6 +55,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use serde_json::{Value, json};
 use tokio::sync::watch;
 
+use crate::broker::Submitted;
 use crate::data::McpData;
 use crate::server::{Failure, Shared, now};
 
@@ -120,6 +121,13 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 impl WriteState {
+    /// Whether a task of this server waits for the confirmation.
+    fn is_waiting(&self, id: &ConfirmationId) -> bool {
+        lock(&self.waiting)
+            .get(id)
+            .is_some_and(|rx| rx.has_changed().is_ok())
+    }
+
     async fn lock_key(&self, client: &McpClientId, key: &str) -> tokio::sync::OwnedMutexGuard<()> {
         let mutex = {
             let mut keys = lock(&self.keys);
@@ -232,7 +240,7 @@ pub(crate) fn audit_detail(plan: &Plan, outcome: &WriteOutcome) -> String {
     format!("{}{value}", crate::messages::WRITE_DETAIL_PREFIX)
 }
 
-fn audit_outcome(outcome: &WriteOutcome) -> McpOutcome {
+pub(crate) fn audit_outcome(outcome: &WriteOutcome) -> McpOutcome {
     match outcome {
         WriteOutcome::Result(McpWriteResult::Done { .. }) => McpOutcome::Allowed,
         WriteOutcome::Result(_) => McpOutcome::Declined,
@@ -627,7 +635,21 @@ pub(crate) async fn call<D: McpData>(
         return refused(Failure::Limited(limited)).await;
     }
     let by = attribution(client);
+    // A key with a confirmation behind it goes through the confirmation
+    // again, which checks that it names the same request (review M4a).
+    let key_confirmed = match &key {
+        Some(k) => {
+            let (actor, k) = (by.actor.clone(), k.clone());
+            shared
+                .store
+                .call(move |s| s.has_confirmation_key(&actor, &k))
+                .await
+                .unwrap_or(true)
+        }
+        None => false,
+    };
     let asks = plan.kind.is_destructive()
+        || key_confirmed
         || match shared.broker.policy(&by.actor, plan.kind).await {
             Ok(policy) => policy.asks(),
             Err(err) => {
@@ -654,11 +676,24 @@ pub(crate) async fn call<D: McpData>(
         idempotency_key: key.clone(),
         timeout_secs: shared.settings.confirmation_timeout_secs,
     };
-    let confirmation: Confirmation = match shared.broker.submit(new).await {
-        Ok(submitted) => submitted.confirmation().clone(),
+    let (confirmation, existing): (Confirmation, bool) = match shared.broker.submit(new).await {
+        Ok(Submitted::New(c)) => (c, false),
+        Ok(Submitted::Existing(c)) => (c, true),
         Err(err) => return refused(Failure::Api(err)).await,
     };
+    // The key's earlier request (the store checked it is this one) is
+    // pending, but nothing in this server waits for it: an approval would
+    // run nothing. Cancel it; the agent retries with a new key.
+    let orphaned = existing
+        && confirmation.state == ConfirmationState::Pending
+        && !shared.writes.is_waiting(&confirmation.id);
+    if orphaned && let Err(err) = shared.broker.cancel(&confirmation.id).await {
+        tracing::warn!(%err, "cannot cancel an orphaned confirmation");
+    }
     let early = match confirmation.state {
+        ConfirmationState::Pending if orphaned => Some(McpWriteResult::Expired {
+            confirmation_id: confirmation.id.as_str().to_owned(),
+        }),
         ConfirmationState::Pending => None,
         ConfirmationState::Denied => Some(McpWriteResult::Denied {
             confirmation_id: confirmation.id.as_str().to_owned(),

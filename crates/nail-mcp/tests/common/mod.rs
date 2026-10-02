@@ -64,7 +64,8 @@ pub fn summary(id: &str, account: &str, folder: &str, thread: &str) -> MessageSu
     }
 }
 
-/// Two accounts (`work`, `home`), a virtual account over both, messages
+/// Two accounts (`work` with Inbox, HR and Trash, `home`), a virtual
+/// account over both, messages
 /// `m1` (work, with an attachment), `m2` (home), `m3` (work, encrypted),
 /// thread `t1` = m1 + m2.
 pub struct FakeData {
@@ -77,6 +78,8 @@ pub struct FakeData {
     pub writes: Mutex<Vec<(ActionAttribution, Request)>>,
     /// M4a WP105: tools plug-ins expose (calls answer with their input).
     pub plugin_tools: Vec<nail_mcp::PluginTool>,
+    /// Review M4a: drafts edited since (their `To` is someone else now).
+    pub changed_drafts: Mutex<Vec<String>>,
 }
 
 impl Default for FakeData {
@@ -92,6 +95,7 @@ impl Default for FakeData {
             decrypted_index: false,
             writes: Mutex::new(Vec::new()),
             plugin_tools: Vec::new(),
+            changed_drafts: Mutex::new(Vec::new()),
         }
     }
 }
@@ -181,6 +185,7 @@ impl McpData for FakeData {
             "work" => Ok(vec![
                 folder("work-inbox", FolderRole::Inbox),
                 folder("work-hr", FolderRole::Other),
+                folder("work-trash", FolderRole::Trash),
             ]),
             "home" => Ok(vec![folder("home-inbox", FolderRole::Inbox)]),
             _ => Err(ApiError::not_found("account")),
@@ -370,6 +375,17 @@ impl McpData for FakeData {
             }];
             draft.markdown = Some("Hello Bob".into());
             draft.mode = nail_api::accounts::ComposerMode::Markdown;
+        }
+        if self
+            .changed_drafts
+            .lock()
+            .unwrap()
+            .contains(&id.as_str().to_owned())
+        {
+            draft.to = vec![Address {
+                name: None,
+                email: "attacker@evil.example".into(),
+            }];
         }
         if id.as_str() == "draft-reply-m2" {
             draft.context = Some(nail_api::DraftContext {

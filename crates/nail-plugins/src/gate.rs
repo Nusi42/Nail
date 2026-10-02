@@ -14,11 +14,20 @@
 //!   loopback hosts), no credentials in the URL, a fixed set of methods,
 //!   no hop-by-hop / `Host` / `Cookie` headers.
 //!
+//! * While a plug-in serves an MCP client's tool call (`mcp.expose`), its
+//!   gate is narrowed to the client's grant ([`ClientLimit`], review M4a):
+//!   only permissions the client's scopes cover, only the client's
+//!   accounts, never its excluded folders. The plug-in's own non-data
+//!   permissions (storage, network, notifications, dialogs) stay.
+//!
 //! A refused call fails with `forbidden` ([`Denied`]) and is logged to the
 //! plug-in's log (source `api`).
 
+use std::sync::Arc;
+
+use nail_api::mcp::{McpGrant, McpScope};
 use nail_api::plugins::{PluginGrant, PluginManifest, PluginPermission};
-use nail_api::{AccountId, ApiError, ErrorCode, LocalizedMessage};
+use nail_api::{AccountId, ApiError, ErrorCode, FolderId, LocalizedMessage};
 
 use crate::l10n;
 use crate::services::AccountScope;
@@ -58,10 +67,70 @@ impl Denied {
     }
 }
 
+/// What the MCP client a plug-in serves may reach: while the plug-in
+/// handles one of its exposed tool calls, the gate allows only the overlap
+/// of the plug-in's grants and this ([`Gate::limited`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClientLimit {
+    /// The client's scopes.
+    pub scopes: Vec<McpScope>,
+    /// Its accounts, real or virtual (`None` = every account).
+    pub accounts: Option<Vec<AccountId>>,
+    /// The folders it excludes.
+    pub excluded_folders: Vec<FolderId>,
+}
+
+impl ClientLimit {
+    /// The limit of a client's grant (an empty grant reaches nothing).
+    pub fn from_grant(grant: &McpGrant) -> Self {
+        if grant.is_empty() {
+            return Self {
+                scopes: Vec::new(),
+                accounts: Some(Vec::new()),
+                excluded_folders: Vec::new(),
+            };
+        }
+        let all = grant.all_accounts || grant.accounts.iter().any(|a| a.as_str() == AccountId::ALL);
+        Self {
+            scopes: grant.scopes.clone(),
+            accounts: (!all).then(|| grant.accounts.clone()),
+            excluded_folders: grant.excluded_folders.clone(),
+        }
+    }
+
+    fn has(&self, scope: McpScope) -> bool {
+        self.scopes.contains(&scope)
+    }
+
+    /// Whether the client's scopes cover `permission` (the plug-in's own
+    /// storage, network, notifications and dialogs always; hooks never).
+    pub fn permits(&self, permission: &PluginPermission) -> bool {
+        use PluginPermission as P;
+        match permission {
+            P::MailRead | P::MailReadBody | P::CalendarRead => self.has(McpScope::Read),
+            P::Attachments => self.has(McpScope::Attachments),
+            P::MailOrganize => self.has(McpScope::Organize),
+            P::MailSend => self.has(McpScope::Draft) || self.has(McpScope::Send),
+            P::CalendarWrite => self.has(McpScope::Calendar),
+            P::ContactsWrite | P::TasksWrite => self.has(McpScope::Pim),
+            P::Composer => self.has(McpScope::Context),
+            P::HooksArrival | P::HooksBeforeSend | P::HooksOpen => false,
+            P::Storage
+            | P::Notifications
+            | P::UiDialogs
+            | P::Background
+            | P::McpExpose
+            | P::Network(_) => true,
+        }
+    }
+}
+
 /// The grants of one plug-in, as the gate uses them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Gate {
     grants: Vec<PluginGrant>,
+    /// The MCP client the plug-in serves right now, if any.
+    limit: Option<Arc<ClientLimit>>,
 }
 
 impl Gate {
@@ -76,7 +145,32 @@ impl Gate {
                 accounts: g.accounts.clone().filter(|_| g.permission.takes_accounts()),
             })
             .collect();
-        Self { grants }
+        Self {
+            grants,
+            limit: None,
+        }
+    }
+
+    /// This gate narrowed to what an MCP client may reach (see
+    /// [`ClientLimit`]).
+    pub fn limited(&self, limit: Arc<ClientLimit>) -> Self {
+        Self {
+            grants: self
+                .grants
+                .iter()
+                .filter(|g| limit.permits(&g.permission))
+                .cloned()
+                .collect(),
+            limit: Some(limit),
+        }
+    }
+
+    /// The folders the served MCP client excludes (none without one).
+    pub fn excluded_folders(&self) -> Vec<FolderId> {
+        self.limit
+            .as_ref()
+            .map(|l| l.excluded_folders.clone())
+            .unwrap_or_default()
     }
 
     /// The effective grants.
@@ -103,12 +197,17 @@ impl Gate {
     }
 
     fn scope_of(
+        &self,
         grant: &PluginGrant,
         expand: &dyn Fn(&[AccountId]) -> Vec<AccountId>,
     ) -> AccountScope {
-        match &grant.accounts {
+        let own = match &grant.accounts {
             None => AccountScope::All,
             Some(accounts) => AccountScope::Only(expand(accounts)),
+        };
+        match self.limit.as_ref().and_then(|l| l.accounts.as_ref()) {
+            Some(accounts) => own.intersect(&AccountScope::Only(expand(accounts))),
+            None => own,
         }
     }
 
@@ -121,7 +220,7 @@ impl Gate {
         let grant = self
             .grant(&PluginPermission::MailRead)
             .ok_or_else(|| Denied::new(call, PluginPermission::MailRead))?;
-        Ok(Self::scope_of(grant, expand))
+        Ok(self.scope_of(grant, expand))
     }
 
     /// The accounts whose bodies may be read (`mail.read` ∩
@@ -135,7 +234,7 @@ impl Gate {
         let body = self
             .grant(&PluginPermission::MailReadBody)
             .ok_or_else(|| Denied::new(call, PluginPermission::MailReadBody))?;
-        Ok(read.intersect(&Self::scope_of(body, expand)))
+        Ok(read.intersect(&self.scope_of(body, expand)))
     }
 
     /// The accounts a granted `permission` reaches on its own (M4a; every
@@ -149,7 +248,7 @@ impl Gate {
         let grant = self
             .grant(permission)
             .ok_or_else(|| Denied::new(call, permission))?;
-        Ok(Self::scope_of(grant, expand))
+        Ok(self.scope_of(grant, expand))
     }
 
     /// The accounts where `permission` and `mail.read` are both granted
@@ -453,6 +552,70 @@ mod tests {
                 .permission,
             "mail.read"
         );
+    }
+
+    /// Review M4a: serving an MCP client, the gate keeps only what the
+    /// client's grant covers too.
+    #[test]
+    fn client_limits_narrow_the_gate() {
+        let m = manifest(&[
+            "mail.read",
+            "mail.read.body",
+            "mail.organize",
+            "mail.send",
+            "tasks.write",
+            "storage",
+            "network:api.example.com",
+        ]);
+        let gate = Gate::new(
+            &m,
+            &[
+                grant("mail.read", None),
+                grant("mail.read.body", None),
+                grant("mail.organize", None),
+                grant("mail.send", None),
+                grant("tasks.write", None),
+                grant("storage", None),
+                grant("network:api.example.com", None),
+            ],
+        );
+        let limit = ClientLimit::from_grant(&McpGrant {
+            scopes: vec![McpScope::Read, McpScope::Draft],
+            accounts: vec!["work".into()],
+            excluded_folders: vec!["work/hr".into()],
+            ..McpGrant::default()
+        });
+        let narrowed = gate.limited(Arc::new(limit));
+        assert!(narrowed.has(&PluginPermission::MailRead));
+        assert!(narrowed.has(&PluginPermission::MailSend), "drafts");
+        assert!(!narrowed.has(&PluginPermission::MailOrganize));
+        assert!(!narrowed.has(&PluginPermission::TasksWrite));
+        assert!(narrowed.has(&PluginPermission::Storage));
+        assert_eq!(narrowed.network_patterns(), ["api.example.com"]);
+        assert_eq!(
+            narrowed.mail_scope("x", &no_expand).unwrap(),
+            AccountScope::Only(vec!["work".into()])
+        );
+        assert_eq!(
+            narrowed.body_scope("x", &no_expand).unwrap(),
+            AccountScope::Only(vec!["work".into()])
+        );
+        assert_eq!(narrowed.excluded_folders(), [FolderId::from("work/hr")]);
+        assert!(gate.excluded_folders().is_empty());
+        assert_eq!(gate.mail_scope("x", &no_expand).unwrap(), AccountScope::All);
+
+        // A revoked client (empty grant) reaches no mail at all.
+        let none = gate.limited(Arc::new(ClientLimit::from_grant(&McpGrant::default())));
+        assert!(none.mail_scope("x", &no_expand).is_err());
+        assert!(none.has(&PluginPermission::Storage));
+        // All accounts: no account limit.
+        let all = ClientLimit::from_grant(&McpGrant {
+            scopes: vec![McpScope::Read],
+            accounts: vec![AccountId::all()],
+            ..McpGrant::default()
+        });
+        assert_eq!(all.accounts, None);
+        assert!(!all.permits(&PluginPermission::HooksBeforeSend));
     }
 
     fn fetch(url: &str) -> FetchInit {

@@ -58,6 +58,7 @@ mcp-tool-elicit-destructive = { $summary } Deleting can only be approved in Nail
 
 # $reasons = the plug-ins' reasons.
 mcp-tool-error-vetoed = A plug-in stopped sending: { $reasons }
+mcp-tool-error-draft-changed = The draft changed after you were asked, so it was not sent. Review it and send it from Nail.
 
 ## Audit log (writes)
 

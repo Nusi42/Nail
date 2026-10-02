@@ -695,6 +695,13 @@ fn encrypted_cheap(service: &Service, id: &MessageId) -> bool {
         .is_some_and(|raw| crate::crypto::is_encrypted_raw(&raw))
 }
 
+/// Whether a plug-in write from this API may delete (Trash, Junk,
+/// permanent): every API but arrival hooks, whose actions are never a
+/// delete (review M4a).
+fn allows_deletes(operation: &str) -> bool {
+    operation != "hooks.arrival"
+}
+
 impl PluginServices for CoreServices {
     fn expand_accounts(&self, accounts: &[AccountId]) -> Vec<AccountId> {
         let Ok(service) = self.service() else {
@@ -1175,15 +1182,18 @@ impl PluginServices for CoreServices {
                 AccountScope::Only(accounts) => Some(accounts),
             };
             let writes = service.actor_writes();
+            let allow_destructive = allows_deletes(&request.operation);
             let result = Box::pin(writes.run(nail_mcp::ActorWriteRequest {
                 by: request.attribution,
                 operation: request.operation,
                 write: crate::agents::actor_write(request.write),
                 accounts,
+                allow_destructive,
             }))
             .await;
-            // Every plug-in write leaves a line in its log (the audit of
-            // plug-ins); no mailbox content, only what ran and how it ended.
+            // Every plug-in write leaves a line in its log for the
+            // developer; the audit record the plug-in cannot push out is
+            // the MCP audit entry `ActorWrites` writes (review M4a).
             if let Some(plugin_id) = plugin {
                 let outcome = match &result {
                     Ok(McpWriteResult::Done { .. }) => "done",
@@ -1662,6 +1672,13 @@ mod tests {
 
     fn rewrite(text: &str) -> Option<String> {
         header_only(&nail_search::parse_query(text).unwrap()).map(|q| q.to_string())
+    }
+
+    #[test]
+    fn arrival_hook_actions_never_delete() {
+        assert!(!allows_deletes("hooks.arrival"));
+        assert!(allows_deletes("nail.mail.update"));
+        assert!(allows_deletes("nail.mail.delete"));
     }
 
     #[test]

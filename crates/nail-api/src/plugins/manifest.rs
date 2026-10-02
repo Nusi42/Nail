@@ -160,8 +160,9 @@ pub struct PluginContributions {
     #[serde(default)]
     #[ts(optional, as = "Option<Vec<PluginAttachmentActionDef>>")]
     pub attachment_actions: Vec<PluginAttachmentActionDef>,
-    /// Link menu actions (M4a; no permission: they get only the link the
-    /// user picked).
+    /// Link actions (M4a; no permission: they get only the link the user
+    /// picked). Not offered in the reader yet, so users cannot pick them
+    /// in this version.
     #[serde(default)]
     #[ts(optional, as = "Option<Vec<PluginLinkActionDef>>")]
     pub link_actions: Vec<PluginLinkActionDef>,

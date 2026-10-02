@@ -38,22 +38,26 @@ Permission: `attachments`.
 
 ## Building and packing
 
+The build scripts write into the example's own folder (`dist/index.js`,
+`dist/<name>.nailplugin`). The repository lives in OneDrive, where build
+output must not go, so **copy the example out of the repository first**
+and build the copy:
+
 ```
-cd examples/<name>
+cp -r examples/<name> <dir>/<name>     # any folder outside the repository
+cd <dir>/<name>
 npm run package      # type-check, bundle, pack → dist/<name>.nailplugin
 ```
 
-or, without npm scripts (for example in e2e setup; `--out` puts the
-package anywhere, outside the repository):
+The copy needs `@nail/plugin-api`, esbuild and TypeScript: run it inside a
+folder whose `node_modules` has them, or `npm install` them there.
+`pack.mjs --out <file>` puts the package anywhere, but `build.mjs` always
+writes `dist/index.js` next to the manifest. The e2e setup does not use
+these scripts: `e2e/support/plugins.ts` bundles every example with the
+same esbuild options straight into its build-output folder.
 
-```
-node examples/<name>/scripts/build.mjs
-node examples/<name>/scripts/pack.mjs --out <dir>/<name>.nailplugin
-```
-
-The folders are not npm workspaces; `@nail/plugin-api`, esbuild and
-TypeScript resolve from the repository's `node_modules`. `dist/` is
-gitignored and never committed. The tests live in
+The folders are not npm workspaces. `dist/` is gitignored and never
+committed. The tests live in
 `packages/create-nail-plugin/test/` (`examples.test.ts` for what every
 example must do, `example.test.ts`, `attachment-check.test.ts`,
 `csv-preview.test.ts` for their behaviour); they copy each example to a temp

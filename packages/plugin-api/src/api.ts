@@ -928,7 +928,10 @@ export interface PluginAttachmentsRegistry {
 
 /** Link registrations (`ctx.links`). */
 export interface PluginLinksRegistry {
-  /** Registers a link action (`contributes.linkActions`). */
+  /**
+   * Registers a link action (`contributes.linkActions`). The reader does
+   * not offer link actions yet; test them with the test host.
+   */
   registerAction(name: string, handler: PluginActionHandler): void;
 }
 

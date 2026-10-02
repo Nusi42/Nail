@@ -1338,3 +1338,162 @@ async fn rules_need_all_accounts_and_ask_first() {
     );
     assert!(!rule.enabled);
 }
+
+/// Review M4a: an idempotency key names one request. Reusing it for other
+/// arguments (or another tool) while the first waits is refused, so an
+/// approval of what the user saw never runs something else.
+#[tokio::test]
+async fn a_reused_key_never_attaches_another_request_to_a_confirmation() {
+    let env = start().await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(
+        &env.store,
+        &id,
+        &[McpScope::Organize, McpScope::PermanentDelete],
+        &["work"],
+    )
+    .await;
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let waiting = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            call(
+                &client,
+                "delete_messages",
+                json!({"message_ids": ["m1"], "idempotency_key": "k1"}),
+            )
+            .await
+        })
+    };
+    let confirmation = pending(&env.store).await;
+    assert_eq!(confirmation.kind, ActionKind::Trash);
+    // Same tool and key, other arguments: refused, nothing new is asked.
+    let other = call(
+        &client,
+        "delete_messages",
+        json!({"message_ids": ["m3"], "permanent": true, "idempotency_key": "k1"}),
+    )
+    .await;
+    assert_eq!(other.is_error, Some(true));
+    assert_eq!(
+        value(&other)["error"],
+        "invalid_request",
+        "{:?}",
+        value(&other)
+    );
+    let still = env
+        .store
+        .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
+        .unwrap();
+    assert_eq!(still.len(), 1);
+    assert_eq!(still[0].id, confirmation.id);
+    // Another tool under the key: refused too.
+    let other = call(
+        &client,
+        "update_messages",
+        json!({"message_ids": ["m1"], "flagged": true, "idempotency_key": "k1"}),
+    )
+    .await;
+    assert_eq!(other.is_error, Some(true));
+    // The approval runs exactly what was shown.
+    decide(&env.store, &confirmation, true);
+    let result = tokio::time::timeout(Duration::from_secs(10), waiting)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(value(&result)["status"], "done");
+    assert_eq!(
+        env.data.written(),
+        [Request::DeleteMessages {
+            message_ids: vec!["m1".into()],
+            permanent: false
+        }]
+    );
+}
+
+/// Review M4a: a pending confirmation nothing in this server waits for
+/// (left from before a restart) is cancelled instead of joined.
+#[tokio::test]
+async fn an_orphaned_confirmation_under_a_key_is_cancelled() {
+    let env = start().await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(&env.store, &id, &[McpScope::Organize], &["work"]).await;
+    let client = plain(env.server.url(), &token).await;
+    // What `delete_messages` with key k2 stores, left behind by an earlier
+    // run of the server.
+    let args = json!({"message_ids": ["m1"], "idempotency_key": "k2"});
+    let payload = json!({
+        "action": "requests",
+        "requests": [{"type": "DeleteMessages", "message_ids": ["m1"], "permanent": false}],
+    });
+    let orphan = env
+        .store
+        .insert_confirmation(
+            nail_api::agents::NewConfirmation {
+                requested_by: nail_api::agents::ActionAttribution {
+                    actor: ActionActor::mcp_client(id.clone()),
+                    name: "Claude".into(),
+                    on_behalf_of: None,
+                },
+                kind: ActionKind::Trash,
+                operation: "delete_messages".into(),
+                summary: nail_api::LocalizedMessage::new("confirmation-summary-trash"),
+                targets: vec![],
+                changes: vec![],
+                account_ids: vec!["work".into()],
+                payload,
+                idempotency_key: Some("k2".into()),
+                timeout_secs: 300,
+            },
+            chrono::Utc::now().timestamp(),
+            20,
+        )
+        .unwrap();
+    let result = call(&client, "delete_messages", args).await;
+    assert_eq!(value(&result)["status"], "expired", "{:?}", value(&result));
+    let ended = env
+        .store
+        .get_confirmation(&orphan.confirmation().id)
+        .unwrap();
+    assert_eq!(ended.state, ConfirmationState::Cancelled);
+    assert!(env.data.written().is_empty());
+}
+
+/// Review M4a: moving into Trash with `update_messages` is a delete: it
+/// asks even when organizing is allowed without asking.
+#[tokio::test]
+async fn moving_to_trash_asks_like_a_delete() {
+    let env = start().await;
+    let (id, token) = create_client(&env.store, "Claude").await;
+    grant(&env.store, &id, &[McpScope::Organize], &["work"]).await;
+    env.store
+        .set_action_policy(
+            &ActionActor::mcp_client(id.clone()),
+            ActionKind::Organize,
+            Some(ActionPolicyMode::Allow),
+            0,
+        )
+        .unwrap();
+    let client = Arc::new(plain(env.server.url(), &token).await);
+    let waiting = {
+        let client = client.clone();
+        tokio::spawn(async move {
+            call(
+                &client,
+                "update_messages",
+                json!({"message_ids": ["m1"], "move_to_folder_id": "work-trash"}),
+            )
+            .await
+        })
+    };
+    let confirmation = pending(&env.store).await;
+    assert_eq!(confirmation.kind, ActionKind::Trash);
+    assert!(!confirmation.can_always_allow);
+    decide(&env.store, &confirmation, false);
+    let result = tokio::time::timeout(Duration::from_secs(10), waiting)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(value(&result)["status"], "denied");
+    assert!(env.data.written().is_empty());
+}

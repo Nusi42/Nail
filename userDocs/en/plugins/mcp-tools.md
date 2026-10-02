@@ -54,13 +54,21 @@ A tool runs under two sets of permissions:
 - the **client's** grant decides whether the agent may call it (`scopes`,
   and every call is in the client's activity log and counts against its
   rate limits);
-- the **plug-in's** permissions decide what the handler may do. Writes it
-  makes while serving the call follow the plug-in's confirmations, and the
-  confirmation names both: "Plug-in “Acme CRM” for the AI agent “Claude
-  Desktop”".
+- while the handler runs, it may do only what **both** the plug-in and the
+  client may: the plug-in's permissions, narrowed to the client's grant.
+  Mail in accounts the client may not read, or in folders it excludes, is
+  "not found"; a write the client's scopes do not cover is refused
+  (`forbidden`). The plug-in's own storage, network hosts, notifications
+  and dialogs stay available.
+- writes it makes while serving the call ask when the plug-in's **or** the
+  client's confirmation setting asks, count against the client's limits
+  (changes per minute, messages per hour), are in the client's activity
+  log, and the confirmation names both: "Plug-in “Acme CRM” for the AI
+  agent “Claude Desktop”".
 
 So a tool cannot give an agent more than the plug-in may do, and cannot
-give the plug-in more than you granted it.
+give the plug-in more than you granted it — nor more than the agent may
+do.
 
 ## Testing
 

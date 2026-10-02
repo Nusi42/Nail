@@ -332,7 +332,7 @@ To develop one:
 
 ```sh
 node packages/create-nail-plugin/index.mjs <dir> [--template command|hook|composer|attachment] [--id ID] [--name NAME] [--sdk PATH]
-npm run package --prefix examples/<name>    # build + pack an example: follow-up, attachment-check, csv-preview (dist/ gitignored)
+npm run package --prefix <copy>             # build + pack a copy of examples/<name> made outside the repo (the scripts write dist/ next to the manifest; see examples/README.md)
 nail plugin dev <folder> [--url URL | --data-dir DIR]
 ```
 

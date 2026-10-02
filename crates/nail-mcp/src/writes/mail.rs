@@ -273,6 +273,12 @@ fn attachment_names(draft: &Draft) -> Option<String> {
     joined(draft.attachments.iter().map(|a| a.filename.as_str()))
 }
 
+/// Whether moving into a folder of this role deletes (Trash; Junk, which
+/// servers empty on their own).
+pub(crate) fn deletes(role: FolderRole) -> bool {
+    matches!(role, FolderRole::Trash | FolderRole::Junk)
+}
+
 /// `update_messages`.
 pub(crate) async fn update_messages<D: McpData>(
     ctx: &Ctx<'_, D>,
@@ -375,8 +381,14 @@ pub(crate) async fn update_messages<D: McpData>(
         let names: Vec<String> = messages.iter().map(|m| folder_name(&m.folder_id)).collect();
         joined(names.iter().map(String::as_str))
     };
+    // A move into Trash (or Junk, which servers empty) deletes: it asks
+    // like `delete_messages` (review M4a).
+    let mut kind = ActionKind::Organize;
     if let Some(folder) = &a.move_to_folder_id {
         let folder = ctx.writable_folder(&FolderId::new(folder.clone())).await?;
+        if deletes(folder.role) {
+            kind = ActionKind::Trash;
+        }
         if let Some(other) = messages.iter().find(|m| m.account_id != folder.account_id) {
             return Err(invalid(format!(
                 "message {} is not in the folder's account {}",
@@ -428,9 +440,14 @@ pub(crate) async fn update_messages<D: McpData>(
             wake_folder_id: None,
         });
     }
+    let summary = if kind == ActionKind::Trash {
+        "confirmation-summary-trash"
+    } else {
+        "confirmation-summary-organize"
+    };
     Ok(Plan {
-        kind: ActionKind::Organize,
-        summary: LocalizedMessage::new("confirmation-summary-organize")
+        kind,
+        summary: LocalizedMessage::new(summary)
             .arg("actor", ctx.actor())
             .arg("count", messages.len()),
         targets: messages
@@ -790,7 +807,8 @@ pub(crate) async fn send_message<D: McpData>(
 ) -> Result<Plan, Failure> {
     ctx.access.require(McpScope::Send)?;
     let id = DraftId::new(a.draft_id.clone());
-    let (draft, account) = ctx.writable_draft(&id).await?;
+    let (mut draft, account) = ctx.writable_draft(&id).await?;
+    draft.id = Some(id.clone());
     if let Some(at) = &a.send_at {
         chrono::DateTime::parse_from_rfc3339(at)
             .map_err(|_| invalid(format!("invalid time {at:?}")))?;
@@ -848,13 +866,12 @@ pub(crate) async fn send_message<D: McpData>(
             audit("send_at", None, a.send_at.clone()),
         ],
         sends: 1,
-        action: Action::Requests {
-            requests: vec![Request::SendDraft {
-                draft_id: id,
-                delay_secs: None,
-                send_at: a.send_at,
-                crypto: None,
-            }],
+        // The draft as the confirmation shows it: sending refuses a draft
+        // that changed since (review M4a).
+        action: Action::SendDraft {
+            draft_id: id,
+            send_at: a.send_at,
+            expected: Box::new(draft),
         },
     })
 }
@@ -941,6 +958,12 @@ mod tests {
         set_body(&mut draft, ComposerMode::Plain, "hi".into());
         assert_eq!((body_of(&draft), draft.html.as_deref()), ("hi", None));
         assert_eq!(mode_of(McpTextFormat::Text), ComposerMode::Plain);
+    }
+
+    #[test]
+    fn trash_and_junk_moves_delete() {
+        assert!(deletes(FolderRole::Trash) && deletes(FolderRole::Junk));
+        assert!(!deletes(FolderRole::Archive) && !deletes(FolderRole::Inbox));
     }
 
     #[test]

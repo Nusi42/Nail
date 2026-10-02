@@ -71,6 +71,11 @@ pub trait CoreAccess: Send + Sync + 'static {
         None
     }
 
+    /// The core's shared rate limiter; `None` = the server's own.
+    fn rate_limiter(&self) -> Option<Arc<crate::limits::RateLimiter>> {
+        None
+    }
+
     /// Renders a user-facing text in the core's locale (default English).
     fn render(&self, message: &nail_api::LocalizedMessage) -> String {
         nail_config::l10n::english(message)
@@ -267,6 +272,10 @@ impl<C: CoreAccess> McpData for CoreData<C> {
 
     fn confirmations(&self) -> Option<Arc<dyn ConfirmationBroker>> {
         self.0.confirmations()
+    }
+
+    fn rate_limiter(&self) -> Option<Arc<crate::limits::RateLimiter>> {
+        self.0.rate_limiter()
     }
 
     fn render(&self, message: &nail_api::LocalizedMessage) -> String {

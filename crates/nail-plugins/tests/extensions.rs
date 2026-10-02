@@ -15,7 +15,16 @@ use nail_api::plugins::{
     PluginUiTarget,
 };
 use nail_api::{ErrorCode, Event, McpScope, UiContext};
-use nail_plugins::{PackageFiles, PluginSpec};
+use nail_plugins::{ClientLimit, PackageFiles, PluginSpec};
+
+/// An MCP client that may reach everything.
+fn full() -> ClientLimit {
+    ClientLimit {
+        scopes: McpScope::ALL.to_vec(),
+        accounts: None,
+        excluded_folders: Vec::new(),
+    }
+}
 use serde_json::{Value, json};
 
 fn add_files(mut spec: PluginSpec, files: &[(&str, &[u8])]) -> PluginSpec {
@@ -432,6 +441,7 @@ async fn mcp_tools_are_exposed_and_act_on_behalf_of_the_client() {
             "crm__find-customer",
             json!({"email": "ada@example.com"}),
             client.clone(),
+            full(),
         )
         .await
         .unwrap();
@@ -444,19 +454,24 @@ async fn mcp_tools_are_exposed_and_act_on_behalf_of_the_client() {
     assert_eq!(write.attribution.on_behalf_of.as_ref(), Some(&client));
 
     let err = host
-        .call_mcp_tool("crm__find-customer", json!({"email": 7}), client.clone())
+        .call_mcp_tool(
+            "crm__find-customer",
+            json!({"email": 7}),
+            client.clone(),
+            full(),
+        )
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::InvalidRequest);
     let err = host
-        .call_mcp_tool("crm__fails", Value::Null, client.clone())
+        .call_mcp_tool("crm__fails", Value::Null, client.clone(), full())
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::Internal);
     assert!(err.message.contains("no CRM"));
     for name in ["hidden__fails", "crm__unknown", "search_messages"] {
         let err = host
-            .call_mcp_tool(name, json!({}), client.clone())
+            .call_mcp_tool(name, json!({}), client.clone(), full())
             .await
             .unwrap_err();
         assert_eq!(err.code, ErrorCode::NotFound, "{name}");
@@ -678,13 +693,13 @@ async fn extension_handlers_have_wall_clock_and_size_limits() {
     };
     let started = std::time::Instant::now();
     let err = host
-        .call_mcp_tool("limited__hang", json!({}), client.clone())
+        .call_mcp_tool("limited__hang", json!({}), client.clone(), full())
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::Unavailable);
     assert!(started.elapsed() < std::time::Duration::from_secs(2));
     let err = host
-        .call_mcp_tool("limited__big", json!({}), client)
+        .call_mcp_tool("limited__big", json!({}), client, full())
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::TooLarge);
@@ -707,4 +722,73 @@ async fn extension_handlers_have_wall_clock_and_size_limits() {
     .unwrap();
     assert_eq!(result(&fake, "bytes", "E ").await, "true");
     assert!(fake.fetches.lock().unwrap().is_empty());
+}
+
+/// Review M4a: a plug-in serving an MCP client reads and writes only what
+/// the client's grant reaches too (its accounts, not its excluded folders,
+/// its scopes).
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_tools_run_within_the_clients_grant() {
+    let fake = Fake::new();
+    {
+        let mut messages = fake.messages.lock().unwrap();
+        messages.push((message("m-work", "work", "t1", false), None));
+        messages.push((message("m-home", "home", "t2", false), None));
+        let mut hr = message("m-hr", "work", "t3", false);
+        hr.folder_id = "hr".into();
+        messages.push((hr, None));
+    }
+    let host = host(&fake);
+    let js = r#"
+      export default { activate(ctx) {
+        ctx.mcp.registerTool("peek", async () => {
+          const seen = {};
+          for (const id of ["m-work", "m-home", "m-hr"]) {
+            try { await nail.mail.get(id); seen[id] = "ok"; }
+            catch (e) { seen[id] = e.code; }
+          }
+          try { await nail.tasks.create({ title: "x" }); seen.task = "ok"; }
+          catch (e) { seen.task = e.code; }
+          return seen;
+        });
+      } };
+    "#;
+    host.start(spec_with(
+        "crm",
+        &["mcp.expose", "mail.read", "tasks.write"],
+        json!({ "mcpTools": [{ "id": "peek", "description": "Peek" }] }),
+        js,
+    ))
+    .await
+    .unwrap();
+    let client = McpClientRef {
+        client_id: "agent".into(),
+        name: "Agent".into(),
+    };
+    let narrow = ClientLimit {
+        scopes: vec![McpScope::Read],
+        accounts: Some(vec!["work".into()]),
+        excluded_folders: vec!["hr".into()],
+    };
+    let seen = host
+        .call_mcp_tool("crm__peek", json!({}), client.clone(), narrow)
+        .await
+        .unwrap();
+    assert_eq!(
+        seen,
+        json!({"m-work": "ok", "m-home": "not_found", "m-hr": "not_found", "task": "forbidden"})
+    );
+    assert!(fake.writes().is_empty(), "no task without the pim scope");
+
+    // The same plug-in for a client with everything reaches everything.
+    let seen = host
+        .call_mcp_tool("crm__peek", json!({}), client, full())
+        .await
+        .unwrap();
+    assert_eq!(
+        seen,
+        json!({"m-work": "ok", "m-home": "ok", "m-hr": "ok", "task": "ok"})
+    );
+    // Only the second call wrote.
+    assert_eq!(fake.writes().len(), 1);
 }

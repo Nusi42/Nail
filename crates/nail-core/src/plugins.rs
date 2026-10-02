@@ -230,6 +230,13 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             if let Some(host) = service.inner.plugins.existing_host() {
                 host.stop(&plugin_id, PluginStopReason::Disabled);
             }
+            // Review M4a: what it asked for while enabled is not approvable
+            // any more (its policies stay for when it is enabled again).
+            service
+                .cancel_confirmations_of(&nail_api::agents::ActionActor::Plugin {
+                    plugin_id: plugin_id.clone(),
+                })
+                .await;
             service.broadcast(Event::PluginsChanged);
             plugin_response(service, plugin_id).await?
         }
@@ -269,6 +276,12 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             if let Some(host) = service.inner.plugins.existing_host() {
                 host.update_grants(&plugin_id, &grants);
             }
+            // Review M4a: pending writes were checked under the old grants.
+            service
+                .cancel_confirmations_of(&nail_api::agents::ActionActor::Plugin {
+                    plugin_id: plugin_id.clone(),
+                })
+                .await;
             service.broadcast(Event::PluginsChanged);
             plugin_response(service, plugin_id).await?
         }

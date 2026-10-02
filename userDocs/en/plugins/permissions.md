@@ -52,7 +52,8 @@ See [mail hooks](hooks.md).
 | `mcp.expose` | Offering tools to the AI agents (MCP clients) you connected, under those clients' permissions. See [tools for AI agents](mcp-tools.md). |
 
 Link actions need no permission: they get only the link you picked (and
-the message it is in, when the plug-in may read it).
+the message it is in, when the plug-in may read it). The reader does not
+offer link actions yet.
 
 ## Everything else
 

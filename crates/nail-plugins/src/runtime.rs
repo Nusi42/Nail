@@ -47,7 +47,7 @@ use rquickjs::{Context, Ctx, Function, Module, Object, Persistent, Runtime, Type
 use serde_json::json;
 use tokio::sync::oneshot;
 
-use crate::gate::{Denied, FetchInit, FetchRefusal, Gate};
+use crate::gate::{ClientLimit, Denied, FetchInit, FetchRefusal, Gate};
 use crate::host::{DialogEntry, Inner};
 use crate::jobs::{CpuMeter, minute_of};
 use crate::l10n::{self, PluginCatalogs};
@@ -61,13 +61,15 @@ pub(crate) const MAX_COMPOSER_TEXT: usize = 256 * 1024;
 
 /// Who a turn runs for: the UI whose request started it (dialogs and
 /// notifications go there) and, while a plug-in serves an exposed MCP
-/// tool, the client it acts for (its writes are attributed to both).
+/// tool, the client it acts for (its writes are attributed to both) and
+/// what that client may reach (the gate is narrowed to it, review M4a).
 /// Pending API calls and timers carry the origin of the turn that started
 /// them.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Origin {
     pub client: Option<String>,
     pub on_behalf: Option<McpClientRef>,
+    pub limit: Option<Arc<ClientLimit>>,
 }
 
 impl Origin {
@@ -75,6 +77,7 @@ impl Origin {
         Self {
             client,
             on_behalf: None,
+            limit: None,
         }
     }
 }
@@ -600,8 +603,23 @@ impl State {
         Answer::Error(error)
     }
 
+    /// The plug-in's gate, narrowed to the MCP client the turn serves.
     fn gate(&self) -> Gate {
-        self.gate.read().map(|g| g.clone()).unwrap_or_default()
+        let gate = self.gate.read().map(|g| g.clone()).unwrap_or_default();
+        match &self.origin.limit {
+            Some(limit) => gate.limited(Arc::clone(limit)),
+            None => gate,
+        }
+    }
+
+    /// Folders the served MCP client excludes: messages there are not
+    /// found.
+    fn hidden_folders(&self) -> Vec<nail_api::FolderId> {
+        self.origin
+            .limit
+            .as_ref()
+            .map(|l| l.excluded_folders.clone())
+            .unwrap_or_default()
     }
 
     fn expand(&self) -> impl Fn(&[AccountId]) -> Vec<AccountId> + use<> {
@@ -931,9 +949,12 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 Err(d) => return Ok(s.deny(&d)),
             };
             let id = MessageId::from(str_field(payload, "id")?);
+            let hidden = s.hidden_folders();
             s.spawn(call, payload, async move {
                 match services.mail_get(id).await? {
-                    Some(m) if scope.contains(&m.account_id) => Ok(to_json(m)?),
+                    Some(m) if scope.contains(&m.account_id) && !hidden.contains(&m.folder_id) => {
+                        Ok(to_json(m)?)
+                    }
                     _ => Err(ApiError::not_found("message not found")),
                 }
             })
@@ -946,9 +967,12 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
             };
             let id = MessageId::from(str_field(payload, "id")?);
             let inner = Arc::clone(&s.inner);
+            let hidden = s.hidden_folders();
             s.spawn(call, payload, async move {
                 let header = services.mail_get(id.clone()).await?;
-                let Some(header) = header.filter(|m| scope.contains(&m.account_id)) else {
+                let Some(header) = header
+                    .filter(|m| scope.contains(&m.account_id) && !hidden.contains(&m.folder_id))
+                else {
                     return Err(ApiError::not_found("message not found"));
                 };
                 if header.encrypted {
@@ -990,13 +1014,14 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 .and_then(serde_json::Value::as_u64)
                 .map_or(50, |l| u32::try_from(l).unwrap_or(max))
                 .clamp(1, max);
+            let hidden = s.hidden_folders();
             s.spawn(call, payload, async move {
                 let found = services
                     .mail_search(query, scope.clone(), body_scope, limit)
                     .await?;
                 let found: Vec<_> = found
                     .into_iter()
-                    .filter(|m| scope.contains(&m.account_id))
+                    .filter(|m| scope.contains(&m.account_id) && !hidden.contains(&m.folder_id))
                     .take(limit as usize)
                     .collect();
                 to_json(found)
@@ -1009,11 +1034,12 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 Err(d) => return Ok(s.deny(&d)),
             };
             let thread = ThreadId::from(str_field(payload, "threadId")?);
+            let hidden = s.hidden_folders();
             s.spawn(call, payload, async move {
                 let found = services.mail_thread(thread).await?;
                 let found: Vec<_> = found
                     .into_iter()
-                    .filter(|m| scope.contains(&m.account_id))
+                    .filter(|m| scope.contains(&m.account_id) && !hidden.contains(&m.folder_id))
                     .collect();
                 to_json(found)
             })
@@ -1398,6 +1424,7 @@ fn write_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<An
         scope,
     };
     let services = Arc::clone(&s.inner.services);
+    let hidden = s.hidden_folders();
     // The payload is logged without its texts and bytes.
     let summary = json!({ "kind": request.kind.as_str() });
     Ok(s.spawn(call, &summary, async move {
@@ -1405,12 +1432,14 @@ fn write_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<An
         for id in read_ids {
             let found = services.mail_get(id).await?;
             match (&found, &check_scope) {
-                (Some(m), Some(scope)) if scope.contains(&m.account_id) => {}
+                (Some(m), Some(scope))
+                    if scope.contains(&m.account_id) && !hidden.contains(&m.folder_id) => {}
                 _ => return Err(ApiError::not_found("message not found")),
             }
         }
         for id in content_ids {
             let found = services.mail_get(id).await?;
+            let found = found.filter(|m| !hidden.contains(&m.folder_id));
             match (&found, &content_scope) {
                 (Some(m), Some(scope)) if scope.contains(&m.account_id) && !m.encrypted => {}
                 (Some(m), Some(scope)) if scope.contains(&m.account_id) => {
@@ -2385,6 +2414,7 @@ fn handle(
                 Origin {
                     client: client_id.or(origin.client),
                     on_behalf: origin.on_behalf,
+                    limit: origin.limit,
                 },
                 budget,
                 "dialogAction",

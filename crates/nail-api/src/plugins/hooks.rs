@@ -230,9 +230,12 @@ pub struct PluginOutgoingMessage {
     pub bcc: Vec<Address>,
     /// Subject.
     pub subject: String,
-    /// The body as plain text (the text rendering of HTML / Markdown).
+    /// The body as plain text (the text rendering of HTML / Markdown);
+    /// empty when the message will be end-to-end encrypted (hooks never see
+    /// encrypted content).
     pub text: String,
-    /// The HTML body as it will be sent, if any.
+    /// The HTML body as it will be sent, if any (never for a message that
+    /// will be end-to-end encrypted).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub html: Option<String>,

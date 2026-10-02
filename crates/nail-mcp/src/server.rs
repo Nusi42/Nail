@@ -84,7 +84,7 @@ impl From<ApiError> for Failure {
 
 impl Failure {
     /// Audit outcome and detail.
-    fn audit(&self) -> (McpOutcome, Option<String>) {
+    pub(crate) fn audit(&self) -> (McpOutcome, Option<String>) {
         match self {
             Self::Denied(denial) => (McpOutcome::Denied, Some(denial.to_string())),
             Self::Api(err) if err.code == ErrorCode::RateLimited => {
@@ -140,8 +140,9 @@ pub(crate) struct Shared<D> {
     pub hub: Arc<Hub>,
     /// Confirmations (the core's, or the store-backed one).
     pub broker: Arc<dyn ConfirmationBroker>,
-    /// Per-client rate limits.
-    pub limiter: RateLimiter,
+    /// Per-client rate limits (the core's, shared with plug-in writes for
+    /// clients, or the server's own).
+    pub limiter: Arc<RateLimiter>,
     /// Writes waiting for a decision, MRTR continuations, idempotency keys.
     pub writes: WriteState,
     /// Confirmation timeout and polling.
@@ -159,12 +160,13 @@ impl<D: McpData> Shared<D> {
                 settings.poll_interval,
             ))
         });
+        let limiter = data.rate_limiter().unwrap_or_default();
         Self {
             store,
             data,
             hub: Arc::new(Hub::default()),
             broker,
-            limiter: RateLimiter::default(),
+            limiter,
             writes: WriteState::default(),
             settings,
         }

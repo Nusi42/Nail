@@ -77,6 +77,21 @@ impl Access {
         }
     }
 
+    /// What both reach (review M4a: a plug-in serving an MCP client acts
+    /// within the overlap of its own and the client's grant): the scopes
+    /// and accounts of both, the folders either excludes.
+    pub fn intersect(&self, other: &Access) -> Access {
+        let accounts = match (&self.accounts, &other.accounts) {
+            (None, x) | (x, None) => x.clone(),
+            (Some(a), Some(b)) => Some(a.intersection(b).cloned().collect()),
+        };
+        Self {
+            scopes: self.scopes.intersection(&other.scopes).copied().collect(),
+            accounts,
+            excluded: self.excluded.union(&other.excluded).cloned().collect(),
+        }
+    }
+
     /// The client's grant, resolved.
     pub fn of(client: &McpClient, virtuals: &[VirtualAccountConfig]) -> Self {
         Self::resolve(&client.grant, virtuals)
@@ -268,6 +283,35 @@ mod tests {
                 .require_message(&summary("work", "work/inbox"))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn intersections_keep_what_both_allow() {
+        let plugin = Access::resolve(
+            &McpGrant {
+                scopes: vec![McpScope::Read, McpScope::Organize, McpScope::Send],
+                all_accounts: true,
+                ..McpGrant::default()
+            },
+            &[],
+        );
+        let client = Access::resolve(
+            &McpGrant {
+                scopes: vec![McpScope::Read, McpScope::Organize, McpScope::Draft],
+                accounts: vec!["work".into()],
+                excluded_folders: vec!["work/hr".into()],
+                ..McpGrant::default()
+            },
+            &[],
+        );
+        let both = plugin.intersect(&client);
+        assert!(both.has(McpScope::Organize));
+        assert!(!both.has(McpScope::Send) && !both.has(McpScope::Draft));
+        assert!(both.allows_account(&"work".into()));
+        assert!(!both.allows_account(&"home".into()));
+        assert!(!both.allows_folder(&"work/hr".into()));
+        assert_eq!(both, client.intersect(&plugin));
+        assert!(!both.intersect(&Access::none()).has(McpScope::Read));
     }
 
     #[test]

@@ -63,8 +63,9 @@ attachmentPreviews?: Array<PluginAttachmentPreviewDef>,
  */
 attachmentActions?: Array<PluginAttachmentActionDef>, 
 /**
- * Link menu actions (M4a; no permission: they get only the link the
- * user picked).
+ * Link actions (M4a; no permission: they get only the link the user
+ * picked). Not offered in the reader yet, so users cannot pick them
+ * in this version.
  */
 linkActions?: Array<PluginLinkActionDef>, 
 /**

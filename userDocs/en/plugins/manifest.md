@@ -185,7 +185,9 @@ At most 50 of each.
 
 ## `contributes.linkActions`
 
-Entries in the link menu; no permission needed. At most 50.
+Actions for links; no permission needed. At most 50. The reader does not
+offer link actions yet, so users cannot pick them in this version (see
+[attachments and links](attachments-and-links.md)).
 
 | Field | Required | What it is |
 | --- | --- | --- |

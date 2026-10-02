@@ -154,7 +154,9 @@ impl PluginAttachmentActionDef {
     }
 }
 
-/// An action in the link menu (`contributes.linkActions`).
+/// An action for links (`contributes.linkActions`). The reader does not
+/// offer link actions yet (links sit in its sandboxed frame): they are
+/// declared and testable, but users cannot pick them in this version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginLinkActionDef {

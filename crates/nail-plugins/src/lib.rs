@@ -73,6 +73,7 @@ pub mod tree;
 pub mod writes;
 
 pub use extensions::PluginMcpTool;
+pub use gate::ClientLimit;
 pub use hooks::{ArrivalReport, BeforeSendReport, HookRun, OpenReport};
 pub use host::{DevLoadError, PluginHost, PluginSpec, effective_settings};
 pub use l10n::PluginCatalogs;

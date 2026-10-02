@@ -16,7 +16,11 @@
 //! * Open hooks (annotations), previews, actions and manual job runs go to
 //!   the plug-in host.
 //! * Revoking an MCP client or removing a plug-in cancels its pending
-//!   confirmations and removes its policies ([`Service::forget_actor`]).
+//!   confirmations and removes its policies ([`Service::forget_actor`]);
+//!   changing a grant or disabling a plug-in cancels its pending
+//!   confirmations (they were checked under the old permissions), and so
+//!   does starting Nail (nothing waits for those of an earlier run;
+//!   review M4a, ADR 0085).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -291,6 +295,9 @@ struct PendingVeto {
 #[derive(Default)]
 pub(crate) struct AgentsCtl {
     broker: OnceLock<Arc<StoreBroker>>,
+    /// MCP clients' rate limits, shared by the MCP server and plug-in
+    /// writes made for clients.
+    limiter: Arc<nail_mcp::limits::RateLimiter>,
     vetoes: Mutex<HashMap<String, PendingVeto>>,
     headers: Mutex<HashMap<DraftId, Vec<PluginHeader>>>,
     /// When `PluginActivityChanged` was last sent for a plug-in's hooks.
@@ -315,6 +322,48 @@ impl Service {
                 WriteSettings::default().poll_interval,
             ))
         }))
+    }
+
+    /// The MCP clients' rate limiter (shared with plug-in writes for them).
+    pub(crate) fn mcp_rate_limiter(&self) -> Arc<nail_mcp::limits::RateLimiter> {
+        Arc::clone(&self.inner.agents.limiter)
+    }
+
+    /// Cancels the actor's pending confirmations (waiting calls answer
+    /// `expired`).
+    pub(crate) async fn cancel_confirmations_of(&self, actor: &ActionActor) {
+        let now = self.inner.clock.unix();
+        let for_store = actor.clone();
+        match self
+            .store()
+            .call(move |s| s.cancel_confirmations_of(&for_store, now))
+            .await
+        {
+            Ok(cancelled) => self.confirmations_cancelled(cancelled),
+            Err(err) => tracing::warn!(%err, "cannot cancel an actor's confirmations"),
+        }
+    }
+
+    /// At start: confirmations of an earlier run have nobody waiting to
+    /// run them, so approving one would do nothing — they are cancelled.
+    pub(crate) fn cancel_orphaned_confirmations(&self) {
+        let now = self.inner.clock.unix();
+        match self.store().cancel_pending_confirmations(now) {
+            Ok(cancelled) => self.confirmations_cancelled(cancelled),
+            Err(err) => tracing::warn!(%err, "cannot cancel confirmations of an earlier run"),
+        }
+    }
+
+    fn confirmations_cancelled(&self, cancelled: Vec<nail_api::agents::Confirmation>) {
+        if cancelled.is_empty() {
+            return;
+        }
+        for confirmation in cancelled {
+            self.broadcast(Event::ConfirmationResolved {
+                confirmation: Box::new(confirmation),
+            });
+        }
+        self.confirmation_broker().wake();
     }
 
     /// The write path of plug-ins (the MCP write tools' plans).
@@ -343,12 +392,7 @@ impl Service {
             .await
         {
             Ok((cancelled, customized)) => {
-                for confirmation in cancelled {
-                    self.broadcast(Event::ConfirmationResolved {
-                        confirmation: Box::new(confirmation),
-                    });
-                }
-                self.confirmation_broker().wake();
+                self.confirmations_cancelled(cancelled);
                 if customized {
                     self.broadcast(Event::ActionPoliciesChanged {
                         actor: actor.clone(),

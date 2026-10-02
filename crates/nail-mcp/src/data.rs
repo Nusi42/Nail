@@ -213,6 +213,13 @@ pub trait McpData: Send + Sync + 'static {
         None
     }
 
+    /// The per-client rate limiter the core shares with plug-in writes made
+    /// for MCP clients (review M4a). `None` (the default): the server keeps
+    /// its own.
+    fn rate_limiter(&self) -> Option<Arc<crate::limits::RateLimiter>> {
+        None
+    }
+
     /// Renders a user-facing text (confirmation values, elicitation
     /// questions, prompt templates) in the core's locale. The default is
     /// English.

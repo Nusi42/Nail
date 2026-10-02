@@ -90,3 +90,16 @@ describe.each(EXAMPLES)("the %s example", (name) => {
     expect(readme).toContain(`## \`${name}\``);
   });
 });
+
+// Review M4a: build output never goes into the repository (OneDrive), so
+// the docs never tell anyone to build an example in place.
+describe("example build docs", () => {
+  it("build a copy outside the repository", () => {
+    const readme = readFileSync(path.join(REPO, "examples", "README.md"), "utf8");
+    const setup = readFileSync(path.join(REPO, "docs", "dev-setup.md"), "utf8");
+    expect(readme).toContain("copy the example out of the repository");
+    expect(readme).not.toMatch(/cd examples\/</);
+    expect(readme).not.toMatch(/node examples\/<name>\/scripts\/build\.mjs/);
+    expect(setup).not.toMatch(/--prefix examples\//);
+  });
+});

@@ -756,8 +756,8 @@ A message on its way out, as a before-send hook sees it.
 | `cc` | `Array<Address>` | Cc. |
 | `bcc` | `Array<Address>` | Bcc. |
 | `subject` | `string` | Subject. |
-| `text` | `string` | The body as plain text (the text rendering of HTML / Markdown). |
-| `html?` | `string` | The HTML body as it will be sent, if any. |
+| `text` | `string` | The body as plain text (the text rendering of HTML / Markdown); empty when the message will be end-to-end encrypted (hooks never see encrypted content). |
+| `html?` | `string` | The HTML body as it will be sent, if any (never for a message that will be end-to-end encrypted). |
 | `attachments` | `Array<PluginAttachment>` | Attachments (names, types, sizes). |
 | `inReplyTo?` | `MessageId` | The message being replied to or forwarded. |
 | `encrypted` | `boolean` | Whether it will be signed / encrypted (hooks cannot change that; content added to an encrypted message is encrypted with it). |
@@ -1094,7 +1094,7 @@ Link registrations (`ctx.links`).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `registerAction` | `(name: string, handler: PluginActionHandler) => void` | Registers a link action (`contributes.linkActions`). |
+| `registerAction` | `(name: string, handler: PluginActionHandler) => void` | Registers a link action (`contributes.linkActions`). The reader does not offer link actions yet; test them with the test host. |
 
 ### `PluginLink`
 
@@ -1686,7 +1686,7 @@ The contributions of a manifest.
 | `markdownBlocks?` | `Array<PluginMarkdownBlockDef>` | Markdown block renderers (M4a; `composer`). |
 | `attachmentPreviews?` | `Array<PluginAttachmentPreviewDef>` | Attachment preview renderers (M4a; `attachments`). |
 | `attachmentActions?` | `Array<PluginAttachmentActionDef>` | Attachment menu actions (M4a; `attachments`). |
-| `linkActions?` | `Array<PluginLinkActionDef>` | Link menu actions (M4a; no permission: they get only the link the user picked). |
+| `linkActions?` | `Array<PluginLinkActionDef>` | Link actions (M4a; no permission: they get only the link the user picked). Not offered in the reader yet, so users cannot pick them in this version. |
 | `jobs?` | `Array<PluginJobDef>` | Background jobs (M4a; `background`). |
 | `mcpTools?` | `Array<PluginMcpToolDef>` | Tools offered to MCP clients (M4a; `mcp.expose`). |
 
@@ -1862,7 +1862,7 @@ An action in the attachment menu (`contributes.attachmentActions`).
 
 ### `PluginLinkActionDef`
 
-An action in the link menu (`contributes.linkActions`).
+An action for links (`contributes.linkActions`). The reader does not offer link actions yet (links sit in its sandboxed frame): they are declared and testable, but users cannot pick them in this version.
 
 | Member | Type | Description |
 | --- | --- | --- |

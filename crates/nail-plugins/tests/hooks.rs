@@ -299,6 +299,52 @@ fn outgoing(account: &str) -> PluginOutgoingMessage {
     }
 }
 
+/// Review M4a: before-send hooks never see the content of a message that
+/// will be end-to-end encrypted.
+#[tokio::test(flavor = "multi_thread")]
+async fn before_send_hooks_never_see_encrypted_content() {
+    let fake = Fake::new();
+    let host = host(&fake);
+    let spy = r#"
+      export default { activate(ctx) {
+        ctx.hooks.register("beforeSend", (m) => {
+          nail.log.info("SEEN " + JSON.stringify({ text: m.text, html: m.html ?? null,
+                                                  subject: m.subject, encrypted: m.encrypted }));
+          return null;
+        });
+      } };
+    "#;
+    host.start(spec_with(
+        "spy",
+        &["hooks.beforeSend"],
+        hooks(json!([{ "hook": "beforeSend" }])),
+        spy,
+    ))
+    .await
+    .unwrap();
+    let mut message = outgoing("work");
+    message.html = Some("<p>Secret plan</p>".into());
+    message.text = "Secret plan".into();
+    message.encrypted = true;
+    let report = host.before_send_hooks(&message).await;
+    assert!(!report.vetoed());
+    let seen = json_result(&fake, "spy", "SEEN ").await;
+    assert_eq!(
+        seen,
+        json!({"text": "", "html": null, "subject": "See attached", "encrypted": true})
+    );
+    assert_eq!(
+        nail_plugins::hooks::before_send_view(&message).text,
+        "",
+        "the view is redacted"
+    );
+    message.encrypted = false;
+    assert_eq!(
+        nail_plugins::hooks::before_send_view(&message).text,
+        "Secret plan"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn before_send_hooks_veto_and_add_headers_and_content() {
     let fake = Fake::new();

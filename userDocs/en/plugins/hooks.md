@@ -55,8 +55,9 @@ It may answer **actions**, applied in order like a rule's actions through
 the operation queue (undoable): `addTag`, `removeTag`, `setFlagged`,
 `setRead`, `move` (a folder of the same account), `archive` — at most 20.
 Actions need `mail.organize` (and follow its confirmations); there is no
-delete action. An answer with actions but without `mail.organize` is
-skipped.
+delete action, and a `move` into Trash or Junk counts as one: such an
+answer is refused (the plug-in's log says so). An answer with actions but
+without `mail.organize` is skipped.
 
 ```ts
 arrival: ({ message, body }) =>
@@ -71,7 +72,9 @@ For work that takes longer than a hook's budget, use a
 `hooks.beforeSend` sees every outgoing message (`PluginOutgoingMessage`:
 sender, recipients, subject, the text, the HTML, attachment names and
 sizes, the replied-to message, whether it will be encrypted) before it is
-queued. It may answer:
+queued. A message that will be **end-to-end encrypted** comes without its
+content: `text` is empty and `html` absent (plug-ins never see encrypted
+content). It may answer:
 
 - `veto: { reason }` — stop sending. Nail shows the reason **with the
   plug-in's name** and offers **Keep editing** and **Send anyway**, which

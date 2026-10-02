@@ -378,7 +378,7 @@ impl PluginHost {
     /// docs). Never fails.
     pub async fn before_send_hooks(&self, message: &PluginOutgoingMessage) -> BeforeSendReport {
         let inner = Arc::clone(self.inner());
-        let input = serde_json::to_value(message).unwrap_or_default();
+        let input = serde_json::to_value(before_send_view(message)).unwrap_or_default();
         let mut tasks = tokio::task::JoinSet::new();
         for (plugin, running) in inner.running_all() {
             if running.manifest.hook(PluginHookKind::BeforeSend).is_none() {
@@ -537,6 +537,19 @@ impl PluginHost {
         }
         report
     }
+}
+
+/// What before-send hooks see: never the content of a message that will be
+/// end-to-end encrypted (`mail.read.encrypted` is not offered; review
+/// M4a) — its text is empty and its HTML absent. Recipients, subject and
+/// attachment names stay (they decide routing and checks).
+pub fn before_send_view(message: &PluginOutgoingMessage) -> PluginOutgoingMessage {
+    let mut view = message.clone();
+    if view.encrypted {
+        view.text = String::new();
+        view.html = None;
+    }
+    view
 }
 
 /// Hands an arrival hook's actions to the core (not awaited: the user may

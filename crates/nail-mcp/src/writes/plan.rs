@@ -94,6 +94,14 @@ pub(crate) enum Action {
         recurrence: Option<Recurrence>,
         invite: bool,
     },
+    /// Send a saved draft — only while it is still `expected`, the draft
+    /// the confirmation showed (an edit after the request would otherwise
+    /// send something the user never approved).
+    SendDraft {
+        draft_id: DraftId,
+        send_at: Option<String>,
+        expected: Box<Draft>,
+    },
     /// Edit the draft open in the composer (shown live).
     ComposerEdit {
         draft_id: DraftId,
@@ -458,6 +466,35 @@ impl<D: McpData> Shared<D> {
                         .await?;
                     Self::collect(&response, false, &mut done)?;
                 }
+            }
+            Action::SendDraft {
+                draft_id,
+                send_at,
+                expected,
+            } => {
+                let mut current = self.data.draft(draft_id).await?;
+                current.id = Some(draft_id.clone());
+                if current != **expected {
+                    return Err(Failure::Api(
+                        ApiError::new(
+                            nail_api::ErrorCode::Conflict,
+                            "the draft changed after the send was requested; nothing was sent",
+                        )
+                        .with_localized(LocalizedMessage::new("mcp-tool-error-draft-changed")),
+                    ));
+                }
+                let response = self
+                    .run(
+                        by,
+                        Request::SendDraft {
+                            draft_id: draft_id.clone(),
+                            delay_secs: None,
+                            send_at: send_at.clone(),
+                            crypto: None,
+                        },
+                    )
+                    .await?;
+                Self::collect(&response, false, &mut done)?;
             }
             Action::ComposerEdit { draft_id, edit } => {
                 self.data.emit(Event::ComposerEditRequested {

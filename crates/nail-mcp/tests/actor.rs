@@ -11,8 +11,10 @@ use nail_api::agents::{
     ActionActor, ActionAttribution, ActionKind, ActionPolicyMode, ConfirmationFilter,
     ConfirmationSource,
 };
+use nail_api::agents::{ConfirmationState, McpClientRef};
 use nail_api::mcp::tools::{McpEditScope, McpWriteResult};
 use nail_api::mcp::{McpCallKind, McpScope};
+use nail_api::mcp::{McpOutcome, McpRateLimits};
 use nail_api::{ErrorCode, Request};
 use nail_mcp::{ActorWrite, ActorWriteRequest, ActorWrites, PimDelete, PluginTool, WriteSettings};
 use nail_store::Store;
@@ -49,7 +51,26 @@ fn request(write: ActorWrite, accounts: Option<&[&str]>) -> ActorWriteRequest {
         operation: "nail.test".into(),
         write,
         accounts: accounts.map(|a| a.iter().map(|x| (*x).into()).collect()),
+        allow_destructive: true,
     }
+}
+
+/// The pending confirmation, once it shows up.
+async fn first_pending(store: &Store) -> nail_api::agents::Confirmation {
+    for _ in 0..500 {
+        let list = store
+            .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
+            .unwrap();
+        if let Some(first) = list.into_iter().next() {
+            return first;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("no pending confirmation");
+}
+
+fn now() -> i64 {
+    chrono::Utc::now().timestamp()
 }
 
 fn args<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
@@ -286,4 +307,259 @@ async fn plugin_tools_are_offered_by_scope_and_answer_untrusted() {
             .any(|e| e.kind == McpCallKind::Tool && e.name == "crm__lookup"),
         "{audit:?}"
     );
+}
+
+/// Review M4a: a send is approved for the draft the confirmation showed;
+/// a draft changed after the request is not sent.
+#[tokio::test]
+async fn a_draft_changed_after_the_send_request_is_not_sent() {
+    let store = Store::open_in_memory().unwrap();
+    let data = Arc::new(FakeData::default());
+    let writes = writer(&store, data.clone());
+    let send = || {
+        let writes = writes.clone();
+        tokio::spawn(async move {
+            writes
+                .run(request(
+                    ActorWrite::SendMessage(args(json!({"draft_id": "d1"}))),
+                    None,
+                ))
+                .await
+        })
+    };
+    let waiting = send();
+    let pending = first_pending(&store).await;
+    assert_eq!(pending.kind, ActionKind::Send);
+    // The draft is edited (another recipient) while the user looks at it.
+    data.changed_drafts.lock().unwrap().push("d1".into());
+    store
+        .decide_confirmation(&pending.id, true, ConfirmationSource::Nail, now())
+        .unwrap();
+    let err = waiting.await.unwrap().unwrap_err();
+    assert_eq!(err.code, ErrorCode::Conflict, "{err:?}");
+    assert!(data.written().is_empty(), "nothing was sent");
+    let ended = store.get_confirmation(&pending.id).unwrap();
+    assert_eq!(ended.state, ConfirmationState::Failed);
+    assert_eq!(ended.error.unwrap().id, "mcp-tool-error-draft-changed");
+
+    // Unchanged, the approved draft goes out.
+    data.changed_drafts.lock().unwrap().clear();
+    let waiting = send();
+    let pending = first_pending(&store).await;
+    store
+        .decide_confirmation(&pending.id, true, ConfirmationSource::Nail, now())
+        .unwrap();
+    assert!(matches!(
+        waiting.await.unwrap().unwrap(),
+        McpWriteResult::Done { .. }
+    ));
+    assert!(matches!(
+        data.written().as_slice(),
+        [Request::SendDraft { .. }]
+    ));
+}
+
+/// Review M4a: moving into Trash is a delete — it always asks; arrival
+/// hooks (never a delete) are refused.
+#[tokio::test]
+async fn moves_to_trash_ask_and_arrival_actions_never_delete() {
+    let store = Store::open_in_memory().unwrap();
+    let data = Arc::new(FakeData::default());
+    let writes = writer(&store, data.clone());
+    // Even "always allow" for organizing does not cover a move to Trash.
+    store
+        .set_action_policy(
+            &plugin().actor,
+            ActionKind::Organize,
+            Some(ActionPolicyMode::Allow),
+            0,
+        )
+        .unwrap();
+    let to_trash = || {
+        ActorWrite::UpdateMessages(args(
+            json!({"message_ids": ["m1"], "move_to_folder_id": "work-trash"}),
+        ))
+    };
+    let waiting = tokio::spawn({
+        let writes = writes.clone();
+        let request = request(to_trash(), None);
+        async move { writes.run(request).await }
+    });
+    let pending = first_pending(&store).await;
+    assert_eq!(pending.kind, ActionKind::Trash);
+    assert_eq!(pending.summary.id, "confirmation-summary-trash");
+    assert!(!pending.can_always_allow);
+    store
+        .decide_confirmation(&pending.id, false, ConfirmationSource::Nail, now())
+        .unwrap();
+    assert!(matches!(
+        waiting.await.unwrap().unwrap(),
+        McpWriteResult::Denied { .. }
+    ));
+    assert!(data.written().is_empty());
+
+    let mut arrival = request(to_trash(), Some(&["work"]));
+    arrival.operation = "hooks.arrival".into();
+    arrival.allow_destructive = false;
+    let err = writes.run(arrival).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+    assert!(data.written().is_empty());
+    assert!(
+        store
+            .list_confirmations(ConfirmationFilter::Pending, None, None, 10)
+            .unwrap()
+            .is_empty()
+    );
+    // Other folders stay organizing.
+    let done = writes
+        .run(request(
+            ActorWrite::UpdateMessages(args(
+                json!({"message_ids": ["m1"], "move_to_folder_id": "work-hr"}),
+            )),
+            None,
+        ))
+        .await
+        .unwrap();
+    assert!(matches!(done, McpWriteResult::Done { .. }));
+}
+
+/// Review M4a: a plug-in serving an MCP client writes within the overlap
+/// of both grants, asks when either policy asks, counts against the
+/// client's limits, and every plug-in write is in the MCP audit log.
+#[tokio::test]
+async fn plugins_acting_for_a_client_stay_within_its_grant() {
+    let store = Store::open_in_memory().unwrap();
+    let data = Arc::new(FakeData::default());
+    let writes = writer(&store, data.clone());
+    let (client_id, _) = create_client(&store, "Agent").await;
+    grant(
+        &store,
+        &client_id,
+        &[McpScope::Read, McpScope::Organize],
+        &["work"],
+    )
+    .await;
+    // The plug-in may send without asking; the client may not.
+    store
+        .set_action_policy(
+            &plugin().actor,
+            ActionKind::Send,
+            Some(ActionPolicyMode::Allow),
+            0,
+        )
+        .unwrap();
+    let for_client = |write: ActorWrite| {
+        let mut r = request(write, None);
+        r.by.on_behalf_of = Some(McpClientRef {
+            client_id: client_id.clone(),
+            name: "Agent".into(),
+        });
+        r
+    };
+    let flag =
+        |id: &str| ActorWrite::UpdateMessages(args(json!({"message_ids": [id], "flagged": true})));
+    let send = || ActorWrite::SendMessage(args(json!({"draft_id": "d1"})));
+
+    // Another account than the client's: refused, although the plug-in
+    // reaches every account.
+    let err = writes.run(for_client(flag("m2"))).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+    // Sending is not in the client's grant.
+    let err = writes.run(for_client(send())).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
+    assert!(data.written().is_empty());
+
+    // Within both grants it runs, attributed to the plug-in for the client.
+    assert!(matches!(
+        writes.run(for_client(flag("m1"))).await.unwrap(),
+        McpWriteResult::Done { .. }
+    ));
+    let by = data.writes.lock().unwrap()[0].0.clone();
+    assert_eq!(by.on_behalf_of.unwrap().client_id, client_id);
+
+    // With `send`, the client's policy (ask) wins over the plug-in's (allow).
+    grant(
+        &store,
+        &client_id,
+        &[McpScope::Read, McpScope::Organize, McpScope::Send],
+        &["work"],
+    )
+    .await;
+    let waiting = tokio::spawn({
+        let writes = writes.clone();
+        let request = for_client(send());
+        async move { writes.run(request).await }
+    });
+    let pending = first_pending(&store).await;
+    assert_eq!(pending.kind, ActionKind::Send);
+    assert_eq!(
+        pending
+            .requested_by
+            .on_behalf_of
+            .as_ref()
+            .unwrap()
+            .client_id,
+        client_id
+    );
+    store
+        .decide_confirmation(&pending.id, false, ConfirmationSource::Nail, now())
+        .unwrap();
+    assert!(matches!(
+        waiting.await.unwrap().unwrap(),
+        McpWriteResult::Denied { .. }
+    ));
+
+    // The client's writes_per_minute counts the plug-in's writes for it.
+    store
+        .set_mcp_rate_limits(
+            &client_id,
+            &McpRateLimits {
+                requests_per_minute: None,
+                writes_per_minute: Some(2),
+                sends_per_hour: None,
+            },
+        )
+        .unwrap();
+    let err = writes.run(for_client(flag("m1"))).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::RateLimited, "{err:?}");
+    // The plug-in's own writes are not the client's.
+    assert!(matches!(
+        writes.run(request(flag("m1"), None)).await.unwrap(),
+        McpWriteResult::Done { .. }
+    ));
+
+    // The MCP audit log has every write (the client's view: those for it).
+    let audit = store.list_mcp_audit(Some(&client_id), None, 50).unwrap();
+    let names: Vec<(&str, McpOutcome)> = audit
+        .iter()
+        .rev()
+        .map(|e| (e.name.as_str(), e.outcome))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("plugin:follow-up nail.test", McpOutcome::Denied),
+            ("plugin:follow-up nail.test", McpOutcome::Denied),
+            ("plugin:follow-up nail.test", McpOutcome::Allowed),
+            ("plugin:follow-up nail.test", McpOutcome::Declined),
+            ("plugin:follow-up nail.test", McpOutcome::Denied),
+        ]
+    );
+    assert!(audit.iter().all(|e| e.client_name == "Follow up"));
+    let all = store.list_mcp_audit(None, None, 50).unwrap();
+    assert_eq!(all.len(), 6, "the plug-in's own write too: {all:?}");
+    assert!(all[0].client_id.is_none());
+    assert!(
+        all[0]
+            .detail
+            .as_deref()
+            .unwrap()
+            .starts_with(nail_mcp::messages::WRITE_DETAIL_PREFIX),
+        "{all:?}"
+    );
+
+    // A revoked client reaches nothing through the plug-in.
+    store.revoke_mcp_client(&client_id, now()).unwrap();
+    let err = writes.run(for_client(flag("m1"))).await.unwrap_err();
+    assert_eq!(err.code, ErrorCode::Forbidden, "{err:?}");
 }

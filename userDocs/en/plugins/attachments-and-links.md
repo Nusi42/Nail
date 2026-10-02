@@ -2,8 +2,12 @@
 
 With the `attachments` permission a plug-in can render **previews** of the
 attachment types it names and add **actions** to the attachment menu
-("Save to …", "Open in …"). **Link actions** in the link menu need no
-permission.
+("Save to …", "Open in …"). **Link actions** need no permission.
+
+> **Not in the reader yet.** This version of Nail does not offer link
+> actions to users: links sit in the reader's sandboxed frame, which has
+> no link menu yet. You can declare and test link actions now (the test
+> host runs them); users will see them once the reader offers them.
 
 ```json
 "permissions": ["attachments"],
@@ -80,6 +84,8 @@ attachments: {
 (sending the bytes somewhere needs `network:<host>` for that host).
 
 ## Link actions
+
+Not offered in the reader yet (see above); the test host runs them.
 
 The handler gets `ctx.link`: the URL, the link's text, and the message it
 is in when the plug-in may read that message (`mail.read`). Only `http`,

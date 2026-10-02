@@ -230,6 +230,9 @@ open another message.
 - **Repeated calls are safe.** Every writing tool takes an optional
   `idempotency_key` (1–128 characters): repeating a call with the same key
   within a day returns the first call's result instead of doing it twice.
+  A key names one request: the same key with another tool or other
+  arguments is refused. A key whose request was waiting when Nail
+  stopped answers `expired`; use a new key.
 
 Each writing tool answers how it ended: `done` (with the ids of what it
 queued and created), `denied` (you said no; nothing changed), `expired`

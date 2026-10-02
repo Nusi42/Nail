@@ -327,7 +327,7 @@ async fn tools_filter_by_grant_and_mark_content() {
 
     let result = tool(&client, "list_folders", json!({"account_id": "work"})).await;
     let folders = result.structured_content.unwrap();
-    assert_eq!(folders["folders"].as_array().unwrap().len(), 2);
+    assert_eq!(folders["folders"].as_array().unwrap().len(), 3);
     let result = tool(&client, "list_folders", json!({"account_id": "home"})).await;
     assert_eq!(result.is_error, Some(true));
 
@@ -350,7 +350,11 @@ async fn tools_filter_by_grant_and_mark_content() {
     .unwrap();
     let result = tool(&client, "list_folders", json!({"account_id": "work"})).await;
     let folders = result.structured_content.unwrap();
-    assert_eq!(folders["folders"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        folders["folders"].as_array().unwrap().len(),
+        2,
+        "Inbox and Trash; HR is excluded"
+    );
     let messages = text(
         &read(&client, "nail://folders/home-inbox/messages")
             .await
