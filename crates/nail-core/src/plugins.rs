@@ -249,6 +249,12 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 }
             }
             service.inner.plugins.forget(&plugin_id);
+            // M4a: its pending confirmations and policies go with it.
+            service
+                .forget_actor(&nail_api::agents::ActionActor::Plugin {
+                    plugin_id: plugin_id.clone(),
+                })
+                .await;
             service.refresh_installed_plugins().await;
             service.broadcast(Event::PluginsChanged);
             Response::Done

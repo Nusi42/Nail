@@ -483,6 +483,15 @@ impl Service {
             }
         }
         self.broadcast(Event::RemindersChanged);
+        // Plug-in jobs subscribed to `event.reminder` (M4a; no message ids).
+        if !views.is_empty()
+            && let Some(host) = self.inner.plugins.existing_host()
+        {
+            host.deliver_event(
+                nail_api::plugins::jobs::PluginEventName::EventReminder,
+                Vec::new(),
+            );
+        }
         Ok(views.len())
     }
 

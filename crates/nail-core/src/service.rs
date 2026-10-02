@@ -277,6 +277,8 @@ pub(crate) struct Inner {
     /// Exchange accounts: running engines, Autodiscover / sign-in hooks
     /// (M3c).
     pub(crate) exchange: crate::exchange::ExchangeCtl,
+    /// Confirmations broker, before-send vetoes and headers (M4a).
+    pub(crate) agents: crate::agents::AgentsCtl,
     watcher: Mutex<Option<ConfigWatcher>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
@@ -435,6 +437,7 @@ impl Service {
                 ),
                 pim: crate::pim::PimCtl::new(options.loopback_feeds),
                 exchange: crate::exchange::ExchangeCtl::new(options.exchange.clone()),
+                agents: crate::agents::AgentsCtl::default(),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
@@ -951,17 +954,13 @@ impl Service {
                 self.delete_draft(&draft_id).await?;
                 Response::Done
             }
+            // M4a: the plug-ins' before-send hooks may veto (`SendVetoed`).
             Request::SendDraft {
                 draft_id,
                 delay_secs,
                 send_at,
                 crypto,
-            } => Response::SendQueued {
-                entry: Box::new(
-                    self.send_draft(draft_id, delay_secs, send_at, crypto)
-                        .await?,
-                ),
-            },
+            } => Box::pin(self.send_draft_checked(draft_id, delay_secs, send_at, crypto)).await?,
             Request::CancelSend { outbox_id } => Response::SendCancelled {
                 draft_id: self.cancel_send(outbox_id).await?,
             },

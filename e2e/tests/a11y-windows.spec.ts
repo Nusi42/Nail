@@ -49,6 +49,8 @@ const FEATURE_DIALOGS = [
   "gmail-label-editor",
   "gmail-label-delete",
   "gmail-apply-labels",
+  // M4a: the confirmation center of AI agents and plug-ins.
+  "confirmation-center",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -293,6 +295,13 @@ for (const mode of MODES) {
       await page.getByRole("menu").getByRole("menuitem", { name: "Synchronization…" }).click();
       await sweep.scanWindow("sync-folder");
       await sweep.close("sync-folder");
+
+      // M4a: the confirmation center (key "g a"; empty here — the cards are
+      // scanned in agents.spec.ts).
+      await page.keyboard.press("g");
+      await page.keyboard.press("a");
+      await sweep.scanWindow("confirmation-center");
+      await sweep.close("confirmation-center");
 
       // Every settings tab, nested ones included.
       await toolbar.getByRole("button", { name: "Settings" }).click();

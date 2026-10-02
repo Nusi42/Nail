@@ -3,6 +3,12 @@ import { errorMessageIdOf } from "../api/client";
 import { AttachmentWarningMark } from "../features/security";
 import { FocusMoveButton, MessageCategories } from "../features/exchange";
 import { MessageLabels } from "../features/gmail";
+import {
+  AttachmentActionMenu,
+  AttachmentPreviewPane,
+  PluginBadges,
+  PluginBanners,
+} from "../features/plugins";
 import { InvitationCard } from "../features/scheduling";
 import type { Address, MessageBody } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
@@ -141,6 +147,7 @@ export function MessageView({ node }: WidgetProps) {
   const markRead = optionBool(node, "mark-read", true);
   const ctx = useComposeContext();
   const message = query.data;
+  const accountId = message ? (findSummary(ctx.queryClient, message.id)?.account_id ?? null) : null;
 
   // Reading a message marks it as read (a queued write, like any other).
   const loadedId = message?.id ?? null;
@@ -176,9 +183,11 @@ export function MessageView({ node }: WidgetProps) {
               </div>
             );
           })}
+          <PluginBadges messageId={message.id} />
         </header>
         {summaryOf(ctx, message.id)}
         <InvitationCard messageId={message.id} invitation={message.invitation ?? null} />
+        <PluginBanners messageId={message.id} />
         <Body message={message} />
         {message.attachments.length > 0 && (
           <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>
@@ -194,10 +203,21 @@ export function MessageView({ node }: WidgetProps) {
                 </span>
                 <span data-part="message-view.attachment.size">{formatSize(a.size, locale)}</span>
                 <AttachmentWarningMark warnings={message.warnings} index={a.index} />
+                <AttachmentActionMenu messageId={message.id} attachment={a} accountId={accountId} />
               </li>
             ))}
           </ul>
         )}
+        {message.attachments
+          .filter((a) => !a.inline)
+          .map((a) => (
+            <AttachmentPreviewPane
+              key={a.index}
+              messageId={message.id}
+              attachment={a}
+              accountId={accountId}
+            />
+          ))}
       </>
     );
   }

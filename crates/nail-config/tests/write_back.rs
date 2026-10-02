@@ -139,6 +139,7 @@ fn the_narrow_breakpoint_is_addressed_by_index() {
                 "2fr".into(),
                 "auto".into(),
                 "auto".into(),
+                "auto".into(),
             ],
         }],
     );
@@ -146,7 +147,7 @@ fn the_narrow_breakpoint_is_addressed_by_index() {
     let root = serde_json::to_value(&layout.windows["main"][1].root).unwrap();
     assert_eq!(
         root["sizes"],
-        json!(["auto", "auto", "auto", "2fr", "auto", "auto"])
+        json!(["auto", "auto", "auto", "2fr", "auto", "auto", "auto"])
     );
     golden("new_file_narrow_stack", &out);
 }

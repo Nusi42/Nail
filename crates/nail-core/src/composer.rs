@@ -509,7 +509,14 @@ impl Service {
         let date = chrono::Local::now().to_rfc2822();
         let message_id = nail_compose::new_message_id(&identity.email, seed);
         let style = style_of(identity);
-        let draft = draft.clone();
+        let mut draft = draft.clone();
+        // Plug-in Markdown blocks are rendered by their plug-ins at send
+        // time (M4a).
+        if draft.mode == ComposerMode::Markdown
+            && let Some(markdown) = &draft.markdown
+        {
+            draft.markdown = Some(self.render_plugin_blocks(markdown).await);
+        }
         let identity = identity.clone();
         let blobs = self.inner.blobs.clone();
         let built = tokio::task::spawn_blocking(move || {

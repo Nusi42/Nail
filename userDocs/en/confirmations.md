@@ -47,3 +47,16 @@ A plug-in that checks outgoing mail can stop a message, for example when it ment
 ## Plug-in activity
 
 In the plug-in manager, **Activity** shows a plug-in's mail hooks (how often they ran, failed or were too slow), its background jobs (schedule, last and next run, **Run now**) and how much of its hourly CPU time it used. A plug-in that uses all its CPU time has its jobs skipped until the hour is over; a plug-in that is too slow is skipped and can never hold up your mail.
+
+## Where to find it
+
+The default layout shows a small counter under the status bar while something waits (click it to open the confirmations), a **Confirmations** tab in Settings, and the shortcut **G A** opens the confirmations from anywhere. A note in the corner also appears whenever a new request arrives; **Review** opens it.
+
+## Layout options
+
+| Widget | Options |
+| --- | --- |
+| `confirmation-center` | `show-history` (default `#true`): the **History** of decided requests |
+| `confirmation-indicator` | `hide-when-empty` (default `#true`): show nothing while no request waits |
+
+Action: `agents.open-center` (opens the confirmations window).

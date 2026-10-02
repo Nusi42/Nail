@@ -8,7 +8,7 @@ layout "default" {
     // a status bar at the bottom.
     breakpoint min-width=900 {
         window "main" {
-            stack id="root" sizes="auto auto 1fr auto auto" {
+            stack id="root" sizes="auto auto 1fr auto auto auto" {
                 toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
                 // Every error of every config file; nothing while all are valid.
                 config-errors id="config-errors" hide-when-valid=#true
@@ -62,6 +62,9 @@ layout "default" {
                 status-bar id="status" items="sync-progress account-status ops send-status folder-counts"
                 // Shown while an AI agent reads what you are looking at.
                 mcp-context-indicator id="agent-indicator"
+                // How many changes by AI agents or plug-ins wait for your
+                // approval (nothing while none waits); opens the confirmations.
+                confirmation-indicator id="confirmation-indicator"
             }
         }
     }
@@ -69,7 +72,7 @@ layout "default" {
     // Narrow windows (phones, small browser windows): one pane at a time.
     breakpoint max-width=899 {
         window "main" {
-            stack id="root" sizes="auto auto auto 1fr auto auto" {
+            stack id="root" sizes="auto auto auto 1fr auto auto auto" {
                 toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
                 config-errors id="config-errors" hide-when-valid=#true
                 search-bar id="search" scope="account"
@@ -104,6 +107,7 @@ layout "default" {
                 }
                 status-bar id="status" items="sync-progress ops send-status"
                 mcp-context-indicator id="agent-indicator"
+                confirmation-indicator id="confirmation-indicator"
             }
         }
     }
@@ -160,6 +164,8 @@ layout "default" {
             account-settings id="account-settings" label="@settings.tab.accounts"
             virtual-account-editor id="virtual-accounts" label="@settings.tab.virtual-accounts"
             mcp-clients id="mcp-clients" label="@mcp.settings.tab"
+            // Changes by AI agents and plug-ins that wait for you, and the history.
+            confirmation-center id="confirmation-center" label="@agents.center.tab"
             security-keys id="security-keys" label="@security.settings.tab.keys"
             security-identities id="security-identities" label="@security.settings.tab.identities"
             security-settings id="security-settings" label="@security.settings.tab.protection"
@@ -344,6 +350,7 @@ layout "default" {
         bind "g c" "pim.calendar.open"
         bind "g p" "pim.contacts.open"
         bind "g t" "pim.tasks.open"
+        bind "g a" "agents.open-center"
         bind "ctrl+," "settings.open"
         bind "ctrl+shift+i" "inspector.toggle"
         bind "b" "snooze.open"

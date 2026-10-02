@@ -22,9 +22,10 @@ Guides and references for people using Nail.
 | [Remote access and remote content](remote-access.md) | Turning remote access on, internet mode (locked), users, passwords, two-step verification and passkeys, pairing a device, signing in, devices and sessions, the security log, loading remote content per message / sender / domain, the privacy list |
 | [Remote sign-in security](remote-sign-in-security.md) | How passwords, verification codes, passkeys and pairing codes are protected, sessions and their limits, re-authentication, rate limits and lockouts, what the security log records |
 | [Secure connections and remote content](remote-connections.md) | HTTPS and the certificate fingerprint, allowed networks, what the browser is told, mail shown from a separate address, how remote images are fetched through Nail |
-| [Connecting AI agents (MCP)](mcp.md) | MCP clients, tokens, permissions, configuring agents (HTTP and `nail mcp`), resources and tools, the activity log, safety |
+| [Connecting AI agents (MCP)](mcp.md) | MCP clients, tokens, permissions, configuring agents (HTTP and `nail mcp`), resources and tools, write tools and whether they ask, confirmations, prompts, limits, the activity log, safety |
+| [Confirmations](confirmations.md) | Approving or denying changes AI agents and plug-ins want to make, "always allow", what may run without asking, the history |
 | [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, editing toolbars, shortcuts and list columns, right-click menus, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
-| [Plug-ins](plugins/README.md) | Installing and managing plug-ins, permissions, placing and styling them; writing plug-ins: getting started, the sandbox, manifest, API and component references |
+| [Plug-ins](plugins/README.md) | Installing and managing plug-ins, permissions, security, placing and styling them; writing plug-ins: getting started, the sandbox, manifest, writing data, mail hooks, composer, attachments and links, background jobs, tools for AI agents, translations, API and component references |
 | [Installing Nail on Windows](installing.md) | Installer options, Default apps, silent install, uninstall and your data, the portable version |
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |

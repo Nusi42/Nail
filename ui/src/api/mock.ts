@@ -26,6 +26,7 @@ import { answerExchange, isExchangeRequest } from "../features/exchange/mock";
 import { answerGmail, isGmailRequest } from "../features/gmail/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerPim, isPimRequest } from "../features/pim/mock";
+import { answerSendDraft } from "../features/plugins/extensionsMock";
 import { answerPlugins, isPluginsRequest } from "../features/plugins/mock";
 import {
   answerPluginExtensions,
@@ -245,13 +246,8 @@ export class MockTransport implements Transport, MockCore {
       case "ListDrafts":
         return outbox.listDrafts(this);
       case "SendDraft":
-        return outbox.sendDraft(
-          this,
-          request.draft_id,
-          request.delay_secs,
-          request.send_at,
-          request.crypto,
-        );
+        // M4a: plug-ins' before-send hooks may veto (`SendVetoed`).
+        return answerSendDraft(this, request);
       case "CancelSend":
         return outbox.cancelSend(this, request.outbox_id);
       case "ListOutbox":

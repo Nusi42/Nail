@@ -1,6 +1,6 @@
 /**
- * Plug-in packages for the M2d scenarios (ADR 0055): the "Follow up"
- * example built from `examples/follow-up` (esbuild + `@nail/plugin-api`'s
+ * Plug-in packages for the plug-in scenarios (ADRs 0055, 0084): the
+ * examples built from `examples/<name>` (esbuild + `@nail/plugin-api`'s
  * packer, output outside the repository), and small hand-written plug-ins
  * packed or laid out as development folders.
  */
@@ -10,21 +10,27 @@ import { packPlugin } from "@nail/plugin-api/tools";
 import * as esbuild from "esbuild";
 import { buildOutputDir, repoRoot, tempDir } from "./nail";
 
-/** Where the global setup leaves the built example (`NAIL_E2E_FOLLOW_UP`). */
-export const FOLLOW_UP_ENV = "NAIL_E2E_FOLLOW_UP";
+/** Where the global setup leaves the built examples (`NAIL_E2E_EXAMPLE_<NAME>`). */
+export const EXAMPLES = ["follow-up", "attachment-check", "csv-preview"] as const;
+export type ExampleName = (typeof EXAMPLES)[number];
+
+/** The environment variable holding an example's package path. */
+export function exampleEnv(name: ExampleName): string {
+  return `NAIL_E2E_EXAMPLE_${name.toUpperCase().replace(/-/g, "_")}`;
+}
 
 /**
- * Builds `examples/follow-up` into `<build>/e2e/plugins/follow-up` and packs
- * it; returns the `.nailplugin` path. Nothing is written into the repo.
+ * Builds `examples/<name>` into `<build>/e2e/plugins/<name>` with the
+ * examples' own esbuild settings (scripts/build.mjs) and packs it; returns
+ * the `.nailplugin` path. Nothing is written into the repo.
  */
-export async function buildFollowUp(): Promise<string> {
-  const example = path.join(repoRoot, "examples", "follow-up");
-  const staging = path.join(buildOutputDir("e2e"), "plugins", "follow-up");
+export async function buildExample(name: ExampleName): Promise<string> {
+  const example = path.join(repoRoot, "examples", name);
+  const staging = path.join(buildOutputDir("e2e"), "plugins", name);
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging, { recursive: true });
   cpSync(path.join(example, "manifest.json"), path.join(staging, "manifest.json"));
   cpSync(path.join(example, "locales"), path.join(staging, "locales"), { recursive: true });
-  // The example's own build settings (scripts/build.mjs), written elsewhere.
   await esbuild.build({
     absWorkingDir: example,
     entryPoints: ["src/index.tsx"],
@@ -40,15 +46,20 @@ export async function buildFollowUp(): Promise<string> {
     legalComments: "none",
     logLevel: "warning",
   });
-  const out = path.join(staging, "..", "follow-up.nailplugin");
+  const out = path.join(staging, "..", `${name}.nailplugin`);
   return packPlugin({ dir: staging, out }).file;
 }
 
-/** The example's package (built by the global setup). */
-export function followUpPackage(): string {
-  const file = process.env[FOLLOW_UP_ENV];
-  if (!file) throw new Error(`${FOLLOW_UP_ENV} is not set; the global setup did not run`);
+/** An example's package (built by the global setup). */
+export function examplePackage(name: ExampleName): string {
+  const file = process.env[exampleEnv(name)];
+  if (!file) throw new Error(`${exampleEnv(name)} is not set; the global setup did not run`);
   return file;
+}
+
+/** The "Follow up" example's package. */
+export function followUpPackage(): string {
+  return examplePackage("follow-up");
 }
 
 /** A plug-in written as files: `manifest` becomes manifest.json, `main` index.js. */

@@ -28,6 +28,7 @@ import {
   type ReplyMode,
 } from "../../state/compose";
 import { queryKeys } from "../../state/queries";
+import { sendDraftChecked } from "../plugins/SendVeto";
 import { composerSendBlock, composerSendCrypto, loadComposerCrypto } from "../security";
 import { bodyOf, draftKey, fromDraft, richDraftOf } from "./draft";
 import { needsReminder, parseKeywords } from "./reminder";
@@ -298,16 +299,19 @@ export async function sendRich(
   ctx.store.getState().updateComposer({ busy: "sending" });
   const crypto = composerSendCrypto();
   try {
-    const { entry } = await ctx.client.request(
-      {
-        type: "SendDraft",
-        draft_id: draftId,
-        delay_secs: null,
-        send_at: sendAt,
-        ...(crypto ? { crypto } : {}),
-      },
-      "SendQueued",
-    );
+    // M4a: a plug-in's before-send hook may veto; the veto dialog decides.
+    const entry = await sendDraftChecked(ctx.client, ctx.store, {
+      type: "SendDraft",
+      draft_id: draftId,
+      delay_secs: null,
+      send_at: sendAt,
+      ...(crypto ? { crypto } : {}),
+    });
+    if (entry === null) {
+      // "Keep editing": the composer stays open.
+      ctx.store.getState().updateComposer({ busy: null });
+      return false;
+    }
     const ui = ctx.store.getState();
     ui.setLastSend(entry);
     ui.setComposer(null);

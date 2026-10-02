@@ -49,6 +49,18 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 info: running(),
             });
         }
+        // M4a: a revoked client's pending confirmations are
+        // cancelled (its waiting calls answer `expired`), its policies go.
+        Request::RevokeMcpClient { ref client_id } => {
+            let actor = nail_api::agents::ActionActor::mcp_client(client_id.clone());
+            let events = service.clone();
+            let response = nail_mcp::admin::handle(service.store(), info, request, move |event| {
+                events.broadcast(event);
+            })
+            .await?;
+            service.forget_actor(&actor).await;
+            return Ok(response);
+        }
         Request::UpdateMcpSettings { settings } => {
             if let Some(issue) = settings.issues().first() {
                 return Err(ApiError::invalid_request(format!(
@@ -111,6 +123,63 @@ impl CoreAccess for McpCore {
 
     fn emit(&self, event: Event) {
         self.0.broadcast(event);
+    }
+
+    fn handle_write(
+        &self,
+        by: &nail_api::agents::ActionAttribution,
+        request: Request,
+    ) -> impl Future<Output = Response> + Send {
+        // Writes of agents and plug-ins run as the UI's own requests:
+        // through the operation queue, undoable. Who asked is recorded in
+        // the confirmation and the audit log.
+        tracing::debug!(actor = %by.name, "agent write");
+        let service = self.0.clone();
+        async move { service.handle(request).await }
+    }
+
+    fn confirmations(&self) -> Option<Arc<dyn nail_mcp::broker::ConfirmationBroker>> {
+        Some(self.0.confirmation_broker())
+    }
+
+    fn render(&self, message: &LocalizedMessage) -> String {
+        crate::strings::render(self.0.inner.locale.as_deref(), message)
+    }
+
+    fn plugin_tools(&self) -> Vec<nail_mcp::PluginTool> {
+        self.0
+            .inner
+            .plugins
+            .existing_host()
+            .map(|host| {
+                host.mcp_tools()
+                    .into_iter()
+                    .map(|t| nail_mcp::PluginTool {
+                        name: t.name,
+                        plugin_name: t.plugin_name,
+                        description: t.description,
+                        input_schema: t.input_schema,
+                        scopes: t.scopes,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn call_plugin_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+        client: nail_api::agents::McpClientRef,
+    ) -> impl Future<Output = std::result::Result<serde_json::Value, ApiError>> + Send {
+        let host = self.0.inner.plugins.existing_host().cloned();
+        let name = name.to_owned();
+        async move {
+            match host {
+                Some(host) => host.call_mcp_tool(&name, arguments, client).await,
+                None => Err(ApiError::not_found(format!("no plug-in tool {name}"))),
+            }
+        }
     }
 
     fn is_encrypted(

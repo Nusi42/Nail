@@ -19,6 +19,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
+use nail_api::DraftId;
+use nail_api::mcp::tools::McpWriteResult;
 use nail_api::plugins::PluginPermission;
 use nail_api::plugins::admin::MAX_PACKAGE_BYTES;
 use nail_api::plugins::{
@@ -30,12 +32,17 @@ use nail_api::{
     PluginId, Request, Response, SearchQuery, ThreadId,
 };
 use nail_plugins::gate::Denied;
+use nail_plugins::services::{
+    AttachmentData as PluginAttachmentData, HookCallRecord, JobRunRecord, PluginCollection,
+    PluginContact, PluginWriteRequest, StoredJobState,
+};
 use nail_plugins::{
     AccountScope, BoxFuture, HostLimits, HostLogLine, HttpRequest, HttpResponse, PackageFiles,
     PackageStore, PluginCatalogs, PluginHost, PluginServices, PluginSpec, ServiceResult,
 };
 use nail_search::query::{Query, Term, TermKind, TextField};
 use nail_store::{PluginLogLine, PluginRecord};
+use nail_triage::Clock as _;
 use serde_json::Value;
 
 use crate::error::Result;
@@ -279,6 +286,14 @@ impl PluginsCtl {
 }
 
 impl Service {
+    /// The core's clock was moved (the `clock-set` / `clock-advance` test
+    /// controls): plug-in jobs due at the new time run now.
+    pub fn clock_moved(&self) {
+        if let Some(host) = self.inner.plugins.existing_host() {
+            host.run_due_jobs();
+        }
+    }
+
     /// The plug-in host, created on first use (inside the Tokio runtime).
     pub(crate) fn plugin_host(&self) -> &PluginHost {
         self.inner.plugins.host.get_or_init(|| {
@@ -1141,6 +1156,429 @@ impl PluginServices for CoreServices {
         }
         enqueue_log(&self.logs, &self.dropped, line);
     }
+
+    // --- M4a (ADR 0084) ---
+
+    fn write(
+        &self,
+        request: PluginWriteRequest,
+    ) -> BoxFuture<'static, ServiceResult<McpWriteResult>> {
+        let service = self.service();
+        let logs = self.logs.clone();
+        let dropped = Arc::clone(&self.dropped);
+        Box::pin(async move {
+            let service = service?;
+            let plugin = request.plugin_id().cloned();
+            let operation = request.operation.clone();
+            let accounts = match request.scope {
+                AccountScope::All => None,
+                AccountScope::Only(accounts) => Some(accounts),
+            };
+            let writes = service.actor_writes();
+            let result = Box::pin(writes.run(nail_mcp::ActorWriteRequest {
+                by: request.attribution,
+                operation: request.operation,
+                write: crate::agents::actor_write(request.write),
+                accounts,
+            }))
+            .await;
+            // Every plug-in write leaves a line in its log (the audit of
+            // plug-ins); no mailbox content, only what ran and how it ended.
+            if let Some(plugin_id) = plugin {
+                let outcome = match &result {
+                    Ok(McpWriteResult::Done { .. }) => "done",
+                    Ok(McpWriteResult::Denied { .. }) => "denied",
+                    Ok(McpWriteResult::Expired { .. }) => "expired",
+                    Ok(McpWriteResult::Vetoed { .. }) => "vetoed",
+                    Err(_) => "failed",
+                };
+                enqueue_log(
+                    &logs,
+                    &dropped,
+                    HostLogLine {
+                        plugin_id,
+                        at_ms: chrono::Utc::now().timestamp_millis(),
+                        level: if result.is_ok() {
+                            nail_api::plugins::PluginLogLevel::Info
+                        } else {
+                            nail_api::plugins::PluginLogLevel::Warn
+                        },
+                        source: nail_api::plugins::PluginLogSource::Host,
+                        message: format!("write {operation}: {outcome}"),
+                        localized: Some(
+                            LocalizedMessage::new("plugin-write-log")
+                                .arg("operation", operation.as_str())
+                                .arg("outcome", outcome),
+                        ),
+                    },
+                );
+            }
+            result
+        })
+    }
+
+    fn calendars(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let calendars = match service?
+                .handle(Request::ListCalendars { source_id: None })
+                .await
+            {
+                Response::Calendars { calendars } => calendars,
+                other => return Err(answer_error(other)),
+            };
+            Ok(collections(
+                calendars
+                    .into_iter()
+                    .filter(nail_api::pim::Calendar::has_events),
+            ))
+        })
+    }
+
+    fn address_books(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let books = match service?
+                .handle(Request::ListAddressBooks { source_id: None })
+                .await
+            {
+                Response::AddressBooks { address_books } => address_books,
+                other => return Err(answer_error(other)),
+            };
+            let mut out: Vec<PluginCollection> = books
+                .into_iter()
+                .map(|b| PluginCollection {
+                    id: b.id.as_str().to_owned(),
+                    name: b.settings.name.clone(),
+                    default: false,
+                    read_only: b.read_only
+                        || b.role == Some(nail_api::pim::contact::AddressBookRole::Collected),
+                })
+                .collect();
+            if let Some(first) = out.iter_mut().find(|b| !b.read_only) {
+                first.default = true;
+            }
+            Ok(out)
+        })
+    }
+
+    fn task_lists(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let calendars = match service?
+                .handle(Request::ListCalendars { source_id: None })
+                .await
+            {
+                Response::Calendars { calendars } => calendars,
+                other => return Err(answer_error(other)),
+            };
+            Ok(collections(
+                calendars
+                    .into_iter()
+                    .filter(nail_api::pim::Calendar::has_tasks),
+            ))
+        })
+    }
+
+    fn find_contacts(
+        &self,
+        email: String,
+        limit: u32,
+    ) -> BoxFuture<'static, ServiceResult<Vec<PluginContact>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let wanted = email.trim().to_lowercase();
+            if wanted.is_empty() {
+                return Ok(Vec::new());
+            }
+            let contacts = match service?
+                .handle(Request::SearchContacts {
+                    query: wanted.clone(),
+                    address_book_ids: None,
+                    limit: limit.clamp(1, 100).saturating_mul(4),
+                })
+                .await
+            {
+                Response::Contacts { contacts, .. } => contacts,
+                other => return Err(answer_error(other)),
+            };
+            Ok(contacts
+                .into_iter()
+                .filter(|c| c.emails.iter().any(|e| e.trim().to_lowercase() == wanted))
+                .take(limit.clamp(1, 100) as usize)
+                .map(|c| PluginContact {
+                    id: c.id.as_str().to_owned(),
+                    address_book_id: c.address_book_id.as_str().to_owned(),
+                    full_name: Some(c.display_name.clone()).filter(|n| !n.is_empty()),
+                    emails: c.emails.clone(),
+                    organization: c.organization.clone().filter(|n| !n.is_empty()),
+                })
+                .collect())
+        })
+    }
+
+    fn attachment(
+        &self,
+        message: MessageId,
+        index: u32,
+        max_bytes: u64,
+    ) -> BoxFuture<'static, ServiceResult<Option<PluginAttachmentData>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let service = service?;
+            let check = message.clone();
+            match service
+                .blocking(move |s| s.message_is_encrypted(&check))
+                .await
+            {
+                Ok(true) => {
+                    return Err(ApiError::new(
+                        ErrorCode::Forbidden,
+                        "end-to-end encrypted content is not given to plug-ins",
+                    ));
+                }
+                Ok(false) => {}
+                Err(err) => {
+                    let err = api(err);
+                    return if err.code == ErrorCode::NotFound {
+                        Ok(None)
+                    } else {
+                        Err(err)
+                    };
+                }
+            }
+            let data = nail_mcp::CoreData(crate::mcp::McpCore(service));
+            match nail_mcp::McpData::attachment(&data, &message, index).await {
+                Ok(found) => {
+                    let size = found.data.len() as u64;
+                    Ok(Some(PluginAttachmentData {
+                        name: found.filename.unwrap_or_default(),
+                        mime_type: found.mime,
+                        size,
+                        bytes: if size <= max_bytes {
+                            found.data
+                        } else {
+                            Vec::new()
+                        },
+                    }))
+                }
+                Err(err) if err.code == ErrorCode::NotFound => Ok(None),
+                Err(err) => Err(err),
+            }
+        })
+    }
+
+    fn draft_mode(&self, draft: DraftId) -> BoxFuture<'static, ServiceResult<Option<String>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let service = service?;
+            match service.store().call(move |s| s.get_draft(&draft)).await {
+                Ok(draft) => Ok(Some(
+                    match draft.mode {
+                        nail_api::accounts::ComposerMode::Plain => "plain",
+                        nail_api::accounts::ComposerMode::Html => "html",
+                        nail_api::accounts::ComposerMode::Markdown => "markdown",
+                    }
+                    .to_owned(),
+                )),
+                Err(err) if err.is_not_found() => Ok(None),
+                Err(err) => Err(err.into()),
+            }
+        })
+    }
+
+    fn message_matches(
+        &self,
+        message: MessageId,
+        query: String,
+    ) -> BoxFuture<'static, ServiceResult<bool>> {
+        let service = self.service();
+        Box::pin(async move {
+            let service = service?;
+            let id = message.clone();
+            let summary = match service.store().call(move |s| s.get_message(&id)).await {
+                Ok(stored) => stored.summary,
+                Err(err) if err.is_not_found() => return Ok(false),
+                Err(err) => return Err(err.into()),
+            };
+            // The filter within the message's folder, newest first: a
+            // message the hook sees is new, so it is on the first pages.
+            let mut offset = 0;
+            loop {
+                let request = SearchQuery {
+                    text: query.clone(),
+                    account_id: Some(summary.account_id.clone()),
+                    folder_id: Some(summary.folder_id.clone()),
+                    offset,
+                    limit: FILTER_PAGE,
+                    sort: nail_api::search::SearchSort::Date,
+                };
+                match service
+                    .search_with(request, crate::search::ServerSearchMode::Off)
+                    .await
+                    .map_err(api)?
+                {
+                    Response::SearchResults { hits, total, .. } => {
+                        if hits.iter().any(|h| h.message.id == message) {
+                            return Ok(true);
+                        }
+                        offset += FILTER_PAGE;
+                        if hits.is_empty() || offset >= total || offset >= MAX_FILTER_SCAN {
+                            return Ok(false);
+                        }
+                    }
+                    Response::InvalidQuery { error } => {
+                        return Err(ApiError::invalid_request(format!(
+                            "invalid hook filter: {}",
+                            error.message
+                        )));
+                    }
+                    other => return Err(answer_error(other)),
+                }
+            }
+        })
+    }
+
+    fn locale(&self) -> Option<String> {
+        self.service().ok().and_then(|s| s.inner.locale.clone())
+    }
+
+    fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        match self.service() {
+            Ok(service) => service.inner.clock.now(),
+            Err(_) => chrono::Utc::now(),
+        }
+    }
+
+    fn job_states(
+        &self,
+        plugin: PluginId,
+    ) -> BoxFuture<'static, ServiceResult<Vec<StoredJobState>>> {
+        let service = self.service();
+        Box::pin(async move {
+            let states = service?
+                .store()
+                .call(move |s| s.plugin_job_states(&plugin))
+                .await?;
+            Ok(states
+                .into_iter()
+                .map(|s| StoredJobState {
+                    job: s.job,
+                    next_run_at: s.next_run_at,
+                })
+                .collect())
+        })
+    }
+
+    fn set_job_next_run(
+        &self,
+        plugin: PluginId,
+        job: String,
+        next_run_at: Option<i64>,
+    ) -> BoxFuture<'static, ServiceResult<()>> {
+        let service = self.service();
+        Box::pin(async move {
+            Ok(service?
+                .store()
+                .call(move |s| s.set_plugin_job_next_run(&plugin, &job, next_run_at))
+                .await?)
+        })
+    }
+
+    fn record_job_run(&self, record: JobRunRecord) -> BoxFuture<'static, ServiceResult<()>> {
+        let service = self.service();
+        Box::pin(async move {
+            Ok(service?
+                .store()
+                .call(move |s| {
+                    s.record_plugin_job_run(
+                        &record.plugin_id,
+                        &record.job,
+                        record.at,
+                        record.outcome,
+                        record.error.as_deref(),
+                        record.next_run_at,
+                    )
+                })
+                .await?)
+        })
+    }
+
+    fn record_hook_call(&self, record: HookCallRecord) -> BoxFuture<'static, ServiceResult<()>> {
+        let service = self.service();
+        Box::pin(async move {
+            Ok(service?
+                .store()
+                .call(move |s| {
+                    s.record_plugin_hook_call(
+                        &record.plugin_id,
+                        record.hook,
+                        record.at,
+                        record.ms,
+                        record.outcome,
+                        record.error.as_deref(),
+                    )
+                })
+                .await?)
+        })
+    }
+
+    fn record_cpu(
+        &self,
+        plugin: PluginId,
+        at: i64,
+        cpu_ms: u64,
+    ) -> BoxFuture<'static, ServiceResult<()>> {
+        let service = self.service();
+        Box::pin(async move {
+            Ok(service?
+                .store()
+                .call(move |s| s.add_plugin_cpu(&plugin, at, cpu_ms))
+                .await?)
+        })
+    }
+}
+
+/// Hits per page when a hook filter is checked against one message.
+const FILTER_PAGE: u32 = 200;
+
+/// Most hits a hook filter check looks at.
+const MAX_FILTER_SCAN: u32 = 2000;
+
+/// The error of an unexpected answer.
+fn answer_error(response: Response) -> ApiError {
+    match response {
+        Response::Error {
+            code,
+            message,
+            localized,
+        } => ApiError {
+            code,
+            message,
+            localized,
+        },
+        _ => ApiError::internal("unexpected answer"),
+    }
+}
+
+/// Calendars or task lists as plug-ins see them; the first writable one
+/// (in the user's order) is the default.
+fn collections(calendars: impl Iterator<Item = nail_api::pim::Calendar>) -> Vec<PluginCollection> {
+    let mut list: Vec<nail_api::pim::Calendar> = calendars.collect();
+    list.sort_by_key(|c| c.settings.order);
+    let mut out: Vec<PluginCollection> = list
+        .into_iter()
+        .map(|c| PluginCollection {
+            id: c.id.as_str().to_owned(),
+            name: c.settings.name.clone(),
+            default: false,
+            read_only: c.read_only,
+        })
+        .collect();
+    if let Some(first) = out.iter_mut().find(|c| !c.read_only) {
+        first.default = true;
+    }
+    out
 }
 
 /// Stops every plug-in (the service shuts down).

@@ -1,9 +1,11 @@
 /**
- * Playwright global setup: builds the "Follow up" example plug-in once
- * (outside the repository) and hands its path to the workers.
+ * Playwright global setup: builds the example plug-ins once (outside the
+ * repository) and hands their paths to the workers.
  */
-import { buildFollowUp, FOLLOW_UP_ENV } from "./plugins";
+import { buildExample, EXAMPLES, exampleEnv } from "./plugins";
 
 export default async function globalSetup(): Promise<void> {
-  process.env[FOLLOW_UP_ENV] ??= await buildFollowUp();
+  for (const name of EXAMPLES) {
+    process.env[exampleEnv(name)] ??= await buildExample(name);
+  }
 }

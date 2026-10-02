@@ -210,7 +210,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
 
     let test_control = demo_multi
         .clone()
-        .map(|demo| Arc::new(DemoControl(demo)) as Arc<dyn TestControl>);
+        .map(|demo| Arc::new(DemoControl(demo, service.clone())) as Arc<dyn TestControl>);
     // The local UI: loopback, no login, with the remote-content proxy.
     let server = Server::bind_with(
         service.clone(),
@@ -270,7 +270,7 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
 }
 
 /// The demo-multi mock servers as the server's test hooks.
-struct DemoControl(Arc<DemoMulti>);
+struct DemoControl(Arc<DemoMulti>, Service);
 
 impl TestControl for DemoControl {
     fn control(
@@ -278,7 +278,12 @@ impl TestControl for DemoControl {
         command: &str,
         args: &serde_json::Value,
     ) -> Result<serde_json::Value, String> {
-        self.0.control(command, args)
+        let answer = self.0.control(command, args)?;
+        if matches!(command, "clock-set" | "clock-advance") {
+            // Plug-in jobs due at the new time run now (M4a).
+            self.1.clock_moved();
+        }
+        Ok(answer)
     }
 }
 

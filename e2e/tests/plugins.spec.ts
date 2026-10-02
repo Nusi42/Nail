@@ -8,13 +8,13 @@ import { nailBinary, startNail, type NailServer } from "../support/nail";
 import { commandManifest, followUpPackage, packFiles, writePluginFolder } from "../support/plugins";
 
 /**
- * Wave M2d plug-in preview (plan WP64, ADR 0055) on a private `nail serve
- * --seed demo`: installing the "Follow up" example through the install
+ * Plug-ins (plan WP64 / WP105, ADRs 0055, 0084) on a private `nail serve
+ * --seed demo`: installing the full "Follow up" example through the install
  * dialog with its permissions, its reader toolbar button and dialog, the
- * stored reminder and the notification, the placement written to
- * layout.kdl; a plug-in without `mail.read.body` refused a body; a runaway
- * plug-in stopped and flagged while the UI keeps working; `nail plugin
- * dev` loading a folder and reloading it on changes.
+ * task it creates (a plug-in write through the core) and the notification,
+ * the placement written to layout.kdl; a plug-in without `mail.read.body`
+ * refused a body; a runaway plug-in stopped and flagged while the UI keeps
+ * working; `nail plugin dev` loading a folder and reloading it on changes.
  */
 const test = base.extend<{ nail: NailServer }>({
   nail: async ({}, use) => {
@@ -73,7 +73,7 @@ async function install(page: Page, file: string, title: RegExp): Promise<Locator
   return settings;
 }
 
-test("the example installs with its permissions, runs from the reader toolbar and is placed in layout.kdl", async ({
+test("the full Follow-up example installs with its permissions, creates a task and is placed in layout.kdl", async ({
   page,
   nail,
 }) => {
@@ -91,15 +91,19 @@ test("the example installs with its permissions, runs from the reader toolbar an
 
   // The review names the plug-in (texts from its own catalog), what it
   // adds and every permission with Allow / Deny.
-  await expect(dialog.getByRole("heading", { name: "Follow up 1.0.0" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Follow up 2.0.0" })).toBeVisible();
   await expect(dialog.getByText("Command “Follow up…”")).toBeVisible();
   const permissions = dialog.getByRole("list", { name: "Permissions" });
-  await expect(permissions.getByRole("listitem")).toHaveCount(4);
+  await expect(permissions.getByRole("listitem")).toHaveCount(6);
+  // Writing tasks is marked as a change to your data.
+  await expect(permissions.locator("[data-write]")).toHaveCount(1);
   for (const name of [
     /^Read your mail/,
+    /tasks/i,
     "Show dialogs",
     "Store its own data on this device",
     "Show notifications",
+    /background/i,
   ]) {
     await expect(
       permissions.getByRole("group", { name }).getByRole("radio", { name: "Allow" }),
@@ -128,23 +132,35 @@ test("the example installs with its permissions, runs from the reader toolbar an
   await followUp.click();
   const plugin = page.getByRole("dialog", { name: "Follow up" });
   await expect(plugin.getByText("from Follow up")).toBeVisible();
-  await expect(plugin.getByText(/Remind me about “Welcome to Nail/)).toBeVisible();
+  await expect(plugin.getByText(/Follow up on “Welcome to Nail/)).toBeVisible();
   expect(await violations(page), "plug-in dialog").toEqual([]);
-  await plugin.getByLabel("Due").fill("2031-03-05");
+  await plugin.getByLabel("Due", { exact: true }).fill("2031-03-05");
   await plugin.getByLabel("Note").fill("Answer Ada");
-  await plugin.getByRole("button", { name: "Save reminder" }).click();
+  await plugin.getByRole("button", { name: "Create task" }).click();
   await expect(plugin).toBeHidden();
 
-  // The notification confirms it…
+  // The notification confirms the task (created without asking: task
+  // writes run without a confirmation by default)…
   const toast = page.locator('[data-part="plugin.notification"]');
-  await expect(toast.filter({ hasText: "Follow-up reminder set for 2031-03-05" })).toBeVisible();
+  await expect(toast.filter({ hasText: "Follow-up task created, due 2031-03-05" })).toBeVisible();
   expect(await violations(page), "plug-in notification").toEqual([]);
-  // …and the reminder is stored: the dialog now offers to remove it.
+  // …the dialog now knows about it…
   await followUp.click();
-  await expect(plugin.getByRole("button", { name: "Remove reminder" })).toBeVisible();
-  await expect(plugin.getByLabel("Note")).toHaveValue("Answer Ada");
+  await expect(
+    plugin.getByText("A follow-up task for this message is due 2031-03-05."),
+  ).toBeVisible();
   await plugin.getByRole("button", { name: "Cancel" }).click();
   await expect(plugin).toBeHidden();
+  // …and the task is in Nail's task list, linked to the message.
+  await page.keyboard.press("g");
+  await page.keyboard.press("t");
+  const tasks = page.getByRole("dialog", { name: "Tasks" });
+  await expect(tasks.getByText(/Follow up: Welcome to Nail/)).toBeVisible();
+  // The plug-in's log records the write.
+  await closeDialog(page, "Tasks");
+  const log = await openSettings(page, "Plug-ins");
+  await log.getByRole("button", { name: "Log" }).click();
+  await expect(log.getByText("Changed your data: nail.tasks.create")).toBeVisible();
 });
 
 test("a plug-in without mail.read.body is refused the message body", async ({ page, nail }) => {

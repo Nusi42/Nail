@@ -351,6 +351,7 @@ impl Service {
             Err(err) => tracing::error!(%err, "cannot record a send result"),
         }
         if let Ok(sent) = result {
+            self.forget_plugin_headers(&entry.draft_id);
             self.after_send(&entry, sent).await;
         }
     }
@@ -377,7 +378,17 @@ impl Service {
             Some(AutomaticMail::AutocryptSetup | AutomaticMail::Itip) => {
                 self.prepared_message(&draft, &identity).await
             }
-            _ => self.build_draft_message(&draft, &identity, seed).await,
+            // Headers the plug-ins' before-send hooks added (M4a).
+            _ => self
+                .build_draft_message(&draft, &identity, seed)
+                .await
+                .map(|mut message| {
+                    let headers = self.plugin_headers(&entry.draft_id);
+                    if !headers.is_empty() {
+                        message.raw = crate::agents::add_headers(&message.raw, &headers);
+                    }
+                    message
+                }),
         }
         .map_err(EngineError::from)?;
         // The Autocrypt header, signing and encryption (M2a). Redirects,
@@ -448,20 +459,31 @@ impl Service {
                 tracing::debug!(%err, "cannot mark the original answered");
             }
         }
-        if !wants_sent_copy(&sent.account) {
-            return;
+        let mut copies = Vec::new();
+        if wants_sent_copy(&sent.account) {
+            match self
+                .file_sent_copy(&sent.account, &entry.id, &sent.raw)
+                .await
+            {
+                Ok(Some(copy)) if sent.draft.automatic.is_none() => {
+                    self.run_on_send_rules(&copy).await;
+                    copies.push(copy);
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    tracing::warn!(account = %sent.account.id, %err, "cannot file the Sent copy");
+                }
+            }
         }
-        match self
-            .file_sent_copy(&sent.account, &entry.id, &sent.raw)
-            .await
+        // Plug-in jobs subscribed to `message.sent` (M4a): the Sent copy's
+        // id when Nail filed one.
+        if sent.draft.automatic.is_none()
+            && let Some(host) = self.inner.plugins.existing_host()
         {
-            Ok(Some(copy)) if sent.draft.automatic.is_none() => {
-                self.run_on_send_rules(&copy).await;
-            }
-            Ok(_) => {}
-            Err(err) => {
-                tracing::warn!(account = %sent.account.id, %err, "cannot file the Sent copy");
-            }
+            host.deliver_event(
+                nail_api::plugins::jobs::PluginEventName::MessageSent,
+                copies,
+            );
         }
     }
 

@@ -122,6 +122,14 @@ plugin-host-job-failed = The background job “{ $job }” failed: { $detail }
 plugin-host-job-timed-out = The background job “{ $job }” took too long: { $detail }
 # `name` is the plug-in's action, renderer, tool or banner (`<kind> <name>`).
 plugin-host-handler-failed = { $name } failed: { $detail }
+# M4a WP105 (the core): one line per plug-in write ($operation = the API, e.g. nail.tasks.create).
+plugin-write-log = { $outcome ->
+    [done] Changed your data: { $operation }
+    [denied] You denied a change: { $operation }
+    [expired] A change was not confirmed in time: { $operation }
+    [vetoed] A before-send check stopped sending: { $operation }
+   *[failed] A change failed: { $operation }
+}
 
 ## Plug-in packages (.nailplugin) and folders ($path = the file, $detail = more detail)
 

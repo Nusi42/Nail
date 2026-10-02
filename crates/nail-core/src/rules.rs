@@ -891,6 +891,10 @@ impl Service {
         } else {
             HashMap::new()
         };
+        // Plug-in arrival hooks (M4a) after the user's own rules; their
+        // actions go through the plug-ins' write path without being waited
+        // for, and a hook can never hold up delivery beyond its budget.
+        self.plugin_arrivals(&ids, &junk).await;
         // New-mail notifications (M2c) after the rules' `notify` actions.
         self.notify_arrivals(&ids, &rule_notify, &junk).await;
         let done = ids.len();
@@ -899,6 +903,38 @@ impl Service {
             .call(move |s| s.clear_rule_inbox(&ids))
             .await?;
         Ok(done)
+    }
+
+    /// Runs the plug-ins' arrival hooks on new mail (not on mail filed as
+    /// junk) and tells jobs subscribed to `message.received`.
+    async fn plugin_arrivals(&self, ids: &[MessageId], junk: &[MessageId]) {
+        let Some(host) = self.inner.plugins.existing_host().cloned() else {
+            return;
+        };
+        let arrived: Vec<MessageId> = ids
+            .iter()
+            .filter(|id| !junk.contains(*id))
+            .cloned()
+            .collect();
+        if arrived.is_empty() {
+            return;
+        }
+        let mut runs = tokio::task::JoinSet::new();
+        for id in arrived.clone() {
+            let host = host.clone();
+            runs.spawn(async move { host.arrival_hooks(&id).await });
+        }
+        let mut plugins = Vec::new();
+        while let Some(report) = runs.join_next().await {
+            if let Ok(report) = report {
+                plugins.extend(report.runs.into_iter().map(|r| r.plugin_id));
+            }
+        }
+        self.hooks_ran(plugins.iter());
+        host.deliver_event(
+            nail_api::plugins::jobs::PluginEventName::MessageReceived,
+            arrived,
+        );
     }
 
     /// Every rule `cause` triggers, in order, on each message. On arrival

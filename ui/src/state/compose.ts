@@ -11,6 +11,7 @@ import type { WriteContext } from "./mailOps";
 import { queryKeys } from "./queries";
 import type { ComposerState } from "./uiStore";
 import { DATE_TIME, formatDateTime } from "../i18n/format";
+import { sendDraftChecked } from "../features/plugins/SendVeto";
 
 /** Name of the layout window that holds the composer. */
 export const COMPOSER_WINDOW = "composer";
@@ -263,10 +264,18 @@ export async function sendComposer(ctx: ComposeContext, sendAt: string | null): 
   if (draftId === null) return false;
   ctx.store.getState().updateComposer({ busy: "sending" });
   try {
-    const { entry } = await ctx.client.request(
-      { type: "SendDraft", draft_id: draftId, delay_secs: null, send_at: sendAt },
-      "SendQueued",
-    );
+    // M4a: a plug-in's before-send hook may veto; the veto dialog decides.
+    const entry = await sendDraftChecked(ctx.client, ctx.store, {
+      type: "SendDraft",
+      draft_id: draftId,
+      delay_secs: null,
+      send_at: sendAt,
+    });
+    if (entry === null) {
+      // "Keep editing": the composer stays open.
+      ctx.store.getState().updateComposer({ busy: null });
+      return false;
+    }
     const ui = ctx.store.getState();
     ui.setLastSend(entry);
     ui.setComposer(null);

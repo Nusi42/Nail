@@ -41,6 +41,7 @@ import {
   uploadFiles,
 } from "./flows";
 import { LazyHtmlEditor, LazyMarkdownEditor, prefetchEditors } from "./lazyEditors";
+import { ComposerPlugins, PluginBlocks } from "./pluginExtensions";
 import { Preview } from "./Preview";
 import { needsReminder, parseKeywords } from "./reminder";
 import { AUTOSAVE_MS, richStoreFor, useRich, useRichStoreApi, type RichState } from "./store";
@@ -206,6 +207,7 @@ export function Composer({ node }: WidgetProps) {
   const [later, setLater] = useState(false);
   const [sendAt, setSendAt] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const handledAttach = useRef(rich.attachRequest);
   const allowLater = optionBool(node, "send-later", true);
   const keywords = useMemo(() => parseKeywords(t("composer-attachment-keywords")), [t]);
@@ -431,6 +433,7 @@ export function Composer({ node }: WidgetProps) {
             </label>
           </>
         )}
+        <ComposerPlugins ctx={ctx} mode={mode} textarea={bodyRef} />
         <span data-part="composer.spacer" />
         <button
           type="button"
@@ -490,6 +493,7 @@ export function Composer({ node }: WidgetProps) {
             {bodyLabel}
           </label>
           <textarea
+            ref={bodyRef}
             id={`${ids}-body`}
             data-part="composer.body"
             value={composer.text}
@@ -516,6 +520,7 @@ export function Composer({ node }: WidgetProps) {
             onChange={(markdown) => richApi.setState({ markdown })}
           />
           {rich.preview && <Preview markdown={rich.markdown} identityId={composer.identityId} />}
+          {rich.preview && <PluginBlocks markdown={rich.markdown} />}
         </div>
       )}
 

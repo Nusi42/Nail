@@ -1,7 +1,8 @@
 //! Wave M4a contract (ADR 0079): the confirmation, policy, rate-limit and
 //! plug-in activity requests are served from the store; the plug-in host
-//! requests answer as before WP105 (no annotations; previews, actions and
-//! manual job runs `unsupported`; nothing to "Send anyway").
+//! requests go to the host (WP105): no annotations without open hooks,
+//! previews, actions and manual job runs of a plug-in that is not running
+//! fail, an unknown veto has nothing to "Send anyway".
 
 use nail_api::agents::{
     ActionActor, ActionAttribution, ActionKind, ActionPolicyMode, ActionTarget, ActionTargetKind,
@@ -370,9 +371,12 @@ async fn plugin_activity_and_host_requests() {
             client_id: None,
         },
     ] {
-        assert_eq!(
-            error_of(service.handle(request).await).0,
-            ErrorCode::Unsupported
+        // Served by the host since WP105: a plug-in that is not running
+        // has no jobs, renderers or actions to offer.
+        let code = error_of(service.handle(request).await).0;
+        assert!(
+            matches!(code, ErrorCode::NotFound | ErrorCode::Unavailable),
+            "{code:?}"
         );
     }
     let anyway = service

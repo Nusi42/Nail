@@ -198,10 +198,12 @@ How it works:
   config and WebView2 profile in a temporary directory. The test always
   runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`,
   which the CI workflow sets after `npm run build:desktop` (ADR 0028).
-- The global setup (`e2e/support/global-setup.ts`) builds the "Follow up"
-  example plug-in once (esbuild + `@nail/plugin-api/tools`' `packPlugin`,
+- The global setup (`e2e/support/global-setup.ts`) builds the example
+  plug-ins (`follow-up`, `attachment-check`, `csv-preview`) once (esbuild +
+  `@nail/plugin-api/tools`' `packPlugin`, `buildExample` in
   `e2e/support/plugins.ts`) into `%LOCALAPPDATA%\nail-build\e2e\plugins\`
-  and hands the package path to the workers (`NAIL_E2E_FOLLOW_UP`).
+  and hands the package paths to the workers (`NAIL_E2E_EXAMPLE_<NAME>`,
+  read with `examplePackage(name)`).
 - Traces, screenshots and the CI HTML report go to
   `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
   `NAIL_BUILD_DIR` overrides the base), not into the repository.
@@ -224,12 +226,14 @@ How it works:
 | `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server; a second app started with a `mailto:` link opens the composer with its fields |
 | `e2e/tests/remote.spec.ts` | the remote UI (turned on over the local WebSocket: TLS with a self-signed certificate, host name `localhost`) in a second browser context: pairing with a code from the desktop's dialog (fingerprint, used code refused, Trusted Types block an injected script), passkey registration and login with a CDP virtual authenticator, password + TOTP (a used code refused), password guessing slowed down (backoff, audit), session revoke on the desktop logs the browser out, internet mode locked in the settings and in the core, the local UI's CSP blocking an inline script (`e2e/support/remote.ts`: `rpc`, `enableRemoteUi`, `totp`, `trustingBrowser`) |
 | `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed; "Load once" loads without adding an allow-list entry |
-| `e2e/tests/plugins.spec.ts` | M2d plug-ins (private `--seed demo` each): the example installed through Settings → Plug-ins with its permissions, placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, stored reminder, notification; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
+| `e2e/tests/plugins.spec.ts` | plug-ins (private `--seed demo` each): the full Follow-up example installed through Settings → Plug-ins with its six permissions (write marked), placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, the task it creates in the task window, notification, log line; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
 | `e2e/tests/a11y-windows.spec.ts` | axe on every layout window, settings tab (nested ones too) and feature dialog (incl. the plug-in install dialog) in default, high-contrast and dark mode against `--seed demo-multi`; checks its own coverage against the layout |
 | `e2e/tests/pim.spec.ts` | `--seed demo-multi` (M3a): a weekly event edited "this and following" (two series); an event created in the CalDAV calendar reaches the mock CalDAV server and another client's event (`dav-put`) appears after "Sync"; the ICS subscription's holiday is read-only and a second feed is added from the sources dialog; a reminder fires at the controlled clock time (`clock-set`) and is dismissed; a contact created in the CardDAV book reaches the server and is suggested in the composer; duplicate contacts (local + CardDAV) merged into one linked person; a task with a subtask completed; an `.ics` given with `--launch` previewed and imported; an MCP client lists events only after a grant |
 | `e2e/tests/scheduling.spec.ts` | `--seed demo-multi` (M3b): an iMIP invitation (delivered with `imap-deliver`) is added on arrival and accepted from the reader's card, the `REPLY` reaches the mock SMTP server and the event is in the calendar; an organizer's update moves the event and the cancellation is removed with "Remove from calendar"; a meeting created in the event editor is sent ("Send invitations"), Grace's `COUNTER` is accepted from the card and the updated `REQUEST` goes out; the attendee picker shows `bob`'s busy blocks from the mock CalDAV server's outbox |
 | `e2e/tests/gmail.spec.ts` | `--seed demo-multi` (M3b): the Gmail account switched on in the settings syncs (four inbox conversations, chat skipped), category tabs filter the inbox, a label applied with "Labels…" reaches the mock Gmail server, archive removes `INBOX`, mail is sent through the API (`gmail-sent`), a message delivered on the server (`gmail-deliver`) arrives by history polling |
 | `e2e/tests/exchange.spec.ts` | `--seed demo-multi` (M3c): an Exchange Online account added through Autodiscover (mock Autodiscover → Graph, the redirect confirmed, the mock Microsoft sign-in) syncs; an on-premises account added through Autodiscover (EWS, password) syncs and gets a server-side message by streaming notifications (`ews-deliver`); the "Contoso" Graph account switched on: Focused / Other tabs, flag, move into a subfolder, a new category and a category set on a message reach the mock Graph tenant (`graph-messages`, `graph-settings`), mail sent through Graph (`graph-sent`); a shared mailbox opened (its folder tree) and automatic replies set through Settings → Vacation reply and read back in the Exchange editor; a rule created from a message placed as an inbox rule; a To Do task created, a room booked through the room finder and an invitation answered through Graph's meeting API (`graph-pim`, `graph-meetings`, no mail sent) |
+| `e2e/tests/agents.spec.ts` | `--seed demo-multi` (M4a): an MCP client created and granted in the settings writes a draft without confirmation; its send waits until approved in the confirmation center ("always allow" then lets the next send run at once; axe on the center); a denied Trash and a permanent delete (always asks, no always-allow) change nothing; the `summarize_thread` prompt; a rate limit saved in the settings trips and is audited as denied |
+| `e2e/tests/extensions.spec.ts` | `--seed demo-multi` (M4a): the before-send example vetoes ("Keep editing", "Send anyway"; axe on the veto dialog); an arrival hook tags new mail (keyword on the IMAP server) and an open hook's banner button reaches the plug-in; the CSV preview renders a table; an hourly job runs after `clock-advance` and "Run now"; a runaway arrival hook is stopped while mail keeps arriving; a composer action inserts text attributed to its plug-in |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 
 ### Generated files and snapshots
@@ -327,8 +331,8 @@ Plug-ins run inside the core (ADR 0055): installed packages are kept in
 To develop one:
 
 ```sh
-node packages/create-nail-plugin/index.mjs <dir> [--id ID] [--name NAME] [--sdk PATH]
-npm run package --prefix examples/follow-up    # build + pack the example (examples/follow-up/dist, gitignored)
+node packages/create-nail-plugin/index.mjs <dir> [--template command|hook|composer|attachment] [--id ID] [--name NAME] [--sdk PATH]
+npm run package --prefix examples/<name>    # build + pack an example: follow-up, attachment-check, csv-preview (dist/ gitignored)
 nail plugin dev <folder> [--url URL | --data-dir DIR]
 ```
 

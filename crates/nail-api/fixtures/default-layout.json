@@ -14,6 +14,7 @@
             "auto",
             "1fr",
             "auto",
+            "auto",
             "auto"
           ],
           "children": [
@@ -320,6 +321,15 @@
               "options": {},
               "rows": [],
               "source": null
+            },
+            {
+              "type": "widget",
+              "id": "confirmation-indicator",
+              "label": null,
+              "kind": "confirmation-indicator",
+              "options": {},
+              "rows": [],
+              "source": null
             }
           ]
         }
@@ -336,6 +346,7 @@
             "auto",
             "auto",
             "1fr",
+            "auto",
             "auto",
             "auto"
           ],
@@ -617,6 +628,15 @@
               "id": "agent-indicator",
               "label": null,
               "kind": "mcp-context-indicator",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "confirmation-indicator",
+              "label": null,
+              "kind": "confirmation-indicator",
               "options": {},
               "rows": [],
               "source": null
@@ -927,6 +947,15 @@
               "id": "mcp-clients",
               "label": "@mcp.settings.tab",
               "kind": "mcp-clients",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "confirmation-center",
+              "label": "@agents.center.tab",
+              "kind": "confirmation-center",
               "options": {},
               "rows": [],
               "source": null
@@ -1661,6 +1690,12 @@
       "icon": null,
       "alias_of": null,
       "args": []
+    },
+    "agents.open-center": {
+      "label": null,
+      "icon": null,
+      "alias_of": null,
+      "args": []
     }
   },
   "keys": [
@@ -1928,6 +1963,12 @@
       "context": "global",
       "key": "g t",
       "action": "pim.tasks.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g a",
+      "action": "agents.open-center",
       "args": []
     },
     {

@@ -3881,4 +3881,182 @@ theme "default" mode="system" {
     part "exchange.actions" { display "flex"; gap "$space.sm"; justify-content "flex-end"; }
     part "exchange.problem" { margin 0; color "$color.danger"; }
     part "exchange.hint" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+
+    // ---- Confirmations of AI agents and plug-ins, plug-in extensions (ADRs 0083, 0084) ----
+
+    part "confirmation-center" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "confirmation-center.intro" { margin 0; color "$color.fg-muted"; }
+    part "confirmation-center.views" { gap "$space.xs"; }
+    part "confirmation-center.view:selected" { font-weight "$font-weight.bold"; }
+    part "confirmation-center.list" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "confirmation-center.empty" { color "$color.fg-muted"; }
+    part "confirmation-center.error" { color "$color.danger"; }
+    part "confirmation" {
+        display "flex"
+        flex-direction "column"
+        gap "$space.sm"
+        padding "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+    }
+    part "confirmation[risk=\"destructive\"]" { border-color "$color.danger"; }
+    part "confirmation[risk=\"outgoing\"]" { border-color "$color.warning"; }
+    part "confirmation.header" { gap "$space.sm"; }
+    part "confirmation.actor" { font-weight "$font-weight.bold"; }
+    part "confirmation.on-behalf-of" { color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "confirmation.kind" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "confirmation.risk" { font-size "$font-size.sm"; font-weight "$font-weight.bold"; }
+    part "confirmation[risk=\"destructive\"] confirmation.risk" { color "$color.danger"; }
+    part "confirmation[risk=\"outgoing\"] confirmation.risk" { color "$color.warning"; }
+    part "confirmation.summary" { margin 0; font-size "$font-size.md"; }
+    part "confirmation.targets.title" { margin 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "confirmation.targets.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "confirmation.target.kind" { font-size "$font-size.xs"; color "$color.fg-muted"; margin-right "$space.xs"; }
+    part "confirmation.targets.more" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "confirmation.changes" { font-size "$font-size.sm"; }
+    part "confirmation.changes.caption" { text-align "left"; color "$color.fg-muted"; }
+    part "confirmation.change.field" { padding "$space.xxs" "$space.sm"; color "$color.fg-muted"; text-align "left"; }
+    part "confirmation.change.before" { padding "$space.xxs" "$space.sm"; text-decoration "line-through"; color "$color.fg-muted"; }
+    part "confirmation.change.after" { padding "$space.xxs" "$space.sm"; }
+    part "confirmation.times" { gap "$space.md"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "confirmation.accounts" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "confirmation.operation" { font-family "$font.mono"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "confirmation.buttons" { gap "$space.sm"; }
+    part "confirmation.always-allow" { display "flex"; align-items "center"; gap "$space.xs"; }
+    part "confirmation.always-asks" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "confirmation.outcome" { gap "$space.sm"; font-size "$font-size.sm"; }
+    part "confirmation.state" { font-weight "$font-weight.medium"; }
+    part "confirmation.error" { color "$color.danger"; }
+    part "confirmation-notices.list" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "confirmation-notice" {
+        gap "$space.sm"
+        padding "$space.sm" "$space.md"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg-raised"
+        box-shadow "$shadow.overlay"
+    }
+    part "confirmation-notice[risk=\"destructive\"]" { border-color "$color.danger"; }
+    part "confirmation-notice[risk=\"outgoing\"]" { border-color "$color.warning"; }
+    part "confirmation-notice.actor" { font-weight "$font-weight.bold"; }
+    part "confirmation-notice.summary" { font-size "$font-size.sm"; }
+    part "confirmation-indicator" { gap "$space.xs"; padding "$space.xxs" "$space.sm"; }
+    part "confirmation-indicator:waiting" { color "$color.accent-fg"; background-color "$color.accent"; border-radius "$radius.sm"; }
+    part "confirmation-indicator.count" { font-weight "$font-weight.bold"; }
+    part "action-policies" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "action-policies.title" { margin 0; font-size "$font-size.md"; }
+    part "action-policies.intro" { margin 0; color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "action-policies.list" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "action-policies.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "action-policies.kind" { flex "1 1 200px"; }
+    part "action-policies.choice" { display "flex"; gap "$space.sm"; }
+    part "action-policies.locked" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "action-policies.default" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "action-policies.error" { color "$color.danger"; }
+
+    part "plugin-banners" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.xs" "$space.md"; }
+    part "plugin-banner" {
+        display "flex"
+        flex-wrap "wrap"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.sm" "$space.md"
+        border-left "3px solid $color.accent"
+        border-radius "$radius.sm"
+        background-color "$color.bg-subtle"
+    }
+    part "plugin-banner[level=\"warning\"]" { border-left-color "$color.warning"; }
+    part "plugin-banner[level=\"error\"]" { border-left-color "$color.danger"; }
+    part "plugin-banner[level=\"success\"]" { border-left-color "$color.success"; }
+    part "plugin-banner.plugin" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-banner.text" { flex "1 1 auto"; }
+    part "plugin-banner.buttons" { display "flex"; gap "$space.xs"; }
+    part "plugin-banner.error" { color "$color.danger"; }
+    part "plugin-badges" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
+    part "plugin-badge" { padding "0" "$space.xs"; border "$border.thin"; border-radius "$radius.sm"; font-size "$font-size.xs"; }
+    part "plugin-badge[level=\"warning\"]" { color "$color.warning"; border-color "$color.warning"; }
+    part "plugin-badge[level=\"error\"]" { color "$color.danger"; border-color "$color.danger"; }
+    part "plugin-badge[level=\"success\"]" { color "$color.success"; border-color "$color.success"; }
+    part "plugin-preview" { display "flex"; flex-direction "column"; gap "$space.xs"; margin "$space.sm" "$space.md"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; max-height 480; overflow "auto"; }
+    part "plugin-preview.header" { display "flex"; flex-wrap "wrap"; align-items "center"; justify-content "space-between"; gap "$space.sm"; }
+    part "plugin-preview.by" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-preview.loading" { color "$color.fg-muted"; }
+    part "plugin-preview.error" { color "$color.danger"; }
+    part "plugin-extension-menu" { position "relative"; display "inline-flex"; }
+    part "plugin-extension-menu.list" {
+        position "absolute"
+        z-index 50
+        min-width 220
+        margin 0
+        padding "$space.xs"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "plugin-extension-menu.title" { padding "$space.xxs" "$space.sm"; font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-extension-menu.item" { display "flex"; flex-direction "column"; width "100%"; padding "$space.xs" "$space.sm"; border 0; border-radius "$radius.sm"; text-align "left"; background-color "transparent"; color "inherit"; cursor "pointer"; }
+    part "plugin-extension-menu.item:focus" { background-color "$color.selection"; color "$color.selection-fg"; }
+    part "plugin-extension-menu.plugin" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-actions.error" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "plugin-composer" { display "inline-flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; }
+    part "plugin-composer.edited" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-composer.error" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "composer.plugin-blocks" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "plugin-block" { margin 0; padding "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "plugin-block.caption" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-block.source" { font-family "$font.mono"; font-size "$font-size.sm"; white-space "pre-wrap"; }
+    part "plugin-veto.backdrop" { position "fixed"; inset 0; z-index 400; background-color "$color.scrim"; }
+    part "plugin-veto" {
+        position "fixed"
+        z-index 401
+        inset 0
+        width "min(520px, calc(100% - 32px))"
+        height "fit-content"
+        margin "auto"
+        display "flex"
+        flex-direction "column"
+        gap "$space.md"
+        padding "$space.lg"
+        border "$border.thin"
+        border-radius "$radius.lg"
+        background-color "$color.bg"
+        box-shadow "$shadow.overlay"
+    }
+    part "plugin-veto.title" { margin 0; font-size "$font-size.lg"; }
+    part "plugin-veto.intro" { margin 0; color "$color.fg-muted"; }
+    part "plugin-veto.list" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
+    part "plugin-veto.plugin" { font-weight "$font-weight.bold"; }
+    part "plugin-veto.reason" { margin 0; }
+    part "plugin-veto.buttons" { display "flex"; justify-content "flex-end"; gap "$space.sm"; }
+    part "plugin-veto.error" { color "$color.danger"; }
+    part "plugin-activity" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "plugin-activity.heading" { margin 0; font-size "$font-size.md"; }
+    part "plugin-activity.cpu" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "plugin-activity.cpu[level=\"high\"] plugin-activity.cpu.value" { color "$color.warning"; }
+    part "plugin-activity.cpu[level=\"exhausted\"] plugin-activity.cpu.value" { color "$color.danger"; }
+    part "plugin-activity.cpu.exhausted" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "plugin-activity.hooks" { font-size "$font-size.sm"; border-collapse "collapse"; }
+    part "plugin-activity.caption" { text-align "left"; color "$color.fg-muted"; }
+    part "plugin-activity.job-list" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
+    part "plugin-activity.job" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "plugin-activity.job[state=\"error\"]" { border-color "$color.danger"; }
+    part "plugin-activity.job[state=\"running\"]" { border-color "$color.accent"; }
+    part "plugin-activity.job.title" { font-weight "$font-weight.medium"; }
+    part "plugin-activity.job.facts" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "plugin-activity.schedule" { font-family "$font.mono"; }
+    part "plugin-activity.last-error" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "plugin-activity.none" { color "$color.fg-muted"; }
+    part "plugin-activity.error" { color "$color.danger"; }
+    part "plugin-permissions.item[write]" { font-weight "$font-weight.medium"; }
+    part "mcp-grants.scope[write]" { font-weight "$font-weight.medium"; }
+    part "mcp-rate-limits" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "mcp-rate-limits.title" { margin 0; font-size "$font-size.md"; }
+    part "mcp-rate-limits.intro" { margin 0; color "$color.fg-muted"; font-size "$font-size.sm"; }
+    part "mcp-rate-limits.fields" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "mcp-rate-limits.limit" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "mcp-rate-limits.issue" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "mcp-rate-limits.actions" { display "flex"; gap "$space.sm"; }
+    part "mcp-clients.pending" { color "$color.warning"; }
 }

@@ -61,8 +61,12 @@ The writing permissions:
 | Filter rules | Create filter rules (asks first unless you allow it) and test them on existing mail | `create_rule`, `test_rule` |
 
 A writing permission alone reads nothing: give *Read mail* too, so the
-agent can find what it should change. Changes are limited to the accounts
-and folders the client may see.
+agent can find what it should change. To change something, the client
+needs that change's own permission and the account (and folder) of every
+item; *Read mail* is not needed for that. Replying to, forwarding or
+quoting a message needs *Read mail* for it, and forwarding a message with
+attachments (or copying an attachment from a message into a draft) also
+needs *Attachments*.
 
 **Accounts.** Choose single accounts, a virtual account (which includes its
 member accounts), or **All accounts, including ones added later**. Filter
@@ -254,7 +258,10 @@ requests stay in the **History** (more in [confirmations](confirmations.md)).
   counts.
 - **Nail without its window.** When an agent started Nail through
   `nail mcp` and no Nail window is open, answer in the agent's prompt if it
-  asks; otherwise the request expires.
+  asks; otherwise the request expires. `nail mcp` writes a line to the
+  agent's log (standard error) for each request that waits.
+- **The agent went away.** An approval counts even if the agent
+  disconnected or gave up waiting: the change still runs, exactly once.
 - An agent can have at most 20 requests waiting; further changes are
   refused until you answer.
 
@@ -302,7 +309,7 @@ Each client has three limits (**Settings → MCP clients → Limits**):
 | Limit | Default | Counts |
 | --- | --- | --- |
 | Calls per minute | 120 | Reading, searching, tools and prompts together |
-| Changes per minute | 20 | Every call of a writing tool, whether it runs, asks or is refused |
+| Changes per minute | 20 | Every call of a writing tool, whether it runs, asks or is refused by its permissions; a repeated call with the same `idempotency_key` does not count |
 | Messages sent per hour | 10 | Sent mail, invitations and answers to invitations |
 
 Each can be 1 to 10,000 or switched off ("No limit …"); **Use the default
