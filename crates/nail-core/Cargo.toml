@@ -97,6 +97,10 @@ nail-proto-gmail = { workspace = true, features = ["testing"] }
 nail-proto-graph = { workspace = true, features = ["testing"] }
 nail-proto-ews = { workspace = true, features = ["testing"] }
 nail-exchange = { workspace = true, features = ["testing"] }
+# Cheap Argon2id for backup tests (production uses KdfParams::STANDARD) and the
+# in-memory PKCS#11 token for smartcard tests (M4c).
+nail-portability = { workspace = true, features = ["testing"] }
+nail-pkcs11 = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 zeroize.workspace = true
 pretty_assertions.workspace = true

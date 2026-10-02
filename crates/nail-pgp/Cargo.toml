@@ -22,9 +22,17 @@ thiserror.workspace = true
 chrono.workspace = true
 base64.workspace = true
 mail-parser.workspace = true
+# M4c WP122: matching card keys with OpenPGP keys (the RustCrypto types
+# rPGP uses) and the JSON smartcard key reference.
+rsa.workspace = true
+p256.workspace = true
+hex.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 nail-testkit.workspace = true
+# Smartcard tests on the in-memory soft token.
+nail-pkcs11 = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 
 [lints]

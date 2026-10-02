@@ -155,8 +155,54 @@ pub struct MockTask {
 pub struct SentMail {
     /// The mailbox it was sent from.
     pub mailbox: String,
-    /// The MIME as uploaded (after base64 decoding).
+    /// The MIME as uploaded (after base64 decoding), or as the mock
+    /// rendered a draft built from parts.
     pub raw: Vec<u8>,
+    /// How it was sent: `sendMail` (MIME) or `send` (a draft, M4c upload
+    /// sessions).
+    pub via: String,
+}
+
+/// A draft created from JSON (M4c: messages over 4 MB are built from
+/// parts), with the attachments added so far.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JsonDraft {
+    /// The mailbox it is in.
+    pub mailbox: String,
+    /// The `message` resource as created.
+    pub message: Value,
+    /// Attachments: metadata and content.
+    pub attachments: Vec<(Value, Vec<u8>)>,
+}
+
+/// An open attachment upload session.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MockUpload {
+    /// The mailbox of the draft.
+    pub mailbox: String,
+    /// The draft.
+    pub message_id: String,
+    /// The `AttachmentItem` of `createUploadSession`.
+    pub item: Value,
+    /// The announced size.
+    pub size: usize,
+    /// The bytes received so far.
+    pub received: Vec<u8>,
+    /// The ranges received (`start`, `end` inclusive).
+    pub ranges: Vec<(u64, u64)>,
+}
+
+/// A finished upload (for assertions).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompletedUpload {
+    /// The draft.
+    pub message_id: String,
+    /// The file name.
+    pub name: String,
+    /// Its size.
+    pub size: usize,
+    /// How many range requests it took.
+    pub ranges: usize,
 }
 
 /// A meeting answer or cancellation the server received.
@@ -249,6 +295,12 @@ pub struct Tenant {
     pub meeting_actions: Vec<MeetingAction>,
     /// Ids.
     pub ids: IdGen,
+    /// Drafts created from JSON, by message id (M4c).
+    pub json_drafts: BTreeMap<String, JsonDraft>,
+    /// Open upload sessions, by session id (M4c).
+    pub uploads: BTreeMap<String, MockUpload>,
+    /// Finished uploads (M4c).
+    pub completed_uploads: Vec<CompletedUpload>,
 }
 
 /// The well-known folders every mailbox has, with display names.
@@ -804,6 +856,9 @@ impl Tenant {
             sent: Vec::new(),
             meeting_actions: Vec::new(),
             ids,
+            json_drafts: BTreeMap::new(),
+            uploads: BTreeMap::new(),
+            completed_uploads: Vec::new(),
         }
     }
 

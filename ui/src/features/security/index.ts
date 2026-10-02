@@ -11,14 +11,34 @@
  * `locales/{en,de}/security.ftl`). The central registry (`../registry.ts`)
  * merges these exports into the app; see `../README.md`.
  *
+ * M4c (WP124, ADR 0094): the vault recovery key (widget
+ * `security-recovery-key`, dialogs `security-recovery-create` / `-verify` /
+ * `-restore`, effect `RecoveryGate`), smartcards (widget
+ * `security-smartcards`) and the PIN dialog (`smartcard-pin`, opened by
+ * `PinRequested`).
+ *
  * Components for other packages to mount (the composer, the reader, the
  * account settings) are re-exported at the end of this file.
  */
+import type { ActionInfo } from "../../actions/palette";
 import type { Feature, FeatureEventHandler } from "../types";
 import { AUTOCRYPT_IMPORT_DIALOG, AutocryptImportDialog, AutocryptSetup } from "./Autocrypt";
 import { ComposerSecurityWidget } from "./ComposerSecurity";
 import { IdentityCryptoSettings } from "./IdentityCrypto";
 import { KeyManager } from "./KeyManager";
+import { PIN_DIALOG, PinPromptDialog, handlePinEvent } from "./PinPrompt";
+import {
+  RECOVERY_CREATE_DIALOG,
+  RECOVERY_RESTORE_DIALOG,
+  RECOVERY_VERIFY_DIALOG,
+  RECOVERY_WIDGET,
+  RecoveryCreateDialog,
+  RecoveryGate,
+  RecoveryKeyWidget,
+  RecoveryRestoreDialog,
+  RecoveryVerifyDialog,
+} from "./RecoveryKey";
+import { SMARTCARDS_WIDGET, SmartcardsWidget } from "./Smartcards";
 import { SecurityMessageWidget } from "./MessageSecurity";
 import { applyVaultStatus, securityKeys } from "./queries";
 import { SecuritySettingsWidget } from "./SecuritySettings";
@@ -33,7 +53,14 @@ export const widgets: Feature["widgets"] = {
   "security-message": SecurityMessageWidget,
   "security-warnings": SecurityWarningsWidget,
   "security-composer": ComposerSecurityWidget,
+  [RECOVERY_WIDGET]: RecoveryKeyWidget,
+  [SMARTCARDS_WIDGET]: SmartcardsWidget,
 };
+
+/** M4c action ids. */
+export const RECOVERY_CREATE_ACTION = "security.recovery-key.create";
+export const RECOVERY_CHECK_ACTION = "security.recovery-key.check";
+export const RECOVERY_RESTORE_ACTION = "security.recovery-key.restore";
 
 /** Action ids → handlers (prefix `security.`). */
 export const actions: Feature["actions"] = {
@@ -42,11 +69,46 @@ export const actions: Feature["actions"] = {
     run: (ctx) => ctx.store.getState().openWindow(AUTOCRYPT_IMPORT_DIALOG),
     enabled: (ctx) => ctx.store.getState().selectedMessageId !== null,
   },
+  /** Creates (or replaces) the vault recovery key. */
+  [RECOVERY_CREATE_ACTION]: {
+    run: (ctx) => ctx.store.getState().openWindow(RECOVERY_CREATE_DIALOG),
+  },
+  /** Checks a stored recovery key. */
+  [RECOVERY_CHECK_ACTION]: {
+    run: (ctx) => ctx.store.getState().openWindow(RECOVERY_VERIFY_DIALOG),
+  },
+  /** Puts the data key back with the recovery key. */
+  [RECOVERY_RESTORE_ACTION]: {
+    run: (ctx) => ctx.store.getState().openWindow(RECOVERY_RESTORE_DIALOG),
+  },
+};
+
+/** Command-palette descriptions of the M4c actions (`security.ftl`). */
+export const actionInfo: Readonly<Record<string, ActionInfo>> = {
+  [RECOVERY_CREATE_ACTION]: {
+    title: "security-action-recovery-create",
+    keywords: "security-action-recovery-keywords",
+    availability: ["desktop"],
+  },
+  [RECOVERY_CHECK_ACTION]: {
+    title: "security-action-recovery-check",
+    keywords: "security-action-recovery-keywords",
+    availability: ["desktop"],
+  },
+  [RECOVERY_RESTORE_ACTION]: {
+    title: "security-action-recovery-restore",
+    keywords: "security-action-recovery-keywords",
+    availability: ["desktop"],
+  },
 };
 
 /** Named dialogs (opened with `window.open "<name>"`). */
 export const dialogs: Feature["dialogs"] = {
   [AUTOCRYPT_IMPORT_DIALOG]: AutocryptImportDialog,
+  [RECOVERY_CREATE_DIALOG]: RecoveryCreateDialog,
+  [RECOVERY_VERIFY_DIALOG]: RecoveryVerifyDialog,
+  [RECOVERY_RESTORE_DIALOG]: RecoveryRestoreDialog,
+  [PIN_DIALOG]: PinPromptDialog,
 };
 
 /** Message queries of the reader (`queryKeys.message` in `state/queries.ts`). */
@@ -74,10 +136,10 @@ export const handleSecurityEvent: FeatureEventHandler = (event, { queryClient })
 };
 
 /** Handlers for core events (`KeysChanged`, `VaultProgress`, …). */
-export const events: Feature["events"] = [handleSecurityEvent];
+export const events: Feature["events"] = [handleSecurityEvent, handlePinEvent];
 
 /** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [];
+export const effects: Feature["effects"] = [RecoveryGate];
 
 // ---------------------------------------------------------------------------
 // Mount points for other packages (see ADR 0033, "Mount points").
@@ -95,3 +157,11 @@ export { IdentityCryptoFields } from "./IdentityCrypto";
 export { AuthBadge, MessageBadges, SecurityBadge, SecurityDetails } from "./MessageSecurity";
 export { attachmentWarning, warningsForLink } from "./model";
 export { AttachmentWarningMark, MessageWarnings } from "./Warnings";
+export { pinStoreFor, PIN_DIALOG } from "./PinPrompt";
+export { formatRecoveryKey, parseRecoveryKey } from "./recoveryKeyText";
+export {
+  closePinPrompt,
+  simulateLostVaultKey,
+  simulatePinRequest,
+  type VaultMockState,
+} from "./vaultMock";

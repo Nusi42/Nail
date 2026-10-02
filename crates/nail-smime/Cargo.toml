@@ -35,6 +35,8 @@ p12-keystore.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 base64.workspace = true
+# The JSON smartcard key reference in the keyring (M4c WP122).
+serde_json.workspace = true
 # RFC 3394 AES key wrap for ECDH recipients, PBKDF2 for passphrase-protected
 # private keys (ADR 0031; MIT OR Apache-2.0).
 aes-kw.workspace = true
@@ -45,6 +47,8 @@ windows.workspace = true
 
 [dev-dependencies]
 nail-testkit.workspace = true
+# Smartcard tests on the in-memory soft token.
+nail-pkcs11 = { workspace = true, features = ["testing"] }
 pretty_assertions.workspace = true
 
 [lints]

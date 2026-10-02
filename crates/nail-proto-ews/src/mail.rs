@@ -6,6 +6,7 @@
 //! `FindItem` by `InternetMessageId` (idempotent appends).
 
 use base64::Engine as _;
+use nail_api::accounts::SendingMailbox;
 use nail_api::domain::Flags;
 use nail_api::engine::{RemoteMessage, RemoteMessageChange};
 use nail_api::exchange::engine::{ExchangeFolder, ExchangeFolderClass};
@@ -351,22 +352,56 @@ impl EwsClient {
     }
 
     /// Sends raw MIME (`CreateItem` `SendAndSaveCopy` into Sent Items, or
-    /// `SendOnly`).
+    /// `SendOnly`) from the user's own mailbox.
     pub async fn send_mime(&self, raw: &[u8], save_copy: bool) -> Result<(), EwsError> {
+        self.send_mime_from(raw, save_copy, &SendingMailbox::Own)
+            .await
+    }
+
+    /// Sends raw MIME as the user, as another mailbox (Send As: `From` is
+    /// that mailbox, the copy goes to *its* Sent Items) or on its behalf
+    /// (`From` is that mailbox, the message's `Sender` the user, the copy
+    /// stays in the user's Sent Items). Exchange checks the permission
+    /// (`ErrorSendAsDenied` → [`EwsError::Forbidden`]).
+    pub async fn send_mime_from(
+        &self,
+        raw: &[u8],
+        save_copy: bool,
+        sending: &SendingMailbox,
+    ) -> Result<(), EwsError> {
         let mime = base64::engine::general_purpose::STANDARD.encode(raw);
+        let (from, saved_in) = match sending {
+            SendingMailbox::Own => (String::new(), None),
+            SendingMailbox::SendAs { mailbox } => (from_xml(mailbox), Some(mailbox.as_str())),
+            SendingMailbox::OnBehalf { mailbox } => (from_xml(mailbox), None),
+        };
         let body = if save_copy {
             format!(
-                r#"<m:CreateItem MessageDisposition="SendAndSaveCopy"><m:SavedItemFolderId>{}</m:SavedItemFolderId><m:Items><t:Message><t:MimeContent CharacterSet="UTF-8">{mime}</t:MimeContent></t:Message></m:Items></m:CreateItem>"#,
-                FolderRef::distinguished("sentitems", None).xml()
+                r#"<m:CreateItem MessageDisposition="SendAndSaveCopy"><m:SavedItemFolderId>{}</m:SavedItemFolderId><m:Items><t:Message><t:MimeContent CharacterSet="UTF-8">{mime}</t:MimeContent>{from}</t:Message></m:Items></m:CreateItem>"#,
+                FolderRef::distinguished("sentitems", saved_in).xml()
             )
         } else {
             format!(
-                r#"<m:CreateItem MessageDisposition="SendOnly"><m:Items><t:Message><t:MimeContent CharacterSet="UTF-8">{mime}</t:MimeContent></t:Message></m:Items></m:CreateItem>"#
+                r#"<m:CreateItem MessageDisposition="SendOnly"><m:Items><t:Message><t:MimeContent CharacterSet="UTF-8">{mime}</t:MimeContent>{from}</t:Message></m:Items></m:CreateItem>"#
             )
         };
         let response = self.call(&Operation::write("CreateItem", body)).await?;
         soap::single_message(&response.body)?;
         Ok(())
+    }
+
+    /// The transport headers of a message (`PR_TRANSPORT_MESSAGE_HEADERS`,
+    /// `0x007D`); `None` when it has none (sent mail, drafts).
+    pub async fn transport_headers(
+        &self,
+        mailbox: Option<&str>,
+        id: &str,
+    ) -> Result<Option<String>, EwsError> {
+        let shape = r#"<m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:ExtendedFieldURI PropertyTag="0x007D" PropertyType="String"/></t:AdditionalProperties></m:ItemShape>"#;
+        let item = self.get_item(mailbox, &ItemRef::new(id), shape).await?;
+        Ok(extended_property(&item, "0x007D")
+            .map(str::to_owned)
+            .filter(|h| !h.trim().is_empty()))
     }
 
     /// `UpdateItem` of one item. With a change key the write fails with
@@ -776,6 +811,15 @@ pub fn exchange_folder(
 /// Recipients of the address headers of a raw message (`To`, `Cc`,
 /// `Bcc`), lowercase.
 pub fn header_recipients(raw: &[u8]) -> Vec<String> {
+    ["to", "cc", "bcc"]
+        .iter()
+        .flat_map(|h| header_addresses(raw, h))
+        .collect()
+}
+
+/// The addresses of one address header (`from`, `sender`, `to`, …; every
+/// occurrence), lowercase.
+pub fn header_addresses(raw: &[u8], wanted: &str) -> Vec<String> {
     let head_end = find_header_end(raw);
     let head = String::from_utf8_lossy(&raw[..head_end]);
     let mut unfolded: Vec<String> = Vec::new();
@@ -795,7 +839,7 @@ pub fn header_recipients(raw: &[u8]) -> Vec<String> {
         let Some((name, value)) = header.split_once(':') else {
             continue;
         };
-        if !["to", "cc", "bcc"].contains(&name.trim().to_ascii_lowercase().as_str()) {
+        if !name.trim().eq_ignore_ascii_case(wanted) {
             continue;
         }
         out.extend(addresses(value));
@@ -909,6 +953,46 @@ pub fn with_envelope_recipients(raw: &[u8], recipients: &[String]) -> Result<Vec
     let mut out = format!("Bcc: {}\r\n", missing.join(", ")).into_bytes();
     out.extend_from_slice(raw);
     Ok(out)
+}
+
+/// `<t:From>` naming `address`.
+fn from_xml(address: &str) -> String {
+    format!(
+        "<t:From><t:Mailbox>{}</t:Mailbox></t:From>",
+        el("t:EmailAddress", address)
+    )
+}
+
+/// The header section of transport headers or a raw message: CRLF line
+/// ends, unsafe lines dropped, ending with the empty line.
+pub fn header_block(text: &[u8]) -> Vec<u8> {
+    let end = text
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|i| i + 2)
+        .or_else(|| text.windows(2).position(|w| w == b"\n\n").map(|i| i + 1))
+        .unwrap_or(text.len());
+    let head = String::from_utf8_lossy(&text[..end]);
+    let mut out = String::new();
+    for line in head.split('\n') {
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() {
+            continue;
+        }
+        let continuation = line.starts_with([' ', '\t']);
+        // A header line needs a name: a stray line would end the headers.
+        if !continuation
+            && !line
+                .split_once(':')
+                .is_some_and(|(n, _)| !n.is_empty() && !n.contains(' '))
+        {
+            continue;
+        }
+        out.push_str(line);
+        out.push_str("\r\n");
+    }
+    out.push_str("\r\n");
+    out.into_bytes()
 }
 
 #[cfg(test)]

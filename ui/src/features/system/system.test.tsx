@@ -366,7 +366,7 @@ describe("first-run screen", () => {
     }
   });
 
-  it("offers default apps, start with Windows and the import placeholder", async () => {
+  it("offers default apps, start with Windows and the import offer", async () => {
     const env = createEnv();
     env.transport.data.features.system.firstRun.completed = false;
     env.store.getState().openWindow(FIRST_RUN_DIALOG);
@@ -383,10 +383,10 @@ describe("first-run screen", () => {
         start_hidden: true,
       }),
     );
+    expect(screen.getByRole("button", { name: "Import…" })).toBeVisible();
     expect(
-      screen.getByText("The import assistant comes with a later version of Nail."),
-    ).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Import…" })).toBeNull();
+      screen.queryByText("The import assistant comes with a later version of Nail."),
+    ).toBeNull();
     await user.click(screen.getByRole("button", { name: "Get started" }));
     await waitFor(() => expect(close).toHaveBeenCalled());
     expect(env.transport.data.features.system.firstRun.completed).toBe(true);

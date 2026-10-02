@@ -1,0 +1,55 @@
+# Nail's stand-in for `libsqlite3-sys` 0.38.2 (M4c WP122, ADR 0095):
+# the same crate API and bindings, but the bundled library is the
+# SQLite3 Multiple Ciphers amalgamation (MIT; from the `sqlite3mc-src`
+# crate) instead of plain SQLite, so `rusqlite` can open full-file
+# encrypted databases (`PRAGMA cipher` / `PRAGMA hexkey`). Plain databases
+# open exactly as before. Wired in by the root `Cargo.toml`'s
+# `[patch.crates-io]`.
+#
+# Only the bundled build exists: the features of the original crate are
+# kept so `rusqlite`'s feature list resolves, but SQLCipher, pkg-config /
+# vcpkg linking, build-time bindgen and loadable extensions are refused at
+# build time (compile_error!). No OpenSSL.
+[package]
+name = "libsqlite3-sys"
+version = "0.38.2"
+edition = "2021"
+authors = ["The rusqlite developers", "Nail"]
+build = "build.rs"
+links = "sqlite3"
+description = "libsqlite3-sys 0.38.2 API over the bundled SQLite3 Multiple Ciphers amalgamation (Nail)"
+license = "MIT"
+publish = false
+
+[lib]
+name = "libsqlite3_sys"
+path = "src/lib.rs"
+
+[features]
+default = ["min_sqlite_version_3_34_1"]
+bundled = ["bundled_bindings"]
+bundled-windows = ["bundled_bindings"]
+bundled_bindings = []
+# Kept for feature resolution only; refused in build.rs.
+bundled-sqlcipher = ["bundled"]
+bundled-sqlcipher-vendored-openssl = ["bundled-sqlcipher"]
+buildtime_bindgen = []
+column_metadata = []
+in_gecko = []
+loadable_extension = []
+min_sqlite_version_3_34_1 = []
+preupdate_hook = []
+session = ["preupdate_hook"]
+sqlcipher = []
+unlock_notify = []
+wasm32-wasi-vfs = []
+with-asan = []
+
+[build-dependencies]
+cc = "1.2.27"
+# The untouched SQLite3 Multiple Ciphers 2.5.1 amalgamation (SQLite
+# 3.53.4). MIT; the amalgamation also carries public-domain code, a
+# CC0-1.0 file, Argon2 (CC0-1.0 OR Apache-2.0) and miniz (Unlicense; only
+# compiled with SQLITE_ENABLE_COMPRESS / SQLAR / ZIPFILE, which Nail does
+# not set).
+sqlite3mc-src = "=205.1.0"

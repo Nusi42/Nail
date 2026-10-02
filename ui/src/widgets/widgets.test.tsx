@@ -297,6 +297,8 @@ describe("toolbar", () => {
       "Categories…",
       "Move to Focused / Other…",
       "Import Autocrypt setup message",
+      // M4c: printing.
+      "Print the message…",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");
     expect(buttons[0]).toBeDisabled(); // no message selected

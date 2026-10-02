@@ -27,7 +27,7 @@ pub const TOKEN_CATEGORIES: &[&str] = &[
 pub const PX_TOKEN_CATEGORIES: &[&str] = &["font-size", "space", "size", "radius"];
 
 /// Colour modes that may override tokens.
-pub const MODES: &[&str] = &["light", "dark", "high-contrast"];
+pub const MODES: &[&str] = &["light", "dark", "high-contrast", "print"];
 
 /// The CSS properties a part rule may set.
 pub const PROPERTIES: &[&str] = &[

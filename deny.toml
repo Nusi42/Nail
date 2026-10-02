@@ -59,6 +59,10 @@ allow = [
     "MPL-2.0",
 ]
 confidence-threshold = 0.93
+# sqlite3mc-src (SQLite3 Multiple Ciphers amalgamation, ADR 0095) is
+# `MIT AND CC0-1.0 AND Unlicense AND (CC0-1.0 OR Apache-2.0)`; the Unlicense
+# part is its bundled miniz, which Nail's build does not compile.
+exceptions = [{ crate = "sqlite3mc-src", allow = ["Unlicense"] }]
 
 [licenses.private]
 # Nail's own crates (license = "LicenseRef-Proprietary", publish = false).

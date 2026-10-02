@@ -5,6 +5,8 @@
  * runtime are listed by `runtimeIds`.
  */
 import type { ActionAvailability } from "../../api/generated";
+import { builtinMessageIds } from "./builtinInfo";
+import { PALETTE_DIALOG } from "./names";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["palette-"];
@@ -34,6 +36,8 @@ export function runtimeIds(): string[] {
   return [
     "palette-title",
     "palette-invalid-action",
+    `window-${PALETTE_DIALOG}`,
     ...ACTION_AVAILABILITIES.map(availabilityMessageId),
+    ...builtinMessageIds(),
   ];
 }

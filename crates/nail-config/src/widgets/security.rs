@@ -6,7 +6,7 @@
 
 use super::WidgetSpec;
 #[allow(unused_imports)]
-use super::{OptionType, future_widget, widget};
+use super::{OptionType, widget};
 
 /// Widgets of this feature (none takes options).
 ///
@@ -29,8 +29,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // M4c (WP124, ADR 0094): future widgets (any options) — the vault
     // recovery key (create / show once / verify / restore) and smartcards
     // (PKCS#11 modules, tokens, keys, PIN cache).
-    future_widget("security-recovery-key", false),
-    future_widget("security-smartcards", false),
+    widget("security-recovery-key", &[], &[], false),
+    widget("security-smartcards", &[], &[], false),
 ];
 
 #[cfg(test)]

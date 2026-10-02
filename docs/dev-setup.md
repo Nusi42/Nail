@@ -62,7 +62,10 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Installer and release scripts (node:test) | `node --test "scripts/test/*.test.mjs"` |
 | The Simple MAPI DLL as x86 (32-bit Office) under WOW64 | `cargo test -p nail-mapi --target i686-pc-windows-msvc` (once: `rustup target add i686-pc-windows-msvc`) |
 | Licences, bans, sources, advisories | `cargo deny check` (advisories need the RustSec database from GitHub) |
-| The performance benchmark (M4c, budgets in `e2e/perf/budgets.json`) | `cargo run -p nail-bench --release -- --corpus small` (`standard` = 100k messages) |
+| The performance benchmark (M4c, budgets in `e2e/perf/budgets.json`) | `cargo run -p nail-bench --release -- --corpus small` (`standard` = 100k messages; `--tolerant` = CI tolerance 1.5, `--no-check`, `--in-process`, `--work-dir DIR`) |
+| Merge benchmark reports and check the budgets | `nail-bench check --report A --report B [--tolerant] [--out F]` |
+| The whole performance job (Rust run → Playwright scroll / first render → check) | `node e2e/perf/run-perf.mjs [--corpus standard\|small] [--tolerant]` after `cargo build --release -p nail-cli -p nail-bench` and `npm run build`; reports in `%LOCALAPPDATA%/nail-build/perf/<corpus>` |
+| Only the UI perf scenario | `npx playwright test -c e2e/perf/playwright.perf.config.ts` (env `NAIL_PERF_CORPUS`, `NAIL_PERF_WORK`, `NAIL_PERF_TOLERANT`, `NAIL_PERF_FRESH`, `NAIL_BIN`, `NAIL_BENCH_BIN`) |
 
 CI (`.github/workflows/ci.yml`) runs these jobs:
 
@@ -156,7 +159,23 @@ No GPL / LGPL / AGPL dependency, no OpenSSL and no aws-lc (TLS uses
 `ring`; ADRs 0029 and 0036). `deny.toml` enforces the licence allowlist,
 bans `openssl-sys` / `aws-lc-*` and allows only crates.io: run
 `cargo deny check` after adding a crate (CI runs it too). It records the
-RUSTSEC-2023-0071 exception (`rsa` 0.9, ADR 0034).
+RUSTSEC-2023-0071 exception (`rsa` 0.9, ADR 0034) and one licence
+exception: `sqlite3mc-src` carries `Unlicense` for its bundled miniz, which
+Nail's build does not compile (ADR 0095).
+
+### SQLite3 Multiple Ciphers (ADR 0095)
+
+The bundled SQLite is SQLite3 Multiple Ciphers (full-file database
+encryption). `rusqlite`'s `libsqlite3-sys` is replaced through the root
+`[patch.crates-io]` by `crates/nail-store/libsqlite3-sys-sqlite3mc`, a
+stand-in with the original crate's API and pre-generated bindings that
+compiles the amalgamation from the `sqlite3mc-src` crate (no OpenSSL, no
+bindgen). The first build compiles it (about 80 s in debug). To upgrade:
+bump `sqlite3mc-src` together with `rusqlite`, copy the new
+`libsqlite3-sys` version's `src/` and bindings into the stand-in (keep its
+`build.rs`), set the stand-in's version to the new `libsqlite3-sys`
+version, then run `cargo test -p nail-store -p nail-vault` and
+`cargo deny check`.
 
 ### Sockets and the Windows firewall (ADR 0057)
 

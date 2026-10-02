@@ -28,7 +28,7 @@ use pgp::types::{KeyDetails, Password, VerifyingKey};
 use crate::compose::PROTECTED_HEADERS;
 use crate::error::Result;
 use crate::key::{KeyInfo, hex_upper};
-use crate::keyring::{Keyring, effective_trust, rfc3339};
+use crate::keyring::{CardDecryption, Keyring, effective_trust, rfc3339};
 use crate::mime::{self, ContentType, Entity, HeaderField};
 
 /// Nesting limit for multiparts and nested protection.
@@ -297,65 +297,111 @@ impl Reader<'_, '_> {
                 candidates.push((stored, secret));
             }
         }
+        // M4c WP122: own keys on a smartcard (RSA session keys are
+        // decrypted on the card).
+        let mut on_card = None;
         if candidates.is_empty() {
-            return Ok(Decrypted {
-                info: encryption(DecryptionState::NoKey, None, recipients),
-                plaintext: None,
-                signatures: Vec::new(),
-            });
-        }
-        let mut unlocked = Vec::new();
-        let mut locked = Vec::new();
-        for (stored, secret) in candidates {
-            match self.keyring.try_password(&stored)? {
-                Some(password) => {
-                    unlocked.push((stored, secret, Password::from(password.as_str())))
+            match self.keyring.card_session_key(&pkesks)? {
+                None => {
+                    return Ok(Decrypted {
+                        info: encryption(DecryptionState::NoKey, None, recipients),
+                        plaintext: None,
+                        signatures: Vec::new(),
+                    });
                 }
-                None => locked.push(stored),
+                Some(CardDecryption::Failed(stored, err)) => {
+                    // The card is missing or its PIN was not entered: like
+                    // a locked key, the user can try again.
+                    let state =
+                        if err.kind == nail_api::smartcard::SmartcardError::MechanismUnsupported {
+                            DecryptionState::Unsupported
+                        } else {
+                            DecryptionState::Locked
+                        };
+                    return Ok(Decrypted {
+                        info: encryption(state, Some(stored.id), recipients),
+                        plaintext: None,
+                        signatures: Vec::new(),
+                    });
+                }
+                Some(CardDecryption::Session(stored, session)) => {
+                    let opened =
+                        parse_message(data).and_then(|m| m.decrypt_with_session_key(session).ok());
+                    match opened {
+                        Some(opened) => on_card = Some((opened, stored.id)),
+                        None => {
+                            return Ok(Decrypted {
+                                info: encryption(
+                                    DecryptionState::Failed,
+                                    Some(stored.id),
+                                    recipients,
+                                ),
+                                plaintext: None,
+                                signatures: Vec::new(),
+                            });
+                        }
+                    }
+                }
             }
         }
-        if unlocked.is_empty() {
-            return Ok(Decrypted {
-                info: encryption(
-                    DecryptionState::Locked,
-                    locked.first().map(|s| s.id.clone()),
-                    recipients,
-                ),
-                plaintext: None,
-                signatures: Vec::new(),
-            });
-        }
-        // One key at a time, so the key that worked is known (rPGP's ring
-        // result is overwritten per session key packet).
-        let mut decrypted = None;
-        let mut first = Some(message);
-        for (stored, secret, password) in &unlocked {
-            let Some(attempt) = first.take().or_else(|| parse_message(data)) else {
-                break;
-            };
-            let ring = TheRing {
-                secret_keys: vec![secret],
-                key_passwords: vec![password],
-                decrypt_options: DecryptionOptions::new().enable_gnupg_aead(),
-                ..TheRing::default()
-            };
-            if let Ok((message, _)) = attempt.decrypt_the_ring(ring, true) {
-                decrypted = Some((message, stored.id.clone()));
-                break;
+        let (mut message, key_id) = match on_card {
+            Some(found) => found,
+            None => {
+                let mut unlocked = Vec::new();
+                let mut locked = Vec::new();
+                for (stored, secret) in candidates {
+                    match self.keyring.try_password(&stored)? {
+                        Some(password) => {
+                            unlocked.push((stored, secret, Password::from(password.as_str())))
+                        }
+                        None => locked.push(stored),
+                    }
+                }
+                if unlocked.is_empty() {
+                    return Ok(Decrypted {
+                        info: encryption(
+                            DecryptionState::Locked,
+                            locked.first().map(|s| s.id.clone()),
+                            recipients,
+                        ),
+                        plaintext: None,
+                        signatures: Vec::new(),
+                    });
+                }
+                // One key at a time, so the key that worked is known (rPGP's ring
+                // result is overwritten per session key packet).
+                let mut decrypted = None;
+                let mut first = Some(message);
+                for (stored, secret, password) in &unlocked {
+                    let Some(attempt) = first.take().or_else(|| parse_message(data)) else {
+                        break;
+                    };
+                    let ring = TheRing {
+                        secret_keys: vec![secret],
+                        key_passwords: vec![password],
+                        decrypt_options: DecryptionOptions::new().enable_gnupg_aead(),
+                        ..TheRing::default()
+                    };
+                    if let Ok((message, _)) = attempt.decrypt_the_ring(ring, true) {
+                        decrypted = Some((message, stored.id.clone()));
+                        break;
+                    }
+                }
+                let Some(found) = decrypted else {
+                    let state = if locked.is_empty() {
+                        DecryptionState::Failed
+                    } else {
+                        DecryptionState::Locked
+                    };
+                    let key_id = locked.first().map(|s| s.id.clone());
+                    return Ok(Decrypted {
+                        info: encryption(state, key_id, recipients),
+                        plaintext: None,
+                        signatures: Vec::new(),
+                    });
+                };
+                found
             }
-        }
-        let Some((mut message, key_id)) = decrypted else {
-            let state = if locked.is_empty() {
-                DecryptionState::Failed
-            } else {
-                DecryptionState::Locked
-            };
-            let key_id = locked.first().map(|s| s.id.clone());
-            return Ok(Decrypted {
-                info: encryption(state, key_id, recipients),
-                plaintext: None,
-                signatures: Vec::new(),
-            });
         };
         let key_id = Some(key_id);
         let failed = |recipients: Vec<String>, key_id: Option<KeyId>| Decrypted {

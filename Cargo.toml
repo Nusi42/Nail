@@ -391,3 +391,9 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 1
+
+# M4c WP122 (ADR 0095): full-file database encryption. rusqlite's
+# libsqlite3-sys is replaced by Nail's build of the same crate over the
+# SQLite3 Multiple Ciphers amalgamation (MIT, from `sqlite3mc-src`).
+[patch.crates-io]
+libsqlite3-sys = { path = "crates/nail-store/libsqlite3-sys-sqlite3mc" }

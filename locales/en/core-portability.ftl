@@ -116,3 +116,23 @@ diagnostics-issue-messages-without-mail-item = Messages are only included with â
 diagnostics-issue-too-many-messages = Include at most 20 messages.
 
 ## Importers, exporters, backups (WP121)
+
+# Why a job stopped (PortabilityError::localized).
+portability-error-io = A file could not be read or written.
+portability-error-invalid-source = This is not a valid source for the chosen format.
+portability-error-target-exists = The target exists. Choose another name or allow replacing it.
+portability-error-not-a-backup = This file is not a Nail backup.
+portability-error-corrupt-backup = The backup is damaged and cannot be read.
+portability-error-invalid-options = These settings cannot be used.
+portability-error-store = Nail could not save the imported data.
+portability-error-source-changed = Your data changed while the backup was written. Try again.
+
+# A more specific text for an item issue.
+portability-issue-deleted-in-source = Deleted in the other program and not imported.
+
+# Notes of a restore plan or report (RestoreAction.note).
+restore-note-accounts-need-passwords = { $count ->
+    [one] One account needs its password again.
+   *[other] { $count } accounts need their passwords again.
+}
+restore-note-plugins-review = Check the plug-ins' permissions after the restore.

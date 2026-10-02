@@ -184,6 +184,10 @@ pub struct SentMessage {
     pub raw: Vec<u8>,
     /// Whether a copy was saved in Sent Items.
     pub saved: bool,
+    /// The `t:From` mailbox the request named (send as / on behalf; M4c).
+    pub from: Option<String>,
+    /// The mailbox whose Sent Items got the copy.
+    pub saved_in: Option<String>,
 }
 
 /// The client side of the scripted Negotiate handshake (a stand-in for
@@ -619,6 +623,12 @@ impl MockEwsServer {
     /// Messages sent so far.
     pub fn sent(&self) -> Vec<SentMessage> {
         self.state().sent.clone()
+    }
+
+    /// Refuses (`false`) or allows `MoveItem` / `CopyItem` between
+    /// mailboxes (`ErrorCrossMailboxMoveCopy`; M4c).
+    pub fn allow_cross_mailbox_moves(&self, allow: bool) {
+        self.state().cross_mailbox_moves = allow;
     }
 
     /// Meeting messages sent so far.

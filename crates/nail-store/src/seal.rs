@@ -115,6 +115,11 @@ impl CipherSlot {
         *slot = cipher.map(|cipher| Installed { cipher, mode });
     }
 
+    /// Whether a cipher is installed.
+    pub(crate) fn is_installed(&self) -> bool {
+        self.get().is_some()
+    }
+
     fn get(&self) -> Option<Installed> {
         self.inner
             .read()

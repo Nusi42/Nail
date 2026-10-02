@@ -30,6 +30,9 @@ serde.workspace = true
 serde_json.workspace = true
 # MIME upload for sendMail / message creation (base64 text/plain bodies).
 base64.workspace = true
+# Messages over 4 MB are rebuilt from their parts for upload sessions
+# (M4c); Apache-2.0 OR MIT, already in the workspace.
+mail-parser.workspace = true
 # Times, Retry-After dates.
 chrono.workspace = true
 # The mock server (feature `testing`); MIT, already in the workspace.

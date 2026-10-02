@@ -1,21 +1,23 @@
 //! Widgets of M4c WP124 (import, export, backup, diagnostics; contract
 //! ADR 0094). Rendered by `ui/src/features/portability/`.
 //!
-//! Slot created by WP120 as future widgets (any options accepted); WP124
-//! gives them typed options. The wizards, the command palette and the
-//! print view are dialogs / overlays, not widgets.
+//! Options (WP124 / WP125): `import-export` and `backup-restore` take
+//! `show-jobs` (default #true: the list of recent jobs); `diagnostics`
+//! takes none. The wizards, the command palette and the print view are
+//! dialogs / overlays, not widgets.
 
-use super::{WidgetSpec, future_widget};
+use super::OptionType::Bool;
+use super::{WidgetSpec, widget};
 
 /// Widgets of this feature.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // Import from files / Thunderbird, export, running and recent jobs
     // with their reports.
-    future_widget("import-export", false),
+    widget("import-export", &[("show-jobs", Bool)], &[], false),
     // Back up now, verify, restore (dry run first).
-    future_widget("backup-restore", false),
+    widget("backup-restore", &[("show-jobs", Bool)], &[], false),
     // The diagnostics bundle: choose, preview exactly what goes in, save.
-    future_widget("diagnostics", false),
+    widget("diagnostics", &[], &[], false),
 ];
 
 #[cfg(test)]
@@ -29,8 +31,8 @@ mod tests {
         let text = "layout \"x\" extends=\"default\" {
     window \"main\" {
         stack {
-            import-export
-            backup-restore
+            import-export show-jobs=#false
+            backup-restore show-jobs=#true
             diagnostics
             security-recovery-key
             security-smartcards
@@ -39,5 +41,31 @@ mod tests {
 }
 ";
         crate::parse_layout(text, "layout.kdl").unwrap();
+    }
+
+    #[test]
+    fn unknown_options_are_refused() {
+        for widget in [
+            "import-export",
+            "backup-restore",
+            "diagnostics",
+            "security-recovery-key",
+            "security-smartcards",
+        ] {
+            let text = format!(
+                "layout \"x\" extends=\"default\" {{
+    window \"main\" {{
+        stack {{
+            {widget} show-everything=#true
+        }}
+    }}
+}}
+"
+            );
+            assert!(
+                crate::parse_layout(&text, "layout.kdl").is_err(),
+                "{widget}"
+            );
+        }
     }
 }

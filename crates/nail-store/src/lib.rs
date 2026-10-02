@@ -82,6 +82,11 @@
 //!   and CPU time ([`Store::record_plugin_job_run`],
 //!   [`Store::record_plugin_hook_call`], [`Store::plugin_cpu_last_hour`]).
 //!
+//! * M4c (WP122, ADR 0095): full-file database encryption
+//!   ([`dbfile`]): the bundled SQLite is SQLite3 Multiple Ciphers;
+//!   [`Store::open_with_key`] opens encrypted files and
+//!   [`Store::rewrite_file`] converts plain <-> encrypted crash-safely.
+//!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
 
@@ -91,6 +96,7 @@ pub mod blob;
 mod bodies;
 mod compose;
 mod crypto;
+pub mod dbfile;
 mod error;
 pub mod exchange;
 pub mod exchange_sync;
@@ -124,6 +130,7 @@ pub use crypto::{
     AutocryptPeerRecord, KeyData, MessageSecurityRecord, SECURITY_SETTINGS_KEY, SecretKeyData,
     StoredKey, VaultRecord,
 };
+pub use dbfile::{DatabaseKey, FileEncryption, file_encryption};
 pub use error::{Error, Result};
 pub use filter::{MessageFilter, SizeCmp};
 pub use lock::{DataDirLock, LOCK_FILE, LockError, LockHolder};

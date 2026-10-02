@@ -1,0 +1,12 @@
+// <!-- <mdb:mork:z v="1.4"/> -->
+< <(a=c)> // (f=iso-8859-1)
+  (B8=LastModifiedDate)(B9=RecordKey)(BA=AddrCharSet)
+  (80=ns:addrbk:db:row:scope:card:all)(81=ns:addrbk:db:row:scope:list:all)
+  (82=ns:addrbk:db:row:scope:data:all)(83=FirstName)(84=LastName)
+  (85=DisplayName)(86=PrimaryEmail)(87=Notes)(88=ListName)(89=Address1)>
+
+<(90=Grace)(91=Hopper)(92=Grace Hopper)(93=grace@example.org)(94=Pioneers)>
+
+{1:^80 {(k^C0:c)(s=9)}
+  [1(^83^90)(^84^91)(^85^92)(^86^93)(^87=From the old Mork book)]
+  [2:^81(^88^94)(^89=1)]}

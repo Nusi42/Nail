@@ -502,7 +502,7 @@ pub fn create_setup_message(
 ) -> Result<Vec<u8>> {
     let passcode = normalize_passcode(passcode).ok_or(Problem::SetupCodeFormat)?;
     // Unprotected transferable secret key (the passcode protects it).
-    let mut secret = key.secret.clone();
+    let mut secret = key.secret_key()?.clone();
     let password = key.password();
     secret.primary_key.remove_password(&password)?;
     for sub in &mut secret.secret_subkeys {

@@ -18,6 +18,9 @@
 //! * [`keys`]: public keys and [`keys::PrivateKeyOps`] for software keys
 //!   and keys that stay in the Windows certificate store.
 //! * [`pkcs12`]: `.p12` / `.pfx` import (pure Rust `p12-keystore`).
+//! * [`smartcard`] (M4c WP122): keys on PKCS#11 smartcards
+//!   ([`smartcard::SmartcardKey`] over `nail-pkcs11`), sign / decrypt on
+//!   the card with PIN prompts.
 //! * [`keyring`]: the store's keyring (`technology = smime`, fingerprint =
 //!   SHA-256 of the DER certificate), private-key protection (OS keychain
 //!   key or passphrase) and the protocol's `CryptoKey` view.
@@ -40,6 +43,7 @@ pub mod mime;
 pub mod oids;
 pub mod pkcs12;
 pub mod signed;
+pub mod smartcard;
 pub mod time;
 #[cfg(windows)]
 pub mod windows;
@@ -54,6 +58,7 @@ pub use error::{Error, Result};
 pub use keys::{PrivateKeyOps, SoftwareKey};
 pub use mime::{ReadContext, ReadOutcome, SignMode};
 pub use signed::Signer;
+pub use smartcard::SmartcardKey;
 
 /// The technology this crate implements.
 pub const TECHNOLOGY: CryptoTechnology = CryptoTechnology::Smime;

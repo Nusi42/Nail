@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use nail_api::engine::{
     AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, Envelope, FreeBusyProvider,
-    OutgoingTransport, RemoteWrite, SendReceipt, WriteOutcome,
+    OutgoingTransport, RemoteWrite, SendProgress, SendReceipt, WriteOutcome,
 };
 use nail_api::exchange::engine::{
     ExchangeDirectoryEngine, ExchangeEngine, ExchangeMailEngine, ExchangePimEngine,
@@ -44,6 +44,9 @@ pub struct EngineOptions {
     pub calendar_past_days: u32,
     /// How far ahead calendar deltas reach (days after now).
     pub calendar_future_days: u32,
+    /// Bytes per upload-session request (M4c; rounded down to a multiple
+    /// of 320 KiB as Graph requires, at least 320 KiB).
+    pub upload_chunk: usize,
 }
 
 impl Default for EngineOptions {
@@ -53,6 +56,7 @@ impl Default for EngineOptions {
             pages_per_call: 5,
             calendar_past_days: 365,
             calendar_future_days: 730,
+            upload_chunk: crate::upload::DEFAULT_UPLOAD_CHUNK,
         }
     }
 }
@@ -81,6 +85,10 @@ pub struct GraphEngine {
     pub(crate) well_known: Mutex<HashMap<Option<String>, WellKnown>>,
     /// The account (free/busy answers name it as their source).
     pub(crate) account_id: nail_api::AccountId,
+    /// The signed-in mailbox's address (lowercase), once known: decides
+    /// whether a message is sent as the user, as another mailbox or on its
+    /// behalf (M4c).
+    pub(crate) own_address: std::sync::Mutex<Option<String>>,
 }
 
 impl GraphEngine {
@@ -91,7 +99,48 @@ impl GraphEngine {
             options: EngineOptions::default(),
             well_known: Mutex::new(HashMap::new()),
             account_id: nail_api::AccountId::new(""),
+            own_address: std::sync::Mutex::new(None),
         }
+    }
+
+    /// Sets the signed-in mailbox's address (else the first send asks
+    /// `GET /me`).
+    #[must_use]
+    pub fn with_own_address(self, address: &str) -> Self {
+        let address = address.trim().to_ascii_lowercase();
+        *self
+            .own_address
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            (!address.is_empty()).then_some(address);
+        self
+    }
+
+    /// The signed-in mailbox's address (cached; `GET /me` the first time
+    /// when not configured).
+    pub async fn own_address(&self) -> Result<String, GraphError> {
+        if let Some(known) = self
+            .own_address
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        {
+            return Ok(known);
+        }
+        let user = self.client.me(None).await?;
+        let address = user
+            .mail
+            .or(user.user_principal_name)
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if address.is_empty() {
+            return Err(GraphError::Protocol("GET /me named no address".into()));
+        }
+        *self
+            .own_address
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(address.clone());
+        Ok(address)
     }
 
     /// Sets the account the engine belongs to.
@@ -134,7 +183,8 @@ impl GraphEngine {
         };
         Ok(
             Self::new(GraphClient::new(&options.graph_url(server), auth)?)
-                .with_account_id(account.id.clone()),
+                .with_account_id(account.id.clone())
+                .with_own_address(&account.email),
         )
     }
 
@@ -368,7 +418,16 @@ impl OutgoingTransport for GraphEngine {
         envelope: &'a Envelope,
         message: &'a [u8],
     ) -> BoxFuture<'a, Result<SendReceipt, EngineError>> {
-        Box::pin(async move { engine(self.send_mime(None, envelope, message).await) })
+        Box::pin(async move { engine(self.send_message(envelope, message, None).await) })
+    }
+
+    fn send_with_progress<'a>(
+        &'a self,
+        envelope: &'a Envelope,
+        message: &'a [u8],
+        progress: SendProgress<'a>,
+    ) -> BoxFuture<'a, Result<SendReceipt, EngineError>> {
+        Box::pin(async move { engine(self.send_message(envelope, message, Some(progress)).await) })
     }
 }
 

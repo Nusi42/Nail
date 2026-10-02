@@ -215,7 +215,8 @@ impl EwsError {
             | "ErrorAccountDisabled"
             | "ErrorInvalidLicense"
             | "ErrorNotDelegate"
-            | "ErrorNoPermissionToSearchOrHoldMailbox" => Self::Forbidden(detail()),
+            | "ErrorNoPermissionToSearchOrHoldMailbox"
+            | "ErrorSendAsDenied" => Self::Forbidden(detail()),
             "ErrorIrresolvableConflict"
             | "ErrorChangeKeyRequiredForWriteOperations"
             | "ErrorStaleObject"

@@ -526,6 +526,95 @@ impl GraphClient {
         parse_json(&reply.body, what)
     }
 
+    /// `PUT` of one byte range to an upload session's pre-authenticated URL
+    /// (`Content-Range: bytes start-end/total`). The URL may be on another
+    /// host than the API (Outlook's upload service) but must pass
+    /// [`is_allowed_url`]; the bearer token is **never** sent there (the
+    /// URL carries its own authorization). Ranges may be repeated, so
+    /// transient failures are retried per the [`RetryPolicy`]. Answers the
+    /// status (`200` = more wanted, `201` = complete) and the JSON body.
+    pub(crate) async fn put_upload_range(
+        &self,
+        upload_url: &str,
+        bytes: &[u8],
+        start: u64,
+        total: u64,
+        what: &str,
+    ) -> Result<(u16, Value), GraphError> {
+        let url =
+            Url::parse(upload_url).map_err(|e| GraphError::Protocol(format!("upload URL: {e}")))?;
+        if !is_allowed_url(&url) {
+            return Err(GraphError::InsecureUrl(url.origin().ascii_serialization()));
+        }
+        if bytes.is_empty() || start + bytes.len() as u64 > total {
+            return Err(GraphError::Protocol(format!(
+                "{what}: range {start}+{} of {total}",
+                bytes.len()
+            )));
+        }
+        let end = start + bytes.len() as u64 - 1;
+        let mut attempt = 0u32;
+        loop {
+            let sent = self
+                .http
+                .put(url.clone())
+                .header(
+                    reqwest::header::CONTENT_RANGE,
+                    format!("bytes {start}-{end}/{total}"),
+                )
+                .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                .body(bytes.to_vec())
+                .send()
+                .await
+                .map_err(transport_error);
+            let mut response = match sent {
+                Ok(r) => r,
+                Err(e @ (GraphError::Network(_) | GraphError::Timeout))
+                    if attempt < self.retry.max_retries =>
+                {
+                    tracing::debug!(what, error = %e, "upload range failed, retrying");
+                    tokio::time::sleep(self.retry.backoff(attempt)).await;
+                    attempt += 1;
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            let status = response.status().as_u16();
+            let headers = response.headers().clone();
+            let mut body = Vec::new();
+            while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+                if body.len() + chunk.len() > 1024 * 1024 {
+                    return Err(GraphError::TooLarge(format!("answer to {what}")));
+                }
+                body.extend_from_slice(&chunk);
+            }
+            if (200..300).contains(&status) {
+                let value = if body.is_empty() {
+                    Value::Null
+                } else {
+                    parse_json(&body, what)?
+                };
+                return Ok((status, value));
+            }
+            let retry_after = retry_after_secs(&headers);
+            if GraphError::is_transient(status)
+                && attempt < self.retry.max_retries
+                && let Some(wait) = self.retry.wait(attempt, retry_after)
+            {
+                tokio::time::sleep(wait).await;
+                attempt += 1;
+                continue;
+            }
+            let error_body: Option<ErrorBody> = serde_json::from_slice(&body).ok();
+            return Err(GraphError::from_status(
+                status,
+                retry_after,
+                error_body.as_ref(),
+                what,
+            ));
+        }
+    }
+
     /// `GET /me` (or `/users/{mailbox}`): the signed-in user; also the
     /// account test.
     pub async fn me(&self, mailbox: Option<&str>) -> Result<User, GraphError> {

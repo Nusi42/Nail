@@ -1,19 +1,45 @@
 //! Nail's data portability (plan M4c WP121; contract ADR 0094,
-//! `nail_api::portability`, `nail_api::backup`, `nail_api::diagnostics`).
+//! `nail_api::portability`, `nail_api::backup`, `nail_api::diagnostics`;
+//! design ADR 0096-portability).
 //!
-//! * **Importers** read mbox (mboxrd / mboxo, streamed), folders of `.eml`
-//!   files, Maildir (Courier / Dovecot flags and folder trees), Thunderbird
-//!   profiles (local folders, address books, account and filter proposals)
-//!   and `.ics` / `.vcf` files, yielding messages / PIM items with per-item
-//!   [`nail_api::portability::ItemIssue`]s.
-//! * **Exporters** write mbox, `.eml`, Maildir, `.ics` and `.vcf`.
-//! * **Backups**: the encrypted `.nailbackup` archive
-//!   ([`nail_api::backup::BACKUP_MAGIC`], Argon2id + XChaCha20-Poly1305
-//!   STREAM over a zip with a manifest), verification and restore plans.
-//! * **Diagnostics**: the bundle writer with redaction and an exact
-//!   manifest.
+//! Pure file work behind traits the core implements ([`sink`]): importers
+//! push messages and PIM items into a [`sink::MailImportSink`] /
+//! [`sink::PimImportSink`]; exporters and backups pull from a
+//! [`sink::MailExportSource`] / [`sink::PimExportSource`] /
+//! [`backup::BackupSource`]; restores write through a
+//! [`backup::RestoreTarget`]. Every job reports progress and per-item
+//! issues through a [`job::JobContext`].
 //!
-//! Slot of WP121: this crate is a stub until then.
+//! * **Importers** ([`import`]): mbox ([`mbox`]: mboxrd / mboxo / mboxcl /
+//!   mboxcl2, streamed), folders of `.eml` files ([`eml`]), Maildir
+//!   ([`maildir`]: `cur` / `new`, `:2,` flags, Dovecot / Courier keywords,
+//!   Maildir++ and nested trees), Thunderbird profiles ([`thunderbird`]:
+//!   local folders, address books from `abook.sqlite` / `history.sqlite` /
+//!   Mork `.mab`, `prefs.js` accounts and `msgFilterRules.dat` filters as
+//!   proposals), `.ics` / `.vcf` ([`pim`]).
+//! * **Exporters** ([`export`]): mbox, `.eml`, Maildir, `.ics`, `.vcf`.
+//! * **Backups** ([`backup`]): the encrypted `.nailbackup` archive
+//!   (Argon2id + XChaCha20-Poly1305 STREAM over a zip with a manifest),
+//!   verification, restore plans (dry run) and restores.
+//! * **Diagnostics** ([`diagnostics`]): redaction and the bundle writer.
+
+pub mod backup;
+pub mod diagnostics;
+pub mod eml;
+pub mod error;
+pub mod export;
+pub mod folder;
+pub mod import;
+pub mod job;
+pub mod maildir;
+pub mod mbox;
+pub mod message;
+pub mod pim;
+pub mod sink;
+pub mod thunderbird;
+
+pub use error::{PortabilityError, Result, SinkError};
+pub use job::{CancelFlag, JobContext};
 
 /// The backup archive format version this crate writes.
 pub fn backup_format_version() -> u32 {

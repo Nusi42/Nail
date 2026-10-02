@@ -92,6 +92,30 @@ pub fn verify_key_check(key: &DataKey, check: &[u8]) -> Result<(), VaultError> {
     }
 }
 
+/// Context of the database-file key derivation.
+const DATABASE_KEY_CONTEXT: &[u8] = b"nail/vault/database-file/v1";
+
+/// A 256-bit key derived from `key` for a purpose named by `context`
+/// (SHA-256 over the context, a separator and the key; the inputs are
+/// uniformly random 256-bit keys, so no slow KDF is needed).
+pub(crate) fn derive(key: &[u8; 32], context: &[u8]) -> Zeroizing<[u8; 32]> {
+    use sha2::Digest;
+    let digest = sha2::Sha256::new()
+        .chain_update(context)
+        .chain_update([0u8])
+        .chain_update(key)
+        .finalize();
+    let mut out = Zeroizing::new([0u8; 32]);
+    out.copy_from_slice(&digest);
+    out
+}
+
+/// The key of the full-file encrypted database (SQLite3 Multiple
+/// Ciphers), derived from the data key so the keychain holds one secret.
+pub fn database_key(key: &DataKey) -> nail_store::DatabaseKey {
+    nail_store::DatabaseKey::from_bytes(*derive(key.bytes(), DATABASE_KEY_CONTEXT))
+}
+
 /// The [`DataCipher`] the store and the blob store use.
 #[derive(Debug, Clone)]
 pub struct VaultCipher {
@@ -152,6 +176,22 @@ mod tests {
         ));
         assert!(store.delete(&key_ref).unwrap());
         assert!(!store.delete(&key_ref).unwrap());
+    }
+
+    #[test]
+    fn database_keys_are_derived_deterministically_and_separately() {
+        let key = DataKey::from_bytes([1; 32]);
+        assert_eq!(database_key(&key), database_key(&key));
+        assert_ne!(
+            database_key(&key),
+            database_key(&DataKey::from_bytes([2; 32]))
+        );
+        // Not the data key itself, and different per context.
+        assert_ne!(*derive(key.bytes(), DATABASE_KEY_CONTEXT), [1u8; 32]);
+        assert_ne!(
+            *derive(key.bytes(), DATABASE_KEY_CONTEXT),
+            *derive(key.bytes(), b"nail/other")
+        );
     }
 
     #[test]

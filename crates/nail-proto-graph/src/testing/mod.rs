@@ -34,11 +34,12 @@ use tokio::task::JoinHandle;
 pub mod fixtures;
 mod server;
 mod tenant;
+mod upload;
 
 use server::{Budget, Req, State, dispatch};
 pub use tenant::{
-    IdGen, Mailbox, MeetingAction, MockError, MockFolder, MockMessage, MockResult, MockTask,
-    SentMail, Tenant, WELL_KNOWN,
+    CompletedUpload, IdGen, JsonDraft, Mailbox, MeetingAction, MockError, MockFolder, MockMessage,
+    MockResult, MockTask, MockUpload, SentMail, Tenant, WELL_KNOWN,
 };
 
 /// An error the server answers instead of handling a request.
@@ -394,6 +395,16 @@ impl MockGraphServer {
     /// Messages received through `sendMail`.
     pub fn sent(&self) -> Vec<SentMail> {
         self.with_tenant(|t| t.sent.clone())
+    }
+
+    /// Attachment uploads that finished (M4c upload sessions).
+    pub fn completed_uploads(&self) -> Vec<CompletedUpload> {
+        self.with_tenant(|t| t.completed_uploads.clone())
+    }
+
+    /// Upload sessions still open.
+    pub fn open_uploads(&self) -> usize {
+        self.with_tenant(|t| t.uploads.len())
     }
 
     /// Meeting answers and cancellations received.

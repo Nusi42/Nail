@@ -93,8 +93,19 @@ fn add_param(field: &mut HeaderField, name: &str, value: &str) {
         .extend_from_slice(format!(";\r\n {name}=\"{value}\"").as_bytes());
 }
 
-/// Protects `raw` as described by `protection`.
+/// Protects `raw` as described by `protection`. A signature that failed
+/// on a smartcard reports the card's error (PIN not entered, card
+/// removed), not rPGP's.
 pub fn protect_message(raw: &[u8], protection: &Protection<'_>) -> Result<Vec<u8>> {
+    protect(raw, protection).map_err(|err| {
+        match protection.signer.and_then(UnlockedKey::card_error) {
+            Some(card) => crate::Error::Smartcard(card),
+            None => err,
+        }
+    })
+}
+
+fn protect(raw: &[u8], protection: &Protection<'_>) -> Result<Vec<u8>> {
     let encrypt = !protection.recipients.is_empty();
     if protection.signer.is_none() && !encrypt {
         return Err(Problem::NothingToProtect.into());

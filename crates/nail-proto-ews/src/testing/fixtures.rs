@@ -301,6 +301,7 @@ pub fn organization() -> State {
             version: (15, 2, 1544, 4),
             stream_close_after: std::time::Duration::from_secs(30),
             break_streams: 0,
+            cross_mailbox_moves: true,
         },
     };
     let own = b.mailbox(OWN_ADDRESS, "Ada Lovelace", Access::Full);

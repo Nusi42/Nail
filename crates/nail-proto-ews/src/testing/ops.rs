@@ -127,6 +127,10 @@ fn error_text(code: &str) -> &'static str {
             "The send or update operation could not be performed because the change key passed in the request does not match the current change key for the item."
         }
         "ErrorSubscriptionNotFound" => "The specified subscription was not found.",
+        "ErrorSendAsDenied" => {
+            "The user account which was used to submit this request does not have the right to send mail on behalf of the specified sending account."
+        }
+        "ErrorCrossMailboxMoveCopy" => "Cross-mailbox moves and copies are not permitted.",
         _ => "The request failed.",
     }
 }
@@ -657,6 +661,13 @@ fn get_item(state: &State, op: &Element) -> OpResult {
     let mime = op
         .path(&["ItemShape", "IncludeMimeContent"])
         .is_some_and(|m| m.text.trim() == "true");
+    // `PR_TRANSPORT_MESSAGE_HEADERS` asked for (M4c headers-only sync).
+    let transport = op
+        .path(&["ItemShape", "AdditionalProperties"])
+        .is_some_and(|a| {
+            a.children_named("ExtendedFieldURI")
+                .any(|u| u.attr("PropertyTag").is_some_and(|t| same_tag(t, "0x007D")))
+        });
     let mut out = Vec::new();
     for id in op
         .child("ItemIds")
@@ -665,11 +676,46 @@ fn get_item(state: &State, op: &Element) -> OpResult {
     {
         let id = id.attr("Id").unwrap_or_default();
         out.push(match render_any(state, id, mime) {
-            Ok(item) => ok_message("GetItem", &format!("<m:Items>{item}</m:Items>")),
+            Ok(mut item) => {
+                if transport && let Some(headers) = transport_headers(state, id) {
+                    let property = format!(
+                        r#"<t:ExtendedProperty><t:ExtendedFieldURI PropertyTag="0x7d" PropertyType="String"/><t:Value>{}</t:Value></t:ExtendedProperty>"#,
+                        escape(&headers)
+                    );
+                    if let Some(at) = item.rfind("</t:Message>") {
+                        item.insert_str(at, &property);
+                    }
+                }
+                ok_message("GetItem", &format!("<m:Items>{item}</m:Items>"))
+            }
             Err(code) => error_message("GetItem", code, error_text(code)),
         });
     }
     Ok(messages("GetItem", &out))
+}
+
+/// The transport headers of a received message (none for sent mail and
+/// drafts, like Exchange).
+fn transport_headers(state: &State, id: &str) -> Option<String> {
+    let (m, i) = state.item_location(id)?;
+    let item = &state.mailboxes[m].items[i];
+    let folder = state.mailboxes[m]
+        .folders
+        .iter()
+        .find(|f| f.id == item.folder)?;
+    if folder
+        .distinguished
+        .as_deref()
+        .is_some_and(|d| matches!(d, "sentitems" | "drafts" | "outbox"))
+    {
+        return None;
+    }
+    let raw = item.mime.as_ref()?;
+    let end = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map_or(raw.len(), |e| e + 4);
+    Some(String::from_utf8_lossy(&raw[..end]).into_owned())
 }
 
 /// Converts wall times of a written item to UTC (the request's
@@ -826,10 +872,19 @@ fn create_message(
     let own = state.mailbox_index(None).ok_or("ErrorNonExistentMailbox")?;
     if disposition != "SaveOnly" {
         let save = disposition == "SendAndSaveCopy";
-        state.sent.push(SentMessage {
-            raw: raw.clone(),
-            saved: save,
-        });
+        // Send as / on behalf (M4c): the user needs a mailbox they may use.
+        let from = item
+            .path(&["From", "Mailbox", "EmailAddress"])
+            .map(|e| e.text.trim().to_ascii_lowercase());
+        if let Some(address) = &from
+            && *address != state.own
+        {
+            match state.mailbox_index(Some(address)) {
+                Some(m) if matches!(state.mailboxes[m].access, Access::Full) => {}
+                _ => return Err("ErrorSendAsDenied"),
+            }
+        }
+        let mut saved_in = None;
         if save {
             let (m, folder) = match saved_folder {
                 Some(reference) => {
@@ -841,9 +896,16 @@ fn create_message(
                     default_folder(state, own, "sentitems").ok_or("ErrorFolderNotFound")?,
                 ),
             };
+            saved_in = Some(state.mailboxes[m].address.clone());
             let props = fixtures::message_props(&raw, true, &[]);
-            state.add_item(m, &folder, "Message", props, Some(raw));
+            state.add_item(m, &folder, "Message", props, Some(raw.clone()));
         }
+        state.sent.push(SentMessage {
+            raw,
+            saved: save,
+            from,
+            saved_in,
+        });
         return Ok("<m:Items/>".to_owned());
     }
     let (m, folder) = match saved_folder {
@@ -1252,6 +1314,9 @@ pub(crate) fn move_item(
 ) -> Result<String, &'static str> {
     let (m, i) = state.item_location(id).ok_or("ErrorItemNotFound")?;
     let (target_m, _) = state.folder_location(folder).ok_or("ErrorFolderNotFound")?;
+    if m != target_m && !state.cross_mailbox_moves {
+        return Err("ErrorCrossMailboxMoveCopy");
+    }
     let new_id = state.new_id("AAMkItem");
     let key = state.new_key();
     let mut item = if copy {

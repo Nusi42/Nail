@@ -79,6 +79,32 @@ pub struct EmailAddress {
     pub address: String,
 }
 
+/// One transport header (`internetMessageHeaders`).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct InternetHeader {
+    /// Name.
+    #[serde(default)]
+    pub name: String,
+    /// Value.
+    #[serde(default)]
+    pub value: String,
+}
+
+/// An attachment upload session (`createUploadSession`).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadSession {
+    /// Where the bytes go (pre-authenticated: no bearer token).
+    #[serde(default)]
+    pub upload_url: String,
+    /// When the session expires.
+    #[serde(default)]
+    pub expiration_date_time: Option<String>,
+    /// The byte ranges the server still wants (`"start-"` / `"start-end"`).
+    #[serde(default)]
+    pub next_expected_ranges: Vec<String>,
+}
+
 /// A recipient (`{"emailAddress": …}`).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -185,6 +211,10 @@ pub struct Message {
     /// Has attachments.
     #[serde(default)]
     pub has_attachments: Option<bool>,
+    /// The transport headers (received mail; `$select` only; M4c headers-
+    /// only sync).
+    #[serde(default)]
+    pub internet_message_headers: Option<Vec<InternetHeader>>,
     /// Gone (delta pages).
     #[serde(rename = "@removed", default)]
     pub removed: Option<Removed>,

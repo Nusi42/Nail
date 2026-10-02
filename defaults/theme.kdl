@@ -7,13 +7,14 @@
 theme "default" mode="system" {
     tokens {
         // Colours: the first value is the light (base) value; `dark=` and
-        // `high-contrast=` override it in those modes.
-        color "bg"           "#ffffff" dark="#1b1e24" high-contrast="#000000"
-        color "bg-subtle"    "#f5f6f8" dark="#22262d" high-contrast="#000000"
-        color "bg-raised"    "#e9ebef" dark="#2c313a" high-contrast="#1a1a1a"
-        color "fg"           "#1d2129" dark="#e3e6eb" high-contrast="#ffffff"
-        color "fg-muted"     "#5c6370" dark="#9aa2ae" high-contrast="#ffffff"
-        color "border"       "#d8dce3" dark="#353b45" high-contrast="#ffffff"
+        // `high-contrast=` override it in those modes; `print=` applies while
+        // the print view is shown (white paper, black text, no shadows).
+        color "bg"           "#ffffff" dark="#1b1e24" high-contrast="#000000" print="#ffffff"
+        color "bg-subtle"    "#f5f6f8" dark="#22262d" high-contrast="#000000" print="#ffffff"
+        color "bg-raised"    "#e9ebef" dark="#2c313a" high-contrast="#1a1a1a" print="#ffffff"
+        color "fg"           "#1d2129" dark="#e3e6eb" high-contrast="#ffffff" print="#000000"
+        color "fg-muted"     "#5c6370" dark="#9aa2ae" high-contrast="#ffffff" print="#444444"
+        color "border"       "#d8dce3" dark="#353b45" high-contrast="#ffffff" print="#999999"
         color "accent"       "#2e5eaa" dark="#7aa7e8" high-contrast="#ffff00"
         color "accent-fg"    "#ffffff" dark="#10233f" high-contrast="#000000"
         color "selection"    "#dbe6f7" dark="#2b3f5e" high-contrast="#ffff00"
@@ -67,8 +68,8 @@ theme "default" mode="system" {
 
         border "thin" "1px solid $color.border"
 
-        shadow "raised"  "0 1px 3px rgb(0 0 0 / 0.12)" dark="0 1px 3px rgb(0 0 0 / 0.5)"
-        shadow "overlay" "0 8px 24px rgb(0 0 0 / 0.2)" dark="0 8px 24px rgb(0 0 0 / 0.6)"
+        shadow "raised"  "0 1px 3px rgb(0 0 0 / 0.12)" dark="0 1px 3px rgb(0 0 0 / 0.5)" print="none"
+        shadow "overlay" "0 8px 24px rgb(0 0 0 / 0.2)" dark="0 8px 24px rgb(0 0 0 / 0.6)" print="none"
 
         motion "fast"   "100ms"
         motion "normal" "200ms"
@@ -4138,4 +4139,229 @@ theme "default" mode="system" {
         background-color "$color.bg-subtle"
     }
     part "program-draft.text" { margin 0; }
+
+    // ---- M4c: command palette, printing, import / export / backup, diagnostics, recovery key, smartcards (ADRs 0094, 0098) ----
+
+    // The command palette (Ctrl+K): an overlay with a search field and a list of actions.
+    part "palette" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.md"; min-height 0; }
+    part "palette.search" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "palette.input" {
+        padding "$space.sm" "$space.md"
+        font-size "$font-size.lg"
+        border "$border.thin"
+        border-radius "$radius.md"
+        background-color "$color.bg"
+        color "$color.fg"
+    }
+    part "palette.input:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset 1; }
+    part "palette.status" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "palette.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; max-height 420; overflow-y "auto"; }
+    part "palette.item" {
+        display "flex"
+        align-items "center"
+        gap "$space.sm"
+        padding "$space.xs" "$space.sm"
+        border-radius "$radius.sm"
+        cursor "pointer"
+    }
+    part "palette.item:hover" { background-color "$color.bg-subtle"; }
+    part "palette.item[state=\"active\"]" { background-color "$color.selection"; color "$color.selection-fg"; }
+    part "palette.item[state=\"unavailable\"]" { opacity "$opacity.muted"; }
+    part "palette.item[state=\"recent\"] palette.item.badge" { color "$color.accent"; }
+    part "palette.item.title" { flex-grow 1; }
+    part "palette.item.badge" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "palette.item.unavailable" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "palette.shortcuts" { display "flex"; gap "$space.xxs"; }
+    part "palette.shortcut" {
+        padding "0" "$space.xs"
+        font-family "$font.mono"
+        font-size "$font-size.xs"
+        border "$border.thin"
+        border-radius "$radius.sm"
+        background-color "$color.bg-subtle"
+    }
+    part "palette.match" { font-weight "$font-weight.bold"; text-decoration "underline"; }
+    part "palette.empty" { color "$color.fg-muted"; padding "$space.sm"; }
+    part "palette.footer" { display "flex"; flex-wrap "wrap"; justify-content "space-between"; gap "$space.sm"; }
+    part "palette.hint" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+
+    // The print dialog and the print view (#/print/<job>; the `print` colour mode applies while it shows).
+    part "print-setup" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "print-setup.what" { margin 0; font-weight "$font-weight.medium"; }
+    part "print-setup.nothing" { color "$color.fg-muted"; }
+    part "print-setup.saved" { color "$color.success"; }
+    part "print" { background-color "$color.bg"; color "$color.fg"; font-family "$font.reader"; }
+    part "print.toolbar" { display "flex"; gap "$space.sm"; padding "$space.sm"; border-bottom "$border.thin"; }
+    part "print.page" { display "flex"; flex-direction "column"; gap "$space.lg"; padding "$space.lg"; max-width 800; margin "0 auto"; }
+    part "print.message" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "print.subject" { margin 0; font-size "$font-size.xl"; }
+    part "print.headers" { display "grid"; grid-template-columns "max-content 1fr"; gap "$space.xxs $space.md"; margin 0; font-size "$font-size.sm"; }
+    part "print.header" { display "contents"; }
+    part "print.header.name" { font-weight "$font-weight.bold"; }
+    part "print.header.value" { margin 0; }
+    part "print.body" { border-top "$border.thin"; padding-top "$space.sm"; }
+    part "print.text" { margin 0; white-space "pre-wrap"; overflow-wrap "anywhere"; font-family "$font.reader"; }
+    part "print.quote" { margin 0; padding-left "$space.sm"; border-left "3px solid $color.border"; color "$color.fg-muted"; white-space "pre-wrap"; }
+    part "print.quote-omitted" { font-style "italic"; color "$color.fg-muted"; }
+    part "print.attachments" { font-size "$font-size.sm"; }
+    part "print.attachments.list" { margin 0; padding-left "$space.lg"; }
+    part "print.attachment" { overflow-wrap "anywhere"; }
+    part "print.thread" { display "flex"; flex-direction "column"; gap "$space.lg"; }
+    part "print.thread.title" { margin 0; font-size "$font-size.xl"; }
+    part "print.thread.count" { color "$color.fg-muted"; }
+    part "print.event" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "print.event.title" { margin 0; font-size "$font-size.xl"; }
+    part "print.attendees" { font-size "$font-size.sm"; }
+    part "print.attendees.list" { margin 0; padding-left "$space.lg"; }
+    part "print.attendee" { overflow-wrap "anywhere"; }
+    part "print.section.title" { margin 0; font-size "$font-size.md"; }
+    part "print.agenda" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "print.agenda.heading" { margin 0; font-size "$font-size.xl"; }
+    part "print.agenda.group" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "print.agenda.day" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "print.agenda.date" { margin 0; font-size "$font-size.md"; border-bottom "$border.thin"; }
+    part "print.agenda.events" { margin 0; padding 0; display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "print.agenda.event" { display "flex"; gap "$space.sm"; }
+    part "print.agenda.time" { min-width 96; font-variant-numeric "tabular-nums"; color "$color.fg-muted"; }
+    part "print.agenda.title" { font-weight "$font-weight.medium"; }
+    part "print.agenda.location" { color "$color.fg-muted"; }
+    part "print.agenda.free" { color "$color.fg-muted"; font-style "italic"; }
+    part "print.agenda.month" { width "100%"; border-collapse "collapse"; font-size "$font-size.xs"; }
+    part "print.agenda.caption" { text-align "left"; font-size "$font-size.md"; font-weight "$font-weight.bold"; }
+    part "print.agenda.week-row" { vertical-align "top"; }
+    part "print.agenda.cell" { border "$border.thin"; padding "$space.xxs"; height 72; overflow "hidden"; }
+    part "print.agenda.cell.day" { font-weight "$font-weight.bold"; }
+    part "print.error" { color "$color.danger"; }
+    part "print.recovery-kit" { display "flex"; flex-direction "column"; gap "$space.md"; }
+
+    // Wizards (import, export, backup, restore), path fields, jobs and reports.
+    part "wizard" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "wizard.header" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "wizard.step" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "wizard.title" { margin 0; font-size "$font-size.lg"; }
+    part "wizard.intro" { margin 0; color "$color.fg-muted"; }
+    part "wizard.step-body" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "wizard.buttons" { display "flex"; flex-wrap "wrap"; justify-content "flex-end"; gap "$space.sm"; }
+    part "path-field" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "form.radio" { display "flex"; align-items "center"; gap "$space.xs"; }
+    part "form.error" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "portability.choices" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.choice" { display "flex"; align-items "flex-start"; gap "$space.sm"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "portability.buttons" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+    part "portability.count" { font-variant-numeric "tabular-nums"; }
+    part "portability.loading" { color "$color.fg-muted"; }
+    part "portability.section.title" { margin 0; font-size "$font-size.md"; }
+    part "portability.found" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.found.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "portability.found.label" { font-weight "$font-weight.medium"; }
+    part "portability.found.default" { font-size "$font-size.xs"; color "$color.accent"; }
+    part "portability.found.used" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "portability.issues" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.issues.count" { font-weight "$font-weight.medium"; }
+    part "portability.issues.list" { display "flex"; flex-direction "column"; gap "$space.xs"; max-height 280; overflow-y "auto"; }
+    part "portability.issue" { padding "$space.xs" "$space.sm"; border-left "3px solid $color.border"; }
+    part "portability.issue[severity=\"warning\"]" { border-left-color "$color.warning"; }
+    part "portability.issue[severity=\"skipped\"]" { border-left-color "$color.danger"; }
+    part "portability.issue.severity" { font-size "$font-size.xs"; font-weight "$font-weight.bold"; }
+    part "portability.issue.text" { margin 0; }
+    part "portability.issue.where" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "portability.issue.path" { font-family "$font.mono"; overflow-wrap "anywhere"; }
+    part "portability.issue.details" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "portability.issue.detail" { font-family "$font.mono"; overflow-wrap "anywhere"; }
+    part "portability.report" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "portability.report[state=\"completed\"] portability.report.title" { color "$color.success"; }
+    part "portability.report[state=\"completed-with-issues\"] portability.report.title" { color "$color.warning"; }
+    part "portability.report[state=\"failed\"] portability.report.title" { color "$color.danger"; }
+    part "portability.report.heading" { display "flex"; flex-direction "column"; gap "$space.xxs"; }
+    part "portability.report.title" { margin 0; font-size "$font-size.md"; }
+    part "portability.report.path" { font-family "$font.mono"; font-size "$font-size.sm"; overflow-wrap "anywhere"; }
+    part "portability.report.when" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "portability.progress" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.progress.bar" { width "100%"; accent-color "$color.accent"; }
+    part "portability.progress.phase" { font-weight "$font-weight.medium"; }
+    part "portability.progress.current" { font-size "$font-size.sm"; color "$color.fg-muted"; overflow-wrap "anywhere"; }
+    part "portability.jobs" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.jobs.list" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.job" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "portability.job[state=\"running\"]" { border-color "$color.accent"; }
+    part "portability.job[state=\"failed\"]" { border-color "$color.danger"; }
+    part "portability.job.kind" { font-weight "$font-weight.medium"; }
+    part "portability.job.path" { font-family "$font.mono"; font-size "$font-size.xs"; overflow-wrap "anywhere"; }
+    part "portability.job.when" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "portability.manifest" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.manifest.items" { margin 0; padding-left "$space.lg"; }
+    part "portability.manifest.created" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "portability.plan" { width "100%"; border-collapse "collapse"; font-size "$font-size.sm"; }
+    part "portability.plan.caption" { text-align "left"; font-weight "$font-weight.medium"; padding-bottom "$space.xs"; }
+    part "portability.plan.head" { text-align "left"; border-bottom "$border.thin"; padding "$space.xxs" "$space.sm"; }
+    part "portability.plan.item" { padding "$space.xxs" "$space.sm"; }
+    part "portability.plan.effect" { padding "$space.xxs" "$space.sm"; font-weight "$font-weight.medium"; }
+    part "portability.plan.numbers" { padding "$space.xxs" "$space.sm"; font-variant-numeric "tabular-nums"; }
+    part "portability.plan.note" { font-size "$font-size.sm"; color "$color.fg-muted"; }
+    part "portability.proposals" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "portability.proposal-list" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "portability.proposal" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "portability.proposal[state=\"incomplete\"]" { border-color "$color.warning"; }
+    part "portability.proposal[state=\"added\"]" { border-color "$color.success"; }
+    part "portability.verify" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "import-export" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "backup-restore" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+
+    // The diagnostics bundle: options, the exact preview, the saved file.
+    part "diagnostics-settings" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "diagnostics" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "diagnostics.issues" { color "$color.danger"; font-size "$font-size.sm"; }
+    part "diagnostics.preview" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    part "diagnostics.preview.summary" { font-weight "$font-weight.medium"; }
+    part "diagnostics.entries" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
+    part "diagnostics.entry" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
+    part "diagnostics.entry.summary" { cursor "pointer"; }
+    part "diagnostics.entry.name" { font-family "$font.mono"; }
+    part "diagnostics.entry.item" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "diagnostics.entry.size" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "diagnostics.entry.redactions" { margin 0; padding-left "$space.lg"; font-size "$font-size.xs"; }
+    part "diagnostics.entry.redaction" { color "$color.fg-muted"; }
+    part "diagnostics.entry.text" { margin 0; max-height 240; overflow "auto"; font-family "$font.mono"; font-size "$font-size.xs"; white-space "pre-wrap"; background-color "$color.bg-subtle"; padding "$space.xs"; }
+    part "diagnostics.saved" { display "flex"; flex-direction "column"; gap "$space.xxs"; color "$color.success"; }
+    part "diagnostics.saved.text" { margin 0; }
+    part "diagnostics.saved.hash" { font-family "$font.mono"; font-size "$font-size.xs"; overflow-wrap "anywhere"; color "$color.fg-muted"; }
+
+    // The vault recovery key: create (shown once), check, restore.
+    part "recovery" { display "flex"; flex-direction "column"; gap "$space.md"; }
+    part "recovery.text" { margin 0; }
+    part "recovery.result" { font-weight "$font-weight.medium"; }
+    part "recovery-key" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.md"; border "2px dashed $color.border"; border-radius "$radius.md"; }
+    part "recovery-key.value" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; font-family "$font.mono"; font-size "$font-size.lg"; }
+    part "recovery-key.group" { font-family "$font.mono"; letter-spacing "0.05em"; }
+    part "recovery-settings" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "recovery-settings.facts" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; }
+    part "recovery-settings.fact" { display "flex"; gap "$space.sm"; }
+    part "recovery-settings.fact.label" { color "$color.fg-muted"; }
+    part "recovery-settings.fact.value" { margin 0; font-weight "$font-weight.medium"; }
+    part "recovery-settings.confirm" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
+
+    // Smartcards (PKCS#11): modules, cards, keys and certificates; the PIN prompt.
+    part "smartcards" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
+    part "smartcards.modules" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
+    part "smartcards.module" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
+    part "smartcards.module.path" { font-family "$font.mono"; font-size "$font-size.sm"; overflow-wrap "anywhere"; }
+    part "smartcards.tokens" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
+    part "smartcards.token" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; border "$border.thin"; border-radius "$radius.md"; }
+    part "smartcards.token.label" { margin 0; font-size "$font-size.md"; }
+    part "smartcards.token.facts" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "smartcards.objects" { display "flex"; flex-direction "column"; gap "$space.xs"; margin 0; padding 0; }
+    part "smartcards.object" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; padding "$space.xs"; border-top "$border.thin"; }
+    part "smartcards.object.kind" { font-size "$font-size.xs"; font-weight "$font-weight.bold"; }
+    part "smartcards.object.label" { font-weight "$font-weight.medium"; }
+    part "smartcards.object.algorithm" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "smartcards.object.usages" { font-size "$font-size.xs"; color "$color.fg-muted"; }
+    part "smartcards.object.certificate" { font-size "$font-size.xs"; }
+    part "smartcards.object.fingerprint" { font-family "$font.mono"; font-size "$font-size.xs"; overflow-wrap "anywhere"; }
+    part "smartcards.object.used" { font-size "$font-size.xs"; color "$color.success"; }
+    part "smartcards.object.actions" { display "flex"; gap "$space.xs"; }
+    part "pin-prompt" { display "flex"; flex-direction "column"; gap "$space.sm"; }
+    part "pin-prompt.purpose" { margin 0; font-weight "$font-weight.medium"; }
+    part "pin-prompt.token" { margin 0; color "$color.fg-muted"; }
+    part "pin-prompt.key" { margin 0; font-family "$font.mono"; font-size "$font-size.sm"; }
+    part "pin-prompt.text" { margin 0; }
 }

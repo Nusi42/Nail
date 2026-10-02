@@ -85,6 +85,11 @@ impl DataKey {
         Ok(Self(bytes))
     }
 
+    /// The raw key bytes (for key derivation inside this crate).
+    pub(crate) fn bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
     fn cipher(&self) -> XChaCha20Poly1305 {
         XChaCha20Poly1305::new(Key::from_slice(self.0.as_ref()))
     }

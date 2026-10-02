@@ -17,6 +17,8 @@ import type {
   VaultState,
 } from "../../api/generated";
 import { AUTOCRYPT_IMPORT_DIALOG } from "./Autocrypt";
+import { RECOVERY_KEY_ISSUES, recoveryIssueId } from "./recoveryKeyText";
+import { PIN_CLOSE_REASONS, PIN_PURPOSES } from "./smartcardModel";
 import { EXPIRY_CHOICES, WINDOWS_STORES } from "./KeyTools";
 import { KEY_TOOLS } from "./KeyManager";
 import { REMEMBER_CHOICES } from "./MessageSecurity";
@@ -63,6 +65,9 @@ export const notMessages: readonly string[] = [
   "security-vault",
   "security-warnings",
   "security-windows",
+  // M4c widget kinds.
+  "security-recovery-key",
+  "security-smartcards",
   // `KeySource` value that happens to match the shared `setup-` prefix.
   "setup-message",
 ];
@@ -104,8 +109,9 @@ const SOURCES: KeySource[] = [
   "wkd",
   "keyserver",
   "message",
+  "smartcard",
 ];
-const STORAGE: SecretStorage[] = ["keychain", "passphrase", "windows-store"];
+const STORAGE: SecretStorage[] = ["keychain", "passphrase", "windows-store", "smartcard"];
 const VAULT_STATES: VaultState[] = ["plain", "encrypting", "encrypted", "decrypting"];
 const VAULT_PHASES: VaultPhase[] = ["database", "blobs", "index"];
 const AUTOCRYPT: RecipientKeysReport["autocrypt"][] = ["discourage", "available", "encrypt"];
@@ -129,6 +135,25 @@ const LAYOUT_LABELS = [
   "security-settings-tab-protection",
   "security-settings-tab-autocrypt",
   "security-action-autocrypt-import",
+];
+
+/** M4c dialogs (titles `window-<name>`). */
+const M4C_DIALOGS = [
+  "security-recovery-create",
+  "security-recovery-verify",
+  "security-recovery-restore",
+  "smartcard-pin",
+];
+const SMARTCARD_ERRORS = [
+  "module-not-found",
+  "module-load-failed",
+  "token-not-present",
+  "pin-incorrect",
+  "pin-locked",
+  "pin-cancelled",
+  "key-not-found",
+  "mechanism-unsupported",
+  "device-error",
 ];
 
 /** Message ids built at runtime (e.g. `security-trust-<level>`). */
@@ -173,5 +198,18 @@ export function runtimeIds(): string[] {
     ...LOOKUP_STATES.map((s) => `security-compose-lookup-${s}`),
     `window-${AUTOCRYPT_IMPORT_DIALOG}`,
     ...LAYOUT_LABELS,
+    // M4c: recovery key, smartcards, PIN prompts (contract texts in core-vault.ftl).
+    ...M4C_DIALOGS.map((d) => `window-${d}`),
+    ...RECOVERY_KEY_ISSUES.map(recoveryIssueId),
+    "recovery-key-wrong",
+    "vault-not-encrypted",
+    ...PIN_PURPOSES.map((p) => `pin-purpose-${p}`),
+    ...PIN_CLOSE_REASONS.map((r) => `pin-prompt-closed-${r}`),
+    ...["private-key", "certificate", "public-key"].map((k) => `smartcard-object-${k}`),
+    ...["sign", "decrypt"].map((u) => `smartcard-usage-${u}`),
+    ...SMARTCARD_ERRORS.map((e) => `smartcard-error-${e}`),
+    ...["relative-path", "duplicate-module", "cache-too-long"].map(
+      (i) => `smartcard-settings-issue-${i}`,
+    ),
   ];
 }

@@ -27,6 +27,7 @@ use nail_api::security::{
     KeyImportResult, KeySource, RecipientKey, RecipientKeyState, SecretProtection, SecretStorage,
     TrustDecision, TrustLevel,
 };
+use nail_api::smartcard::SmartcardKeyRef;
 use nail_api::{ErrorCode, KeyId, LocalizedMessage};
 use nail_store::{KeyData, SecretKeyData, Store, StoredKey};
 use pgp::composed::{
@@ -144,11 +145,14 @@ pub struct ExportedKey {
 pub struct UnlockedKey {
     /// The key as stored.
     pub stored: StoredKey,
-    /// The (still S2K-protected) secret key.
-    pub secret: SignedSecretKey,
+    /// The (still S2K-protected) secret key; `None` for a key on a
+    /// smartcard (M4c).
+    pub secret: Option<SignedSecretKey>,
     /// Its analysis.
     pub info: KeyInfo,
     password: Zeroizing<String>,
+    /// The signing key on a smartcard (M4c).
+    card: Option<crate::smartcard::CardSigningKey>,
 }
 
 impl std::fmt::Debug for UnlockedKey {
@@ -166,13 +170,36 @@ impl UnlockedKey {
         Password::from(self.password.as_str())
     }
 
+    /// Whether the secret stays on a smartcard.
+    pub fn on_smartcard(&self) -> bool {
+        self.card.is_some()
+    }
+
+    /// The secret key; [`Error::Unsupported`] for a key on a smartcard
+    /// (it cannot be exported, e.g. into an Autocrypt setup message).
+    pub fn secret_key(&self) -> Result<&SignedSecretKey> {
+        self.secret.as_ref().ok_or_else(|| {
+            Error::Unsupported("the secret key is on a smartcard and cannot be exported".into())
+        })
+    }
+
+    /// The card error of the last failed signature (rPGP reports card
+    /// failures as its own errors).
+    pub(crate) fn card_error(&self) -> Option<nail_pkcs11::CardError> {
+        self.card.as_ref().and_then(|c| c.last_error())
+    }
+
     /// The component that signs at `now`.
     pub(crate) fn signing_key(&self, now: i64) -> Result<&dyn SigningKey> {
+        if let Some(card) = &self.card {
+            return Ok(card);
+        }
+        let secret = self.secret_key()?;
         Ok(match self.info.signing_component(now)? {
-            None => &self.secret.primary_key,
+            None => &secret.primary_key,
             Some(index) => {
-                let fingerprint = self.secret.public_subkeys_fingerprint(index);
-                self.secret
+                let fingerprint = secret.public_subkeys_fingerprint(index);
+                secret
                     .secret_subkeys
                     .iter()
                     .find(|s| Some(s.key.fingerprint()) == fingerprint)
@@ -237,8 +264,23 @@ pub fn to_crypto_key(key: &StoredKey, now: i64) -> CryptoKey {
         issuer: data.issuer.clone(),
         serial: data.serial.clone(),
         chain: None,
-        smartcard: None,
+        smartcard: data
+            .secret
+            .as_ref()
+            .filter(|s| s.storage == SecretStorage::Smartcard)
+            .and_then(|s| s.reference.as_deref())
+            .and_then(|r| crate::smartcard::parse_references(r).ok())
+            .and_then(|refs| refs.into_iter().next()),
     }
+}
+
+/// The outcome of decrypting a session key on a smartcard.
+#[derive(Debug)]
+pub(crate) enum CardDecryption {
+    /// The session key, decrypted with this own key.
+    Session(StoredKey, pgp::composed::PlainSessionKey),
+    /// The card could not (removed, PIN not entered, …).
+    Failed(StoredKey, nail_pkcs11::CardError),
 }
 
 /// Whether a key matches a [`KeyFilter`] (technology, own, text).
@@ -442,6 +484,7 @@ pub struct Keyring<'a> {
     secrets: &'a dyn SecretStore,
     unlocked: &'a UnlockCache,
     now: Option<i64>,
+    cards: Option<&'a dyn nail_pkcs11::KeyResolver>,
 }
 
 impl<'a> Keyring<'a> {
@@ -452,7 +495,213 @@ impl<'a> Keyring<'a> {
             secrets,
             unlocked,
             now: None,
+            cards: None,
         }
+    }
+
+    /// Uses smartcard keys through `cards` (M4c WP122). Without it, keys
+    /// whose secret is on a card are [`Error::Unsupported`].
+    #[must_use]
+    pub fn with_smartcards(mut self, cards: &'a dyn nail_pkcs11::KeyResolver) -> Self {
+        self.cards = Some(cards);
+        self
+    }
+
+    fn cards(&self) -> Result<&'a dyn nail_pkcs11::KeyResolver> {
+        self.cards
+            .ok_or_else(|| Error::Unsupported("smartcards are not available here".into()))
+    }
+
+    /// The fingerprint of the keyring key (primary or subkey) a card key
+    /// belongs to, for `SmartcardObject.openpgp_fingerprint`.
+    pub fn fingerprint_for_card_key(
+        &self,
+        material: &nail_pkcs11::PublicKeyMaterial,
+    ) -> Result<Option<(KeyId, String)>> {
+        for (stored, public, _) in self.all_public()? {
+            if let Some((_, fingerprint)) = crate::smartcard::matching_component(&public, material)
+            {
+                return Ok(Some((stored.id, fingerprint)));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Attaches a key on a smartcard to the keyring key it belongs to
+    /// (`UseSmartcardKey`): the OpenPGP public key must be in the keyring
+    /// already (the card holds no certificate); its primary key or a
+    /// subkey must have the card key's public key. The entry's secret then
+    /// stays on the card; a second card key of the same OpenPGP key (an
+    /// OpenPGP card's separate signing and decryption keys) is added to
+    /// the reference.
+    pub fn use_smartcard_key(&self, key: &SmartcardKeyRef) -> Result<CryptoKey> {
+        let card = self.cards()?.card_key(key)?;
+        let material = card.public_key().ok_or_else(|| {
+            Error::NoKey("the smartcard does not show the key's public part".into())
+        })?;
+        let (stored, _) = self
+            .all_public()?
+            .into_iter()
+            .find_map(|(stored, public, _)| {
+                crate::smartcard::matching_component(&public, material).map(|_| (stored, public))
+            })
+            .ok_or_else(|| {
+                Error::NoKey("import the OpenPGP public key of the smartcard key first".into())
+            })?;
+        let mut refs = match &stored.data.secret {
+            Some(secret) if secret.storage == SecretStorage::Smartcard => secret
+                .reference
+                .as_deref()
+                .map(crate::smartcard::parse_references)
+                .transpose()?
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        if !refs.contains(key) {
+            refs.push(key.clone());
+        }
+        let mut data = stored.data.clone();
+        data.source = KeySource::Smartcard;
+        data.secret = Some(SecretKeyData {
+            storage: SecretStorage::Smartcard,
+            data: None,
+            reference: Some(crate::smartcard::reference_of(&refs)),
+        });
+        let (stored, _) = self.store.upsert_key(&data)?;
+        Ok(to_crypto_key(&stored, self.now()))
+    }
+
+    /// The card keys of a stored smartcard key.
+    fn card_refs(stored: &StoredKey) -> Result<Vec<SmartcardKeyRef>> {
+        match &stored.data.secret {
+            Some(secret) if secret.storage == SecretStorage::Smartcard => {
+                crate::smartcard::parse_references(secret.reference.as_deref().unwrap_or("[]"))
+            }
+            _ => Ok(Vec::new()),
+        }
+    }
+
+    /// An unlocked view of a key on a smartcard: the signing component's
+    /// card key (the PIN is asked when the card signs).
+    fn unlocked_card_key(&self, stored: &StoredKey) -> Result<UnlockedKey> {
+        let cards = self.cards()?;
+        let public = self.public_key(stored)?;
+        let info = KeyInfo::analyze(&public)?;
+        let component = match info.signing_component(self.now())? {
+            None => crate::smartcard::Component::Primary(public.primary_key.clone()),
+            Some(index) => crate::smartcard::Component::Subkey(
+                public
+                    .public_subkeys
+                    .get(index)
+                    .ok_or_else(|| Error::NoKey("the signing subkey is missing".into()))?
+                    .key
+                    .clone(),
+            ),
+        };
+        let params = match &component {
+            crate::smartcard::Component::Primary(k) => k.public_params().clone(),
+            crate::smartcard::Component::Subkey(k) => k.public_params().clone(),
+        };
+        let mut last_error = None;
+        for key_ref in Self::card_refs(stored)? {
+            match cards.card_key(&key_ref) {
+                Ok(card)
+                    if card
+                        .public_key()
+                        .is_some_and(|m| crate::smartcard::same_key(&params, m)) =>
+                {
+                    return Ok(UnlockedKey {
+                        stored: stored.clone(),
+                        secret: None,
+                        info,
+                        password: Zeroizing::new(String::new()),
+                        card: Some(crate::smartcard::CardSigningKey::new(component, card)),
+                    });
+                }
+                Ok(_) => {}
+                Err(err) => last_error = Some(err),
+            }
+        }
+        Err(match last_error {
+            Some(err) => err.into(),
+            None => Error::NoKey("no smartcard key for the signing key".into()),
+        })
+    }
+
+    /// Decrypts the session key of a message with an own key on a
+    /// smartcard (RSA). `Ok(None)`: no card key is addressed.
+    pub(crate) fn card_session_key(
+        &self,
+        pkesks: &[&pgp::packet::PublicKeyEncryptedSessionKey],
+    ) -> Result<Option<CardDecryption>> {
+        let Some(cards) = self.cards else {
+            return Ok(None);
+        };
+        for stored in self
+            .store
+            .list_keys(Some(CryptoTechnology::OpenPgp), true)?
+        {
+            let refs = Self::card_refs(&stored)?;
+            if refs.is_empty() {
+                continue;
+            }
+            let public = self.public_key(&stored)?;
+            let mut components: Vec<&pgp::types::PublicParams> = Vec::new();
+            for pkesk in pkesks {
+                if pkesk.match_identity(&public.primary_key) {
+                    components.push(public.primary_key.public_params());
+                }
+                for sub in &public.public_subkeys {
+                    if pkesk.match_identity(&sub.key) {
+                        components.push(sub.key.public_params());
+                    }
+                }
+            }
+            if components.is_empty() {
+                continue;
+            }
+            for key_ref in &refs {
+                let card = match cards.card_key(key_ref) {
+                    Ok(card) => card,
+                    Err(err) => {
+                        return Ok(Some(CardDecryption::Failed(stored.clone(), err)));
+                    }
+                };
+                let Some(material) = card.public_key() else {
+                    continue;
+                };
+                for pkesk in pkesks {
+                    let addressed = (pkesk.match_identity(&public.primary_key)
+                        && crate::smartcard::same_key(
+                            public.primary_key.public_params(),
+                            material,
+                        ))
+                        || public.public_subkeys.iter().any(|s| {
+                            pkesk.match_identity(&s.key)
+                                && crate::smartcard::same_key(s.key.public_params(), material)
+                        });
+                    if !addressed {
+                        continue;
+                    }
+                    let modulus_len = match material {
+                        nail_pkcs11::PublicKeyMaterial::Rsa { modulus, .. } => {
+                            modulus.iter().skip_while(|b| **b == 0).count()
+                        }
+                        nail_pkcs11::PublicKeyMaterial::Ec { .. } => 0,
+                    };
+                    return Ok(Some(
+                        match crate::smartcard::card_session_key(&card, pkesk, modulus_len) {
+                            Ok(session) => CardDecryption::Session(stored.clone(), session),
+                            Err(Error::Smartcard(err)) => {
+                                CardDecryption::Failed(stored.clone(), err)
+                            }
+                            Err(err) => return Err(err),
+                        },
+                    ));
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// Evaluates validity at a fixed time (tests).
@@ -885,16 +1134,23 @@ impl<'a> Keyring<'a> {
             }
             SecretStorage::Passphrase => Ok(self.unlocked.get(&stored.data.fingerprint)),
             SecretStorage::WindowsStore => Err(Problem::WindowsStore.into()),
-            // M4c WP122: keys on a smartcard sign / decrypt on the card.
-            SecretStorage::Smartcard => Err(Error::Unsupported(
-                "smartcard keys are not supported yet".into(),
-            )),
+            // M4c WP122: keys on a smartcard sign / decrypt on the card;
+            // the card asks for its PIN itself.
+            SecretStorage::Smartcard => Ok(Some(Zeroizing::new(String::new()))),
         }
     }
 
     /// An own key ready to use; [`Error::Locked`] when its passphrase is
     /// needed.
     pub fn unlocked_key(&self, stored: &StoredKey) -> Result<UnlockedKey> {
+        if stored
+            .data
+            .secret
+            .as_ref()
+            .is_some_and(|s| s.storage == SecretStorage::Smartcard)
+        {
+            return self.unlocked_card_key(stored);
+        }
         let secret = self.secret_key(stored)?;
         let password = self.password_for(stored)?.ok_or_else(|| Error::Locked {
             key_id: stored.id.clone(),
@@ -902,9 +1158,10 @@ impl<'a> Keyring<'a> {
         let info = KeyInfo::analyze(&secret.to_public_key())?;
         Ok(UnlockedKey {
             stored: stored.clone(),
-            secret,
+            secret: Some(secret),
             info,
             password,
+            card: None,
         })
     }
 
@@ -1074,6 +1331,7 @@ fn import_issue(error: &Error) -> LocalizedMessage {
         }
         Error::Problem(problem) => problem.localized(),
         Error::Secrets(_) => LocalizedMessage::new("pgp-import-keychain"),
+        Error::Smartcard(err) => LocalizedMessage::new(err.kind.message_id()),
         Error::Store(_) | Error::Locked { .. } | Error::BadPassphrase => {
             LocalizedMessage::new("pgp-import-store")
         }

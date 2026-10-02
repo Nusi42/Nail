@@ -2,11 +2,15 @@
  * The mock core's answers to the M4c print requests (ADR 0094): print jobs
  * kept like the core keeps them (an id, the print view's route, the ready
  * flag); agenda ranges checked; `SavePrintPdf` answers `unsupported`
- * (`desktop-unavailable`) — the mock has no desktop host. `../../api/mock.ts`
- * routes exactly these requests here.
+ * (`desktop-unavailable`) like `nail serve`, or with `desktop` on writes
+ * a simulated PDF like the shell. `../../api/mock.ts` routes exactly these
+ * requests here.
  */
-import type { PrintJob, PrintTarget, Request, Response } from "../../api/generated";
+import type { PdfFile, PrintJob, Request, Response } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
+import { printViewRoute, targetIssue } from "./model";
+
+export { MAX_AGENDA_DAYS, printViewRoute, targetIssue } from "./model";
 
 /** The requests this feature answers. */
 export const PRINT_REQUESTS = [
@@ -22,36 +26,17 @@ export function isPrintRequest(request: Request): request is PrintRequest {
   return (PRINT_REQUESTS as readonly string[]).includes(request.type);
 }
 
-/** `nail_api::print::print_view_route`. */
-export function printViewRoute(jobId: string): string {
-  return `#/print/${jobId}`;
-}
-
-/** `nail_api::print::MAX_AGENDA_DAYS`. */
-export const MAX_AGENDA_DAYS = 366;
-
-/** `PrintTarget::issues` (the first one), as a Fluent id; `null` = fine. */
-export function targetIssue(target: PrintTarget): string | null {
-  if (target.type !== "agenda") return null;
-  const day = (d: string) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`))
-      ? Date.parse(`${d}T00:00:00Z`) / 86_400_000
-      : null;
-  const start = day(target.start);
-  const end = day(target.end);
-  if (start === null || end === null) return "print-target-issue-invalid-date";
-  if (end < start) return "print-target-issue-end-before-start";
-  if (end - start + 1 > MAX_AGENDA_DAYS) return "print-target-issue-range-too-long";
-  return null;
-}
-
 /** Mock-core state of this feature. */
 export interface PrintMockState {
   jobs: Record<string, PrintJob>;
+  /** Whether a desktop host writes PDF files (`false` = `nail serve`). */
+  desktop: boolean;
+  /** PDF files the simulated host wrote. */
+  pdfs: PdfFile[];
 }
 
 export function createPrintMockState(): PrintMockState {
-  return { jobs: {} };
+  return { jobs: {}, desktop: false, pdfs: [] };
 }
 
 function expired(jobId: string): Response {
@@ -93,14 +78,22 @@ export function answerPrint(core: MockCore, request: PrintRequest): Response {
       job.ready = true;
       return { type: "Done" };
     }
-    case "SavePrintPdf":
-      return state.jobs[request.job_id]
-        ? {
-            type: "Error",
-            code: "unsupported",
-            message: "only the desktop app writes PDF files",
-            localized: { id: "desktop-unavailable" },
-          }
-        : expired(request.job_id);
+    case "SavePrintPdf": {
+      const job = state.jobs[request.job_id];
+      if (!job) return expired(request.job_id);
+      if (!state.desktop) {
+        return {
+          type: "Error",
+          code: "unsupported",
+          message: "only the desktop app writes PDF files",
+          localized: { id: "desktop-unavailable" },
+        };
+      }
+      // The shell lays the view out in a hidden window, then prints it.
+      job.ready = true;
+      const file: PdfFile = { path: request.path, size_bytes: 48_213 };
+      state.pdfs.push(file);
+      return { type: "PdfSaved", file };
+    }
   }
 }

@@ -74,6 +74,10 @@ tokens {
 - The first value is used in light mode (and in any mode without its own
   value). `dark=` and `high-contrast=` set the value for those modes.
   `light=` may be used instead of the first value.
+- `print=` sets the value used while Nail prints (the print view of a
+  message, conversation, event or agenda, and PDF files). A mode without a
+  `print=` value prints with the light value, so a dark theme never prints
+  dark. The default theme prints black text on white without shadows.
 - Tokens may use other tokens (`border "thin" "1px solid $color.border"`).
   A token must not refer to itself, directly or through others.
 - Numbers without a unit are pixels for `font-size`, `space`, `size` and
@@ -86,6 +90,7 @@ tokens {
 modes {
     dark { color "bg" "#101010"; }
     high-contrast { color "accent" "#ff00ff"; }
+    print { color "fg" "#202020"; }
 }
 ```
 
@@ -169,6 +174,11 @@ States: `hover`, `active`, `focus`, `focus-visible`, `focus-within`,
 | Folders | `folder-tree`, `folder-tree.item` (condition `role`: `inbox`, `sent`, `drafts`, `archive`, `junk`, `trash`, `other`), `folder-tree.item.icon`, `folder-tree.item.name`, `folder-tree.item.unread-count` |
 | Message list | `message-list`, `message-list.row` (states `selected`, `unread`, `flagged`), `message-list.row.line`, `message-list.row.from`, `message-list.row.subject`, `message-list.row.date`, `message-list.row.preview`, `message-list.empty` |
 | Message view | `message-view`, `message-view.header`, `message-view.header.subject`, `message-view.header.field`, `message-view.remote-content-banner`, `message-view.body`, `message-view.attachments`, `message-view.attachment`, `message-view.empty` |
+| Command palette | `palette`, `palette.search`, `palette.input`, `palette.status`, `palette.list`, `palette.item` (condition `state`: `active`, `unavailable`, `recent`; condition `source`), `palette.item.title`, `palette.item.badge`, `palette.item.unavailable`, `palette.shortcuts`, `palette.shortcut`, `palette.match`, `palette.empty`, `palette.footer`, `palette.hint` |
+| Printing | `print-setup`, `print-setup.what`, `print-setup.nothing`, `print-setup.saved`, `print`, `print.toolbar`, `print.page`, `print.message`, `print.subject`, `print.headers`, `print.header`, `print.header.name`, `print.header.value`, `print.body`, `print.text`, `print.quote`, `print.quote-omitted`, `print.attachments`, `print.attachments.list`, `print.attachment`, `print.thread`, `print.thread.title`, `print.thread.count`, `print.event`, `print.event.title`, `print.attendees`, `print.attendees.list`, `print.attendee`, `print.section.title`, `print.agenda` (with `.heading`, `.group`, `.day`, `.date`, `.events`, `.event`, `.time`, `.title`, `.location`, `.free`, `.month`, `.caption`, `.week-row`, `.cell`, `.cell.day`), `print.error`, `print.recovery-kit`; colours come from the `print` mode |
+| Import, export, backups | `wizard`, `wizard.header`, `wizard.step`, `wizard.title`, `wizard.intro`, `wizard.step-body`, `wizard.buttons`, `path-field`, `form.radio`, `form.error`, `import-export`, `backup-restore`, `portability.choices`, `portability.choice`, `portability.found` (`.item`, `.label`, `.default`, `.used`), `portability.issues` (`.count`, `.list`), `portability.issue` (conditions `severity`: `warning`, `skipped`; `code`) with `.severity`, `.text`, `.where`, `.path`, `.index`, `.label`, `.details`, `.detail`, `portability.report` (conditions `state`, `kind`) with `.heading`, `.title`, `.path`, `.when`, `portability.progress` (`.bar`, `.phase`, `.items`, `.bytes`, `.current`), `portability.jobs`, `portability.job` (condition `state`) with `.kind`, `.path`, `.state`, `.when`, `.progress`, `portability.manifest`, `portability.plan` (`.caption`, `.head`, `.row`, `.item`, `.effect`, `.numbers`, `.note`), `portability.proposals`, `portability.proposal` (condition `state`: `incomplete`, `added`), `portability.verify` |
+| Diagnostics | `diagnostics-settings`, `diagnostics` (condition `state`: `options`, `previewed`, `saved`), `diagnostics.issues`, `diagnostics.preview`, `diagnostics.preview.summary`, `diagnostics.entries`, `diagnostics.entry` with `.summary`, `.name`, `.item`, `.size`, `.redactions`, `.redaction`, `.details`, `.text`, `diagnostics.saved`, `diagnostics.saved.text`, `diagnostics.saved.hash` |
+| Recovery key, smartcards | `recovery`, `recovery.text`, `recovery.result`, `recovery-key`, `recovery-key.value`, `recovery-key.group`, `recovery-settings` with `.facts`, `.fact`, `.fact.label`, `.fact.value`, `.confirm`, `smartcards` with `.modules`, `.module`, `.module.path`, `.tokens`, `.token`, `.token.label`, `.token.facts`, `.objects`, `.object` and `.object.kind`, `.label`, `.algorithm`, `.usages`, `.certificate`, `.fingerprint`, `.used`, `.actions`, `pin-prompt` with `.purpose`, `.token`, `.key`, `.text` |
 
 ### Supported CSS properties
 

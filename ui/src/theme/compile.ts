@@ -21,6 +21,9 @@ import { GMAIL_BASE_CSS } from "../features/gmail/parts";
 import { PIM_BASE_CSS } from "../features/pim/parts";
 import { SCHEDULING_BASE_CSS } from "../features/scheduling/parts";
 import { SYSTEM_BASE_CSS } from "../features/system/parts";
+import { PORTABILITY_BASE_CSS } from "../features/portability/parts";
+import { PALETTE_BASE_CSS } from "../features/palette/parts";
+import { PRINT_BASE_CSS } from "../features/print/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
   AncestorSelector,
@@ -239,7 +242,10 @@ ${SCHEDULING_BASE_CSS}
 ${GMAIL_BASE_CSS}
 ${EXCHANGE_BASE_CSS}
 ${AGENTS_BASE_CSS}
-${SYSTEM_BASE_CSS}`;
+${SYSTEM_BASE_CSS}
+${PORTABILITY_BASE_CSS}
+${PALETTE_BASE_CSS}
+${PRINT_BASE_CSS}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {

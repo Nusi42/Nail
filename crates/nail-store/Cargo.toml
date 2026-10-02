@@ -21,6 +21,8 @@ zstd = "0.14.0"
 sha2.workspace = true
 hex.workspace = true
 base64.workspace = true
+# M4c WP122: database keys are zeroed on drop.
+zeroize.workspace = true
 futures-util.workspace = true
 # PIM (M3a WP73): calendar times to instants for the instance cache and
 # range columns (IANA zones, DST gaps / repeats).

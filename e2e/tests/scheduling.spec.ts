@@ -125,7 +125,7 @@ async function openCalendar(page: Page): Promise<Locator> {
     .click();
   const calendar = page.getByRole("dialog", { name: "Calendar", exact: true });
   await expect(calendar).toBeVisible();
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   return calendar;
 }
 

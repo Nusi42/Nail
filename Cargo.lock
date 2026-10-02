@@ -4000,12 +4000,9 @@ dependencies = [
 [[package]]
 name = "libsqlite3-sys"
 version = "0.38.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
 dependencies = [
  "cc",
- "pkg-config",
- "vcpkg",
+ "sqlite3mc-src",
 ]
 
 [[package]]
@@ -4381,10 +4378,13 @@ dependencies = [
 name = "nail-bench"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "clap",
+ "mail-parser",
  "nail-api",
  "nail-core",
+ "nail-proto-imap",
  "nail-search",
  "nail-store",
  "nail-testkit",
@@ -4396,6 +4396,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "windows-sys 0.61.2",
 ]
 
@@ -4676,14 +4677,18 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "chrono",
+ "hex",
  "mail-parser",
  "nail-api",
  "nail-pkcs11",
  "nail-store",
  "nail-testkit",
+ "p256",
  "pgp",
  "pretty_assertions",
  "rand 0.8.8",
+ "rsa",
+ "serde_json",
  "sha1 0.10.7",
  "thiserror 2.0.21",
  "zeroize",
@@ -4693,11 +4698,20 @@ dependencies = [
 name = "nail-pkcs11"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "const-oid 0.9.6",
  "cryptoki",
  "der",
  "hex",
  "nail-api",
+ "nail-pkcs11",
+ "nail-testkit",
+ "p256",
  "pretty_assertions",
+ "rand 0.8.8",
+ "rsa",
+ "sha1 0.10.7",
+ "sha2 0.10.9",
  "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
@@ -4808,6 +4822,7 @@ dependencies = [
  "axum",
  "base64 0.23.1",
  "chrono",
+ "mail-parser",
  "nail-api",
  "nail-auth",
  "nail-proto-graph",
@@ -5031,6 +5046,7 @@ dependencies = [
  "pretty_assertions",
  "rand 0.8.8",
  "rsa",
+ "serde_json",
  "sha1 0.10.7",
  "sha2 0.10.9",
  "spki",
@@ -5059,6 +5075,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "zeroize",
  "zstd 0.14.0",
 ]
 
@@ -5121,13 +5138,16 @@ name = "nail-vault"
 version = "0.1.0"
 dependencies = [
  "chacha20poly1305",
+ "chrono",
  "hex",
  "nail-api",
  "nail-search",
  "nail-store",
  "pretty_assertions",
  "rand 0.8.8",
+ "serde",
  "serde_json",
+ "sha2 0.11.0",
  "tantivy",
  "tempfile",
  "thiserror 2.0.21",
@@ -7770,6 +7790,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite3mc-src"
+version = "205.1.0+sqlite3mc-2.5.1-sqlite-3.53.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f155b7d3de6d72fb7b7c7affcba3773634c1fb2978b944b425c3d3ed5474448c"
+
+[[package]]
 name = "sse-stream"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9319,12 +9345,6 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
-name = "vcpkg"
-version = "0.2.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version-compare"

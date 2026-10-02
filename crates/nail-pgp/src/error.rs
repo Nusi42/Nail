@@ -46,6 +46,10 @@ pub enum Error {
     /// (ADR 0054; M2d review fixes).
     #[error(transparent)]
     Problem(#[from] Problem),
+    /// A smartcard operation failed (M4c WP122): card missing, PIN wrong /
+    /// locked / not entered, mechanism not supported.
+    #[error(transparent)]
+    Smartcard(#[from] nail_pkcs11::CardError),
 }
 
 /// A problem `nail-pgp` detects itself (not a library error), each with
@@ -289,6 +293,7 @@ impl Error {
             Self::Store(e) => store_code(e),
             Self::Secrets(e) => e.code,
             Self::Problem(p) => p.code(),
+            Self::Smartcard(e) => e.code(),
         }
     }
 
@@ -310,6 +315,7 @@ impl Error {
             Self::Unsupported(detail) => Some(with_detail("pgp-error-unsupported", detail)),
             Self::NotBase64(detail) => Some(with_detail("pgp-import-not-base64", detail)),
             Self::Problem(p) => Some(p.localized()),
+            Self::Smartcard(e) => Some(LocalizedMessage::new(e.kind.message_id())),
             // The code's text says it all (`error-no-key`); store and
             // keychain errors keep their own.
             Self::NoKey(_) | Self::Store(_) | Self::Secrets(_) => None,

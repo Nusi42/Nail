@@ -540,7 +540,8 @@ impl GraphEngine {
     /// Stores a raw message in a folder (a replayed append finds the copy
     /// it made before by its `Message-ID`); answers its id. Graph creates
     /// MIME uploads as drafts: outside Drafts, Outlook shows them as
-    /// unsent (Graph cannot clear that for MIME creates).
+    /// unsent (Graph cannot clear that for MIME creates). Messages over
+    /// 4 MB go up in parts ([`GraphEngine::append_large`]).
     pub async fn append(
         &self,
         mailbox: Option<&str>,
@@ -566,6 +567,9 @@ impl GraphEngine {
             if let Some(existing) = found.value.into_iter().next() {
                 return Ok(existing.id);
             }
+        }
+        if crate::upload::needs_upload_session(raw) {
+            return self.append_large(mailbox, folder, raw, flags).await;
         }
         let encoded = encode_mime(raw)?;
         let created = self
@@ -770,8 +774,11 @@ impl GraphEngine {
         }
     }
 
-    /// Sends a raw message through `sendMail` of the own mailbox (`None`)
-    /// or another one (Send As / on behalf is the server's permission).
+    /// Sends a raw message (at most 4 MB of MIME; larger ones go through
+    /// [`GraphEngine::send_large`], and [`GraphEngine::send_message`]
+    /// picks the mailbox and the way) through `sendMail` of the own
+    /// mailbox (`None`) or another one (Send As / on behalf is the
+    /// server's permission).
     /// Envelope recipients missing from the headers go into a `Bcc` header
     /// (Graph takes the recipients from the headers). Exchange files the
     /// message in Sent Items itself.

@@ -10,11 +10,15 @@
 //!   random `keychain:nail/vault-…/data-key` reference, with a key check
 //!   value in the store's `vault_state` row. [`VaultCipher`] implements
 //!   [`nail_store::DataCipher`].
-//! * **Database**: SQLCipher needs OpenSSL on Windows MSVC and
-//!   SQLite3MultipleCiphers is not buildable through `rusqlite` without
-//!   patching `libsqlite3-sys`, so the database stays a plain SQLite file
-//!   and the sensitive columns ([`nail_store::SEALED_COLUMNS`]) are sealed
-//!   by the store's hooks.
+//! * **Database**: the sensitive columns ([`nail_store::SEALED_COLUMNS`])
+//!   are sealed by the store's hooks (M2a). Since M4c (WP122, ADR
+//!   0095) the whole database file is encrypted as well: the bundled
+//!   SQLite is SQLite3 Multiple Ciphers (a `[patch]` of `libsqlite3-sys`),
+//!   keyed with [`key::database_key`]; [`open_data_dir`] opens it and the
+//!   vault file ([`vaultfile`]) keeps what opening and recovery need
+//!   readable beside it.
+//! * **Recovery key** ([`recovery`], M4c): a 256-bit key shown once that
+//!   wraps the data key, to restore it after the keychain entry was lost.
 //! * **Blobs**: sealed after compression by [`nail_store::BlobStore`] once
 //!   the cipher is installed.
 //! * **Search index**: [`SealedDirectory`], an encrypting tantivy
@@ -28,19 +32,25 @@
 
 #![warn(missing_docs)]
 
+mod datadir;
 pub mod directory;
 mod error;
 pub mod format;
 pub mod key;
+pub mod recovery;
 mod vault;
+pub mod vaultfile;
 
 use nail_api::security::VaultState;
 
+pub use datadir::{LockedVault, OpenedDataDir, ReadyDataDir, open_data_dir};
 pub use directory::SealedDirectory;
 pub use error::VaultError;
 pub use format::DataKey;
 pub use key::{KeyStore, VaultCipher};
+pub use recovery::RecoveryKey;
 pub use vault::{INDEX_VERSION_FILE, IndexWrapper, Vault};
+pub use vaultfile::{VAULT_FILE_NAME, VaultFile};
 
 /// The state of a data directory nobody has encrypted: encryption at rest
 /// is **off** by default.

@@ -194,15 +194,18 @@ pub(crate) fn ingest(
             blobs.put(&message.raw)?;
         }
     }
-    report.new.retain(|id| !merged.skipped.contains(id));
+    // WP123: sets, not `Vec::contains` in loops (large batches).
+    let skipped: std::collections::HashSet<&MessageId> = merged.skipped.iter().collect();
+    report.new.retain(|id| !skipped.contains(id));
     for row in &rows {
-        if !merged.skipped.contains(&row.message.summary.id) {
+        if !skipped.contains(&row.message.summary.id) {
             report.stored.push(row.message.summary.id.clone());
         }
     }
+    let new: std::collections::HashSet<&MessageId> = report.new.iter().collect();
     let learned: Vec<Address> = addresses
         .into_iter()
-        .filter(|(id, _)| report.new.contains(id))
+        .filter(|(id, _)| new.contains(id))
         .flat_map(|(_, a)| a)
         .collect();
     if !learned.is_empty()
@@ -211,9 +214,9 @@ pub(crate) fn ingest(
         tracing::debug!(%err, "cannot record addresses");
     }
     if let Some(index) = index {
-        docs.retain(|d| {
-            report.stored.contains(&d.message_id) && !keeps_body.contains(&d.message_id)
-        });
+        let stored: std::collections::HashSet<&MessageId> = report.stored.iter().collect();
+        let keeps_body: std::collections::HashSet<&MessageId> = keeps_body.iter().collect();
+        docs.retain(|d| stored.contains(&d.message_id) && !keeps_body.contains(&d.message_id));
         if let Err(err) = index.add(&docs) {
             tracing::warn!(%err, "cannot index new messages");
         }

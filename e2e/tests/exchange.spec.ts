@@ -365,7 +365,7 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
 
   // An invitation in the Exchange calendar is answered through Graph's
   // meeting API (no iMIP mail).
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await calendar
     .getByRole("button", { name: /^Architecture review,/ })
     .first()
@@ -451,7 +451,7 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
   // (AcceptItem), not by iMIP mail.
   await mainToolbar(page).getByRole("button", { name: "Calendar" }).click();
   const calendar = page.getByRole("dialog", { name: "Calendar", exact: true });
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await calendar
     .getByRole("button", { name: /^Board review,/ })
     .first()

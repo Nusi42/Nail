@@ -24,6 +24,19 @@
 //!   missing one would lose data);
 //! * the state switches to `encrypted` / `plain` only after the last phase.
 //!
+//! # Full-file database encryption (M4c WP122)
+//!
+//! With [`Vault::with_full_file_encryption`] (what
+//! [`crate::open_data_dir`] builds) the database phase ends by rewriting
+//! the database file encrypted with a key derived from the data key
+//! ([`crate::key::database_key`], SQLite3 Multiple Ciphers) instead of
+//! only compacting it; decrypting rewrites it plain again. The rewrite is
+//! itself crash-safe ([`nail_store::Store::rewrite_file`]) and the file
+//! header says which form it is in, so a resumed migration just checks it.
+//! What opening needs while the file is encrypted (key reference, key
+//! check value, the recovery-key-wrapped data key) is kept in the vault
+//! file beside it ([`crate::vaultfile`]).
+//!
 //! While `encrypting`, new writes are already sealed; while `decrypting`,
 //! they are plain; reads accept both. So the app keeps working during a
 //! migration, except that the search index must be closed during the index
@@ -40,10 +53,15 @@ use nail_api::{ErrorCode, SecretRef};
 use nail_store::{BlobStore, DataCipher, SealMode, Store, VaultRecord};
 use tantivy::directory::Directory;
 
+use nail_api::recovery::RecoveryKeyStatus;
+use zeroize::Zeroizing;
+
 use crate::directory::SealedDirectory;
 use crate::error::VaultError;
 use crate::format::{self, DataKey};
-use crate::key::{KeyStore, VaultCipher, key_check, new_key_ref, verify_key_check};
+use crate::key::{KeyStore, VaultCipher, database_key, key_check, new_key_ref, verify_key_check};
+use crate::recovery::{self, RecoveryKey};
+use crate::vaultfile::{VaultFile, VaultFileSlot};
 
 /// Wraps the search index's directory (`nail_search::DirectoryWrapper`
 /// has the same shape).
@@ -90,6 +108,10 @@ pub struct Vault {
     index_dir: Option<PathBuf>,
     keys: KeyStore,
     key: Mutex<Option<DataKey>>,
+    /// The vault file beside the database (M4c).
+    file: VaultFileSlot,
+    /// Whether encrypting also encrypts the database file itself (M4c).
+    full_file: bool,
 }
 
 impl Vault {
@@ -101,13 +123,44 @@ impl Vault {
         index_dir: Option<PathBuf>,
         secrets: Arc<dyn SecretStore>,
     ) -> Self {
+        let file = VaultFileSlot::beside(store.path());
         Self {
             store,
             blobs,
             index_dir,
             keys: KeyStore::new(secrets),
             key: Mutex::new(None),
+            file,
+            full_file: false,
         }
+    }
+
+    /// Whether switching encryption on also encrypts the database file
+    /// itself (SQLite3 Multiple Ciphers; M4c WP122). Off for
+    /// [`Vault::new`] — the column-level sealing of M2a only, so a store
+    /// opened with plain [`nail_store::Store::open`] keeps opening — and on
+    /// for [`crate::open_data_dir`], which opens encrypted files with the
+    /// key. Decrypting always turns an encrypted file plain.
+    #[must_use]
+    pub fn with_full_file_encryption(mut self, on: bool) -> Self {
+        self.full_file = on;
+        self
+    }
+
+    /// Whether [`Vault::with_full_file_encryption`] is on.
+    pub fn full_file_encryption(&self) -> bool {
+        self.full_file
+    }
+
+    /// The store this vault protects.
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
+    /// Uses a data key that was already loaded and verified (by
+    /// [`crate::open_data_dir`], which needs it to open the database).
+    pub(crate) fn preload_key(&self, key: DataKey) {
+        self.set_cached_key(Some(key));
     }
 
     fn cached_key(&self) -> Option<DataKey> {
@@ -121,7 +174,21 @@ impl Vault {
         *self.key.lock().unwrap_or_else(PoisonError::into_inner) = key;
     }
 
+    fn recovery_status(&self) -> RecoveryKeyStatus {
+        match self.file.get() {
+            Ok(file) => recovery::status_of(&file),
+            Err(err) => {
+                tracing::warn!(%err, "cannot read the vault file");
+                RecoveryKeyStatus::default()
+            }
+        }
+    }
+
     fn status_of(&self, record: &VaultRecord) -> VaultStatus {
+        let key_in_keychain = record
+            .key_ref
+            .as_ref()
+            .is_some_and(|r| self.keys.contains(&SecretRef(r.clone())));
         let (error, message) = record
             .error
             .as_deref()
@@ -132,13 +199,9 @@ impl Vault {
             phase: record.phase,
             done: record.done,
             total: record.total,
-            key_in_keychain: record
-                .key_ref
-                .as_ref()
-                .is_some_and(|r| self.keys.contains(&SecretRef(r.clone()))),
-            // M4c (ADR 0094): filled in by WP122 (recovery key).
-            needs_recovery: false,
-            recovery: nail_api::recovery::RecoveryKeyStatus::default(),
+            key_in_keychain,
+            needs_recovery: record.state != VaultState::Plain && !key_in_keychain,
+            recovery: self.recovery_status(),
             error,
             message,
             localized: None,
@@ -192,6 +255,7 @@ impl Vault {
     /// missing and [`VaultError::Crypto`] when it does not match.
     pub fn open(&self) -> Result<VaultStatus, VaultError> {
         let record = self.store.vault_state()?;
+        self.sync_vault_file(&record)?;
         if record.state == VaultState::Plain {
             self.set_cached_key(None);
             self.install(None, SealMode::Plain)?;
@@ -200,6 +264,23 @@ impl Vault {
             self.install(Some(&key), Self::mode_for(record.state))?;
         }
         Ok(self.status_of(&record))
+    }
+
+    /// Makes the vault file name the same data key as the state row (the
+    /// row wins while the database is readable). A recovery record of
+    /// another key is dropped: it could not restore this one.
+    fn sync_vault_file(&self, record: &VaultRecord) -> Result<(), VaultError> {
+        let key_check = record.key_check.as_deref().map(hex::encode);
+        let encrypted = self.store.is_file_encrypted();
+        self.file.update(|file| {
+            if file.key_ref != record.key_ref || file.key_check != key_check {
+                file.key_ref.clone_from(&record.key_ref);
+                file.key_check = key_check;
+                file.recovery = None;
+            }
+            file.database_encrypted = encrypted;
+        })?;
+        Ok(())
     }
 
     /// Whether a migration is pending (after [`Vault::set_enabled`] or an
@@ -232,6 +313,9 @@ impl Vault {
                 self.keys.store(&key_ref, &key)?;
                 record.key_ref = Some(key_ref.as_str().to_owned());
                 record.key_check = Some(key_check(&key)?);
+                // Then the vault file (needed to open an encrypted
+                // database file), then the row.
+                self.sync_vault_file(&record)?;
                 self.set_cached_key(Some(key));
                 VaultState::Encrypting
             }
@@ -301,7 +385,7 @@ impl Vault {
             record.error = None;
             self.store.set_vault_state(&record)?;
             let outcome = match phase {
-                VaultPhase::Database => self.database_phase(seal, &mut record, progress),
+                VaultPhase::Database => self.database_phase(&key, seal, &mut record, progress),
                 VaultPhase::Blobs => self.blob_phase(seal, &mut record, progress),
                 VaultPhase::Index => self.index_phase(&key, seal, &mut record, progress),
             };
@@ -342,8 +426,10 @@ impl Vault {
         record.state = VaultState::Plain;
         let key_ref = record.key_ref.take();
         record.key_check = None;
-        // The row forgets the key before the keychain does.
+        // The row forgets the key before the vault file, and both before
+        // the keychain does.
         self.store.set_vault_state(&record)?;
+        self.sync_vault_file(&record)?;
         self.install(None, SealMode::Plain)?;
         self.set_cached_key(None);
         if let Some(key_ref) = key_ref
@@ -365,6 +451,7 @@ impl Vault {
 
     fn database_phase(
         &self,
+        key: &DataKey,
         seal: bool,
         record: &mut VaultRecord,
         progress: &mut dyn FnMut(&VaultStatus) -> ControlFlow<()>,
@@ -389,9 +476,123 @@ impl Vault {
                 return Ok(ControlFlow::Break(()));
             }
         }
-        // No old page may keep a value from before the conversion.
-        self.store.compact()?;
+        // No old page may keep a value from before the conversion: the
+        // file is rewritten (encrypted / plain) or at least compacted.
+        self.database_file_step(key, seal)?;
         Ok(ControlFlow::Continue(()))
+    }
+
+    /// The end of the database phase: encrypts the database file (full-file
+    /// encryption on), decrypts it (decrypting), or compacts it. Idempotent:
+    /// the file header tells whether the rewrite already happened.
+    fn database_file_step(&self, key: &DataKey, seal: bool) -> Result<(), VaultError> {
+        if self.store.path().is_none() {
+            self.store.compact()?;
+            return Ok(());
+        }
+        let encrypted = self.store.is_file_encrypted();
+        if seal && self.full_file && !encrypted {
+            self.store.rewrite_file(Some(&database_key(key)))?;
+        } else if !seal && encrypted {
+            self.store.rewrite_file(None)?;
+        } else {
+            self.store.compact()?;
+        }
+        let encrypted = self.store.is_file_encrypted();
+        self.file
+            .update(|file| file.database_encrypted = encrypted)?;
+        Ok(())
+    }
+
+    /// Encrypts the database file of an already encrypted vault whose file
+    /// is still plain (a data directory encrypted before M4c, column
+    /// sealing only). A no-op (`false`) unless full-file encryption is on,
+    /// the vault is `encrypted` and the file is plain. Crash-safe like the
+    /// migration ([`nail_store::Store::rewrite_file`]); blocks the store
+    /// while it runs, so call it from a background task.
+    pub fn encrypt_database_file(&self) -> Result<bool, VaultError> {
+        let record = self.store.vault_state()?;
+        if !self.full_file
+            || record.state != VaultState::Encrypted
+            || self.store.path().is_none()
+            || self.store.is_file_encrypted()
+        {
+            return Ok(false);
+        }
+        let key = self.require_key(&record)?;
+        self.store.rewrite_file(Some(&database_key(&key)))?;
+        self.file.update(|file| file.database_encrypted = true)?;
+        tracing::info!("database file of an encrypted vault encrypted");
+        Ok(true)
+    }
+
+    // --- Recovery key (M4c WP122) ---
+
+    /// Creates a recovery key for the data key, replacing (rotating) an
+    /// older one. Returns its text form — the only time it exists outside
+    /// the user's hands — and the new status. Needs an encrypted (or
+    /// encrypting) vault with its key: [`VaultError::NotEncrypted`]
+    /// otherwise.
+    pub fn create_recovery_key(
+        &self,
+    ) -> Result<(Zeroizing<String>, RecoveryKeyStatus), VaultError> {
+        let record = self.store.vault_state()?;
+        if !matches!(record.state, VaultState::Encrypted | VaultState::Encrypting) {
+            return Err(VaultError::NotEncrypted);
+        }
+        let key = self.require_key(&record)?;
+        self.sync_vault_file(&record)?;
+        let recovery_key = RecoveryKey::generate();
+        let entry = recovery::new_record(&recovery_key, &key)?;
+        let file = self.file.update(|file| file.recovery = Some(entry))?;
+        tracing::info!("recovery key created");
+        Ok((recovery_key.to_text(), recovery::status_of(&file)))
+    }
+
+    /// Checks a typed recovery key without changing the data: `true` when
+    /// it opens the current data key (and records when it was verified).
+    /// A mistyped key is [`VaultError::RecoveryKeyInvalid`]; without a
+    /// recovery key [`VaultError::NoRecoveryKey`].
+    pub fn verify_recovery_key(&self, text: &str) -> Result<(bool, RecoveryKeyStatus), VaultError> {
+        let file = self.file.get()?;
+        match recovery::open_data_key(&file, text) {
+            Ok(_) => {
+                let file = self.file.update(|file| {
+                    if let Some(entry) = file.recovery.as_mut() {
+                        entry.verified_at = Some(recovery::now_rfc3339());
+                    }
+                })?;
+                Ok((true, recovery::status_of(&file)))
+            }
+            Err(VaultError::RecoveryKeyWrong) => Ok((false, recovery::status_of(&file))),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Puts the data key back into the keychain with the recovery key
+    /// (after the entry was lost) and opens the vault with it.
+    /// [`VaultError::RecoveryKeyWrong`] for a key that does not fit.
+    pub fn restore_key(&self, text: &str) -> Result<VaultStatus, VaultError> {
+        let record = self.store.vault_state()?;
+        if record.state == VaultState::Plain {
+            return Err(VaultError::NotEncrypted);
+        }
+        let file = self.file.get()?;
+        let key = recovery::restore_into_keychain(&file, &self.keys, text)?;
+        self.set_cached_key(Some(key));
+        self.open()
+    }
+
+    /// Removes the recovery key.
+    pub fn remove_recovery_key(&self) -> Result<VaultStatus, VaultError> {
+        self.file.update(|file| file.recovery = None)?;
+        tracing::info!("recovery key removed");
+        self.status()
+    }
+
+    /// The vault file's contents (diagnostics, tests).
+    pub fn vault_file(&self) -> Result<VaultFile, VaultError> {
+        self.file.get()
     }
 
     fn blob_phase(

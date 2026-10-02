@@ -259,6 +259,9 @@ pub struct State {
     pub stream_close_after: std::time::Duration,
     /// Streams to break (abort the connection).
     pub break_streams: u32,
+    /// `MoveItem` / `CopyItem` between mailboxes allowed (else
+    /// `ErrorCrossMailboxMoveCopy`; M4c).
+    pub cross_mailbox_moves: bool,
 }
 
 impl State {

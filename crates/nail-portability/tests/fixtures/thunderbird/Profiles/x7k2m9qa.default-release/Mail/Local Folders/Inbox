@@ -1,0 +1,40 @@
+From - Thu Oct  1 10:00:00 2026
+X-Mozilla-Status: 0005
+X-Mozilla-Status2: 00000000
+X-Mozilla-Keys: $label1
+From: Charles Babbage <charles@example.org>
+To: Ada Lovelace <ada@example.org>
+Subject: Difference engine
+Message-ID: <engine-1@example.org>
+Date: Thu, 01 Oct 2026 09:59:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Dear Ada,
+>From the drawings it should work.
+Charles
+
+From - Thu Oct  1 11:00:00 2026
+X-Mozilla-Status: 0009
+X-Mozilla-Status2: 00000000
+From: Spam <spam@example.com>
+To: Ada Lovelace <ada@example.org>
+Subject: Deleted but not compacted
+Message-ID: <deleted-1@example.com>
+Date: Thu, 01 Oct 2026 10:59:00 +0000
+
+Thunderbird keeps deleted messages until the folder is compacted.
+
+From - Fri Oct  2 08:30:00 2026
+X-Mozilla-Status: 0000
+X-Mozilla-Status2: 00010000
+From: Mary Somerville <mary@example.org>
+To: Ada Lovelace <ada@example.org>
+Subject: =?UTF-8?Q?Gr=C3=BC=C3=9Fe?=
+Message-ID: <greetings-1@example.org>
+Date: Fri, 02 Oct 2026 08:29:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Unread greetings.
+

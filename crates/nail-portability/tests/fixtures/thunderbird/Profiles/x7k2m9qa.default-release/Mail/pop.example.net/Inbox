@@ -1,0 +1,11 @@
+From - Fri Oct  2 09:00:00 2026
+X-Mozilla-Status: 0003
+X-Mozilla-Status2: 00000000
+From: Bob <bob@example.net>
+To: ada@example.net
+Subject: POP mail
+Message-ID: <pop-1@example.net>
+Date: Fri, 02 Oct 2026 08:59:00 +0000
+
+Downloaded with POP3, only on this computer.
+

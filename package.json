@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "npm run dev -w ui",
     "build": "npm run build -w ui",
-    "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present",
+    "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs",
     "check:sockets": "node scripts/check-socket-binds.mjs",
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",

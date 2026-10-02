@@ -39,6 +39,10 @@ pub enum Error {
     /// A Windows certificate store call failed.
     #[error("Windows certificate store: {0}")]
     Windows(String),
+    /// A smartcard operation failed (M4c WP122): card missing, PIN wrong /
+    /// locked / not entered, mechanism not supported.
+    #[error(transparent)]
+    Smartcard(nail_pkcs11::CardError),
 }
 
 impl Error {
@@ -55,6 +59,7 @@ impl Error {
             Self::Store(nail_store::Error::Locked(_)) => ErrorCode::Locked,
             Self::Store(nail_store::Error::Crypto(_)) => ErrorCode::Crypto,
             Self::Store(_) | Self::Keychain(_) | Self::Windows(_) => ErrorCode::Internal,
+            Self::Smartcard(err) => err.code(),
         }
     }
 
@@ -71,7 +76,11 @@ impl From<der::Error> for Error {
 
 impl From<Error> for ApiError {
     fn from(err: Error) -> Self {
-        ApiError::new(err.code(), err.to_string())
+        match err {
+            // The smartcard's own text (`smartcard-error-*`).
+            Error::Smartcard(card) => card.into(),
+            err => ApiError::new(err.code(), err.to_string()),
+        }
     }
 }
 
@@ -94,5 +103,10 @@ mod tests {
         let api: ApiError = Error::NoKey("bob@example.net".into()).into();
         assert_eq!(api.code, ErrorCode::NoKey);
         assert!(api.message.contains("bob@example.net"));
+        let card =
+            nail_pkcs11::CardError::new(nail_api::smartcard::SmartcardError::PinLocked, "locked");
+        assert_eq!(Error::Smartcard(card.clone()).code(), ErrorCode::Locked);
+        let api: ApiError = Error::Smartcard(card).into();
+        assert_eq!(api.localized.unwrap().id, "smartcard-error-pin-locked");
     }
 }

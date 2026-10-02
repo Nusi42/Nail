@@ -24,6 +24,8 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - Rust 1.97 (MSVC), Node 26 + npm 11. **npm workspaces, not pnpm** (pnpm is not installed). No docker locally: integration tests use in-process mock servers from `crates/nail-testkit`.
 - The repo lives in OneDrive. Build output must stay outside it: a local, gitignored `.cargo/config.toml` sets `target-dir` to `%LOCALAPPDATA%\nail-build\target`. When running several cargo processes in parallel, give each its own `CARGO_TARGET_DIR`.
 - Config files are KDL v2.
+- SQLite is SQLite3 Multiple Ciphers (M4c, ADR 0095) through the root `[patch.crates-io]` stand-in
+  `crates/nail-store/libsqlite3-sys-sqlite3mc`; the first build compiles its amalgamation (about 80 s in debug).
 
 ## Layout
 
@@ -154,7 +156,12 @@ crates/nail-store      SQLite metadata (v15), blob store, per-account operation 
                        per minute)
                        v15 (ADR 0094): crypto_keys rebuilt for `smartcard` keys (secret_ref = SmartcardKeyRef JSON);
                        messages.remote_thread_id (MessageMeta.remote_thread_id, set_message_remote_thread_id:
-                       `remote-thread:<account>:<id>` in thread_refs)
+                       `remote-thread:<account>:<id>` in thread_refs);
+                       M4c WP122 (ADR 0095): dbfile.rs full-file encryption (SQLite3 Multiple Ciphers via the root
+                       `[patch.crates-io]` libsqlite3-sys = crates/nail-store/libsqlite3-sys-sqlite3mc, a stand-in with
+                       the original crate's API over `sqlite3mc-src`), Store::open_with_key / rewrite_file (VACUUM INTO
+                       + rename, crash safe) / file_encryption; thread/mod.rs subject fallback uses the partial index
+                       (SUBJECT_REPLY_SQL / SUBJECT_ORIGINAL_SQL, EXPLAIN test; WP123 found the quadratic scan)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -279,7 +286,11 @@ crates/nail-pgp        OpenPGP (rPGP): keyring (S2K secrets: passphrase or keych
 crates/nail-smime      S/MIME (RustCrypto cms/x509-cert): sign/encrypt/verify/decrypt, chain validation
                        (TrustAnchors), PKCS#12, keyring, Windows cert store + CNG keys (ADR 0031)
 crates/nail-vault      encryption at rest: sealed format (XChaCha20-Poly1305), data key in the keychain,
-                       SealedDirectory (tantivy), Vault migration plain <-> encrypted (ADR 0032)
+                       SealedDirectory (tantivy), Vault migration plain <-> encrypted (ADR 0032);
+                       M4c (ADR 0095): vault.json (vaultfile.rs: keychain ref, key check, data key wrapped by the
+                       recovery key), recovery.rs (create / verify / rotate / restore / remove), datadir.rs
+                       open_data_dir → Ready {store, blobs, vault} | Locked(LockedVault), Vault::with_full_file_encryption
+                       / encrypt_database_file (the database file key is derived from the data key)
 crates/nail-remote-auth remote-UI auth: passkeys (webauthn_rp), Argon2id + TOTP, pairing codes,
                        device-bound sessions, rate limits, exhaustive required_access, axum login
                        route / middleware (ADR 0037)
@@ -356,11 +367,26 @@ crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (s
                        forward.rs, staging.rs (attachment copies in %TEMP%\nail-mapi, sweep of own
                        `<pid>-<hex>-<n>` folders only, limit nail_api::compose::MAX_ATTACHMENT_BYTES),
                        registration.rs (HKLM Clients\Mail\Nail values, .reg rendering) (ADRs 0087, 0088, 0093)
-crates/nail-portability M4c WP121 (ADR 0094): importers (mbox, EML folders, Maildir, Thunderbird), exporters,
-                       `.nailbackup` archives (Argon2id + XChaCha20-Poly1305 STREAM over zip), diagnostics bundle writer
-crates/nail-pkcs11     M4c WP122 (ADR 0094): PKCS#11 smartcards over cryptoki (used by nail-pgp / nail-smime)
-crates/nail-bench      M4c WP123 (ADR 0094): benchmark harness (CorpusSpec, metrics, budgets = e2e/perf/budgets.json),
-                       bin nail-bench
+crates/nail-portability M4c WP121 (ADR 0096): importers (mbox streamed: mboxrd / mboxo / mboxcl(2), EML folders,
+                       Maildir incl. Dovecot / Courier keywords, Thunderbird profiles: profiles.ini, prefs.js account
+                       proposals, Local Folders / POP3 mail, abook.sqlite / history.sqlite / Mork .mab address books,
+                       msgFilterRules.dat rule proposals; ics / vcf via nail-ical), exporters (mbox / EML / Maildir / ics /
+                       vcf, temp file + rename), `.nailbackup` (backup/: Argon2id + XChaCha20-Poly1305 STREAM over a zip
+                       with manifest.json first, random-access reading, restore plan = dry run, restore report),
+                       diagnostics.rs (Redactor + bundle writer); the core implements the traits in sink.rs
+                       (MailImportSink, PimImportSink, MailExportSource, PimExportSource) and backup/ (BackupSource,
+                       RestoreTarget); job.rs JobContext (cancel flag, throttled progress) + finish_report; feature
+                       `testing` = KdfParams::insecure_for_tests; fixture tests/fixtures/thunderbird (SQLite books
+                       regenerated with NAIL_REGENERATE_FIXTURES=1)
+crates/nail-pkcs11     M4c WP122 (ADR 0095): PKCS#11 smartcards over cryptoki: Module / CryptokiModule, Smartcards /
+                       CardKey (PIN flow: retry, last try, locked, cancel; PIN never stored; login cache),
+                       BlockingPinSource (adapts the async PinSource; card operations run on blocking threads),
+                       feature `testing` = SoftToken (in-memory RSA / P-256 token); nail-pgp / nail-smime smartcard.rs
+                       (card keys; Keyring::with_smartcards / use_smartcard_key)
+crates/nail-bench      M4c WP123 (ADR 0097): corpus.rs (deterministic 100k corpus), mock.rs (mock IMAP server in a
+                       child process), run.rs (metrics through Service; the account is handed over as local so
+                       `nail serve` shows the data), memory.rs; bin nail-bench (run / check / corpus / mock-imap);
+                       budgets = e2e/perf/budgets.json
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -414,7 +440,12 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        default-apps; dialogs about-nail (F1), first-run; FirstRunGate; ProgramDraftNotice in the
                        composer + openProgramDraft for ComposeDraft launches; SYSTEM_BASE_CSS; mock.ts simulates the
                        desktop host: simulateMapiSendMail, setUpdateState, setDefaultApps; ADRs 0087, 0091, 0092);
-                       M4c (ADR 0094): portability/, palette/, print/ slots + security/vaultMock.ts (WP124);
+                       M4c (ADRs 0094, 0098): portability/ (import / export / backup / restore wizards, diagnostics,
+                       jobs + reports, PathField; widgets import-export / backup-restore / diagnostics), palette/
+                       (command-palette dialog, palette.open = Ctrl+K, fuzzy.ts, builtinInfo.ts), print/ (print dialog,
+                       PrintHost renders `#/print/<job>` with `<html data-nail-mode="print">`, printSheet,
+                       PORTABILITY / PALETTE / PRINT_BASE_CSS in theme/compile.ts), security/ (recovery-key widget +
+                       dialogs, RecoveryGate, smartcards widget, smartcard-pin dialog; vaultMock.ts);
                        actions/palette.ts (ActionInfo, buildPalette) + Feature.actionInfo;
                        WP105 mounts: composer/pluginExtensions.tsx, reader in
                        widgets/MessageView.tsx (ADR 0084);
@@ -447,7 +478,9 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/gmail.spec.ts (M3b), tests/agents.spec.ts + tests/extensions.spec.ts (M4a),
                        tests/desktop-m4b.spec.ts (M4b on the desktop app: MAPI harness, tray / start hidden via
                        shellControl, loopback updater with support/updates.ts, MSI facts via NAIL_REGISTRY_ROOT,
-                       nail plugin dev, first run; ADR 0092); perf/ (M4c WP123: budgets.json + scenarios))
+                       nail plugin dev, first run; ADR 0092); perf/ (M4c WP123, ADR 0097: budgets.json,
+                       list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
+                       = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
@@ -493,7 +526,10 @@ nail plugin dev <folder> [--url URL | --data-dir DIR]   # load a plug-in folder 
 node --test "scripts/test/*.test.mjs"      # installer / release script tests
 cargo test -p nail-mapi --target i686-pc-windows-msvc   # the x86 Simple MAPI DLL under WOW64 (rustup target add i686-pc-windows-msvc)
 cargo deny check                           # licences, bans (openssl, aws-lc), sources, advisories (deny.toml)
-cargo run -p nail-bench --release -- --corpus small   # performance benchmark against e2e/perf/budgets.json (M4c WP123)
+cargo run -p nail-bench --release -- --corpus small   # performance benchmark against e2e/perf/budgets.json (M4c WP123; --tolerant, --no-check, --in-process, --work-dir DIR)
+nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
+node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
+npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
 powershell -File scripts/installer-smoke.ps1   # install to a temp dir, start, [update,] uninstall
 powershell -File scripts/msi-smoke.ps1         # elevated (CI): silent MSI install with properties, start, upgrade, uninstall

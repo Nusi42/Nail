@@ -20,6 +20,8 @@ nail-core = { workspace = true, features = ["demo"] }
 nail-store.workspace = true
 nail-search.workspace = true
 nail-testkit.workspace = true
+# The IMAP settings of the synced account (ImapConfig / Credentials).
+nail-proto-imap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -29,6 +31,10 @@ rand.workspace = true
 chrono.workspace = true
 clap.workspace = true
 tempfile.workspace = true
+# Attachments and DKIM-like headers of the generated corpus.
+base64.workspace = true
+# Progress logs on stderr (`NAIL_LOG`), like nail-cli.
+tracing-subscriber.workspace = true
 
 # Peak working set (memory budget) without a system-info crate.
 [target.'cfg(windows)'.dependencies]
@@ -36,6 +42,8 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# The corpus tests parse every generated message.
+mail-parser.workspace = true
 
 [lints]
 workspace = true

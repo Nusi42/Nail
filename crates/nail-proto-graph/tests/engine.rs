@@ -706,7 +706,15 @@ async fn sending_mime() {
         engine.send(&bad, &message).await.unwrap_err().code,
         ErrorCode::Unsupported
     );
-    let huge = vec![b'a'; 4 * 1024 * 1024];
+    // Over 4 MB a signed message cannot be rebuilt from parts (M4c: other
+    // large messages go through upload sessions, tests/m4c.rs).
+    let mut huge = b"From: ada@contoso.example
+To: bob@contoso.example
+Content-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; boundary=x
+
+"
+    .to_vec();
+    huge.extend(vec![b'a'; 4 * 1024 * 1024]);
     assert_eq!(
         engine.send(&envelope, &huge).await.unwrap_err().code,
         ErrorCode::TooLarge

@@ -46,3 +46,16 @@ pin-prompt-closed-token-removed = The card was removed.
 pin-prompt-closed-cancelled = The operation was cancelled.
 
 ## Vault, database encryption and smartcards (WP122)
+
+vault-no-recovery-key = There is no recovery key for this data. Create one in the security settings while your data is unlocked.
+vault-key-missing = Your data is encrypted and its key is not in the Windows Credential Manager. If you saved a recovery key, restore the key with it.
+vault-key-mismatch = The key in the Windows Credential Manager does not open your data. Restore the right key with your recovery key.
+vault-file-damaged = The file that describes your encrypted data (vault.json) is damaged.
+
+## Recovery kit file (written when you save the recovery key; WP122)
+
+recovery-kit-title = Nail recovery key
+recovery-kit-intro = This key opens your encrypted Nail data if the key in the Windows Credential Manager is lost, for example after reinstalling Windows.
+recovery-kit-key = Recovery key: { $key }
+recovery-kit-created = Created: { $created }
+recovery-kit-advice = Keep this file somewhere safe and away from this computer, or print it and delete the file. Anyone with this key and a copy of your data can read your mail.

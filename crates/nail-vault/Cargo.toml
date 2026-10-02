@@ -21,12 +21,18 @@ tracing.workspace = true
 # The data key in the keychain (hex) and atomic file rewrites.
 hex.workspace = true
 tempfile.workspace = true
+# M4c WP122 (ADR 0095): the vault file next to the database (it must
+# be readable while the database file is encrypted), RFC 3339 times of the
+# recovery key, and key derivation (database key, recovery wrapping key).
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 # End-to-end: a real search index over the encrypted directory.
 nail-search.workspace = true
-serde_json.workspace = true
 
 [lints]
 workspace = true

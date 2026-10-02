@@ -170,6 +170,9 @@ layout "default" {
             security-identities id="security-identities" label="@security.settings.tab.identities"
             security-settings id="security-settings" label="@security.settings.tab.protection"
             security-autocrypt id="security-autocrypt" label="@security.settings.tab.autocrypt"
+            // The vault recovery key and smartcards (PKCS#11) for signing / decrypting (M4c).
+            security-recovery-key id="security-recovery-key" label="@security.settings.tab.recovery-key"
+            security-smartcards id="security-smartcards" label="@security.settings.tab.smartcards"
             remote-settings id="remote-settings" label="@remote.settings.tab"
             remote-users id="remote-users" label="@remote.settings.tab.users"
             remote-devices id="remote-devices" label="@remote.settings.tab.devices"
@@ -191,6 +194,10 @@ layout "default" {
             update-settings id="update-settings" label="@system.settings.tab.updates"
             desktop-settings id="desktop-settings" label="@system.settings.tab.desktop"
             default-apps id="default-apps" label="@system.settings.tab.default-apps"
+            // Import / export, backups and the diagnostics bundle (M4c).
+            import-export id="import-export" label="@portability.settings.tab.import-export"
+            backup-restore id="backup-restore" label="@portability.settings.tab.backup"
+            diagnostics id="diagnostics" label="@portability.settings.tab.diagnostics"
             stack id="customize" label="@settings.tab.customize" sizes="auto auto 1fr" {
                 toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
                 config-errors id="settings-config-errors"
@@ -298,6 +305,19 @@ layout "default" {
         action "system.check-updates" label="@system.action.check-updates"
         action "system.first-run" label="@system.action.first-run"
         action "system.default-apps" label="@system.action.default-apps"
+        // The command palette, printing, import / export / backup,
+        // diagnostics (M4c).
+        action "palette.open"     label="@palette.action.open"     icon="search"
+        action "print.message"    label="@print.action.message"
+        action "print.thread"     label="@print.action.thread"
+        action "print.event"      label="@print.action.event"
+        action "print.agenda"     label="@print.action.agenda"
+        action "print.save-pdf"   label="@print.action.save-pdf"
+        action "import.open"      label="@portability.action.import"
+        action "export.open"      label="@portability.action.export"
+        action "backup.create"    label="@portability.action.backup"
+        action "backup.restore"   label="@portability.action.restore"
+        action "diagnostics.open" label="@portability.action.diagnostics"
     }
 
     keys context="list" {
@@ -305,6 +325,7 @@ layout "default" {
         bind "k" "mail.previous"
         bind "arrowdown" "mail.next"
         bind "arrowup" "mail.previous"
+        bind "ctrl+p" "print.message"
     }
 
     keys context="reader" {
@@ -314,6 +335,7 @@ layout "default" {
         bind "shift+m" "scheduling.tentative"
         bind "shift+n" "scheduling.decline"
         bind "shift+o" "exchange.classify"
+        bind "ctrl+p" "print.message"
     }
 
     keys context="composer" {
@@ -340,6 +362,9 @@ layout "default" {
 
     keys context="window" {
         bind "escape" "window.close"
+        // The command palette also opens (and closes) over dialogs.
+        bind "ctrl+k" "palette.open"
+        bind "ctrl+shift+p" "palette.open"
     }
 
     keys {
@@ -367,6 +392,9 @@ layout "default" {
         bind "f1" "system.about"
         bind "b" "snooze.open"
         bind "shift+j" "junk.mark"
+        // The command palette (M4c): every action, searchable.
+        bind "ctrl+k" "palette.open"
+        bind "ctrl+shift+p" "palette.open"
         // The context menu of the focused item (list row, folder, message).
         bind "shift+f10" "menu.context"
         bind "contextmenu" "menu.context"
@@ -408,6 +436,7 @@ layout "default" {
         item "exchange.apply-categories"
         item "exchange.classify"
         item "security.autocrypt.import"
+        item "print.message"
     }
 
     // The calendar window's toolbar (M3a).
@@ -418,6 +447,8 @@ layout "default" {
         item "contacts.new"
         item "scheduling.find-time"
         spacer
+        item "print.event"
+        item "print.agenda"
         item "pim.import"
         item "pim.sources"
         item "scheduling.settings"
@@ -453,6 +484,9 @@ layout "default" {
         item "gmail.apply-labels"
         item "exchange.apply-categories"
         item "exchange.classify"
+        separator
+        item "print.message"
+        item "print.thread"
     }
 
     menu "context:thread-view.message" {
@@ -473,6 +507,9 @@ layout "default" {
         item "junk.mark"
         item "junk.not-junk"
         item "sync.download-message"
+        separator
+        item "print.message"
+        item "print.save-pdf"
     }
 
     menu "context:folder-tree.folder" {

@@ -26,6 +26,7 @@ use nail_api::security::{
     ChainState, CryptoKey, CryptoTechnology, KeyEncoding, KeyFilter, KeyImportResult, KeySource,
     RecipientKey, RecipientKeyState, SecretProtection, SecretStorage, TrustDecision, TrustLevel,
 };
+use nail_api::smartcard::SmartcardKeyRef;
 use nail_api::{KeyId, SecretRef};
 use nail_store::{KeyData, SecretKeyData, Store, StoredKey};
 use rand::RngCore;
@@ -167,6 +168,7 @@ pub struct Keyring<'a> {
     unlocked: &'a UnlockCache,
     pbkdf2_iterations: u32,
     now: Option<i64>,
+    cards: Option<&'a dyn nail_pkcs11::KeyResolver>,
 }
 
 impl<'a> Keyring<'a> {
@@ -185,7 +187,61 @@ impl<'a> Keyring<'a> {
             unlocked,
             pbkdf2_iterations: PBKDF2_ITERATIONS,
             now: None,
+            cards: None,
         }
+    }
+
+    /// Uses smartcard keys through `cards` (M4c WP122). Without it, keys
+    /// whose secret is on a card are [`Error::Unsupported`].
+    pub fn with_smartcards(mut self, cards: &'a dyn nail_pkcs11::KeyResolver) -> Self {
+        self.cards = Some(cards);
+        self
+    }
+
+    /// Adds the certificate of a key on a smartcard as an own key whose
+    /// private part stays on the card (`UseSmartcardKey`). The certificate
+    /// is the one stored on the card under the key's id, or else one
+    /// already in the keyring with the same public key;
+    /// [`Error::NoKey`] when there is none. Needs
+    /// [`Keyring::with_smartcards`].
+    pub fn use_smartcard_key(&self, key: &SmartcardKeyRef) -> Result<KeyImportResult> {
+        let cards = self
+            .cards
+            .ok_or_else(|| Error::Unsupported("smartcards are not available here".into()))?;
+        let card = cards.card_key(key)?;
+        let cert = match card.certificate() {
+            Some(der) => Cert::from_der(der)?,
+            None => self
+                .known_certificates()?
+                .into_iter()
+                .find(|c| {
+                    card.public_key().is_some() && crate::smartcard::certificate_matches(c, &card)
+                })
+                .ok_or_else(|| {
+                    Error::NoKey(
+                        "no certificate for the smartcard key on the card or in the keyring".into(),
+                    )
+                })?,
+        };
+        if !crate::smartcard::certificate_matches(&cert, &card) {
+            return Err(Error::Crypto(
+                "the certificate on the card is not for the card's key".into(),
+            ));
+        }
+        let secret = SecretKeyData {
+            storage: SecretStorage::Smartcard,
+            data: None,
+            reference: Some(crate::smartcard::reference_of(key)),
+        };
+        let (stored, created) =
+            self.store
+                .upsert_key(&key_data(&cert, KeySource::Smartcard, Some(secret)))?;
+        Ok(KeyImportResult {
+            keys: vec![self.to_crypto_key(&stored)?],
+            created: u32::from(created),
+            updated: u32::from(!created),
+            issues: Vec::new(),
+        })
     }
 
     /// Uses fewer PBKDF2 iterations for new keys (tests only; the count is
@@ -366,7 +422,7 @@ impl<'a> Keyring<'a> {
             issuer: stored.data.issuer.clone(),
             serial: stored.data.serial.clone(),
             chain: Some(validation.chain),
-            smartcard: None,
+            smartcard: smartcard_ref(stored),
         })
     }
 
@@ -592,9 +648,19 @@ impl<'a> Keyring<'a> {
             }
             SecretStorage::WindowsStore => windows_key(secret),
             // M4c WP122: keys on a smartcard sign / decrypt on the card.
-            SecretStorage::Smartcard => Err(Error::Unsupported(
-                "smartcard keys are not supported yet".into(),
-            )),
+            SecretStorage::Smartcard => {
+                let cards = self.cards.ok_or_else(|| {
+                    Error::Unsupported("smartcards are not available here".into())
+                })?;
+                let reference = secret
+                    .reference
+                    .as_deref()
+                    .ok_or_else(|| Error::malformed("smartcard key without a reference"))?;
+                let key = crate::smartcard::parse_reference(reference)?;
+                Ok(Arc::new(crate::smartcard::SmartcardKey::new(
+                    cards.card_key(&key)?,
+                )))
+            }
         }
     }
 
@@ -836,6 +902,15 @@ fn trust_level(stored: &StoredKey) -> TrustLevel {
         _ if stored.is_own() => TrustLevel::Own,
         _ => TrustLevel::Unknown,
     }
+}
+
+/// The smartcard reference of a key whose secret is on a card.
+fn smartcard_ref(stored: &StoredKey) -> Option<SmartcardKeyRef> {
+    let secret = stored.data.secret.as_ref()?;
+    if secret.storage != SecretStorage::Smartcard {
+        return None;
+    }
+    crate::smartcard::parse_reference(secret.reference.as_deref()?).ok()
 }
 
 fn key_data(cert: &Cert, source: KeySource, secret: Option<SecretKeyData>) -> KeyData {

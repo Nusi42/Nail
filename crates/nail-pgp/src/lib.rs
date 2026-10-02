@@ -13,6 +13,7 @@
 //! | [`read`] | Incoming: decrypt / verify PGP/MIME, inline PGP (read-only), header protection; returns [`nail_api::security::SecurityStatus`] and a display message. |
 //! | [`autocrypt`] | Autocrypt Level 1: headers, peer state, gossip, recommendation, setup messages. |
 //! | [`discovery`] | WKD and keys.openpgp.org lookups through an injected [`discovery::HttpClient`]. |
+//! | [`smartcard`] | M4c WP122: keys on PKCS#11 smartcards — rPGP `SigningKey` over a card key (RSA, ECDSA), RSA session keys decrypted on the card. |
 //!
 //! Results use the contract types of [`nail_api::security`]. Interop
 //! vectors made with GnuPG 2.4 in Thunderbird's MIME layout are in
@@ -28,6 +29,7 @@ pub mod key;
 pub mod keyring;
 mod mime;
 pub mod read;
+pub mod smartcard;
 #[cfg(test)]
 mod testutil;
 

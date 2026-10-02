@@ -60,7 +60,7 @@
       "default": {}
     },
     "tokens": {
-      "description": "`tokens { <category> \"<name>\" <value> dark=… high-contrast=… }`:\ncategory → name → definition. Categories: color, font, font-size,\nfont-weight, line-height, space, size, radius, border, shadow, motion,\nopacity, z-index. Unitless numbers get `px` for font-size, space,\nsize and radius.",
+      "description": "`tokens { <category> \"<name>\" <value> dark=… high-contrast=… print=… }`:\ncategory → name → definition. Categories: color, font, font-size,\nfont-weight, line-height, space, size, radius, border, shadow, motion,\nopacity, z-index. Unitless numbers get `px` for font-size, space,\nsize and radius.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
@@ -245,7 +245,7 @@
       "type": "object",
       "properties": {
         "modes": {
-          "description": "Per-mode values: `light`, `dark`, `high-contrast`.",
+          "description": "Per-mode values: `light`, `dark`, `high-contrast`, `print` (the print view).",
           "type": "object",
           "additionalProperties": {
             "type": "string"

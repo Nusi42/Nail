@@ -75,21 +75,21 @@ impl Req {
         }
     }
 
-    fn query(&self, name: &str) -> Option<&str> {
+    pub(crate) fn query(&self, name: &str) -> Option<&str> {
         self.query
             .iter()
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.as_str())
     }
 
-    fn header(&self, name: &str) -> Option<&str> {
+    pub(crate) fn header(&self, name: &str) -> Option<&str> {
         self.headers
             .iter()
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.as_str())
     }
 
-    fn json(&self) -> MockResult<Value> {
+    pub(crate) fn json(&self) -> MockResult<Value> {
         if self.body.is_empty() {
             return Ok(Value::Null);
         }
@@ -97,7 +97,7 @@ impl Req {
             .map_err(|e| MockError::bad("BadRequest", &format!("Invalid JSON: {e}")))
     }
 
-    fn is_text(&self) -> bool {
+    pub(crate) fn is_text(&self) -> bool {
         self.header("content-type")
             .is_some_and(|c| c.to_ascii_lowercase().starts_with("text/plain"))
     }
@@ -139,7 +139,7 @@ impl Reply {
         Self::json(200, value)
     }
 
-    fn empty(status: u16) -> Self {
+    pub(crate) fn empty(status: u16) -> Self {
         Self {
             status,
             headers: Vec::new(),
@@ -212,6 +212,20 @@ pub(crate) fn dispatch(state: &mut State, req: &Req, in_batch: bool) -> Reply {
     {
         state.tenant.ids.immutable = true;
     }
+    // Upload sessions' pre-authenticated URLs (M4c): no bearer token, no
+    // 4 MB limit.
+    let upload = !in_batch
+        && !req.path.starts_with(nail_api::exchange::GRAPH_BASE_PATH)
+        && req.segments.first().is_some_and(|s| s == "upload");
+    if upload {
+        if let Some(reply) = injected(state, req) {
+            return reply;
+        }
+        return super::upload::put_range(state, req);
+    }
+    if !in_batch && req.body.len() > super::upload::MAX_REQUEST {
+        return Reply::error(&super::upload::too_large());
+    }
     if !in_batch {
         let accepted = match (&state.token, &token) {
             (_, None) => false,
@@ -222,25 +236,7 @@ pub(crate) fn dispatch(state: &mut State, req: &Req, in_batch: bool) -> Reply {
             return Reply::json(401, &recorded_error("401"));
         }
     }
-    let target = if req.raw_query.is_empty() {
-        req.path.clone()
-    } else {
-        format!("{}?{}", req.path, req.raw_query)
-    };
-    if let Some(i) = state
-        .errors
-        .iter()
-        .position(|e| e.matches(&req.method, &target))
-    {
-        let error = state.errors[i].clone();
-        state.errors[i].times -= 1;
-        if state.errors[i].times == 0 {
-            state.errors.remove(i);
-        }
-        let mut reply = Reply::json(error.status, &error.body);
-        if let Some(retry) = error.retry_after {
-            reply.headers.push(("retry-after".into(), retry));
-        }
+    if let Some(reply) = injected(state, req) {
         return reply;
     }
     if !(in_batch && req.segments.first().is_some_and(|s| s == "$batch"))
@@ -265,6 +261,29 @@ pub(crate) fn dispatch(state: &mut State, req: &Req, in_batch: bool) -> Reply {
         Ok(reply) => reply,
         Err(error) => Reply::error(&error),
     }
+}
+
+/// The injected error for this request, if any (used up as it answers).
+fn injected(state: &mut State, req: &Req) -> Option<Reply> {
+    let target = if req.raw_query.is_empty() {
+        req.path.clone()
+    } else {
+        format!("{}?{}", req.path, req.raw_query)
+    };
+    let i = state
+        .errors
+        .iter()
+        .position(|e| e.matches(&req.method, &target))?;
+    let error = state.errors[i].clone();
+    state.errors[i].times -= 1;
+    if state.errors[i].times == 0 {
+        state.errors.remove(i);
+    }
+    let mut reply = Reply::json(error.status, &error.body);
+    if let Some(retry) = error.retry_after {
+        reply.headers.push(("retry-after".into(), retry));
+    }
+    Some(reply)
 }
 
 fn batch(state: &mut State, req: &Req) -> Reply {
@@ -372,6 +391,28 @@ fn mailbox_route(
         ("POST", ["calendar", "getSchedule"]) => return get_schedule(tenant, req),
         ("POST", ["findMeetingTimes"]) => return find_meeting_times(tenant, req),
         ("POST", ["sendMail"]) => return send_mail(tenant, address, req),
+        // Large messages (M4c): drafts from JSON, attachments, upload
+        // sessions, sending a draft.
+        ("POST", ["messages", id, "send"]) => {
+            tenant.mailbox(address)?;
+            return super::upload::send_draft(tenant, address, id);
+        }
+        ("POST", ["messages", id, "attachments", "createUploadSession"]) => {
+            tenant.mailbox(address)?;
+            return super::upload::create_upload_session(tenant, address, id, req, origin);
+        }
+        ("POST", ["messages", id, "attachments"]) => {
+            tenant.mailbox(address)?;
+            return super::upload::add_file_attachment(tenant, id, req);
+        }
+        ("POST", ["messages"]) if !req.is_text() => {
+            tenant.mailbox(address)?;
+            return super::upload::create_json(tenant, address, "drafts", req);
+        }
+        ("POST", ["mailFolders", folder, "messages"]) if !req.is_text() => {
+            tenant.mailbox(address)?;
+            return super::upload::create_json(tenant, address, folder, req);
+        }
         _ => {}
     }
     let ids = &mut tenant.ids;
@@ -595,7 +636,22 @@ fn mailbox_route(
                 .messages
                 .get(*id)
                 .ok_or_else(|| MockError::not_found(id))?;
-            Ok(Reply::ok(&m.to_json()))
+            let mut value = m.to_json();
+            if req
+                .query("$select")
+                .is_some_and(|s| s.contains("internetMessageHeaders"))
+            {
+                // Only received mail has transport headers.
+                let local = ["sentitems", "drafts", "outbox"]
+                    .iter()
+                    .any(|wk| mailbox.folder_id(wk).as_deref() == Some(m.folder.as_str()));
+                value["internetMessageHeaders"] = if local {
+                    json!([])
+                } else {
+                    json!(super::upload::transport_headers(&m.raw))
+                };
+            }
+            Ok(Reply::ok(&value))
         }
         ("GET", ["messages", id, "$value"]) => {
             let m = mailbox
@@ -1169,29 +1225,12 @@ fn send_mail(tenant: &mut Tenant, address: &str, req: &Req) -> MockResult<Reply>
     }
     .ok_or_else(|| MockError::new(404, "ErrorInvalidUser", "The requested user is invalid."))?;
     // The Sent Items copy has no Bcc header.
-    let copy: Vec<u8> = {
-        let text = String::from_utf8_lossy(&raw);
-        let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
-        let mut kept = Vec::new();
-        let mut skipping = false;
-        for line in head.split("\r\n") {
-            if line.starts_with([' ', '\t']) {
-                if !skipping {
-                    kept.push(line);
-                }
-                continue;
-            }
-            skipping = line.to_ascii_lowercase().starts_with("bcc:");
-            if !skipping {
-                kept.push(line);
-            }
-        }
-        format!("{}\r\n\r\n{body}", kept.join("\r\n")).into_bytes()
-    };
+    let copy = super::upload::without_bcc(&raw);
     mailbox.add_message(ids, "sentitems", copy, true, false)?;
     tenant.sent.push(SentMail {
         mailbox: address,
         raw,
+        via: "sendMail".into(),
     });
     Ok(Reply::empty(202))
 }

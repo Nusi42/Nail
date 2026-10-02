@@ -96,7 +96,7 @@ pub struct ThemeFile {
     pub extends: Option<String>,
     /// Which colour mode to use (default: follow the OS).
     pub mode: Option<ModeSetting>,
-    /// `tokens { <category> "<name>" <value> dark=… high-contrast=… }`:
+    /// `tokens { <category> "<name>" <value> dark=… high-contrast=… print=… }`:
     /// category → name → definition. Categories: color, font, font-size,
     /// font-weight, line-height, space, size, radius, border, shadow, motion,
     /// opacity, z-index. Unitless numbers get `px` for font-size, space,
@@ -127,7 +127,7 @@ pub struct TokenDef {
     /// Base (light) value; absent when the file only overrides modes of a
     /// token defined elsewhere (`modes { dark { color "bg" "#000" } }`).
     pub value: Option<Located<String>>,
-    /// Per-mode values: `light`, `dark`, `high-contrast`.
+    /// Per-mode values: `light`, `dark`, `high-contrast`, `print` (the print view).
     #[serde(default)]
     pub modes: IndexMap<String, Located<String>>,
 }

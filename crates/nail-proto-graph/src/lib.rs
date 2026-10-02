@@ -28,6 +28,11 @@
 //!   series with exceptions, instances, meeting responses incl. new-time
 //!   proposals, cancellations), contacts (+ delta), Microsoft To Do (lists,
 //!   tasks + delta, checklist items, linked resources).
+//! * [`upload`] (M4c) — messages over 4 MB: a draft from the message's
+//!   parts, attachments over 3 MB through upload sessions (pre-authenticated
+//!   byte ranges, progress reported), then `send`; send as / on behalf of
+//!   shared mailboxes ([`nail_api::accounts::SendingMailbox`]); headers-only
+//!   fetches for sync policies; moves between mailboxes.
 //! * [`poll`] — adaptive polling ([`PollTimer`], [`FolderPoll`]); Graph
 //!   has no push for a desktop client.
 //! * [`testing`] (feature `testing`) — `MockGraphServer` on 127.0.0.1 with
@@ -48,6 +53,7 @@ pub mod pim;
 pub mod poll;
 pub mod settings;
 pub mod text;
+pub mod upload;
 pub mod wire;
 
 #[cfg(feature = "testing")]

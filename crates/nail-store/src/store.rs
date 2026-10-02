@@ -24,8 +24,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 
+use crate::dbfile::DatabaseKey;
 use crate::error::Result;
 use crate::schema;
 
@@ -52,6 +53,8 @@ struct Inner {
     /// Encryption at rest (sealed columns), shared with the SQL functions.
     cipher: crate::seal::CipherSlot,
     path: Option<PathBuf>,
+    /// The key of a full-file encrypted database (M4c WP122).
+    file_key: Mutex<Option<DatabaseKey>>,
 }
 
 impl std::fmt::Debug for Store {
@@ -68,47 +71,37 @@ impl Store {
     /// (mail and PIM operations left `in_flight` by a crash go back to
     /// `pending`).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-            std::fs::create_dir_all(parent)?;
-        }
-        let conn = Connection::open_with_flags(
-            path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE
-                | OpenFlags::SQLITE_OPEN_CREATE
-                | OpenFlags::SQLITE_OPEN_NO_MUTEX
-                | OpenFlags::SQLITE_OPEN_URI,
-        )?;
-        let journal: String =
-            conn.pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get(0))?;
-        if !journal.eq_ignore_ascii_case("wal") {
-            tracing::warn!(%journal, "could not enable WAL mode");
-        }
-        // NORMAL is durable in WAL mode except for the last transactions on
-        // power loss, which sync repairs; it avoids an fsync per commit.
-        conn.pragma_update(None, "synchronous", "NORMAL")?;
-        Self::init(conn, Some(path.to_owned()))
+        Self::open_with_key(path, None)
     }
 
     /// Opens a private in-memory database (tests, demos).
     pub fn open_in_memory() -> Result<Self> {
-        Self::init(Connection::open_in_memory()?, None)
+        Self::init(Connection::open_in_memory()?, None, None)
     }
 
-    fn init(mut conn: Connection, path: Option<PathBuf>) -> Result<Self> {
-        conn.busy_timeout(BUSY_TIMEOUT)?;
-        conn.pragma_update(None, "foreign_keys", true)?;
+    pub(crate) fn init(
+        conn: Connection,
+        path: Option<PathBuf>,
+        file_key: Option<DatabaseKey>,
+    ) -> Result<Self> {
         let cipher = crate::seal::CipherSlot::default();
-        crate::seal::register_functions(&conn, &cipher)?;
-        let version = schema::migrate(&mut conn)?;
         let store = Self {
             inner: Arc::new(Inner {
-                conn: Mutex::new(conn),
+                // Replaced below once the connection is prepared.
+                conn: Mutex::new(Connection::open_in_memory()?),
                 replay_locks: crate::queue::ReplayLocks::default(),
                 cipher,
                 path,
+                file_key: Mutex::new(file_key),
             }),
         };
+        let mut conn = store.prepare_connection(conn)?;
+        let version = schema::migrate(&mut conn)?;
+        *store
+            .inner
+            .conn
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = conn;
         let recovered = store.recover_in_flight()? + store.recover_pim_in_flight()?;
         store.recover_sending()?;
         tracing::debug!(path = ?store.inner.path, version, recovered, "store opened");
@@ -168,6 +161,35 @@ impl Store {
             tx.commit()?;
             Ok(out)
         })
+    }
+
+    /// Per-connection settings: busy timeout, foreign keys, the sealing
+    /// SQL functions and `secure_delete` while a data cipher is installed.
+    pub(crate) fn prepare_connection(&self, conn: Connection) -> Result<Connection> {
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.pragma_update(None, "foreign_keys", true)?;
+        crate::seal::register_functions(&conn, &self.inner.cipher)?;
+        if self.inner.cipher.is_installed() {
+            conn.pragma_update(None, "secure_delete", true)?;
+        }
+        Ok(conn)
+    }
+
+    /// The key of a full-file encrypted database (`None` = plain file).
+    pub(crate) fn file_key(&self) -> Option<DatabaseKey> {
+        self.inner
+            .file_key
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    pub(crate) fn set_file_key(&self, key: Option<DatabaseKey>) {
+        *self
+            .inner
+            .file_key
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = key;
     }
 
     pub(crate) fn cipher_slot(&self) -> &crate::seal::CipherSlot {

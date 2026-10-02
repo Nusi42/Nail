@@ -28,6 +28,8 @@ security-settings-tab-keys = Keys and certificates
 security-settings-tab-identities = Signing and encryption
 security-settings-tab-protection = Data protection
 security-settings-tab-autocrypt = Autocrypt
+security-settings-tab-recovery-key = Recovery key
+security-settings-tab-smartcards = Smartcards
 security-action-autocrypt-import = Import Autocrypt setup message
 window-security-autocrypt-import = Import Autocrypt setup message
 
@@ -461,3 +463,117 @@ security-autocrypt-not-setup = This message is not an Autocrypt setup message.
 
 autocrypt-setup-message-body = This message contains your OpenPGP secret key for Autocrypt, encrypted with a setup code. To use the key on another device, open this message there in an Autocrypt-capable mail program and enter the setup code that was shown on the device that sent it.
 autocrypt-setup-message-html-intro = This is your Autocrypt setup message. The key below is encrypted with the setup code shown on the sending device; enter that code in your mail program to import it.
+
+## M4c (WP124): keys on smartcards
+
+security-source-smartcard = On a smartcard
+security-secret-smartcard = Stays on the smartcard
+
+## M4c (WP124): the vault recovery key
+
+window-security-recovery-create = Recovery key
+window-security-recovery-verify = Check the recovery key
+window-security-recovery-restore = Open your data with the recovery key
+security-action-recovery-create = Create a recovery key…
+security-action-recovery-check = Check the recovery key…
+security-action-recovery-restore = Restore access with the recovery key…
+security-action-recovery-keywords = recovery key vault encryption lost keychain backup
+security-recovery-title = Recovery key
+security-recovery-what = With encryption at rest, the key to your data is kept in the Windows Credential Manager. If that entry is ever lost — a new Windows profile, a reset — the recovery key is the only way back to your data.
+security-recovery-not-encrypted = Turn on encryption at rest first; then you can create a recovery key for it.
+security-recovery-missing = There is no recovery key yet. If the key in the Credential Manager is lost, your data cannot be opened.
+security-recovery-needed-banner = Your data is encrypted but its key is missing from this computer. Enter your recovery key to open it.
+security-recovery-created = Created
+security-recovery-checked = Last checked
+security-recovery-unknown = Unknown
+security-recovery-never-checked = Never — check that your copy works
+security-recovery-create = Create recovery key
+security-recovery-replace = Create a new recovery key
+security-recovery-replace-warning = The current recovery key stops working as soon as the new one is created.
+security-recovery-check = Check recovery key
+security-recovery-remove = Remove recovery key
+security-recovery-remove-warning = Without a recovery key, your data is lost if the key in the Credential Manager is lost.
+security-recovery-remove-confirm = Remove it
+security-recovery-keep = Keep it
+security-recovery-intro = Nail creates a recovery key and shows it once. Write it down or print it, and keep it somewhere safe away from this computer. Nail does not keep a copy.
+security-recovery-save-kit = Also save it in a text file (a recovery kit)
+security-recovery-kit-file = Recovery kit file
+security-recovery-kit-pick-title = Save the recovery kit as
+security-recovery-kit-default-name = Nail recovery key.txt
+security-recovery-kit-filter = Text files
+security-recovery-show-once = This is your recovery key. It is shown only now.
+security-recovery-key-label = Recovery key
+security-recovery-kit-saved = Also saved to { $path }. Move this file somewhere safe, away from this computer.
+security-recovery-copy = Copy
+security-recovery-copied = Copied
+security-recovery-copy-failed = The key could not be copied. Write it down instead.
+security-recovery-print = Print
+security-recovery-stored = I have written down, printed or saved the key
+security-recovery-next = Next
+security-recovery-verify-intro = To be sure your copy is right, type the recovery key from it.
+security-recovery-input = Recovery key
+security-recovery-input-hint = 56 letters and digits; dashes and spaces do not matter.
+security-recovery-verify = Check
+security-recovery-verify-mismatch = This is not the key that was just shown. Check your copy.
+security-recovery-show-again = Show the key again
+security-recovery-done = Your recovery key works. Keep it safe.
+security-recovery-close = Close
+security-recovery-check-intro = Type your recovery key to check that your copy still works. Nothing changes.
+security-recovery-check-valid = This recovery key works.
+security-recovery-check-invalid = This is not your current recovery key.
+security-recovery-restore-needed = Your data is encrypted, but its key is missing from this computer’s Credential Manager. Type your recovery key to open your data again.
+security-recovery-restore-intro = Type your recovery key to put the key to your data back into the Credential Manager.
+security-recovery-restore = Open with recovery key
+security-recovery-restore-lost = Without the recovery key the encrypted data cannot be opened by anyone, including Nail.
+security-recovery-restored = Your data is open again. The key is back in the Credential Manager.
+security-recovery-kit-title = Nail recovery key
+security-recovery-kit-text = Recovery key for Nail’s encrypted data, created { $created }.
+security-recovery-kit-keep = Keep this page somewhere safe. Anyone with it and a copy of your data can read your data.
+
+## M4c (WP124): smartcards
+
+security-smartcard-title = Smartcards
+security-smartcard-intro = Use keys on a smartcard or USB token (PKCS#11) for S/MIME and OpenPGP. The private key never leaves the card; Nail asks for the PIN when it needs it and never stores it.
+security-smartcard-desktop-only = Smartcards can only be used in the desktop app.
+security-smartcard-modules = PKCS#11 modules
+security-smartcard-modules-hint = The driver of your card or token, for example C:\Windows\System32\opensc-pkcs11.dll. Your card’s vendor names it.
+security-smartcard-no-modules = No module yet.
+security-smartcard-module-path = Module (DLL)
+security-smartcard-module-pick-title = Choose the PKCS#11 module
+security-smartcard-module-filter = PKCS#11 modules
+security-smartcard-add-module = Add module
+security-smartcard-remove-module = Remove
+security-smartcard-pin-cache = Keep a card unlocked for (minutes)
+security-smartcard-pin-cache-hint = 0 asks for the PIN every time. At most 480 minutes (8 hours).
+security-smartcard-save = Save
+security-smartcard-saved = Saved.
+security-smartcard-cards = Cards and tokens
+security-smartcard-enable-first = Add and switch on a module to see your cards.
+security-smartcard-no-cards = No card found. Insert your card or token.
+security-smartcard-module-problem = { $module }: { $problem }
+security-smartcard-token = { $manufacturer } { $model }, serial number { $serial }
+security-smartcard-pin-low = Few PIN attempts are left on this card. Type the PIN carefully.
+security-smartcard-certificate = Certificate { $subject }, valid until { $until }
+security-smartcard-openpgp = OpenPGP key { $fingerprint }
+security-smartcard-in-keyring = In your keys
+security-smartcard-use-smime = Use for S/MIME
+security-smartcard-use-openpgp = Use for OpenPGP
+security-smartcard-in-use = This key is already in your keys.
+
+## M4c (WP124): PIN prompts
+
+window-smartcard-pin = Smartcard PIN
+security-pin-token = Card: { $label } ({ $serial })
+security-pin-key = Key: { $key }
+security-pin-attempts = { $count ->
+    [one] 1 attempt left.
+   *[other] { $count } attempts left.
+}
+security-pin-last-attempt = Last attempt: a wrong PIN locks the card.
+security-pin-label = PIN
+security-pin-hint = Nail waits until { $until }. The PIN is passed to the card and not stored.
+security-pin-ok = OK
+security-pin-cancel = Cancel
+security-pin-close = Close
+security-pin-nothing = No card is asking for a PIN.
+security-pin-prompt-gone = This PIN request is no longer waiting.

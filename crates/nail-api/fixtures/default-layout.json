@@ -998,6 +998,24 @@
             },
             {
               "type": "widget",
+              "id": "security-recovery-key",
+              "label": "@security.settings.tab.recovery-key",
+              "kind": "security-recovery-key",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "security-smartcards",
+              "label": "@security.settings.tab.smartcards",
+              "kind": "security-smartcards",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
               "id": "remote-settings",
               "label": "@remote.settings.tab",
               "kind": "remote-settings",
@@ -1127,6 +1145,33 @@
               "id": "default-apps",
               "label": "@system.settings.tab.default-apps",
               "kind": "default-apps",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "import-export",
+              "label": "@portability.settings.tab.import-export",
+              "kind": "import-export",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "backup-restore",
+              "label": "@portability.settings.tab.backup",
+              "kind": "backup-restore",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
+              "id": "diagnostics",
+              "label": "@portability.settings.tab.diagnostics",
+              "kind": "diagnostics",
               "options": {},
               "rows": [],
               "source": null
@@ -1742,6 +1787,72 @@
       "alias_of": null,
       "args": []
     },
+    "palette.open": {
+      "label": "@palette.action.open",
+      "icon": "search",
+      "alias_of": null,
+      "args": []
+    },
+    "print.message": {
+      "label": "@print.action.message",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "print.thread": {
+      "label": "@print.action.thread",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "print.event": {
+      "label": "@print.action.event",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "print.agenda": {
+      "label": "@print.action.agenda",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "print.save-pdf": {
+      "label": "@print.action.save-pdf",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "import.open": {
+      "label": "@portability.action.import",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "export.open": {
+      "label": "@portability.action.export",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "backup.create": {
+      "label": "@portability.action.backup",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "backup.restore": {
+      "label": "@portability.action.restore",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
+    "diagnostics.open": {
+      "label": "@portability.action.diagnostics",
+      "icon": null,
+      "alias_of": null,
+      "args": []
+    },
     "agents.open-center": {
       "label": null,
       "icon": null,
@@ -1772,6 +1883,12 @@
       "context": "list",
       "key": "arrowup",
       "action": "mail.previous",
+      "args": []
+    },
+    {
+      "context": "list",
+      "key": "ctrl+p",
+      "action": "print.message",
       "args": []
     },
     {
@@ -1808,6 +1925,12 @@
       "context": "reader",
       "key": "shift+o",
       "action": "exchange.classify",
+      "args": []
+    },
+    {
+      "context": "reader",
+      "key": "ctrl+p",
+      "action": "print.message",
       "args": []
     },
     {
@@ -1902,6 +2025,18 @@
       "context": "window",
       "key": "escape",
       "action": "window.close",
+      "args": []
+    },
+    {
+      "context": "window",
+      "key": "ctrl+k",
+      "action": "palette.open",
+      "args": []
+    },
+    {
+      "context": "window",
+      "key": "ctrl+shift+p",
+      "action": "palette.open",
       "args": []
     },
     {
@@ -2050,6 +2185,18 @@
       "context": "global",
       "key": "shift+j",
       "action": "junk.mark",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+k",
+      "action": "palette.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+shift+p",
+      "action": "palette.open",
       "args": []
     },
     {
@@ -2272,6 +2419,13 @@
         "args": [],
         "label": null,
         "icon": null
+      },
+      {
+        "type": "action",
+        "action": "print.message",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "calendar": [
@@ -2308,6 +2462,20 @@
       },
       {
         "type": "spacer"
+      },
+      {
+        "type": "action",
+        "action": "print.event",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "print.agenda",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
@@ -2494,6 +2662,23 @@
         "args": [],
         "label": null,
         "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "print.message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "print.thread",
+        "args": [],
+        "label": null,
+        "icon": null
       }
     ],
     "context:thread-view.message": [
@@ -2585,6 +2770,23 @@
       {
         "type": "action",
         "action": "sync.download-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "print.message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "print.save-pdf",
         "args": [],
         "label": null,
         "icon": null

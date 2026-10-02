@@ -127,7 +127,7 @@ test("an event syncs to the CalDAV server and a server-side change appears", asy
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
   const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   // The server's sample event.
   await expect(chip(calendar, "Team sync")).toBeVisible();
 
@@ -157,7 +157,7 @@ test("an ICS subscription shows its events read-only", async ({ page }) => {
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
   const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   const holiday = chip(calendar, "Founders' Day");
   await expect(holiday).toBeVisible();
   await holiday.click();
@@ -186,7 +186,7 @@ test("a reminder fires at the controlled clock time", async ({ page }) => {
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
   const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await control(server, "dav-put", {
     collection: "personal",
     name: "checkup.ics",
@@ -304,7 +304,7 @@ test("an .ics file given at launch is imported", async ({ page }) => {
   await expect(dialog.getByRole("status")).toHaveText("Imported: 1 new, 0 updated, 0 skipped.");
   await dialog.getByRole("button", { name: "Close" }).first().click();
   const calendar = await openCalendar(page);
-  await calendar.getByRole("button", { name: "Agenda" }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await expect(chip(calendar, "Launch party")).toBeVisible();
 });
 

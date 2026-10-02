@@ -238,26 +238,36 @@ fn assign_thread_with(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Re
     Ok(winner)
 }
 
-fn subject_fallback(tx: &Transaction<'_>, row: &ThreadRow) -> Result<Option<String>> {
-    if row.subject_key.is_empty() {
-        return Ok(None);
-    }
-    let sql = if row.kind == SubjectKind::Reply.to_sql() {
-        "SELECT thread_id FROM messages
-         WHERE subject_key = ?1 AND id <> ?2 AND thread_id IS NOT NULL
-           AND abs(date_sort - ?3) <= ?4
-         ORDER BY date_sort DESC, id DESC LIMIT 1"
-    } else if row.kind == SubjectKind::Original.to_sql() {
-        "SELECT m.thread_id FROM messages m
-         WHERE m.subject_key = ?1 AND m.id <> ?2 AND m.thread_id IS NOT NULL
-           AND abs(m.date_sort - ?3) <= ?4
+/// Subject fallback for a reply without references. `subject_key <> ''`
+/// repeats the condition of the partial index `messages_subject_key`, and
+/// the date window is a range, so SQLite searches that index instead of
+/// scanning every message (WP123: the scan made initial syncs quadratic).
+pub(crate) const SUBJECT_REPLY_SQL: &str = "SELECT thread_id FROM messages
+         WHERE subject_key = ?1 AND subject_key <> '' AND id <> ?2 AND thread_id IS NOT NULL
+           AND date_sort BETWEEN ?3 - ?4 AND ?3 + ?4
+         ORDER BY date_sort DESC, id DESC LIMIT 1";
+
+/// Subject fallback for an original that a reply-subject thread may
+/// adopt (see [`SUBJECT_REPLY_SQL`] for the index conditions).
+pub(crate) const SUBJECT_ORIGINAL_SQL: &str = "SELECT m.thread_id FROM messages m
+         WHERE m.subject_key = ?1 AND m.subject_key <> '' AND m.id <> ?2 AND m.thread_id IS NOT NULL
+           AND m.date_sort BETWEEN ?3 - ?4 AND ?3 + ?4
            AND m.subject_is_reply = 1
            AND m.in_reply_to_json = '[]' AND m.references_json = '[]'
            AND (m.message_id IS NOT NULL OR m.thread_key IS NULL)
            AND NOT EXISTS (
                SELECT 1 FROM messages o
                WHERE o.thread_id = m.thread_id AND o.id <> ?2 AND o.subject_is_reply <> 1)
-         ORDER BY m.date_sort DESC, m.id DESC LIMIT 1"
+         ORDER BY m.date_sort DESC, m.id DESC LIMIT 1";
+
+fn subject_fallback(tx: &Transaction<'_>, row: &ThreadRow) -> Result<Option<String>> {
+    if row.subject_key.is_empty() {
+        return Ok(None);
+    }
+    let sql = if row.kind == SubjectKind::Reply.to_sql() {
+        SUBJECT_REPLY_SQL
+    } else if row.kind == SubjectKind::Original.to_sql() {
+        SUBJECT_ORIGINAL_SQL
     } else {
         return Ok(None);
     };
@@ -604,4 +614,43 @@ fn thread_rows(
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn plan(conn: &Connection, sql: &str) -> String {
+        let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+        let rows = stmt
+            .query_map(params!["subject", "id", 1_000_000_i64, 3600_i64], |r| {
+                r.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        rows.join("\n")
+    }
+
+    /// WP123: without the index the subject fallback scanned every
+    /// message once per reply without references (quadratic syncs).
+    #[test]
+    fn subject_fallback_searches_the_subject_index() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::schema::migrate(&mut conn).unwrap();
+        for sql in [SUBJECT_REPLY_SQL, SUBJECT_ORIGINAL_SQL] {
+            let plan = plan(&conn, sql);
+            assert!(
+                plan.contains("USING INDEX messages_subject_key"),
+                "subject fallback does not use the index:\n{plan}"
+            );
+            assert!(
+                !plan
+                    .lines()
+                    .any(|l| l.trim() == "SCAN messages" || l.trim() == "SCAN m"),
+                "subject fallback scans the messages table:\n{plan}"
+            );
+        }
+    }
 }

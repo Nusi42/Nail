@@ -24,6 +24,11 @@
 //!   vacation settings, the [`nail_api::exchange::pim`] item shapes ↔
 //!   Nail events / tasks (To Do checklists ↔ subtasks) / contacts, rooms
 //!   for the free/busy picker.
+//! * [`policy`] (M4c) — sync policies for Exchange folders: per message
+//!   the full MIME or headers only (recent N days / headers-only rules of
+//!   the account's `sync` block).
+//! * [`transfer`] (M4c) — moves between mailboxes and accounts of API
+//!   engines (Exchange mailboxes, Gmail): fetch, idempotent append, delete.
 //! * [`http`] — the HTTP seam (no redirects followed; a loopback routing
 //!   switch for tests and demo runs).
 //! * `testing` (feature) — `MockAutodiscoverServer` on 127.0.0.1 (v2 JSON
@@ -40,10 +45,12 @@ pub mod autodiscover;
 pub mod http;
 pub mod mapping;
 pub mod negotiate;
+pub mod policy;
 pub mod sspi;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod texts;
+pub mod transfer;
 mod xml;
 
 /// Name of the crate, for diagnostics.

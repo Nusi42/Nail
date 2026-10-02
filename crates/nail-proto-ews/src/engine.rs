@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use nail_api::AccountId;
-use nail_api::accounts::{AccountConfig, AuthConfig, IncomingServer};
+use nail_api::accounts::{AccountConfig, AuthConfig, IncomingServer, SendingMailbox};
 use nail_api::engine::{
     AccessTokenProvider, BoxFuture, DeltaOutcome, EngineError, Envelope, FreeBusyProvider,
     OutgoingTransport, RemoteWrite, SecretStore, SendReceipt, SyncDelta, WriteOutcome,
@@ -1089,8 +1089,9 @@ impl EwsEngine {
             });
         }
         let raw = with_envelope_recipients(message, &envelope.to)?;
+        let sending = self.sending_mailbox(&raw);
         self.client
-            .send_mime(&raw, self.options.save_sent_copy)
+            .send_mime_from(&raw, self.options.save_sent_copy, &sending)
             .await?;
         Ok(SendReceipt {
             response: format!(
@@ -1102,6 +1103,73 @@ impl EwsEngine {
                 }
             ),
         })
+    }
+}
+
+impl EwsEngine {
+    /// Who a message is sent as ([`SendingMailbox::of`]: its `From`, its
+    /// `Sender` and the account's address).
+    pub fn sending_mailbox(&self, raw: &[u8]) -> SendingMailbox {
+        let header = |name: &str| mail::header_addresses(raw, name).into_iter().next();
+        let (Some(from), Some(own)) = (header("from"), self.client.own_address()) else {
+            return SendingMailbox::Own;
+        };
+        SendingMailbox::of(&from, header("sender").as_deref(), own)
+    }
+
+    /// The headers of a message without its body, for headers-only sync
+    /// policies: the transport headers (`PR_TRANSPORT_MESSAGE_HEADERS`), or
+    /// for messages without them (sent mail, drafts) the MIME cut at the
+    /// end of its headers. Ends with the empty line.
+    pub async fn fetch_headers(
+        &self,
+        mailbox: Option<&str>,
+        remote_id: &str,
+    ) -> Result<Vec<u8>, EwsError> {
+        if let Some(headers) = self.client.transport_headers(mailbox, remote_id).await? {
+            return Ok(mail::header_block(headers.as_bytes()));
+        }
+        let raw = self.client.get_mime(mailbox, remote_id).await?;
+        Ok(mail::header_block(&raw))
+    }
+
+    /// Moves a message to a folder of another mailbox (`None` = the
+    /// user's own): `MoveItem` across mailboxes where the server allows it,
+    /// else (`ErrorCrossMailboxMoveCopy`) a MIME copy in the target with
+    /// the flags and a hard delete at the source. Answers the new id.
+    pub async fn move_to_mailbox(
+        &self,
+        from_mailbox: Option<&str>,
+        remote_id: &str,
+        to_mailbox: Option<&str>,
+        to_folder: &str,
+        flags: nail_api::domain::Flags,
+    ) -> Result<String, EwsError> {
+        let target = FolderRef::named(to_mailbox, to_folder);
+        match self
+            .client
+            .move_item(from_mailbox, remote_id, target, false)
+            .await
+        {
+            Ok(moved) => return Ok(moved.id),
+            Err(EwsError::Rejected { code, .. }) if code == "ErrorCrossMailboxMoveCopy" => {
+                tracing::debug!("no cross-mailbox MoveItem; copying the MIME");
+            }
+            Err(e) => return Err(e),
+        }
+        let raw = self.client.get_mime(from_mailbox, remote_id).await?;
+        let created = self
+            .client
+            .create_mime_item(to_mailbox, target, &raw, flags)
+            .await?;
+        match self
+            .client
+            .delete_item(from_mailbox, &ItemRef::new(remote_id), "HardDelete", "")
+            .await
+        {
+            Ok(()) | Err(EwsError::NotFound(_)) => Ok(created.id),
+            Err(e) => Err(e),
+        }
     }
 }
 

@@ -10,7 +10,7 @@ import type { AgendaLayout, HeaderDetail, PageOrientation, PageSize } from "../.
 export const prefixes: readonly string[] = ["print-"];
 
 /** Literals with those prefixes that are not message ids (part, widget, dialog names). */
-export const notMessages: readonly string[] = [];
+export const notMessages: readonly string[] = ["print-setup", "remote-images"];
 
 /** The contract's choices (mirror `nail_api::print`). */
 export const AGENDA_LAYOUTS: readonly AgendaLayout[] = ["day", "week", "month", "list"];
@@ -29,5 +29,9 @@ export function runtimeIds(): string[] {
     ...ORIENTATIONS.map((o) => `print-orientation-${o}`),
     ...HEADER_DETAILS.map((h) => `print-headers-${h}`),
     ...["invalid-date", "end-before-start", "range-too-long"].map((i) => `print-target-issue-${i}`),
+    "window-print",
+    "print-filter-pdf",
+    ...["from", "to", "cc", "reply-to"].map((h) => `print-header-${h}`),
+    ...["message", "thread", "event", "agenda"].map((w) => `print-what-${w}`),
   ];
 }
