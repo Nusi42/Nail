@@ -195,7 +195,9 @@ The calendar, contact and task widgets (`calendar`, `agenda`,
 and their options are described in
 [Calendar, contacts and tasks](calendar-contacts-tasks.md#layout-options); the invitation,
 free/busy, Gmail label and category widgets in
-[Invitations, scheduling and Gmail labels](invitations-and-gmail-labels.md#layout-options). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
+[Invitations, scheduling and Gmail labels](invitations-and-gmail-labels.md#layout-options); the desktop app's
+`update-settings`, `desktop-settings` and `default-apps` (and the `system.*`
+actions) in [The desktop app on Windows](desktop-app.md#layout-options). Plug-in panels are written `plugin-panel "<plugin-id>.<panel>"`;
 the older form `plugin.<plugin-id>.<panel>` is refused with a hint to it.
 
 ```kdl

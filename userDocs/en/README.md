@@ -26,13 +26,15 @@ Guides and references for people using Nail.
 | [Confirmations](confirmations.md) | Approving or denying changes AI agents and plug-ins want to make, "always allow", what may run without asking, the history |
 | [Customizing](customization.md) | The inspector, dividers written to `layout.kdl`, editing toolbars, shortcuts and list columns, right-click menus, applying a shared theme or layout (merge dialog, backups), every config error at once, smart folders |
 | [Plug-ins](plugins/README.md) | Installing and managing plug-ins, permissions, security, placing and styling them; writing plug-ins: getting started, the sandbox, manifest, writing data, mail hooks, composer, attachments and links, background jobs, tools for AI agents, translations, API and component references |
-| [Installing Nail on Windows](installing.md) | Installer options, Default apps, silent install, uninstall and your data, the portable version |
+| [Installing Nail on Windows](installing.md) | The downloads (x64 / ARM64, offline, MSI, portable), installer options, Default apps, silent install, updates, uninstall and your data, the portable version |
+| [The desktop app on Windows](desktop-app.md) | The welcome screen, updates and About Nail, tray and starting with Windows, default apps, mail from other programs ("Send to → Mail recipient"; never sent without you) |
+| [Deploying Nail](deploying-nail.md) | For IT: which package, silent per-user and per-machine (MSI) installs and their options, update channels and policies, "Send to > Mail recipient", winget |
 | [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
 | [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities (formats, signatures, mail style), what to synchronize, virtual accounts, OAuth2 providers, undo send |
 
-These pages describe the current preview (milestone M3: calendars, contacts, tasks, invitations, Gmail and Exchange accounts are new).
+These pages describe the current preview (milestone M4: changes by AI agents and plug-ins with confirmations, and the Windows desktop app — installers, updates, tray, default apps, "Send to → Mail recipient" — are new).
 
 Internal material (design, plan, decisions) lives in [`docs/`](../../docs/)
 instead. Translations go to `userDocs/<language>/`; a page without a

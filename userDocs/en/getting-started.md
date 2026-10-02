@@ -68,6 +68,7 @@ is narrow, the panes become tabs.
 | `Esc` | Close the composer, settings or another window |
 | `g` then `o` | Show the outbox |
 | `Ctrl+,` | Settings |
+| `F1` | About Nail (version, installation, updates; desktop app) |
 | `F5` | Check for new mail |
 | `Ctrl+B` | Show or hide the folder pane |
 | `g` then `r` | Show or hide the message pane |

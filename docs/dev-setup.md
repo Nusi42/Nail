@@ -60,6 +60,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Playwright only (already built) | `npm run e2e:only` |
 | The desktop app for the WebView2 smoke test | `npm run build:desktop` |
 | Installer and release scripts (node:test) | `node --test "scripts/test/*.test.mjs"` |
+| The Simple MAPI DLL as x86 (32-bit Office) under WOW64 | `cargo test -p nail-mapi --target i686-pc-windows-msvc` (once: `rustup target add i686-pc-windows-msvc`) |
 | Licences, bans, sources, advisories | `cargo deny check` (advisories need the RustSec database from GitHub) |
 
 CI (`.github/workflows/ci.yml`) runs these jobs:
@@ -67,18 +68,43 @@ CI (`.github/workflows/ci.yml`) runs these jobs:
 | Job | Runner | What |
 | --- | --- | --- |
 | `build-test` | `windows-latest` | build, `cargo test --workspace`, clippy, fmt, Vitest, lint, the Playwright web tests, the script tests |
-| `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke test with `NAIL_E2E_DESKTOP=1` |
-| `installer` | `windows-latest` | `node scripts/build-installer.mjs`, the install → start → uninstall smoke test, uploads installer, portable zip, SBOMs and checksums |
+| `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke tests (`desktop.spec.ts`, `desktop-m4b.spec.ts`) with `NAIL_E2E_DESKTOP=1` |
+| `mapi` | `windows-latest` | `nail-mapi` tests as x86 under WOW64, release builds of `nail_mapi.dll` for x64 / x86 / ARM64, every export checked on the x64 and x86 DLLs (`nail-mapi-harness exports`) |
+| `installer` | `windows-latest` | `node scripts/build-installer.mjs --offline-webview …` (NSIS, MSI, offline-WebView2 NSIS, portable zip, SBOMs, update signatures with a throwaway key), the next patch version as the update, the loopback update server, `installer-smoke.ps1` (install → start → update → start → uninstall), `msi-smoke.ps1` (elevated silent MSI install with properties → start: the app reports msi-managed updates → upgrade → uninstall), winget manifests; uploads everything |
+| `installer-arm64` | `windows-latest` | the ARM64 installers, cross-built (not run: no ARM64 runner) |
 | `deny` | `ubuntu-latest` | `cargo deny check` |
 | `interop` | `ubuntu-latest` | the engines against real Dovecot and Stalwart (below) |
+
+`.github/workflows/release.yml` (tags / manual) builds the signed x64 and
+ARM64 packages with the release update key, writes the per-channel update
+manifests and the winget manifests, and drafts a GitHub release (ADR 0089).
+Repository settings it reads: secrets `NAIL_SIGN_PFX_BASE64` /
+`NAIL_SIGN_PFX_PASSWORD` (optional; unsigned without), `NAIL_UPDATER_PRIVATE_KEY`
+/ `NAIL_UPDATER_KEY_PASSWORD`; variables `NAIL_UPDATER_PUBKEY`,
+`NAIL_UPDATE_BASE_URL`. Key handling: `packaging/README.md`.
 
 ### Installer, portable zip and SBOMs (ADR 0040)
 
 ```sh
-node scripts/build-installer.mjs [--skip-ui]      # NSIS installer, portable zip, SBOMs, SHA256SUMS → <build dir>/dist
-powershell -File scripts/installer-smoke.ps1      # silent install to a temp dir, start, uninstall
+node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview]
+    [--version V] [--update-base URL [--insecure-loopback-updates]] [--dev-updater-key] [--no-mapi] [--no-portable]
+                                                  # NSIS + MSI, portable zip, NailMapi.dll (own arch + x86), SBOMs, SHA256SUMS → <build dir>/dist
+powershell -File scripts/installer-smoke.ps1      # silent per-user install to a temp dir, start, [update,] uninstall
+powershell -File scripts/msi-smoke.ps1            # elevated: silent MSI install with properties, start, upgrade, uninstall (CI)
+node scripts/update-manifest.mjs --version V --channel stable --artifacts DIR --download-base URL --out DIR   # <channel>/latest.json, signatures checked first
+node scripts/update-server.mjs --root DIR [--port N]   # loopback update server (127.0.0.1 only)
+node scripts/update-check.mjs …                   # checks an endpoint and a download like the app does
+node scripts/updater-key.mjs                      # the development update key (%LOCALAPPDATA%\nail-build\keys; only packaging/updater/dev.pub is committed)
+node scripts/winget-manifest.mjs --version V --artifacts DIR --installer-url-template T --out DIR
 node scripts/sbom.mjs                             # CycloneDX SBOMs of the Rust and npm dependencies
 ```
+
+Signing runs only when `NAIL_SIGN_THUMBPRINT` is set (`scripts/lib/sign.mjs`;
+CI imports a `.pfx` from secrets with `scripts/import-signing-cert.ps1` and
+checks the result with `scripts/verify-signatures.ps1`). The MSI is Tauri's
+WiX template plus one fragment (`app/src-tauri/windows/wix/nail.wxs`, added
+through `app/src-tauri/windows/bundle.json`, which also pins the upgrade
+code). Installers, updates and winget: ADR 0089, `packaging/README.md`.
 
 Nothing is written into the repository. The installer's NSIS template is a
 copy of Tauri's (`app/src-tauri/windows/nsis/installer.nsi`); a test fails when
@@ -223,7 +249,8 @@ How it works:
 | `e2e/tests/mcp.spec.ts` | an MCP client created in the settings is denied until "Read mail" is granted, then reads `nail://accounts` and finds messages with `search_messages` over Streamable HTTP (`e2e/support/mcp.ts`); the activity log shows both |
 | `e2e/tests/customization.spec.ts` | the inspector (part path, theme rules, layout node with file positions), dragging a divider writes `layout.kdl`, the merge dialog applies a shared theme and reverts it (backup), the error list shows every error of two broken files and clears one when it is fixed |
 | `e2e/tests/security.spec.ts` | `--seed demo-multi` (both accounts have an OpenPGP key and an S/MIME certificate of the test CA): a signed + encrypted OpenPGP mail from Work to Home with `Subject: ...` on the mock SMTP server, read in Home with a verified badge; a tampered signature shows as invalid; an S/MIME sign + encrypt round trip with a valid chain; Autocrypt turns encryption on after one message (`autocrypt-alice.eml`); the sender badge from a trusted `Authentication-Results` (`authserv-id "mx.nail.example"`) and a look-alike link warning; encryption at rest on and off with mail and search intact; an MCP client reads an encrypted message only with the "Encrypted messages" grant |
-| `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, the rich composer's core-rendered Markdown preview, the running MCP server; a second app started with a `mailto:` link opens the composer with its fields |
+| `e2e/tests/desktop.spec.ts` | the desktop app over WebView2 CDP: demo mail and reading through Tauri IPC, search, Shift+F10 context menu, the rich composer's core-rendered Markdown preview, the running MCP server; a second app started with a `mailto:` link opens the composer with its fields |
+| `e2e/tests/desktop-m4b.spec.ts` | M4b on the desktop app: the first-run screen, About Nail (F1), tray / startup and default-apps settings; `nail-mapi-harness send` through `nail_mapi.dll` → the composer opens with the file attached and the program's note; the tray's New message (seeded-only test control) and start hidden (`--autostart`); the updater on a loopback update server (throwaway key, `nail-fake-installer` as the package) → Restart to install runs it and Nail quits; MSI facts with `DisableUpdates=1` staged below `NAIL_REGISTRY_ROOT` hide the updater; `nail plugin dev` through the desktop endpoint (token) |
 | `e2e/tests/remote.spec.ts` | the remote UI (turned on over the local WebSocket: TLS with a self-signed certificate, host name `localhost`) in a second browser context: pairing with a code from the desktop's dialog (fingerprint, used code refused, Trusted Types block an injected script), passkey registration and login with a CDP virtual authenticator, password + TOTP (a used code refused), password guessing slowed down (backoff, audit), session revoke on the desktop logs the browser out, internet mode locked in the settings and in the core, the local UI's CSP blocking an inline script (`e2e/support/remote.ts`: `rpc`, `enableRemoteUi`, `totp`, `trustingBrowser`) |
 | `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed; "Load once" loads without adding an allow-list entry |
 | `e2e/tests/plugins.spec.ts` | plug-ins (private `--seed demo` each): the full Follow-up example installed through Settings → Plug-ins with its six permissions (write marked), placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, the task it creates in the task window, notification, log line; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
@@ -435,6 +462,22 @@ With `--seed demo` and no directories it runs in a temporary directory
 (data, config and the WebView2 profile), like `nail serve --seed`. It
 starts the MCP server like `nail serve`.
 
+M4b (ADRs 0090, 0092): the app shows a tray icon (Open Nail, New message,
+Check mail, Quit Nail), closes to the tray, starts hidden with
+`--autostart` (the Run key's argument), serves the Simple MAPI pipe and,
+when switched on, the `nail plugin dev` endpoint. A seeded run never touches
+the real registry, Run key or pipe. Test variables of the shell:
+
+| Variable | Effect |
+| --- | --- |
+| `NAIL_REGISTRY_ROOT=Software\NailTests\<name>` | Both hives below that `HKCU` key (`<root>\HKCU\…`, `<root>\HKLM\…`): stage installation facts (`Software\Nail\Install`) and policies (`Software\Policies\Nail`) without touching HKLM; seeded runs otherwise use an in-memory registry |
+| `NAIL_UPDATE_ENDPOINT=http://127.0.0.1:<port>/{{channel}}/latest.json` + `NAIL_UPDATE_PUBKEY=<minisign public key>` | A loopback update source (other hosts are refused); enables the updater in development builds; plain `http` needs a debug build (or the release overlay's `dangerousInsecureTransportProtocol`); policies still win |
+| `NAIL_MAPI_PIPE=\\.\pipe\<name>` | The Simple MAPI pipe name (seeded runs serve a pipe only with it); the DLL and `nail-mapi-harness` read it too, and `NAIL_MAPI_APP` (only together with it) names the app the DLL may start |
+
+Seeded runs also register the test control `nail_test_shell` (a tray menu
+item id, or `window-visible`), which the desktop smoke tests call through
+`window.__TAURI_INTERNALS__.invoke`; a real profile never has it.
+
 To inspect the WebView2 window with Chrome DevTools or Playwright, start it
 with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`
 and connect to `http://127.0.0.1:9333`, for example with Playwright's
@@ -542,6 +585,24 @@ For M4b:
   opens, never sent for a program; slots `crates/nail-mapi`, `app/src-tauri/windows/` (was
   `installer/`), `packaging/`, `ui/src/features/system/`). Texts built in Rust:
   `locales/<lang>/core-desktop.ftl`; UI: `system.ftl`.
+- **0088 (WP111):** `nail-mapi` — `NailMapi.dll` (13 Simple MAPI exports checked against
+  windows-sys, VirtualQuery-checked reads, private copies of the files in `%TEMP%\nail-mapi`,
+  the per-user pipe with the same-user server check, starting Nail.exe, registration values;
+  x64 / x86 / ARM64) and `nail-mapi-harness`.
+- **0089 (WP112):** the per-machine MSI (WiX fragment, `AUTOSTART` / `ADDTOPATH` /
+  `DISABLEUPDATES` / `MAPI`), the NSIS MAPI option, signing when configured, update manifests
+  per channel (own minisign check), winget manifests, the installer CI jobs and `release.yml`.
+- **0090 (WP113):** the desktop shell — `DesktopHost`, tray, close to tray / start hidden, the
+  Run key, installation facts and policies from the registry, the updater over
+  tauri-plugin-updater (install on restart and on quit), default apps, the Simple MAPI pipe
+  server, the `nail plugin dev` endpoint (127.0.0.1, bearer token, no Origin).
+- **0091 (WP114):** the desktop UI (`ui/src/features/system/`: updates and About, tray and
+  startup, default apps, first run, the composer note for drafts from other programs).
+- **0092:** M4b integration (wiring, the pipe server waiting for the client before it
+  disconnects, update status refetched after commands, the machine-wide Run key, the composer /
+  launch mounts, layout / theme, typed widget options, the attachment limit in `nail_api`, the
+  desktop smoke scenarios and their test hooks, the `mapi` CI job, the MSI smoke checking
+  msi-managed updates).
 
 For M4a:
 

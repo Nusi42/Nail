@@ -27,7 +27,7 @@ with ×, it comes back at the next start. To see it again, use the
 
 ## Updates and About Nail
 
-*About Nail* shows the version, how Nail was installed (with
+*About Nail* (press **F1**) shows the version, how Nail was installed (with
 `Nail-setup.exe`, by your organization, as a portable copy or as a
 development build), for whom (just you or all users of the PC), the
 architecture, the update channel, the folder and the WebView2 version.
@@ -48,7 +48,7 @@ What the update status can show:
 | Checking for updates… | Wait a moment |
 | Version x is available | Read *What's new*, then *Download* |
 | Downloading version x… | The bar shows the progress |
-| Version x is ready | *Restart to install*: Nail closes, installs and starts again |
+| Version x is ready | *Restart to install*: Nail closes, installs and starts again. If you quit Nail instead, the update is installed then and Nail does not start again by itself |
 | A problem (no connection, invalid signature, …) | *Try again*. An update with an invalid signature is never installed |
 | Updates are off | Nothing — see below |
 
@@ -68,6 +68,12 @@ An organization can also fix the update channel; the channel list is then
 locked and says so.
 
 ## Tray and startup
+
+Nail shows an icon in the notification area while it runs. A left click on
+it opens the window; its menu has **Open Nail**, **New message** (opens an
+empty message), **Check mail** (synchronizes every account now) and **Quit
+Nail**. Starting Nail again (from the Start menu, a link or a file) brings
+a hidden window back.
 
 In **Settings → Tray and startup**:
 
@@ -117,7 +123,25 @@ anyway, and the message goes only when you press *Send*. Programs that
 expect a silent send see the composer instead. The message is saved as a
 draft, so closing the composer keeps it in *Drafts*.
 
-Nail reads the files when the program hands them over, so it does not
-matter if the program deletes its temporary files right away. Each file
-must fit the composer's attachment limit. If Nail has no e-mail account
-yet, the program is told to set one up first.
+Nail gets its own copies of the files when the program hands them over,
+so the program may delete its files right away. Each file must fit the
+composer's attachment limit (25 MB); a larger file is refused and the
+program reports that the attachment is too large. If Nail has no e-mail
+account yet, the program is told to set one up first. If Nail is not
+running, it is started.
+
+## Layout options
+
+The three settings pages are widgets you can place anywhere in your
+`layout.kdl` ([Layout reference](layout-reference.md)). Each takes one
+option:
+
+| Widget | Option | Default | Meaning |
+| --- | --- | --- | --- |
+| `update-settings` | `show-installation` | `#true` | The version and installer line above the update status |
+| `desktop-settings` | `show-dev-endpoint` | `#true` | The "nail plugin dev" switch |
+| `default-apps` | `show-mapi` | `#true` | The "Send to → Mail recipient" row |
+
+For example `default-apps show-mapi=#false`. The actions `system.about`,
+`system.check-updates`, `system.first-run` and `system.default-apps` can be
+bound to keys or put on toolbars; `system.about` is on **F1**.

@@ -97,8 +97,9 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        M3c: account `exchange` node (engine, host / url, polling, streaming, server-rules;
                        `auth "windows"` only there), widgets/exchange.rs (WP94 slot) (ADR 0072);
                        M4a: widgets/agents.rs (confirmation-center show-history, confirmation-indicator
-                       hide-when-empty; ADRs 0079, 0084); M4b: widgets/system.rs (future widgets
-                       update-settings, desktop-settings, default-apps; ADR 0087)
+                       hide-when-empty; ADRs 0079, 0084); M4b: widgets/system.rs (update-settings
+                       show-installation, desktop-settings show-dev-endpoint, default-apps show-mapi;
+                       ADRs 0087, 0092)
 crates/nail-store      SQLite metadata (v13), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -166,7 +167,9 @@ crates/nail-search     Tantivy index + query language parser (ADR 0016); open_wi
 crates/nail-testkit    mock IMAP server (SEARCH incl. TEXT / BODY / OR / NOT), .eml corpus, demo seed;
                        corpus/crypto/{pgp,smime}: end-to-end
                        test vectors (not demo mail; `crypto_fixture`; each has generate.sh + README;
-                       smime/ada-{work,home}.p12 are the demo-multi certificates)
+                       smime/ada-{work,home}.p12 are the demo-multi certificates);
+                       bin nail-fake-installer (M4b: the updater smoke's "package"; records its command line
+                       to NAIL_FAKE_INSTALLER_RECORD instead of installing; ADR 0092)
 crates/nail-testkit-net mock SMTP / POP3 / OAuth2 (add_refresh_token: start signed in) / HTTP / DNS servers; managesieve.rs:
                        MockSieveServer + validate_script (ADR 0044); dav.rs: MockDavServer (CalDAV / CardDAV,
                        sync tokens, TLS, server-side changes for tests) (ADR 0060); dav/schedule.rs + ical.rs:
@@ -327,8 +330,15 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M4b (ADR 0087): desktop.rs (desktop requests: app_settings `desktop.*` + the shell's
                        DesktopHost from ServiceOptions::desktop, `unsupported` without; Service::submit_mapi =
                        Simple MAPI → saved draft + LaunchRequest::ComposeDraft, never sent; desktop_settings())
-crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as
-                       mapi\<arch>\NailMapi.dll) + rlib + bin nail-mapi-harness; windows-sys (ADR 0087)
+crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
+                       + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
+                       fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
+                       checked against windows-sys LPMAPI*), windows/decode.rs + memory.rs (VirtualQuery-checked
+                       reads of caller structs), windows/client.rs (named-pipe client, same-user server check,
+                       starts Nail.exe, NAIL_MAPI_APP only together with NAIL_MAPI_PIPE), windows/server.rs
+                       (reference pipe server), forward.rs, staging.rs (attachment copies in %TEMP%\nail-mapi,
+                       limit nail_api::compose::MAX_ATTACHMENT_BYTES), registration.rs (HKLM Clients\Mail\Nail
+                       values, .reg rendering) (ADRs 0087, 0088)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -345,9 +355,23 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        for NotificationRequested; main window created in code; nail-proxy protocol;
                        single instance); launch.rs,
                        portable.rs, setup_helper.rs; windows/ (installer sources: nsis/ template copy +
-                       hooks + strings (ADR 0040), wix/ MSI (M4b WP112); tests/installer.rs checks them);
+                       hooks + strings (ADR 0040), wix/nail.wxs MSI fragment + bundle.json (upgrade code)
+                       (M4b WP112, ADR 0089); tests/installer.rs checks them);
+                       M4b shell (WP113, ADR 0090): registry.rs (Registry trait; WindowsRegistry with
+                       NAIL_REGISTRY_ROOT; MemoryRegistry for seeded runs), install.rs (InstallationInfo,
+                       UpdateSource from plugins.updater with {{channel}} or <channel>/latest.json,
+                       NAIL_UPDATE_ENDPOINT / NAIL_UPDATE_PUBKEY loopback-only test override), default_apps.rs,
+                       startup.rs (Run key; the MSI's machine-wide entry counts, never duplicated),
+                       updater.rs + updater_tauri.rs (update states over tauri-plugin-updater; installs a
+                       downloaded update on restart or quit), dev_endpoint.rs (127.0.0.1, bearer token, no
+                       Origin), mapi_server.rs (named pipe, first instance, current-user DACL; waits for the
+                       client to close before disconnecting), win.rs, host.rs (ShellHost: DesktopHost), tray.rs,
+                       shell.rs (tray menu, second start, seeded-only test control `nail_test_shell`);
+                       tests/mapi_wired.rs (DLL client → pipe server → core; ADR 0092);
                        M4b deps: tauri tray-icon, tauri-plugin-updater (rustls / ring) (ADR 0087)
-packaging/             M4b WP112: winget manifests, per-channel update manifests (ADR 0087)
+packaging/             M4b WP112 (ADR 0089): updater/dev.pub (development update key; private keys never in the
+                       repo), winget/ facts, release-notes/<version>.md (written before a release); README =
+                       key handling
 ui/                    React renderer; feature slots in ui/src/features/<name>/ (README there;
                        M2a: security/; M2b: remote/, launch/; M2c: sieve/ (status, vacation),
                        triage/ (junk, snooze, notifications), sync/ (policies, bodies), menus/
@@ -362,8 +386,10 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        AGENTS_BASE_CSS; model.ts mirrors nail_api::agents, mock.ts), plugins/ extensions
                        (extensions.ts, MessageAnnotations, AttachmentPreview, ActionMenus, ComposerExtensions,
                        SendVeto (sendDraftChecked), Activity; extensionsMock simulates the host, extensionsSeed),
-                       mcp/ write scopes + RateLimits; M4b: system/ (updates, about, tray / startup, default
-                       apps, first run, ComposeDraft notice; mock.ts simulates the desktop host; ADR 0087);
+                       mcp/ write scopes + RateLimits; M4b: system/ (widgets update-settings, desktop-settings,
+                       default-apps; dialogs about-nail (F1), first-run; FirstRunGate; ProgramDraftNotice in the
+                       composer + openProgramDraft for ComposeDraft launches; SYSTEM_BASE_CSS; mock.ts simulates the
+                       desktop host: simulateMapiSendMail, setUpdateState, setDefaultApps; ADRs 0087, 0091, 0092);
                        WP105 mounts: composer/pluginExtensions.tsx, reader in
                        widgets/MessageView.tsx (ADR 0084);
                        RemoteGate.tsx
@@ -392,7 +418,10 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/plugins.spec.ts (M2d), tests/a11y-windows.spec.ts (axe on every window, tab and
                        dialog in default / high-contrast / dark, self-checked coverage; ADR 0054),
                        tests/pim.spec.ts (M3a; startNail({launch}) passes `--launch`), tests/scheduling.spec.ts +
-                       tests/gmail.spec.ts (M3b), tests/agents.spec.ts + tests/extensions.spec.ts (M4a))
+                       tests/gmail.spec.ts (M3b), tests/agents.spec.ts + tests/extensions.spec.ts (M4a),
+                       tests/desktop-m4b.spec.ts (M4b on the desktop app: MAPI harness, tray / start hidden via
+                       shellControl, loopback updater with support/updates.ts, MSI facts via NAIL_REGISTRY_ROOT,
+                       nail plugin dev, first run; ADR 0092))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
@@ -403,7 +432,11 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        M4b: core-desktop.ftl (contract ids: install kinds, update channels / failures / reasons,
                        default apps, mapi-result-*; WP113 shell texts), system.ftl (WP114);
                        every file is embedded in nail-config l10n.rs
-scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, check-socket-binds.mjs (ADR 0057), test/ (node:test);
+scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
+                       sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
+                       (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
+                       import-signing-cert.ps1 / verify-signatures.ps1, lib/ (minisign, sign, winget, …; M4b
+                       ADR 0089), check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
 ```
 
@@ -430,9 +463,12 @@ node packages/create-nail-plugin/index.mjs <dir> [--template command|hook|compos
 npm run package --prefix examples/<name>   # build + pack an example (follow-up, attachment-check, csv-preview; dist/ gitignored)
 nail plugin dev <folder> [--url URL | --data-dir DIR]   # load a plug-in folder into the running `nail serve`, hot reload, log console
 node --test "scripts/test/*.test.mjs"      # installer / release script tests
+cargo test -p nail-mapi --target i686-pc-windows-msvc   # the x86 Simple MAPI DLL under WOW64 (rustup target add i686-pc-windows-msvc)
 cargo deny check                           # licences, bans (openssl, aws-lc), sources, advisories (deny.toml)
-node scripts/build-installer.mjs [--skip-ui]   # NSIS installer, portable zip, SBOMs → build dir (never the repo)
-powershell -File scripts/installer-smoke.ps1   # install to a temp dir, start, uninstall
+node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
+powershell -File scripts/installer-smoke.ps1   # install to a temp dir, start, [update,] uninstall
+powershell -File scripts/msi-smoke.ps1         # elevated (CI): silent MSI install with properties, start, upgrade, uninstall
+node scripts/update-server.mjs --root DIR      # loopback update server; update-manifest.mjs / winget-manifest.mjs write manifests
 node scripts/sbom.mjs                      # CycloneDX SBOMs
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas (theme, layout, accounts)
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema   # rules.kdl JSON Schema
@@ -632,6 +668,14 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `.github/workflows/` (WP112), rest of `app/src-tauri` (WP113), `ui/src/features/system/` + `system.ftl`
   (WP114); new deps tauri-plugin-updater (rustls only), tauri tray-icon / image-png, windows-sys,
   windows-registry).
+- M4b integration (ADR 0092; packages ADRs 0088 MAPI DLL, 0089 installers / updates, 0090 shell, 0091 UI): a
+  program's `MAPISendMail(W)` → `NailMapi.dll` (private copies of the files) → the shell's pipe → `submit_mapi` →
+  draft + `ComposeDraft` → composer with the program's note; never sent. The pipe server must not disconnect
+  before the client closed its end (`DisconnectNamedPipe` drops unread answers). UI update commands refetch
+  `GetUpdateStatus` instead of writing their answer (events may be newer). Seeded desktop runs never touch the real
+  registry / Run key / pipe and register `nail_test_shell` (tray item ids, `window-visible`) for the smoke tests;
+  shell test variables: `NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` + `NAIL_UPDATE_PUBKEY` (loopback only),
+  `NAIL_MAPI_PIPE` (docs/dev-setup.md). The real MSI install runs only in CI (`msi-smoke.ps1`, elevated).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

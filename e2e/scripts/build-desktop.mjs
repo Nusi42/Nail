@@ -1,7 +1,9 @@
 /**
- * Builds the desktop app for the WebView2 smoke test
- * (`tests/desktop.spec.ts`): `nail-app` with Tauri's `custom-protocol`
- * feature, so it serves the built `ui/dist` instead of the Vite dev server.
+ * Builds the desktop app for the WebView2 smoke tests
+ * (`tests/desktop.spec.ts`, `tests/desktop-m4b.spec.ts`): `nail-app` with
+ * Tauri's `custom-protocol` feature, so it serves the built `ui/dist`
+ * instead of the Vite dev server; plus `nail_mapi.dll` with
+ * `nail-mapi-harness` and `nail-fake-installer` (M4b).
  *
  * It uses a target directory of its own next to cargo's
  * (`<build dir>/desktop-target`, see `buildOutputDir` in support/nail.ts):
@@ -25,5 +27,25 @@ const targetDir = path.join(base, "desktop-target");
 execFileSync(
   "cargo",
   ["build", "-p", "nail-app", "--features", "tauri/custom-protocol", "--target-dir", targetDir],
+  { cwd: repoRoot, stdio: "inherit" },
+);
+// M4b (WP115): the Simple MAPI DLL + its harness (a program calling
+// MAPISendMailW) and the fake installer the updater scenario serves.
+execFileSync(
+  "cargo",
+  [
+    "build",
+    "-p",
+    "nail-mapi",
+    "-p",
+    "nail-testkit",
+    "--bin",
+    "nail-mapi-harness",
+    "--bin",
+    "nail-fake-installer",
+    "--lib",
+    "--target-dir",
+    targetDir,
+  ],
   { cwd: repoRoot, stdio: "inherit" },
 );

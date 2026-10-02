@@ -1,11 +1,14 @@
 # Installing Nail on Windows
 
-Nail comes in two forms for Windows 10 (22H2) and Windows 11 on x64:
+Nail runs on Windows 10 (22H2) and Windows 11, on x64 and ARM64 PCs. Pick
+the download for your PC (`x64` or `arm64` in the name):
 
 | Download | For |
 | --- | --- |
-| `Nail_<version>_x64-setup.exe` | Everyday use. Installs for your Windows account only, without an administrator prompt. |
-| `Nail_<version>_x64-portable.zip` | USB sticks and trying Nail out. Nothing is installed; everything stays in the unzipped folder. |
+| `Nail_<version>_<arch>-setup.exe` | Everyday use. Installs for your Windows account only, without an administrator prompt. Nail keeps itself up to date. |
+| `Nail_<version>_<arch>-offline-setup.exe` | The same for PCs without internet access during setup: it brings the Microsoft Edge WebView2 runtime along. |
+| `Nail_<version>_<arch>_en-US.msi` | IT departments: installs for all users of a PC. See [Deploying Nail](deploying-nail.md). |
+| `Nail_<version>_<arch>-portable.zip` | USB sticks and trying Nail out. Nothing is installed; everything stays in the unzipped folder. |
 
 Preview builds are not signed yet, so Windows SmartScreen may warn that the
 publisher is unknown. Choose *More info* > *Run anyway* only for a build you
@@ -26,11 +29,19 @@ Run the setup program and follow the pages:
    - *Add the nail command-line tool to PATH*: lets you run `nail serve`,
      `nail mcp` and the other commands from any terminal. Open a new
      terminal afterwards.
+   - *Use Nail for "Send to > Mail recipient"*: lets other programs hand
+     files to Nail (see [Mail from other programs](desktop-app.md#mail-from-other-programs-send-to--mail-recipient)).
+     Windows keeps this setting for the whole PC, so this one step asks for
+     administrator rights; if you decline, Nail is installed without it.
 3. **Finish.** You can start Nail and create a desktop shortcut.
 
 If the Microsoft Edge WebView2 runtime is missing (it is part of
 Windows 11), the setup program installs it; this needs an internet
-connection.
+connection (or use the `offline-setup.exe`).
+
+The first time Nail starts, a welcome screen helps you choose Nail as your
+mail program and start it with Windows; see
+[The desktop app on Windows](desktop-app.md).
 
 Running the setup program again repairs or changes an installation; it
 remembers your options.
@@ -45,8 +56,10 @@ Nail registers itself as a program that can open:
 
 Windows does not let programs make themselves the default. To use Nail for
 these, open **Settings > Apps > Default apps**, pick **Nail**, and choose
-the link and file types you want it to handle. You can also right-click a
-file and use **Open with > Nail**.
+the link and file types you want it to handle — or use *Choose in Default
+apps* in Nail's **Settings > Default apps**, which opens that page and
+shows what Nail handles now ([details](desktop-app.md#default-apps)). You
+can also right-click a file and use **Open with > Nail**.
 
 What happens when you open one:
 
@@ -54,9 +67,10 @@ What happens when you open one:
   and text of the link;
 - an **`.eml` file** is shown in Nail under **Opened files** (a local
   account that only holds the messages you opened this way);
-- **calendar and contact files and links** (`webcal:`, `.ics`, `.vcf`)
-  arrive in a later preview; until then Nail says it cannot import them
-  yet.
+- a **`webcal:` link** opens the calendar subscription dialog with the
+  address filled in;
+- an **`.ics` or `.vcf` file** opens the import dialog for calendars or
+  contacts.
 
 If Nail is already running, the link or file opens in that window.
 
@@ -73,8 +87,23 @@ Nail_0.1.0_x64-setup.exe /S /AUTOSTART=1 /ADDTOPATH=1
 | `/S` | Silent: no pages, default answers |
 | `/AUTOSTART=1` or `0` | Start Nail when signing in (default: off) |
 | `/ADDTOPATH=1` or `0` | Put the `nail` tool on `PATH` (default: off) |
+| `/MAPI=1` or `0` | Use Nail for "Send to > Mail recipient" (default: off; shows an administrator prompt even when silent) |
 | `/NS` | Create no shortcuts |
 | `/D=<folder>` | Install location; must be the last option, without quotes |
+
+Installing for all users with the MSI, its properties (`AUTOSTART`,
+`ADDTOPATH`, `DISABLEUPDATES`, `MAPI`), update policies and winget are
+described in [Deploying Nail](deploying-nail.md).
+
+## Updates
+
+The setup program's Nail updates itself: it checks when it starts and once
+a day, downloads a new version in the background and installs it when you
+restart Nail (or when you quit it). Every update is checked against Nail's
+update signature first. You choose the channel (stable or beta) in
+**Settings > Updates**; see [Updates and About Nail](desktop-app.md#updates-and-about-nail).
+Installations from the MSI are updated by your IT department; the portable
+version is updated by replacing the folder.
 
 ## Uninstall
 
