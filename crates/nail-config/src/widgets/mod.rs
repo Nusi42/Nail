@@ -10,10 +10,12 @@
 //! [`pim`] those of M3a (calendars, contacts, tasks; WP74, ADR 0058),
 //! [`scheduling`] and [`gmail`] those of M3b (invitations, free/busy,
 //! Gmail labels and categories; WP84, ADR 0065), [`exchange`] those of M3c
-//! (Focused Inbox, automatic replies; WP94, ADR 0072). The
+//! (Focused Inbox, automatic replies; WP94, ADR 0072), [`agents`] those of
+//! M4a (the confirmation center; WP104, ADR 0079). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
+mod agents;
 mod composer;
 mod core;
 mod customization;
@@ -99,6 +101,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     scheduling::WIDGETS,
     gmail::WIDGETS,
     exchange::WIDGETS,
+    agents::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

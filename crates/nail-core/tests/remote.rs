@@ -1856,3 +1856,61 @@ async fn remote_exchange_requests_follow_grants() {
         Some(changed)
     );
 }
+
+/// M4a contract (ADR 0079): confirmations and policies are administration
+/// over every account; plug-in extensions need full grants; "Send anyway"
+/// needs `send`; the events follow.
+#[tokio::test]
+async fn remote_agent_requests_follow_grants() {
+    use nail_api::agents::{ActionActor, ConfirmationFilter};
+    let f = setup();
+    let service = &f.service;
+    let reader = remote_session(&f, "reader", RemoteAccessPreset::ReadOnly.grant()).await;
+    let narrow = remote_session(&f, "narrow", elsewhere(&[])).await;
+    let mut admin_grant = RemoteAccessPreset::Full.grant();
+    admin_grant.admin = true;
+    let admin = remote_session(&f, "admin", admin_grant).await;
+    let list = Request::ListConfirmations {
+        filter: ConfirmationFilter::Pending,
+        actor: None,
+        before: None,
+        limit: 10,
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, list.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    let answer = service.handle_remote(&admin, list).await;
+    assert!(
+        matches!(&answer, Response::Confirmations { .. })
+            || error_code(&answer) == Some(ErrorCode::ReauthRequired),
+        "{answer:?}"
+    );
+    let annotations = Request::GetMessagePluginAnnotations {
+        message_id: demo_messages(&f)[0].id.clone(),
+        client_id: None,
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&narrow, annotations.clone()).await),
+        Some(ErrorCode::Forbidden)
+    );
+    assert!(matches!(
+        service.handle_remote(&reader, annotations).await,
+        Response::MessagePluginAnnotations { .. }
+    ));
+    let anyway = Request::OverrideSendVeto {
+        veto_id: "v1".into(),
+    };
+    assert_eq!(
+        error_code(&service.handle_remote(&reader, anyway).await),
+        Some(ErrorCode::Forbidden)
+    );
+    let changed = nail_api::Event::ActionPoliciesChanged {
+        actor: ActionActor::mcp_client("mcp-1"),
+    };
+    assert_eq!(service.remote_event(&reader, changed.clone()).await, None);
+    assert_eq!(
+        service.remote_event(&admin, changed.clone()).await,
+        Some(changed)
+    );
+}

@@ -86,3 +86,24 @@ async fn streamable_http_round_trip() {
     let _ = client.cancel().await;
     server.abort();
 }
+
+/// M4a (ADR 0079): the write tools' argument types from nail-api derive
+/// their JSON Schemas with rmcp's own schemars (one version in the build),
+/// so the server can publish them as tool input schemas.
+#[test]
+fn contract_argument_types_have_rmcp_schemas() {
+    use nail_api::mcp::prompts::DraftReplyArgs;
+    use nail_api::mcp::tools::{CreateDraftArgs, DeleteMessagesArgs, SendMessageArgs};
+    use rmcp::handler::server::common::schema_for_type;
+
+    let send = schema_for_type::<SendMessageArgs>();
+    assert_eq!(send.get("type").and_then(|t| t.as_str()), Some("object"));
+    let required = send.get("required").and_then(|r| r.as_array()).unwrap();
+    assert_eq!(required, &[serde_json::json!("draft_id")]);
+    let draft = schema_for_type::<CreateDraftArgs>();
+    assert!(draft["properties"]["attachments"].is_object());
+    let delete = schema_for_type::<DeleteMessagesArgs>();
+    assert!(delete["properties"]["permanent"].is_object());
+    let prompt = schema_for_type::<DraftReplyArgs>();
+    assert!(prompt["properties"]["message_id"].is_object());
+}

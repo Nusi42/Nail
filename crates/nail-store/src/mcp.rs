@@ -6,7 +6,9 @@
 //! plain hash is enough (no password hashing needed). Client ids are
 //! `mcp-<n>`.
 
-use nail_api::mcp::{McpAuditEntry, McpCallKind, McpClient, McpGrant, McpOutcome, McpScope};
+use nail_api::mcp::{
+    McpAuditEntry, McpCallKind, McpClient, McpGrant, McpOutcome, McpRateLimits, McpScope,
+};
 use nail_api::{AccountId, FolderId, McpClientId};
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 use sha2::{Digest, Sha256};
@@ -49,7 +51,8 @@ fn client_cols() -> String {
     format!(
         "id, name, strftime({RFC3339}, created_at, 'unixepoch'),
          strftime({RFC3339}, last_used_at, 'unixepoch'), token_hint,
-         all_accounts, skip_draft_confirmation, strftime({RFC3339}, revoked_at, 'unixepoch')"
+         all_accounts, skip_draft_confirmation, strftime({RFC3339}, revoked_at, 'unixepoch'),
+         rate_limits"
     )
 }
 
@@ -66,6 +69,11 @@ fn client_from_row(row: &Row<'_>) -> rusqlite::Result<McpClient> {
             ..McpGrant::default()
         },
         revoked_at: row.get(7)?,
+        // NULL (clients from before M4a) or unreadable JSON = the defaults.
+        rate_limits: row
+            .get::<_, Option<String>>(8)?
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default(),
     })
 }
 
@@ -227,6 +235,87 @@ impl Store {
             }
             write_grant(tx, n, grant)?;
             client_in_tx(tx, n)
+        })
+    }
+
+    /// Replaces a client's rate limits (M4a). Fails with
+    /// [`Error::InvalidData`] for limits with issues
+    /// ([`McpRateLimits::issues`]) and [`Error::Conflict`] for a revoked
+    /// client.
+    pub fn set_mcp_rate_limits(
+        &self,
+        id: &McpClientId,
+        limits: &McpRateLimits,
+    ) -> Result<McpClient> {
+        if !limits.issues().is_empty() {
+            return Err(Error::InvalidData(format!(
+                "invalid rate limits {limits:?}"
+            )));
+        }
+        let n = parse_client_id(id)?;
+        self.with_tx(|tx| {
+            let client = client_in_tx(tx, n)?;
+            if client.revoked_at.is_some() {
+                return Err(Error::Conflict(format!("MCP client {id} is revoked")));
+            }
+            tx.execute(
+                "UPDATE mcp_clients SET rate_limits = ?2 WHERE id = ?1",
+                params![n, serde_json::to_string(limits)?],
+            )?;
+            client_in_tx(tx, n)
+        })
+    }
+
+    /// The result a client's earlier write call with this idempotency key
+    /// returned, if it is younger than `since` (Unix seconds): `(tool,
+    /// result)`.
+    pub fn mcp_idempotent_result(
+        &self,
+        id: &McpClientId,
+        key: &str,
+        since: i64,
+    ) -> Result<Option<(String, serde_json::Value)>> {
+        let n = parse_client_id(id)?;
+        self.with_conn(|conn| {
+            let row: Option<(String, String)> = conn
+                .query_row(
+                    "SELECT tool, nail_open('mcp_idempotency.result', result) FROM mcp_idempotency
+                     WHERE client_id = ?1 AND key = ?2 AND created_at >= ?3",
+                    params![n, key, since],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            row.map(|(tool, json)| Ok((tool, serde_json::from_str(&json)?)))
+                .transpose()
+        })
+    }
+
+    /// Remembers a write call's result under its idempotency key at `at`
+    /// (Unix seconds), replacing an expired one; drops entries older than
+    /// `expire_before`.
+    pub fn store_mcp_idempotent_result(
+        &self,
+        id: &McpClientId,
+        key: &str,
+        tool: &str,
+        result: &serde_json::Value,
+        at: i64,
+        expire_before: i64,
+    ) -> Result<()> {
+        let n = parse_client_id(id)?;
+        self.with_tx(|tx| {
+            tx.execute(
+                "DELETE FROM mcp_idempotency WHERE created_at < ?1",
+                [expire_before],
+            )?;
+            tx.execute(
+                "INSERT INTO mcp_idempotency (client_id, key, tool, result, created_at)
+                 VALUES (?1, ?2, ?3, nail_seal('mcp_idempotency.result', ?4), ?5)
+                 ON CONFLICT (client_id, key) DO UPDATE SET tool = excluded.tool,
+                     result = excluded.result, created_at = excluded.created_at",
+                params![n, key, tool, serde_json::to_string(result)?, at],
+            )?;
+            Ok(())
         })
     }
 
@@ -452,5 +541,73 @@ mod tests {
         assert_eq!(own.len(), 3);
         assert_eq!(store.purge_mcp_audit(2).unwrap(), 2);
         assert_eq!(store.list_mcp_audit(None, None, 10).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn rate_limits_and_idempotency_keys() {
+        let store = Store::open_in_memory().unwrap();
+        let client = store
+            .create_mcp_client("agent", &hash_mcp_token("t"), "t", &grant(), 100)
+            .unwrap();
+        assert_eq!(client.rate_limits, McpRateLimits::default());
+        let limits = McpRateLimits {
+            requests_per_minute: Some(60),
+            writes_per_minute: None,
+            sends_per_hour: Some(2),
+        };
+        let saved = store.set_mcp_rate_limits(&client.id, &limits).unwrap();
+        assert_eq!(saved.rate_limits, limits);
+        assert_eq!(
+            store.get_mcp_client(&client.id).unwrap().rate_limits,
+            limits
+        );
+        assert!(matches!(
+            store.set_mcp_rate_limits(
+                &client.id,
+                &McpRateLimits {
+                    requests_per_minute: Some(0),
+                    ..limits
+                }
+            ),
+            Err(Error::InvalidData(_))
+        ));
+
+        assert_eq!(
+            store.mcp_idempotent_result(&client.id, "k1", 0).unwrap(),
+            None
+        );
+        let result = serde_json::json!({"status": "done", "op_ids": ["op-1"]});
+        store
+            .store_mcp_idempotent_result(&client.id, "k1", "update_messages", &result, 1000, 0)
+            .unwrap();
+        assert_eq!(
+            store.mcp_idempotent_result(&client.id, "k1", 900).unwrap(),
+            Some(("update_messages".to_owned(), result.clone()))
+        );
+        // Too old for the caller's window.
+        assert_eq!(
+            store.mcp_idempotent_result(&client.id, "k1", 1001).unwrap(),
+            None
+        );
+        // Storing later expires the old entry.
+        store
+            .store_mcp_idempotent_result(&client.id, "k2", "send_message", &result, 5000, 2000)
+            .unwrap();
+        assert_eq!(
+            store.mcp_idempotent_result(&client.id, "k1", 0).unwrap(),
+            None
+        );
+        assert!(
+            store
+                .mcp_idempotent_result(&client.id, "k2", 0)
+                .unwrap()
+                .is_some()
+        );
+
+        store.revoke_mcp_client(&client.id, 6000).unwrap();
+        assert!(matches!(
+            store.set_mcp_rate_limits(&client.id, &limits),
+            Err(Error::Conflict(_))
+        ));
     }
 }

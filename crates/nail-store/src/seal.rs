@@ -288,6 +288,24 @@ pub const SEALED_COLUMNS: &[SealedColumn] = &[
         column: "comment",
         key: "id",
     },
+    // Confirmations of writes by agents and plug-ins (v14, ADR 0079): what
+    // the user sees (subjects, addresses) and what runs once approved; the
+    // results of MCP write calls kept for their idempotency keys.
+    SealedColumn {
+        table: "confirmations",
+        column: "view",
+        key: "id",
+    },
+    SealedColumn {
+        table: "confirmations",
+        column: "payload",
+        key: "id",
+    },
+    SealedColumn {
+        table: "mcp_idempotency",
+        column: "result",
+        key: "id",
+    },
 ];
 
 /// Progress of the sealed columns: how many values are sealed and how many

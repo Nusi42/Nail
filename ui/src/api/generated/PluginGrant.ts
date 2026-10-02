@@ -14,8 +14,9 @@ export type PluginGrant = {
  */
 permission: PluginPermission, 
 /**
- * For `mail.read` / `mail.read.body` only: the accounts (real or
- * virtual) the plug-in may read; `null` = all. Must be `null` for
- * every other permission.
+ * For permissions that [`PluginPermission::takes_accounts`] (the mail
+ * permissions, mail hooks and `attachments`): the accounts (real or
+ * virtual) it reaches; `null` = all. Must be `null` for every other
+ * permission.
  */
 accounts: Array<AccountId> | null, };

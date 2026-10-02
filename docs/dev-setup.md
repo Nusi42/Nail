@@ -525,6 +525,15 @@ For M2c:
   headers-only sync + on-demand bodies + server search, replay connection, localized
   messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)
 
+For M4a:
+
+- **0079:** the M4a contract (writes by agents and plug-ins: `nail_api::agents` action kinds, policies
+  (destructive kinds always ask; "always allow" per MCP client / plug-in for the rest) and
+  confirmations; the MCP tool table, write-tool arguments (`--features json-schema` derives their JSON
+  Schemas), prompts and rate limits; plug-in write / hook permissions, hooks, composer / attachment /
+  link / MCP extensions, background jobs (`CronSchedule`), `nail.l10n`, binary fetch bodies; store v14;
+  slots). Texts built in Rust: `locales/<lang>/core-agents.ftl`, `core-mcp.ftl`; UI: `agents.ftl`.
+
 For M3c:
 
 - **0072:** the M3c contract (Exchange accounts as an `exchange` node in `accounts.kdl` with

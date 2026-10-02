@@ -222,6 +222,14 @@ pub enum PluginUiTarget {
         /// The panel.
         panel: String,
     },
+    /// A button of a banner an open hook showed with a message (M4a,
+    /// [`super::hooks::PluginBannerSpec`]).
+    Banner {
+        /// The message.
+        message_id: MessageId,
+        /// `<plugin>.<banner id>`.
+        banner: String,
+    },
 }
 
 /// The level of a notification.

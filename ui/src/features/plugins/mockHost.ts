@@ -486,7 +486,9 @@ export function answerHost(core: MockCore, host: MockHost, request: HostRequest)
       const pluginId =
         request.target.kind === "dialog"
           ? host.dialogs.get(request.target.dialog_id)?.pluginId
-          : parsePluginPanelId(request.target.panel)?.plugin;
+          : parsePluginPanelId(
+              request.target.kind === "panel" ? request.target.panel : request.target.banner,
+            )?.plugin;
       const plugin = pluginId === undefined ? undefined : find(pluginId);
       if (!plugin) return errorResponse("not_found", "no such dialog or panel");
       if (!runnable(plugin)) return errorResponse("unavailable", `${plugin.id} is not running`);

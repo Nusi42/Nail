@@ -13,6 +13,13 @@ serde_json.workspace = true
 indexmap.workspace = true
 thiserror.workspace = true
 ts-rs.workspace = true
+# M4a: JSON Schemas of the MCP tool / prompt arguments (`json-schema`).
+schemars = { workspace = true, optional = true }
+
+[features]
+# Derive `schemars::JsonSchema` for the MCP tool and prompt arguments
+# (`mcp::tools`, `mcp::prompts`); enabled by nail-mcp.
+json-schema = ["dep:schemars"]
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 mod accounts;
+mod agents;
 mod bodies;
 mod clock;
 mod composer;

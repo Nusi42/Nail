@@ -65,6 +65,14 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        exchange/engine.rs ExchangeEngine (mail per folder + settings + directory + PIM +
                        free/busy + sending) and NegotiateAuth; exchange/pim.rs provider-neutral Exchange
                        item shapes (ADR 0072)
+                       M4a: agents (ActionKind, ActionPolicy ask / allow — destructive kinds always ask,
+                       Confirmation + NewConfirmation, ConfirmationSource nail / elicitation / system),
+                       mcp/tools.rs (MCP_TOOLS table, write-tool argument structs, McpWriteResult;
+                       feature `json-schema` = schemars JsonSchema, enabled by nail-mcp), mcp/prompts.rs
+                       (McpPrompt), McpRateLimits on McpClient; plugins: write / hook permissions,
+                       hooks.rs (hook defs, results, vetoes, banners / badges, stats), extensions.rs
+                       (composer actions, Markdown blocks, previews, attachment / link actions, MCP tools,
+                       ComposerEdit), jobs.rs (CronSchedule, events, job status, PluginActivity) (ADR 0079)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -82,7 +90,8 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        M3b: account `gmail` node (oauth2 only, no smtp, plaintext only on loopback),
                        widgets/{scheduling,gmail}.rs (WP84 slots) (ADR 0065);
                        M3c: account `exchange` node (engine, host / url, polling, streaming, server-rules;
-                       `auth "windows"` only there), widgets/exchange.rs (WP94 slot) (ADR 0072)
+                       `auth "windows"` only there), widgets/exchange.rs (WP94 slot) (ADR 0072);
+                       M4a: widgets/agents.rs (WP104 slot: confirmation-center, confirmation-indicator)
 crates/nail-store      SQLite metadata (v13), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -121,7 +130,11 @@ crates/nail-store      SQLite metadata (v13), blob store, per-account operation 
                        operation queue); Calendar / AddressBook `.exchange` read from exchange_pim_collections;
                        v13 (ADR 0078): exchange_sync.rs (full listings kept across passes: exchange_listed +
                        exchange_pim_collections.full_sync_page; exchange_removed = removals kept until the mailbox
-                       was synced (moves by other clients); exchange_meeting_answers, comment sealed)
+                       was synced (moves by other clients); exchange_meeting_answers, comment sealed);
+                       v14 (ADR 0079): agents.rs (confirmations: view + payload sealed, decided once, idempotency
+                       key per actor, history 500; action_policies, `allow` refused for destructive kinds),
+                       mcp.rs rate limits + mcp_idempotency (sealed), plugin_activity.rs (jobs, hook stats, CPU
+                       per minute)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -164,7 +177,8 @@ crates/nail-plugins    plug-in host (M2d WP61): PluginHost (one thread + QuickJS
                        PluginServices (implemented by nail-core), prelude.js (`nail.*` API), package.rs
                        (.nailplugin checks, PackageStore keeps approved archives packed and verified by
                        hash), dev.rs (hot reload), l10n.rs (PluginCatalogs) (ADR 0051); M3a:
-                       `nail.calendar.events` behind `calendar.read` (ADR 0063)
+                       `nail.calendar.events` behind `calendar.read` (ADR 0063); M4a: rquickjs `array-buffer`
+                       (binary bodies), banner UI actions answer unsupported until WP102 (ADR 0079)
 crates/nail-ical       iCalendar / vCard (own lossless content-line layer + patching writers; calcard
                        only for the Windows zone table and VTIMEZONE generation), own recurrence engine
                        (recur.rs, expand.rs instances, edit.rs scopes), tz.rs (IANA/Windows/custom VTIMEZONE
@@ -221,7 +235,8 @@ crates/nail-mcp        MCP server (rmcp): Streamable HTTP on loopback, grants, a
                        CoreData adapter, admin requests, `nail mcp` stdio bridge (ADR 0025);
                        messages.rs (localized texts), configured_port (ADR 0046); pim.rs: read-only PIM
                        resources (nail://calendars, …/events, contacts, tasks) and tools (list_events,
-                       find_free_time, search_contacts, list_tasks) via McpData::pim / pim_raw (ADR 0063)
+                       find_free_time, search_contacts, list_tasks) via McpData::pim / pim_raw (ADR 0063);
+                       M4a: admin `UpdateMcpRateLimits`; write tools / prompts / confirmations = WP101 (ADR 0079)
 crates/nail-pgp        OpenPGP (rPGP): keyring (S2K secrets: passphrase or keychain:nail/openpgp/<FPR>),
                        PGP/MIME sign/encrypt/decrypt/verify, inline read, header protection, Autocrypt
                        L1, WKD + keys.openpgp.org via injected HttpClient (ADR 0030); Error::localized()
@@ -281,7 +296,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        task (mail per folder, ExchangeExecutor replay, Exchange queue, Graph polling / EWS streaming),
                        settings.rs (categories, automatic replies, rule placement as inbox rules, vacation mapping),
                        pim.rs (`exchange:<account>` source, ExchangeReplayer: meetings through the meeting APIs));
-                       `focus:` (search filter, rules' message view)
+                       `focus:` (search filter, rules' message view);
+                       M4a (ADR 0079): agents.rs (confirmations, action policies, plug-in activity from the store;
+                       annotations empty, previews / actions / job runs unsupported until WP105)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -307,6 +324,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        free/busy timeline), gmail/ (label list / editor, category tabs, MessageLabels)
                        (ADR 0069)); M3c: exchange/ (WP94, ADR 0076: mailboxes, categories, Focused tabs, automatic
                        replies, rule badges, room finder, To Do chooser, setup / settings parts; EXCHANGE_BASE_CSS);
+                       M4a: agents/ (WP104: confirmation center; model.ts mirrors nail_api::agents, mock.ts),
+                       plugins/extensionsMock.ts (M4a plug-in requests);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -331,7 +350,8 @@ defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: 
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
                        M3c: core-exchange.ftl (WP93 + contract ids), core-graph.ftl (WP91), core-ews.ftl
-                       (WP92), exchange.ftl (WP94);
+                       (WP92), exchange.ftl (WP94); M4a: core-agents.ftl (contract ids: kinds, states,
+                       summaries, fields), core-mcp.ftl (WP101: prompts), agents.ftl (WP104);
                        every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs, sbom.mjs, installer-smoke.ps1, check-socket-binds.mjs (ADR 0057), test/ (node:test);
                        interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
@@ -527,6 +547,17 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `trusted_hosts` / `windows_sign_in` and answers `exchange` (prompts, automapped mailboxes); `StartOAuth` carries
   `protocol` (per-service scopes). demo-multi's Exchange accounts `exchange` (Graph) and `corp` (EWS) start
   `enabled=#false`; `exchange.spec.ts` switches one on or adds accounts through Autodiscover.
+- M4a contract: ADR 0079 (`nail_api::agents`: action kinds, policies — destructive kinds (Trash, permanent
+  delete, PIM deletes) always ask, outgoing + rules ask by default and may be always-allowed per client / plug-in,
+  drafts / flags / tags / PIM writes run without asking by default; `skip_draft_confirmation` is ignored —
+  confirmations with attribution, summary, before / after; elicitation approves only non-destructive kinds; MCP
+  tool table + write-tool args (`json-schema` feature) + prompts + `McpRateLimits`; plug-in permissions
+  `mail.organize` … `mcp.expose`, hooks (budgets, veto → `SendVetoed` / `OverrideSendVeto`, banners via
+  `GetMessagePluginAnnotations`), composer / attachment / link / MCP extensions (`RunPluginAction`,
+  `RenderAttachmentPreview`, `ComposerEditRequested`), background jobs (`CronSchedule`, CPU quota),
+  `nail.l10n`, binary fetch; 11 requests, 5 events; store v14; slots: `ui/src/features/agents/`,
+  `nail-config/src/widgets/agents.rs`, `locales/*/{agents,core-agents,core-mcp}.ftl`; WP101–WP104 own
+  `nail-mcp`+`nail-cli` / `nail-plugins` / `packages`+`examples`+plug-in & MCP user docs / UI).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

@@ -27,5 +27,9 @@ excluded_folders: Array<FolderId>,
 /**
  * Skip the confirmation prompt for draft writes (never relaxes
  * sending or permanent delete).
+ *
+ * Superseded in M4a by the client's action policies
+ * ([`crate::agents::ActionPolicy`]; drafts run without asking by
+ * default); kept for the wire format and ignored (ADR 0079).
  */
 skip_draft_confirmation: boolean, };

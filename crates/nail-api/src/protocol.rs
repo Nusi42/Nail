@@ -24,6 +24,10 @@ use crate::accounts::{
     AccountConfig, AccountStatus, AccountTestResult, AccountsConfig, DiscoveredAccount, Identity,
     SecretInput, SecretValue, VirtualAccountConfig,
 };
+use crate::agents::{
+    ActionActor, ActionAttribution, ActionKind, ActionPolicy, ActionPolicyMode, Confirmation,
+    ConfirmationDecision, ConfirmationFilter,
+};
 use crate::compose::{
     ComposerMode, Draft, DraftAttachment, DraftContext, OutboxEntry, OutboxState,
 };
@@ -43,15 +47,15 @@ use crate::exchange::{
 };
 use crate::gmail::{GmailLabel, GmailLabelSettings};
 use crate::ids::{
-    AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
-    EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId,
-    ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId,
-    TaskId, ThreadId,
+    AccountId, AddressBookId, CalendarId, ConfigBackupId, ConfirmationId, ContactGroupId,
+    ContactId, DraftId, EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId,
+    McpClientId, MessageId, OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId,
+    PluginDialogId, PluginId, ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId,
+    RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
 };
 use crate::launch::LaunchRequest;
 use crate::localized::LocalizedMessage;
-use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpServerInfo, McpSettings};
+use crate::mcp::{McpAuditEntry, McpClient, McpGrant, McpRateLimits, McpServerInfo, McpSettings};
 use crate::ops::{FlagChange, MoveTarget, OpStatus};
 use crate::pim::calendar::FreeSlot;
 use crate::pim::contact::DuplicateGroup;
@@ -65,9 +69,10 @@ use crate::pim::{
 };
 use crate::plugins::runtime::PluginCommandSurface;
 use crate::plugins::{
-    PluginDialog, PluginGrant, PluginInfo, PluginInstallPreview, PluginLogEntry,
-    PluginNotification, PluginPackageSource, PluginSettingDef, PluginStopReason, PluginUiNode,
-    PluginUiTarget,
+    ComposerEdit, PluginActionTarget, PluginActivity, PluginBadge, PluginBanner, PluginDialog,
+    PluginGrant, PluginInfo, PluginInstallPreview, PluginLogEntry, PluginNotification,
+    PluginPackageSource, PluginPreview, PluginSendVeto, PluginSettingDef, PluginStopReason,
+    PluginUiNode, PluginUiTarget,
 };
 use crate::remote::{
     PairingCode, RemoteAlert, RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession,
@@ -2235,6 +2240,140 @@ pub enum Request {
         #[serde(default)]
         refresh: bool,
     },
+
+    // --- Confirmations and action policies (M4a WP100, ADR 0079) ---
+    /// Confirmations of writes by MCP clients and plug-ins. Answered with
+    /// [`Response::Confirmations`].
+    ListConfirmations {
+        /// Pending (oldest first), decided (newest first) or all.
+        #[serde(default)]
+        filter: ConfirmationFilter,
+        /// Only this client's / plug-in's; `null` = everyone's.
+        #[serde(default)]
+        actor: Option<ActionActor>,
+        /// Only confirmations with a smaller id (paging the history);
+        /// `null` = from the start.
+        #[serde(default)]
+        before: Option<ConfirmationId>,
+        /// At most this many.
+        limit: u32,
+    },
+    /// Approve or deny a pending confirmation; with `always_allow`, an
+    /// approval also sets the actor's policy for the kind to `allow`.
+    /// Answered with [`Response::ConfirmationDecided`], followed by
+    /// [`Event::ConfirmationResolved`] (and [`Event::ActionPoliciesChanged`]);
+    /// `not_found`, `conflict` when it is no longer pending,
+    /// `invalid_request` with `action-policy-issue-destructive` for
+    /// `always_allow` on a destructive kind.
+    DecideConfirmation {
+        /// The confirmation.
+        confirmation_id: ConfirmationId,
+        /// The answer.
+        decision: ConfirmationDecision,
+        /// Also allow this actor's actions of this kind from now on.
+        #[serde(default)]
+        always_allow: bool,
+    },
+    /// An actor's policy for every kind. Answered with
+    /// [`Response::ActionPolicies`]; `not_found` for an unknown client or
+    /// plug-in.
+    ListActionPolicies {
+        /// The MCP client or plug-in.
+        actor: ActionActor,
+    },
+    /// Set (or, with `null`, reset to the default) an actor's policy for
+    /// one kind. Answered with [`Response::ActionPolicies`], followed by
+    /// [`Event::ActionPoliciesChanged`]; `invalid_request` with
+    /// `action-policy-issue-destructive` for `allow` on a destructive kind.
+    SetActionPolicy {
+        /// The MCP client or plug-in.
+        actor: ActionActor,
+        /// The kind.
+        kind: ActionKind,
+        /// The new mode; `null` = the default.
+        mode: Option<ActionPolicyMode>,
+    },
+
+    // --- MCP rate limits (M4a) ---
+    /// Replace a client's rate limits. Answered with
+    /// [`Response::McpClientSaved`]; `invalid_request` with an
+    /// `mcp-rate-limit-issue-*` id.
+    UpdateMcpRateLimits {
+        /// The client.
+        client_id: McpClientId,
+        /// The new limits.
+        limits: McpRateLimits,
+    },
+
+    // --- Plug-ins: hooks, extensions, jobs (M4a) ---
+    /// A plug-in's jobs, hooks and CPU use. Answered with
+    /// [`Response::PluginActivity`].
+    GetPluginActivity {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
+    /// Run a plug-in's job now (trigger `manual`). Answered with
+    /// [`Response::Done`] once the job started; `not_found` for an unknown
+    /// job, `unavailable` when the plug-in is not running, `conflict`
+    /// while the job runs.
+    RunPluginJob {
+        /// The plug-in.
+        plugin_id: PluginId,
+        /// The job's name.
+        job: String,
+    },
+    /// The banners and badges the plug-ins' open hooks show with a message
+    /// (the reader asks when it opens one; hooks that fail or time out
+    /// contribute nothing). Answered with
+    /// [`Response::MessagePluginAnnotations`].
+    GetMessagePluginAnnotations {
+        /// The message.
+        message_id: MessageId,
+        /// The UI's random id (see [`crate::plugins::runtime`]).
+        #[serde(default)]
+        client_id: Option<String>,
+    },
+    /// Render an attachment with a plug-in's preview renderer. Answered
+    /// with [`Response::AttachmentPreview`]; `not_found`, `too_large` over
+    /// the renderer's size, `unavailable` when the plug-in is not running,
+    /// `invalid_request` when it does not render this type.
+    RenderAttachmentPreview {
+        /// The message.
+        message_id: MessageId,
+        /// The attachment's index.
+        index: u32,
+        /// `<plugin>.<renderer>`.
+        renderer: String,
+        /// The UI's random id.
+        #[serde(default)]
+        client_id: Option<String>,
+    },
+    /// Run a composer, attachment or link action of a plug-in. Answered
+    /// with [`Response::Done`] once the plug-in took it; what it does
+    /// arrives as events (composer edits, dialogs, notifications).
+    /// `not_found` for an unknown action, `unavailable` when the plug-in
+    /// is not running.
+    RunPluginAction {
+        /// `<plugin>.<action>`.
+        action: String,
+        /// Where it was invoked.
+        target: PluginActionTarget,
+        /// The UI's context.
+        #[serde(default)]
+        context: UiContext,
+        /// The UI's random id.
+        #[serde(default)]
+        client_id: Option<String>,
+    },
+    /// "Send anyway": send a draft a before-send hook vetoed, with the
+    /// options of the original [`Request::SendDraft`] (the other hooks'
+    /// headers and content still apply). Answered with
+    /// [`Response::SendQueued`]; `not_found` when the veto expired (send
+    /// again).
+    OverrideSendVeto {
+        /// The veto ([`Response::SendVetoed`]).
+        veto_id: SendVetoId,
+    },
 }
 
 fn default_true() -> bool {
@@ -3120,6 +3259,60 @@ pub enum Response {
         /// by fire time.
         reminders: Vec<Reminder>,
     },
+    /// Answer to [`Request::ListConfirmations`].
+    Confirmations {
+        /// The confirmations.
+        confirmations: Vec<Confirmation>,
+    },
+    /// Answer to [`Request::DecideConfirmation`].
+    ConfirmationDecided {
+        /// The confirmation in its new state.
+        confirmation: Box<Confirmation>,
+    },
+    /// Answer to [`Request::ListActionPolicies`] and
+    /// [`Request::SetActionPolicy`].
+    ActionPolicies {
+        /// The actor.
+        actor: ActionActor,
+        /// One policy per kind, in [`ActionKind::ALL`] order.
+        policies: Vec<ActionPolicy>,
+    },
+    /// Answer to [`Request::GetPluginActivity`].
+    PluginActivity {
+        /// The activity.
+        activity: Box<PluginActivity>,
+    },
+    /// Answer to [`Request::GetMessagePluginAnnotations`].
+    MessagePluginAnnotations {
+        /// The message.
+        message_id: MessageId,
+        /// Banners, by plug-in name.
+        banners: Vec<PluginBanner>,
+        /// Badges, by plug-in name.
+        badges: Vec<PluginBadge>,
+    },
+    /// Answer to [`Request::RenderAttachmentPreview`].
+    AttachmentPreview {
+        /// The message.
+        message_id: MessageId,
+        /// The attachment's index.
+        index: u32,
+        /// The renderer.
+        renderer: String,
+        /// What to show.
+        preview: Box<PluginPreview>,
+    },
+    /// Answer to [`Request::SendDraft`] when a before-send hook vetoed:
+    /// nothing was queued; the UI names each plug-in with its reason and
+    /// offers "Send anyway" ([`Request::OverrideSendVeto`]).
+    SendVetoed {
+        /// The draft (unchanged).
+        draft_id: DraftId,
+        /// Pass to [`Request::OverrideSendVeto`] (valid for 10 minutes).
+        veto_id: SendVetoId,
+        /// The vetoes.
+        vetoes: Vec<PluginSendVeto>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -3493,6 +3686,42 @@ pub enum Event {
         /// What changed.
         areas: Vec<ExchangeArea>,
     },
+    /// An MCP client or plug-in asks the user to confirm a write (M4a):
+    /// the confirmation center shows it (and the desktop may notify).
+    ConfirmationRequested {
+        /// The pending confirmation.
+        confirmation: Box<Confirmation>,
+    },
+    /// A confirmation was decided, expired or cancelled.
+    ConfirmationResolved {
+        /// The confirmation in its final state.
+        confirmation: Box<Confirmation>,
+    },
+    /// An actor's action policies changed; clients refetch
+    /// [`Request::ListActionPolicies`].
+    ActionPoliciesChanged {
+        /// The actor.
+        actor: ActionActor,
+    },
+    /// A plug-in's composer action or MCP's `edit_open_draft` edits the
+    /// open draft: the composer showing `draft_id` applies it live.
+    ComposerEditRequested {
+        /// The draft.
+        draft_id: DraftId,
+        /// The UI that ran the composer action; `null` = every UI showing
+        /// the draft (MCP).
+        client_id: Option<String>,
+        /// Who edits (shown next to the change).
+        by: Box<ActionAttribution>,
+        /// The edit.
+        edit: ComposerEdit,
+    },
+    /// A plug-in's jobs, hooks or CPU use changed; the plug-in manager
+    /// refetches [`Request::GetPluginActivity`].
+    PluginActivityChanged {
+        /// The plug-in.
+        plugin_id: PluginId,
+    },
 }
 
 /// A request frame on a multiplexed transport (WebSocket).
@@ -3787,6 +4016,7 @@ mod tests {
                 token_hint: "x1y2".into(),
                 grant: McpGrant::default(),
                 revoked_at: None,
+                rate_limits: McpRateLimits::default(),
             }),
             token: "secret".into(),
         };
@@ -4404,5 +4634,116 @@ mod tests {
         };
         let value = serde_json::to_value(&lists).unwrap();
         assert_eq!(serde_json::from_value::<Response>(value).unwrap(), lists);
+    }
+
+    #[test]
+    fn m4a_requests_responses_and_events_serialize() {
+        let list: Request =
+            serde_json::from_value(json!({"type": "ListConfirmations", "limit": 20})).unwrap();
+        assert_eq!(
+            list,
+            Request::ListConfirmations {
+                filter: ConfirmationFilter::Pending,
+                actor: None,
+                before: None,
+                limit: 20,
+            }
+        );
+        let decide = Request::DecideConfirmation {
+            confirmation_id: "7".into(),
+            decision: ConfirmationDecision::Approve,
+            always_allow: true,
+        };
+        assert_eq!(
+            serde_json::to_value(&decide).unwrap(),
+            json!({"type": "DecideConfirmation", "confirmation_id": "7",
+                   "decision": "approve", "always_allow": true})
+        );
+        let set = Request::SetActionPolicy {
+            actor: ActionActor::mcp_client("c1"),
+            kind: ActionKind::Send,
+            mode: Some(ActionPolicyMode::Allow),
+        };
+        let value = serde_json::to_value(&set).unwrap();
+        assert_eq!(
+            value["actor"],
+            json!({"kind": "mcp-client", "client_id": "c1"})
+        );
+        assert_eq!(serde_json::from_value::<Request>(value).unwrap(), set);
+        let policies = Response::ActionPolicies {
+            actor: ActionActor::plugin("follow-up"),
+            policies: ActionPolicy::table(&[]),
+        };
+        let value = serde_json::to_value(&policies).unwrap();
+        assert_eq!(
+            value["policies"].as_array().unwrap().len(),
+            ActionKind::ALL.len()
+        );
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), policies);
+        let action: Request = serde_json::from_value(json!({
+            "type": "RunPluginAction", "action": "acme-crm.save",
+            "target": {"kind": "attachment", "message_id": "m1", "index": 0}
+        }))
+        .unwrap();
+        assert!(matches!(
+            action,
+            Request::RunPluginAction {
+                client_id: None,
+                ..
+            }
+        ));
+        let vetoed = Response::SendVetoed {
+            draft_id: "d1".into(),
+            veto_id: "v1".into(),
+            vetoes: vec![PluginSendVeto {
+                plugin_id: "attachment-check".into(),
+                plugin_name: "Attachment check".into(),
+                reason: "You mention an attachment but none is attached.".into(),
+            }],
+        };
+        let value = serde_json::to_value(&vetoed).unwrap();
+        assert_eq!(value["vetoes"][0]["plugin_name"], "Attachment check");
+        assert_eq!(serde_json::from_value::<Response>(value).unwrap(), vetoed);
+        let edit = Event::ComposerEditRequested {
+            draft_id: "d1".into(),
+            client_id: None,
+            by: Box::new(ActionAttribution {
+                actor: ActionActor::mcp_client("c1"),
+                name: "Claude".into(),
+                on_behalf_of: None,
+            }),
+            edit: ComposerEdit {
+                op: crate::plugins::ComposerEditOp::Insert,
+                text: "Hello".into(),
+                format: crate::plugins::ComposerTextFormat::Markdown,
+            },
+        };
+        let value = serde_json::to_value(&edit).unwrap();
+        assert_eq!(
+            value["edit"],
+            json!({"op": "insert", "text": "Hello", "format": "markdown"})
+        );
+        assert_eq!(serde_json::from_value::<Event>(value).unwrap(), edit);
+        let limits: Request = serde_json::from_value(json!({
+            "type": "UpdateMcpRateLimits", "client_id": "c1", "limits": {"sends_per_hour": null}
+        }))
+        .unwrap();
+        let Request::UpdateMcpRateLimits { limits, .. } = limits else {
+            panic!("wrong request");
+        };
+        assert_eq!(limits.sends_per_hour, None);
+        assert_eq!(limits.requests_per_minute, Some(120));
+        let banner_action: Request = serde_json::from_value(json!({
+            "type": "PluginUiAction", "component_id": "open-crm", "values": {},
+            "target": {"kind": "banner", "message_id": "m1", "banner": "acme-crm.customer"}
+        }))
+        .unwrap();
+        assert!(matches!(
+            banner_action,
+            Request::PluginUiAction {
+                target: PluginUiTarget::Banner { .. },
+                ..
+            }
+        ));
     }
 }

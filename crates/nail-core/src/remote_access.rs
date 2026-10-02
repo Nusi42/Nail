@@ -599,6 +599,25 @@ impl Service {
             Request::ClassifyFocused { message_ids, .. } => {
                 self.check_messages(access, message_ids).await
             }
+            // M4a (ADR 0079): confirmations and policies name items of any
+            // account (`admin` and a full grant); rate limits and plug-in
+            // activity are administration like their siblings; plug-in
+            // extensions read with the plug-in's grants (full grants, like
+            // the M2d runtime requests); "Send anyway" sends.
+            Request::ListConfirmations { .. }
+            | Request::DecideConfirmation { .. }
+            | Request::ListActionPolicies { .. }
+            | Request::SetActionPolicy { .. } => check_full(access),
+            Request::UpdateMcpRateLimits { .. }
+            | Request::GetPluginActivity { .. }
+            | Request::RunPluginJob { .. } => Ok(()),
+            Request::GetMessagePluginAnnotations { .. }
+            | Request::RenderAttachmentPreview { .. }
+            | Request::RunPluginAction { .. } => check_full(access),
+            Request::OverrideSendVeto { .. } => {
+                check_send(access)?;
+                check_full(access)
+            }
         }
     }
 
@@ -1263,6 +1282,14 @@ impl Service {
             Event::GmailLabelsChanged { account_id } => access.allows_account(account_id),
             // M3c: Exchange state follows its account.
             Event::ExchangeChanged { account_id, .. } => access.allows_account(account_id),
+            // M4a: confirmations and policies are administration over every
+            // account; composer edits follow plug-ins (full grants); plug-in
+            // activity is administration.
+            Event::ConfirmationRequested { .. }
+            | Event::ConfirmationResolved { .. }
+            | Event::ActionPoliciesChanged { .. } => admin && full(&access),
+            Event::ComposerEditRequested { .. } => full(&access),
+            Event::PluginActivityChanged { .. } => admin,
         };
         allowed.then_some(event)
     }

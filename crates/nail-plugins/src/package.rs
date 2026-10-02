@@ -730,7 +730,7 @@ mod tests {
         let invalid = zip_with(
             &[(
                 "manifest.json",
-                br#"{"id":"Bad","permissions":["mail.send"]}"#,
+                br#"{"id":"Bad","permissions":["ui.webview"]}"#,
             )],
             deflate(),
         );

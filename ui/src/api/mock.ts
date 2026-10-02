@@ -20,12 +20,17 @@ import {
   answerDraftAttachment,
   isComposerRequest,
 } from "../features/composer/mock";
+import { answerAgents, isAgentsRequest } from "../features/agents/mock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerExchange, isExchangeRequest } from "../features/exchange/mock";
 import { answerGmail, isGmailRequest } from "../features/gmail/mock";
 import { answerMcp, isMcpRequest } from "../features/mcp/mock";
 import { answerPim, isPimRequest } from "../features/pim/mock";
 import { answerPlugins, isPluginsRequest } from "../features/plugins/mock";
+import {
+  answerPluginExtensions,
+  isPluginExtensionRequest,
+} from "../features/plugins/extensionsMock";
 import { answerRemote, decorateRemoteContent, isRemoteRequest } from "../features/remote/mock";
 import { answerRules, isRulesRequest } from "../features/rules/mock";
 import {
@@ -126,6 +131,8 @@ export class MockTransport implements Transport, MockCore {
     if (isSchedulingRequest(request)) return answerScheduling(this, request);
     if (isGmailRequest(request)) return answerGmail(this, request);
     if (isExchangeRequest(request)) return answerExchange(this, request);
+    if (isAgentsRequest(request)) return answerAgents(this, request);
+    if (isPluginExtensionRequest(request)) return answerPluginExtensions(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };

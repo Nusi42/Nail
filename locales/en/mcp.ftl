@@ -99,3 +99,8 @@ mcp-indicator-dismiss = Hide agent indicator
 ## MCP settings (M2c, nail_api::mcp::McpSettingsIssue)
 
 mcp-settings-issue-port = Choose a port between 1024 and 65535.
+
+## Rate limits (M4a, ADR 0079; McpRateLimitIssue)
+
+mcp-rate-limit-issue-zero = A limit cannot be 0. Remove the client's permissions instead.
+mcp-rate-limit-issue-too-high = A limit can be at most 10,000.

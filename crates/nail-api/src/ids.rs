@@ -212,6 +212,18 @@ string_id!(
     ExchangeCategoryId
 );
 
+string_id!(
+    /// Identifies a confirmation request: a write by an MCP client or a
+    /// plug-in waiting for the user's decision (M4a,
+    /// [`crate::agents::Confirmation`]). Opaque, made by the core.
+    ConfirmationId
+);
+string_id!(
+    /// Identifies a before-send veto waiting for the user's "Send anyway"
+    /// (M4a, [`crate::Response::SendVetoed`]). Opaque, made by the core.
+    SendVetoId
+);
+
 impl PimSourceId {
     /// Id of the built-in local source (local calendars, task lists and
     /// address books, including the "Collected" address book). Reserved:

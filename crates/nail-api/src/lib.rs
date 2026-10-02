@@ -58,6 +58,15 @@
 //!   room lists, Microsoft To Do lists, Exchange sync state; the engine
 //!   seams in [`exchange::engine`] and the provider-neutral PIM item shapes
 //!   in [`exchange::pim`].
+//! * M4a (ADR 0079): [`agents`] — writes by MCP clients and plug-ins:
+//!   action kinds, confirmations (pending actions with attribution,
+//!   summary and before / after, approve / deny), "always allow" policies
+//!   per client / plug-in for non-destructive kinds; [`mcp`] gains the write
+//!   tools, prompts and per-client rate limits ([`mcp::tools`],
+//!   [`mcp::prompts`], [`mcp::McpRateLimits`]); [`plugins`] gains the write
+//!   and hook permissions, mail hooks ([`plugins::hooks`]), composer /
+//!   attachment / link / MCP extensions ([`plugins::extensions`]) and
+//!   background jobs ([`plugins::jobs`]).
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -74,6 +83,7 @@
 #![warn(missing_docs)]
 
 pub mod accounts;
+pub mod agents;
 pub mod compose;
 pub mod config;
 pub mod context;
@@ -108,6 +118,10 @@ pub use accounts::{
     AccountConfig, AccountState, AccountStatus, AccountsConfig, AuthConfig, Identity,
     IncomingServer, OutgoingServer, SecretRef, ServerEndpoint, TlsMode, VirtualAccountConfig,
 };
+pub use agents::{
+    ActionActor, ActionAttribution, ActionKind, ActionPolicy, ActionPolicyMode, Confirmation,
+    ConfirmationState,
+};
 pub use compose::{
     AutomaticMail, Draft, DraftAttachment, DraftContext, DraftContextMode, LOOP_HEADER,
     OutboxEntry, OutboxState, SignatureChoice,
@@ -134,15 +148,15 @@ pub use exchange::{
 };
 pub use gmail::{GmailCategory, GmailLabel, GmailLabelSettings, GmailMessageInfo, GmailOptions};
 pub use ids::{
-    AccountId, AddressBookId, CalendarId, ConfigBackupId, ContactGroupId, ContactId, DraftId,
-    EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId, McpClientId, MessageId,
-    OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId, PluginDialogId, PluginId,
-    ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId, RuleRunId, SavedSearchId,
-    TaskId, ThreadId,
+    AccountId, AddressBookId, CalendarId, ConfigBackupId, ConfirmationId, ContactGroupId,
+    ContactId, DraftId, EventId, ExchangeCategoryId, FolderId, GmailLabelId, IdentityId, KeyId,
+    McpClientId, MessageId, OAuthFlowId, OpId, OutboxId, PairingId, PasskeyId, PimSourceId,
+    PluginDialogId, PluginId, ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId,
+    RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
 };
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
-pub use mcp::{McpClient, McpGrant, McpScope, McpSettings};
+pub use mcp::{McpClient, McpGrant, McpRateLimits, McpScope, McpSettings};
 pub use menus::{ResolvedMenu, ResolvedMenuEntry};
 pub use ops::{FlagChange, MoveTarget, OpState, OpStatus};
 pub use pim::{
@@ -288,6 +302,20 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     ExchangeMessageInfo::export_all(&cfg)?;
     ExchangeOptions::export_all(&cfg)?;
     accounts::SspiPackage::export_all(&cfg)?;
+    // M4a: agent / plug-in types the UI names but that are reachable only
+    // through optional fields, or not at all (issues, kinds, hook and
+    // extension shapes the plug-in manager shows).
+    agents::ActionPolicyIssue::export_all(&cfg)?;
+    agents::ConfirmationDecision::export_all(&cfg)?;
+    agents::ActionTargetKind::export_all(&cfg)?;
+    mcp::McpRateLimitIssue::export_all(&cfg)?;
+    plugins::PluginHookKind::export_all(&cfg)?;
+    plugins::PluginHookOutcome::export_all(&cfg)?;
+    plugins::PluginEventName::export_all(&cfg)?;
+    plugins::PluginJobOutcome::export_all(&cfg)?;
+    plugins::jobs::CronIssue::export_all(&cfg)?;
+    plugins::ComposerEdit::export_all(&cfg)?;
+    plugins::PluginPreview::export_all(&cfg)?;
 
     write_index(out_dir)
 }
@@ -316,6 +344,17 @@ pub fn export_plugin_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::Ex
     plugins::PluginCalendarEvent::export_all(&cfg)?;
     PluginPermission::export_all(&cfg)?;
     plugins::PluginLogLevel::export_all(&cfg)?;
+    // M4a: hooks, extensions, jobs, composer edits.
+    plugins::PluginArrivalResult::export_all(&cfg)?;
+    plugins::PluginBeforeSendResult::export_all(&cfg)?;
+    plugins::PluginOpenResult::export_all(&cfg)?;
+    plugins::PluginOutgoingMessage::export_all(&cfg)?;
+    plugins::PluginActionContext::export_all(&cfg)?;
+    plugins::PluginMarkdownBlockInput::export_all(&cfg)?;
+    plugins::PluginMarkdownBlockResult::export_all(&cfg)?;
+    plugins::PluginPreview::export_all(&cfg)?;
+    plugins::PluginJobTrigger::export_all(&cfg)?;
+    plugins::ComposerEdit::export_all(&cfg)?;
     write_index(out_dir)
 }
 

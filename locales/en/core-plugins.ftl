@@ -34,6 +34,16 @@ plugin-manifest-invalid-setting = The setting at { $path } is not valid.
 plugin-manifest-duplicate-setting = The setting “{ $detail }” is declared twice.
 plugin-manifest-invalid-locale = The language file at { $path } is not valid.
 plugin-manifest-too-many-contributions = The plug-in declares too many entries at { $path }.
+plugin-manifest-missing-required-permission = A permission needs another one the plug-in does not declare: { $detail }.
+plugin-manifest-contribution-needs-permission = { $path } needs the permission { $detail }.
+plugin-manifest-invalid-hook = The mail hook at { $path } has an invalid filter or time budget.
+plugin-manifest-duplicate-hook = The plug-in declares the hook “{ $detail }” twice.
+plugin-manifest-invalid-extension = The entry “{ $detail }” at { $path } has an invalid id, title, file type or host.
+plugin-manifest-duplicate-extension = “{ $detail }” is declared twice at { $path }.
+plugin-manifest-invalid-job = The background job “{ $detail }” has an invalid id or title, nothing that starts it, or a schedule that is invalid or runs more often than every 5 minutes.
+plugin-manifest-duplicate-job = The plug-in declares the background job “{ $detail }” twice.
+plugin-manifest-invalid-mcp-tool = The MCP tool “{ $detail }” has an invalid id, description, argument schema or scopes, or its name is too long.
+plugin-manifest-duplicate-mcp-tool = The plug-in declares the MCP tool “{ $detail }” twice.
 
 ## Refused UI trees (PluginUiIssueKind; logged to the plug-in's log, $path = where)
 
@@ -116,3 +126,14 @@ plugin-package-no-manifest = The plug-in package has no manifest.json.
 plugin-package-unreadable = The plug-in package cannot be read. { $detail }
 plugin-package-hash-mismatch = The plug-in package changed after it was checked. Check it again before installing.
 plugin-package-missing-file = The plug-in file { $path } is missing.
+
+## M4a (ADR 0079): hooks and background jobs (plug-in manager, logs)
+
+plugin-hook-arrival = New mail
+plugin-hook-before-send = Before sending
+plugin-hook-open = Opening a message
+plugin-job-outcome-ok = Finished
+plugin-job-outcome-error = Failed
+plugin-job-outcome-timeout = Took too long
+plugin-job-outcome-cpu-quota = Skipped: the plug-in used its CPU time for this hour
+plugin-job-outcome-overlap = Skipped: the previous run had not finished

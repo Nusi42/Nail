@@ -1,12 +1,13 @@
 //! The MCP client administration requests of the Client API
 //! (`ListMcpClients`, `CreateMcpClient`, `UpdateMcpGrants`,
-//! `RevokeMcpClient`, `ListMcpAudit`, `GetMcpServerInfo`; ADR 0022).
+//! `RevokeMcpClient`, `ListMcpAudit`, `GetMcpServerInfo`; ADR 0022) and
+//! the client's rate limits (`UpdateMcpRateLimits`, M4a, ADR 0079).
 //!
 //! The core routes these requests here ([`handle`]); everything they need
 //! is the store, the server's state and a way to emit events.
 
 use nail_api::mcp::{McpGrant, McpServerInfo};
-use nail_api::{ApiError, Event, Request, Response};
+use nail_api::{ApiError, Event, LocalizedMessage, Request, Response};
 use nail_store::{Store, hash_mcp_token};
 
 use crate::server::now;
@@ -50,6 +51,7 @@ pub fn is_admin_request(request: &Request) -> bool {
             | Request::RevokeMcpClient { .. }
             | Request::ListMcpAudit { .. }
             | Request::GetMcpServerInfo
+            | Request::UpdateMcpRateLimits { .. }
     )
 }
 
@@ -90,6 +92,22 @@ pub async fn handle(
             let grant = normalized(grant);
             let client = store
                 .call(move |s| s.update_mcp_grant(&client_id, &grant))
+                .await?;
+            emit(Event::McpClientsChanged);
+            Ok(Response::McpClientSaved {
+                client: Box::new(client),
+            })
+        }
+        Request::UpdateMcpRateLimits { client_id, limits } => {
+            if let Some(issue) = limits.issues().first() {
+                return Err(ApiError::invalid_request(format!(
+                    "invalid rate limits ({})",
+                    issue.message_id()
+                ))
+                .with_localized(LocalizedMessage::new(issue.message_id())));
+            }
+            let client = store
+                .call(move |s| s.set_mcp_rate_limits(&client_id, &limits))
                 .await?;
             emit(Event::McpClientsChanged);
             Ok(Response::McpClientSaved {
@@ -391,5 +409,60 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn rate_limits_are_validated_and_saved() {
+        use nail_api::mcp::McpRateLimits;
+        let store = Store::open_in_memory().unwrap();
+        let events = Mutex::new(Vec::new());
+        let emit = |e: Event| events.lock().unwrap().push(e);
+        let Response::McpClientCreated { client, .. } = handle(
+            &store,
+            None,
+            Request::CreateMcpClient {
+                name: "Agent".into(),
+                grant: McpGrant::default(),
+            },
+            emit,
+        )
+        .await
+        .unwrap() else {
+            panic!("created expected");
+        };
+        assert_eq!(client.rate_limits, McpRateLimits::default());
+        let request = Request::UpdateMcpRateLimits {
+            client_id: client.id.clone(),
+            limits: McpRateLimits {
+                requests_per_minute: Some(0),
+                ..McpRateLimits::default()
+            },
+        };
+        assert!(is_admin_request(&request));
+        let err = handle(&store, None, request, emit).await.unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+        assert_eq!(err.localized.unwrap().id, "mcp-rate-limit-issue-zero");
+        let limits = McpRateLimits {
+            sends_per_hour: Some(3),
+            ..McpRateLimits::unlimited()
+        };
+        let Response::McpClientSaved { client: saved } = handle(
+            &store,
+            None,
+            Request::UpdateMcpRateLimits {
+                client_id: client.id.clone(),
+                limits,
+            },
+            emit,
+        )
+        .await
+        .unwrap() else {
+            panic!("saved expected");
+        };
+        assert_eq!(saved.rate_limits, limits);
+        assert!(matches!(
+            events.lock().unwrap().last(),
+            Some(Event::McpClientsChanged)
+        ));
     }
 }

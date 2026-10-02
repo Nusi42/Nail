@@ -24,6 +24,12 @@
 //!   read-only mail view ([`PluginMessage`]).
 //! * [`admin`]: installed plug-ins ([`PluginInfo`]), install sources and
 //!   previews, logs, settings, storage limits.
+//! * M4a (ADR 0079): [`hooks`] — mail hooks (arrival, before send, open)
+//!   and their results; [`extensions`] — composer actions, Markdown
+//!   blocks, attachment previews and actions, link actions, MCP tools,
+//!   composer edits; [`jobs`] — background jobs (cron schedules, event
+//!   subscriptions, limits, status). The write permissions and their
+//!   confirmations are in [`permission`] and [`crate::agents`].
 //!
 //! **Naming.** Everything a plug-in author writes or receives (manifest,
 //! component trees, dialog specs and results, command contexts, the mail
@@ -39,6 +45,9 @@
 //! `plugin-panel "<plugin>.<panel>"` ([`plugin_panel_id`]).
 
 pub mod admin;
+pub mod extensions;
+pub mod hooks;
+pub mod jobs;
 pub mod manifest;
 pub mod permission;
 pub mod runtime;
@@ -47,6 +56,24 @@ pub mod ui;
 pub use admin::{
     PluginInfo, PluginInstallPreview, PluginLogEntry, PluginLogLevel, PluginLogSource,
     PluginPackageSource, PluginRunState, PluginStopReason, PluginStorageUsage,
+};
+pub use extensions::{
+    ComposerEdit, ComposerEditOp, ComposerSelection, ComposerTextFormat, PluginActionContext,
+    PluginActionTarget, PluginAttachmentActionDef, PluginAttachmentPreviewDef, PluginAttachmentRef,
+    PluginComposerActionDef, PluginComposerContext, PluginLink, PluginLinkActionDef,
+    PluginMarkdownBlockDef, PluginMarkdownBlockInput, PluginMarkdownBlockResult, PluginMcpToolDef,
+    PluginPreview, PluginRenderPurpose, markdown_block_info, plugin_extension_id,
+    plugin_mcp_tool_name,
+};
+pub use hooks::{
+    PluginArrivalResult, PluginBadge, PluginBadgeSpec, PluginBanner, PluginBannerSpec,
+    PluginBeforeSendResult, PluginContentAddition, PluginHeader, PluginHookDef, PluginHookKind,
+    PluginHookOutcome, PluginHookStats, PluginMailAction, PluginOpenResult, PluginOutgoingMessage,
+    PluginSendVeto, PluginVetoSpec,
+};
+pub use jobs::{
+    CronSchedule, PluginActivity, PluginEventName, PluginJobDef, PluginJobOutcome, PluginJobStatus,
+    PluginJobTrigger,
 };
 pub use manifest::{
     PluginCommandDef, PluginContributions, PluginKeyDef, PluginManifest, PluginManifestIssue,

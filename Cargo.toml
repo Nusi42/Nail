@@ -252,7 +252,9 @@ tauri-plugin-notification = "2.5.0"
 # module loading of the bundled entry; `macro` / `classes` / `properties`:
 # binding the `nail.*` API. Memory limits and interrupt handlers are core
 # features.
-rquickjs = { version = "0.14.0", features = ["futures", "loader", "macro", "classes", "properties"] }
+# M4a (ADR 0079): `array-buffer` for binary `nail.http.fetch` bodies and
+# attachment bytes (Uint8Array / ArrayBuffer; no extra dependency).
+rquickjs = { version = "0.14.0", features = ["futures", "loader", "macro", "classes", "properties", "array-buffer"] }
 # `.nailplugin` archives (zip): deflate through zlib-rs (pure Rust, Zlib
 # licence); no bzip2 / zstd / lzma C code, no AES.
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
@@ -289,6 +291,16 @@ iana-time-zone = "0.1.65"
 # (`Win32_Security_Authentication_Identity`, `Win32_Security_Credentials`,
 # enabled in its own manifest) for Negotiate / Kerberos / NTLM. Ask before
 # adding more (licences: no GPL / LGPL / AGPL, no OpenSSL / aws-lc).
+
+# M4a (ADR 0079). Agents and full extensibility. One new direct
+# dependency: schemars (MIT; already in the lock as rmcp's 1.2 generation)
+# so nail-api's MCP tool argument types derive their JSON Schemas behind
+# nail-api's `json-schema` feature (nail-mcp enables it); the version must
+# stay the one rmcp uses. Background-job schedules are parsed by nail-api
+# itself (five-field cron subset, no crate); nail-plugins (WP102) computes
+# next runs with the workspace chrono. Ask before adding more (licences: no
+# GPL / LGPL / AGPL, no OpenSSL / aws-lc).
+schemars = "1.2.2"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

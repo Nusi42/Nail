@@ -1012,7 +1012,8 @@ impl Service {
             | Request::UpdateMcpGrants { .. }
             | Request::RevokeMcpClient { .. }
             | Request::ListMcpAudit { .. }
-            | Request::GetMcpServerInfo) => crate::mcp::handle(self, request).await?,
+            | Request::GetMcpServerInfo
+            | Request::UpdateMcpRateLimits { .. }) => crate::mcp::handle(self, request).await?,
             request @ (Request::UpdateLayout { .. }
             | Request::PreviewConfigMerge { .. }
             | Request::ResolveConfigMerge { .. }
@@ -1215,6 +1216,18 @@ impl Service {
             | Request::DeleteExchangeInboxRule { .. }
             | Request::ListRoomLists { .. }
             | Request::FindRooms { .. }) => crate::exchange::handle(self, request).await?,
+            // M4a confirmations, policies and plug-in extensions (ADR 0079):
+            // one arm; WP105 wires the host and the requesters.
+            request @ (Request::ListConfirmations { .. }
+            | Request::DecideConfirmation { .. }
+            | Request::ListActionPolicies { .. }
+            | Request::SetActionPolicy { .. }
+            | Request::GetPluginActivity { .. }
+            | Request::RunPluginJob { .. }
+            | Request::GetMessagePluginAnnotations { .. }
+            | Request::RenderAttachmentPreview { .. }
+            | Request::RunPluginAction { .. }
+            | Request::OverrideSendVeto { .. }) => crate::agents::handle(self, request).await?,
         })
     }
 }

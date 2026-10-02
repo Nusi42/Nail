@@ -10,6 +10,8 @@ import type {
   McpAuditEntry,
   McpClient,
   McpGrant,
+  McpRateLimitIssue,
+  McpRateLimits,
   McpServerInfo,
   McpSettings,
   Request,
@@ -27,6 +29,7 @@ export const MCP_REQUESTS = [
   "GetMcpServerInfo",
   "GetMcpSettings",
   "UpdateMcpSettings",
+  "UpdateMcpRateLimits",
 ] as const satisfies readonly Request["type"][];
 
 export type McpRequest = Extract<Request, { type: (typeof MCP_REQUESTS)[number] }>;
@@ -48,6 +51,22 @@ export interface McpMockState {
 
 const DEMO_TIME = "2026-09-28T09:00:00Z";
 
+/** The rate limits a client starts with (`McpRateLimits::default`, M4a). */
+export const DEFAULT_RATE_LIMITS: McpRateLimits = {
+  requests_per_minute: 120,
+  writes_per_minute: 20,
+  sends_per_hour: 10,
+};
+
+/** Problems with rate limits (`McpRateLimits::issues`). */
+export function rateLimitIssues(limits: McpRateLimits): McpRateLimitIssue[] {
+  const values = [limits.requests_per_minute, limits.writes_per_minute, limits.sends_per_hour];
+  const issues: McpRateLimitIssue[] = [];
+  if (values.includes(0)) issues.push("zero");
+  if (values.some((v) => v !== null && v > 10_000)) issues.push("too-high");
+  return issues;
+}
+
 /** One demo client with a read grant and a few audit entries. */
 export function createMcpMockState(): McpMockState {
   const demo: McpClient = {
@@ -64,6 +83,7 @@ export function createMcpMockState(): McpMockState {
       skip_draft_confirmation: false,
     },
     revoked_at: null,
+    rate_limits: { ...DEFAULT_RATE_LIMITS },
   };
   const entry = (id: number, name: string, outcome: McpAuditEntry["outcome"]): McpAuditEntry => ({
     id,
@@ -170,6 +190,7 @@ export function answerMcp(core: MockCore, request: McpRequest): Response {
         token_hint: token.slice(-4),
         grant: normalized(request.grant),
         revoked_at: null,
+        rate_limits: { ...DEFAULT_RATE_LIMITS },
       };
       s.clients.push(client);
       core.emit({ type: "McpClientsChanged" });
@@ -219,6 +240,25 @@ export function answerMcp(core: MockCore, request: McpRequest): Response {
         settings: structuredClone(s.settings),
         info: structuredClone(s.server),
       };
+    case "UpdateMcpRateLimits": {
+      const issue = rateLimitIssues(request.limits)[0];
+      if (issue !== undefined) {
+        return {
+          type: "Error",
+          code: "invalid_request",
+          message: `invalid rate limits (mcp-rate-limit-issue-${issue})`,
+          localized: { id: `mcp-rate-limit-issue-${issue}` },
+        };
+      }
+      const client = s.clients.find((c) => c.id === request.client_id);
+      if (!client) return errorResponse("not_found", `MCP client ${request.client_id} not found`);
+      if (client.revoked_at !== null) {
+        return errorResponse("conflict", `MCP client ${client.id} is revoked`);
+      }
+      client.rate_limits = structuredClone(request.limits);
+      core.emit({ type: "McpClientsChanged" });
+      return { type: "McpClientSaved", client: structuredClone(client) };
+    }
     case "UpdateMcpSettings": {
       const port = request.settings.port;
       if (port !== null && port < 1024) {

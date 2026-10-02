@@ -5,6 +5,8 @@ import type { AccountId } from "./AccountId";
 import type { AccountStatus } from "./AccountStatus";
 import type { AccountTestResult } from "./AccountTestResult";
 import type { AccountsConfig } from "./AccountsConfig";
+import type { ActionActor } from "./ActionActor";
+import type { ActionPolicy } from "./ActionPolicy";
 import type { Address } from "./Address";
 import type { AddressBook } from "./AddressBook";
 import type { AutomaticReplies } from "./AutomaticReplies";
@@ -13,6 +15,7 @@ import type { CalendarEvent } from "./CalendarEvent";
 import type { ConfigBackup } from "./ConfigBackup";
 import type { ConfigIssue } from "./ConfigIssue";
 import type { ConfigMergePreview } from "./ConfigMergePreview";
+import type { Confirmation } from "./Confirmation";
 import type { Contact } from "./Contact";
 import type { ContactGroup } from "./ContactGroup";
 import type { ContactId } from "./ContactId";
@@ -66,10 +69,15 @@ import type { PimImportResult } from "./PimImportResult";
 import type { PimSearchHit } from "./PimSearchHit";
 import type { PimSource } from "./PimSource";
 import type { PimSourceTestResult } from "./PimSourceTestResult";
+import type { PluginActivity } from "./PluginActivity";
+import type { PluginBadge } from "./PluginBadge";
+import type { PluginBanner } from "./PluginBanner";
 import type { PluginId } from "./PluginId";
 import type { PluginInfo } from "./PluginInfo";
 import type { PluginInstallPreview } from "./PluginInstallPreview";
 import type { PluginLogEntry } from "./PluginLogEntry";
+import type { PluginPreview } from "./PluginPreview";
+import type { PluginSendVeto } from "./PluginSendVeto";
 import type { PluginSettingDef } from "./PluginSettingDef";
 import type { PluginUiNode } from "./PluginUiNode";
 import type { RecipientKeysReport } from "./RecipientKeysReport";
@@ -95,6 +103,7 @@ import type { SchedulingSettings } from "./SchedulingSettings";
 import type { SearchError } from "./SearchError";
 import type { SearchHit } from "./SearchHit";
 import type { SecuritySettings } from "./SecuritySettings";
+import type { SendVetoId } from "./SendVetoId";
 import type { ServerSearch } from "./ServerSearch";
 import type { SieveAccountStatus } from "./SieveAccountStatus";
 import type { SnoozedMessage } from "./SnoozedMessage";
@@ -949,7 +958,67 @@ rooms: Array<RoomAvailability>, } | { "type": "Reminders",
  * Fired and snoozed reminders (and pending ones up to `until`),
  * by fire time.
  */
-reminders: Array<Reminder>, } | { "type": "Error", 
+reminders: Array<Reminder>, } | { "type": "Confirmations", 
+/**
+ * The confirmations.
+ */
+confirmations: Array<Confirmation>, } | { "type": "ConfirmationDecided", 
+/**
+ * The confirmation in its new state.
+ */
+confirmation: Confirmation, } | { "type": "ActionPolicies", 
+/**
+ * The actor.
+ */
+actor: ActionActor, 
+/**
+ * One policy per kind, in [`ActionKind::ALL`] order.
+ */
+policies: Array<ActionPolicy>, } | { "type": "PluginActivity", 
+/**
+ * The activity.
+ */
+activity: PluginActivity, } | { "type": "MessagePluginAnnotations", 
+/**
+ * The message.
+ */
+message_id: MessageId, 
+/**
+ * Banners, by plug-in name.
+ */
+banners: Array<PluginBanner>, 
+/**
+ * Badges, by plug-in name.
+ */
+badges: Array<PluginBadge>, } | { "type": "AttachmentPreview", 
+/**
+ * The message.
+ */
+message_id: MessageId, 
+/**
+ * The attachment's index.
+ */
+index: number, 
+/**
+ * The renderer.
+ */
+renderer: string, 
+/**
+ * What to show.
+ */
+preview: PluginPreview, } | { "type": "SendVetoed", 
+/**
+ * The draft (unchanged).
+ */
+draft_id: DraftId, 
+/**
+ * Pass to [`Request::OverrideSendVeto`] (valid for 10 minutes).
+ */
+veto_id: SendVetoId, 
+/**
+ * The vetoes.
+ */
+vetoes: Array<PluginSendVeto>, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

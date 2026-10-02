@@ -8,6 +8,7 @@ import { builtinActions, type ActionHandler } from "../actions/registry";
 import type { DialogRegistry } from "../layout/dialogRegistry";
 import type { WidgetRegistry } from "../layout/widgetRegistry";
 import { builtinWidgets } from "../widgets";
+import * as agents from "./agents";
 import * as composer from "./composer";
 import * as customization from "./customization";
 import * as exchange from "./exchange";
@@ -44,6 +45,7 @@ export const features: Readonly<Record<string, Feature>> = {
   scheduling,
   gmail,
   exchange,
+  agents,
 };
 
 /** The merged registries. */

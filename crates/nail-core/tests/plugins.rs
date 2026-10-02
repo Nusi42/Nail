@@ -786,7 +786,22 @@ async fn dev_folders_load_and_reload() {
         }
     })
     .await;
-    assert_eq!(get(&f, "devplug").await.state, PluginRunState::Running);
+    // The new manifest is stored before the reloaded runtime has started
+    // (`starting` under load): wait for it to run.
+    wait_until("the reloaded plug-in to run", || {
+        let service = f.service.clone();
+        async move {
+            matches!(
+                service
+                    .handle(Request::GetPlugin {
+                        plugin_id: PluginId::new("devplug"),
+                    })
+                    .await,
+                Response::Plugin { plugin } if plugin.state == PluginRunState::Running
+            )
+        }
+    })
+    .await;
 
     // A change of only the plug-in's locale file (the manifest stays the
     // same) reloads its texts too (post-M2 verify finding).

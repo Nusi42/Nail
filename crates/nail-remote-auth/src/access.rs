@@ -405,6 +405,30 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::DeleteExchangeInboxRule { .. } => ("DeleteExchangeInboxRule", Admin),
         Request::ListRoomLists { .. } => ("ListRoomLists", Scope(S::Read)),
         Request::FindRooms { .. } => ("FindRooms", Scope(S::Read)),
+
+        // --- Confirmations and policies (M4a, ADR 0079): deciding for an
+        // agent or plug-in, and relaxing its policies, is administration
+        // (like MCP client grants); the core also needs every account a
+        // confirmation names. Rate limits like grants. ---
+        Request::ListConfirmations { .. } => ("ListConfirmations", Admin),
+        Request::DecideConfirmation { .. } => ("DecideConfirmation", Admin),
+        Request::ListActionPolicies { .. } => ("ListActionPolicies", Admin),
+        Request::SetActionPolicy { .. } => ("SetActionPolicy", Admin),
+        Request::UpdateMcpRateLimits { .. } => ("UpdateMcpRateLimits", Admin),
+        // --- Plug-in extensions (M4a): activity and manual job runs are
+        // plug-in administration; annotations and actions follow the
+        // plug-in rules of M2d (a grant for every account), previews need
+        // attachment bytes, "Send anyway" sends. ---
+        Request::GetPluginActivity { .. } => ("GetPluginActivity", Admin),
+        Request::RunPluginJob { .. } => ("RunPluginJob", Admin),
+        Request::GetMessagePluginAnnotations { .. } => {
+            ("GetMessagePluginAnnotations", Scope(S::Read))
+        }
+        Request::RenderAttachmentPreview { .. } => {
+            ("RenderAttachmentPreview", Scope(S::Attachments))
+        }
+        Request::RunPluginAction { .. } => ("RunPluginAction", Scope(S::Read)),
+        Request::OverrideSendVeto { .. } => ("OverrideSendVeto", Scope(S::Send)),
     };
     RequestAccess { name, access }
 }
@@ -824,6 +848,70 @@ mod m3c_tests {
             required_access(&Request::DeleteExchangeInboxRule {
                 account_id: "work".into(),
                 server_rule_id: "r1".into()
+            })
+            .access,
+            Access::Admin
+        );
+    }
+}
+
+#[cfg(test)]
+mod m4a_tests {
+    use super::*;
+    use nail_api::agents::{ActionActor, ActionKind, ConfirmationDecision, ConfirmationFilter};
+    use nail_api::plugins::PluginActionTarget;
+
+    #[test]
+    fn agent_and_extension_access() {
+        let decide = required_access(&Request::DecideConfirmation {
+            confirmation_id: "1".into(),
+            decision: ConfirmationDecision::Approve,
+            always_allow: false,
+        });
+        assert_eq!(decide.access, Access::Admin);
+        assert!(decide.audited());
+        let list = required_access(&Request::ListConfirmations {
+            filter: ConfirmationFilter::Pending,
+            actor: None,
+            before: None,
+            limit: 10,
+        });
+        assert_eq!(list.access, Access::Admin);
+        let policy = required_access(&Request::SetActionPolicy {
+            actor: ActionActor::mcp_client("mcp-1"),
+            kind: ActionKind::Send,
+            mode: None,
+        });
+        assert_eq!(
+            (policy.name, policy.access),
+            ("SetActionPolicy", Access::Admin)
+        );
+        let preview = required_access(&Request::RenderAttachmentPreview {
+            message_id: "m1".into(),
+            index: 0,
+            renderer: "csv.table".into(),
+            client_id: None,
+        });
+        assert_eq!(preview.access, Access::Scope(McpScope::Attachments));
+        let action = required_access(&Request::RunPluginAction {
+            action: "crm.save".into(),
+            target: PluginActionTarget::Link {
+                url: "https://x.example".into(),
+                text: None,
+                message_id: None,
+            },
+            context: Default::default(),
+            client_id: None,
+        });
+        assert_eq!(action.access, Access::Scope(McpScope::Read));
+        let anyway = required_access(&Request::OverrideSendVeto {
+            veto_id: "v1".into(),
+        });
+        assert_eq!(anyway.access, Access::Scope(McpScope::Send));
+        assert!(anyway.audited());
+        assert_eq!(
+            required_access(&Request::GetPluginActivity {
+                plugin_id: "x".into()
             })
             .access,
             Access::Admin

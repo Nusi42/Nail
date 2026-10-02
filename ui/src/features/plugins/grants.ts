@@ -6,8 +6,17 @@
  */
 import type { AccountId, PluginGrant, PluginPermission } from "../../api/generated";
 
-/** Permissions that can be limited to accounts. */
-export const ACCOUNT_PERMISSIONS: readonly PluginPermission[] = ["mail.read", "mail.read.body"];
+/** Permissions that can be limited to accounts (`PluginPermission::takes_accounts`; M4a adds the mail writes, mail hooks and `attachments`). */
+export const ACCOUNT_PERMISSIONS: readonly PluginPermission[] = [
+  "mail.read",
+  "mail.read.body",
+  "mail.organize",
+  "mail.send",
+  "hooks.arrival",
+  "hooks.beforeSend",
+  "hooks.open",
+  "attachments",
+];
 
 export function takesAccounts(permission: PluginPermission): boolean {
   return ACCOUNT_PERMISSIONS.includes(permission);

@@ -620,6 +620,10 @@ impl PluginHost {
                     },
                 )?;
             }
+            // Banner buttons of open hooks (M4a, ADR 0079): WP102.
+            PluginUiTarget::Banner { .. } => {
+                return Err(ApiError::unsupported("banner actions are not wired yet"));
+            }
         }
         self.wait(rx).await
     }

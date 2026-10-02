@@ -28,6 +28,12 @@
 //! shown as written. The host resolves them before [`super::PluginInfo`]
 //! reaches the UI.
 //!
+//! **M4a** (ADR 0079) adds `hooks`, `composerActions`, `markdownBlocks`,
+//! `attachmentPreviews`, `attachmentActions`, `linkActions`, `jobs` and
+//! `mcpTools` ([`super::hooks`], [`super::extensions`], [`super::jobs`]);
+//! each needs its permission in the same manifest
+//! ([`PluginManifestIssueKind::ContributionNeedsPermission`]).
+//!
 //! **Placements** are suggestions: on install (after the user confirms in
 //! the merge dialog) they become ordinary lines in `layout.kdl`
 //! (`item "plugin.follow-up.follow-up"` in `toolbar "reader"`,
@@ -40,7 +46,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use super::permission::{PluginPermission, PluginPermissionError};
+use super::extensions::{
+    MAX_MATCHERS, MAX_MCP_TOOL_DESCRIPTION, MAX_MCP_TOOL_NAME, MAX_PREVIEW_INPUT,
+    PluginAttachmentActionDef, PluginAttachmentPreviewDef, PluginComposerActionDef,
+    PluginLinkActionDef, PluginMarkdownBlockDef, PluginMcpToolDef, is_extension, is_mime_pattern,
+    plugin_mcp_tool_name,
+};
+use super::hooks::PluginHookDef;
+use super::jobs::{MAX_JOBS, PluginJobDef};
+use super::permission::{PluginPermission, PluginPermissionError, is_domain_pattern};
 use super::runtime::PluginCommandSurface;
 use super::ui::PluginSelectOption;
 use super::{is_contribution_name, is_plugin_id, is_plugin_version, is_supported_api_version};
@@ -122,10 +136,43 @@ pub struct PluginContributions {
     #[ts(optional, as = "Option<Vec<PluginSettingDef>>")]
     pub settings: Vec<PluginSettingDef>,
     /// The plug-in's Fluent catalogs: language tag (`en`, `de`, `pt-BR`)
-    /// → `.ftl` file in the package.
+    /// → `.ftl` file in the package (also `nail.l10n` at run time).
     #[serde(default)]
     #[ts(optional, as = "Option<BTreeMap<String, String>>")]
     pub locales: BTreeMap<String, String>,
+    /// Mail hooks, at most one per kind (M4a; `hooks.*`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginHookDef>>")]
+    pub hooks: Vec<PluginHookDef>,
+    /// Composer actions (M4a; `composer`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginComposerActionDef>>")]
+    pub composer_actions: Vec<PluginComposerActionDef>,
+    /// Markdown block renderers (M4a; `composer`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginMarkdownBlockDef>>")]
+    pub markdown_blocks: Vec<PluginMarkdownBlockDef>,
+    /// Attachment preview renderers (M4a; `attachments`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginAttachmentPreviewDef>>")]
+    pub attachment_previews: Vec<PluginAttachmentPreviewDef>,
+    /// Attachment menu actions (M4a; `attachments`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginAttachmentActionDef>>")]
+    pub attachment_actions: Vec<PluginAttachmentActionDef>,
+    /// Link menu actions (M4a; no permission: they get only the link the
+    /// user picked).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginLinkActionDef>>")]
+    pub link_actions: Vec<PluginLinkActionDef>,
+    /// Background jobs (M4a; `background`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginJobDef>>")]
+    pub jobs: Vec<PluginJobDef>,
+    /// Tools offered to MCP clients (M4a; `mcp.expose`).
+    #[serde(default)]
+    #[ts(optional, as = "Option<Vec<PluginMcpToolDef>>")]
+    pub mcp_tools: Vec<PluginMcpToolDef>,
 }
 
 /// A command.
@@ -550,11 +597,37 @@ pub enum PluginManifestIssueKind {
     InvalidLocale,
     /// More contributions of one kind than allowed.
     TooManyContributions,
+    /// A permission without one it needs (`mail.organize`, `hooks.arrival`
+    /// and `hooks.open` need `mail.read`; M4a). `mail.read.body` keeps
+    /// [`Self::BodyWithoutRead`].
+    MissingRequiredPermission,
+    /// A contribution whose permission is not declared (hooks, composer,
+    /// attachment, job and MCP contributions; the detail names it).
+    ContributionNeedsPermission,
+    /// A hook with an invalid filter or budget.
+    InvalidHook,
+    /// Two hooks of the same kind.
+    DuplicateHook,
+    /// A composer action, Markdown block, attachment preview / action or
+    /// link action with an invalid id, title or matcher.
+    InvalidExtension,
+    /// Two extensions of one kind with the same id.
+    DuplicateExtension,
+    /// A job with an invalid id or title, nothing to run on, or an
+    /// invalid / too frequent schedule.
+    InvalidJob,
+    /// Two jobs with the same id.
+    DuplicateJob,
+    /// An MCP tool with an invalid id, description, schema or scopes, or
+    /// a name longer than MCP clients accept.
+    InvalidMcpTool,
+    /// Two MCP tools with the same id.
+    DuplicateMcpTool,
 }
 
 impl PluginManifestIssueKind {
     /// All issues.
-    pub const ALL: [PluginManifestIssueKind; 25] = [
+    pub const ALL: [PluginManifestIssueKind; 35] = [
         Self::TooLarge,
         Self::InvalidJson,
         Self::InvalidId,
@@ -580,6 +653,16 @@ impl PluginManifestIssueKind {
         Self::DuplicateSetting,
         Self::InvalidLocale,
         Self::TooManyContributions,
+        Self::MissingRequiredPermission,
+        Self::ContributionNeedsPermission,
+        Self::InvalidHook,
+        Self::DuplicateHook,
+        Self::InvalidExtension,
+        Self::DuplicateExtension,
+        Self::InvalidJob,
+        Self::DuplicateJob,
+        Self::InvalidMcpTool,
+        Self::DuplicateMcpTool,
     ];
 
     /// Fluent message id (`plugin-manifest-<kind>`; arguments `$path` and
@@ -611,6 +694,16 @@ impl PluginManifestIssueKind {
             Self::DuplicateSetting => "plugin-manifest-duplicate-setting",
             Self::InvalidLocale => "plugin-manifest-invalid-locale",
             Self::TooManyContributions => "plugin-manifest-too-many-contributions",
+            Self::MissingRequiredPermission => "plugin-manifest-missing-required-permission",
+            Self::ContributionNeedsPermission => "plugin-manifest-contribution-needs-permission",
+            Self::InvalidHook => "plugin-manifest-invalid-hook",
+            Self::DuplicateHook => "plugin-manifest-duplicate-hook",
+            Self::InvalidExtension => "plugin-manifest-invalid-extension",
+            Self::DuplicateExtension => "plugin-manifest-duplicate-extension",
+            Self::InvalidJob => "plugin-manifest-invalid-job",
+            Self::DuplicateJob => "plugin-manifest-duplicate-job",
+            Self::InvalidMcpTool => "plugin-manifest-invalid-mcp-tool",
+            Self::DuplicateMcpTool => "plugin-manifest-duplicate-mcp-tool",
         }
     }
 }
@@ -756,6 +849,20 @@ impl PluginManifest {
         {
             push(K::BodyWithoutRead, "permissions".into(), "mail.read.body");
         }
+        for p in &self.permissions {
+            if *p == PluginPermission::MailReadBody {
+                continue;
+            }
+            for needed in p.requires() {
+                if !seen.contains(needed) {
+                    push(
+                        K::MissingRequiredPermission,
+                        "permissions".into(),
+                        &format!("{p} needs {needed}"),
+                    );
+                }
+            }
+        }
 
         let c = &self.contributes;
         for (name, len, max) in [
@@ -765,6 +872,29 @@ impl PluginManifest {
             ("panels", c.panels.len(), MAX_SMALL_CONTRIBUTIONS),
             ("settings", c.settings.len(), MAX_SMALL_CONTRIBUTIONS),
             ("locales", c.locales.len(), MAX_SMALL_CONTRIBUTIONS),
+            (
+                "composerActions",
+                c.composer_actions.len(),
+                MAX_SMALL_CONTRIBUTIONS,
+            ),
+            (
+                "markdownBlocks",
+                c.markdown_blocks.len(),
+                MAX_SMALL_CONTRIBUTIONS,
+            ),
+            (
+                "attachmentPreviews",
+                c.attachment_previews.len(),
+                MAX_SMALL_CONTRIBUTIONS,
+            ),
+            (
+                "attachmentActions",
+                c.attachment_actions.len(),
+                MAX_SMALL_CONTRIBUTIONS,
+            ),
+            ("linkActions", c.link_actions.len(), MAX_SMALL_CONTRIBUTIONS),
+            ("jobs", c.jobs.len(), MAX_JOBS),
+            ("mcpTools", c.mcp_tools.len(), MAX_SMALL_CONTRIBUTIONS),
         ] {
             if len > max {
                 push(K::TooManyContributions, format!("contributes.{name}"), "");
@@ -851,7 +981,200 @@ impl PluginManifest {
                 push(K::InvalidLocale, format!("contributes.locales.{tag}"), file);
             }
         }
+        self.validate_extensions(&mut out);
         out
+    }
+
+    /// The M4a contributions (hooks, composer, attachments, links, jobs,
+    /// MCP tools).
+    fn validate_extensions(&self, out: &mut Vec<PluginManifestIssue>) {
+        use PluginManifestIssueKind as K;
+        let mut push = |kind, path: String, detail: &str| {
+            out.push(PluginManifestIssue::new(kind, path).detail(detail));
+        };
+        let c = &self.contributes;
+        let declared: HashSet<&PluginPermission> = self.permissions.iter().collect();
+        let needs = |permission: PluginPermission, path: &str, used: bool| {
+            (used && !declared.contains(&permission)).then(|| (path.to_owned(), permission.name()))
+        };
+        let missing: Vec<(String, String)> = [
+            needs(
+                PluginPermission::HooksArrival,
+                "contributes.hooks",
+                c.hooks
+                    .iter()
+                    .any(|h| h.hook == super::hooks::PluginHookKind::Arrival),
+            ),
+            needs(
+                PluginPermission::HooksBeforeSend,
+                "contributes.hooks",
+                c.hooks
+                    .iter()
+                    .any(|h| h.hook == super::hooks::PluginHookKind::BeforeSend),
+            ),
+            needs(
+                PluginPermission::HooksOpen,
+                "contributes.hooks",
+                c.hooks
+                    .iter()
+                    .any(|h| h.hook == super::hooks::PluginHookKind::Open),
+            ),
+            needs(
+                PluginPermission::Composer,
+                "contributes.composerActions",
+                !c.composer_actions.is_empty(),
+            ),
+            needs(
+                PluginPermission::Composer,
+                "contributes.markdownBlocks",
+                !c.markdown_blocks.is_empty(),
+            ),
+            needs(
+                PluginPermission::Attachments,
+                "contributes.attachmentPreviews",
+                !c.attachment_previews.is_empty(),
+            ),
+            needs(
+                PluginPermission::Attachments,
+                "contributes.attachmentActions",
+                !c.attachment_actions.is_empty(),
+            ),
+            needs(
+                PluginPermission::Background,
+                "contributes.jobs",
+                !c.jobs.is_empty(),
+            ),
+            needs(
+                PluginPermission::McpExpose,
+                "contributes.mcpTools",
+                !c.mcp_tools.is_empty(),
+            ),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        for (path, permission) in missing {
+            push(K::ContributionNeedsPermission, path, &permission);
+        }
+
+        let mut hooks = HashSet::new();
+        for (i, hook) in c.hooks.iter().enumerate() {
+            let path = format!("contributes.hooks[{i}]");
+            if !hook.is_valid() {
+                push(K::InvalidHook, path, hook.hook.as_str());
+            } else if !hooks.insert(hook.hook) {
+                push(K::DuplicateHook, path, hook.hook.as_str());
+            }
+        }
+
+        let matchers_ok = |mimes: &[String], exts: &[String]| {
+            mimes.len() <= MAX_MATCHERS
+                && exts.len() <= MAX_MATCHERS
+                && mimes.iter().all(|m| is_mime_pattern(m))
+                && exts.iter().all(|e| is_extension(e))
+        };
+        let mut check = |list: &str, items: Vec<(&str, bool)>| {
+            let mut seen = HashSet::new();
+            for (i, (id, valid)) in items.into_iter().enumerate() {
+                let path = format!("contributes.{list}[{i}]");
+                if !is_contribution_name(id) || !valid {
+                    push(K::InvalidExtension, path, id);
+                } else if !seen.insert(id) {
+                    push(K::DuplicateExtension, path, id);
+                }
+            }
+        };
+        check(
+            "composerActions",
+            c.composer_actions
+                .iter()
+                .map(|a| {
+                    let desc_ok = a
+                        .description
+                        .as_ref()
+                        .is_none_or(|d| d.chars().count() <= MAX_DESCRIPTION_LEN);
+                    (a.id.as_str(), is_title(&a.title) && desc_ok)
+                })
+                .collect(),
+        );
+        check(
+            "markdownBlocks",
+            c.markdown_blocks
+                .iter()
+                .map(|b| {
+                    let template_ok = b
+                        .template
+                        .as_ref()
+                        .is_none_or(|t| t.chars().count() <= MAX_DESCRIPTION_LEN);
+                    (b.id.as_str(), is_title(&b.title) && template_ok)
+                })
+                .collect(),
+        );
+        check(
+            "attachmentPreviews",
+            c.attachment_previews
+                .iter()
+                .map(|p| {
+                    let some_matcher = !p.mime_types.is_empty() || !p.extensions.is_empty();
+                    let size_ok = p.max_bytes.is_none_or(|b| b > 0 && b <= MAX_PREVIEW_INPUT);
+                    (
+                        p.id.as_str(),
+                        is_title(&p.title)
+                            && some_matcher
+                            && size_ok
+                            && matchers_ok(&p.mime_types, &p.extensions),
+                    )
+                })
+                .collect(),
+        );
+        check(
+            "attachmentActions",
+            c.attachment_actions
+                .iter()
+                .map(|a| {
+                    (
+                        a.id.as_str(),
+                        is_title(&a.title) && matchers_ok(&a.mime_types, &a.extensions),
+                    )
+                })
+                .collect(),
+        );
+        check(
+            "linkActions",
+            c.link_actions
+                .iter()
+                .map(|a| {
+                    let hosts_ok = a.hosts.len() <= MAX_MATCHERS
+                        && a.hosts.iter().all(|h| is_domain_pattern(h));
+                    (a.id.as_str(), is_title(&a.title) && hosts_ok)
+                })
+                .collect(),
+        );
+
+        let mut jobs = HashSet::new();
+        for (i, job) in c.jobs.iter().enumerate() {
+            let path = format!("contributes.jobs[{i}]");
+            let title_ok = job.title.as_deref().is_none_or(is_title);
+            if !is_contribution_name(&job.id) || !title_ok || !job.is_valid() {
+                push(K::InvalidJob, path, &job.id);
+            } else if !jobs.insert(job.id.as_str()) {
+                push(K::DuplicateJob, path, &job.id);
+            }
+        }
+
+        let mut tools = HashSet::new();
+        for (i, tool) in c.mcp_tools.iter().enumerate() {
+            let path = format!("contributes.mcpTools[{i}]");
+            let name_ok = is_contribution_name(&tool.id)
+                && plugin_mcp_tool_name(&self.id, &tool.id).len() <= MAX_MCP_TOOL_NAME;
+            let description_ok = !tool.description.trim().is_empty()
+                && tool.description.chars().count() <= MAX_MCP_TOOL_DESCRIPTION;
+            if !name_ok || !description_ok || !tool.schema_ok() || tool.scopes.is_empty() {
+                push(K::InvalidMcpTool, path, &tool.id);
+            } else if !tools.insert(tool.id.as_str()) {
+                push(K::DuplicateMcpTool, path, &tool.id);
+            }
+        }
     }
 
     /// A command by name.
@@ -862,6 +1185,16 @@ impl PluginManifest {
     /// A panel by name.
     pub fn panel(&self, name: &str) -> Option<&PluginPanelDef> {
         self.contributes.panels.iter().find(|p| p.id == name)
+    }
+
+    /// The hook of a kind, if declared (M4a).
+    pub fn hook(&self, kind: super::hooks::PluginHookKind) -> Option<&PluginHookDef> {
+        self.contributes.hooks.iter().find(|h| h.hook == kind)
+    }
+
+    /// A job by name (M4a).
+    pub fn job(&self, name: &str) -> Option<&PluginJobDef> {
+        self.contributes.jobs.iter().find(|j| j.id == name)
     }
 
     /// Whether the manifest declares `permission`.
@@ -984,7 +1317,7 @@ mod tests {
         let mut v = example();
         v["permissions"] = json!([
             "mail.read.body",
-            "mail.send",
+            "ui.webview",
             "teleport",
             "network:https://x.org",
             "storage",
@@ -1102,6 +1435,110 @@ mod tests {
         let text = issues[0].localized();
         assert_eq!(text.id, "plugin-manifest-duplicate-command");
         assert_eq!(text.args["path"], "contributes.commands[1]".into());
+    }
+
+    fn m4a_example() -> Value {
+        json!({
+            "id": "acme-crm", "name": "ACME CRM", "version": "2.0.0", "apiVersion": "1",
+            "main": "dist/index.js",
+            "permissions": ["mail.read", "mail.organize", "hooks.arrival", "hooks.beforeSend",
+                            "hooks.open", "composer", "attachments", "background", "mcp.expose",
+                            "tasks.write"],
+            "contributes": {
+                "hooks": [
+                    { "hook": "arrival", "filter": "from:@acme.example" },
+                    { "hook": "beforeSend", "timeoutMs": 1500 },
+                    { "hook": "open" }
+                ],
+                "composerActions": [{ "id": "insert-ticket", "title": "Insert ticket" }],
+                "markdownBlocks": [{ "id": "ticket", "title": "Ticket", "template": "4711" }],
+                "attachmentPreviews": [{ "id": "csv", "title": "Table", "mimeTypes": ["text/csv"],
+                                         "extensions": ["csv"] }],
+                "attachmentActions": [{ "id": "save", "title": "Save to CRM" }],
+                "linkActions": [{ "id": "open", "title": "Open in CRM", "hosts": ["*.acme.example"] }],
+                "jobs": [{ "id": "sync", "schedule": "*/30 * * * *", "events": ["app.started"] }],
+                "mcpTools": [{ "id": "find-customer", "description": "Find a customer",
+                               "inputSchema": { "type": "object" } }]
+            }
+        })
+    }
+
+    #[test]
+    fn m4a_contributions_are_valid() {
+        let m = parse(&m4a_example()).unwrap();
+        assert_eq!(m.contributes.hooks.len(), 3);
+        assert!(
+            m.hook(super::super::hooks::PluginHookKind::BeforeSend)
+                .is_some()
+        );
+        assert!(m.job("sync").is_some());
+        let value = serde_json::to_value(&m).unwrap();
+        assert!(value["contributes"]["composerActions"].is_array());
+        assert!(value["contributes"]["mcpTools"][0]["inputSchema"].is_object());
+        let back: PluginManifest = serde_json::from_value(value).unwrap();
+        assert_eq!(back, m);
+    }
+
+    #[test]
+    fn m4a_contributions_are_checked() {
+        use PluginManifestIssueKind as K;
+        let mut v = m4a_example();
+        v["permissions"] = json!(["hooks.arrival", "mail.organize"]);
+        assert_eq!(
+            kinds(&v),
+            [
+                K::MissingRequiredPermission,
+                K::MissingRequiredPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+                K::ContributionNeedsPermission,
+            ]
+        );
+        let mut v = m4a_example();
+        let c = &mut v["contributes"];
+        c["hooks"] = json!([
+            { "hook": "arrival" }, { "hook": "arrival" }, { "hook": "beforeSend", "filter": "x" }
+        ]);
+        c["composerActions"] = json!([{ "id": "a", "title": "A" }, { "id": "a", "title": "B" }]);
+        c["attachmentPreviews"] = json!([{ "id": "p", "title": "P" },
+                                         { "id": "q", "title": "Q", "mimeTypes": ["Text/CSV"] }]);
+        c["linkActions"] = json!([{ "id": "l", "title": "L", "hosts": ["https://x.example"] }]);
+        c["jobs"] = json!([{ "id": "j", "schedule": "* * * * *" }, { "id": "k" },
+                           { "id": "m", "events": ["app.started"] },
+                           { "id": "m", "events": ["app.started"] }]);
+        c["mcpTools"] = json!([
+            { "id": "t", "description": " " },
+            { "id": "u", "description": "U", "inputSchema": { "type": "array" } },
+            { "id": "a-tool-name-that-is-too-long-for-mcp-clients-with-the-plugin-id", "description": "V" },
+            { "id": "w", "description": "W", "scopes": [] },
+            { "id": "x", "description": "X" }, { "id": "x", "description": "X" }
+        ]);
+        assert_eq!(
+            kinds(&v),
+            [
+                K::DuplicateHook,
+                K::InvalidHook,
+                K::DuplicateExtension,
+                K::InvalidExtension,
+                K::InvalidExtension,
+                K::InvalidExtension,
+                K::InvalidJob,
+                K::InvalidJob,
+                K::DuplicateJob,
+                K::InvalidMcpTool,
+                K::InvalidMcpTool,
+                K::InvalidMcpTool,
+                K::InvalidMcpTool,
+                K::DuplicateMcpTool,
+            ]
+        );
+        let issues = parse(&v).unwrap_err();
+        assert_eq!(issues[0].path, "contributes.hooks[1]");
     }
 
     #[test]

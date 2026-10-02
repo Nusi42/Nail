@@ -19,6 +19,7 @@ import type {
   Response,
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { ACCOUNT_PERMISSIONS } from "./grants";
 import { answerHost, createMockHost, type MockHost } from "./mockHost";
 
 /** The requests this feature answers. */
@@ -145,7 +146,7 @@ export function checkGrants(plugin: PluginInfo, grants: PluginGrant[]): string |
     }
     if (seen.has(grant.permission)) return `permission ${grant.permission} granted twice`;
     seen.add(grant.permission);
-    const takesAccounts = grant.permission === "mail.read" || grant.permission === "mail.read.body";
+    const takesAccounts = ACCOUNT_PERMISSIONS.includes(grant.permission);
     if (grant.accounts && (!takesAccounts || grant.accounts.length === 0)) {
       return `permission ${grant.permission} cannot be limited to these accounts`;
     }

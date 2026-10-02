@@ -145,3 +145,25 @@ fn plugin_bindings_hold_the_plugin_surface_only() {
     assert!(node.contains("\"type\": \"contact-picker\""), "{node}");
     assert!(node.contains("maxLength?: number"), "{node}");
 }
+
+/// A doc comment containing `*/` (a cron step like `*/15`, a MIME pattern
+/// `type/*/`) would end the generated TSDoc comment early and break the
+/// TypeScript build (M4a).
+#[test]
+fn doc_comments_never_close_the_tsdoc_comment_early() {
+    for dir in [checked_in_dir(), plugin_api_dir()] {
+        for (file, text) in read_tree(&dir) {
+            for line in text.lines() {
+                let trimmed = line.trim();
+                if trimmed.contains("*/") {
+                    assert!(
+                        trimmed == "*/"
+                            || trimmed.ends_with(" */")
+                                && !trimmed[..trimmed.len() - 2].contains("*/"),
+                        "{file}: {line}"
+                    );
+                }
+            }
+        }
+    }
+}

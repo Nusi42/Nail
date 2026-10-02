@@ -73,10 +73,20 @@
 //!   Gmail accounts ([`gmail`]: `historyId`, labels ↔ tags / folders,
 //!   per-message labels and category, the label operation queue).
 //!
+//! * M4a (schema v14, ADR 0079): confirmations of writes by MCP clients
+//!   and plug-ins ([`Store::insert_confirmation`], decided once, view and
+//!   payload sealed, history pruned), action policies
+//!   ([`Store::set_action_policy`]; `allow` refused for destructive kinds),
+//!   MCP rate limits and idempotency keys ([`Store::set_mcp_rate_limits`],
+//!   [`Store::mcp_idempotent_result`]), plug-in job state, hook statistics
+//!   and CPU time ([`Store::record_plugin_job_run`],
+//!   [`Store::record_plugin_hook_call`], [`Store::plugin_cpu_last_hour`]).
+//!
 //! A data directory conventionally holds [`DB_FILE_NAME`] and
 //! [`BLOB_DIR_NAME`]; [`open_data_dir`] opens both.
 
 mod addresses;
+mod agents;
 pub mod blob;
 mod bodies;
 mod compose;
@@ -90,6 +100,7 @@ pub mod lock;
 mod mail;
 mod mcp;
 pub mod pim;
+mod plugin_activity;
 mod plugins;
 mod pop3;
 mod queue;
@@ -105,6 +116,7 @@ mod triage;
 
 use std::path::Path;
 
+pub use agents::InsertedConfirmation;
 pub use blob::{BlobHash, BlobStore};
 pub use bodies::{BodyFetchTarget, StoredBody};
 pub use compose::{DraftServerCopy, SendOutcome};
@@ -120,6 +132,7 @@ pub use mail::{
     SyncedMessage,
 };
 pub use mcp::{McpAuditRecord, hash_mcp_token};
+pub use plugin_activity::{MAX_ACTIVITY_ERROR, PluginJobState};
 pub use plugins::{
     PluginInstall, PluginLogLine, PluginRecord, check_grants as check_plugin_grants,
 };

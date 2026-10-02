@@ -651,7 +651,15 @@ The contributions of a manifest.
 | `keys?` | `Array<PluginKeyDef>` | Suggested key bindings. |
 | `panels?` | `Array<PluginPanelDef>` | Panels placeable in the layout (`plugin-panel "<id>.<panel>"`). |
 | `settings?` | `Array<PluginSettingDef>` | The settings schema; becomes a generated settings page. |
-| `locales?` | `{ [key in string]: string }` | The plug-in's Fluent catalogs: language tag (`en`, `de`, `pt-BR`) → `.ftl` file in the package. |
+| `locales?` | `{ [key in string]: string }` | The plug-in's Fluent catalogs: language tag (`en`, `de`, `pt-BR`) → `.ftl` file in the package (also `nail.l10n` at run time). |
+| `hooks?` | `Array<PluginHookDef>` | Mail hooks, at most one per kind (M4a; `hooks.*`). |
+| `composerActions?` | `Array<PluginComposerActionDef>` | Composer actions (M4a; `composer`). |
+| `markdownBlocks?` | `Array<PluginMarkdownBlockDef>` | Markdown block renderers (M4a; `composer`). |
+| `attachmentPreviews?` | `Array<PluginAttachmentPreviewDef>` | Attachment preview renderers (M4a; `attachments`). |
+| `attachmentActions?` | `Array<PluginAttachmentActionDef>` | Attachment menu actions (M4a; `attachments`). |
+| `linkActions?` | `Array<PluginLinkActionDef>` | Link menu actions (M4a; no permission: they get only the link the user picked). |
+| `jobs?` | `Array<PluginJobDef>` | Background jobs (M4a; `background`). |
+| `mcpTools?` | `Array<PluginMcpToolDef>` | Tools offered to MCP clients (M4a; `mcp.expose`). |
 
 ### `PluginCommandDef`
 
@@ -754,10 +762,10 @@ A choice of a `select` node (also used by `select` settings).
 
 ### `PluginPermission`
 
-A permission of the preview API.
+A plug-in permission (the preview's and, since M4a, the writes, hooks and extension points).
 
 ```ts
-type PluginPermission = "mail.read" | "mail.read.body" | "calendar.read" | "ui.dialogs" | "notifications" | "storage" | `network:${string}`;
+type PluginPermission = "mail.read" | "mail.read.body" | "calendar.read" | "ui.dialogs" | "notifications" | "storage" | "mail.organize" | "mail.send" | "calendar.write" | "contacts.write" | "tasks.write" | "hooks.arrival" | "hooks.beforeSend" | "hooks.open" | "composer" | "attachments" | "background" | "mcp.expose" | `network:${string}`;
 ```
 
 <!-- END GENERATED -->

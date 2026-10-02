@@ -7,17 +7,22 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use nail_api::ErrorCode;
+use nail_api::agents::{
+    ACTION_FIELD_IDS, ActionKind, ActionPolicyIssue, CONFIRMATION_SUMMARY_IDS, ConfirmationState,
+};
 use nail_api::exchange::oof::AutomaticRepliesIssue;
 use nail_api::exchange::{
     CategoryColor, ExchangeCategoryIssue, ExchangeConfigIssue, ExchangeEngine,
     ExchangeMailboxIssue, ExchangeMailboxState, ExchangeWarning, InferenceClassification,
 };
 use nail_api::gmail::{GmailCategory, GmailLabelIssue};
-use nail_api::mcp::McpSettingsIssue;
+use nail_api::mcp::prompts::McpPrompt;
+use nail_api::mcp::{McpRateLimitIssue, McpSettingsIssue};
 use nail_api::pim::PimIssue;
 use nail_api::pim::source::{PimSourceIssue, PimSourceState};
 use nail_api::plugins::{
-    PluginManifestIssueKind, PluginPermission, PluginStopReason, PluginUiIssueKind,
+    PluginHookKind, PluginJobOutcome, PluginManifestIssueKind, PluginPermission, PluginStopReason,
+    PluginUiIssueKind,
 };
 use nail_api::scheduling::{FreeBusyIssue, ItipIssue};
 use nail_api::sieve::{ManageSieveIssue, VacationIssue};
@@ -170,6 +175,43 @@ fn contract_message_ids_exist_in_english() {
         ]
         .map(str::to_owned),
     );
+    // M4a (ADR 0079): action kinds, confirmation states / summaries / fields,
+    // policy and rate-limit problems, prompts, hooks, job outcomes.
+    wanted.extend(ActionKind::ALL.iter().map(|k| k.message_id()));
+    wanted.extend(ConfirmationState::ALL.iter().map(|s| s.message_id()));
+    wanted.extend(
+        ActionPolicyIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(CONFIRMATION_SUMMARY_IDS.iter().map(|id| (*id).to_owned()));
+    wanted.extend(ACTION_FIELD_IDS.iter().map(|id| (*id).to_owned()));
+    wanted.extend(
+        McpRateLimitIssue::ALL
+            .iter()
+            .map(|i| i.message_id().to_owned()),
+    );
+    wanted.extend(
+        McpPrompt::ALL
+            .iter()
+            .flat_map(|p| [p.description_id(), p.instructions_id()]),
+    );
+    wanted.extend(
+        PluginHookKind::ALL
+            .iter()
+            .map(|h| h.message_id().to_owned()),
+    );
+    wanted.extend(
+        [
+            PluginJobOutcome::Ok,
+            PluginJobOutcome::Error,
+            PluginJobOutcome::Timeout,
+            PluginJobOutcome::CpuQuota,
+            PluginJobOutcome::Overlap,
+        ]
+        .iter()
+        .map(|o| o.message_id()),
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -209,6 +251,9 @@ fn german_catalogs_are_the_same_files() {
         "core-graph.ftl",
         "core-ews.ftl",
         "exchange.ftl",
+        "core-agents.ftl",
+        "core-mcp.ftl",
+        "agents.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

@@ -18,6 +18,7 @@ import type {
 import { QUERY_HINTS, hintMessageId } from "../widgets/SearchBar";
 import { COLUMN_IDS } from "../widgets/MessageList";
 import { errorMessageId } from "../api/client";
+import * as agentsMessages from "../features/agents/messages";
 import * as composerMessages from "../features/composer/messages";
 import * as customizationMessages from "../features/customization/messages";
 import * as exchangeMessages from "../features/exchange/messages";
@@ -52,6 +53,7 @@ const FEATURE_MESSAGES = [
   schedulingMessages,
   gmailMessages,
   exchangeMessages,
+  agentsMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

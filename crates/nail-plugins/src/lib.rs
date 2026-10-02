@@ -133,6 +133,29 @@ mod tests {
         );
     }
 
+    /// M4a (ADR 0079): binary bodies cross the boundary as typed arrays
+    /// (`array-buffer` feature): bytes from Rust arrive as a `Uint8Array`,
+    /// and a plug-in's `ArrayBuffer` comes back as bytes.
+    #[test]
+    fn quickjs_typed_arrays_carry_bytes() {
+        use rquickjs::{Function, TypedArray};
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let bytes = TypedArray::<u8>::new(ctx.clone(), vec![0u8, 1, 2, 255]).unwrap();
+            let sum: Function<'_> = ctx
+                .eval("(a) => a instanceof Uint8Array ? a.reduce((x, y) => x + y, 0) : -1")
+                .unwrap();
+            let total: i32 = sum.call((bytes,)).unwrap();
+            assert_eq!(total, 258);
+            let back: Vec<u8> = ctx.eval("Array.from(new Uint8Array([104, 105]))").unwrap();
+            assert_eq!(back, b"hi");
+            let buffer: rquickjs::ArrayBuffer<'_> =
+                ctx.eval("new Uint8Array([7, 8, 9]).buffer").unwrap();
+            assert_eq!(buffer.len(), 3);
+        });
+    }
+
     /// `.nailplugin` archives are zip files with deflate.
     #[test]
     fn zip_round_trip() {
