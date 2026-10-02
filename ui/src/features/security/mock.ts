@@ -152,6 +152,8 @@ export function createSecurityMockState(): SecurityMockState {
       done: 0,
       total: 0,
       key_in_keychain: false,
+      needs_recovery: false,
+      recovery: { configured: false, created_at: null, verified_at: null },
       error: null,
       message: null,
     },
@@ -569,6 +571,8 @@ function setVault(core: MockCore, enabled: boolean): Response {
     done: 0,
     total: VAULT_ITEMS.database,
     key_in_keychain: v.key_in_keychain || enabled,
+    needs_recovery: false,
+    recovery: { configured: false, created_at: null, verified_at: null },
     error: null,
     message: null,
   };

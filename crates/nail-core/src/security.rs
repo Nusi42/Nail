@@ -628,6 +628,7 @@ mod tests {
             issuer: None,
             serial: None,
             chain: None,
+            smartcard: None,
         };
         let sorted = sort_keys(vec![key("b@x", false), key("z@x", true), key("a@x", false)]);
         assert_eq!(

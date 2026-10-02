@@ -62,6 +62,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Installer and release scripts (node:test) | `node --test "scripts/test/*.test.mjs"` |
 | The Simple MAPI DLL as x86 (32-bit Office) under WOW64 | `cargo test -p nail-mapi --target i686-pc-windows-msvc` (once: `rustup target add i686-pc-windows-msvc`) |
 | Licences, bans, sources, advisories | `cargo deny check` (advisories need the RustSec database from GitHub) |
+| The performance benchmark (M4c, budgets in `e2e/perf/budgets.json`) | `cargo run -p nail-bench --release -- --corpus small` (`standard` = 100k messages) |
 
 CI (`.github/workflows/ci.yml`) runs these jobs:
 
@@ -581,6 +582,21 @@ For M2c:
 - **0048:** M2c integration (Sieve upload task, junk / snooze / notifications in the core,
   headers-only sync + on-demand bodies + server search, replay connection, localized
   messages end to end, desktop MCP port + lock, M2b follow-ups, the adjustable clock)
+
+For M4c:
+
+- **0094:** the M4c contract (`nail_api::portability`: import sources mbox / EML folder /
+  Maildir / Thunderbird profile / ICS / vCard, export targets, jobs with progress events and
+  per-item reports, "Local Folders"; `nail_api::backup`: items, the encrypted `.nailbackup`
+  format, verify, dry-run restore plans; `nail_api::recovery`: the vault recovery key;
+  `nail_api::smartcard`: PKCS#11 settings, tokens, keys, PIN prompts; `nail_api::palette`:
+  recent actions + `ui/src/actions/palette.ts`; `nail_api::print`: print jobs, the print
+  view, PDF through the desktop host; `nail_api::diagnostics`: the bundle with an exact
+  manifest; `PickPath`; send-as / on-behalf identities, upload progress, server thread ids;
+  store v15; new crates `nail-portability`, `nail-pkcs11`, `nail-bench`; slots
+  `ui/src/features/{portability,palette,print}`). Texts built in Rust:
+  `locales/<lang>/core-portability.ftl`, `core-vault.ftl`; UI: `portability.ftl`,
+  `palette.ftl`, `print.ftl`.
 
 For M4b:
 

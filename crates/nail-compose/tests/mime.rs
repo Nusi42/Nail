@@ -35,6 +35,7 @@ fn identity() -> Identity {
         posting: None,
         mail_style: None,
         crypto: None,
+        send_as: None,
     }
 }
 
@@ -442,4 +443,41 @@ fn redirects_prepend_resent_headers_and_the_loop_marker() {
          X-Nail-Loop: ada@work.example\r\n\
          From: Bob <bob@example.org>\r\nSubject: Hi\r\n\r\nBody\r\n"
     );
+}
+
+#[test]
+fn on_behalf_identities_add_a_sender_and_send_as_does_not() {
+    use nail_api::accounts::{SendAs, SendAsMode};
+    let style = MailStyle::default();
+    let blobs = blobs();
+    let blobs = move |hash: &str| blobs.get(hash).cloned();
+    let meta = MessageMeta {
+        date: DATE,
+        message_id: "x@work.example",
+    };
+    let mut team = identity();
+    team.email = "team@work.example".into();
+    team.name = Some("Team".into());
+    team.send_as = Some(SendAs {
+        mode: SendAsMode::OnBehalf,
+        sender: Some("ada@work.example".into()),
+    });
+    let draft = base_draft();
+    let built = build_message(&draft, &team, None, meta, &style, &blobs).unwrap();
+    let text = String::from_utf8_lossy(&built.raw);
+    assert!(
+        text.contains("From: \"Team\" <team@work.example>"),
+        "{text}"
+    );
+    assert!(text.contains("Sender: <ada@work.example>"), "{text}");
+    assert_eq!(built.envelope.from, "ada@work.example");
+
+    team.send_as = Some(SendAs {
+        mode: SendAsMode::SendAs,
+        sender: Some("ada@work.example".into()),
+    });
+    let built = build_message(&draft, &team, None, meta, &style, &blobs).unwrap();
+    let text = String::from_utf8_lossy(&built.raw);
+    assert!(!text.contains("Sender:"), "{text}");
+    assert_eq!(built.envelope.from, "team@work.example");
 }

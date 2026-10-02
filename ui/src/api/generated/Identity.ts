@@ -5,6 +5,7 @@ import type { IdentityCrypto } from "./IdentityCrypto";
 import type { IdentityId } from "./IdentityId";
 import type { MailStyleConfig } from "./MailStyleConfig";
 import type { QuotePosting } from "./QuotePosting";
+import type { SendAs } from "./SendAs";
 import type { Signature } from "./Signature";
 
 /**
@@ -60,4 +61,10 @@ mail_style: MailStyleConfig | null,
  * ([`IdentityCrypto::default`]). Saved with
  * [`crate::Request::UpdateAccount`] like every identity setting.
  */
-crypto?: IdentityCrypto, };
+crypto?: IdentityCrypto, 
+/**
+ * Sending as / on behalf of another mailbox (a shared or delegate
+ * Exchange mailbox; M4c, ADR 0094): `email` is then that mailbox's
+ * address. Absent = the account's own address.
+ */
+send_as?: SendAs, };

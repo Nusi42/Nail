@@ -3,4 +3,4 @@
 /**
  * Where a key or certificate came from.
  */
-export type KeySource = "generated" | "imported" | "pkcs12" | "windows-store" | "autocrypt" | "autocrypt-gossip" | "setup-message" | "wkd" | "keyserver" | "message";
+export type KeySource = "generated" | "imported" | "pkcs12" | "windows-store" | "autocrypt" | "autocrypt-gossip" | "setup-message" | "wkd" | "keyserver" | "message" | "smartcard";

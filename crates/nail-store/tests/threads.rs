@@ -35,6 +35,7 @@ fn mail(
                 .unwrap_or_default(),
             references: refs.iter().map(|r| (*r).to_owned()).collect(),
             size: Some(1000),
+            remote_thread_id: None,
         }),
     }
 }
@@ -402,5 +403,46 @@ fn list_threads_summarizes_per_folder() {
             .get_thread(&"t-nope".into(), None)
             .unwrap_err()
             .is_not_found()
+    );
+}
+
+#[test]
+fn server_thread_ids_group_messages_without_links() {
+    let store = seeded_store();
+    // Two unrelated subjects, no references: separate threads by JWZ...
+    let mut a = mail("ga", "a1", "inbox", Some("ga@x"), &[], "Lunch", 1);
+    let mut b = mail("gb", "a1", "inbox", Some("gb@x"), &[], "Different", 2);
+    // ...but the server says they are one conversation.
+    a.meta.as_mut().unwrap().remote_thread_id = Some("thread-1".into());
+    b.meta.as_mut().unwrap().remote_thread_id = Some("thread-1".into());
+    store.merge_messages(&[a]).unwrap();
+    store.merge_messages(&[b]).unwrap();
+    assert!(same_thread(&store, &["ga", "gb"]));
+    assert_eq!(
+        store
+            .message_remote_thread_id(&"ga".into())
+            .unwrap()
+            .as_deref(),
+        Some("thread-1")
+    );
+    // A later message joins once its thread id is known (no subject match).
+    store
+        .merge_messages(&[mail("gc", "a1", "inbox", Some("gc@x"), &[], "Other", 3)])
+        .unwrap();
+    assert!(!same_thread(&store, &["ga", "gc"]));
+    let joined = store
+        .set_message_remote_thread_id(&"gc".into(), Some("thread-1"))
+        .unwrap();
+    assert_eq!(joined, thread(&store, "ga"));
+    // Re-merging without a thread id keeps the stored one.
+    store
+        .merge_messages(&[mail("gc", "a1", "inbox", Some("gc@x"), &[], "Other", 3)])
+        .unwrap();
+    assert!(same_thread(&store, &["ga", "gb", "gc"]));
+    // Unknown messages are an error.
+    assert!(
+        store
+            .set_message_remote_thread_id(&"missing".into(), Some("t"))
+            .is_err()
     );
 }

@@ -831,7 +831,7 @@
       ]
     },
     "IdentitySchema": {
-      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style …; crypto … }`.",
+      "description": "`identity \"<address>\" id=… name=… reply-to=… composer=… posting=… send-as=… sender=… { bcc …; signature …; mail-style …; crypto … }`.",
       "type": "object",
       "properties": {
         "bcc": {
@@ -906,6 +906,24 @@
         },
         "reply-to": {
           "description": "Reply-To address.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "send-as": {
+          "description": "Send for another mailbox (a shared / delegate Exchange mailbox whose\naddress is the identity's): \"send-as\" or \"on-behalf\".",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SendAsSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sender": {
+          "description": "With send-as=\"on-behalf\": the user's own address for `Sender`\n(default: the account's address).",
           "type": [
             "string",
             "null"
@@ -1231,6 +1249,21 @@
       "description": "A keychain reference: `keychain:<service>/<name>`.",
       "type": "string",
       "pattern": "^keychain:[^/\\s]+/\\S+$"
+    },
+    "SendAsSchema": {
+      "description": "How an identity sends for another mailbox.",
+      "oneOf": [
+        {
+          "description": "The mail is from the mailbox alone (Send As permission).",
+          "type": "string",
+          "const": "send-as"
+        },
+        {
+          "description": "From the mailbox, on behalf of the user (Send on Behalf permission).",
+          "type": "string",
+          "const": "on-behalf"
+        }
+      ]
     },
     "SieveSchema": {
       "description": "`sieve host=… port=… tls=… script=… enabled=…` (every property optional).",

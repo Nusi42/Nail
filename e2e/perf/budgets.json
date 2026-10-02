@@ -1,0 +1,13 @@
+{
+  "$comment": "Performance budgets of the 100k-message benchmark (plan M4c WP123, ADR 0094). Read by crates/nail-bench (Rust metrics) and the Playwright perf scenarios in e2e/perf/ (UI metrics). Tighten, never loosen without an ADR.",
+  "corpus": "standard",
+  "budgets": [
+    { "metric": "initial-sync-secs", "max": 300 },
+    { "metric": "search-p95-ms", "max": 250 },
+    { "metric": "list-page-p95-ms", "max": 50 },
+    { "metric": "cold-start-ms", "max": 3000 },
+    { "metric": "peak-memory-mib", "max": 800 },
+    { "metric": "scroll-frame-p95-ms", "max": 20 },
+    { "metric": "scroll-long-frames", "max": 5 }
+  ]
+}

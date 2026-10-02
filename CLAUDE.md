@@ -78,6 +78,14 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        UiEndpointFile + dev-endpoint allow-list, DesktopHost trait + DesktopNotifier), mapi
                        (MapiMessage / MapiResult codes, pipe name + frames, registry, DLL paths);
                        LaunchRequest::ComposeDraft (ADR 0087)
+                       M4c (ADR 0094): labels.rs (`labeled_enum!`: wire name + Fluent id + ALL),
+                       portability (import sources / export targets, jobs, JobProgress / JobReport, ItemIssue,
+                       Thunderbird AccountProposal / RuleProposal, LOCAL_FOLDERS_ACCOUNT_ID), backup (items,
+                       `.nailbackup` format constants, manifest, RestorePlan / RestoreReport), recovery (recovery-key
+                       text form), smartcard (PKCS#11 settings, tokens, PinPrompt, PinSource), palette (recent
+                       actions), print (PrintTarget / PrintOptions / PrintJob), diagnostics (items, redactions,
+                       manifest); desktop PathPick + DesktopHost pick_path / print_to_pdf / print_view_ready;
+                       accounts SendAs / SendingMailbox; OutgoingTransport::send_with_progress
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -99,8 +107,9 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        M4a: widgets/agents.rs (confirmation-center show-history, confirmation-indicator
                        hide-when-empty; ADRs 0079, 0084); M4b: widgets/system.rs (update-settings
                        show-installation, desktop-settings show-dev-endpoint, default-apps show-mapi;
-                       ADRs 0087, 0092)
-crates/nail-store      SQLite metadata (v13), blob store, per-account operation queue with sync-side
+                       ADRs 0087, 0092); M4c: identity `send-as=` / `sender=`, widgets/portability.rs + security
+                       future widgets security-recovery-key / security-smartcards (ADR 0094)
+crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
                        v5: keyring, trust decisions, Autocrypt peers, vault state, message security,
@@ -143,6 +152,9 @@ crates/nail-store      SQLite metadata (v13), blob store, per-account operation 
                        key per actor, history 500; action_policies, `allow` refused for destructive kinds),
                        mcp.rs rate limits + mcp_idempotency (sealed), plugin_activity.rs (jobs, hook stats, CPU
                        per minute)
+                       v15 (ADR 0094): crypto_keys rebuilt for `smartcard` keys (secret_ref = SmartcardKeyRef JSON);
+                       messages.remote_thread_id (MessageMeta.remote_thread_id, set_message_remote_thread_id:
+                       `remote-thread:<account>:<id>` in thread_refs)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -330,6 +342,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        M4b (ADR 0087): desktop.rs (desktop requests: app_settings `desktop.*` + the shell's
                        DesktopHost from ServiceOptions::desktop, `unsupported` without; Service::submit_mapi =
                        Simple MAPI → saved draft + LaunchRequest::ComposeDraft, never sent; desktop_settings())
+                       M4c (ADR 0094): palette.rs (recent actions), print.rs (PrintCtl jobs, PDF via the host),
+                       smartcard.rs (settings), portability.rs (PickPath via the host; the rest `m4c-not-ready`)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -342,6 +356,11 @@ crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (s
                        forward.rs, staging.rs (attachment copies in %TEMP%\nail-mapi, sweep of own
                        `<pid>-<hex>-<n>` folders only, limit nail_api::compose::MAX_ATTACHMENT_BYTES),
                        registration.rs (HKLM Clients\Mail\Nail values, .reg rendering) (ADRs 0087, 0088, 0093)
+crates/nail-portability M4c WP121 (ADR 0094): importers (mbox, EML folders, Maildir, Thunderbird), exporters,
+                       `.nailbackup` archives (Argon2id + XChaCha20-Poly1305 STREAM over zip), diagnostics bundle writer
+crates/nail-pkcs11     M4c WP122 (ADR 0094): PKCS#11 smartcards over cryptoki (used by nail-pgp / nail-smime)
+crates/nail-bench      M4c WP123 (ADR 0094): benchmark harness (CorpusSpec, metrics, budgets = e2e/perf/budgets.json),
+                       bin nail-bench
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -395,6 +414,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        default-apps; dialogs about-nail (F1), first-run; FirstRunGate; ProgramDraftNotice in the
                        composer + openProgramDraft for ComposeDraft launches; SYSTEM_BASE_CSS; mock.ts simulates the
                        desktop host: simulateMapiSendMail, setUpdateState, setDefaultApps; ADRs 0087, 0091, 0092);
+                       M4c (ADR 0094): portability/, palette/, print/ slots + security/vaultMock.ts (WP124);
+                       actions/palette.ts (ActionInfo, buildPalette) + Feature.actionInfo;
                        WP105 mounts: composer/pluginExtensions.tsx, reader in
                        widgets/MessageView.tsx (ADR 0084);
                        RemoteGate.tsx
@@ -426,7 +447,7 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/gmail.spec.ts (M3b), tests/agents.spec.ts + tests/extensions.spec.ts (M4a),
                        tests/desktop-m4b.spec.ts (M4b on the desktop app: MAPI harness, tray / start hidden via
                        shellControl, loopback updater with support/updates.ts, MSI facts via NAIL_REGISTRY_ROOT,
-                       nail plugin dev, first run; ADR 0092))
+                       nail plugin dev, first run; ADR 0092); perf/ (M4c WP123: budgets.json + scenarios))
 defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
@@ -436,6 +457,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        audit texts), agents.ftl (WP104), core-plugins.ftl (WP102 host texts, plugin-write-log);
                        M4b: core-desktop.ftl (contract ids: install kinds, update channels / failures / reasons,
                        default apps, mapi-result-*; WP113 shell texts), system.ftl (WP114);
+                       M4c: core-portability.ftl (WP121 + contract ids), core-vault.ftl (WP122 + contract ids),
+                       portability.ftl / palette.ftl / print.ftl (WP124; palette / print contract ids);
                        every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
@@ -470,6 +493,7 @@ nail plugin dev <folder> [--url URL | --data-dir DIR]   # load a plug-in folder 
 node --test "scripts/test/*.test.mjs"      # installer / release script tests
 cargo test -p nail-mapi --target i686-pc-windows-msvc   # the x86 Simple MAPI DLL under WOW64 (rustup target add i686-pc-windows-msvc)
 cargo deny check                           # licences, bans (openssl, aws-lc), sources, advisories (deny.toml)
+cargo run -p nail-bench --release -- --corpus small   # performance benchmark against e2e/perf/budgets.json (M4c WP123)
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
 powershell -File scripts/installer-smoke.ps1   # install to a temp dir, start, [update,] uninstall
 powershell -File scripts/msi-smoke.ps1         # elevated (CI): silent MSI install with properties, start, upgrade, uninstall
@@ -687,6 +711,17 @@ npm run tauri dev                          # desktop app with Vite hot reload
   the DLLs to `%ProgramFiles%\Nail MAPI` in one elevated `cmd.exe` and registers the copy); nothing elevated reads
   from `%TEMP%`; secrets go to the one step that needs them (the update key reaches only `tauri bundle`);
   release / signing / update-key procedures live in `docs/release.md`.
+- M4c contract: ADR 0094 (`nail_api::portability` — import mbox / EML / Maildir / Thunderbird / ICS / vCard,
+  export, jobs with `PortabilityJobProgress` / `PortabilityJobFinished` and per-item reports, mail into "Local
+  Folders" or through the account's queue, Thunderbird accounts / filters only proposed; `backup` — encrypted
+  `.nailbackup`, verify, dry-run `PreviewRestore`; `recovery` — the vault recovery key (`VaultStatus.needs_recovery`);
+  `smartcard` — PKCS#11 + `PinRequested` / `AnswerPinPrompt` (desktop only, PINs never stored); `palette` — recent
+  actions (served); `print` — print jobs + `#/print/<id>` view with `print.*` theme parts, PDF via
+  `DesktopHost::print_to_pdf` (served); `diagnostics` — exact manifest, no mail by default; `PickPath`;
+  `Identity.send_as`, `send_with_progress` / `SendProgress`, store v15 server threads). The rest answers
+  `unsupported` (`m4c-not-ready`) until WP125. Slots: WP121 `nail-portability`, WP122 vault / store / pgp / smime /
+  `nail-pkcs11` + `[patch.crates-io]`, WP123 Graph / Gmail / EWS / exchange + `nail-bench` + `e2e/perf/`, WP124
+  `ui/src/features/{portability,palette,print}` + security additions.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

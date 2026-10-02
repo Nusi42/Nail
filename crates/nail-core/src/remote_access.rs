@@ -152,7 +152,25 @@ impl Service {
             | Request::ListRemoteContentAllows
             | Request::GetNotificationSettings
             | Request::TestNotification
-            | Request::ListSnoozed { account_id: None } => Ok(()),
+            | Request::ListSnoozed { account_id: None }
+            // M4c: the palette's recent actions (no mail data); print jobs by
+            // id only name targets checked when the job was made.
+            | Request::GetRecentActions
+            | Request::RecordActionUsed { .. }
+            | Request::ClearRecentActions
+            | Request::GetPrintJob { .. }
+            | Request::PrintViewReady { .. } => Ok(()),
+
+            // M4c print jobs: the target must be readable by the session.
+            Request::CreatePrintJob { target, .. } => match target {
+                nail_api::print::PrintTarget::Message { message_id } => {
+                    self.check_readable(access, message_id).await
+                }
+                // Threads are narrowed when the print view reads them.
+                nail_api::print::PrintTarget::Thread { .. } => Ok(()),
+                nail_api::print::PrintTarget::Event { .. }
+                | nail_api::print::PrintTarget::Agenda { .. } => check_full_pim(access),
+            },
 
             // Administration (`admin` and a fresh login, checked by
             // `authorize`), self-service on the session's own user, or
@@ -232,6 +250,31 @@ impl Service {
             | Request::OpenDefaultAppsSettings
             | Request::GetFirstRun
             | Request::CompleteFirstRun
+            | Request::FindImportSources
+            | Request::PreviewImport { .. }
+            | Request::StartImport { .. }
+            | Request::StartExport { .. }
+            | Request::CreateBackup { .. }
+            | Request::InspectBackup { .. }
+            | Request::VerifyBackup { .. }
+            | Request::PreviewRestore { .. }
+            | Request::StartRestore { .. }
+            | Request::ListPortabilityJobs
+            | Request::GetPortabilityJob { .. }
+            | Request::CancelPortabilityJob { .. }
+            | Request::CreateRecoveryKey { .. }
+            | Request::VerifyRecoveryKey { .. }
+            | Request::RestoreVaultKey { .. }
+            | Request::RemoveRecoveryKey
+            | Request::GetSmartcardSettings
+            | Request::SetSmartcardSettings { .. }
+            | Request::ListSmartcards
+            | Request::UseSmartcardKey { .. }
+            | Request::AnswerPinPrompt { .. }
+            | Request::SavePrintPdf { .. }
+            | Request::PreviewDiagnostics { .. }
+            | Request::CreateDiagnosticsBundle { .. }
+            | Request::PickPath { .. }
             | Request::SyncSieve { .. }
             | Request::UpdateNotificationSettings { .. }
             | Request::SetFolderSyncPolicy { .. }
@@ -1224,7 +1267,7 @@ impl Service {
             }
             Event::AccountStatus { status } => access.allows_account(&status.account_id),
             Event::OpStatus { status } => access.allows_account(&status.account_id),
-            Event::SendStatus { outbox_id, .. } => {
+            Event::SendStatus { outbox_id, .. } | Event::SendProgress { outbox_id, .. } => {
                 let lookup = outbox_id.clone();
                 match self
                     .inner
@@ -1306,6 +1349,14 @@ impl Service {
             Event::UpdateStatusChanged { .. }
             | Event::DesktopSettingsChanged
             | Event::DefaultAppsChanged => false,
+            // M4c: portability jobs, PIN prompts and smartcards belong to the
+            // desktop (their requests are desktop-only); upload progress
+            // follows its outbox entry like `SendStatus`.
+            Event::PortabilityJobProgress { .. }
+            | Event::PortabilityJobFinished { .. }
+            | Event::PinRequested { .. }
+            | Event::PinPromptClosed { .. }
+            | Event::SmartcardsChanged => false,
         };
         allowed.then_some(event)
     }

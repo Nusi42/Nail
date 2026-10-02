@@ -26,6 +26,11 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     widget("security-message", &[], &[], false),
     widget("security-warnings", &[], &[], false),
     widget("security-composer", &[], &[], false),
+    // M4c (WP124, ADR 0094): future widgets (any options) — the vault
+    // recovery key (create / show once / verify / restore) and smartcards
+    // (PKCS#11 modules, tokens, keys, PIN cache).
+    future_widget("security-recovery-key", false),
+    future_widget("security-smartcards", false),
 ];
 
 #[cfg(test)]

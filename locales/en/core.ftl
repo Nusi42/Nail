@@ -100,6 +100,7 @@ config-sspi-package-invalid = `package` must be "negotiate", "kerberos" or "ntlm
 config-sieve-script-invalid = `script` must be 1 to 128 characters without control characters or slashes, found { $found }
 config-needs-leave-on-server = `{ $key }` only applies with leave-on-server=#true
 config-bcc-empty = `bcc` needs at least one address
+config-sender-needs-on-behalf = `sender` only applies with send-as="on-behalf"
 config-fingerprint-invalid = `{ $key }` must be a fingerprint of { $lengths } hexadecimal digits, found { $found }
 config-sync-recent-needs-days = bodies="recent" needs days=<number of days>
 config-sync-days-needs-recent = `days` only applies with bodies="recent"

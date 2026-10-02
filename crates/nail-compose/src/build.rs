@@ -128,9 +128,24 @@ pub fn envelope_of(draft: &Draft, identity: &Identity) -> Envelope {
         }
     }
     Envelope {
-        from: identity.email.trim().to_owned(),
+        // The bounce address is the user's own for "on behalf of".
+        from: on_behalf_sender(identity)
+            .unwrap_or_else(|| identity.email.trim())
+            .to_owned(),
         to,
     }
+}
+
+/// The `Sender` address of an identity sending on behalf of a mailbox
+/// (its `sender`, when set; the core fills in the account's address).
+pub fn on_behalf_sender(identity: &Identity) -> Option<&str> {
+    identity
+        .send_as
+        .as_ref()
+        .filter(|s| s.mode == nail_api::accounts::SendAsMode::OnBehalf)
+        .and_then(|s| s.sender.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }
 
 fn clean_header(text: &str) -> String {
@@ -375,6 +390,11 @@ pub fn build_message(
             from_name,
             identity.email.trim().to_owned(),
         ));
+    // M4c (ADR 0094): "on behalf of" a shared mailbox puts the user into
+    // `Sender`; "send as" sends from the mailbox alone.
+    if let Some(sender) = on_behalf_sender(identity) {
+        builder = builder.sender(MbAddress::new_address(None::<String>, sender.to_owned()));
+    }
     if !draft.to.is_empty() {
         builder = builder.to(address_list(&draft.to));
     }

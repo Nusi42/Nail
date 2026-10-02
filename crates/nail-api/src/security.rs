@@ -560,6 +560,8 @@ pub enum KeySource {
     Keyserver,
     /// A certificate taken from a signed S/MIME message.
     Message,
+    /// A key on a smartcard / token (M4c; the private key stays there).
+    Smartcard,
 }
 
 impl KeySource {
@@ -576,6 +578,7 @@ impl KeySource {
             Self::Wkd => "wkd",
             Self::Keyserver => "keyserver",
             Self::Message => "message",
+            Self::Smartcard => "smartcard",
         }
     }
 }
@@ -591,6 +594,9 @@ pub enum SecretStorage {
     Passphrase,
     /// Held by the Windows certificate store (CNG); Nail never sees it.
     WindowsStore,
+    /// On a smartcard / token, used through PKCS#11 with a PIN (M4c,
+    /// [`CryptoKey::smartcard`]); Nail never sees it.
+    Smartcard,
 }
 
 /// How to protect a new secret key.
@@ -658,6 +664,11 @@ pub struct CryptoKey {
     /// S/MIME: the chain as last validated; `null` for OpenPGP.
     #[serde(default)]
     pub chain: Option<CertificateChain>,
+    /// Where the private key lives when it is on a smartcard (M4c,
+    /// ADR 0094); absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub smartcard: Option<crate::smartcard::SmartcardKeyRef>,
 }
 
 /// Filters of [`crate::Request::ListKeys`].
@@ -1113,6 +1124,15 @@ pub struct VaultStatus {
     /// Whether the data key is in the OS keychain.
     #[serde(default)]
     pub key_in_keychain: bool,
+    /// The data is encrypted but its key is not in the keychain (a new
+    /// Windows profile, a reset Credential Manager): Nail cannot open the
+    /// data until the user restores the key with the recovery key
+    /// ([`crate::Request::RestoreVaultKey`]; M4c, ADR 0094).
+    #[serde(default)]
+    pub needs_recovery: bool,
+    /// The recovery key (M4c).
+    #[serde(default)]
+    pub recovery: crate::recovery::RecoveryKeyStatus,
     /// The last migration error, if it stopped (it is retried on start).
     #[serde(default)]
     pub error: Option<ErrorCode>,
@@ -1135,6 +1155,8 @@ impl VaultStatus {
             done: 0,
             total: 0,
             key_in_keychain: false,
+            needs_recovery: false,
+            recovery: crate::recovery::RecoveryKeyStatus::default(),
             error: None,
             message: None,
             localized: None,

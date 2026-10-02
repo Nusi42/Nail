@@ -32,6 +32,9 @@ members = [
     "crates/nail-proto-ews",
     "crates/nail-exchange",
     "crates/nail-mapi",
+    "crates/nail-portability",
+    "crates/nail-pkcs11",
+    "crates/nail-bench",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -72,6 +75,9 @@ default-members = [
     "crates/nail-proto-ews",
     "crates/nail-exchange",
     "crates/nail-mapi",
+    "crates/nail-portability",
+    "crates/nail-pkcs11",
+    "crates/nail-bench",
     "crates/nail-core",
     "crates/nail-server",
     "crates/nail-cli",
@@ -118,6 +124,9 @@ nail-proto-graph = { path = "crates/nail-proto-graph" }
 nail-proto-ews = { path = "crates/nail-proto-ews" }
 nail-exchange = { path = "crates/nail-exchange" }
 nail-mapi = { path = "crates/nail-mapi" }
+nail-portability = { path = "crates/nail-portability" }
+nail-pkcs11 = { path = "crates/nail-pkcs11" }
+nail-bench = { path = "crates/nail-bench" }
 nail-core = { path = "crates/nail-core" }
 nail-server = { path = "crates/nail-server" }
 
@@ -318,6 +327,18 @@ windows-registry = "0.6.1"
 # when none is set), no `zip` (Windows updates are the NSIS / MSI packages
 # themselves), no system proxy probing.
 tauri-plugin-updater = { version = "2.13.1", default-features = false, features = ["rustls-tls"] }
+
+# M4c (ADR 0094). Data portability, release hardening and leftovers.
+# One new third-party crate: cryptoki (Apache-2.0; with cryptoki-sys,
+# libloading (ISC), secrecy, bitflags) for PKCS#11 smartcards
+# (nail-pkcs11, WP122): pre-generated bindings, no bindgen / libclang, the
+# vendor module is loaded at run time; no OpenSSL. nail-portability (WP121)
+# uses the workspace zip / argon2 / chacha20poly1305 (`stream`) / sha2 /
+# rusqlite / mail-parser; nail-bench (WP123) the workspace rand / clap /
+# windows-sys. WP122 may add SQLite3MultipleCiphers as a `[patch.crates-io]`
+# of libsqlite3-sys (MIT) below. Ask before adding more (licences: no GPL /
+# LGPL / AGPL, no OpenSSL / aws-lc).
+cryptoki = "0.12.1"
 
 # Hashing (ids, blob addresses)
 sha2 = "0.11.0"

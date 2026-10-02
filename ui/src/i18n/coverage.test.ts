@@ -34,6 +34,9 @@ import * as pluginsMessages from "../features/plugins/messages";
 import * as sieveMessages from "../features/sieve/messages";
 import * as syncMessages from "../features/sync/messages";
 import * as systemMessages from "../features/system/messages";
+import * as portabilityMessages from "../features/portability/messages";
+import * as paletteMessages from "../features/palette/messages";
+import * as printMessages from "../features/print/messages";
 import * as triageMessages from "../features/triage/messages";
 import { shippedCatalogs } from "./catalogs";
 
@@ -56,6 +59,9 @@ const FEATURE_MESSAGES = [
   exchangeMessages,
   agentsMessages,
   systemMessages,
+  portabilityMessages,
+  paletteMessages,
+  printMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

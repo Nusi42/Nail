@@ -1,0 +1,30 @@
+[package]
+name = "nail-pkcs11"
+description = "PKCS#11 smartcards and security tokens for Nail: loading modules, listing tokens, keys and certificates, signing and decrypting on the card with PIN prompts (OpenPGP and S/MIME)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# M4c WP122 (contract ADR 0094). cryptoki (Apache-2.0) loads the vendor's
+# PKCS#11 DLL at run time (libloading); pre-generated bindings, no
+# bindgen / libclang, no OpenSSL.
+[dependencies]
+nail-api.workspace = true
+cryptoki.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+zeroize.workspace = true
+hex.workspace = true
+sha2.workspace = true
+# Certificate facts of token objects.
+x509-cert.workspace = true
+der.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

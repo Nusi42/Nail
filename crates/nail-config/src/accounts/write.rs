@@ -274,6 +274,14 @@ fn render_account(account: &AccountConfig, indent: &str) -> String {
                     QuotePosting::Top => "top",
                     QuotePosting::Bottom => "bottom",
                 }),
+            )
+            .prop_opt(
+                "send-as",
+                identity.send_as.as_ref().map(|s| s.mode.as_str()),
+            )
+            .prop_opt(
+                "sender",
+                identity.send_as.as_ref().and_then(|s| s.sender.as_deref()),
             );
         let mut grand = Vec::new();
         if !identity.bcc.is_empty() {

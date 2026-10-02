@@ -303,6 +303,7 @@ mod tests {
             posting: None,
             mail_style: None,
             crypto: None,
+            send_as: None,
         }
     }
 

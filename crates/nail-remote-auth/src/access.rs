@@ -444,6 +444,41 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::OpenDefaultAppsSettings => ("OpenDefaultAppsSettings", DesktopOnly),
         Request::GetFirstRun => ("GetFirstRun", DesktopOnly),
         Request::CompleteFirstRun => ("CompleteFirstRun", DesktopOnly),
+        // --- M4c (ADR 0094): paths on the desktop, the vault's recovery
+        // key, smartcards and diagnostics belong to the desktop; the
+        // palette's recent actions hold no mail data; print jobs only
+        // name what the session may read anyway (checked by the core) ---
+        Request::FindImportSources => ("FindImportSources", DesktopOnly),
+        Request::PreviewImport { .. } => ("PreviewImport", DesktopOnly),
+        Request::StartImport { .. } => ("StartImport", DesktopOnly),
+        Request::StartExport { .. } => ("StartExport", DesktopOnly),
+        Request::CreateBackup { .. } => ("CreateBackup", DesktopOnly),
+        Request::InspectBackup { .. } => ("InspectBackup", DesktopOnly),
+        Request::VerifyBackup { .. } => ("VerifyBackup", DesktopOnly),
+        Request::PreviewRestore { .. } => ("PreviewRestore", DesktopOnly),
+        Request::StartRestore { .. } => ("StartRestore", DesktopOnly),
+        Request::ListPortabilityJobs => ("ListPortabilityJobs", DesktopOnly),
+        Request::GetPortabilityJob { .. } => ("GetPortabilityJob", DesktopOnly),
+        Request::CancelPortabilityJob { .. } => ("CancelPortabilityJob", DesktopOnly),
+        Request::CreateRecoveryKey { .. } => ("CreateRecoveryKey", DesktopOnly),
+        Request::VerifyRecoveryKey { .. } => ("VerifyRecoveryKey", DesktopOnly),
+        Request::RestoreVaultKey { .. } => ("RestoreVaultKey", DesktopOnly),
+        Request::RemoveRecoveryKey => ("RemoveRecoveryKey", DesktopOnly),
+        Request::GetSmartcardSettings => ("GetSmartcardSettings", DesktopOnly),
+        Request::SetSmartcardSettings { .. } => ("SetSmartcardSettings", DesktopOnly),
+        Request::ListSmartcards => ("ListSmartcards", DesktopOnly),
+        Request::UseSmartcardKey { .. } => ("UseSmartcardKey", DesktopOnly),
+        Request::AnswerPinPrompt { .. } => ("AnswerPinPrompt", DesktopOnly),
+        Request::SavePrintPdf { .. } => ("SavePrintPdf", DesktopOnly),
+        Request::PreviewDiagnostics { .. } => ("PreviewDiagnostics", DesktopOnly),
+        Request::CreateDiagnosticsBundle { .. } => ("CreateDiagnosticsBundle", DesktopOnly),
+        Request::PickPath { .. } => ("PickPath", DesktopOnly),
+        Request::GetRecentActions => ("GetRecentActions", Session),
+        Request::RecordActionUsed { .. } => ("RecordActionUsed", Session),
+        Request::ClearRecentActions => ("ClearRecentActions", Session),
+        Request::CreatePrintJob { .. } => ("CreatePrintJob", Scope(S::Read)),
+        Request::GetPrintJob { .. } => ("GetPrintJob", Scope(S::Read)),
+        Request::PrintViewReady { .. } => ("PrintViewReady", Scope(S::Read)),
     };
     RequestAccess { name, access }
 }
@@ -960,5 +995,64 @@ mod m4a_tests {
                 "{request:?}"
             );
         }
+    }
+
+    #[test]
+    fn m4c_requests() {
+        use nail_api::portability::{ImportFormat, ImportSource};
+        use nail_api::print::{PrintOptions, PrintTarget};
+        let desktop = [
+            Request::FindImportSources,
+            Request::StartImport {
+                source: ImportSource {
+                    format: ImportFormat::Mbox,
+                    path: "C:/x.mbox".into(),
+                },
+                options: Default::default(),
+            },
+            Request::CreateBackup {
+                path: "C:/b.nailbackup".into(),
+                contents: Default::default(),
+                passphrase: "correct horse battery".into(),
+            },
+            Request::RestoreVaultKey { key: "k".into() },
+            Request::ListSmartcards,
+            Request::AnswerPinPrompt {
+                prompt_id: "p".into(),
+                pin: None,
+            },
+            Request::SavePrintPdf {
+                job_id: "j".into(),
+                path: "C:/x.pdf".into(),
+            },
+            Request::CreateDiagnosticsBundle {
+                options: Default::default(),
+                path: "C:/d.zip".into(),
+            },
+        ];
+        for request in desktop {
+            assert_eq!(
+                required_access(&request).access,
+                Access::DesktopOnly,
+                "{request:?}"
+            );
+        }
+        assert_eq!(
+            required_access(&Request::RecordActionUsed {
+                action_id: "mail.reply".into()
+            })
+            .access,
+            Access::Session
+        );
+        assert_eq!(
+            required_access(&Request::CreatePrintJob {
+                target: PrintTarget::Message {
+                    message_id: "m".into()
+                },
+                options: PrintOptions::default(),
+            })
+            .access,
+            Access::Scope(McpScope::Read)
+        );
     }
 }

@@ -1589,6 +1589,62 @@ CREATE TABLE plugin_cpu (
 ) WITHOUT ROWID;
 "#;
 
+/// Schema v15 (M4c, ADR 0094): smartcard keys and server threads.
+///
+/// * `crypto_keys` is rebuilt so `source` and `secret_storage` may be
+///   `'smartcard'` (a key on a PKCS#11 token: `secret_ref` holds the JSON of
+///   its `nail_api::smartcard::SmartcardKeyRef`, `secret_data` is NULL).
+///   `crypto_key_emails` references it, so the step runs with foreign keys
+///   off ([`Migration::rebuild`]).
+/// * `messages.remote_thread_id` — the server's thread / conversation id
+///   (Gmail `threadId`, Graph / EWS conversation id); messages sharing one
+///   share a Nail thread (`thread_refs` key `remote-thread:<account>:<id>`,
+///   `Store::set_message_remote_thread_id`).
+const V15: &str = r#"
+CREATE TABLE crypto_keys_v15 (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    technology        TEXT NOT NULL CHECK (technology IN ('openpgp', 'smime')),
+    fingerprint       TEXT NOT NULL,
+    user_ids          TEXT NOT NULL DEFAULT '[]',
+    algorithm         TEXT NOT NULL,
+    created_at        INTEGER NOT NULL,
+    expires_at        INTEGER,
+    revoked           INTEGER NOT NULL DEFAULT 0,
+    can_sign          INTEGER NOT NULL DEFAULT 0,
+    can_encrypt       INTEGER NOT NULL DEFAULT 0,
+    source            TEXT NOT NULL CHECK (source IN ('generated', 'imported', 'pkcs12',
+                          'windows-store', 'autocrypt', 'autocrypt-gossip', 'setup-message',
+                          'wkd', 'keyserver', 'message', 'smartcard')),
+    public_data       BLOB NOT NULL,
+    secret_storage    TEXT CHECK (secret_storage IN ('keychain', 'passphrase', 'windows-store',
+                          'smartcard')),
+    -- Encrypted secret material; NULL for 'windows-store' and 'smartcard'.
+    secret_data       BLOB,
+    -- Keychain reference, Windows store thumbprint, or (smartcard) the
+    -- JSON of the SmartcardKeyRef.
+    secret_ref        TEXT,
+    issuer            TEXT,
+    serial            TEXT,
+    imported_at       INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL,
+    UNIQUE (technology, fingerprint),
+    CHECK (secret_storage IS NOT NULL OR (secret_data IS NULL AND secret_ref IS NULL))
+);
+INSERT INTO crypto_keys_v15 (id, technology, fingerprint, user_ids, algorithm, created_at,
+    expires_at, revoked, can_sign, can_encrypt, source, public_data, secret_storage,
+    secret_data, secret_ref, issuer, serial, imported_at, updated_at)
+SELECT id, technology, fingerprint, user_ids, algorithm, created_at,
+    expires_at, revoked, can_sign, can_encrypt, source, public_data, secret_storage,
+    secret_data, secret_ref, issuer, serial, imported_at, updated_at
+FROM crypto_keys;
+DROP TABLE crypto_keys;
+ALTER TABLE crypto_keys_v15 RENAME TO crypto_keys;
+
+ALTER TABLE messages ADD COLUMN remote_thread_id TEXT;
+CREATE INDEX messages_remote_thread ON messages(account_id, remote_thread_id)
+    WHERE remote_thread_id IS NOT NULL;
+"#;
+
 /// One schema step: SQL plus an optional Rust backfill that runs in the same
 /// transaction (for data SQLite cannot compute, e.g. normalized subjects).
 #[derive(Clone, Copy)]
@@ -1646,6 +1702,7 @@ pub(crate) const MIGRATIONS: &[Migration] = &[
     Migration::rebuild(V12),
     Migration::sql(V13),
     Migration::sql(V14),
+    Migration::rebuild(V15),
 ];
 
 /// The schema version this build creates and understands.
@@ -2287,5 +2344,58 @@ mod tests {
             }
             other => panic!("expected SchemaTooNew, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn v15_keeps_keys_and_allows_smartcards_and_server_threads() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        migrate_to_version(&mut conn, 14).unwrap();
+        conn.execute_batch(
+            "INSERT INTO crypto_keys (id, technology, fingerprint, algorithm, created_at, source,
+                 public_data, secret_storage, secret_data, secret_ref, imported_at, updated_at)
+                 VALUES (7, 'openpgp', 'AB', 'Ed25519', 1, 'generated', x'01', 'keychain',
+                         x'02', 'keychain:nail/openpgp/AB', 1, 1);
+             INSERT INTO crypto_key_emails (key_id, email) VALUES (7, 'ada@x');
+             INSERT INTO accounts (id, name, email, kind) VALUES ('g', 'G', 'g@x', 'gmail');
+             INSERT INTO folders (id, account_id, name, path) VALUES ('fi', 'g', 'Inbox', 'INBOX');
+             INSERT INTO messages (id, account_id, folder_id, date) VALUES ('m', 'g', 'fi', 'x');",
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), SCHEMA_VERSION);
+        let (fpr, email): (String, String) = conn
+            .query_row(
+                "SELECT k.fingerprint, e.email FROM crypto_keys k
+                 JOIN crypto_key_emails e ON e.key_id = k.id WHERE k.id = 7",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((fpr.as_str(), email.as_str()), ("AB", "ada@x"));
+        // Smartcard keys: no secret data, a reference.
+        conn.execute(
+            "INSERT INTO crypto_keys (technology, fingerprint, algorithm, created_at, source,
+                 public_data, secret_storage, secret_ref, imported_at, updated_at)
+             VALUES ('smime', 'CD', 'RSA 2048', 1, 'smartcard', x'01', 'smartcard',
+                     '{}', 1, 1)",
+            [],
+        )
+        .unwrap();
+        assert!(
+            conn.execute("UPDATE crypto_keys SET source = 'bogus' WHERE id = 7", [])
+                .is_err()
+        );
+        // The email rows still cascade with their key.
+        conn.execute("DELETE FROM crypto_keys WHERE id = 7", [])
+            .unwrap();
+        let emails: i64 = conn
+            .query_row("SELECT COUNT(*) FROM crypto_key_emails", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(emails, 0);
+        conn.execute(
+            "UPDATE messages SET remote_thread_id = 't1' WHERE id = 'm'",
+            [],
+        )
+        .unwrap();
     }
 }

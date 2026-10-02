@@ -366,6 +366,7 @@ impl<'a> Keyring<'a> {
             issuer: stored.data.issuer.clone(),
             serial: stored.data.serial.clone(),
             chain: Some(validation.chain),
+            smartcard: None,
         })
     }
 
@@ -590,6 +591,10 @@ impl<'a> Keyring<'a> {
                 Ok(key)
             }
             SecretStorage::WindowsStore => windows_key(secret),
+            // M4c WP122: keys on a smartcard sign / decrypt on the card.
+            SecretStorage::Smartcard => Err(Error::Unsupported(
+                "smartcard keys are not supported yet".into(),
+            )),
         }
     }
 

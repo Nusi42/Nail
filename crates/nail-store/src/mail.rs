@@ -80,6 +80,11 @@ pub struct MessageMeta {
     pub references: Vec<String>,
     /// Size of the raw message in bytes.
     pub size: Option<u64>,
+    /// The server's thread / conversation id (Gmail `threadId`, Graph /
+    /// EWS conversation id; M4c, schema v15): messages sharing one share a
+    /// Nail thread. `None` keeps what is stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_thread_id: Option<String>,
 }
 
 /// A message as reported by a server, for [`Store::merge_messages`].
@@ -498,7 +503,7 @@ pub(crate) fn upsert_message_in_tx(
             .transpose()?;
         tx.execute(
             "UPDATE messages SET message_id = ?2, in_reply_to_json = ?3, references_json = ?4,
-                 size = ?5
+                 size = ?5, remote_thread_id = COALESCE(?6, remote_thread_id)
              WHERE id = ?1",
             params![
                 s.id.as_str(),
@@ -506,6 +511,7 @@ pub(crate) fn upsert_message_in_tx(
                 serde_json::to_string(&normalize_msgids(&meta.in_reply_to))?,
                 serde_json::to_string(&normalize_msgids(&meta.references))?,
                 size,
+                meta.remote_thread_id.as_deref().filter(|t| !t.is_empty()),
             ],
         )?;
     }
@@ -819,6 +825,7 @@ impl Store {
                     in_reply_to: serde_json::from_str(&irt)?,
                     references: serde_json::from_str(&refs)?,
                     size: size.map(i64::cast_unsigned),
+                    remote_thread_id: None,
                 })
             })
         })

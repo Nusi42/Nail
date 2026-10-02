@@ -13,6 +13,11 @@ import { MCP_REQUESTS } from "./mcp/mock";
 import { REMOTE_REQUESTS } from "./remote/mock";
 import { RULES_REQUESTS } from "./rules/mock";
 import { SECURITY_REQUESTS } from "./security/mock";
+import { VAULT_REQUESTS } from "./security/vaultMock";
+import { PALETTE_REQUESTS } from "./palette/mock";
+import { PORTABILITY_REQUESTS } from "./portability/mock";
+import { PRINT_REQUESTS } from "./print/mock";
+import { SYSTEM_REQUESTS } from "./system/mock";
 import { builtinWidgets } from "../widgets";
 import { appRegistry, features, mergeFeatures } from "./registry";
 import type { Feature } from "./types";
@@ -22,7 +27,7 @@ import type { DialogProps } from "../layout/dialogRegistry";
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the M1b, M2a, M2b, M2c, M2d, M3a, M3b, M3c, M4a and M4b slots and contains every built-in", () => {
+  it("has the M1b, M2a, M2b, M2c, M2d, M3a, M3b, M3c, M4a, M4b and M4c slots and contains every built-in", () => {
     expect(Object.keys(features)).toEqual([
       "composer",
       "rules",
@@ -42,6 +47,9 @@ describe("feature registry", () => {
       "exchange",
       "agents",
       "system",
+      "portability",
+      "palette",
+      "print",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);
@@ -66,6 +74,25 @@ describe("feature registry", () => {
     expect(Object.keys(merged.actions).sort()).toEqual(["mail.next", "rules.run"]);
     expect(Object.keys(merged.dialogs)).toEqual(["confirm"]);
     expect(merged.events).toHaveLength(1);
+    expect(merged.actionInfo).toEqual({});
+
+    // M4c: palette descriptions merge like actions and refuse duplicates.
+    const info = { title: "rules-run-title" };
+    expect(
+      mergeFeatures(
+        { widgets: {}, actions: {} },
+        { a: { ...empty, actionInfo: { "rules.run": info } } },
+      ).actionInfo,
+    ).toEqual({ "rules.run": info });
+    expect(() =>
+      mergeFeatures(
+        { widgets: {}, actions: {} },
+        {
+          a: { ...empty, actionInfo: { x: info } },
+          b: { ...empty, actionInfo: { x: info } },
+        },
+      ),
+    ).toThrow(/action info "x"/);
 
     expect(() =>
       mergeFeatures(
@@ -92,6 +119,11 @@ describe("feature registry", () => {
       CUSTOMIZATION_REQUESTS,
       SECURITY_REQUESTS,
       REMOTE_REQUESTS,
+      SYSTEM_REQUESTS,
+      PORTABILITY_REQUESTS,
+      PALETTE_REQUESTS,
+      PRINT_REQUESTS,
+      VAULT_REQUESTS,
     ];
     const all: string[] = lists.flat();
     expect(new Set(all).size).toBe(all.length);

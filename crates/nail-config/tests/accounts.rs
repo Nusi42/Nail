@@ -85,6 +85,7 @@ fn identity(account: &str, email: &str) -> Identity {
         posting: None,
         mail_style: None,
         crypto: None,
+        send_as: None,
     }
 }
 
@@ -1245,4 +1246,48 @@ fn sieve_settings_are_read_and_written() {
     }
     let schema = serde_json::to_string(&nail_config::accounts_schema()).unwrap();
     assert!(schema.contains("ManageSieve"), "{schema}");
+}
+
+#[test]
+fn send_as_identities_read_write_and_validate() {
+    use nail_api::accounts::{SendAs, SendAsMode};
+    let text = account_with(
+        "    imap host=\"h\" {\n        auth \"password\"\n    }\n    identity \"a@example.org\"\n    identity \"team@example.org\" name=\"Team\" send-as=\"on-behalf\" sender=\"a@example.org\"\n    identity \"news@example.org\" send-as=\"send-as\"",
+    );
+    let config = parse_accounts(&text, "accounts.kdl").unwrap();
+    let ids = &config.accounts[0].identities;
+    assert_eq!(ids[0].send_as, None);
+    assert_eq!(
+        ids[1].send_as,
+        Some(SendAs {
+            mode: SendAsMode::OnBehalf,
+            sender: Some("a@example.org".into())
+        })
+    );
+    assert_eq!(
+        ids[2].send_as,
+        Some(SendAs {
+            mode: SendAsMode::SendAs,
+            sender: None
+        })
+    );
+    // The writer keeps both properties.
+    let mut d = AccountsDocument::empty("accounts.kdl");
+    d.set_config(config.clone()).unwrap();
+    assert!(
+        d.text()
+            .contains("send-as=\"on-behalf\" sender=\"a@example.org\""),
+        "{}",
+        d.text()
+    );
+    assert_eq!(parse_accounts(d.text(), "accounts.kdl").unwrap(), config);
+
+    let (_, _, message) = error(&account_with(
+        "    imap host=\"h\" {\n        auth \"password\"\n    }\n    identity \"t@example.org\" send-as=\"maybe\"",
+    ));
+    assert!(message.contains("send-as"), "{message}");
+    let (_, _, message) = error(&account_with(
+        "    imap host=\"h\" {\n        auth \"password\"\n    }\n    identity \"t@example.org\" sender=\"a@example.org\"",
+    ));
+    assert!(message.contains("on-behalf"), "{message}");
 }

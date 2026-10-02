@@ -1454,6 +1454,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cryptoki"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "625cf4599c43d69a16996ce2573fc80745a0b0300c962f0bfa11d55b6cab2b2d"
+dependencies = [
+ "bitflags 2.13.2",
+ "cryptoki-sys",
+ "libloading 0.8.9",
+ "log",
+ "secrecy",
+]
+
+[[package]]
+name = "cryptoki-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1fd850498411e4057f1cba79e6e2bc7cbe960544c1046ab46d4685c403a1121"
+dependencies = [
+ "libloading 0.8.9",
+]
+
+[[package]]
 name = "css-inline"
 version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3915,7 +3937,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e9ec52138abedcc58dc17a7c6c0c00a2bdb4f3427c7f63fa97fd0d859155caf"
 dependencies = [
  "gtk-sys",
- "libloading",
+ "libloading 0.7.4",
  "once_cell",
 ]
 
@@ -3948,6 +3970,16 @@ checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
  "cfg-if",
  "winapi",
+]
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link",
 ]
 
 [[package]]
@@ -4346,6 +4378,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "nail-bench"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "nail-api",
+ "nail-core",
+ "nail-search",
+ "nail-store",
+ "nail-testkit",
+ "pretty_assertions",
+ "rand 0.8.8",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "nail-cli"
 version = "0.1.0"
 dependencies = [
@@ -4427,7 +4481,9 @@ dependencies = [
  "nail-mcp",
  "nail-mime",
  "nail-pgp",
+ "nail-pkcs11",
  "nail-plugins",
+ "nail-portability",
  "nail-proto-ews",
  "nail-proto-gmail",
  "nail-proto-graph",
@@ -4622,6 +4678,7 @@ dependencies = [
  "chrono",
  "mail-parser",
  "nail-api",
+ "nail-pkcs11",
  "nail-store",
  "nail-testkit",
  "pgp",
@@ -4629,6 +4686,23 @@ dependencies = [
  "rand 0.8.8",
  "sha1 0.10.7",
  "thiserror 2.0.21",
+ "zeroize",
+]
+
+[[package]]
+name = "nail-pkcs11"
+version = "0.1.0"
+dependencies = [
+ "cryptoki",
+ "der",
+ "hex",
+ "nail-api",
+ "pretty_assertions",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "x509-cert",
  "zeroize",
 ]
 
@@ -4655,6 +4729,32 @@ dependencies = [
  "tracing",
  "unic-langid",
  "url",
+ "zip",
+]
+
+[[package]]
+name = "nail-portability"
+version = "0.1.0"
+dependencies = [
+ "argon2 0.6.0",
+ "base64 0.23.1",
+ "chacha20poly1305",
+ "chrono",
+ "hex",
+ "mail-parser",
+ "nail-api",
+ "nail-ical",
+ "nail-mime",
+ "pretty_assertions",
+ "rand 0.8.8",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "zeroize",
  "zip",
 ]
 
@@ -4921,6 +5021,7 @@ dependencies = [
  "der",
  "ecdsa",
  "nail-api",
+ "nail-pkcs11",
  "nail-store",
  "nail-testkit",
  "p12-keystore",
@@ -7085,6 +7186,15 @@ dependencies = [
  "pkcs8",
  "serdect 0.2.0",
  "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
  "zeroize",
 ]
 

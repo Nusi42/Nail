@@ -136,6 +136,9 @@ impl Vault {
                 .key_ref
                 .as_ref()
                 .is_some_and(|r| self.keys.contains(&SecretRef(r.clone()))),
+            // M4c (ADR 0094): filled in by WP122 (recovery key).
+            needs_recovery: false,
+            recovery: nail_api::recovery::RecoveryKeyStatus::default(),
             error,
             message,
             localized: None,

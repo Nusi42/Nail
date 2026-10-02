@@ -12,6 +12,9 @@ import type { DraftId } from "./DraftId";
 import type { ErrorCode } from "./ErrorCode";
 import type { ExchangeArea } from "./ExchangeArea";
 import type { FolderId } from "./FolderId";
+import type { JobId } from "./JobId";
+import type { JobProgress } from "./JobProgress";
+import type { JobReport } from "./JobReport";
 import type { LocalizedMessage } from "./LocalizedMessage";
 import type { MailNotification } from "./MailNotification";
 import type { McpClientId } from "./McpClientId";
@@ -21,6 +24,9 @@ import type { OpStatus } from "./OpStatus";
 import type { OutboxId } from "./OutboxId";
 import type { OutboxState } from "./OutboxState";
 import type { PimOpStatus } from "./PimOpStatus";
+import type { PinPrompt } from "./PinPrompt";
+import type { PinPromptCloseReason } from "./PinPromptCloseReason";
+import type { PinPromptId } from "./PinPromptId";
 import type { PluginDialog } from "./PluginDialog";
 import type { PluginDialogId } from "./PluginDialogId";
 import type { PluginId } from "./PluginId";
@@ -336,4 +342,40 @@ plugin_id: PluginId, } | { "type": "UpdateStatusChanged",
 /**
  * Settings and state.
  */
-status: UpdateStatus, } | { "type": "DesktopSettingsChanged" } | { "type": "DefaultAppsChanged" };
+status: UpdateStatus, } | { "type": "DesktopSettingsChanged" } | { "type": "DefaultAppsChanged" } | { "type": "PortabilityJobProgress", 
+/**
+ * The job.
+ */
+job_id: JobId, 
+/**
+ * Where it is.
+ */
+progress: JobProgress, } | { "type": "PortabilityJobFinished", 
+/**
+ * What it did.
+ */
+report: JobReport, } | { "type": "PinRequested", 
+/**
+ * The prompt.
+ */
+prompt: PinPrompt, } | { "type": "PinPromptClosed", 
+/**
+ * The prompt.
+ */
+prompt_id: PinPromptId, 
+/**
+ * Why.
+ */
+reason: PinPromptCloseReason, } | { "type": "SmartcardsChanged" } | { "type": "SendProgress", 
+/**
+ * The outbox entry.
+ */
+outbox_id: OutboxId, 
+/**
+ * Bytes uploaded.
+ */
+sent_bytes: number, 
+/**
+ * Bytes in total.
+ */
+total_bytes: number, };

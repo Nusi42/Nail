@@ -4,6 +4,7 @@ import type { CryptoTechnology } from "./CryptoTechnology";
 import type { KeyId } from "./KeyId";
 import type { KeySource } from "./KeySource";
 import type { SecretStorage } from "./SecretStorage";
+import type { SmartcardKeyRef } from "./SmartcardKeyRef";
 import type { TrustLevel } from "./TrustLevel";
 
 /**
@@ -88,4 +89,9 @@ serial: string | null,
 /**
  * S/MIME: the chain as last validated; `null` for OpenPGP.
  */
-chain: CertificateChain | null, };
+chain: CertificateChain | null, 
+/**
+ * Where the private key lives when it is on a smartcard (M4c,
+ * ADR 0094); absent otherwise.
+ */
+smartcard?: SmartcardKeyRef, };

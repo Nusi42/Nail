@@ -796,6 +796,85 @@ pub struct Identity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub crypto: Option<IdentityCrypto>,
+    /// Sending as / on behalf of another mailbox (a shared or delegate
+    /// Exchange mailbox; M4c, ADR 0094): `email` is then that mailbox's
+    /// address. Absent = the account's own address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub send_as: Option<SendAs>,
+}
+
+/// How an identity sends for another mailbox (`send-as=` of an identity).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum SendAsMode {
+    /// "Send as": the mail is from the mailbox alone (needs the Send As
+    /// permission on the server).
+    SendAs,
+    /// "Send on behalf": `From` is the mailbox, `Sender` the user (needs
+    /// the Send on Behalf permission); recipients see "Ada on behalf of
+    /// Team".
+    OnBehalf,
+}
+
+impl SendAsMode {
+    /// The `accounts.kdl` / wire name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SendAs => "send-as",
+            Self::OnBehalf => "on-behalf",
+        }
+    }
+}
+
+/// Sending for another mailbox.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SendAs {
+    /// Send as or on behalf.
+    pub mode: SendAsMode,
+    /// The user's own address put into `Sender` for `on-behalf`; `null` =
+    /// the account's own address (the core fills it in when sending).
+    #[serde(default)]
+    pub sender: Option<String>,
+}
+
+/// Which mailbox an API engine (Graph, EWS, Gmail) sends a finished
+/// message from, read from its `From` / `Sender` headers and the account's
+/// own address (M4c): the account itself, or another mailbox as / on
+/// behalf.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendingMailbox {
+    /// The account's own mailbox.
+    Own,
+    /// Another mailbox, "send as".
+    SendAs {
+        /// The mailbox's address.
+        mailbox: String,
+    },
+    /// Another mailbox, on behalf of the user.
+    OnBehalf {
+        /// The mailbox's address.
+        mailbox: String,
+    },
+}
+
+impl SendingMailbox {
+    /// Decides from the message's `From` address, its `Sender` address (if
+    /// any) and the account's own address (case-insensitive).
+    pub fn of(from: &str, sender: Option<&str>, own: &str) -> Self {
+        let same = |a: &str, b: &str| a.trim().eq_ignore_ascii_case(b.trim());
+        if same(from, own) {
+            return Self::Own;
+        }
+        match sender {
+            Some(sender) if !sender.trim().is_empty() && !same(sender, from) => Self::OnBehalf {
+                mailbox: from.trim().to_owned(),
+            },
+            _ => Self::SendAs {
+                mailbox: from.trim().to_owned(),
+            },
+        }
+    }
 }
 
 /// Top or bottom posting in replies (`posting=` of an identity).
@@ -1168,6 +1247,42 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
+    #[test]
+    fn sending_mailbox_from_headers() {
+        let own = "ada@work.example";
+        assert_eq!(
+            SendingMailbox::of("ADA@work.example", None, own),
+            SendingMailbox::Own
+        );
+        assert_eq!(
+            SendingMailbox::of("team@work.example", None, own),
+            SendingMailbox::SendAs {
+                mailbox: "team@work.example".into()
+            }
+        );
+        assert_eq!(
+            SendingMailbox::of("team@work.example", Some("ada@work.example"), own),
+            SendingMailbox::OnBehalf {
+                mailbox: "team@work.example".into()
+            }
+        );
+        // A Sender equal to From is not "on behalf".
+        assert_eq!(
+            SendingMailbox::of("team@work.example", Some("team@work.example"), own),
+            SendingMailbox::SendAs {
+                mailbox: "team@work.example".into()
+            }
+        );
+        let send_as: SendAs = serde_json::from_value(json!({"mode": "on-behalf"})).unwrap();
+        assert_eq!(send_as.mode, SendAsMode::OnBehalf);
+        assert_eq!(send_as.sender, None);
+        assert_eq!(SendAsMode::SendAs.as_str(), "send-as");
+        assert_eq!(
+            serde_json::to_value(SendAsMode::SendAs).unwrap(),
+            json!("send-as")
+        );
+    }
+
     fn sample() -> AccountConfig {
         AccountConfig {
             id: "work".into(),
@@ -1443,6 +1558,7 @@ mod tests {
             posting: None,
             mail_style: None,
             crypto: None,
+            send_as: None,
         });
         let config = AccountsConfig {
             accounts: vec![account],

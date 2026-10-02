@@ -75,6 +75,15 @@
 //!   [`desktop::DesktopHost`] trait the shell implements; [`mapi`] — Simple
 //!   MAPI requests from other programs (recipients, subject, body, files,
 //!   UI flag), their result codes and the DLL ↔ app pipe frames.
+//! * M4c (ADR 0094): [`portability`] — import (mbox, EML folders, Maildir,
+//!   Thunderbird profiles, ICS, vCard) and export jobs with progress and
+//!   per-item reports; [`backup`] — encrypted backup archives, verification
+//!   and dry-run restores; [`recovery`] — the vault recovery key;
+//!   [`smartcard`] — PKCS#11 tokens and PIN prompts; [`palette`] — recent
+//!   command-palette actions; [`print`] — print jobs and PDF files;
+//!   [`diagnostics`] — the user-made diagnostics bundle; send-as /
+//!   on-behalf identities ([`accounts::SendAs`]) and upload progress
+//!   ([`engine::OutgoingTransport::send_with_progress`]).
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -90,13 +99,18 @@
 
 #![warn(missing_docs)]
 
+#[macro_use]
+mod labels;
+
 pub mod accounts;
 pub mod agents;
+pub mod backup;
 pub mod compose;
 pub mod config;
 pub mod context;
 pub mod customize;
 pub mod desktop;
+pub mod diagnostics;
 pub mod domain;
 pub mod engine;
 pub mod error;
@@ -109,9 +123,13 @@ pub mod mapi;
 pub mod mcp;
 pub mod menus;
 pub mod ops;
+pub mod palette;
 pub mod pim;
 pub mod plugins;
+pub mod portability;
+pub mod print;
 pub mod protocol;
+pub mod recovery;
 pub mod remote;
 pub mod remote_content;
 pub mod rules;
@@ -119,6 +137,7 @@ pub mod scheduling;
 pub mod search;
 pub mod security;
 pub mod sieve;
+pub mod smartcard;
 pub mod sync;
 pub mod triage;
 
@@ -168,6 +187,7 @@ pub use ids::{
     PluginDialogId, PluginId, ReminderId, RemoteDeviceId, RemoteSessionId, RemoteUserId, RuleId,
     RuleRunId, SavedSearchId, SendVetoId, TaskId, ThreadId,
 };
+pub use ids::{JobId, PinPromptId, PrintJobId};
 pub use launch::{LaunchRequest, MailtoLink};
 pub use localized::{LocalizedMessage, MessageArg};
 pub use mapi::{MapiMessage, MapiResult};
@@ -178,6 +198,8 @@ pub use pim::{
     Calendar, CalendarEvent, Contact, PimSource, PimSourceConfig, PimTime, Reminder, Task,
 };
 pub use plugins::{PluginGrant, PluginInfo, PluginManifest, PluginPermission, PluginUiNode};
+pub use portability::{ImportSource, JobReport, JobStatus};
+pub use print::{PrintJob, PrintTarget};
 pub use protocol::{
     Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
 };
@@ -337,6 +359,25 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     desktop::UpdateDisabledReason::export_all(&cfg)?;
     desktop::UiEndpointFile::export_all(&cfg)?;
     MapiResult::export_all(&cfg)?;
+    // M4c: portability, backup, recovery, smartcard, palette, print and
+    // diagnostics types the UI names but that are reachable only through
+    // optional fields, or not at all (issues, kinds, availability).
+    portability::PortabilityIssueCode::export_all(&cfg)?;
+    portability::IssueSeverity::export_all(&cfg)?;
+    portability::JobPhase::export_all(&cfg)?;
+    backup::BackupItem::export_all(&cfg)?;
+    backup::BackupIssue::export_all(&cfg)?;
+    backup::RestoreEffect::export_all(&cfg)?;
+    recovery::RecoveryKeyIssue::export_all(&cfg)?;
+    smartcard::SmartcardSettingsIssue::export_all(&cfg)?;
+    smartcard::SmartcardError::export_all(&cfg)?;
+    smartcard::PinPurpose::export_all(&cfg)?;
+    palette::ActionAvailability::export_all(&cfg)?;
+    print::PrintTargetIssue::export_all(&cfg)?;
+    print::AgendaLayout::export_all(&cfg)?;
+    diagnostics::DiagnosticsIssue::export_all(&cfg)?;
+    diagnostics::Redaction::export_all(&cfg)?;
+    accounts::SendAs::export_all(&cfg)?;
 
     write_index(out_dir)
 }

@@ -501,6 +501,7 @@ fn merge_records_headers_and_size() {
         in_reply_to: vec![" <root@example.org> ".into()],
         references: vec!["<root@example.org>".into(), "".into()],
         size: Some(2048),
+        remote_thread_id: None,
     });
     store.merge_messages(&[synced]).unwrap();
     assert_eq!(
@@ -510,6 +511,7 @@ fn merge_records_headers_and_size() {
             in_reply_to: vec!["root@example.org".into()],
             references: vec!["root@example.org".into()],
             size: Some(2048),
+            remote_thread_id: None,
         }
     );
     // A plain upsert keeps the recorded headers.

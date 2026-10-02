@@ -32,6 +32,20 @@ use nail_api::plugins::{
 use nail_api::scheduling::{FreeBusyIssue, ItipIssue};
 use nail_api::sieve::{ManageSieveIssue, VacationIssue};
 use nail_api::triage::{JunkIssue, NotificationIssue};
+// M4c (ADR 0094).
+use nail_api::backup::{BackupIssue, BackupItem, RestoreEffect};
+use nail_api::diagnostics::{DiagnosticsIssue, DiagnosticsItem, Redaction};
+use nail_api::palette::ActionAvailability;
+use nail_api::portability::{
+    ExportFormat, ImportCollectionKind, ImportFormat, IssueSeverity, JobKind, JobPhase, JobState,
+    MboxVariant, PortabilityIssueCode,
+};
+use nail_api::print::{AgendaLayout, HeaderDetail, PageOrientation, PageSize, PrintTargetIssue};
+use nail_api::recovery::RecoveryKeyIssue;
+use nail_api::smartcard::{
+    PinPromptCloseReason, PinPurpose, SmartcardError, SmartcardKeyUsage, SmartcardObjectKind,
+    SmartcardSettingsIssue,
+};
 
 fn locales() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../locales")
@@ -247,6 +261,55 @@ fn contract_message_ids_exist_in_english() {
         ]
         .map(str::to_owned),
     );
+    // M4c (ADR 0094): portability, backups, diagnostics, recovery key,
+    // smartcards, palette, printing, core-built texts.
+    macro_rules! labels {
+        ($($t:ty),+ $(,)?) => {
+            $( wanted.extend(<$t>::ALL.iter().map(|v| v.message_id())); )+
+        };
+    }
+    labels!(
+        ImportFormat,
+        ExportFormat,
+        MboxVariant,
+        ImportCollectionKind,
+        JobKind,
+        JobPhase,
+        JobState,
+        IssueSeverity,
+        PortabilityIssueCode,
+        BackupItem,
+        BackupIssue,
+        RestoreEffect,
+        DiagnosticsItem,
+        Redaction,
+        DiagnosticsIssue,
+        RecoveryKeyIssue,
+        SmartcardSettingsIssue,
+        SmartcardObjectKind,
+        SmartcardKeyUsage,
+        PinPurpose,
+        PinPromptCloseReason,
+        SmartcardError,
+        ActionAvailability,
+        AgendaLayout,
+        PageSize,
+        PageOrientation,
+        HeaderDetail,
+        PrintTargetIssue,
+    );
+    wanted.extend(
+        [
+            "m4c-not-ready",
+            "backup-wrong-passphrase",
+            "recovery-key-wrong",
+            "vault-not-encrypted",
+            "palette-invalid-action",
+            "print-job-expired",
+            "config-sender-needs-on-behalf",
+        ]
+        .map(str::to_owned),
+    );
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -291,6 +354,11 @@ fn german_catalogs_are_the_same_files() {
         "agents.ftl",
         "core-desktop.ftl",
         "system.ftl",
+        "core-portability.ftl",
+        "core-vault.ftl",
+        "portability.ftl",
+        "palette.ftl",
+        "print.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

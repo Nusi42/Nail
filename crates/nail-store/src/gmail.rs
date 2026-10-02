@@ -21,7 +21,7 @@ use nail_api::gmail::{
     GmailCategory, GmailLabel, GmailLabelColor, GmailLabelKind, GmailLabelListVisibility,
     GmailLabelSettings, GmailLabelSync, GmailMessageInfo, GmailMessageListVisibility,
 };
-use nail_api::{AccountId, FolderId, GmailLabelId, MessageId, OpId};
+use nail_api::{AccountId, FolderId, GmailLabelId, MessageId, OpId, ThreadId};
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 
 use crate::error::{Error, Result};
@@ -305,6 +305,43 @@ impl Store {
                 return Err(Error::not_found("message", id));
             }
             Ok(())
+        })
+    }
+
+    /// Sets (or clears) a message's server thread id — Gmail `threadId`,
+    /// Graph / EWS conversation id (M4c, schema v15) — and re-threads it:
+    /// messages of one server thread share a Nail thread. Returns the
+    /// message's thread.
+    pub fn set_message_remote_thread_id(
+        &self,
+        id: &MessageId,
+        remote_thread_id: Option<&str>,
+    ) -> Result<ThreadId> {
+        self.with_tx(|tx| {
+            let changed = tx.execute(
+                "UPDATE messages SET remote_thread_id = ?2 WHERE id = ?1",
+                params![id.as_str(), remote_thread_id.filter(|t| !t.is_empty())],
+            )?;
+            if changed == 0 {
+                return Err(Error::not_found("message", id));
+            }
+            Ok(ThreadId::new(crate::thread::assign_thread(
+                tx,
+                id.as_str(),
+            )?))
+        })
+    }
+
+    /// A message's server thread id (schema v15).
+    pub fn message_remote_thread_id(&self, id: &MessageId) -> Result<Option<String>> {
+        self.with_conn(|conn| {
+            conn.query_row(
+                "SELECT remote_thread_id FROM messages WHERE id = ?1",
+                [id.as_str()],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .ok_or_else(|| Error::not_found("message", id))
         })
     }
 

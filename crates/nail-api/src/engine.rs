@@ -258,7 +258,26 @@ pub trait OutgoingTransport: Send + Sync + fmt::Debug {
         envelope: &'a Envelope,
         message: &'a [u8],
     ) -> BoxFuture<'a, Result<SendReceipt, EngineError>>;
+
+    /// [`Self::send`] reporting upload progress (M4c, ADR 0094): engines
+    /// that upload large messages in pieces (Graph upload sessions over
+    /// 4 MB) call `progress(sent_bytes, total_bytes)` as they go; the core
+    /// turns it into [`crate::Event::SendProgress`]. The default sends in
+    /// one go and reports nothing.
+    fn send_with_progress<'a>(
+        &'a self,
+        envelope: &'a Envelope,
+        message: &'a [u8],
+        progress: SendProgress<'a>,
+    ) -> BoxFuture<'a, Result<SendReceipt, EngineError>> {
+        let _ = progress;
+        self.send(envelope, message)
+    }
 }
+
+/// Upload progress callback of [`OutgoingTransport::send_with_progress`]:
+/// `(sent_bytes, total_bytes)`.
+pub type SendProgress<'a> = &'a (dyn Fn(u64, u64) + Send + Sync);
 
 // ---------------------------------------------------------------------------
 // API mail engines (M3b, ADR 0065)

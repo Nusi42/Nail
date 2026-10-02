@@ -616,6 +616,8 @@ Wire everything; **Playwright / desktop:** MAPI test harness sends a file and th
 ### Wave M4c — Data portability, release hardening and leftovers
 
 #### WP120 — Contract (sequential)
+
+*Status:* done — ADR 0094. `nail_api::{portability, backup, recovery, smartcard, palette, print, diagnostics}` (31 requests, 6 events), `PickPath` + `DesktopHost::{pick_path, print_to_pdf, print_view_ready}`, `Identity.send_as` (`accounts.kdl` `send-as=` / `sender=`; `Sender:` in nail-compose), `OutgoingTransport::send_with_progress` + `Event::SendProgress`, store v15 (smartcard keys, `messages.remote_thread_id` threading), `VaultStatus.needs_recovery` / `recovery`, `CryptoKey.smartcard`; the core serves recent actions, print jobs, smartcard settings and the file dialog (rest `unsupported` / `m4c-not-ready`); stub crates `nail-portability` (WP121), `nail-pkcs11` (WP122, cryptoki 0.12.1), `nail-bench` + `e2e/perf/budgets.json` (WP123); UI slots `features/{portability,palette,print}` + `security/vaultMock.ts`, `Feature.actionInfo` + `actions/palette.ts`; future widgets; catalogs `core-portability` / `core-vault` / `portability` / `palette` / `print`.
 Import/export requests with progress and reports (mbox, EML, Maildir, Thunderbird profile, ICS, vCard), backup / restore (what is included, encryption, verification), vault recovery key, command palette model, print requests, diagnostics bundle, performance-benchmark harness interfaces.
 
 #### WP121 — Import, export, backup (parallel)

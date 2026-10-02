@@ -47,6 +47,7 @@ pub(crate) fn meta_of(parsed: &ParsedMessage, size: usize) -> MessageMeta {
         in_reply_to: parsed.in_reply_to.clone(),
         references: parsed.references.clone(),
         size: Some(size as u64),
+        remote_thread_id: None,
     }
 }
 

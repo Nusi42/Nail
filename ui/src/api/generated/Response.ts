@@ -10,6 +10,7 @@ import type { ActionPolicy } from "./ActionPolicy";
 import type { Address } from "./Address";
 import type { AddressBook } from "./AddressBook";
 import type { AutomaticReplies } from "./AutomaticReplies";
+import type { BackupManifest } from "./BackupManifest";
 import type { Calendar } from "./Calendar";
 import type { CalendarEvent } from "./CalendarEvent";
 import type { ConfigBackup } from "./ConfigBackup";
@@ -24,6 +25,8 @@ import type { ContactSummary } from "./ContactSummary";
 import type { CryptoKey } from "./CryptoKey";
 import type { DefaultAppsStatus } from "./DefaultAppsStatus";
 import type { DesktopSettings } from "./DesktopSettings";
+import type { DiagnosticsBundle } from "./DiagnosticsBundle";
+import type { DiagnosticsManifest } from "./DiagnosticsManifest";
 import type { DiscoveredAccount } from "./DiscoveredAccount";
 import type { Draft } from "./Draft";
 import type { DraftAttachment } from "./DraftAttachment";
@@ -41,13 +44,16 @@ import type { FirstRunState } from "./FirstRunState";
 import type { Folder } from "./Folder";
 import type { FolderId } from "./FolderId";
 import type { FolderSyncPolicy } from "./FolderSyncPolicy";
+import type { FoundImportSource } from "./FoundImportSource";
 import type { FreeBusyResult } from "./FreeBusyResult";
 import type { FreeSlot } from "./FreeSlot";
 import type { GmailLabel } from "./GmailLabel";
 import type { Identity } from "./Identity";
 import type { IdentityId } from "./IdentityId";
+import type { ImportPreview } from "./ImportPreview";
 import type { InstallationInfo } from "./InstallationInfo";
 import type { Invitation } from "./Invitation";
+import type { JobStatus } from "./JobStatus";
 import type { JunkStatus } from "./JunkStatus";
 import type { KeyEncoding } from "./KeyEncoding";
 import type { KeyImportResult } from "./KeyImportResult";
@@ -68,6 +74,7 @@ import type { OpId } from "./OpId";
 import type { OutboxEntry } from "./OutboxEntry";
 import type { OutboxId } from "./OutboxId";
 import type { PairingCode } from "./PairingCode";
+import type { PdfFile } from "./PdfFile";
 import type { PimImportPreview } from "./PimImportPreview";
 import type { PimImportResult } from "./PimImportResult";
 import type { PimSearchHit } from "./PimSearchHit";
@@ -84,7 +91,10 @@ import type { PluginPreview } from "./PluginPreview";
 import type { PluginSendVeto } from "./PluginSendVeto";
 import type { PluginSettingDef } from "./PluginSettingDef";
 import type { PluginUiNode } from "./PluginUiNode";
+import type { PrintJob } from "./PrintJob";
+import type { RecentActions } from "./RecentActions";
 import type { RecipientKeysReport } from "./RecipientKeysReport";
+import type { RecoveryKeyStatus } from "./RecoveryKeyStatus";
 import type { Reminder } from "./Reminder";
 import type { RemoteAuditEntry } from "./RemoteAuditEntry";
 import type { RemoteContentAllow } from "./RemoteContentAllow";
@@ -95,6 +105,7 @@ import type { RemoteUiStatus } from "./RemoteUiStatus";
 import type { RemoteUser } from "./RemoteUser";
 import type { ResolvedLayout } from "./ResolvedLayout";
 import type { ResolvedTheme } from "./ResolvedTheme";
+import type { RestorePlan } from "./RestorePlan";
 import type { RoomAvailability } from "./RoomAvailability";
 import type { RoomList } from "./RoomList";
 import type { Rule } from "./Rule";
@@ -110,6 +121,9 @@ import type { SecuritySettings } from "./SecuritySettings";
 import type { SendVetoId } from "./SendVetoId";
 import type { ServerSearch } from "./ServerSearch";
 import type { SieveAccountStatus } from "./SieveAccountStatus";
+import type { SmartcardModuleProblem } from "./SmartcardModuleProblem";
+import type { SmartcardSettings } from "./SmartcardSettings";
+import type { SmartcardToken } from "./SmartcardToken";
 import type { SnoozedMessage } from "./SnoozedMessage";
 import type { Task } from "./Task";
 import type { TaskFields } from "./TaskFields";
@@ -1057,7 +1071,87 @@ settings_uri: string, } | { "type": "FirstRun",
 /**
  * The state.
  */
-state: FirstRunState, } | { "type": "Error", 
+state: FirstRunState, } | { "type": "ImportSources", 
+/**
+ * The sources found (may be empty).
+ */
+sources: Array<FoundImportSource>, } | { "type": "ImportPreview", 
+/**
+ * What the import would bring in.
+ */
+preview: ImportPreview, } | { "type": "PortabilityJob", 
+/**
+ * The job.
+ */
+job: JobStatus, } | { "type": "PortabilityJobs", 
+/**
+ * Running first, then finished ones, newest first.
+ */
+jobs: Array<JobStatus>, } | { "type": "BackupManifest", 
+/**
+ * The archive's manifest.
+ */
+manifest: BackupManifest, } | { "type": "RestorePlan", 
+/**
+ * What restoring would do.
+ */
+plan: RestorePlan, } | { "type": "RecoveryKeyCreated", 
+/**
+ * The key in its text form — shown once, never stored.
+ */
+key: string, 
+/**
+ * Where the recovery kit was written, if asked.
+ */
+saved_to: string | null, 
+/**
+ * The new status.
+ */
+status: RecoveryKeyStatus, } | { "type": "RecoveryKeyVerified", 
+/**
+ * Whether the key opens the vault.
+ */
+valid: boolean, 
+/**
+ * The status (with `verified_at` updated when valid).
+ */
+status: RecoveryKeyStatus, } | { "type": "SmartcardSettings", 
+/**
+ * The settings.
+ */
+settings: SmartcardSettings, } | { "type": "Smartcards", 
+/**
+ * The tokens found.
+ */
+tokens: Array<SmartcardToken>, 
+/**
+ * Modules that could not be used, with why (`smartcard-error-*`).
+ */
+problems: Array<SmartcardModuleProblem>, } | { "type": "RecentActions", 
+/**
+ * Most recent first.
+ */
+recent: RecentActions, } | { "type": "PrintJob", 
+/**
+ * The job.
+ */
+job: PrintJob, } | { "type": "PdfSaved", 
+/**
+ * The written file.
+ */
+file: PdfFile, } | { "type": "DiagnosticsPreview", 
+/**
+ * Exactly what the bundle would hold.
+ */
+manifest: DiagnosticsManifest, } | { "type": "DiagnosticsBundle", 
+/**
+ * The written bundle.
+ */
+bundle: DiagnosticsBundle, } | { "type": "PathPicked", 
+/**
+ * The chosen path; `null` = cancelled.
+ */
+path: string | null, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

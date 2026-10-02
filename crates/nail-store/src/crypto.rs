@@ -55,6 +55,7 @@ fn parse_source(text: &str) -> rusqlite::Result<KeySource> {
         "wkd" => KeySource::Wkd,
         "keyserver" => KeySource::Keyserver,
         "message" => KeySource::Message,
+        "smartcard" => KeySource::Smartcard,
         other => return Err(bad_value("source", other)),
     })
 }
@@ -64,6 +65,7 @@ fn storage_str(storage: SecretStorage) -> &'static str {
         SecretStorage::Keychain => "keychain",
         SecretStorage::Passphrase => "passphrase",
         SecretStorage::WindowsStore => "windows-store",
+        SecretStorage::Smartcard => "smartcard",
     }
 }
 
@@ -72,6 +74,7 @@ fn parse_storage(text: &str) -> rusqlite::Result<SecretStorage> {
         "keychain" => SecretStorage::Keychain,
         "passphrase" => SecretStorage::Passphrase,
         "windows-store" => SecretStorage::WindowsStore,
+        "smartcard" => SecretStorage::Smartcard,
         other => return Err(bad_value("secret_storage", other)),
     })
 }
@@ -376,7 +379,10 @@ impl Store {
         }
         if let Some(secret) = &key.secret {
             let consistent = match secret.storage {
-                SecretStorage::WindowsStore => secret.reference.is_some() && secret.data.is_none(),
+                // M4c: `reference` = the JSON of the SmartcardKeyRef.
+                SecretStorage::WindowsStore | SecretStorage::Smartcard => {
+                    secret.reference.is_some() && secret.data.is_none()
+                }
                 SecretStorage::Keychain => secret.reference.is_some() && secret.data.is_some(),
                 SecretStorage::Passphrase => secret.data.is_some(),
             };

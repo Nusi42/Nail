@@ -22,6 +22,10 @@ import {
 } from "../features/composer/mock";
 import { answerAgents, isAgentsRequest } from "../features/agents/mock";
 import { answerSystem, isSystemRequest } from "../features/system/mock";
+import { answerPortability, isPortabilityRequest } from "../features/portability/mock";
+import { answerPalette, isPaletteRequest } from "../features/palette/mock";
+import { answerPrint, isPrintRequest } from "../features/print/mock";
+import { answerVault, isVaultRequest } from "../features/security/vaultMock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
 import { answerExchange, isExchangeRequest } from "../features/exchange/mock";
 import { answerGmail, isGmailRequest } from "../features/gmail/mock";
@@ -135,6 +139,10 @@ export class MockTransport implements Transport, MockCore {
     if (isExchangeRequest(request)) return answerExchange(this, request);
     if (isAgentsRequest(request)) return answerAgents(this, request);
     if (isSystemRequest(request)) return answerSystem(this, request);
+    if (isPortabilityRequest(request)) return answerPortability(this, request);
+    if (isPaletteRequest(request)) return answerPalette(this, request);
+    if (isPrintRequest(request)) return answerPrint(this, request);
+    if (isVaultRequest(request)) return answerVault(this, request);
     if (isPluginExtensionRequest(request)) return answerPluginExtensions(this, request);
     switch (request.type) {
       case "Ping":

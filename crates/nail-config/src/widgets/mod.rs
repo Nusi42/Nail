@@ -12,7 +12,9 @@
 //! Gmail labels and categories; WP84, ADR 0065), [`exchange`] those of M3c
 //! (Focused Inbox, automatic replies; WP94, ADR 0072), [`agents`] those of
 //! M4a (the confirmation center; WP104, ADR 0079), [`system`] those of M4b
-//! (updates, desktop settings, default apps; WP114, ADR 0087). The
+//! (updates, desktop settings, default apps; WP114, ADR 0087),
+//! [`portability`] those of M4c (import / export, backup, diagnostics;
+//! WP124, ADR 0094; recovery key and smartcards are in [`security`]). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -25,6 +27,7 @@ mod gmail;
 mod mcp;
 mod pim;
 mod plugins;
+mod portability;
 mod remote;
 mod rules;
 mod scheduling;
@@ -105,6 +108,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     exchange::WIDGETS,
     agents::WIDGETS,
     system::WIDGETS,
+    portability::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

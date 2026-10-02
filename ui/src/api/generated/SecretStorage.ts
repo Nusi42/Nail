@@ -3,4 +3,4 @@
 /**
  * How the secret part of an own key is protected at rest.
  */
-export type SecretStorage = "keychain" | "passphrase" | "windows-store";
+export type SecretStorage = "keychain" | "passphrase" | "windows-store" | "smartcard";

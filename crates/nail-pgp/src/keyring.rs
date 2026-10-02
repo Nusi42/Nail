@@ -237,6 +237,7 @@ pub fn to_crypto_key(key: &StoredKey, now: i64) -> CryptoKey {
         issuer: data.issuer.clone(),
         serial: data.serial.clone(),
         chain: None,
+        smartcard: None,
     }
 }
 
@@ -884,6 +885,10 @@ impl<'a> Keyring<'a> {
             }
             SecretStorage::Passphrase => Ok(self.unlocked.get(&stored.data.fingerprint)),
             SecretStorage::WindowsStore => Err(Problem::WindowsStore.into()),
+            // M4c WP122: keys on a smartcard sign / decrypt on the card.
+            SecretStorage::Smartcard => Err(Error::Unsupported(
+                "smartcard keys are not supported yet".into(),
+            )),
         }
     }
 

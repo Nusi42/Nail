@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+# M4c WP122 (ADR 0094): keys on PKCS#11 smartcards.
+nail-pkcs11.workspace = true
 nail-api.workspace = true
 # Certificates and own keys live in the store's keyring (schema v5).
 nail-store.workspace = true

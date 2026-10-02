@@ -285,6 +285,8 @@ pub(crate) struct Inner {
     pub(crate) exchange: crate::exchange::ExchangeCtl,
     /// Confirmations broker, before-send vetoes and headers (M4a).
     pub(crate) agents: crate::agents::AgentsCtl,
+    /// Print jobs of this run (M4c).
+    pub(crate) print: crate::print::PrintCtl,
     /// The desktop shell's side of the M4b requests (ADR 0087).
     pub(crate) desktop: Option<Arc<dyn nail_api::DesktopHost>>,
     watcher: Mutex<Option<ConfigWatcher>>,
@@ -446,6 +448,7 @@ impl Service {
                 pim: crate::pim::PimCtl::new(options.loopback_feeds),
                 exchange: crate::exchange::ExchangeCtl::new(options.exchange.clone()),
                 agents: crate::agents::AgentsCtl::default(),
+                print: crate::print::PrintCtl::default(),
                 desktop: options.desktop.clone(),
                 watcher: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
@@ -1265,6 +1268,41 @@ impl Service {
             | Request::OpenDefaultAppsSettings
             | Request::GetFirstRun
             | Request::CompleteFirstRun) => crate::desktop::handle(self, request).await?,
+            // M4c (ADR 0094): the palette's recent actions and print jobs are
+            // served; smartcard settings are stored; imports / exports /
+            // backups / diagnostics, the recovery key and smartcard use
+            // answer `unsupported` (`m4c-not-ready`) until WP125.
+            request @ (Request::GetRecentActions
+            | Request::RecordActionUsed { .. }
+            | Request::ClearRecentActions) => crate::palette::handle(self, request).await?,
+            request @ (Request::CreatePrintJob { .. }
+            | Request::GetPrintJob { .. }
+            | Request::PrintViewReady { .. }
+            | Request::SavePrintPdf { .. }) => crate::print::handle(self, request).await?,
+            request @ (Request::GetSmartcardSettings
+            | Request::SetSmartcardSettings { .. }
+            | Request::ListSmartcards
+            | Request::UseSmartcardKey { .. }
+            | Request::AnswerPinPrompt { .. }
+            | Request::CreateRecoveryKey { .. }
+            | Request::VerifyRecoveryKey { .. }
+            | Request::RestoreVaultKey { .. }
+            | Request::RemoveRecoveryKey) => crate::smartcard::handle(self, request).await?,
+            request @ (Request::FindImportSources
+            | Request::PreviewImport { .. }
+            | Request::StartImport { .. }
+            | Request::StartExport { .. }
+            | Request::CreateBackup { .. }
+            | Request::InspectBackup { .. }
+            | Request::VerifyBackup { .. }
+            | Request::PreviewRestore { .. }
+            | Request::StartRestore { .. }
+            | Request::ListPortabilityJobs
+            | Request::GetPortabilityJob { .. }
+            | Request::CancelPortabilityJob { .. }
+            | Request::PreviewDiagnostics { .. }
+            | Request::CreateDiagnosticsBundle { .. }
+            | Request::PickPath { .. }) => crate::portability::handle(self, request).await?,
         })
     }
 }

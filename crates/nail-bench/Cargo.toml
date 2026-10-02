@@ -1,0 +1,41 @@
+[package]
+name = "nail-bench"
+description = "Nail's performance benchmark harness: a generated mail corpus (100k messages), initial sync from the mock IMAP server, search latency, cold start and memory, checked against the budgets in e2e/perf/budgets.json"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# M4c WP123 (contract ADR 0094). The UI side (list scrolling frame budget,
+# cold start to first paint) runs in Playwright (e2e/perf/) against the
+# same budgets file.
+[[bin]]
+name = "nail-bench"
+path = "src/bin/nail-bench.rs"
+
+[dependencies]
+nail-api.workspace = true
+nail-core = { workspace = true, features = ["demo"] }
+nail-store.workspace = true
+nail-search.workspace = true
+nail-testkit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+rand.workspace = true
+chrono.workspace = true
+clap.workspace = true
+tempfile.workspace = true
+
+# Peak working set (memory budget) without a system-info crate.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading"] }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

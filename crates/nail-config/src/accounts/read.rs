@@ -9,8 +9,8 @@ use nail_api::accounts::{
     AccountConfig, AccountsConfig, AuthConfig, BodyPolicy, ComposerMode, FolderMapping,
     FolderMatch, FolderPolicy, FolderSource, Identity, IdentityRule, ImapOptions, IncomingServer,
     MailProtocol, MailStyleConfig, OAuthProviderConfig, OutgoingServer, Pop3Options, QuotePosting,
-    SaslMechanism, SecretRef, ServerEndpoint, Signature, SmtpOptions, SyncPolicy, TlsMode,
-    VirtualAccountConfig, default_port,
+    SaslMechanism, SecretRef, SendAs, SendAsMode, ServerEndpoint, Signature, SmtpOptions,
+    SyncPolicy, TlsMode, VirtualAccountConfig, default_port,
 };
 use nail_api::exchange::{ExchangeConfigIssue, ExchangeEngine, ExchangeOptions, GRAPH_HOST};
 use nail_api::gmail::{GMAIL_API_HOST, GmailOptions};
@@ -499,6 +499,7 @@ impl Reader<'_, '_> {
                 posting: None,
                 mail_style: None,
                 crypto: None,
+                send_as: None,
             });
         }
         let mut seen = HashSet::new();
@@ -993,7 +994,12 @@ impl Reader<'_, '_> {
     }
 
     fn identity(&self, node: &KdlNode, account: &AccountId) -> Result<Identity, ConfigError> {
-        self.check_props(node, &["id", "name", "reply-to", "composer", "posting"])?;
+        self.check_props(
+            node,
+            &[
+                "id", "name", "reply-to", "composer", "posting", "send-as", "sender",
+            ],
+        )?;
         self.check_unique_props(node)?;
         check_max_args(self.src, node, 1)?;
         let (email, entry) = arg_str(self.src, node, 0)?;
@@ -1042,6 +1048,33 @@ impl Reader<'_, '_> {
                 ));
             }
         };
+        // M4c (ADR 0094): sending as / on behalf of a shared mailbox.
+        let send_as_mode = match prop_str(self.src, node, "send-as")? {
+            None => None,
+            Some(("send-as", _)) => Some(SendAsMode::SendAs),
+            Some(("on-behalf", _)) => Some(SendAsMode::OnBehalf),
+            Some((text, entry)) => {
+                return Err(self.src.entry_err(
+                    entry,
+                    msg("config-expected-one-of")
+                        .arg("what", "`send-as`")
+                        .arg("choices", "\"send-as\", \"on-behalf\"")
+                        .arg("found", format!("{text:?}")),
+                ));
+            }
+        };
+        let sender = match prop_str(self.src, node, "sender")? {
+            Some((text, entry)) => {
+                if send_as_mode != Some(SendAsMode::OnBehalf) {
+                    return Err(self
+                        .src
+                        .entry_err(entry, msg("config-sender-needs-on-behalf")));
+                }
+                Some(self.email(entry, text, "`sender`")?)
+            }
+            None => None,
+        };
+        let send_as = send_as_mode.map(|mode| SendAs { mode, sender });
         let mut bcc = Vec::new();
         let mut signature: Option<Signature> = None;
         let mut mail_style: Option<MailStyleConfig> = None;
@@ -1128,6 +1161,7 @@ impl Reader<'_, '_> {
             posting,
             mail_style,
             crypto,
+            send_as,
         })
     }
 

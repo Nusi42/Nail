@@ -8,6 +8,7 @@ import type { Address } from "./Address";
 import type { AddressBookId } from "./AddressBookId";
 import type { AddressBookSettings } from "./AddressBookSettings";
 import type { AutomaticRepliesSettings } from "./AutomaticRepliesSettings";
+import type { BackupContents } from "./BackupContents";
 import type { BodyPolicy } from "./BodyPolicy";
 import type { CalendarComponent } from "./CalendarComponent";
 import type { CalendarId } from "./CalendarId";
@@ -23,7 +24,9 @@ import type { ConflictChoice } from "./ConflictChoice";
 import type { ContactFields } from "./ContactFields";
 import type { ContactGroupId } from "./ContactGroupId";
 import type { ContactId } from "./ContactId";
+import type { CryptoTechnology } from "./CryptoTechnology";
 import type { DesktopSettings } from "./DesktopSettings";
+import type { DiagnosticsOptions } from "./DiagnosticsOptions";
 import type { Draft } from "./Draft";
 import type { DraftContext } from "./DraftContext";
 import type { DraftId } from "./DraftId";
@@ -33,14 +36,20 @@ import type { EventId } from "./EventId";
 import type { ExchangeCategoryId } from "./ExchangeCategoryId";
 import type { ExchangeCategorySettings } from "./ExchangeCategorySettings";
 import type { ExchangeMailboxSettings } from "./ExchangeMailboxSettings";
+import type { ExportFormat } from "./ExportFormat";
+import type { ExportOptions } from "./ExportOptions";
+import type { ExportSource } from "./ExportSource";
 import type { FlagChange } from "./FlagChange";
 import type { FolderId } from "./FolderId";
 import type { GmailLabelId } from "./GmailLabelId";
 import type { GmailLabelSettings } from "./GmailLabelSettings";
 import type { IdentityId } from "./IdentityId";
+import type { ImportOptions } from "./ImportOptions";
+import type { ImportSource } from "./ImportSource";
 import type { InferenceClassification } from "./InferenceClassification";
 import type { InvitationResponse } from "./InvitationResponse";
 import type { InvitationTarget } from "./InvitationTarget";
+import type { JobId } from "./JobId";
 import type { JunkSettings } from "./JunkSettings";
 import type { KeyAlgorithm } from "./KeyAlgorithm";
 import type { KeyEncoding } from "./KeyEncoding";
@@ -63,12 +72,14 @@ import type { OpId } from "./OpId";
 import type { OutboxId } from "./OutboxId";
 import type { PairingId } from "./PairingId";
 import type { PasskeyId } from "./PasskeyId";
+import type { PathPick } from "./PathPick";
 import type { PimImportSource } from "./PimImportSource";
 import type { PimItemKind } from "./PimItemKind";
 import type { PimItemRef } from "./PimItemRef";
 import type { PimSourceConfig } from "./PimSourceConfig";
 import type { PimSourceId } from "./PimSourceId";
 import type { PimTime } from "./PimTime";
+import type { PinPromptId } from "./PinPromptId";
 import type { PluginActionTarget } from "./PluginActionTarget";
 import type { PluginCommandSurface } from "./PluginCommandSurface";
 import type { PluginDialogId } from "./PluginDialogId";
@@ -76,6 +87,9 @@ import type { PluginGrant } from "./PluginGrant";
 import type { PluginId } from "./PluginId";
 import type { PluginPackageSource } from "./PluginPackageSource";
 import type { PluginUiTarget } from "./PluginUiTarget";
+import type { PrintJobId } from "./PrintJobId";
+import type { PrintOptions } from "./PrintOptions";
+import type { PrintTarget } from "./PrintTarget";
 import type { Recurrence } from "./Recurrence";
 import type { ReminderId } from "./ReminderId";
 import type { RemoteContentScope } from "./RemoteContentScope";
@@ -99,6 +113,8 @@ import type { SecretValue } from "./SecretValue";
 import type { SecuritySettings } from "./SecuritySettings";
 import type { SendCrypto } from "./SendCrypto";
 import type { SendVetoId } from "./SendVetoId";
+import type { SmartcardKeyRef } from "./SmartcardKeyRef";
+import type { SmartcardSettings } from "./SmartcardSettings";
 import type { TaskFields } from "./TaskFields";
 import type { TaskId } from "./TaskId";
 import type { ThreadId } from "./ThreadId";
@@ -1968,4 +1984,168 @@ settings: UpdateSettings, } | { "type": "CheckForUpdates" } | { "type": "Downloa
 /**
  * The new settings.
  */
-settings: DesktopSettings, } | { "type": "GetDefaultApps" } | { "type": "OpenDefaultAppsSettings" } | { "type": "GetFirstRun" } | { "type": "CompleteFirstRun" };
+settings: DesktopSettings, } | { "type": "GetDefaultApps" } | { "type": "OpenDefaultAppsSettings" } | { "type": "GetFirstRun" } | { "type": "CompleteFirstRun" } | { "type": "FindImportSources" } | { "type": "PreviewImport", 
+/**
+ * The source.
+ */
+source: ImportSource, } | { "type": "StartImport", 
+/**
+ * The source.
+ */
+source: ImportSource, 
+/**
+ * How.
+ */
+options: ImportOptions, } | { "type": "StartExport", 
+/**
+ * What.
+ */
+source: ExportSource, 
+/**
+ * The format.
+ */
+format: ExportFormat, 
+/**
+ * The target file (mbox, ICS, vCard with one source) or folder.
+ */
+path: string, 
+/**
+ * How.
+ */
+options: ExportOptions, } | { "type": "CreateBackup", 
+/**
+ * The archive to write (`.nailbackup`).
+ */
+path: string, 
+/**
+ * What goes in.
+ */
+contents: BackupContents, 
+/**
+ * The passphrase (never stored or logged).
+ */
+passphrase: string, } | { "type": "InspectBackup", 
+/**
+ * The archive.
+ */
+path: string, 
+/**
+ * Its passphrase.
+ */
+passphrase: string, } | { "type": "VerifyBackup", 
+/**
+ * The archive.
+ */
+path: string, 
+/**
+ * Its passphrase.
+ */
+passphrase: string, } | { "type": "PreviewRestore", 
+/**
+ * The archive.
+ */
+path: string, 
+/**
+ * Its passphrase.
+ */
+passphrase: string, 
+/**
+ * The items to restore; `null` = everything in the archive.
+ */
+contents: BackupContents | null, } | { "type": "StartRestore", 
+/**
+ * The archive.
+ */
+path: string, 
+/**
+ * Its passphrase.
+ */
+passphrase: string, 
+/**
+ * The items to restore; `null` = everything in the archive.
+ */
+contents: BackupContents | null, } | { "type": "ListPortabilityJobs" } | { "type": "GetPortabilityJob", 
+/**
+ * The job.
+ */
+job_id: JobId, } | { "type": "CancelPortabilityJob", 
+/**
+ * The job.
+ */
+job_id: JobId, } | { "type": "CreateRecoveryKey", 
+/**
+ * Also write a recovery kit text file here.
+ */
+save_to: string | null, } | { "type": "VerifyRecoveryKey", 
+/**
+ * The key as typed.
+ */
+key: string, } | { "type": "RestoreVaultKey", 
+/**
+ * The key as typed.
+ */
+key: string, } | { "type": "RemoveRecoveryKey" } | { "type": "GetSmartcardSettings" } | { "type": "SetSmartcardSettings", 
+/**
+ * The new settings.
+ */
+settings: SmartcardSettings, } | { "type": "ListSmartcards" } | { "type": "UseSmartcardKey", 
+/**
+ * The key.
+ */
+key: SmartcardKeyRef, 
+/**
+ * OpenPGP or S/MIME.
+ */
+technology: CryptoTechnology, } | { "type": "AnswerPinPrompt", 
+/**
+ * The prompt.
+ */
+prompt_id: PinPromptId, 
+/**
+ * The PIN; `null` = cancel.
+ */
+pin: string | null, } | { "type": "GetRecentActions" } | { "type": "RecordActionUsed", 
+/**
+ * The action id.
+ */
+action_id: string, } | { "type": "ClearRecentActions" } | { "type": "CreatePrintJob", 
+/**
+ * What.
+ */
+target: PrintTarget, 
+/**
+ * How.
+ */
+options: PrintOptions, } | { "type": "GetPrintJob", 
+/**
+ * The job.
+ */
+job_id: PrintJobId, } | { "type": "PrintViewReady", 
+/**
+ * The job.
+ */
+job_id: PrintJobId, } | { "type": "SavePrintPdf", 
+/**
+ * The job.
+ */
+job_id: PrintJobId, 
+/**
+ * The file to write.
+ */
+path: string, } | { "type": "PreviewDiagnostics", 
+/**
+ * What to include.
+ */
+options: DiagnosticsOptions, } | { "type": "CreateDiagnosticsBundle", 
+/**
+ * What to include.
+ */
+options: DiagnosticsOptions, 
+/**
+ * The zip to write.
+ */
+path: string, } | { "type": "PickPath", 
+/**
+ * What to ask for.
+ */
+pick: PathPick, };

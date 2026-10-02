@@ -40,7 +40,10 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::engine::BoxFuture;
 use crate::error::ApiError;
+use crate::ids::PrintJobId;
+use crate::print::PrintJob;
 
 // ---------------------------------------------------------------------------
 // Installation facts
@@ -881,6 +884,85 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
     fn start_with_windows_managed(&self) -> bool {
         false
     }
+
+    // --- M4c (ADR 0094); defaults answer `unsupported` so a host without
+    // them still compiles ---
+
+    /// Shows the system's open / save / folder dialog and returns the
+    /// chosen path (`None` = cancelled). May wait for the user.
+    fn pick_path<'a>(
+        &'a self,
+        pick: &'a PathPick,
+    ) -> BoxFuture<'a, Result<Option<String>, ApiError>> {
+        let _ = pick;
+        Box::pin(async { Err(desktop_unsupported()) })
+    }
+
+    /// Loads the print view of `job` ([`crate::print::PrintJob::view`]) in a
+    /// hidden window, waits for [`DesktopHost::print_view_ready`] and
+    /// writes it to `path` as PDF (WebView2 `PrintToPdf`). Returns the
+    /// file's size.
+    fn print_to_pdf<'a>(
+        &'a self,
+        job: &'a PrintJob,
+        path: &'a str,
+    ) -> BoxFuture<'a, Result<u64, ApiError>> {
+        let _ = (job, path);
+        Box::pin(async { Err(desktop_unsupported()) })
+    }
+
+    /// The print view of a job reported it is laid out
+    /// ([`crate::Request::PrintViewReady`]).
+    fn print_view_ready(&self, job_id: &PrintJobId) {
+        let _ = job_id;
+    }
+}
+
+fn desktop_unsupported() -> ApiError {
+    ApiError::new(
+        crate::error::ErrorCode::Unsupported,
+        "not supported by this desktop host",
+    )
+}
+
+// ---------------------------------------------------------------------------
+// File dialogs (M4c, ADR 0094)
+
+/// Which system dialog [`crate::Request::PickPath`] shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum PathPickKind {
+    /// Choose an existing file.
+    OpenFile,
+    /// Choose an existing folder.
+    OpenFolder,
+    /// Choose where to save a file.
+    SaveFile,
+}
+
+/// A file-type filter of a file dialog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PathFilter {
+    /// Fluent id of the filter's name (e.g. `path-filter-mbox`); the shell
+    /// shows the English text when it has no catalog.
+    pub label_id: String,
+    /// Extensions without the dot (`mbox`, `eml`); empty = all files.
+    pub extensions: Vec<String>,
+}
+
+/// What [`crate::Request::PickPath`] asks for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PathPick {
+    /// The dialog.
+    pub kind: PathPickKind,
+    /// Fluent id of the dialog title.
+    pub title_id: String,
+    /// File-type filters (open / save file).
+    #[serde(default)]
+    pub filters: Vec<PathFilter>,
+    /// Suggested file name (save) or start folder.
+    #[serde(default)]
+    pub default_path: Option<String>,
 }
 
 fn default_true() -> bool {

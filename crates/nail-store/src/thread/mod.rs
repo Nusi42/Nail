@@ -26,6 +26,13 @@
 //! only holds orphan replies of that subject (the original arrived late).
 //! Forwards and empty subjects never join by subject.
 //!
+//! **Server threads** (M4c, schema v15): a message with a server thread /
+//! conversation id (`messages.remote_thread_id`: Gmail `threadId`, Graph
+//! `conversationId`, EWS `ConversationId`) also maps the key
+//! `remote-thread:<account>:<id>`, so everything the server puts in one
+//! thread shares a Nail thread (and still merges with Message-ID links).
+//! Such messages never join by subject.
+//!
 //! Deleting messages does not split threads; [`Store::rethread_all`]
 //! rebuilds everything from the stored headers.
 
@@ -62,34 +69,75 @@ struct ThreadRow {
     kind: i64,
     date_sort: i64,
     current: Option<String>,
+    /// `remote-thread:<account>:<id>` when the server threads the message.
+    remote_thread: Option<String>,
 }
 
-fn load_row(tx: &Transaction<'_>, id: &str) -> Result<ThreadRow> {
+/// The thread key of a server thread id ([`remote_thread_key`] in
+/// `thread_refs`).
+pub(crate) fn remote_thread_key(account: &str, remote_thread_id: &str) -> String {
+    format!("remote-thread:{account}:{remote_thread_id}")
+}
+
+/// Whether `messages.remote_thread_id` exists (schema v15); the v2
+/// backfill threads rows while the schema is still older.
+fn has_remote_thread_column(tx: &Transaction<'_>) -> Result<bool> {
+    let n: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'remote_thread_id'",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(n > 0)
+}
+
+const LOAD_ROW: &str = "SELECT id, message_id, in_reply_to_json, references_json, thread_key,
+        subject_key, subject_is_reply, date_sort, thread_id, account_id, remote_thread_id
+     FROM messages WHERE id = ?1";
+const LOAD_ROW_BEFORE_V15: &str = "SELECT id, message_id, in_reply_to_json, references_json,
+        thread_key, subject_key, subject_is_reply, date_sort, thread_id, account_id, NULL
+     FROM messages WHERE id = ?1";
+
+fn load_row(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Result<ThreadRow> {
     tx.query_row(
-        "SELECT id, message_id, in_reply_to_json, references_json, thread_key, subject_key,
-                subject_is_reply, date_sort, thread_id
-         FROM messages WHERE id = ?1",
+        if remote_column {
+            LOAD_ROW
+        } else {
+            LOAD_ROW_BEFORE_V15
+        },
         [id],
         |row| {
             let in_reply_to: String = row.get(2)?;
             let references: String = row.get(3)?;
+            let account: String = row.get(9)?;
+            let remote_thread = row
+                .get::<_, Option<String>>(10)?
+                .filter(|t| !t.is_empty())
+                .map(|t| remote_thread_key(&account, &t));
             Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                in_reply_to,
-                references,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, i64>(6)?,
-                row.get::<_, i64>(7)?,
-                row.get::<_, Option<String>>(8)?,
+                (
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    in_reply_to,
+                    references,
+                    row.get::<_, Option<String>>(4)?,
+                ),
+                (
+                    row.get::<_, String>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                    remote_thread,
+                ),
             ))
         },
     )
     .optional()?
     .ok_or_else(|| Error::not_found("message", id))
     .and_then(
-        |(id, message_id, irt, refs, thread_key, subject_key, kind, date_sort, current)| {
+        |(
+            (id, message_id, irt, refs, thread_key),
+            (subject_key, kind, date_sort, current, remote_thread),
+        )| {
             let irt: Vec<String> = serde_json::from_str(&irt)?;
             let refs: Vec<String> = serde_json::from_str(&refs)?;
             Ok(ThreadRow {
@@ -101,6 +149,7 @@ fn load_row(tx: &Transaction<'_>, id: &str) -> Result<ThreadRow> {
                 kind,
                 date_sort,
                 current,
+                remote_thread,
             })
         },
     )
@@ -109,12 +158,20 @@ fn load_row(tx: &Transaction<'_>, id: &str) -> Result<ThreadRow> {
 /// (Re)assigns the thread of one message row; see the module docs.
 /// Returns the thread id.
 pub(crate) fn assign_thread(tx: &Transaction<'_>, id: &str) -> Result<String> {
-    let row = load_row(tx, id)?;
+    assign_thread_with(tx, id, true)
+}
+
+/// [`assign_thread`] on a schema with or without `remote_thread_id`.
+fn assign_thread_with(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Result<String> {
+    let row = load_row(tx, id, remote_column)?;
     let mut keys: Vec<&str> = Vec::new();
     if let Some(own) = row.message_id.as_deref() {
         keys.push(own);
     }
     keys.extend(row.parents.iter().map(String::as_str));
+    if let Some(remote) = row.remote_thread.as_deref() {
+        keys.push(remote);
+    }
     // Legacy rows (written without headers) carry the M0 thread key, the
     // root of their reference chain.
     if row.message_id.is_none()
@@ -143,7 +200,7 @@ pub(crate) fn assign_thread(tx: &Transaction<'_>, id: &str) -> Result<String> {
     }
 
     let winner = if threads.is_empty() {
-        let fallback = if row.parents.is_empty() {
+        let fallback = if row.parents.is_empty() && row.remote_thread.is_none() {
             subject_fallback(tx, &row)?
         } else {
             None
@@ -153,6 +210,7 @@ pub(crate) fn assign_thread(tx: &Transaction<'_>, id: &str) -> Result<String> {
                 .parents
                 .first()
                 .or(row.message_id.as_ref())
+                .or(row.remote_thread.as_ref())
                 .cloned()
                 .or_else(|| row.thread_key.clone())
                 .unwrap_or_else(|| format!("row:{}", row.id));
@@ -261,8 +319,9 @@ pub(crate) fn rethread_in_tx(tx: &Transaction<'_>) -> Result<usize> {
         stmt.query_map([], |r| r.get(0))?
             .collect::<rusqlite::Result<_>>()?
     };
+    let remote_column = has_remote_thread_column(tx)?;
     for id in &ids {
-        assign_thread(tx, id)?;
+        assign_thread_with(tx, id, remote_column)?;
     }
     Ok(ids.len())
 }

@@ -396,7 +396,7 @@ enum ComposerSchema {
     Markdown,
 }
 
-/// `identity "<address>" id=… name=… reply-to=… composer=… posting=… { bcc …; signature …; mail-style …; crypto … }`.
+/// `identity "<address>" id=… name=… reply-to=… composer=… posting=… send-as=… sender=… { bcc …; signature …; mail-style …; crypto … }`.
 #[derive(JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 struct IdentitySchema {
@@ -422,6 +422,22 @@ struct IdentitySchema {
     mail_style: Option<MailStyleSchema>,
     /// `crypto …`: end-to-end encryption and signing defaults.
     crypto: Option<CryptoSchema>,
+    /// Send for another mailbox (a shared / delegate Exchange mailbox whose
+    /// address is the identity's): "send-as" or "on-behalf".
+    send_as: Option<SendAsSchema>,
+    /// With send-as="on-behalf": the user's own address for `Sender`
+    /// (default: the account's address).
+    sender: Option<String>,
+}
+
+/// How an identity sends for another mailbox.
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum SendAsSchema {
+    /// The mail is from the mailbox alone (Send As permission).
+    SendAs,
+    /// From the mailbox, on behalf of the user (Send on Behalf permission).
+    OnBehalf,
 }
 
 /// `crypto technology=… sign=… encrypt=… openpgp-key=… smime-cert=…

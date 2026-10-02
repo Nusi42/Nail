@@ -36,6 +36,13 @@ import {
 } from "../features/customization/mock";
 import { createAgentsMockState, type AgentsMockState } from "../features/agents/mock";
 import { createSystemMockState, type SystemMockState } from "../features/system/mock";
+import {
+  createPortabilityMockState,
+  type PortabilityMockState,
+} from "../features/portability/mock";
+import { createPaletteMockState, type PaletteMockState } from "../features/palette/mock";
+import { createPrintMockState, type PrintMockState } from "../features/print/mock";
+import { createVaultMockState, type VaultMockState } from "../features/security/vaultMock";
 import { createExchangeMockState, type ExchangeMockState } from "../features/exchange/mock";
 import { createGmailMockState, type GmailMockState } from "../features/gmail/mock";
 import { createMcpMockState, type McpMockState } from "../features/mcp/mock";
@@ -99,6 +106,11 @@ export interface MockFeatures {
   exchange: ExchangeMockState;
   agents: AgentsMockState;
   system: SystemMockState;
+  portability: PortabilityMockState;
+  palette: PaletteMockState;
+  print: PrintMockState;
+  /** Recovery key and smartcards (`features/security/vaultMock.ts`). */
+  vault: VaultMockState;
 }
 
 export function emptyUiContext(): UiContext {
@@ -478,6 +490,10 @@ export function createMockData(inboxSize = 250): MockData {
       exchange: createExchangeMockState(),
       agents: createAgentsMockState(),
       system: createSystemMockState(),
+      portability: createPortabilityMockState(),
+      palette: createPaletteMockState(),
+      print: createPrintMockState(),
+      vault: createVaultMockState(),
     },
     behaviour: { opError: null, sendError: null, oauthError: null, workMs: 20 },
   };

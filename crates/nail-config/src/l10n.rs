@@ -89,6 +89,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/en/core-plugins.ftl"),
     ),
     (
+        "core-portability.ftl",
+        include_str!("../../../locales/en/core-portability.ftl"),
+    ),
+    (
         "core-scheduling.ftl",
         include_str!("../../../locales/en/core-scheduling.ftl"),
     ),
@@ -99,6 +103,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     (
         "core-triage.ftl",
         include_str!("../../../locales/en/core-triage.ftl"),
+    ),
+    (
+        "core-vault.ftl",
+        include_str!("../../../locales/en/core-vault.ftl"),
     ),
     ("core.ftl", include_str!("../../../locales/en/core.ftl")),
     (
@@ -113,11 +121,20 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ("itip.ftl", include_str!("../../../locales/en/itip.ftl")),
     ("mcp.ftl", include_str!("../../../locales/en/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/en/menus.ftl")),
+    (
+        "palette.ftl",
+        include_str!("../../../locales/en/palette.ftl"),
+    ),
     ("pim.ftl", include_str!("../../../locales/en/pim.ftl")),
     (
         "plugins.ftl",
         include_str!("../../../locales/en/plugins.ftl"),
     ),
+    (
+        "portability.ftl",
+        include_str!("../../../locales/en/portability.ftl"),
+    ),
+    ("print.ftl", include_str!("../../../locales/en/print.ftl")),
     ("remote.ftl", include_str!("../../../locales/en/remote.ftl")),
     ("rules.ftl", include_str!("../../../locales/en/rules.ftl")),
     (
@@ -199,6 +216,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
         include_str!("../../../locales/de/core-plugins.ftl"),
     ),
     (
+        "core-portability.ftl",
+        include_str!("../../../locales/de/core-portability.ftl"),
+    ),
+    (
         "core-scheduling.ftl",
         include_str!("../../../locales/de/core-scheduling.ftl"),
     ),
@@ -209,6 +230,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "core-triage.ftl",
         include_str!("../../../locales/de/core-triage.ftl"),
+    ),
+    (
+        "core-vault.ftl",
+        include_str!("../../../locales/de/core-vault.ftl"),
     ),
     ("core.ftl", include_str!("../../../locales/de/core.ftl")),
     (
@@ -223,11 +248,20 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ("itip.ftl", include_str!("../../../locales/de/itip.ftl")),
     ("mcp.ftl", include_str!("../../../locales/de/mcp.ftl")),
     ("menus.ftl", include_str!("../../../locales/de/menus.ftl")),
+    (
+        "palette.ftl",
+        include_str!("../../../locales/de/palette.ftl"),
+    ),
     ("pim.ftl", include_str!("../../../locales/de/pim.ftl")),
     (
         "plugins.ftl",
         include_str!("../../../locales/de/plugins.ftl"),
     ),
+    (
+        "portability.ftl",
+        include_str!("../../../locales/de/portability.ftl"),
+    ),
+    ("print.ftl", include_str!("../../../locales/de/print.ftl")),
     ("remote.ftl", include_str!("../../../locales/de/remote.ftl")),
     ("rules.ftl", include_str!("../../../locales/de/rules.ftl")),
     (

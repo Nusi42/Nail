@@ -100,6 +100,22 @@ use crate::sync::FolderSyncPolicy;
 use crate::triage::{
     JunkSettings, JunkStatus, MailNotification, NotificationSettings, SnoozedMessage,
 };
+// M4c (ADR 0094).
+use crate::backup::{BackupContents, BackupManifest, RestorePlan};
+use crate::desktop::PathPick;
+use crate::diagnostics::{DiagnosticsBundle, DiagnosticsManifest, DiagnosticsOptions};
+use crate::ids::{JobId, PinPromptId, PrintJobId};
+use crate::palette::RecentActions;
+use crate::portability::{
+    ExportFormat, ExportOptions, ExportSource, FoundImportSource, ImportOptions, ImportPreview,
+    ImportSource, JobProgress, JobReport, JobStatus,
+};
+use crate::print::{PdfFile, PrintJob, PrintOptions, PrintTarget};
+use crate::recovery::RecoveryKeyStatus;
+use crate::security::CryptoTechnology;
+use crate::smartcard::{
+    PinPrompt, PinPromptCloseReason, SmartcardKeyRef, SmartcardSettings, SmartcardToken,
+};
 
 /// Version of this protocol. Bumped on incompatible changes; returned by
 /// [`Response::Pong`] so clients can detect a mismatched core.
@@ -2442,6 +2458,240 @@ pub enum Request {
     /// Mark the first-run screen completed (finished or skipped). Answered
     /// with [`Response::FirstRun`].
     CompleteFirstRun,
+
+    // --- Import, export, backup, restore (M4c WP120, ADR 0094; every
+    // request naming a path is desktop-only: `forbidden` remotely) ---
+    /// Import sources found on this computer (Thunderbird profiles).
+    /// Answered with [`Response::ImportSources`].
+    FindImportSources,
+    /// Read a source and say what importing it would bring in; writes
+    /// nothing. Answered with [`Response::ImportPreview`]; `not_found` for a
+    /// missing path, `invalid_request` when it is not that format.
+    PreviewImport {
+        /// The source.
+        source: ImportSource,
+    },
+    /// Start importing. Answered with [`Response::PortabilityJob`] (state
+    /// `running`); progress as [`Event::PortabilityJobProgress`], the end as
+    /// [`Event::PortabilityJobFinished`].
+    StartImport {
+        /// The source.
+        source: ImportSource,
+        /// How.
+        #[serde(default)]
+        options: ImportOptions,
+    },
+    /// Start exporting. Answered with [`Response::PortabilityJob`];
+    /// `invalid_request` when the format cannot write the source,
+    /// `conflict` when the target exists and `overwrite` is off.
+    StartExport {
+        /// What.
+        source: ExportSource,
+        /// The format.
+        format: ExportFormat,
+        /// The target file (mbox, ICS, vCard with one source) or folder.
+        path: String,
+        /// How.
+        #[serde(default)]
+        options: ExportOptions,
+    },
+    /// Start writing a backup archive. Answered with
+    /// [`Response::PortabilityJob`]; `invalid_request` with a
+    /// `backup-issue-*` text for bad contents or a short passphrase.
+    CreateBackup {
+        /// The archive to write (`.nailbackup`).
+        path: String,
+        /// What goes in.
+        #[serde(default)]
+        contents: BackupContents,
+        /// The passphrase (never stored or logged).
+        passphrase: String,
+    },
+    /// Read an archive's manifest. Answered with
+    /// [`Response::BackupManifest`]; `auth_failed`
+    /// (`backup-wrong-passphrase`) for a wrong passphrase.
+    InspectBackup {
+        /// The archive.
+        path: String,
+        /// Its passphrase.
+        passphrase: String,
+    },
+    /// Read an archive completely and check every entry. Answered with
+    /// [`Response::PortabilityJob`] (kind `verify-backup`).
+    VerifyBackup {
+        /// The archive.
+        path: String,
+        /// Its passphrase.
+        passphrase: String,
+    },
+    /// The dry run of a restore: what restoring would do; writes nothing.
+    /// Answered with [`Response::RestorePlan`].
+    PreviewRestore {
+        /// The archive.
+        path: String,
+        /// Its passphrase.
+        passphrase: String,
+        /// The items to restore; `null` = everything in the archive.
+        #[serde(default)]
+        contents: Option<BackupContents>,
+    },
+    /// Restore from an archive. Answered with
+    /// [`Response::PortabilityJob`] (kind `restore`).
+    StartRestore {
+        /// The archive.
+        path: String,
+        /// Its passphrase.
+        passphrase: String,
+        /// The items to restore; `null` = everything in the archive.
+        #[serde(default)]
+        contents: Option<BackupContents>,
+    },
+    /// Running and recently finished jobs. Answered with
+    /// [`Response::PortabilityJobs`].
+    ListPortabilityJobs,
+    /// One job. Answered with [`Response::PortabilityJob`]; `not_found`
+    /// when unknown or forgotten.
+    GetPortabilityJob {
+        /// The job.
+        job_id: JobId,
+    },
+    /// Cancel a running job (what was written stays; the report says
+    /// what). Answered with [`Response::PortabilityJob`].
+    CancelPortabilityJob {
+        /// The job.
+        job_id: JobId,
+    },
+
+    // --- Vault recovery key (M4c; desktop only) ---
+    /// Create a recovery key for the data key (replacing an older one).
+    /// Answered with [`Response::RecoveryKeyCreated`] — the only time the
+    /// key is shown; `conflict` (`vault-not-encrypted`) unless the vault is
+    /// encrypted.
+    CreateRecoveryKey {
+        /// Also write a recovery kit text file here.
+        #[serde(default)]
+        save_to: Option<String>,
+    },
+    /// Check a typed recovery key without changing anything. Answered with
+    /// [`Response::RecoveryKeyVerified`].
+    VerifyRecoveryKey {
+        /// The key as typed.
+        key: String,
+    },
+    /// Put the data key back into the keychain with the recovery key (after
+    /// the keychain entry was lost). Answered with [`Response::VaultStatus`];
+    /// `auth_failed` (`recovery-key-wrong`) for a wrong key,
+    /// `invalid_request` with a `recovery-key-issue-*` text for a mistyped
+    /// one.
+    RestoreVaultKey {
+        /// The key as typed.
+        key: String,
+    },
+    /// Remove the recovery key. Answered with [`Response::VaultStatus`].
+    RemoveRecoveryKey,
+
+    // --- Smartcards (M4c; desktop only) ---
+    /// The PKCS#11 modules and PIN cache. Answered with
+    /// [`Response::SmartcardSettings`].
+    GetSmartcardSettings,
+    /// Store them. Answered with [`Response::SmartcardSettings`];
+    /// `invalid_request` with a `smartcard-settings-issue-*` text.
+    SetSmartcardSettings {
+        /// The new settings.
+        settings: SmartcardSettings,
+    },
+    /// The tokens of the enabled modules with their keys and certificates.
+    /// Answered with [`Response::Smartcards`].
+    ListSmartcards,
+    /// Add a key on a token to the keyring (OpenPGP or S/MIME; the private
+    /// key stays on the token). Answered with [`Response::Key`].
+    UseSmartcardKey {
+        /// The key.
+        key: SmartcardKeyRef,
+        /// OpenPGP or S/MIME.
+        technology: CryptoTechnology,
+    },
+    /// Answer a [`Event::PinRequested`] prompt. Answered with
+    /// [`Response::Done`]; `not_found` when the prompt is gone.
+    AnswerPinPrompt {
+        /// The prompt.
+        prompt_id: PinPromptId,
+        /// The PIN; `null` = cancel.
+        #[serde(default)]
+        pin: Option<String>,
+    },
+
+    // --- Command palette (M4c) ---
+    /// The recently used palette actions. Answered with
+    /// [`Response::RecentActions`].
+    GetRecentActions,
+    /// Record that an action ran from the palette. Answered with
+    /// [`Response::RecentActions`]; `invalid_request` for a malformed id.
+    RecordActionUsed {
+        /// The action id.
+        action_id: String,
+    },
+    /// Forget the recent actions. Answered with
+    /// [`Response::RecentActions`].
+    ClearRecentActions,
+
+    // --- Printing (M4c) ---
+    /// Record what to print. Answered with [`Response::PrintJob`];
+    /// `invalid_request` with a `print-target-issue-*` text.
+    CreatePrintJob {
+        /// What.
+        target: PrintTarget,
+        /// How.
+        #[serde(default)]
+        options: PrintOptions,
+    },
+    /// Read a print job (the print view). Answered with
+    /// [`Response::PrintJob`]; `not_found` when expired.
+    GetPrintJob {
+        /// The job.
+        job_id: PrintJobId,
+    },
+    /// The print view is laid out (the desktop shell waits for this before
+    /// writing a PDF). Answered with [`Response::Done`].
+    PrintViewReady {
+        /// The job.
+        job_id: PrintJobId,
+    },
+    /// Write a print job as PDF (desktop only). Answered with
+    /// [`Response::PdfSaved`]; `unsupported` without the desktop shell.
+    SavePrintPdf {
+        /// The job.
+        job_id: PrintJobId,
+        /// The file to write.
+        path: String,
+    },
+
+    // --- Diagnostics (M4c; desktop only) ---
+    /// Exactly what a diagnostics bundle with these options would hold.
+    /// Answered with [`Response::DiagnosticsPreview`].
+    PreviewDiagnostics {
+        /// What to include.
+        #[serde(default)]
+        options: DiagnosticsOptions,
+    },
+    /// Write the bundle (the same entries the preview showed). Answered
+    /// with [`Response::DiagnosticsBundle`].
+    CreateDiagnosticsBundle {
+        /// What to include.
+        #[serde(default)]
+        options: DiagnosticsOptions,
+        /// The zip to write.
+        path: String,
+    },
+
+    // --- File dialogs (M4c; desktop only) ---
+    /// Show the system's file / folder dialog. Answered with
+    /// [`Response::PathPicked`]; `unsupported` without the desktop shell
+    /// (the UI then asks for a typed path).
+    PickPath {
+        /// What to ask for.
+        pick: PathPick,
+    },
 }
 
 fn default_true() -> bool {
@@ -3417,6 +3667,95 @@ pub enum Response {
         /// The state.
         state: FirstRunState,
     },
+    /// Answer to [`Request::FindImportSources`].
+    ImportSources {
+        /// The sources found (may be empty).
+        sources: Vec<FoundImportSource>,
+    },
+    /// Answer to [`Request::PreviewImport`].
+    ImportPreview {
+        /// What the import would bring in.
+        preview: Box<ImportPreview>,
+    },
+    /// Answer to the requests that start, read or cancel a job.
+    PortabilityJob {
+        /// The job.
+        job: Box<JobStatus>,
+    },
+    /// Answer to [`Request::ListPortabilityJobs`].
+    PortabilityJobs {
+        /// Running first, then finished ones, newest first.
+        jobs: Vec<JobStatus>,
+    },
+    /// Answer to [`Request::InspectBackup`].
+    BackupManifest {
+        /// The archive's manifest.
+        manifest: Box<BackupManifest>,
+    },
+    /// Answer to [`Request::PreviewRestore`].
+    RestorePlan {
+        /// What restoring would do.
+        plan: Box<RestorePlan>,
+    },
+    /// Answer to [`Request::CreateRecoveryKey`].
+    RecoveryKeyCreated {
+        /// The key in its text form — shown once, never stored.
+        key: String,
+        /// Where the recovery kit was written, if asked.
+        saved_to: Option<String>,
+        /// The new status.
+        status: RecoveryKeyStatus,
+    },
+    /// Answer to [`Request::VerifyRecoveryKey`].
+    RecoveryKeyVerified {
+        /// Whether the key opens the vault.
+        valid: bool,
+        /// The status (with `verified_at` updated when valid).
+        status: RecoveryKeyStatus,
+    },
+    /// Answer to [`Request::GetSmartcardSettings`] and
+    /// [`Request::SetSmartcardSettings`].
+    SmartcardSettings {
+        /// The settings.
+        settings: SmartcardSettings,
+    },
+    /// Answer to [`Request::ListSmartcards`].
+    Smartcards {
+        /// The tokens found.
+        tokens: Vec<SmartcardToken>,
+        /// Modules that could not be used, with why (`smartcard-error-*`).
+        problems: Vec<SmartcardModuleProblem>,
+    },
+    /// Answer to the recent-action requests.
+    RecentActions {
+        /// Most recent first.
+        recent: RecentActions,
+    },
+    /// Answer to [`Request::CreatePrintJob`] and [`Request::GetPrintJob`].
+    PrintJob {
+        /// The job.
+        job: Box<PrintJob>,
+    },
+    /// Answer to [`Request::SavePrintPdf`].
+    PdfSaved {
+        /// The written file.
+        file: PdfFile,
+    },
+    /// Answer to [`Request::PreviewDiagnostics`].
+    DiagnosticsPreview {
+        /// Exactly what the bundle would hold.
+        manifest: Box<DiagnosticsManifest>,
+    },
+    /// Answer to [`Request::CreateDiagnosticsBundle`].
+    DiagnosticsBundle {
+        /// The written bundle.
+        bundle: Box<DiagnosticsBundle>,
+    },
+    /// Answer to [`Request::PickPath`].
+    PathPicked {
+        /// The chosen path; `null` = cancelled.
+        path: Option<String>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -3837,6 +4176,54 @@ pub enum Event {
     /// Default-app registration may have changed; clients refetch
     /// [`Request::GetDefaultApps`] (M4b).
     DefaultAppsChanged,
+    /// A portability job made progress (at most a few times per second;
+    /// M4c, ADR 0094). Desktop / local UI only.
+    PortabilityJobProgress {
+        /// The job.
+        job_id: JobId,
+        /// Where it is.
+        progress: JobProgress,
+    },
+    /// A portability job finished (completed, failed or cancelled).
+    PortabilityJobFinished {
+        /// What it did.
+        report: Box<JobReport>,
+    },
+    /// A smartcard needs its PIN: show a PIN dialog (desktop only).
+    PinRequested {
+        /// The prompt.
+        prompt: PinPrompt,
+    },
+    /// A PIN dialog is no longer needed.
+    PinPromptClosed {
+        /// The prompt.
+        prompt_id: PinPromptId,
+        /// Why.
+        reason: PinPromptCloseReason,
+    },
+    /// A token was inserted or removed (refresh the smartcard list).
+    SmartcardsChanged,
+    /// Upload progress of a message being sent (Graph upload sessions for
+    /// large messages; M4c).
+    SendProgress {
+        /// The outbox entry.
+        outbox_id: OutboxId,
+        /// Bytes uploaded.
+        sent_bytes: u64,
+        /// Bytes in total.
+        total_bytes: u64,
+    },
+}
+
+/// A PKCS#11 module that could not be used ([`Response::Smartcards`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SmartcardModuleProblem {
+    /// The module path.
+    pub module: String,
+    /// What went wrong.
+    pub error: crate::smartcard::SmartcardError,
+    /// Diagnostic detail (English).
+    pub detail: String,
 }
 
 /// A request frame on a multiplexed transport (WebSocket).
@@ -4197,10 +4584,7 @@ mod tests {
             panic!("wrong variant");
         };
         assert!(crypto.sign && crypto.encrypt);
-        assert_eq!(
-            crypto.technology,
-            Some(crate::security::CryptoTechnology::OpenPgp)
-        );
+        assert_eq!(crypto.technology, Some(CryptoTechnology::OpenPgp));
 
         let list: Request = serde_json::from_value(json!({"type": "ListKeys"})).unwrap();
         assert_eq!(
@@ -4861,5 +5245,84 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn m4c_requests_responses_and_events_serialize() {
+        use crate::portability::{ImportFormat, JobPhase};
+        let import: Request = serde_json::from_value(json!({
+            "type": "StartImport",
+            "source": {"format": "maildir", "path": "C:/Mail"}
+        }))
+        .unwrap();
+        let Request::StartImport { source, options } = import else {
+            panic!("StartImport expected");
+        };
+        assert_eq!(source.format, ImportFormat::Maildir);
+        assert!(options.skip_duplicates);
+        let backup: Request = serde_json::from_value(json!({
+            "type": "CreateBackup", "path": "C:/b.nailbackup",
+            "passphrase": "correct horse battery"
+        }))
+        .unwrap();
+        assert!(matches!(
+            backup,
+            Request::CreateBackup { contents, .. } if contents == BackupContents::default()
+        ));
+        assert_eq!(
+            serde_json::to_value(Request::AnswerPinPrompt {
+                prompt_id: "p1".into(),
+                pin: None
+            })
+            .unwrap(),
+            json!({"type": "AnswerPinPrompt", "prompt_id": "p1", "pin": null})
+        );
+        assert_eq!(
+            serde_json::to_value(Request::RecordActionUsed {
+                action_id: "mail.reply".into()
+            })
+            .unwrap(),
+            json!({"type": "RecordActionUsed", "action_id": "mail.reply"})
+        );
+        let print: Request = serde_json::from_value(json!({
+            "type": "CreatePrintJob",
+            "target": {"type": "thread", "thread_id": "t1"}
+        }))
+        .unwrap();
+        assert!(
+            matches!(print, Request::CreatePrintJob { options, .. } if options == PrintOptions::default())
+        );
+        assert_eq!(
+            serde_json::to_value(Response::PathPicked { path: None }).unwrap(),
+            json!({"type": "PathPicked", "path": null})
+        );
+        assert_eq!(
+            serde_json::to_value(Event::PortabilityJobProgress {
+                job_id: "j1".into(),
+                progress: JobProgress {
+                    phase: JobPhase::Writing,
+                    done: 3,
+                    total: Some(10),
+                    bytes_done: 0,
+                    bytes_total: None,
+                    current: Some("Inbox".into()),
+                },
+            })
+            .unwrap(),
+            json!({
+                "type": "PortabilityJobProgress", "job_id": "j1",
+                "progress": {"phase": "writing", "done": 3, "total": 10, "bytes_done": 0,
+                             "bytes_total": null, "current": "Inbox"}
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(Event::SendProgress {
+                outbox_id: "o1".into(),
+                sent_bytes: 4,
+                total_bytes: 8
+            })
+            .unwrap(),
+            json!({"type": "SendProgress", "outbox_id": "o1", "sent_bytes": 4, "total_bytes": 8})
+        );
     }
 }

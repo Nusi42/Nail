@@ -46,6 +46,8 @@ describe("security feature slot", () => {
       done: 1,
       total: 4,
       key_in_keychain: true,
+      needs_recovery: false,
+      recovery: { configured: false, created_at: null, verified_at: null },
       error: null,
       message: null,
     };

@@ -4,6 +4,7 @@
  * test harness use only this module, so a feature never edits shared files
  * to register something (see `README.md`).
  */
+import type { ActionInfo } from "../actions/palette";
 import { builtinActions, type ActionHandler } from "../actions/registry";
 import type { DialogRegistry } from "../layout/dialogRegistry";
 import type { WidgetRegistry } from "../layout/widgetRegistry";
@@ -16,8 +17,11 @@ import * as gmail from "./gmail";
 import * as launch from "./launch";
 import * as mcp from "./mcp";
 import * as menus from "./menus";
+import * as palette from "./palette";
 import * as pim from "./pim";
 import * as plugins from "./plugins";
+import * as portability from "./portability";
+import * as print from "./print";
 import * as remote from "./remote";
 import * as rules from "./rules";
 import * as scheduling from "./scheduling";
@@ -48,12 +52,17 @@ export const features: Readonly<Record<string, Feature>> = {
   exchange,
   agents,
   system,
+  portability,
+  palette,
+  print,
 };
 
 /** The merged registries. */
 export interface AppRegistry {
   widgets: WidgetRegistry;
   actions: Readonly<Record<string, ActionHandler>>;
+  /** Command-palette descriptions of the features' actions (M4c). */
+  actionInfo: Readonly<Record<string, ActionInfo>>;
   dialogs: DialogRegistry;
   events: Feature["events"];
   effects: Feature["effects"];
@@ -88,6 +97,7 @@ export function mergeFeatures(
   const widgets: Record<string, WidgetRegistry[string]> = {};
   const actions: Record<string, ActionHandler> = {};
   const dialogs: Record<string, DialogRegistry[string]> = {};
+  const actionInfo: Record<string, ActionInfo> = {};
   mergeInto(widgets, builtins.widgets, "widget", "the built-ins", owners);
   mergeInto(actions, builtins.actions, "action", "the built-ins", owners);
   const events: Feature["events"][number][] = [];
@@ -97,10 +107,11 @@ export function mergeFeatures(
     mergeInto(widgets, feature.widgets, "widget", owner, owners);
     mergeInto(actions, feature.actions, "action", owner, owners);
     mergeInto(dialogs, feature.dialogs, "dialog", owner, owners);
+    mergeInto(actionInfo, feature.actionInfo ?? {}, "action info", owner, owners);
     events.push(...feature.events);
     effects.push(...feature.effects);
   }
-  return { widgets, actions, dialogs, events, effects };
+  return { widgets, actions, actionInfo, dialogs, events, effects };
 }
 
 /** Everything the app registers. */

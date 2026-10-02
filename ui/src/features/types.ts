@@ -4,6 +4,7 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import type { ComponentType } from "react";
+import type { ActionInfo } from "../actions/palette";
 import type { ActionHandler } from "../actions/registry";
 import type { NailClient } from "../api/client";
 import type { Event as NailEvent } from "../api/generated";
@@ -27,6 +28,12 @@ export interface Feature {
   widgets: WidgetRegistry;
   /** Action ids → handlers (toolbars, menus and key bindings refer to the ids). */
   actions: Readonly<Record<string, ActionHandler>>;
+  /**
+   * Command-palette descriptions of this feature's actions (title, keywords,
+   * where they apply; M4c, `../actions/palette.ts`). Optional: actions
+   * without one are described by the palette feature or not listed.
+   */
+  actionInfo?: Readonly<Record<string, ActionInfo>>;
   /**
    * Dialogs opened with `window.open "<name>"` when the layout has no
    * `window "<name>"`: small, fixed-purpose windows (confirmations,

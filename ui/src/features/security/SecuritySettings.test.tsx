@@ -89,6 +89,8 @@ describe("security-settings: encryption at rest", () => {
       done: 0,
       total: 0,
       key_in_keychain: true,
+      needs_recovery: false,
+      recovery: { configured: false, created_at: null, verified_at: null },
       error: null,
       message: null,
     };

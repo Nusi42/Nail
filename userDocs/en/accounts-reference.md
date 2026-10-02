@@ -350,6 +350,8 @@ account "work" email="ada@work.example" {
 | `signature "…"` | Your signature as plain text; `\n` starts a new line. `html="…"` and `markdown="…"` give the HTML and Markdown variants; a missing one is converted from another |
 | `mail-style` | How HTML and Markdown mail looks: `css="…"` is a stylesheet Nail builds into every message (default: a plain, readable one), `code-theme="…"` the colours of code blocks in Markdown (see [Markdown mail](markdown-mail.md#how-it-looks)) |
 | `crypto` | Signing and encryption defaults for this identity (see below) |
+| `send-as` | Send for another mailbox, typically a shared or delegate Exchange mailbox whose address is the identity's: `"send-as"` (the mail is from the mailbox alone; you need the "Send As" permission) or `"on-behalf"` (recipients see "you on behalf of the mailbox"; you need "Send on Behalf") |
+| `sender` | With `send-as="on-behalf"`: your own address shown as the sender (default: the account's address) |
 
 Identity names (`id`, or the address) must be unique across all accounts.
 

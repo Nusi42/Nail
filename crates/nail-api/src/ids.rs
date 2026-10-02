@@ -224,6 +224,23 @@ string_id!(
     SendVetoId
 );
 
+string_id!(
+    /// Identifies an import, export, backup, verification or restore job
+    /// (M4c, [`crate::portability::JobStatus`]). Opaque, made by the core;
+    /// jobs live in memory and are forgotten on restart.
+    JobId
+);
+string_id!(
+    /// Identifies a print job: what to print and how, read by the print
+    /// view (M4c, [`crate::print::PrintJob`]). Opaque, made by the core.
+    PrintJobId
+);
+string_id!(
+    /// Identifies a smartcard PIN prompt waiting for the user (M4c,
+    /// [`crate::smartcard::PinPrompt`]). Opaque, made by the core.
+    PinPromptId
+);
+
 impl PimSourceId {
     /// Id of the built-in local source (local calendars, task lists and
     /// address books, including the "Collected" address book). Reserved:
