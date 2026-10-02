@@ -22,19 +22,131 @@ pub struct MorkRows {
     pub rows: HashMap<String, HashMap<String, String>>,
 }
 
-#[derive(Clone)]
+/// A row while parsing: when it was first seen (file order) and its cells.
+type Row = (u64, HashMap<String, String>);
+
+/// One change inside a transaction group, undone when the group aborts.
+enum Undo {
+    Column(String, Option<String>),
+    Value(String, Option<String>),
+    /// A row was cut (`[-id]`): its old content.
+    RowCut(String, Row),
+    /// A row was created.
+    RowCreated(String),
+    /// A cell was set: its old value.
+    Cell(String, String, Option<String>),
+}
+
+#[derive(Default)]
 struct State {
     columns: HashMap<String, String>,
     values: HashMap<String, String>,
-    rows: MorkRows,
+    rows: HashMap<String, Row>,
+    next_seq: u64,
+    /// Inside a transaction group: the changes since it started (undone
+    /// on abort). A log instead of a snapshot per group, so a file with
+    /// many groups (a long edit history) parses in linear time.
+    undo: Option<Vec<Undo>>,
+}
+
+fn restore(map: &mut HashMap<String, String>, key: String, old: Option<String>) {
+    match old {
+        Some(old) => map.insert(key, old),
+        None => map.remove(&key),
+    };
+}
+
+impl State {
+    fn log(&mut self, change: impl FnOnce() -> Undo) {
+        if let Some(undo) = self.undo.as_mut() {
+            undo.push(change());
+        }
+    }
+
+    fn set_column(&mut self, id: String, value: String) {
+        let old = self.columns.insert(id.clone(), value);
+        self.log(|| Undo::Column(id, old));
+    }
+
+    fn set_value(&mut self, id: String, value: String) {
+        let old = self.values.insert(id.clone(), value);
+        self.log(|| Undo::Value(id, old));
+    }
+
+    fn cut_row(&mut self, key: &str) {
+        if let Some(row) = self.rows.remove(key) {
+            self.log(|| Undo::RowCut(key.to_owned(), row));
+        }
+    }
+
+    fn set_cell(&mut self, key: &str, column: String, value: String) {
+        if !self.rows.contains_key(key) {
+            self.next_seq += 1;
+            self.rows
+                .insert(key.to_owned(), (self.next_seq, HashMap::new()));
+            self.log(|| Undo::RowCreated(key.to_owned()));
+        }
+        let Some((_, cells)) = self.rows.get_mut(key) else {
+            return;
+        };
+        let old = cells.insert(column.clone(), value);
+        self.log(|| Undo::Cell(key.to_owned(), column, old));
+    }
+
+    fn begin_group(&mut self) {
+        // A group that never ended stays (as before: only the latest
+        // group can be aborted).
+        self.undo = Some(Vec::new());
+    }
+
+    fn end_group(&mut self, abort: bool) {
+        let Some(undo) = self.undo.take() else {
+            return;
+        };
+        if !abort {
+            return;
+        }
+        for change in undo.into_iter().rev() {
+            match change {
+                Undo::Column(id, old) => restore(&mut self.columns, id, old),
+                Undo::Value(id, old) => restore(&mut self.values, id, old),
+                Undo::RowCut(key, row) => {
+                    self.rows.insert(key, row);
+                }
+                Undo::RowCreated(key) => {
+                    self.rows.remove(&key);
+                }
+                Undo::Cell(key, column, old) => {
+                    if let Some((_, cells)) = self.rows.get_mut(&key) {
+                        restore(cells, column, old);
+                    }
+                }
+            }
+        }
+    }
+
+    fn into_rows(self) -> MorkRows {
+        let mut keyed: Vec<(u64, String)> = self
+            .rows
+            .iter()
+            .map(|(k, (seq, _))| (*seq, k.clone()))
+            .collect();
+        keyed.sort_unstable();
+        MorkRows {
+            order: keyed.into_iter().map(|(_, k)| k).collect(),
+            rows: self
+                .rows
+                .into_iter()
+                .map(|(k, (_, cells))| (k, cells))
+                .collect(),
+        }
+    }
 }
 
 struct Parser<'a> {
     bytes: &'a [u8],
     pos: usize,
     state: State,
-    /// The state before the current group (restored on abort).
-    group_start: Option<State>,
 }
 
 impl Parser<'_> {
@@ -167,9 +279,9 @@ impl Parser<'_> {
                         self.pos += 1;
                     }
                     if columns {
-                        self.state.columns.insert(id.to_ascii_uppercase(), value);
+                        self.state.set_column(id.to_ascii_uppercase(), value);
                     } else {
-                        self.state.values.insert(id.to_ascii_uppercase(), value);
+                        self.state.set_value(id.to_ascii_uppercase(), value);
                     }
                 }
                 Some(_) => self.pos += 1,
@@ -187,8 +299,7 @@ impl Parser<'_> {
         let raw_id = self.id(b"([]");
         let key = row_key(&raw_id, table_scope);
         if cut {
-            self.state.rows.rows.remove(&key);
-            self.state.rows.order.retain(|k| k != &key);
+            self.state.cut_row(&key);
         }
         loop {
             self.skip_space_and_comments();
@@ -226,15 +337,7 @@ impl Parser<'_> {
                     if self.peek() == Some(b')') {
                         self.pos += 1;
                     }
-                    if !self.state.rows.rows.contains_key(&key) {
-                        self.state.rows.order.push(key.clone());
-                    }
-                    self.state
-                        .rows
-                        .rows
-                        .entry(key.clone())
-                        .or_default()
-                        .insert(column, value);
+                    self.state.set_cell(&key, column, value);
                 }
                 Some(_) => self.pos += 1,
             }
@@ -284,19 +387,15 @@ impl Parser<'_> {
     fn group(&mut self) -> bool {
         // `@$${id{@` starts, `@$$}id}@` ends, `@$$}~abort~id}@` aborts.
         if self.starts_with(b"@$${") {
-            self.group_start = Some(self.state.clone());
+            self.state.begin_group();
             self.skip_to(b"{@");
             true
         } else if self.starts_with(b"@$$}") {
             let start = self.pos;
             self.skip_to(b"}@");
             let marker = &self.bytes[start..self.pos];
-            if marker.windows(7).any(|w| w == b"~abort~")
-                && let Some(state) = self.group_start.take()
-            {
-                self.state = state;
-            }
-            self.group_start = None;
+            let abort = marker.windows(7).any(|w| w == b"~abort~");
+            self.state.end_group(abort);
             true
         } else {
             false
@@ -358,15 +457,10 @@ pub fn parse(bytes: &[u8]) -> MorkRows {
     let mut parser = Parser {
         bytes,
         pos: 0,
-        state: State {
-            columns: HashMap::new(),
-            values: HashMap::new(),
-            rows: MorkRows::default(),
-        },
-        group_start: None,
+        state: State::default(),
     };
     parser.run();
-    parser.state.rows
+    parser.state.into_rows()
 }
 
 /// Reads a `.mab` address book: rows with `ListName` are lists (members in
@@ -490,6 +584,52 @@ mod tests {
         assert_eq!(rows.rows["3:81"]["ListName"], "Engineers");
         assert!(!rows.rows.contains_key("5:80"), "cut row");
         assert!(!rows.rows.contains_key("6:80"), "aborted group");
+    }
+
+    #[test]
+    fn an_aborted_group_undoes_cuts_cells_and_dictionaries() {
+        let text = format!(
+            "{MAB}@$${{7{{@\n<(93=changed@example.org)>\n[-2:^80]\n[1:^80(^85=Renamed)]\n[9:^80(^85=New)]\n@$$}}~abort~7}}@\n"
+        );
+        let before = parse(MAB.as_bytes());
+        let after = parse(text.as_bytes());
+        assert_eq!(after, before);
+        assert_eq!(after.rows["1:80"]["DisplayName"], "Ada Lovelace");
+        assert_eq!(after.rows["1:80"]["PrimaryEmail"], "ada@example.org");
+        assert_eq!(after.order, before.order);
+    }
+
+    #[test]
+    fn a_row_cut_and_written_again_moves_to_the_end() {
+        let rows = parse(b"[1(Name=a)][2(Name=b)][-1][1(Name=c)]");
+        assert_eq!(rows.order, vec!["2:", "1:"]);
+        assert_eq!(rows.rows["1:"].len(), 1);
+        assert_eq!(rows.rows["1:"]["Name"], "c");
+    }
+
+    /// Many transaction groups (a long edit history) parse in linear time:
+    /// 20,000 rows in 20,000 groups took minutes with a snapshot per group.
+    #[test]
+    fn many_groups_parse_quickly() {
+        let mut text = String::from(MAB);
+        for n in 0..20_000u32 {
+            let row = n + 0x100;
+            text.push_str(&format!(
+                "@$${{{n:X}{{@\n[{row:X}:^80(^85=Person {n})(^86=p{n}@example.org)]\n@$$}}{n:X}}}@\n"
+            ));
+            if n % 3 == 0 {
+                text.push_str(&format!("[-{row:X}:^80]\n"));
+            }
+        }
+        let started = std::time::Instant::now();
+        let rows = parse(text.as_bytes());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+        assert_eq!(rows.order.len(), 3 + 20_000 - 6_667);
+        assert_eq!(rows.rows.len(), rows.order.len());
     }
 
     #[test]

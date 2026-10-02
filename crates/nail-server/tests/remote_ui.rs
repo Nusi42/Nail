@@ -29,6 +29,10 @@ struct Fixture {
 }
 
 fn start() -> Fixture {
+    start_with(|_| {})
+}
+
+fn start_with(before: impl FnOnce(&Service)) -> Fixture {
     let data = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
     let mut options = ServiceOptions::new(data.path(), config.path());
@@ -37,6 +41,7 @@ fn start() -> Fixture {
     options.secrets = Some(Arc::new(MemorySecretStore::new()));
     let service = Service::open(demo_options(options)).unwrap();
     seed_demo(service.store(), service.blobs()).unwrap();
+    before(&service);
     let host = RemoteUiHost::start(
         service.clone(),
         RemoteUiOptions {
@@ -300,4 +305,28 @@ async fn a_busy_port_is_reported_as_failed() {
     let failed = wait_for(&f.service, RemoteUiState::Failed).await;
     assert!(failed.message.unwrap().contains(&port.to_string()));
     drop(busy);
+}
+
+/// Stored settings that the setter would refuse (a restored or damaged
+/// value) do not start a plain-HTTP listener beyond loopback.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stored_settings_are_checked_again_before_the_listener_starts() {
+    let f = start_with(|service| {
+        let settings = RemoteUiSettings {
+            enabled: true,
+            // A documentation address: never one of this machine's.
+            bind_address: "192.0.2.1".into(),
+            port: free_port(),
+            tls: nail_api::remote::RemoteTlsMode::Off,
+            ..RemoteUiSettings::default()
+        };
+        assert!(!settings.issues().is_empty());
+        service
+            .store()
+            .set_setting(nail_store::REMOTE_UI_SETTINGS_KEY, &settings)
+            .unwrap();
+    });
+    let failed = wait_for(&f.service, RemoteUiState::Failed).await;
+    let message = failed.message.unwrap();
+    assert!(message.contains("TlsRequired"), "{message}");
 }

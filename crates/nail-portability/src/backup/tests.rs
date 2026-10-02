@@ -746,6 +746,64 @@ fn verification_finds_damaged_and_missing_entries() {
     assert!(plan.actions.iter().all(|a| a.effect == RestoreEffect::Skip));
 }
 
+/// A manifest that declares a huge entry (a deflate bomb) is refused
+/// before anything is read into memory, also in a dry run.
+#[test]
+fn oversized_in_memory_entries_are_refused_unread() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("bomb.nailbackup");
+    let content = vec![b' '; 1024 * 1024];
+    let manifest = BackupManifest {
+        format_version: 1,
+        app_version: "x".into(),
+        schema_version: 15,
+        created_at: "2026-10-02T00:00:00Z".into(),
+        contents: BackupContents {
+            items: vec![BackupItem::Keys],
+        },
+        entries: vec![BackupEntry {
+            item: BackupItem::Keys,
+            name: "keys/keyring.json".into(),
+            size_bytes: 8 * 1024 * 1024 * 1024,
+            sha256: "00".repeat(32),
+        }],
+        counts: JobCounts::default(),
+        accounts: vec![],
+        plugins: vec![],
+    };
+    {
+        let file = File::create(&path).unwrap();
+        let encrypting =
+            crypto::EncryptingWriter::new(file, PASSPHRASE, KdfParams::insecure_for_tests())
+                .unwrap();
+        let mut zip = ZipWriter::new_stream(encrypting);
+        let options = SimpleFileOptions::default();
+        zip.start_file(BACKUP_MANIFEST_ENTRY, options).unwrap();
+        serde_json::to_writer(&mut zip, &manifest).unwrap();
+        zip.start_file("keys/keyring.json", options).unwrap();
+        zip.write_all(&content).unwrap();
+        zip.finish().unwrap().into_inner().finish().unwrap();
+    }
+    let mut archive = BackupArchive::open(&path, PASSPHRASE).unwrap();
+    let mut target = Target::default();
+    let plan = archive.plan(&manifest.contents, &mut target).unwrap();
+    let codes: Vec<_> = plan.issues.iter().map(|i| i.code).collect();
+    assert_eq!(codes, vec![PortabilityIssueCode::TooLarge]);
+    assert!(target.merged.is_empty(), "nothing reached the target");
+    assert_eq!(
+        restore::max_in_memory_bytes("config/settings.json"),
+        restore::MAX_CONFIG_ENTRY_BYTES
+    );
+    assert_eq!(
+        restore::max_in_memory_bytes("pim/calendars/a.ics"),
+        restore::MAX_PIM_ENTRY_BYTES
+    );
+    assert_eq!(
+        restore::max_in_memory_bytes("plugins/x/package.nailplugin"),
+        nail_api::plugins::admin::MAX_PACKAGE_BYTES
+    );
+}
+
 #[test]
 fn the_standard_cost_round_trips() {
     let dir = tempfile::tempdir().unwrap();

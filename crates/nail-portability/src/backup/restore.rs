@@ -82,6 +82,24 @@ pub trait RestoreTarget: MailImportSink + PimImportSink {
     fn begin_mail_account(&mut self, account: &AccountId, dry_run: bool) -> Result<(), SinkError>;
 }
 
+/// Largest configuration, settings or keyring entry read into memory.
+pub const MAX_CONFIG_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
+/// Largest PIM entry (`.ics` / `.vcf` / the PIM index) read into memory.
+pub const MAX_PIM_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+
+/// How much of an entry may be read into memory: the manifest's sizes
+/// come from the archive itself, so a crafted archive must not make a
+/// restore (or its dry run) allocate gigabytes.
+pub fn max_in_memory_bytes(name: &str) -> u64 {
+    if name.starts_with("plugins/") {
+        nail_api::plugins::admin::MAX_PACKAGE_BYTES
+    } else if name.starts_with("pim/") {
+        MAX_PIM_ENTRY_BYTES
+    } else {
+        MAX_CONFIG_ENTRY_BYTES
+    }
+}
+
 /// An opened archive.
 pub struct BackupArchive {
     archive: ZipArchive<DecryptingReader<BufReader<File>>>,
@@ -177,6 +195,13 @@ impl BackupArchive {
             return Err(issue(
                 PortabilityIssueCode::EntryMissing,
                 "invalid entry name".into(),
+            ));
+        }
+        let limit = max_in_memory_bytes(&entry.name);
+        if entry.size_bytes > limit {
+            return Err(issue(
+                PortabilityIssueCode::TooLarge,
+                format!("{} bytes (at most {limit})", entry.size_bytes),
             ));
         }
         let file = match self.archive.by_name(&entry.name) {

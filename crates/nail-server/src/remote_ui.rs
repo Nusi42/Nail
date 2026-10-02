@@ -159,6 +159,15 @@ impl Running {
                 format!("internet mode is locked ({lock})"),
             ));
         }
+        // The setter checks these; stored settings are checked again (a
+        // damaged or foreign value must not serve the login page over
+        // plain HTTP or to public networks).
+        if let Some(issue) = settings.issues().first() {
+            return Err(ApiError::new(
+                issue.error_code(),
+                format!("invalid remote-UI settings: {issue:?}"),
+            ));
+        }
         let ip = settings
             .bind_ip()
             .ok_or_else(|| ApiError::invalid_request("invalid bind address"))?;

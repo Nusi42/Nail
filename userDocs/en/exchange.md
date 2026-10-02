@@ -198,8 +198,8 @@ is saved and comes back with the next sync (Exchange gives it its id).
   administrator grants once for the organization.
 - **Large messages**: Exchange Online takes messages up to its own size
   limit (usually 25–150 MB, set by your organization). Nail uploads
-  messages over 4 MB in pieces and shows the upload progress in the
-  outbox. Signed or encrypted messages over 4 MB cannot be sent through
+  messages over 4 MB in pieces and shows the upload progress on the
+  message in the outbox and in the status bar. Signed or encrypted messages over 4 MB cannot be sent through
   Microsoft Graph; use a smaller attachment or a link.
 - Sending a large message (over 4 MB) as a shared mailbox needs full
   access to that mailbox (the upload goes through its drafts); "Send As"

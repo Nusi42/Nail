@@ -122,6 +122,8 @@ export interface UiState {
   failedOp: OpId | null;
   /** The last message handed to the outbox (undo-send countdown). */
   lastSend: OutboxEntry | null;
+  /** Upload progress of messages being sent, by outbox id (`SendProgress`). */
+  sendProgress: Record<string, SendProgressState>;
   /** Results of OAuth sign-ins by flow id (`null` = success). */
   oauthResults: Record<string, ErrorCode | null>;
 
@@ -152,7 +154,20 @@ export interface UiState {
   opFinished(id: OpId, error: ErrorCode | null): void;
   dismissOpError(): void;
   setLastSend(entry: OutboxEntry | null): void;
+  setSendProgress(outboxId: string, progress: SendProgressState | null): void;
   setOAuthResult(flowId: string, error: ErrorCode | null): void;
+}
+
+/** Upload progress of a message being sent (`SendProgress`). */
+export interface SendProgressState {
+  sentBytes: number;
+  totalBytes: number;
+}
+
+/** Whole percent uploaded (0–100). */
+export function sendPercent(progress: SendProgressState): number {
+  if (progress.totalBytes <= 0) return 0;
+  return Math.min(100, Math.floor((progress.sentBytes / progress.totalBytes) * 100));
 }
 
 export type UiStore = StoreApi<UiState>;
@@ -183,6 +198,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     opError: null,
     failedOp: null,
     lastSend: null,
+    sendProgress: {},
     oauthResults: {},
 
     selectAccount: (id) =>
@@ -264,6 +280,18 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
       }),
     dismissOpError: () => set({ opError: null, failedOp: null }),
     setLastSend: (lastSend) => set({ lastSend }),
+    setSendProgress: (outboxId, progress) =>
+      set((s) => {
+        if (progress === null) {
+          if (!(outboxId in s.sendProgress)) return s;
+          return {
+            sendProgress: Object.fromEntries(
+              Object.entries(s.sendProgress).filter(([id]) => id !== outboxId),
+            ),
+          };
+        }
+        return { sendProgress: { ...s.sendProgress, [outboxId]: progress } };
+      }),
     setOAuthResult: (flowId, error) =>
       set((s) => ({ oauthResults: { ...s.oauthResults, [flowId]: error } })),
     ...initial,

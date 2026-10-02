@@ -201,6 +201,27 @@ struct StoredNotificationSettings {
     quiet_hours: Option<nail_api::triage::QuietHours>,
 }
 
+/// Checks a stored [`NOTIFICATION_SETTINGS_KEY`] value (a restored
+/// backup): it must parse as what the setter stores and pass
+/// [`NotificationSettings::issues`]. `Err` names the problem.
+pub fn check_stored_notification_settings(
+    value: &serde_json::Value,
+) -> std::result::Result<(), String> {
+    let stored = StoredNotificationSettings::deserialize(value).map_err(|e| e.to_string())?;
+    let settings = NotificationSettings {
+        enabled: stored.enabled,
+        show_preview: stored.show_preview,
+        sound: stored.sound,
+        folders: stored.folders,
+        quiet_hours: stored.quiet_hours,
+        overrides: Vec::new(),
+    };
+    match settings.issues().first() {
+        Some(issue) => Err(issue.message_id().to_owned()),
+        None => Ok(()),
+    }
+}
+
 /// Keeps an account's classifier storage bounded (review fix, ADR 0049):
 /// only the newest [`JUNK_TRAINING_WITH_TOKENS`] trained messages keep
 /// their tokens, only the newest [`JUNK_TRAINING_ROWS`] are remembered,

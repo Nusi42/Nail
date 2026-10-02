@@ -3284,6 +3284,17 @@
       "source": null
     },
     {
+      "selector": "outbox.item.progress",
+      "states": [],
+      "conditions": [],
+      "ancestors": [],
+      "declarations": {
+        "width": "8rem",
+        "accent-color": "var(--nail-color-accent)"
+      },
+      "source": null
+    },
+    {
       "selector": "outbox.item.actions",
       "states": [],
       "conditions": [],

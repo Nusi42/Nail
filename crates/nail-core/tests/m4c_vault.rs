@@ -93,6 +93,25 @@ async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
     let text = std::fs::read_to_string(&kit).unwrap();
     assert!(text.contains(&key), "the kit holds the key");
     assert!(text.starts_with("Nail recovery key"));
+    // Replacing the key with a kit that cannot be written (the file exists)
+    // fails before the old key is replaced: the key the user holds still
+    // opens the data and the status is unchanged.
+    assert_eq!(
+        error_of(
+            service
+                .handle(Request::CreateRecoveryKey {
+                    save_to: Some(kit.display().to_string()),
+                })
+                .await
+        ),
+        (
+            ErrorCode::Conflict,
+            Some("portability-error-target-exists".into())
+        )
+    );
+    assert_eq!(std::fs::read_to_string(&kit).unwrap(), text);
+    let after = status(&service).await.recovery;
+    assert_eq!(after.created_at, recovery.created_at);
     let Response::RecoveryKeyVerified { valid, status: s } = service
         .handle(Request::VerifyRecoveryKey { key: key.clone() })
         .await

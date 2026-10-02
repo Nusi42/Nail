@@ -1,7 +1,7 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { startNail, tempDir, type NailServer } from "../support/nail";
 import { rpcOk } from "../support/remote";
 
@@ -24,6 +24,12 @@ test.afterEach(async () => {
     if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
+
+/** Accessibility scan of one window (each step of the recovery-key dialogs). */
+async function expectAccessible(page: Page, selector: string) {
+  const scan = await new AxeBuilder({ page }).include(selector).analyze();
+  expect(scan.violations.map((v) => v.id)).toEqual([]);
+}
 
 async function vaultState(nail: NailServer) {
   const answer = await rpcOk(nail, { type: "GetVaultStatus" }, "VaultStatus");
@@ -61,19 +67,26 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
     .getByRole("tab", { name: "Recovery key", exact: true })
     .click();
   await settings.getByRole("button", { name: "Create recovery key" }).click();
-  const create = page.locator('[data-part="window"][data-window="security-recovery-create"]');
+  const createWindow = '[data-part="window"][data-window="security-recovery-create"]';
+  const create = page.locator(createWindow);
+  await expect(create.getByRole("button", { name: "Create recovery key" })).toBeVisible();
+  await expectAccessible(page, createWindow);
   await create.getByRole("button", { name: "Create recovery key" }).click();
   const shown = create.locator('[data-part="recovery-key.value"]');
   await expect(shown).toBeVisible({ timeout: 30_000 });
+  await expectAccessible(page, createWindow);
   const key = ((await shown.textContent()) ?? "").replace(/\s+/g, "");
   expect(key.length).toBeGreaterThanOrEqual(56);
   await create
     .getByRole("checkbox", { name: "I have written down, printed or saved the key" })
     .check();
   await create.getByRole("button", { name: "Next" }).click();
+  await expect(create.getByLabel("Recovery key")).toBeVisible();
+  await expectAccessible(page, createWindow);
   await create.getByLabel("Recovery key").fill(key);
   await create.getByRole("button", { name: "Check", exact: true }).click();
   await expect(create.getByText("Your recovery key works. Keep it safe.")).toBeVisible();
+  await expectAccessible(page, createWindow);
   await server.stop();
 
   // The data key's entry disappears from the (demo) keychain.
@@ -92,8 +105,7 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   await page.goto(server.url);
   const restore = page.getByRole("dialog", { name: "Open your data with the recovery key" });
   await expect(restore).toBeVisible({ timeout: 30_000 });
-  const scan = await new AxeBuilder({ page }).include('[data-part="window"]').analyze();
-  expect(scan.violations.map((v) => v.id)).toEqual([]);
+  await expectAccessible(page, '[data-part="window"]');
   await restore.getByLabel("Recovery key").fill(key);
   await restore.getByRole("button", { name: "Open with recovery key" }).click();
   await expect(restore.getByText(/Restart Nail to open your data/)).toBeVisible();

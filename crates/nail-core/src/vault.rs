@@ -376,16 +376,15 @@ impl Service {
         let vault = Arc::clone(self.inner.vault.vault());
         let locale = self.inner.locale.clone();
         tokio::task::spawn_blocking(move || -> Result<nail_api::Response> {
-            let (key, status) = vault.create_recovery_key()?;
-            let saved_to = match path {
-                Some(path) => {
-                    let created = status.created_at.clone().unwrap_or_default();
-                    let text = recovery_kit(locale.as_deref(), key.as_str(), &created);
-                    write_kit(&path, &text)?;
-                    Some(path.display().to_string())
+            // The kit is written before the new key replaces the old one: a
+            // kit that cannot be written leaves the old recovery key working.
+            let (key, status) = vault.create_recovery_key_with(|key, created| -> Result<()> {
+                match &path {
+                    Some(path) => write_kit(path, &recovery_kit(locale.as_deref(), key, created)),
+                    None => Ok(()),
                 }
-                None => None,
-            };
+            })?;
+            let saved_to = path.map(|path| path.display().to_string());
             Ok(nail_api::Response::RecoveryKeyCreated {
                 key: key.as_str().to_owned(),
                 saved_to,

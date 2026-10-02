@@ -13,7 +13,7 @@ in remote sessions.
 
 | Item | What it is | In new backups |
 | --- | --- | --- |
-| Settings | Nail's settings (security, notifications, sync, desktop and update settings, recent commands) | yes |
+| Settings | Nail's settings (security, notifications, sync, desktop and update settings, recent commands) — not the smartcard modules, remote access and AI agent (MCP) settings, which belong to one computer: set them up again there | yes |
 | Theme | your `theme.kdl` | yes |
 | Layout | `layout.kdl` | yes |
 | Rules and saved searches | `rules.kdl` and your saved searches | yes |
@@ -79,7 +79,12 @@ check it, choose the items, then **Show what would change** (the dry run)
 and **Restore now**. Details:
 
 * **Configuration** (settings, theme, layout, rules, accounts) is replaced
-  file by file; files that are already identical are left alone.
+  file by file; files that are already identical are left alone. Settings
+  are checked like when you change them in Nail: a setting that is not
+  valid is left out and named in the report.
+* **Encryption keys** are merged by fingerprint. A backup whose keyring
+  refers to other entries of the Credential Manager than the keys' own
+  (for example an account password) is refused as damaged.
 * **Local folders** are merged: messages already there (same
   `Message-ID`, date and size) are skipped, so restoring twice does not
   duplicate anything. Read state, flags and tags come back.
@@ -94,6 +99,8 @@ and **Restore now**. Details:
 * **Restart** Nail when the report says so (after restoring settings or
   plug-ins).
 * Damaged parts of a backup are listed and left out; the rest is restored.
+  Parts that are implausibly large for what they are (for example a
+  settings file of gigabytes) count as damaged.
 
 A backup made by a newer version of Nail cannot be restored by an older
 one; update Nail first.

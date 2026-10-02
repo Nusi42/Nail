@@ -46,3 +46,5 @@ outbox-state-sending = Sending
 outbox-state-sent = Sent
 outbox-state-failed = Failed
 outbox-state-cancelled = Cancelled
+# Upload of a large message (Microsoft 365 sends it in pieces).
+outbox-upload-progress = { $percent }% uploaded

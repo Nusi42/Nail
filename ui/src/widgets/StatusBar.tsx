@@ -5,7 +5,7 @@ import { optionList, type WidgetProps } from "../layout/widgetRegistry";
 import { cancelRichSend } from "../features/composer/flows";
 import { useComposeContext } from "../state/hooks";
 import { useAccounts, useAccountStatuses, useClient, useFolders } from "../state/queries";
-import { useUi } from "../state/uiStore";
+import { sendPercent, useUi } from "../state/uiStore";
 import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** How long "Message sent" stays in the status bar. */
@@ -157,6 +157,7 @@ function SendStatusItem() {
   const ctx = useComposeContext();
   const entry = useUi((s) => s.lastSend);
   const setLastSend = useUi((s) => s.setLastSend);
+  const progress = useUi((s) => (s.lastSend ? s.sendProgress[s.lastSend.id] : undefined));
   const seconds = useSecondsUntil(entry?.state === "scheduled" ? entry.send_at : null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -185,7 +186,9 @@ function SendStatusItem() {
       }
       break;
     case "sending":
-      text = t("status-sending");
+      text = progress
+        ? t("status-sending-progress", { percent: sendPercent(progress) })
+        : t("status-sending");
       break;
     case "sent":
       text = t("status-sent");

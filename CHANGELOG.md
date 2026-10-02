@@ -31,6 +31,8 @@ run, the release update key).
   local calendars and contacts, plug-ins and — only when chosen — keys;
   checking a backup, a dry run before restoring, restores that replace
   configuration files (kept as configuration backups) and merge the rest.
+  Restored settings are checked like any change; smartcard, remote access
+  and AI agent (MCP) settings stay on their computer.
 - **Encryption at rest of the whole database file** (SQLite3 Multiple Ciphers)
   and the **vault recovery key**: shown once, checked, and the way back to the
   data after the key in the Windows Credential Manager was lost.

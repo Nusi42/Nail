@@ -192,6 +192,8 @@ status-send-countdown = { $seconds ->
 }
 status-send-scheduled = Scheduled to send { $time }
 status-sending = Sending…
+# Upload of a large message (Microsoft 365 sends it in pieces).
+status-sending-progress = Sending… { $percent }% uploaded
 status-sent = Message sent.
 status-send-failed = Sending failed: { $reason }
 status-undo-send = Undo

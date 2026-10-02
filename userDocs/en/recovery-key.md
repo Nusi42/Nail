@@ -56,6 +56,9 @@ itself, so it cannot show it again.
 To finish, Nail asks you to type the key back from your copy, so you know
 the copy is right. Creating a new recovery key replaces the old one: the
 old key stops working. Do this if you think someone saw your recovery key.
+Nail saves a recovery kit only as a new file and never over an existing
+one; if the kit cannot be saved, nothing changes and your old recovery key
+keeps working.
 
 ## Checking the recovery key
 

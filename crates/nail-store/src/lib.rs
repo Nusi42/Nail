@@ -164,7 +164,7 @@ pub use thread::{ThreadPage, ThreadTreeEntry};
 pub use triage::{
     JUNK_TOKEN_LIMIT, JUNK_TRAINING_ROWS, JUNK_TRAINING_WITH_TOKENS, JunkStats, MCP_SETTINGS_KEY,
     NOTIFICATION_SETTINGS_KEY, SieveLocation, SieveRecord, SieveUpload, SnoozeRecord, TokenCounts,
-    TrainOutcome, hash_junk_token, hash_sieve_script,
+    TrainOutcome, check_stored_notification_settings, hash_junk_token, hash_sieve_script,
 };
 
 /// Opens the metadata database and blob store inside a data directory

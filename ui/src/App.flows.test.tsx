@@ -164,6 +164,46 @@ describe("M1a flows", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows SendProgress events of a large upload until the send finishes", async () => {
+    const { env } = renderApp();
+    await ready();
+    const entry = {
+      id: "out-7",
+      draft_id: "d",
+      account_id: "acc-personal",
+      identity_id: "ada@example.org",
+      subject: "S",
+      recipients: [],
+      send_at: new Date().toISOString(),
+      state: "sending" as const,
+      attempts: 0,
+      error: null,
+      message: null,
+    };
+    act(() => env.store.getState().setLastSend(entry));
+    const status = screen.getByRole("status", { name: "Status" });
+    act(() =>
+      env.transport.emit({
+        type: "SendProgress",
+        outbox_id: "out-7",
+        sent_bytes: 3_276_800,
+        total_bytes: 13_107_200,
+      }),
+    );
+    expect(within(status).getByText("Sending… 25% uploaded")).toBeInTheDocument();
+    act(() =>
+      env.transport.emit({
+        type: "SendStatus",
+        outbox_id: "out-7",
+        state: "sent",
+        error: null,
+        message: null,
+      }),
+    );
+    expect(env.store.getState().sendProgress).toEqual({});
+    expect(within(status).getByText("Message sent.")).toBeInTheDocument();
+  });
+
   it("archives with e, moves with v and marks flags with s", async () => {
     const user = userEvent.setup();
     const { env } = renderApp();

@@ -56,7 +56,10 @@ const FEATURE_DIALOGS = [
   "about-nail",
   // M4c: the command palette, printing, the import / export / backup /
   // restore wizards and the diagnostics bundle. The recovery-key dialogs
-  // are scanned in vault-recovery.spec.ts (they need encrypted data).
+  // (every step: create, show, check, restore) are scanned in
+  // vault-recovery.spec.ts (they need encrypted data). The smartcard PIN
+  // dialog needs a token, which `nail serve` has none of: it is scanned by
+  // Vitest axe only (ui/src/features/security).
   "command-palette",
   "print",
   "import-wizard",

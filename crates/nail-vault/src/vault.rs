@@ -536,17 +536,31 @@ impl Vault {
     pub fn create_recovery_key(
         &self,
     ) -> Result<(Zeroizing<String>, RecoveryKeyStatus), VaultError> {
-        let record = self.store.vault_state()?;
+        self.create_recovery_key_with(|_, _| Ok::<(), VaultError>(()))
+    }
+
+    /// [`Self::create_recovery_key`] with a step that runs **before** the
+    /// new key replaces the old one: `deliver(key text, created_at)` hands
+    /// the key to the user (writes the recovery kit). When it fails, the
+    /// vault file is left alone, so the recovery key the user already
+    /// holds keeps working.
+    pub fn create_recovery_key_with<E: From<VaultError>>(
+        &self,
+        deliver: impl FnOnce(&str, &str) -> Result<(), E>,
+    ) -> Result<(Zeroizing<String>, RecoveryKeyStatus), E> {
+        let record = self.store.vault_state().map_err(VaultError::from)?;
         if !matches!(record.state, VaultState::Encrypted | VaultState::Encrypting) {
-            return Err(VaultError::NotEncrypted);
+            return Err(VaultError::NotEncrypted.into());
         }
         let key = self.require_key(&record)?;
         self.sync_vault_file(&record)?;
         let recovery_key = RecoveryKey::generate();
         let entry = recovery::new_record(&recovery_key, &key)?;
+        let text = recovery_key.to_text();
+        deliver(text.as_str(), &entry.created_at)?;
         let file = self.file.update(|file| file.recovery = Some(entry))?;
         tracing::info!("recovery key created");
-        Ok((recovery_key.to_text(), recovery::status_of(&file)))
+        Ok((text, recovery::status_of(&file)))
     }
 
     /// Checks a typed recovery key without changing the data: `true` when

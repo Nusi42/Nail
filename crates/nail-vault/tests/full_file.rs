@@ -360,6 +360,42 @@ fn recovery_keys_rotate_and_can_be_removed() {
 }
 
 #[test]
+fn a_failed_delivery_keeps_the_old_recovery_key() {
+    let dir = encrypted();
+    let ready = dir.ready();
+    let (first, before) = ready.vault.create_recovery_key().unwrap();
+    let mut offered = String::new();
+    let err = ready
+        .vault
+        .create_recovery_key_with(|key, created| {
+            assert!(!created.is_empty());
+            offered = key.to_owned();
+            Err(VaultError::VaultFile("the kit cannot be written".into()))
+        })
+        .unwrap_err();
+    assert!(matches!(err, VaultError::VaultFile(_)));
+    assert_ne!(offered, first.as_str());
+    // The old key still opens the data key, the new one was never stored.
+    assert!(ready.vault.verify_recovery_key(&first).unwrap().0);
+    assert!(!ready.vault.verify_recovery_key(&offered).unwrap().0);
+    assert_eq!(
+        dir.vault_file().recovery.unwrap().created_at,
+        before.created_at.unwrap()
+    );
+    // A delivery that works hands over exactly the stored key.
+    let mut delivered = String::new();
+    let (second, _) = ready
+        .vault
+        .create_recovery_key_with(|key, _| {
+            delivered = key.to_owned();
+            Ok::<(), VaultError>(())
+        })
+        .unwrap();
+    assert_eq!(delivered, second.as_str());
+    assert!(ready.vault.verify_recovery_key(&second).unwrap().0);
+}
+
+#[test]
 fn a_plain_vault_has_no_recovery_key() {
     let dir = Dir::new();
     let ready = dir.ready();

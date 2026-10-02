@@ -6,12 +6,26 @@ import { type WidgetProps } from "../layout/widgetRegistry";
 import { displayName } from "../state/addresses";
 import { cancelRichSend, openRichDraft } from "../features/composer/flows";
 import { useComposeContext } from "../state/hooks";
+import { sendPercent, useUi, type SendProgressState } from "../state/uiStore";
 import { queryKeys, useDrafts, useOutbox } from "../state/queries";
 import { DATE_TIME, formatDateTime } from "../i18n/format";
 
 /** Entries the user can still take back (edit) or send at once. */
 export function canTakeBack(entry: OutboxEntry): boolean {
   return entry.state === "scheduled" || entry.state === "failed";
+}
+
+/** Upload progress of a large message being sent (`SendProgress`). */
+function UploadProgress({ progress }: { progress: SendProgressState | undefined }) {
+  const t = useT();
+  if (!progress) return null;
+  const percent = sendPercent(progress);
+  const text = t("outbox-upload-progress", { percent });
+  return (
+    <progress data-part="outbox.item.progress" max={100} value={percent} aria-label={text}>
+      {text}
+    </progress>
+  );
 }
 
 /** Messages waiting to be sent: undo-send countdowns, send-later, failures. */
@@ -22,6 +36,7 @@ export function Outbox({ node }: WidgetProps) {
   const ctx = useComposeContext();
   const outbox = useOutbox();
   const drafts = useDrafts();
+  const progress = useUi((s) => s.sendProgress);
   const [error, setError] = useState<string | null>(null);
 
   const run = async (work: () => Promise<void>) => {
@@ -102,6 +117,9 @@ export function Outbox({ node }: WidgetProps) {
               <span data-part="outbox.item.time">
                 {t("outbox-send-at", { time: format(entry.send_at) })}
               </span>
+              {entry.state === "sending" && entry.id in progress && (
+                <UploadProgress progress={progress[entry.id]} />
+              )}
               {entry.error && (
                 <span data-part="outbox.item.error">{t(errorMessageId(entry.error))}</span>
               )}

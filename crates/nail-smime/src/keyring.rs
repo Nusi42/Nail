@@ -933,7 +933,8 @@ fn key_data(cert: &Cert, source: KeySource, secret: Option<SecretKeyData>) -> Ke
     }
 }
 
-fn keychain_ref(fingerprint: &str) -> Result<SecretRef> {
+/// Keychain reference of the random key protecting an own key.
+pub fn keychain_ref(fingerprint: &str) -> Result<SecretRef> {
     SecretRef::parse(&format!(
         "{}{}/smime-key/{fingerprint}",
         SecretRef::SCHEME,

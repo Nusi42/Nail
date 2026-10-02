@@ -73,12 +73,36 @@ function setState(core: MockCore, entry: OutboxEntry, state: OutboxEntry["state"
   });
 }
 
+/** Above this size the core uploads in pieces and reports `SendProgress`
+ * (Graph upload sessions; `nail-graph`). */
+export const LARGE_SEND_BYTES = 4 * 1024 * 1024;
+/** Size of one uploaded piece (a multiple of 320 KiB, as Graph wants). */
+export const UPLOAD_PIECE_BYTES = 10 * 320 * 1024;
+
+function messageBytes(draft: Draft): number {
+  const body = draft.markdown ?? draft.html ?? draft.text;
+  return body.length + draft.attachments.reduce((sum, a) => sum + a.size, 0);
+}
+
 function deliver(core: MockCore, entry: OutboxEntry, draft: Draft): void {
   const d = core.data;
   setState(core, entry, "sending");
   core.later(() => {
     if (entry.state !== "sending") return;
     entry.attempts++;
+    const total = messageBytes(draft);
+    if (total > LARGE_SEND_BYTES) {
+      for (let sent = UPLOAD_PIECE_BYTES; ; sent += UPLOAD_PIECE_BYTES) {
+        const done = Math.min(sent, total);
+        core.emit({
+          type: "SendProgress",
+          outbox_id: entry.id,
+          sent_bytes: done,
+          total_bytes: total,
+        });
+        if (done >= total) break;
+      }
+    }
     const error = d.behaviour.sendError;
     if (error) {
       entry.error = error;

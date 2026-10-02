@@ -1239,6 +1239,7 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
     }
     part "outbox.item.error" { color "$color.danger"; }
+    part "outbox.item.progress" { width "8rem"; accent-color "$color.accent"; }
     part "outbox.item.actions" {
         display "flex"
         gap "$space.sm"

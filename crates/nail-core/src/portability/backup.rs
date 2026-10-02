@@ -40,11 +40,48 @@ use super::pim::{PimBuffer, PimMode, StorePimSource};
 use crate::service::Service;
 
 /// Settings that belong to this machine / installation and are neither
-/// backed up nor restored.
+/// backed up nor restored: the remote-UI certificate and first-run state,
+/// and the machine-bound security settings — PKCS#11 module paths (DLLs
+/// loaded into the process), the remote-UI listener and MCP access. Those
+/// are set up again on the new machine through their validated setters.
 pub(crate) const EXCLUDED_SETTINGS: &[&str] = &[
     nail_store::REMOTE_UI_CERTIFICATE_KEY,
     crate::desktop::FIRST_RUN_KEY,
+    crate::smartcard::SMARTCARD_SETTINGS_KEY,
+    nail_store::REMOTE_UI_SETTINGS_KEY,
+    nail_store::MCP_SETTINGS_KEY,
 ];
+
+/// Checks a restored setting the way its setter would: known keys must
+/// parse as their type and pass its checks. `Err` = why it is not
+/// restored. Unknown keys (sync state, caches) are kept as they are.
+fn check_restored_setting(key: &str, value: &serde_json::Value) -> Result<(), String> {
+    fn parse<T: serde::de::DeserializeOwned>(value: &serde_json::Value) -> Result<T, String> {
+        T::deserialize(value).map_err(|e| e.to_string())
+    }
+    match key {
+        k if EXCLUDED_SETTINGS.contains(&k) => Err("bound to the machine".to_owned()),
+        nail_store::SECURITY_SETTINGS_KEY => {
+            parse::<nail_api::security::SecuritySettings>(value).map(drop)
+        }
+        nail_store::scheduling::SCHEDULING_SETTINGS_KEY => {
+            parse::<nail_api::scheduling::SchedulingSettings>(value).map(drop)
+        }
+        nail_store::NOTIFICATION_SETTINGS_KEY => {
+            nail_store::check_stored_notification_settings(value)
+        }
+        crate::desktop::UPDATE_SETTINGS_KEY => {
+            parse::<nail_api::desktop::UpdateSettings>(value).map(drop)
+        }
+        crate::desktop::DESKTOP_SETTINGS_KEY => {
+            parse::<nail_api::desktop::DesktopSettings>(value).map(drop)
+        }
+        nail_api::palette::RECENT_ACTIONS_KEY => {
+            parse::<nail_api::palette::RecentActions>(value).map(drop)
+        }
+        _ => Ok(()),
+    }
+}
 
 const SETTINGS_FILE: &str = "settings.json";
 const KEYRING_FILE: &str = "keyring.json";
@@ -99,6 +136,39 @@ struct BackupSecret {
     reference: Option<String>,
     /// The keychain secret behind `reference` (wrapped keys), base64.
     keychain_secret: Option<String>,
+}
+
+impl BackupKey {
+    /// The only keychain reference a restored key may name: its own
+    /// wrapping entry (`keychain:nail/openpgp/<fpr>` or
+    /// `keychain:nail/smime-key/<fpr>`). Anything else (an account
+    /// password, the vault's data key) is refused, so a crafted backup
+    /// cannot overwrite or point at other keychain entries.
+    fn check_reference(&self) -> Result<(), String> {
+        let Some(secret) = &self.secret else {
+            return Ok(());
+        };
+        let own = match self.technology {
+            CryptoTechnology::OpenPgp => nail_pgp::keyring::keychain_ref(&self.fingerprint),
+            CryptoTechnology::Smime => {
+                nail_smime::keyring::keychain_ref(&self.fingerprint).map_err(|e| e.to_string())?
+            }
+        };
+        let names_keychain = secret
+            .reference
+            .as_deref()
+            .is_some_and(|r| r.starts_with(SecretRef::SCHEME));
+        let is_own = secret.reference.as_deref() == Some(own.0.as_str());
+        let keychain_storage =
+            secret.storage == SecretStorage::Keychain && secret.reference.is_some();
+        if !is_own && (names_keychain || keychain_storage || secret.keychain_secret.is_some()) {
+            return Err(format!(
+                "key {} names a keychain entry that is not its own",
+                self.fingerprint
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// The core as a backup's source (blocking).
@@ -365,6 +435,10 @@ impl CoreRestoreTarget {
 
     fn merge_keys(&self, content: &[u8], dry_run: bool) -> Result<MergeOutcome, SinkError> {
         let keys: Vec<BackupKey> = serde_json::from_slice(content).map_err(item_err)?;
+        // Checked before anything is written (also in a dry run).
+        for key in &keys {
+            key.check_reference().map_err(item_err)?;
+        }
         let store = self.service.store();
         let b64 = base64::engine::general_purpose::STANDARD;
         let mut outcome = MergeOutcome::default();
@@ -582,13 +656,28 @@ impl RestoreTarget for CoreRestoreTarget {
                 let settings: BTreeMap<String, serde_json::Value> =
                     serde_json::from_slice(content).map_err(item_err)?;
                 let store = self.service.store();
+                let mut refused = Vec::new();
                 for (key, value) in settings {
                     if EXCLUDED_SETTINGS.contains(&key.as_str()) {
                         continue;
                     }
+                    if let Err(why) = check_restored_setting(&key, &value) {
+                        tracing::warn!(%key, %why, "a backed-up setting is not restored");
+                        refused.push(format!("{key}: {why}"));
+                        continue;
+                    }
                     store.set_setting(&key, &value).map_err(item_err)?;
                 }
-                Ok(None)
+                if refused.is_empty() {
+                    Ok(None)
+                } else {
+                    // Reported as an issue of the settings file; the valid
+                    // settings are restored.
+                    Err(item_err(format!(
+                        "settings not restored: {}",
+                        refused.join("; ")
+                    )))
+                }
             }
             (BackupItem::Rules, SAVED_SEARCHES_FILE) => {
                 let searches: Vec<nail_api::SavedSearch> =
@@ -626,5 +715,196 @@ impl RestoreTarget for CoreRestoreTarget {
                 .map_err(fatal)?,
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn service() -> (Service, tempfile::TempDir, tempfile::TempDir) {
+        let data = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let mut options = crate::ServiceOptions::new(data.path(), config.path());
+        options.watch_config = false;
+        options.start_engines = false;
+        let service = Service::open(crate::demo::demo_options(options)).unwrap();
+        (service, data, config)
+    }
+
+    fn restore_settings(service: &Service, settings: serde_json::Value) -> Result<(), SinkError> {
+        let mut target = CoreRestoreTarget::new(service, false);
+        target
+            .replace_file(
+                BackupItem::Settings,
+                SETTINGS_FILE,
+                &serde_json::to_vec(&settings).unwrap(),
+            )
+            .map(drop)
+    }
+
+    /// Machine-bound security settings never come from a backup, and
+    /// known settings that fail their setter's checks are refused (with an
+    /// issue) while the valid ones are restored.
+    #[test]
+    fn restored_settings_skip_machine_bound_keys_and_invalid_values() {
+        let (service, _data, _config) = service();
+        let store = service.store();
+        let result = restore_settings(
+            &service,
+            serde_json::json!({
+                crate::smartcard::SMARTCARD_SETTINGS_KEY: {
+                    "modules": [{ "path": "evil.dll", "enabled": true }],
+                    "pin_cache_minutes": 5
+                },
+                nail_store::REMOTE_UI_SETTINGS_KEY: {
+                    "enabled": true, "bind_address": "192.0.2.1", "tls": "off"
+                },
+                nail_store::MCP_SETTINGS_KEY: { "enabled": true },
+                nail_store::NOTIFICATION_SETTINGS_KEY: {
+                    "quiet_hours": { "start": "25:99", "end": "07:00" }
+                },
+                nail_store::SECURITY_SETTINGS_KEY: "not settings",
+                "some.unknown.key": 42
+            }),
+        );
+        let Err(SinkError::Item(detail)) = result else {
+            panic!("an issue for the refused settings expected, got {result:?}");
+        };
+        assert!(
+            detail.contains(nail_store::NOTIFICATION_SETTINGS_KEY),
+            "{detail}"
+        );
+        assert!(
+            detail.contains(nail_store::SECURITY_SETTINGS_KEY),
+            "{detail}"
+        );
+        let all = store.all_settings().unwrap();
+        for key in [
+            crate::smartcard::SMARTCARD_SETTINGS_KEY,
+            nail_store::REMOTE_UI_SETTINGS_KEY,
+            nail_store::MCP_SETTINGS_KEY,
+            nail_store::NOTIFICATION_SETTINGS_KEY,
+            nail_store::SECURITY_SETTINGS_KEY,
+        ] {
+            assert!(!all.contains_key(key), "{key} must not be restored");
+        }
+        assert_eq!(all.get("some.unknown.key"), Some(&serde_json::json!(42)));
+        // Valid settings alone restore without an issue.
+        restore_settings(
+            &service,
+            serde_json::json!({ nail_store::NOTIFICATION_SETTINGS_KEY: {
+                "enabled": true, "show_preview": true, "sound": false,
+                "folders": "inbox", "quiet_hours": null
+            } }),
+        )
+        .unwrap();
+        assert!(!store.notification_settings().unwrap().sound);
+    }
+
+    #[test]
+    fn machine_bound_settings_are_not_backed_up() {
+        let (service, _data, _config) = service();
+        let store = service.store();
+        for key in [
+            crate::smartcard::SMARTCARD_SETTINGS_KEY,
+            nail_store::REMOTE_UI_SETTINGS_KEY,
+            nail_store::MCP_SETTINGS_KEY,
+        ] {
+            store.set_setting(key, &serde_json::json!({})).unwrap();
+        }
+        let source = CoreBackupSource {
+            service: service.clone(),
+        };
+        let settings = source.settings().unwrap();
+        for key in EXCLUDED_SETTINGS {
+            assert!(!settings.contains_key(*key), "{key} must not be backed up");
+        }
+    }
+
+    fn key_with_secret(reference: &str, storage: SecretStorage) -> serde_json::Value {
+        let b64 = base64::engine::general_purpose::STANDARD;
+        serde_json::to_value(BackupKey {
+            technology: CryptoTechnology::OpenPgp,
+            fingerprint: "ABCDEF0123456789".into(),
+            user_ids: vec!["Mallory <m@example.org>".into()],
+            emails: vec!["m@example.org".into()],
+            algorithm: "ed25519".into(),
+            created_at: 0,
+            expires_at: None,
+            revoked: false,
+            can_sign: true,
+            can_encrypt: false,
+            source: KeySource::Generated,
+            public_data: b64.encode(b"public"),
+            issuer: None,
+            serial: None,
+            decision: None,
+            secret: Some(BackupSecret {
+                storage,
+                data: Some(b64.encode(b"sealed")),
+                reference: Some(reference.into()),
+                keychain_secret: Some(b64.encode(b"backed-up value")),
+            }),
+        })
+        .unwrap()
+    }
+
+    fn merge(
+        service: &Service,
+        keys: serde_json::Value,
+        dry_run: bool,
+    ) -> Result<MergeOutcome, SinkError> {
+        let target = CoreRestoreTarget::new(service, false);
+        target.merge_keys(&serde_json::to_vec(&keys).unwrap(), dry_run)
+    }
+
+    /// A restored key may only write its own wrapping entry: references to
+    /// account passwords or the vault's data key are refused before
+    /// anything is written.
+    #[test]
+    fn restored_keys_cannot_write_foreign_keychain_entries() {
+        let (service, _data, _config) = service();
+        let secrets = service.secrets();
+        let password = SecretRef("keychain:nail/work/password".into());
+        secrets.set(&password, "the real password").unwrap();
+        let vault_key = SecretRef("keychain:nail/vault-1234/data-key".into());
+        secrets.set(&vault_key, "the data key").unwrap();
+        for (reference, storage) in [
+            (password.0.as_str(), SecretStorage::Keychain),
+            (vault_key.0.as_str(), SecretStorage::Keychain),
+            (password.0.as_str(), SecretStorage::Passphrase),
+            (
+                "keychain:nail/openpgp/0000000000000000",
+                SecretStorage::Keychain,
+            ),
+        ] {
+            for dry_run in [true, false] {
+                let result = merge(
+                    &service,
+                    serde_json::json!([key_with_secret(reference, storage)]),
+                    dry_run,
+                );
+                assert!(
+                    matches!(result, Err(SinkError::Item(_))),
+                    "{reference} must be refused, got {result:?}"
+                );
+            }
+        }
+        let value = |r: &SecretRef| secrets.get(r).unwrap().map(|v| v.as_str().to_owned());
+        assert_eq!(value(&password).as_deref(), Some("the real password"));
+        assert_eq!(value(&vault_key).as_deref(), Some("the data key"));
+        assert!(service.store().list_keys(None, false).unwrap().is_empty());
+
+        // The key's own entry is restored.
+        let own = nail_pgp::keyring::keychain_ref("ABCDEF0123456789");
+        let outcome = merge(
+            &service,
+            serde_json::json!([key_with_secret(&own.0, SecretStorage::Keychain)]),
+            false,
+        )
+        .unwrap();
+        assert_eq!(outcome.added, 1);
+        assert_eq!(value(&own).as_deref(), Some("backed-up value"));
     }
 }

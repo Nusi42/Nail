@@ -41,7 +41,14 @@ pub struct MaildirFolder {
 
 /// Whether `dir` is a maildir (has `cur` or `new`).
 pub fn is_maildir(dir: &Path) -> bool {
-    dir.join("cur").is_dir() || dir.join("new").is_dir()
+    real_dir(&dir.join("cur")) || real_dir(&dir.join("new"))
+}
+
+/// A directory that is not a symbolic link or junction: a `cur` / `new`
+/// pointing elsewhere must not import files from outside the chosen tree
+/// (like [`sorted_entries`], which skips links).
+fn real_dir(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_dir() && !m.file_type().is_symlink())
 }
 
 /// The folders of a Maildir: the root as `Inbox` (when it is a maildir),
@@ -150,7 +157,11 @@ fn scan_nested(
 fn message_files(dir: &Path) -> Vec<(PathBuf, bool)> {
     let mut files = Vec::new();
     for (sub, is_new) in [("cur", false), ("new", true)] {
-        let Ok(entries) = sorted_entries(&dir.join(sub)) else {
+        let sub = dir.join(sub);
+        if !real_dir(&sub) {
+            continue;
+        }
+        let Ok(entries) = sorted_entries(&sub) else {
             continue;
         };
         for (path, file_type) in entries {
@@ -538,6 +549,38 @@ mod tests {
     use super::*;
     use nail_api::portability::{JobKind, JobReport};
     use pretty_assertions::assert_eq;
+
+    /// `cur` / `new` as junctions to another folder are not followed.
+    #[cfg(windows)]
+    #[test]
+    fn junctioned_cur_and_new_are_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("secret.txt"), "Subject: x\r\n\r\nsecret").unwrap();
+        let md = dir.path().join("md");
+        fs::create_dir(&md).unwrap();
+        for sub in ["cur", "new"] {
+            let status = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(md.join(sub))
+                .arg(&outside)
+                .output()
+                .unwrap();
+            assert!(status.status.success(), "{status:?}");
+        }
+        assert!(md.join("cur").is_dir(), "the junction works");
+        assert!(!is_maildir(&md));
+        assert!(message_files(&md).is_empty());
+        assert!(scan(&md).is_err(), "no maildir: nothing to import");
+        // A real maildir beside a junctioned one still works.
+        fs::remove_dir(md.join("new")).unwrap();
+        fs::create_dir(md.join("new")).unwrap();
+        fs::write(md.join("new").join("1"), "Subject: y\r\n\r\nmine").unwrap();
+        let folders = scan(&md).unwrap();
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].messages, 1);
+    }
 
     fn ctx() -> JobContext<'static> {
         JobContext::silent(JobReport::started("j".into(), JobKind::Import, "t"))

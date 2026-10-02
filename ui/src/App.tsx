@@ -252,7 +252,14 @@ function useCoreEvents(): void {
             if (event.status.state === "failed") refreshMail();
           }
           break;
+        case "SendProgress":
+          ui().setSendProgress(event.outbox_id, {
+            sentBytes: Number(event.sent_bytes),
+            totalBytes: Number(event.total_bytes),
+          });
+          break;
         case "SendStatus": {
+          if (event.state !== "sending") ui().setSendProgress(event.outbox_id, null);
           const last = ui().lastSend;
           if (last?.id === event.outbox_id) {
             ui().setLastSend({

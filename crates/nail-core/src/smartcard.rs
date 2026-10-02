@@ -141,11 +141,13 @@ impl SmartcardCtl {
         if let Some(cards) = self.loaded() {
             return cards;
         }
-        let settings: SmartcardSettings = store
-            .setting(SMARTCARD_SETTINGS_KEY)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
+        let settings = checked_settings(
+            store
+                .setting(SMARTCARD_SETTINGS_KEY)
+                .ok()
+                .flatten()
+                .unwrap_or_default(),
+        );
         let prompter = Arc::new(BlockingPinSource::new(Arc::new(self.pins.clone())));
         let cards = match &self.injected {
             Some(modules) => {
@@ -249,6 +251,19 @@ fn list(
         }
     }
     (tokens, problems)
+}
+
+/// Stored settings that fail [`SmartcardSettings::issues`] (only the
+/// validated setter should store them; a damaged or foreign value must not
+/// load a module through the DLL search order) load no modules.
+fn checked_settings(settings: SmartcardSettings) -> SmartcardSettings {
+    match settings.issues().first() {
+        None => settings,
+        Some(issue) => {
+            tracing::warn!(issue = issue.as_str(), "stored smartcard settings refused");
+            SmartcardSettings::default()
+        }
+    }
 }
 
 pub(crate) async fn handle(service: &Service, request: Request) -> Result<Response> {
@@ -392,6 +407,25 @@ mod tests {
         ));
         ctl.cards(&nail_store::Store::open_in_memory().unwrap());
         (ctl, events)
+    }
+
+    #[test]
+    fn stored_settings_with_relative_module_paths_load_nothing() {
+        let module = |path: &str| nail_api::smartcard::Pkcs11Module {
+            path: path.into(),
+            name: None,
+            enabled: true,
+        };
+        let bad = SmartcardSettings {
+            modules: vec![module("evil.dll")],
+            pin_cache_minutes: 5,
+        };
+        assert_eq!(checked_settings(bad), SmartcardSettings::default());
+        let good = SmartcardSettings {
+            modules: vec![module(r"C:\Windows\System32\card.dll")],
+            pin_cache_minutes: 5,
+        };
+        assert_eq!(checked_settings(good.clone()), good);
     }
 
     fn key() -> SmartcardKeyRef {

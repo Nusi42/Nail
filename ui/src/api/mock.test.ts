@@ -388,6 +388,42 @@ describe("accounts in the mock core", () => {
 });
 
 describe("drafts and the outbox in the mock core", () => {
+  it("reports the upload progress of a large message in pieces", async () => {
+    vi.useFakeTimers();
+    const { client, transport, events } = setup();
+    // A draft with a large attachment (put straight into the mock state).
+    transport.data.drafts.set("big", {
+      ...draft(),
+      id: "big",
+      attachments: [
+        { filename: "video.mp4", mime: "video/mp4", size: 9_000_000, blob: "b", content_id: null },
+      ],
+    });
+    await client.request(
+      { type: "SendDraft", draft_id: "big", delay_secs: 0, send_at: null },
+      "SendQueued",
+    );
+    await vi.advanceTimersByTimeAsync(transport.data.behaviour.workMs + 10);
+    const progress = events.flatMap((e) => (e.type === "SendProgress" ? [e] : []));
+    expect(progress.length).toBeGreaterThan(1);
+    const total = 9_000_000 + "Hi Grace".length;
+    expect(progress.every((p) => p.total_bytes === total)).toBe(true);
+    expect(progress.map((p) => p.sent_bytes)).toEqual(
+      [...progress.map((p) => p.sent_bytes)].sort((a, b) => a - b),
+    );
+    expect(progress.at(-1)?.sent_bytes).toBe(total);
+    // A small message sends in one request: no progress.
+    events.length = 0;
+    const { draft_id } = await client.request({ type: "SaveDraft", draft: draft() }, "DraftSaved");
+    await client.request(
+      { type: "SendDraft", draft_id, delay_secs: 0, send_at: null },
+      "SendQueued",
+    );
+    await vi.advanceTimersByTimeAsync(transport.data.behaviour.workMs + 10);
+    expect(events.some((e) => e.type === "SendStatus" && e.state === "sent")).toBe(true);
+    expect(events.some((e) => e.type === "SendProgress")).toBe(false);
+  });
+
   it("sends after the undo-send delay and files a Sent copy", async () => {
     vi.useFakeTimers();
     const { client, transport, events } = setup();
