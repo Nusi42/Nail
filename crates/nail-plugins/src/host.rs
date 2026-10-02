@@ -26,7 +26,7 @@ use nail_api::{
 use serde_json::Value;
 use tokio::sync::{broadcast, oneshot};
 
-use crate::dev::DevWatcher;
+use crate::dev::{DevWatcher, PluginReload, ReloadOutcome};
 use crate::gate::Gate;
 use crate::jobs::{CpuMeter, JobTable};
 use crate::l10n::{self, PluginCatalogs};
@@ -123,7 +123,6 @@ pub(crate) struct Slot {
     tx: Option<mpsc::Sender<ThreadMsg>>,
     alive: Arc<AtomicBool>,
     gate: Arc<RwLock<Gate>>,
-    watcher: Option<DevWatcher>,
     /// M4a: the plug-in's name in the core's language.
     display_name: String,
     /// The manifest with its texts in the core's language (MCP tool
@@ -172,6 +171,14 @@ pub(crate) struct Inner {
     dialogs: Mutex<HashMap<PluginDialogId, DialogEntry>>,
     logs: broadcast::Sender<HostLogLine>,
     generation: AtomicU64,
+    /// Dev folder watchers by plug-in. Kept apart from the slots, which
+    /// every (re)start replaces: two reloads racing on a slot's watcher
+    /// could drop it, and the folder was no longer watched.
+    watchers: Mutex<HashMap<PluginId, DevWatcher>>,
+    /// Reloads run one at a time (a burst of changes may start several).
+    reloading: tokio::sync::Mutex<()>,
+    /// Finished reloads ([`PluginHost::subscribe_reloads`]).
+    reloads: broadcast::Sender<PluginReload>,
     /// M4a: banners of open hooks, in the order they were shown.
     pub(crate) banners: Mutex<(
         ShownBanners,
@@ -196,6 +203,17 @@ impl Inner {
     pub(crate) fn log(&self, line: HostLogLine) {
         self.services.log(line.clone());
         let _ = self.logs.send(line);
+    }
+
+    /// Tells [`PluginHost::subscribe_reloads`] subscribers about a reload.
+    fn notify_reload(&self, id: &PluginId, outcome: ReloadOutcome) {
+        let generation = lock(&self.slots).get(id).map(|s| s.generation);
+        // An error only means nobody listens.
+        let _ = self.reloads.send(PluginReload {
+            plugin_id: id.clone(),
+            outcome,
+            generation,
+        });
     }
 
     pub(crate) fn host_log(
@@ -347,6 +365,11 @@ impl Inner {
             }
             slot.state = match reason {
                 PluginStopReason::Disabled => PluginRunState::Disabled,
+                // A reload (e.g. an invalid dev manifest) does not undo a
+                // disable that came in meanwhile.
+                PluginStopReason::Reloaded if slot.state == PluginRunState::Disabled => {
+                    PluginRunState::Disabled
+                }
                 _ if slot.state == PluginRunState::Crashed && !was_running => {
                     PluginRunState::Crashed
                 }
@@ -361,6 +384,11 @@ impl Inner {
             }
             (was_running, name)
         };
+        if reason == PluginStopReason::Uninstalled {
+            // Dropped outside the slot lock (it stops the watcher thread).
+            let watcher = lock(&self.watchers).remove(id);
+            drop(watcher);
+        }
         self.close_dialogs(id);
         if was_running {
             let localized = stopped_message(reason, &name);
@@ -586,6 +614,7 @@ impl PluginHost {
         limits: HostLimits,
     ) -> Self {
         let (logs, _) = broadcast::channel(1024);
+        let (reloads, _) = broadcast::channel(64);
         let inner = Arc::new(Inner {
             services,
             handle,
@@ -594,6 +623,9 @@ impl PluginHost {
             dialogs: Mutex::new(HashMap::new()),
             logs,
             generation: AtomicU64::new(0),
+            watchers: Mutex::new(HashMap::new()),
+            reloading: tokio::sync::Mutex::new(()),
+            reloads,
             banners: Mutex::new((HashMap::new(), std::collections::VecDeque::new())),
             hook_logs: Mutex::new(HashMap::new()),
         });
@@ -616,6 +648,12 @@ impl PluginHost {
     /// Log lines as they are written (the `nail plugin dev` console).
     pub fn subscribe_logs(&self) -> broadcast::Receiver<HostLogLine> {
         self.inner.logs.subscribe()
+    }
+
+    /// Notices of finished (or skipped) reloads: dev folder changes and
+    /// [`PluginHost::reload`]. Subscribe before the change to see it.
+    pub fn subscribe_reloads(&self) -> broadcast::Receiver<PluginReload> {
+        self.inner.reloads.subscribe()
     }
 
     /// The loaded plug-ins.
@@ -716,7 +754,7 @@ impl PluginHost {
     /// Restarts a plug-in with what it was started with (dev plug-ins
     /// re-read their folder).
     pub async fn reload(&self, id: &PluginId) -> Result<(), ApiError> {
-        reload(&self.inner, id).await
+        reload(&self.inner, id, ReloadKind::Api).await
     }
 
     /// Runs `plugin.<id>.<command>` with the UI's context. Returns once the
@@ -1037,18 +1075,12 @@ impl PluginHost {
                     return;
                 };
                 // A dev plug-in the user switched off stays off.
-                let enabled = lock(&inner.slots)
-                    .get(&id)
-                    .is_some_and(|s| s.state != PluginRunState::Disabled);
-                if enabled {
-                    let _ = reload(&inner, &id).await;
-                }
+                let _ = reload(&inner, &id, ReloadKind::FileChange).await;
             });
         })
         .map_err(|e| DevLoadError::Watch(e.to_string()))?;
-        if let Some(slot) = lock(&self.inner.slots).get_mut(&id) {
-            slot.watcher = Some(watcher);
-        }
+        let replaced = lock(&self.inner.watchers).insert(id.clone(), watcher);
+        drop(replaced);
         started.map_err(DevLoadError::Start)?;
         Ok(manifest)
     }
@@ -1060,12 +1092,41 @@ fn send(tx: &mpsc::Sender<ThreadMsg>, message: ThreadMsg) -> Result<(), ApiError
 }
 
 async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
+    // Boxed: the start future is large and sits inside every request's.
+    Box::pin(start_unless_disabled(inner, spec, false))
+        .await
+        .map(|_| ())
+}
+
+/// Takes the slot of `id` for a new start; with `keep_disabled`, a slot
+/// the user disabled meanwhile is left alone (`None`). Checked under the
+/// slot lock, so a `stop(Disabled)` racing with a reload either comes first
+/// (the reload is skipped) or stops the new runtime.
+fn claim_slot<'a>(
+    inner: &'a Inner,
+    id: &PluginId,
+    keep_disabled: bool,
+) -> Option<std::sync::MutexGuard<'a, HashMap<PluginId, Slot>>> {
+    let slots = lock(&inner.slots);
+    if keep_disabled
+        && slots
+            .get(id)
+            .is_some_and(|s| s.state == PluginRunState::Disabled)
+    {
+        return None;
+    }
+    Some(slots)
+}
+
+/// [`start`]; with `keep_disabled` (dev reloads) a plug-in disabled while
+/// the reload ran stays disabled: `Ok(false)`, nothing started.
+async fn start_unless_disabled(
+    inner: &Arc<Inner>,
+    spec: PluginSpec,
+    keep_disabled: bool,
+) -> Result<bool, ApiError> {
     let id = spec.manifest.id.clone();
     let manifest = Arc::new(spec.manifest.clone());
-    let watcher = {
-        let mut slots = lock(&inner.slots);
-        slots.get_mut(&id).and_then(|s| s.watcher.take())
-    };
     if lock(&inner.slots).get(&id).is_some_and(|s| s.tx.is_some()) {
         inner.stop(&id, PluginStopReason::Reloaded);
     }
@@ -1093,24 +1154,28 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
                 .arg("path", "apiVersion")
                 .arg("detail", manifest.api_version.as_str()),
         );
-        lock(&inner.slots).insert(
-            id,
-            Slot {
-                manifest,
-                spec,
-                state: PluginRunState::Incompatible,
-                error: Some(error.clone()),
-                generation,
-                tx: None,
-                alive,
-                gate,
-                watcher,
-                display_name,
-                localized,
-                cpu,
-                jobs,
-            },
-        );
+        {
+            let Some(mut slots) = claim_slot(inner, &id, keep_disabled) else {
+                return Ok(false);
+            };
+            slots.insert(
+                id,
+                Slot {
+                    manifest,
+                    spec,
+                    state: PluginRunState::Incompatible,
+                    error: Some(error.clone()),
+                    generation,
+                    tx: None,
+                    alive,
+                    gate,
+                    display_name,
+                    localized,
+                    cpu,
+                    jobs,
+                },
+            );
+        }
         inner.services.emit(Event::PluginsChanged);
         return Err(error);
     }
@@ -1133,24 +1198,28 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
         display_name: display_name.clone(),
         cpu: Arc::clone(&cpu),
     };
-    lock(&inner.slots).insert(
-        id.clone(),
-        Slot {
-            manifest,
-            spec,
-            state: PluginRunState::Starting,
-            error: None,
-            generation,
-            tx: Some(tx),
-            alive,
-            gate,
-            watcher,
-            display_name,
-            localized,
-            cpu,
-            jobs,
-        },
-    );
+    {
+        let Some(mut slots) = claim_slot(inner, &id, keep_disabled) else {
+            return Ok(false);
+        };
+        slots.insert(
+            id.clone(),
+            Slot {
+                manifest,
+                spec,
+                state: PluginRunState::Starting,
+                error: None,
+                generation,
+                tx: Some(tx),
+                alive,
+                gate,
+                display_name,
+                localized,
+                cpu,
+                jobs,
+            },
+        );
+    }
     inner.services.emit(Event::PluginsChanged);
     let thread_inner = Arc::clone(inner);
     let thread_id = id.clone();
@@ -1214,16 +1283,67 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
                 .arg("detail", error.message.as_str()),
         );
     }
-    result
+    result.map(|()| true)
 }
 
-async fn reload(inner: &Arc<Inner>, id: &PluginId) -> Result<(), ApiError> {
+/// Who asked for a reload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReloadKind {
+    /// [`PluginHost::reload`].
+    Api,
+    /// The dev folder watcher: a disabled plug-in stays off.
+    FileChange,
+}
+
+async fn reload(inner: &Arc<Inner>, id: &PluginId, kind: ReloadKind) -> Result<(), ApiError> {
+    let _one_at_a_time = inner.reloading.lock().await;
+    // Checked under the reload lock: a change queued behind another
+    // reload must not bring back a plug-in the user disabled meanwhile.
+    if kind == ReloadKind::FileChange
+        && lock(&inner.slots)
+            .get(id)
+            .is_some_and(|s| s.state == PluginRunState::Disabled)
+    {
+        inner.notify_reload(id, ReloadOutcome::SkippedDisabled);
+        return Ok(());
+    }
+    let result = reload_now(inner, id, kind == ReloadKind::FileChange).await;
+    let outcome = match &result {
+        Ok(true) => ReloadOutcome::Started,
+        Ok(false) => ReloadOutcome::SkippedDisabled,
+        Err(ReloadError::Invalid(_)) => ReloadOutcome::Invalid,
+        Err(ReloadError::Failed(_)) => ReloadOutcome::Failed,
+    };
+    inner.notify_reload(id, outcome);
+    result.map(|_| ()).map_err(|e| match e {
+        ReloadError::Invalid(e) | ReloadError::Failed(e) => e,
+    })
+}
+
+enum ReloadError {
+    /// The dev folder's manifest is not valid.
+    Invalid(ApiError),
+    /// Anything else (not loaded, the start failed).
+    Failed(ApiError),
+}
+
+/// Restarts `id` (dev plug-ins re-read their folder). `Ok(false)`: it was
+/// disabled meanwhile and `keep_disabled` left it so.
+async fn reload_now(
+    inner: &Arc<Inner>,
+    id: &PluginId,
+    keep_disabled: bool,
+) -> Result<bool, ReloadError> {
     let spec = lock(&inner.slots)
         .get(id)
         .map(|s| s.spec.clone())
-        .ok_or_else(|| ApiError::not_found(format!("plug-in `{id}` is not loaded")))?;
+        .ok_or_else(|| {
+            ReloadError::Failed(ApiError::not_found(format!("plug-in `{id}` is not loaded")))
+        })?;
     let Some(folder) = spec.dev_folder.clone() else {
-        return start(inner, spec).await;
+        return start_unless_disabled(inner, spec, keep_disabled)
+            .await
+            .map_err(ReloadError::Failed);
     };
     inner.host_log(
         id,
@@ -1259,16 +1379,20 @@ async fn reload(inner: &Arc<Inner>, id: &PluginId) -> Result<(), ApiError> {
                 ));
             }
             inner.stop(id, PluginStopReason::Reloaded);
-            return Err(ApiError::invalid_request("the manifest is not valid"));
+            return Err(ReloadError::Invalid(ApiError::invalid_request(
+                "the manifest is not valid",
+            )));
         }
     };
-    start(
+    start_unless_disabled(
         inner,
         PluginSpec {
             manifest,
             files,
             ..spec
         },
+        keep_disabled,
     )
     .await
+    .map_err(ReloadError::Failed)
 }

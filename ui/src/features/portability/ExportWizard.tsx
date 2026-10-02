@@ -32,7 +32,7 @@ import {
   isAbsolutePath,
   mboxVariantId,
 } from "./model";
-import { PathField } from "./PathField";
+import { PathField, useSavePath } from "./PathField";
 import { rememberJob, useAddressBooks, useCalendars } from "./queries";
 
 type SourceKind = ExportSource["type"];
@@ -62,7 +62,8 @@ export function ExportWizard({ close }: { close(): void }) {
   const [bookIds, setBookIds] = useState<string[]>([]);
   const [format, setFormat] = useState<ExportFormat>("mbox");
   const [variant, setVariant] = useState<MboxVariant>("mboxrd");
-  const [path, setPath] = useState("");
+  // `confirmed`: the Save dialog confirmed replacing an existing file.
+  const { path, overwrite: confirmed, onChange: setPath } = useSavePath();
   const [overwrite, setOverwrite] = useState(false);
   const [headersOnly, setHeadersOnly] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -104,7 +105,11 @@ export function ExportWizard({ close }: { close(): void }) {
           source,
           format: chosenFormat,
           path: path.trim(),
-          options: { overwrite, mbox_variant: variant, allow_headers_only: headersOnly },
+          options: {
+            overwrite: overwrite || (confirmed && !toFolder),
+            mbox_variant: variant,
+            allow_headers_only: headersOnly,
+          },
         },
         "PortabilityJob",
       );

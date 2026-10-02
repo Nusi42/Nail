@@ -604,7 +604,8 @@ pub fn write_backup(
         let _ = fs::remove_file(&temp);
         return Err(e);
     }
-    fs::rename(&temp, path).map_err(|e| PortabilityError::io(path.display().to_string(), e))?;
+    // Replaces an existing archive only when the caller confirmed it.
+    crate::files::persist(&temp, path, options.overwrite)?;
 
     // Read it back.
     ctx.phase(
@@ -623,9 +624,7 @@ pub fn write_backup(
 }
 
 fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".nail-part");
-    path.with_file_name(name)
+    crate::files::temp_path(path)
 }
 
 fn write_archive(

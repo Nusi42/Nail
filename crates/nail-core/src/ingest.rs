@@ -1,11 +1,26 @@
 //! Turning raw messages into stored ones: blob store + MIME parsing +
 //! metadata rows (with threading headers) + the search index. Shared by the
 //! IMAP and POP3 engines, the outbox (local Sent copies) and the demo seed.
+//!
+//! Two steps (post-M4c performance work, ADR 0101):
+//!
+//! 1. [`prepare`] writes the blobs and parses the MIME of a batch on
+//!    several threads; it needs no store, so the IMAP sync runs it while
+//!    the previous batch is being stored and the next one fetched;
+//! 2. [`ingest_prepared`] merges the rows (one transaction), records
+//!    addresses and indexes the batch — the part that needs the store.
+//!
+//! [`ingest`] does both for callers with a single message or batch.
+
+use std::num::NonZeroUsize;
 
 use nail_api::{Address, Flags, Folder, FolderRole, MessageId};
 use nail_mime::{ParsedMessage, SummaryIds};
 use nail_search::{IndexDocument, SearchIndex};
-use nail_store::{BlobStore, MessageFilter, MessageMeta, Store, StoredMessage, SyncedMessage};
+use nail_store::{
+    BlobHash, BlobStore, MessageFilter, MessageMeta, RemovalMark, Store, StoredMessage,
+    SyncedMessage,
+};
 
 use crate::ids;
 
@@ -35,6 +50,102 @@ pub(crate) struct IncomingMessage {
     pub remote_thread_id: Option<String>,
 }
 
+/// A message whose blob is written and whose MIME is parsed
+/// ([`prepare`]).
+#[derive(Debug, Clone)]
+pub(crate) struct PreparedMessage {
+    /// The message as delivered.
+    pub message: IncomingMessage,
+    /// Its blob (already in the blob store).
+    pub blob_hash: BlobHash,
+    /// Its parsed form.
+    pub parsed: ParsedMessage,
+}
+
+/// A batch [`prepare`]d for [`ingest_prepared`].
+#[derive(Debug, Clone)]
+pub(crate) struct PreparedBatch {
+    /// The messages, in the order given.
+    pub messages: Vec<PreparedMessage>,
+    /// The blob store's removals before the blobs were written: only when
+    /// one ran since are the blobs checked again before the rows commit.
+    pub mark: RemovalMark,
+}
+
+/// Most threads [`prepare`] uses for one batch (blob writes end with an
+/// fsync each, which overlap well; parsing is CPU work).
+const MAX_PREPARE_THREADS: usize = 8;
+
+/// Messages per [`prepare`] thread at least (smaller batches use fewer
+/// threads; one message runs on the caller's thread).
+const MIN_MESSAGES_PER_THREAD: usize = 4;
+
+fn prepare_threads(messages: usize) -> usize {
+    let cpus = std::thread::available_parallelism().map_or(1, NonZeroUsize::get);
+    cpus.min(MAX_PREPARE_THREADS)
+        .min(messages.div_ceil(MIN_MESSAGES_PER_THREAD))
+        .max(1)
+}
+
+fn prepare_one(blobs: &BlobStore, message: IncomingMessage) -> nail_store::Result<PreparedMessage> {
+    let blob_hash = blobs.put(&message.raw)?;
+    let parsed = nail_mime::parse_message(&message.raw);
+    Ok(PreparedMessage {
+        message,
+        blob_hash,
+        parsed,
+    })
+}
+
+/// Writes the blobs of `messages` and parses them, on up to
+/// [`MAX_PREPARE_THREADS`] threads. The result keeps the order. Blocking;
+/// needs no store.
+pub(crate) fn prepare(
+    blobs: &BlobStore,
+    messages: Vec<IncomingMessage>,
+) -> nail_store::Result<PreparedBatch> {
+    let mark = blobs.removal_mark();
+    let threads = prepare_threads(messages.len());
+    if threads <= 1 {
+        let messages = messages
+            .into_iter()
+            .map(|m| prepare_one(blobs, m))
+            .collect::<nail_store::Result<_>>()?;
+        return Ok(PreparedBatch { messages, mark });
+    }
+    let per_thread = messages.len().div_ceil(threads);
+    let mut chunks: Vec<Vec<IncomingMessage>> = Vec::with_capacity(threads);
+    let mut rest = messages.into_iter().peekable();
+    while rest.peek().is_some() {
+        chunks.push(rest.by_ref().take(per_thread).collect());
+    }
+    let prepared = std::thread::scope(|scope| {
+        let handles: Vec<_> = chunks
+            .into_iter()
+            .map(|chunk| {
+                scope.spawn(move || {
+                    chunk
+                        .into_iter()
+                        .map(|m| prepare_one(blobs, m))
+                        .collect::<nail_store::Result<Vec<_>>>()
+                })
+            })
+            .collect();
+        let mut out = Vec::new();
+        for handle in handles {
+            match handle.join() {
+                Ok(part) => out.extend(part?),
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        }
+        Ok::<_, nail_store::Error>(out)
+    })?;
+    Ok(PreparedBatch {
+        messages: prepared,
+        mark,
+    })
+}
+
 /// What [`ingest`] wrote.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct IngestReport {
@@ -57,7 +168,9 @@ pub(crate) fn meta_of(parsed: &ParsedMessage, size: usize) -> MessageMeta {
 
 /// Picks the id for an incoming message: an explicit one, the row already
 /// holding this UID, a row moved here by the user whose UID is not known
-/// yet (same Message-ID, no UID), or the id derived from the UID.
+/// yet (same Message-ID, no UID; the oldest), or the id derived from the
+/// UID. Id-only lookups with cached statements (the sync calls this for
+/// every message).
 fn resolve_id(
     store: &Store,
     folder: &Folder,
@@ -69,16 +182,14 @@ fn resolve_id(
         return Ok(id.clone());
     }
     let uid = message.uid.unwrap_or(0);
-    if let Some(existing) = store.find_message_by_uid(&folder.id, uid)? {
-        return Ok(existing.summary.id);
+    if let Some(existing) = store.message_id_by_uid(&folder.id, uid)? {
+        return Ok(existing);
     }
-    if let Some(mid) = &parsed.headers.message_id {
-        for candidate in store.find_messages_by_message_id(mid)? {
-            if candidate.folder_id == folder.id && store.get_message(&candidate.id)?.uid.is_none() {
-                store.set_message_uid(&candidate.id, Some(uid))?;
-                return Ok(candidate.id);
-            }
-        }
+    if let Some(mid) = &parsed.headers.message_id
+        && let Some(moved) = store.uidless_message_by_message_id(&folder.id, mid)?
+    {
+        store.set_message_uid(&moved, Some(uid))?;
+        return Ok(moved);
     }
     Ok(ids::message_id(
         &folder.account_id,
@@ -91,7 +202,7 @@ fn resolve_id(
 /// Stores the raw bytes of `messages` in the blob store and merges their
 /// metadata into `folder` in one transaction (keeping pending local
 /// changes, see [`Store::merge_messages`]), then indexes them. Blocking;
-/// run it on the blocking pool.
+/// run it on the blocking pool. [`prepare`] + [`ingest_prepared`].
 pub(crate) fn ingest(
     store: &Store,
     blobs: &BlobStore,
@@ -100,19 +211,36 @@ pub(crate) fn ingest(
     uid_validity: u32,
     messages: &[IncomingMessage],
 ) -> nail_store::Result<IngestReport> {
-    let mut report = IngestReport::default();
     if messages.is_empty() {
+        return Ok(IngestReport::default());
+    }
+    let batch = prepare(blobs, messages.to_vec())?;
+    ingest_prepared(store, blobs, index, folder, uid_validity, &batch)
+}
+
+/// Merges a [`prepare`]d batch into `folder` (see [`ingest`]). Blocking.
+pub(crate) fn ingest_prepared(
+    store: &Store,
+    blobs: &BlobStore,
+    index: Option<&SearchIndex>,
+    folder: &Folder,
+    uid_validity: u32,
+    batch: &PreparedBatch,
+) -> nail_store::Result<IngestReport> {
+    let mut report = IngestReport::default();
+    if batch.messages.is_empty() {
         return Ok(report);
     }
-    let mut rows = Vec::with_capacity(messages.len());
+    let mut rows = Vec::with_capacity(batch.messages.len());
     let mut addresses: Vec<(MessageId, Vec<Address>)> = Vec::new();
-    let mut docs = Vec::with_capacity(messages.len());
+    let mut docs = Vec::with_capacity(batch.messages.len());
     let mut keeps_body: Vec<MessageId> = Vec::new();
-    for message in messages {
-        let blob_hash = blobs.put(&message.raw)?;
-        let parsed = nail_mime::parse_message(&message.raw);
-        let id = resolve_id(store, folder, uid_validity, message, &parsed)?;
-        if store.get_message(&id).is_err() {
+    for prepared in &batch.messages {
+        let message = &prepared.message;
+        let parsed = &prepared.parsed;
+        let blob_hash = prepared.blob_hash.clone();
+        let id = resolve_id(store, folder, uid_validity, message, parsed)?;
+        if !store.message_exists(&id)? {
             report.new.push(id.clone());
         } else if message.headers_only
             && store
@@ -150,19 +278,19 @@ pub(crate) fn ingest(
         docs.push(IndexDocument::from_parsed(
             id.clone(),
             folder.account_id.clone(),
-            &parsed,
+            parsed,
         ));
         rows.push(SyncedMessage {
             message: StoredMessage {
                 summary,
                 uid: message.uid,
                 blob_hash: Some(blob_hash),
-                thread_key: thread_key(&parsed),
+                thread_key: thread_key(parsed),
             },
             meta: Some(MessageMeta {
                 remote_thread_id: message.remote_thread_id.clone(),
                 ..meta_of(
-                    &parsed,
+                    parsed,
                     message
                         .size
                         .filter(|_| message.headers_only)
@@ -180,8 +308,8 @@ pub(crate) fn ingest(
     ] {
         let group: Vec<SyncedMessage> = rows
             .iter()
-            .zip(messages)
-            .filter(|(_, m)| m.headers_only == headers_only)
+            .zip(&batch.messages)
+            .filter(|(_, m)| m.message.headers_only == headers_only)
             .map(|(r, _)| r.clone())
             .collect();
         if group.is_empty() {
@@ -194,11 +322,14 @@ pub(crate) fn ingest(
     }
     // Blob garbage collection (after folder deletions) may have removed a
     // blob between `put` and the row that references it; store it again.
-    for (message, row) in messages.iter().zip(&rows) {
-        if let Some(hash) = &row.message.blob_hash
-            && !blobs.contains(hash)
-        {
-            blobs.put(&message.raw)?;
+    // Only a removal since the batch was prepared can have done that.
+    if blobs.removed_since(batch.mark) {
+        for (prepared, row) in batch.messages.iter().zip(&rows) {
+            if let Some(hash) = &row.message.blob_hash
+                && !blobs.contains(hash)
+            {
+                blobs.put(&prepared.message.raw)?;
+            }
         }
     }
     // WP123: sets, not `Vec::contains` in loops (large batches).
@@ -394,6 +525,81 @@ mod tests {
         assert_eq!(next.stored, std::slice::from_ref(&id));
         assert!(next.new.is_empty());
         assert_eq!(store.get_message(&id).unwrap().uid, Some(9));
+    }
+
+    #[test]
+    fn prepared_batches_keep_their_order() {
+        let (store, blobs, _dir, folder) = setup();
+        let messages: Vec<IncomingMessage> = (1..=40)
+            .map(|uid| mail(uid, &format!("m{uid}@x"), ""))
+            .collect();
+        let batch = prepare(&blobs, messages.clone()).unwrap();
+        assert_eq!(batch.messages.len(), 40);
+        for (prepared, message) in batch.messages.iter().zip(&messages) {
+            assert_eq!(prepared.message.uid, message.uid);
+            assert_eq!(prepared.blob_hash, BlobHash::of(&message.raw));
+            assert!(blobs.contains(&prepared.blob_hash));
+            assert_eq!(
+                prepared.parsed.headers.message_id.as_deref(),
+                Some(format!("m{}@x", message.uid.unwrap()).as_str())
+            );
+        }
+        let report = ingest_prepared(&store, &blobs, None, &folder, 3, &batch).unwrap();
+        assert_eq!(report.new.len(), 40);
+        let uids: Vec<u32> = report
+            .stored
+            .iter()
+            .map(|id| store.get_message(id).unwrap().uid.unwrap())
+            .collect();
+        assert_eq!(uids, (1..=40).collect::<Vec<_>>());
+        assert!(prepare_threads(1) == 1 && prepare_threads(40) >= 1);
+        assert!(prepare_threads(10_000) <= MAX_PREPARE_THREADS);
+    }
+
+    #[test]
+    fn a_blob_removed_after_prepare_is_stored_again() {
+        let (store, blobs, _dir, folder) = setup();
+        let batch = prepare(&blobs, vec![mail(1, "gone@x", "")]).unwrap();
+        // A garbage collection between prepare and the merge.
+        let hash = batch.messages[0].blob_hash.clone();
+        assert!(blobs.remove(&hash).unwrap());
+        let report = ingest_prepared(&store, &blobs, None, &folder, 1, &batch).unwrap();
+        assert_eq!(report.new.len(), 1);
+        assert!(blobs.contains(&hash), "the blob was written again");
+        let stored = store.get_message(&report.new[0]).unwrap();
+        assert_eq!(stored.blob_hash, Some(hash));
+    }
+
+    #[test]
+    fn existing_uids_and_moved_rows_keep_their_ids() {
+        let (store, blobs, _dir, folder) = setup();
+        let first = ingest(&store, &blobs, None, &folder, 5, &[mail(1, "a@x", "")]).unwrap();
+        // The same UID again (a resync): same row, not new.
+        let again = ingest(&store, &blobs, None, &folder, 5, &[mail(1, "a@x", "")]).unwrap();
+        assert_eq!(again.stored, first.stored);
+        assert!(again.new.is_empty());
+        // Two UID-less rows with one Message-ID: the oldest is adopted.
+        let older = ingest(&store, &blobs, None, &folder, 5, &[mail(2, "dup@x", "")]).unwrap();
+        let newer = ingest(
+            &store,
+            &blobs,
+            None,
+            &folder,
+            5,
+            &[IncomingMessage {
+                raw: b"Message-ID: <dup@x>\r\nSubject: s\r\nFrom: x@y\r\nDate: Tue, 2 Jan 2024 10:00:00 +0000\r\n\r\nb"
+                    .to_vec(),
+                ..mail(3, "dup@x", "")
+            }],
+        )
+        .unwrap();
+        store.set_message_uid(&older.stored[0], None).unwrap();
+        store.set_message_uid(&newer.stored[0], None).unwrap();
+        let adopted = ingest(&store, &blobs, None, &folder, 5, &[mail(9, "dup@x", "")]).unwrap();
+        assert_eq!(adopted.stored, older.stored);
+        assert!(adopted.new.is_empty());
+        assert_eq!(store.get_message(&older.stored[0]).unwrap().uid, Some(9));
+        assert_eq!(store.get_message(&newer.stored[0]).unwrap().uid, None);
     }
 
     #[test]

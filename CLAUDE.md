@@ -161,7 +161,10 @@ crates/nail-store      SQLite metadata (v15), blob store, per-account operation 
                        `[patch.crates-io]` libsqlite3-sys = crates/nail-store/libsqlite3-sys-sqlite3mc, a stand-in with
                        the original crate's API over `sqlite3mc-src`), Store::open_with_key / rewrite_file (VACUUM INTO
                        + rename, crash safe) / file_encryption; thread/mod.rs subject fallback uses the partial index
-                       (SUBJECT_REPLY_SQL / SUBJECT_ORIGINAL_SQL, EXPLAIN test; WP123 found the quadratic scan)
+                       (SUBJECT_REPLY_SQL / SUBJECT_ORIGINAL_SQL, EXPLAIN test; WP123 found the quadratic scan);
+                       post-M4c (ADR 0101): BlobStore removal_mark / removed_since, sync lookups (message_id_by_uid,
+                       message_exists, uidless_message_by_message_id with an EXPLAIN test, folder_uid_flags), one cached
+                       upsert per message (row + subject key + meta)
 crates/nail-mime       MIME parsing, HTML sanitizing, top-level header list (rules); message_file.rs
                        (read_message_file, localized MessageFileError, MAX_MESSAGE_FILE; ADR 0054); domain.rs,
                        auth_results.rs (RFC 8601, trusted authserv-id), links.rs (link / attachment
@@ -212,7 +215,8 @@ crates/nail-plugins    plug-in host (M2d WP61): PluginHost (one thread + QuickJS
                        (composer edits, previews, attachment and link actions, Markdown blocks, MCP tools),
                        jobs.rs (cron on the core's clock, events, CPU quota), nail.l10n, binary fetch bodies
                        ($nailBytes markers via hostPutBytes / hostTakeBytes), panel actions checked against
-                       the rendered tree
+                       the rendered tree; post-M4c (ADR 0101): reloads serialized, watchers in their own map,
+                       PluginHost::subscribe_reloads (PluginReload notices; tests wait on them)
 crates/nail-ical       iCalendar / vCard (own lossless content-line layer + patching writers; calcard
                        only for the Windows zone table and VTIMEZONE generation), own recurrence engine
                        (recur.rs, expand.rs instances, edit.rs scopes), tz.rs (IANA/Windows/custom VTIMEZONE
@@ -366,7 +370,10 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        mode = in-memory stand-in store, engines off, restart after RestoreVaultKey
                        (`vault-restart-needed`), encrypt_database_file once after start), api_moves.rs (moves between
                        Exchange / Gmail accounts via nail_exchange::transfer, IMAP/POP3 → API accounts), demo.rs
-                       FileSecretStore (`<data-dir>/demo-keychain.json` for seeded runs)
+                       FileSecretStore (`<data-dir>/demo-keychain.json` for seeded runs, demo-multi too);
+                       post-M4c (ADR 0101): pipeline.rs (overlapping fetch → prepare → store, used by sync.rs
+                       store_batches; MailChangedThrottle), ingest::prepare (blob writes + MIME parsing on worker
+                       threads) / ingest_prepared, Service::subscribe_plugin_reloads
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -389,7 +396,8 @@ crates/nail-portability M4c WP121 (ADR 0096): importers (mbox streamed: mboxrd /
                        (MailImportSink, PimImportSink, MailExportSource, PimExportSource) and backup/ (BackupSource,
                        RestoreTarget); job.rs JobContext (cancel flag, throttled progress) + finish_report; feature
                        `testing` = KdfParams::insecure_for_tests; fixture tests/fixtures/thunderbird (SQLite books
-                       regenerated with NAIL_REGENERATE_FIXTURES=1)
+                       regenerated with NAIL_REGENERATE_FIXTURES=1); post-M4c (ADR 0101): files.rs (`<name>.nail-part`
+                       + rename; an existing target is replaced only with `overwrite`)
 crates/nail-pkcs11     M4c WP122 (ADR 0095): PKCS#11 smartcards over cryptoki: Module / CryptokiModule, Smartcards /
                        CardKey (PIN flow: retry, last try, locked, cancel; PIN never stored; login cache),
                        BlockingPinSource (adapts the async PinSource; card operations run on blocking threads),

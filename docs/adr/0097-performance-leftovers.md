@@ -162,3 +162,24 @@ messages / 1.67 GB, sync at about 349 messages per second, data directory
 | scroll-frame-p95-ms | 18.1 | 20 |
 | scroll-long-frames | 0 | 5 |
 
+
+## Post-M4c (ADR 0101)
+
+The M4c verify measured 348.8 s / 354.6 s initial and 3,343 / 3,339 ms
+incremental on the same benchmark (over budget; the numbers above had no
+real headroom). ADR 0101 profiles the sync and overlaps fetch / blob writes
++ MIME parsing / store, makes the sync lookups and the flag resync lean and
+caches the hot statements. Same machine, two strict runs each, budgets and
+CI tolerance unchanged:
+
+| Metric | Before (fc2695a) | After (ADR 0101) | Budget |
+| --- | --- | --- | --- |
+| initial-sync-secs | 352.6 / 357.9 | 108.4 / 93.1 | 300 |
+| incremental-sync-ms (200 new) | 3,088.2 / 3,256.1 | 757.4 / 733.7 | 3,000 |
+| search-p95-ms | 124.0 / 126.4 | 126.3 / 131.3 | 250 |
+| list-page-p95-ms | 5.6 / 5.5 | 5.6 / 5.3 | 50 |
+| cold-start-ms | 83.9 / 100.7 | 84.9 / 87.1 | 3,000 |
+| peak-memory-mib | 129.6 / 124.1 | 105.0 / 105.7 | 800 |
+| first-render-ms | 397.2 / 392.1 | 439.4 / 450.2 | 3,000 |
+| scroll-frame-p95-ms | 16.7 / 16.7 | 16.7 / 16.7 | 20 |
+| scroll-long-frames | 0 / 0 | 0 / 0 | 5 |

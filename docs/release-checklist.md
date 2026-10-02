@@ -13,7 +13,7 @@ items: [`docs/backlog.md`](backlog.md).
 
 | # | Gate | Who | Done when | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | **Security review sign-off** of the whole product | an independent reviewer | written sign-off, findings fixed or accepted | Scope: the core's request routing and remote access (`check_remote_request`, grants), the remote-UI login (passwords, TOTP, passkeys, pairing, sessions), the remote-content proxy (SSRF), plug-in sandbox and permissions, MCP writes and confirmations, crypto (OpenPGP, S/MIME, smartcards), encryption at rest (full-file database encryption, recovery key, `vault.json`), backups (Argon2id, STREAM), the diagnostics redaction, the installers (MSI policies, MAPI registration), the updater (signed manifests). ADRs 0029–0099 describe the decisions. |
+| 1 | **Security review sign-off** of the whole product | an independent reviewer | written sign-off, findings fixed or accepted | Scope: the core's request routing and remote access (`check_remote_request`, grants), the remote-UI login (passwords, TOTP, passkeys, pairing, sessions), the remote-content proxy (SSRF), plug-in sandbox and permissions, MCP writes and confirmations, crypto (OpenPGP, S/MIME, smartcards), encryption at rest (full-file database encryption, recovery key, `vault.json`), backups (Argon2id, STREAM), the diagnostics redaction, the installers (MSI policies, MAPI registration), the updater (signed manifests). ADRs 0029–0101 describe the decisions. |
 | 2 | **EV code-signing certificate and a signed build** | owner | `scripts/verify-signatures.ps1` passes on the release artefacts | Buy the EV certificate (hardware token or cloud HSM); configure `NAIL_SIGN_THUMBPRINT` (or the PFX secrets for a standard certificate); run `release.yml`. Unsigned builds work but SmartScreen warns. |
 | 3 | **Real-account tests** from `docs/backlog.md`, as far as wanted before 1.0 | owner + tester | each chosen item run once by hand and noted here | Google account (Gmail API, Google CalDAV / CardDAV), Outlook.com and a Microsoft 365 tenant (Graph: shared mailboxes, rooms, rules, out of office, large attachments over 4 MB, send as / on behalf), optionally grommunio (EWS) in the interop job and an Exchange Server lab (Windows sign-in). |
 | 4 | **Smartcard test on real hardware** | tester | signing and decrypting with a real card (S/MIME and OpenPGP) noted here | The PKCS#11 code path is covered only by a soft token in the automated tests (ADR 0095): try a PIV card / YubiKey (OpenSC module) and an OpenPGP card. |
@@ -42,5 +42,5 @@ items: [`docs/backlog.md`](backlog.md).
 
 | Item | State |
 | --- | --- |
-| Automated gate (all suites, Playwright, installers locally, performance budgets) | see `docs/plan.md` section 9, "M4 automated gate" |
+| Automated gate (all suites, Playwright, installers locally, performance budgets) | met after the post-M4c fixes (ADR 0101: initial sync 93–108 s of 300, incremental 734–757 ms of 3,000); see `docs/plan.md` section 9, "M4 automated gate" |
 | Gates 1–8 | open |

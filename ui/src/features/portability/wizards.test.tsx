@@ -269,6 +269,8 @@ describe("backup and restore", () => {
     expect(env.transport.requests.find((r) => r.type === "CreateBackup")).toMatchObject({
       contents: { items: [...defaultBackupContents().items, "keys"] },
       passphrase: "short but now long",
+      // Chosen with the Save dialog, which asks before replacing a file.
+      overwrite: true,
     });
     finish(env);
     const manifest = await within(dialog).findByRole("region", { name: "In this backup" });
@@ -277,6 +279,43 @@ describe("backup and restore", () => {
     finish(env);
     const check = await within(dialog).findByRole("region", { name: "Backup check" });
     expect(await within(check).findByText("Backup check: Done")).toBeVisible();
+    stop();
+  });
+
+  it("replaces an existing archive only when the Save dialog confirmed it", async () => {
+    const { env, stop } = setup({ desktop: true });
+    const user = userEvent.setup();
+    renderDialogs(env);
+    act(() => env.store.getState().openWindow(BACKUP_DIALOG));
+    const dialog = await screen.findByRole("dialog", { name: "Back up Nail" });
+    await user.type(within(dialog).getByLabelText("Passphrase"), "correct horse battery");
+    await user.type(within(dialog).getByLabelText("Passphrase again"), "correct horse battery");
+    await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
+    const field = within(dialog).getByLabelText("Backup file") as HTMLInputElement;
+    const picked = field.value;
+    env.transport.data.features.portability.existing = [picked];
+    // Typed (here: the picked path edited and typed back): not confirmed.
+    await user.clear(field);
+    await user.type(field, picked);
+    await user.click(within(dialog).getByRole("button", { name: "Back up" }));
+    expect(
+      await within(dialog).findByText(
+        "The target exists. Choose another name or allow replacing it.",
+      ),
+    ).toBeVisible();
+    expect(env.transport.requests.filter((r) => r.type === "CreateBackup").at(-1)).toMatchObject({
+      path: picked,
+      overwrite: false,
+    });
+    // Chosen again in the Save dialog (which asked before replacing it).
+    await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
+    await user.click(within(dialog).getByRole("button", { name: "Back up" }));
+    expect(env.transport.requests.filter((r) => r.type === "CreateBackup").at(-1)).toMatchObject({
+      path: picked,
+      overwrite: true,
+    });
+    finish(env);
+    expect(await within(dialog).findByRole("region", { name: "In this backup" })).toBeVisible();
     stop();
   });
 
@@ -426,6 +465,8 @@ describe("diagnostics bundle", () => {
     expect(env.transport.requests.find((r) => r.type === "CreateDiagnosticsBundle")).toMatchObject({
       options: { items: expect.arrayContaining(["mail-content"]), message_ids: [first?.id] },
       path: "C:\\support\\nail.zip",
+      // A typed path never replaces a file.
+      overwrite: false,
     });
     stop();
   });

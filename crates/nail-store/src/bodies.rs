@@ -82,11 +82,12 @@ impl Store {
             for m in messages {
                 let mut message = m.message.clone();
                 let existing: Option<(String, Option<String>, Option<i64>)> = tx
-                    .query_row(
+                    .prepare_cached(
                         "SELECT body_state, blob_hash, size FROM messages WHERE id = ?1",
-                        [message.summary.id.as_str()],
-                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                    )
+                    )?
+                    .query_row([message.summary.id.as_str()], |r| {
+                        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                    })
                     .optional()?;
                 let keep_body = state == BodyState::HeadersOnly
                     && existing
@@ -114,10 +115,8 @@ impl Store {
                     }
                 }
                 if !keep_body {
-                    tx.execute(
-                        "UPDATE messages SET body_state = ?2 WHERE id = ?1",
-                        params![message.summary.id.as_str(), state.as_str()],
-                    )?;
+                    tx.prepare_cached("UPDATE messages SET body_state = ?2 WHERE id = ?1")?
+                        .execute(params![message.summary.id.as_str(), state.as_str()])?;
                 }
             }
             Ok(report)

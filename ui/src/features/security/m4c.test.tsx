@@ -113,6 +113,34 @@ describe("recovery key", () => {
     stop();
   });
 
+  it("lets the Save dialog confirm replacing the kit file", async () => {
+    const env = createEnv();
+    env.transport.data.features.security.vault.state = "encrypted";
+    env.transport.data.features.security.vault.key_in_keychain = true;
+    env.transport.data.features.portability.desktop = true;
+    env.transport.data.features.portability.pickAnswers = ["C:\\Users\\Ada\\kit.txt"];
+    const stop = listen(env);
+    const user = userEvent.setup();
+    render(env, <NodeView node={widget("security-recovery-key")} path="t" />);
+    await user.click(await screen.findByRole("button", { name: "Create recovery key" }));
+    const dialog = await screen.findByRole("dialog", { name: "Recovery key" });
+    await user.click(
+      within(dialog).getByRole("checkbox", {
+        name: "Also save it in a text file (a recovery kit)",
+      }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Browse…" }));
+    const field = within(dialog).getByLabelText("Recovery kit file");
+    expect(field).toHaveValue("C:\\Users\\Ada\\kit.txt");
+    await user.click(within(dialog).getByRole("button", { name: "Create recovery key" }));
+    await within(dialog).findByRole("figure", { name: "Recovery key" });
+    expect(env.transport.requests.find((r) => r.type === "CreateRecoveryKey")).toMatchObject({
+      save_to: "C:\\Users\\Ada\\kit.txt",
+      overwrite: true,
+    });
+    stop();
+  });
+
   it("reports typos while typing and checks or removes a stored key", async () => {
     const env = createEnv();
     env.transport.data.features.security.vault.state = "encrypted";

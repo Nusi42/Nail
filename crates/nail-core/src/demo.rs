@@ -9,12 +9,13 @@
 //!   mock OAuth2 authorization server; M3b), one SMTP
 //!   server for the first two, a third IMAP server plus autoconfig / DNS
 //!   mocks for setting up a new account by discovery, and a mock CalDAV /
-//!   CardDAV server with a second principal (`bob`, free/busy; M3b). Secrets live in memory, never in the OS
-//!   keychain. [`DemoMulti::control`] offers the test controls the
+//!   CardDAV server with a second principal (`bob`, free/busy; M3b). Secrets live in memory
+//!   (or the seeded run's [`FileSecretStore`]), never in the OS keychain. [`DemoMulti::control`] offers the test controls the
 //!   Playwright suite uses (deliver mail, change flags, go offline, read
 //!   what SMTP received).
 //!
-//! Every seeded run keeps its secrets in memory, trusts only the S/MIME
+//! Every seeded run keeps its secrets in memory (`nail serve`: in the data
+//! directory's [`FileSecretStore`]), trusts only the S/MIME
 //! test root of the corpus and looks up no keys online
 //! ([`demo_options`]); `demo-multi` also gives both accounts an OpenPGP
 //! key and an S/MIME certificate ([`DemoMulti::seed_security`]).
@@ -463,7 +464,8 @@ pub struct DemoMulti {
     /// The clock snooze, quiet hours and notifications see; moved by the
     /// `clock-set` / `clock-advance` controls (M2c).
     pub clock: Arc<crate::AdjustableClock>,
-    /// The in-memory keychain with the accounts' passwords.
+    /// The in-memory keychain with the accounts' passwords (used when the
+    /// options passed to [`DemoMulti::service_options`] bring no store).
     pub secrets: Arc<MemorySecretStore>,
     /// Discovery pointed at the mocks.
     pub discoverer: Arc<Discoverer>,
@@ -751,43 +753,7 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
     );
 
     let secrets = Arc::new(MemorySecretStore::new());
-    for source in [MULTI_CALDAV_ID, MULTI_CARDDAV_ID] {
-        secrets
-            .set(
-                &SecretRef(format!("keychain:nail/pim/{source}/password")),
-                MULTI_DAV_PASSWORD,
-            )
-            .map_err(io_error)?;
-    }
-    for (account, password) in [
-        (MULTI_WORK_ID, MULTI_WORK_PASSWORD),
-        (MULTI_HOME_ID, MULTI_HOME_PASSWORD),
-    ] {
-        secrets
-            .set(
-                &SecretRef::default_for(&AccountId::new(account), SecretKind::Password),
-                password,
-            )
-            .map_err(io_error)?;
-    }
-    secrets
-        .set(
-            &SecretRef::default_for(&AccountId::new(MULTI_GMAIL_ID), SecretKind::OAuth2),
-            MULTI_GMAIL_REFRESH_TOKEN,
-        )
-        .map_err(io_error)?;
-    secrets
-        .set(
-            &SecretRef::default_for(&AccountId::new(MULTI_EXCHANGE_ID), SecretKind::OAuth2),
-            MULTI_EXCHANGE_REFRESH_TOKEN,
-        )
-        .map_err(io_error)?;
-    secrets
-        .set(
-            &SecretRef::default_for(&AccountId::new(MULTI_EWS_ID), SecretKind::Password),
-            MULTI_EWS_PASSWORD,
-        )
-        .map_err(io_error)?;
+    seed_multi_secrets(secrets.as_ref()).map_err(io_error)?;
     Ok(DemoMulti {
         work,
         home,
@@ -807,6 +773,52 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         discoverer: Arc::new(discoverer),
         pop3_counter: AtomicU32::new(0),
     })
+}
+
+/// The keychain entries of the demo-multi accounts and PIM sources (the
+/// mock servers' passwords and refresh tokens).
+fn multi_secrets() -> Vec<(SecretRef, &'static str)> {
+    let mut entries: Vec<(SecretRef, &'static str)> = [MULTI_CALDAV_ID, MULTI_CARDDAV_ID]
+        .into_iter()
+        .map(|source| {
+            (
+                SecretRef(format!("keychain:nail/pim/{source}/password")),
+                MULTI_DAV_PASSWORD,
+            )
+        })
+        .collect();
+    for (account, kind, secret) in [
+        (MULTI_WORK_ID, SecretKind::Password, MULTI_WORK_PASSWORD),
+        (MULTI_HOME_ID, SecretKind::Password, MULTI_HOME_PASSWORD),
+        (
+            MULTI_GMAIL_ID,
+            SecretKind::OAuth2,
+            MULTI_GMAIL_REFRESH_TOKEN,
+        ),
+        (
+            MULTI_EXCHANGE_ID,
+            SecretKind::OAuth2,
+            MULTI_EXCHANGE_REFRESH_TOKEN,
+        ),
+        (MULTI_EWS_ID, SecretKind::Password, MULTI_EWS_PASSWORD),
+    ] {
+        entries.push((
+            SecretRef::default_for(&AccountId::new(account), kind),
+            secret,
+        ));
+    }
+    entries
+}
+
+/// Writes the demo-multi entries ([`multi_secrets`]) into `store`
+/// (replacing earlier values: the mock servers are new every run).
+fn seed_multi_secrets(
+    store: &dyn SecretStore,
+) -> std::result::Result<(), nail_api::engine::EngineError> {
+    for (secret, value) in multi_secrets() {
+        store.set(&secret, value)?;
+    }
+    Ok(())
 }
 
 /// DNS for the demo's Exchange Autodiscover: no SRV records (no sockets).
@@ -936,10 +948,23 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
         Ok(())
     }
 
-    /// `options` pointed at the mocks: in-memory secrets, mock discovery,
-    /// short reconnect delays, the test trust anchor, offline key lookups.
+    /// `options` pointed at the mocks: mock discovery, short reconnect
+    /// delays, the test trust anchor, offline key lookups. Secrets: a store
+    /// already in `options` is kept and receives the demo accounts' entries
+    /// (`nail serve --seed demo-multi` passes the data directory's
+    /// [`FileSecretStore`], so the vault's data key survives a restart);
+    /// without one, the in-memory [`DemoMulti::secrets`].
     pub fn service_options(&self, mut options: crate::ServiceOptions) -> crate::ServiceOptions {
-        options.secrets = Some(Arc::clone(&self.secrets) as Arc<dyn SecretStore>);
+        let secrets = match options.secrets.take() {
+            Some(store) => {
+                if let Err(err) = seed_multi_secrets(store.as_ref()) {
+                    tracing::warn!(%err, "cannot write the demo accounts' secrets");
+                }
+                store
+            }
+            None => Arc::clone(&self.secrets) as Arc<dyn SecretStore>,
+        };
+        options.secrets = Some(secrets);
         options.proxy_fetcher = self.proxy_fetcher();
         options.discoverer = Some(Arc::clone(&self.discoverer));
         options.timing = crate::EngineTiming::fast();

@@ -54,6 +54,23 @@ test("print to PDF writes a PDF file of the message", async () => {
     expect(pdf.length).toBeGreaterThan(1000);
     // The hidden print window is gone again.
     await expect.poll(() => browser.contexts().flatMap((c) => c.pages()).length).toBe(1);
+    // The PDF went through a temporary file next to the target.
+    expect(existsSync(`${target}.nail-part`)).toBe(false);
+
+    // Post-M4c: a typed path never replaces an existing file — only the
+    // Save dialog's confirmation (`overwrite`) would.
+    // The footer's Close (the title bar has a Close button too).
+    await dialog.locator('[data-part="form.button"][data-action="close"]').click();
+    await expect(dialog).toBeHidden();
+    await page.keyboard.press("Control+p");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Save as PDF…" }).click();
+    await dialog.getByLabel("PDF file").fill(target);
+    await dialog.getByRole("button", { name: "Save PDF" }).click();
+    await expect(dialog.getByRole("alert")).toHaveText(
+      "The target exists. Choose another name or allow replacing it.",
+    );
+    expect(readFileSync(target).equals(pdf)).toBe(true);
   } finally {
     await browser.close().catch(() => undefined);
   }

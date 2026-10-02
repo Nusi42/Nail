@@ -263,11 +263,8 @@ impl Store {
     pub fn body_state(&self, id: &MessageId) -> Result<BodyState> {
         self.with_conn(|conn| {
             let text: Option<String> = conn
-                .query_row(
-                    "SELECT body_state FROM messages WHERE id = ?1",
-                    [id.as_str()],
-                    |r| r.get(0),
-                )
+                .prepare_cached("SELECT body_state FROM messages WHERE id = ?1")?
+                .query_row([id.as_str()], |r| r.get(0))
                 .optional()?;
             let text = text.ok_or_else(|| Error::not_found("message", id))?;
             BodyState::parse(&text)

@@ -72,6 +72,7 @@ pub mod services;
 pub mod tree;
 pub mod writes;
 
+pub use dev::{PluginReload, ReloadOutcome};
 pub use extensions::PluginMcpTool;
 pub use gate::ClientLimit;
 pub use hooks::{ArrivalReport, BeforeSendReport, HookRun, OpenReport};

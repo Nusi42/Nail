@@ -349,10 +349,12 @@ pub(crate) async fn resume_migration(service: Service) {
 
 impl Service {
     /// `CreateRecoveryKey`: a new recovery key (shown once), optionally
-    /// with a recovery-kit text file.
+    /// with a recovery-kit text file (replacing an existing one only with
+    /// `overwrite`, which the Save dialog's confirmation sets).
     pub(crate) async fn create_recovery_key(
         &self,
         save_to: Option<String>,
+        overwrite: bool,
     ) -> Result<nail_api::Response> {
         if self.inner.vault.is_locked() {
             self.inner.vault.check()?;
@@ -380,7 +382,11 @@ impl Service {
             // kit that cannot be written leaves the old recovery key working.
             let (key, status) = vault.create_recovery_key_with(|key, created| -> Result<()> {
                 match &path {
-                    Some(path) => write_kit(path, &recovery_kit(locale.as_deref(), key, created)),
+                    Some(path) => write_kit(
+                        path,
+                        &recovery_kit(locale.as_deref(), key, created),
+                        overwrite,
+                    ),
                     None => Ok(()),
                 }
             })?;
@@ -475,27 +481,9 @@ pub(crate) fn recovery_kit(locale: Option<&str>, key: &str, created: &str) -> St
     .join("\r\n")
 }
 
-/// Writes the kit (never over an existing file).
-fn write_kit(path: &Path, text: &str) -> Result<()> {
-    use std::io::Write as _;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::AlreadyExists {
-                ApiError::new(
-                    nail_api::ErrorCode::Conflict,
-                    format!("{} exists", path.display()),
-                )
-                .with_localized(LocalizedMessage::new("portability-error-target-exists"))
-            } else {
-                ApiError::internal(format!("cannot write {}: {e}", path.display()))
-            }
-        })?;
-    file.write_all(text.as_bytes())?;
-    Ok(())
+/// Writes the kit: never over an existing file unless `overwrite` (then
+/// atomically, through a temporary file renamed over it).
+fn write_kit(path: &Path, text: &str, overwrite: bool) -> Result<()> {
+    nail_portability::files::write_file(path, text.as_bytes(), overwrite)
+        .map_err(|e| e.to_api_error().into())
 }

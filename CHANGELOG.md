@@ -6,6 +6,25 @@ All notable changes to Nail. The format follows
 are in [`userDocs/en/release-notes.md`](userDocs/en/release-notes.md);
 decisions behind each change are in [`docs/adr/`](docs/adr/).
 
+## [Unreleased]
+
+### Changed (post-M4c, ADR 0101)
+
+- **Faster mail sync**: fetching, storing raw mail and indexing now overlap;
+  a first sync of a 100,000-message mailbox takes about a third of the time,
+  checking for new mail in a large mailbox about a quarter.
+- **Replacing files from the Save dialog**: when Windows asks "Replace?"
+  and you confirm, backups, recovery kits, diagnostics bundles and PDF
+  files replace the existing file (atomically); a typed path to an existing
+  file is still refused.
+
+### Fixed
+
+- `nail serve --seed demo-multi` keeps its secrets in the demo keychain
+  file, so encryption at rest survives a restart there too.
+- Plug-in hot reload in `nail plugin dev` could stop watching a folder, or
+  restart a plug-in that was just disabled, when changes arrived quickly.
+
 ## [1.0.0-rc.1] — 2026-10-02
 
 The first release candidate for Windows: everything planned for version 1.0

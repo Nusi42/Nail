@@ -98,39 +98,36 @@ const LOAD_ROW_BEFORE_V15: &str = "SELECT id, message_id, in_reply_to_json, refe
      FROM messages WHERE id = ?1";
 
 fn load_row(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Result<ThreadRow> {
-    tx.query_row(
-        if remote_column {
-            LOAD_ROW
-        } else {
-            LOAD_ROW_BEFORE_V15
-        },
-        [id],
-        |row| {
-            let in_reply_to: String = row.get(2)?;
-            let references: String = row.get(3)?;
-            let account: String = row.get(9)?;
-            let remote_thread = row
-                .get::<_, Option<String>>(10)?
-                .filter(|t| !t.is_empty())
-                .map(|t| remote_thread_key(&account, &t));
-            Ok((
-                (
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    in_reply_to,
-                    references,
-                    row.get::<_, Option<String>>(4)?,
-                ),
-                (
-                    row.get::<_, String>(5)?,
-                    row.get::<_, i64>(6)?,
-                    row.get::<_, i64>(7)?,
-                    row.get::<_, Option<String>>(8)?,
-                    remote_thread,
-                ),
-            ))
-        },
-    )
+    tx.prepare_cached(if remote_column {
+        LOAD_ROW
+    } else {
+        LOAD_ROW_BEFORE_V15
+    })?
+    .query_row([id], |row| {
+        let in_reply_to: String = row.get(2)?;
+        let references: String = row.get(3)?;
+        let account: String = row.get(9)?;
+        let remote_thread = row
+            .get::<_, Option<String>>(10)?
+            .filter(|t| !t.is_empty())
+            .map(|t| remote_thread_key(&account, &t));
+        Ok((
+            (
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                in_reply_to,
+                references,
+                row.get::<_, Option<String>>(4)?,
+            ),
+            (
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)?,
+                row.get::<_, Option<String>>(8)?,
+                remote_thread,
+            ),
+        ))
+    })
     .optional()?
     .ok_or_else(|| Error::not_found("message", id))
     .and_then(
@@ -231,10 +228,8 @@ fn assign_thread_with(tx: &Transaction<'_>, id: &str, remote_column: bool) -> Re
             stmt.execute(params![key, winner])?;
         }
     }
-    tx.execute(
-        "UPDATE messages SET thread_id = ?2 WHERE id = ?1",
-        params![row.id, winner],
-    )?;
+    tx.prepare_cached("UPDATE messages SET thread_id = ?2 WHERE id = ?1")?
+        .execute(params![row.id, winner])?;
     Ok(winner)
 }
 
@@ -272,8 +267,8 @@ fn subject_fallback(tx: &Transaction<'_>, row: &ThreadRow) -> Result<Option<Stri
         return Ok(None);
     };
     Ok(tx
+        .prepare_cached(sql)?
         .query_row(
-            sql,
             params![row.subject_key, row.id, row.date_sort, SUBJECT_WINDOW_SECS],
             |r| r.get::<_, String>(0),
         )
@@ -313,10 +308,8 @@ fn merge_threads(tx: &Transaction<'_>, threads: BTreeSet<String>) -> Result<Stri
 /// Recomputes `subject_key` / `subject_is_reply` of one row from its subject.
 pub(crate) fn set_subject_key(tx: &Transaction<'_>, id: &str, subject: &str) -> Result<()> {
     let n = normalize_subject(subject);
-    tx.execute(
-        "UPDATE messages SET subject_key = ?2, subject_is_reply = ?3 WHERE id = ?1",
-        params![id, n.key, n.kind.to_sql()],
-    )?;
+    tx.prepare_cached("UPDATE messages SET subject_key = ?2, subject_is_reply = ?3 WHERE id = ?1")?
+        .execute(params![id, n.key, n.kind.to_sql()])?;
     Ok(())
 }
 

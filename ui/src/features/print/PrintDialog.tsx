@@ -32,7 +32,7 @@ import { useClient, useMessage, useThread } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { Check, CheckGroup, SelectField, WizardButtons } from "../portability/Fields";
 import { formatBytes, isAbsolutePath, plainText } from "../portability/model";
-import { PathField } from "../portability/PathField";
+import { PathField, useSavePath } from "../portability/PathField";
 import { useCalendars } from "../portability/queries";
 import { AGENDA_LAYOUTS, HEADER_DETAILS, ORIENTATIONS, PAGE_SIZES } from "./messages";
 import { defaultAgenda, defaultPrintOptions, targetIssue } from "./model";
@@ -248,7 +248,8 @@ export function PrintSetup({ close }: { close(): void }) {
   const [target, setTarget] = useState<PrintTarget | null>(initialTarget);
   const [options, setOptions] = useState<PrintOptions>(defaultPrintOptions);
   const [pdfStep, setPdfStep] = useState(mode === "pdf");
-  const [path, setPath] = useState("");
+  // `overwrite`: the Save dialog confirmed replacing an existing file.
+  const { path, overwrite, onChange: setPath } = useSavePath();
   const [saved, setSaved] = useState<PdfFile | null>(null);
   const [noDesktop, setNoDesktop] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -283,7 +284,7 @@ export function PrintSetup({ close }: { close(): void }) {
     try {
       const job = await createJob();
       const answer = await client.request(
-        { type: "SavePrintPdf", job_id: job.job_id, path: path.trim() },
+        { type: "SavePrintPdf", job_id: job.job_id, path: path.trim(), overwrite },
         "PdfSaved",
       );
       setSaved(answer.file);

@@ -40,7 +40,7 @@ import {
   redactionId,
 } from "./model";
 import { DIAGNOSTICS_DIALOG } from "./names";
-import { PathField } from "./PathField";
+import { PathField, useSavePath } from "./PathField";
 import { usePortabilityState } from "./store";
 
 /** `nail_api::diagnostics::DIAGNOSTICS_MANIFEST_ENTRY`. */
@@ -126,7 +126,8 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
     message_ids: [],
   }));
   const [preview, setPreview] = useState<DiagnosticsManifest | null>(null);
-  const [path, setPath] = useState("");
+  // `overwrite`: the Save dialog confirmed replacing an existing file.
+  const { path, overwrite, onChange: setPath } = useSavePath();
   const [bundle, setBundle] = useState<DiagnosticsBundle | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
@@ -168,7 +169,7 @@ export function DiagnosticsBundleView({ close }: { close?: () => void }) {
   const save = () =>
     guarded(async () => {
       const answer = await client.request(
-        { type: "CreateDiagnosticsBundle", options, path: path.trim() },
+        { type: "CreateDiagnosticsBundle", options, path: path.trim(), overwrite },
         "DiagnosticsBundle",
       );
       setBundle(answer.bundle);

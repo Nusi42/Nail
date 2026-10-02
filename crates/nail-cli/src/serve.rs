@@ -89,7 +89,7 @@ pub fn portable_root_beside(exe: &Path) -> Option<PathBuf> {
 
 /// Writes the demo-multi `accounts.kdl` into `config_dir`. Refuses a
 /// directory whose `accounts.kdl` is not a demo one: the run would replace
-/// its accounts' secrets with the in-memory demo keychain and write demo
+/// its accounts' secrets with the demo keychain and write demo
 /// state next to real accounts. An earlier demo file is replaced (its mock
 /// server ports are gone).
 pub fn write_demo_multi_config(demo: &DemoMulti, config_dir: &Path) -> anyhow::Result<()> {

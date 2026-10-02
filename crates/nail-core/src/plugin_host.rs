@@ -294,6 +294,15 @@ impl Service {
         }
     }
 
+    /// Notices of finished plug-in reloads (dev folders whose files
+    /// changed): embedders and tests wait on these instead of on timing.
+    /// Creates the plug-in host when needed (inside the Tokio runtime).
+    pub fn subscribe_plugin_reloads(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<nail_plugins::PluginReload> {
+        self.plugin_host().subscribe_reloads()
+    }
+
     /// The plug-in host, created on first use (inside the Tokio runtime).
     pub(crate) fn plugin_host(&self) -> &PluginHost {
         self.inner.plugins.host.get_or_init(|| {

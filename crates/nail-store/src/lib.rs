@@ -123,7 +123,7 @@ mod triage;
 use std::path::Path;
 
 pub use agents::InsertedConfirmation;
-pub use blob::{BlobHash, BlobStore};
+pub use blob::{BlobHash, BlobStore, RemovalMark};
 pub use bodies::{BodyFetchTarget, StoredBody};
 pub use compose::{DraftServerCopy, SendOutcome, draft_revision};
 pub use crypto::{
@@ -136,7 +136,7 @@ pub use filter::{MessageFilter, SizeCmp};
 pub use lock::{DataDirLock, LOCK_FILE, LockError, LockHolder};
 pub use mail::{
     FolderCounts, FolderSyncState, MergeReport, MessageMeta, MessagePage, StoredMessage,
-    SyncedMessage,
+    SyncedMessage, UidFlags,
 };
 pub use mcp::{McpAuditRecord, hash_mcp_token};
 pub use plugin_activity::{MAX_ACTIVITY_ERROR, PluginJobState};

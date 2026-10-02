@@ -14,7 +14,10 @@
 //!      the store (threaded, merged with pending local changes) and the
 //!      search index, and the folder's `UIDNEXT` checkpoint is saved right
 //!      after it, so an interrupted pass resumes after the last stored
-//!      batch;
+//!      batch. The steps overlap ([`crate::pipeline`]): while one batch is
+//!      merged into the store, the next one's blobs are written and its
+//!      MIME parsed on worker threads and the one after it is fetched;
+//!      batches are still stored and checkpointed strictly in order;
 //!    * find flag changes and expunges of the messages already stored
 //!      ([`ImapClient::resync_flags`]: QRESYNC, CONDSTORE or a full flag
 //!      scan) and apply them; the new `HIGHESTMODSEQ` is saved.
@@ -26,9 +29,11 @@
 //! (connection lost, timeout, TLS) and store failures end the pass at once.
 //!
 //! Progress is broadcast as [`Event::SyncProgress`] (one unit for the folder
-//! list plus one per folder), changed folders as [`Event::MailChanged`],
-//! new mail in folders synced before as [`Event::NewMail`], and a failed
-//! pass as [`Event::SyncFailed`].
+//! list plus one per folder), changed folders as [`Event::MailChanged`]
+//! (while a folder's batches are stored, at most one per
+//! [`MAIL_CHANGED_INTERVAL`] and one after its last batch), new mail in
+//! folders synced before as [`Event::NewMail`], and a failed pass as
+//! [`Event::SyncFailed`].
 //!
 //! Configured accounts run passes from their engine (`engine.rs`) on a
 //! long-lived connection. Accounts registered with
@@ -37,6 +42,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use nail_api::accounts::{BodyPolicy, SyncPolicy};
 use nail_api::{AccountId, ApiError, ErrorCode, Event, Folder, FolderId, FolderRole};
@@ -49,7 +55,13 @@ use tokio::sync::broadcast;
 
 use crate::error::{CoreError, Result};
 use crate::ids;
-use crate::ingest::{IncomingMessage, ingest};
+use crate::ingest::{IncomingMessage, PreparedBatch, ingest_prepared, prepare};
+use crate::pipeline::{BatchSink, BatchSource, pipeline};
+
+/// Shortest time between two [`Event::MailChanged`] for a folder whose
+/// batches are being stored (a large initial sync stores thousands of
+/// batches; clients reload the list on every event).
+pub(crate) const MAIL_CHANGED_INTERVAL: Duration = Duration::from_millis(500);
 
 /// How to reach an IMAP account registered with
 /// [`crate::Service::add_imap_account`]. Credentials are held in memory
@@ -482,46 +494,27 @@ pub(crate) async fn sync_folder(
         reset_folder(ctx, folder, uid_validity).await?;
     }
 
-    let mut new_ids = Vec::new();
-    for (index, batch) in plan.batches.iter().enumerate() {
-        let messages: Vec<IncomingMessage> = client
-            .fetch_batch_with(batch, fetch)
-            .await?
-            .into_iter()
-            // A message marked \Deleted is on its way out (e.g. a move
-            // without UIDPLUS); do not show it.
-            .filter(|m| !m.deleted)
-            .map(incoming)
-            .collect();
-        let next = FolderSyncState {
+    let checkpoint_modseq = if reset {
+        None
+    } else {
+        stored_state.highestmodseq
+    };
+    let stored = store_batches(
+        ctx,
+        client,
+        folder,
+        &plan.batches,
+        fetch,
+        |index| FolderSyncState {
             uidvalidity: Some(uid_validity),
             uidnext: Some(plan.state_after(index).uid_next),
-            highestmodseq: if reset {
-                None
-            } else {
-                stored_state.highestmodseq
-            },
-        };
-        let target = folder.clone();
-        let blobs = ctx.blobs.clone();
-        let search = ctx.index.get();
-        let stored = store
-            .call(move |s| {
-                let report = ingest(s, &blobs, Some(&search), &target, uid_validity, &messages)?;
-                s.set_folder_sync_state(&target.id, &next)?;
-                Ok(report)
-            })
-            .await?;
-        outcome.new_messages = outcome
-            .new_messages
-            .saturating_add(u32::try_from(stored.stored.len()).unwrap_or(u32::MAX));
-        if !stored.stored.is_empty() {
-            ctx.emit(Event::MailChanged {
-                folder_ids: vec![folder.id.clone()],
-            });
-        }
-        new_ids.extend(stored.new);
-    }
+            highestmodseq: checkpoint_modseq,
+        },
+        uid_validity,
+    )
+    .await?;
+    outcome.new_messages = stored.stored;
+    let new_ids = stored.new;
     let hidden = {
         let folder = folder.clone();
         store
@@ -585,6 +578,161 @@ pub(crate) async fn sync_folder(
         trim_bodies(ctx, folder, cutoff).await?;
     }
     Ok(outcome)
+}
+
+/// What [`store_batches`] stored.
+#[derive(Debug, Default)]
+struct StoredBatches {
+    /// Messages written.
+    stored: u32,
+    /// Messages that did not exist before.
+    new: Vec<nail_api::MessageId>,
+}
+
+/// Coalesces [`Event::MailChanged`] for one folder while its batches are
+/// stored: at most one per [`MAIL_CHANGED_INTERVAL`], and a final one for
+/// anything not announced yet ([`Self::flush`]).
+#[derive(Debug, Default)]
+pub(crate) struct MailChangedThrottle {
+    last: Option<Instant>,
+    unannounced: bool,
+}
+
+impl MailChangedThrottle {
+    /// A batch was stored at `now` (`changed`: it wrote rows). Returns
+    /// whether to announce the change now.
+    pub(crate) fn stored(&mut self, changed: bool, now: Instant) -> bool {
+        self.unannounced |= changed;
+        let due = self
+            .last
+            .is_none_or(|last| now.saturating_duration_since(last) >= MAIL_CHANGED_INTERVAL);
+        if self.unannounced && due {
+            self.last = Some(now);
+            self.unannounced = false;
+            return true;
+        }
+        false
+    }
+
+    /// Whether stored changes are still unannounced (announce them now).
+    pub(crate) fn flush(&mut self) -> bool {
+        std::mem::take(&mut self.unannounced)
+    }
+}
+
+/// The fetching step of [`store_batches`]: one `UID FETCH` per batch.
+struct ImapBatches<'a> {
+    client: &'a mut ImapClient,
+    batches: &'a [Vec<u32>],
+    fetch: BodyFetch,
+}
+
+impl BatchSource for ImapBatches<'_> {
+    type Batch = Vec<IncomingMessage>;
+
+    async fn fetch(&mut self, index: usize) -> Result<Vec<IncomingMessage>> {
+        Ok(self
+            .client
+            .fetch_batch_with(&self.batches[index], self.fetch)
+            .await?
+            .into_iter()
+            // A message marked \Deleted is on its way out (e.g. a move
+            // without UIDPLUS); do not show it.
+            .filter(|m| !m.deleted)
+            .map(incoming)
+            .collect())
+    }
+}
+
+/// The storing step of [`store_batches`]: [`ingest_prepared`] plus the
+/// folder's checkpoint in one store call per batch.
+struct FolderSink<'a, C> {
+    ctx: &'a SyncCtx,
+    folder: &'a Folder,
+    uid_validity: u32,
+    checkpoint: C,
+    out: StoredBatches,
+    events: MailChangedThrottle,
+}
+
+impl<C> BatchSink<PreparedBatch> for FolderSink<'_, C>
+where
+    C: Fn(usize) -> FolderSyncState + Send + Sync,
+{
+    async fn store(&mut self, index: usize, batch: PreparedBatch) -> Result<()> {
+        let next = (self.checkpoint)(index);
+        let target = self.folder.clone();
+        let blobs = self.ctx.blobs.clone();
+        let search = self.ctx.index.get();
+        let uid_validity = self.uid_validity;
+        let stored = self
+            .ctx
+            .store
+            .call(move |s| {
+                let report =
+                    ingest_prepared(s, &blobs, Some(&search), &target, uid_validity, &batch)?;
+                s.set_folder_sync_state(&target.id, &next)?;
+                Ok(report)
+            })
+            .await?;
+        self.out.stored = self
+            .out
+            .stored
+            .saturating_add(u32::try_from(stored.stored.len()).unwrap_or(u32::MAX));
+        self.out.new.extend(stored.new);
+        if self
+            .events
+            .stored(!stored.stored.is_empty(), Instant::now())
+        {
+            self.ctx.emit(Event::MailChanged {
+                folder_ids: vec![self.folder.id.clone()],
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Fetches `batches` of `folder` and stores them in order, each with its
+/// checkpoint (`checkpoint(index)`), through the overlapping [`pipeline`]:
+/// fetching on this connection, preparing ([`prepare`]: blob writes and
+/// MIME parsing on worker threads) and storing ([`FolderSink`]).
+async fn store_batches(
+    ctx: &SyncCtx,
+    client: &mut ImapClient,
+    folder: &Folder,
+    batches: &[Vec<u32>],
+    fetch: BodyFetch,
+    checkpoint: impl Fn(usize) -> FolderSyncState + Send + Sync,
+    uid_validity: u32,
+) -> Result<StoredBatches> {
+    let mut source = ImapBatches {
+        client,
+        batches,
+        fetch,
+    };
+    let mut sink = FolderSink {
+        ctx,
+        folder,
+        uid_validity,
+        checkpoint,
+        out: StoredBatches::default(),
+        events: MailChangedThrottle::default(),
+    };
+    let blobs = ctx.blobs.clone();
+    let result = pipeline(
+        batches.len(),
+        &mut source,
+        move |messages| Ok(prepare(&blobs, messages)?),
+        &mut sink,
+    )
+    .await;
+    // Whatever was stored is announced, also when a step failed.
+    if sink.events.flush() {
+        ctx.emit(Event::MailChanged {
+            folder_ids: vec![folder.id.clone()],
+        });
+    }
+    result.map(|()| sink.out)
 }
 
 /// Drops the stored bodies of messages that aged out of a "recent N days"
@@ -707,26 +855,20 @@ async fn resync_folder(
         });
     };
     let folder_id = folder.id.clone();
+    // UIDs, flags and tags in two queries (loading every summary made an
+    // incremental sync of a large mailbox slow; post-M4c).
     let local: Vec<(u32, nail_api::MessageId, MessageFlags)> = ctx
         .store
         .call(move |s| {
-            let uids = s.folder_uids(&folder_id)?;
-            let ids: Vec<_> = uids.iter().map(|(_, id)| id.clone()).collect();
-            let summaries: HashMap<_, _> = s
-                .message_summaries(&ids)?
+            Ok(s.folder_uid_flags(&folder_id)?
                 .into_iter()
-                .map(|m| (m.id.clone(), m))
-                .collect();
-            Ok(uids
-                .into_iter()
-                .filter_map(|(uid, id)| {
-                    let summary = summaries.get(&id)?;
+                .map(|m| {
                     let flags = MessageFlags {
-                        flags: summary.flags,
+                        flags: m.flags,
                         deleted: false,
-                        keywords: summary.tags.clone(),
+                        keywords: m.tags,
                     };
-                    Some((uid, id, flags))
+                    (m.uid, m.id, flags)
                 })
                 .collect())
         })
@@ -835,6 +977,32 @@ fn incoming(message: FetchedMessage) -> IncomingMessage {
 #[cfg(test)]
 mod arrival_tests {
     use super::*;
+
+    #[test]
+    fn mail_changed_is_coalesced_while_batches_are_stored() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        let mut throttle = MailChangedThrottle::default();
+        // The first stored batch is announced at once.
+        assert!(throttle.stored(true, at(0)));
+        // More batches within the interval wait.
+        assert!(!throttle.stored(true, at(100)));
+        assert!(!throttle.stored(true, at(499)));
+        // Once the interval passed, the next batch announces them all.
+        assert!(throttle.stored(false, at(500)));
+        // Nothing new: nothing to announce, not even later.
+        assert!(!throttle.stored(false, at(2_000)));
+        assert!(!throttle.flush());
+        // A last change inside the interval is announced by the flush.
+        assert!(throttle.stored(true, at(2_100)));
+        assert!(!throttle.stored(true, at(2_200)));
+        assert!(throttle.flush());
+        assert!(!throttle.flush());
+        // Batches that wrote nothing announce nothing.
+        let mut idle = MailChangedThrottle::default();
+        assert!(!idle.stored(false, at(0)));
+        assert!(!idle.flush());
+    }
 
     #[test]
     fn only_the_inbox_and_user_folders_take_arrivals() {

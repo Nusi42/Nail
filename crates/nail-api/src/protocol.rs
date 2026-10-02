@@ -2506,6 +2506,13 @@ pub enum Request {
         contents: BackupContents,
         /// The passphrase (never stored or logged).
         passphrase: String,
+        /// Post-M4c: replace an existing file (atomically: written under a
+        /// temporary name, then renamed over it). Only set when the user
+        /// confirmed replacing it in the Save dialog; otherwise an existing
+        /// file is `conflict` (`portability-error-target-exists`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        overwrite: bool,
     },
     /// Read an archive's manifest. Answered with
     /// [`Response::BackupManifest`]; `auth_failed`
@@ -2571,6 +2578,13 @@ pub enum Request {
         /// Also write a recovery kit text file here.
         #[serde(default)]
         save_to: Option<String>,
+        /// Post-M4c: replace an existing kit file (atomically: written under a
+        /// temporary name, then renamed over it). Only set when the user
+        /// confirmed replacing it in the Save dialog; otherwise an existing
+        /// file is `conflict` (`portability-error-target-exists`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        overwrite: bool,
     },
     /// Check a typed recovery key without changing anything. Answered with
     /// [`Response::RecoveryKeyVerified`].
@@ -2664,6 +2678,13 @@ pub enum Request {
         job_id: PrintJobId,
         /// The file to write.
         path: String,
+        /// Post-M4c: replace an existing file (atomically: written under a
+        /// temporary name, then renamed over it). Only set when the user
+        /// confirmed replacing it in the Save dialog; otherwise an existing
+        /// file is `conflict` (`portability-error-target-exists`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        overwrite: bool,
     },
 
     // --- Diagnostics (M4c; desktop only) ---
@@ -2682,6 +2703,13 @@ pub enum Request {
         options: DiagnosticsOptions,
         /// The zip to write.
         path: String,
+        /// Post-M4c: replace an existing file (atomically: written under a
+        /// temporary name, then renamed over it). Only set when the user
+        /// confirmed replacing it in the Save dialog; otherwise an existing
+        /// file is `conflict` (`portability-error-target-exists`).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        overwrite: bool,
     },
 
     // --- File dialogs (M4c; desktop only) ---

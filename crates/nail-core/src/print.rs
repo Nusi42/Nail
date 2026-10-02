@@ -97,7 +97,11 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             }
             Ok(Response::Done)
         }
-        Request::SavePrintPdf { job_id, path } => {
+        Request::SavePrintPdf {
+            job_id,
+            path,
+            overwrite,
+        } => {
             let job = ctl.get(&job_id).ok_or_else(|| expired(&job_id))?;
             let host = service.inner.desktop.clone().ok_or_else(|| {
                 crate::error::CoreError::from(
@@ -105,7 +109,25 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                         .with_localized(LocalizedMessage::new("desktop-unavailable")),
                 )
             })?;
-            let size_bytes = host.print_to_pdf(&job, &path).await?;
+            // Post-M4c: an existing file is replaced only when the user
+            // confirmed it (`overwrite`); the shell writes the PDF under a
+            // temporary name next to it, which is then renamed into place.
+            let target = std::path::PathBuf::from(&path);
+            let portability = |e: nail_portability::PortabilityError| {
+                crate::error::CoreError::from(e.to_api_error())
+            };
+            nail_portability::files::check_target(&target, overwrite).map_err(portability)?;
+            let temp = nail_portability::files::temp_path(&target);
+            let _ = std::fs::remove_file(&temp);
+            let written = host.print_to_pdf(&job, &temp.display().to_string()).await;
+            let size_bytes = match written {
+                Ok(size) => size,
+                Err(err) => {
+                    let _ = std::fs::remove_file(&temp);
+                    return Err(err.into());
+                }
+            };
+            nail_portability::files::persist(&temp, &target, overwrite).map_err(portability)?;
             Ok(Response::PdfSaved {
                 file: PdfFile { path, size_bytes },
             })

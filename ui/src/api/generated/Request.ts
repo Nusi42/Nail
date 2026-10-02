@@ -2024,7 +2024,14 @@ contents: BackupContents,
 /**
  * The passphrase (never stored or logged).
  */
-passphrase: string, } | { "type": "InspectBackup", 
+passphrase: string, 
+/**
+ * Post-M4c: replace an existing file (atomically: written under a
+ * temporary name, then renamed over it). Only set when the user
+ * confirmed replacing it in the Save dialog; otherwise an existing
+ * file is `conflict` (`portability-error-target-exists`).
+ */
+overwrite?: boolean, } | { "type": "InspectBackup", 
 /**
  * The archive.
  */
@@ -2076,7 +2083,14 @@ job_id: JobId, } | { "type": "CreateRecoveryKey",
 /**
  * Also write a recovery kit text file here.
  */
-save_to: string | null, } | { "type": "VerifyRecoveryKey", 
+save_to: string | null, 
+/**
+ * Post-M4c: replace an existing kit file (atomically: written under a
+ * temporary name, then renamed over it). Only set when the user
+ * confirmed replacing it in the Save dialog; otherwise an existing
+ * file is `conflict` (`portability-error-target-exists`).
+ */
+overwrite?: boolean, } | { "type": "VerifyRecoveryKey", 
 /**
  * The key as typed.
  */
@@ -2132,7 +2146,14 @@ job_id: PrintJobId,
 /**
  * The file to write.
  */
-path: string, } | { "type": "PreviewDiagnostics", 
+path: string, 
+/**
+ * Post-M4c: replace an existing file (atomically: written under a
+ * temporary name, then renamed over it). Only set when the user
+ * confirmed replacing it in the Save dialog; otherwise an existing
+ * file is `conflict` (`portability-error-target-exists`).
+ */
+overwrite?: boolean, } | { "type": "PreviewDiagnostics", 
 /**
  * What to include.
  */
@@ -2144,7 +2165,14 @@ options: DiagnosticsOptions,
 /**
  * The zip to write.
  */
-path: string, } | { "type": "PickPath", 
+path: string, 
+/**
+ * Post-M4c: replace an existing file (atomically: written under a
+ * temporary name, then renamed over it). Only set when the user
+ * confirmed replacing it in the Save dialog; otherwise an existing
+ * file is `conflict` (`portability-error-target-exists`).
+ */
+overwrite?: boolean, } | { "type": "PickPath", 
 /**
  * What to ask for.
  */

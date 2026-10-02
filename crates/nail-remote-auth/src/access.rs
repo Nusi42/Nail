@@ -1014,6 +1014,7 @@ mod m4a_tests {
                 path: "C:/b.nailbackup".into(),
                 contents: Default::default(),
                 passphrase: "correct horse battery".into(),
+                overwrite: false,
             },
             Request::RestoreVaultKey { key: "k".into() },
             Request::ListSmartcards,
@@ -1024,10 +1025,12 @@ mod m4a_tests {
             Request::SavePrintPdf {
                 job_id: "j".into(),
                 path: "C:/x.pdf".into(),
+                overwrite: true,
             },
             Request::CreateDiagnosticsBundle {
                 options: Default::default(),
                 path: "C:/d.zip".into(),
+                overwrite: false,
             },
         ];
         for request in desktop {

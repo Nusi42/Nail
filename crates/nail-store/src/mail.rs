@@ -37,6 +37,27 @@ pub struct FolderSyncState {
     pub highestmodseq: Option<u64>,
 }
 
+/// [`Store::uidless_message_by_message_id`]. The unary `+` keep SQLite
+/// from walking the folder's date index to avoid the sort (it did: every
+/// synced message scanned its whole folder); the `Message-ID` index finds
+/// the few candidates.
+pub(crate) const UIDLESS_BY_MESSAGE_ID_SQL: &str = "SELECT id FROM messages
+     WHERE message_id = ?1 AND +folder_id = ?2 AND uid IS NULL
+     ORDER BY +date_sort, +id LIMIT 1";
+
+/// A stored message's UID, flags and tags ([`Store::folder_uid_flags`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UidFlags {
+    /// IMAP UID.
+    pub uid: u32,
+    /// The message.
+    pub id: MessageId,
+    /// System flags.
+    pub flags: Flags,
+    /// Tags (IMAP keywords), sorted.
+    pub tags: Vec<String>,
+}
+
 /// A message as stored: the summary shown to clients plus sync metadata.
 ///
 /// In `summary`, `thread_id` is ignored on writes (the store threads
@@ -349,10 +370,8 @@ pub(crate) fn tags_in_tx(conn: &Connection, id: &MessageId) -> Result<Vec<String
 
 /// Replaces a message's tags (empty tags are ignored).
 pub(crate) fn set_tags_in_tx(tx: &Transaction<'_>, id: &MessageId, tags: &[String]) -> Result<()> {
-    tx.execute(
-        "DELETE FROM message_tags WHERE message_id = ?1",
-        [id.as_str()],
-    )?;
+    tx.prepare_cached("DELETE FROM message_tags WHERE message_id = ?1")?
+        .execute([id.as_str()])?;
     let mut stmt =
         tx.prepare_cached("INSERT OR IGNORE INTO message_tags (message_id, tag) VALUES (?1, ?2)")?;
     for tag in tags.iter().filter(|t| !t.is_empty()) {
@@ -379,14 +398,11 @@ pub(crate) fn set_flags_in_tx(tx: &Transaction<'_>, id: &MessageId, flags: Flags
 }
 
 pub(crate) fn folder_account_in_tx(tx: &Transaction<'_>, folder: &FolderId) -> Result<AccountId> {
-    tx.query_row(
-        "SELECT account_id FROM folders WHERE id = ?1",
-        [folder.as_str()],
-        |row| row.get::<_, String>(0),
-    )
-    .optional()?
-    .map(AccountId)
-    .ok_or_else(|| Error::not_found("folder", folder))
+    tx.prepare_cached("SELECT account_id FROM folders WHERE id = ?1")?
+        .query_row([folder.as_str()], |row| row.get::<_, String>(0))
+        .optional()?
+        .map(AccountId)
+        .ok_or_else(|| Error::not_found("folder", folder))
 }
 
 /// Normalizes a Message-ID: trims whitespace and angle brackets; `None`
@@ -421,6 +437,59 @@ pub(crate) enum MergeOutcome {
     Skipped,
 }
 
+/// The columns and values every upsert writes (`?1`–`?19`).
+macro_rules! upsert_message_head {
+    () => {
+        "INSERT INTO messages (id, account_id, folder_id, uid, subject, from_name, from_email,
+             to_json, date, date_sort, seen, flagged, answered, draft, has_attachments, preview,
+             blob_hash, thread_key, subject_key, subject_is_reply"
+    };
+}
+macro_rules! upsert_message_values {
+    () => {
+        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, COALESCE(unixepoch(?9), 0), ?10, ?11, ?12,
+             ?13, ?14, nail_seal('messages.preview', ?15), ?16, ?17, ?18, ?19"
+    };
+}
+macro_rules! upsert_message_update {
+    () => {
+        "ON CONFLICT (id) DO UPDATE SET
+             folder_id = excluded.folder_id, uid = excluded.uid, subject = excluded.subject,
+             from_name = excluded.from_name, from_email = excluded.from_email,
+             to_json = excluded.to_json, date = excluded.date, date_sort = excluded.date_sort,
+             seen = excluded.seen, flagged = excluded.flagged, answered = excluded.answered,
+             draft = excluded.draft, has_attachments = excluded.has_attachments,
+             preview = excluded.preview, blob_hash = excluded.blob_hash,
+             thread_key = excluded.thread_key, subject_key = excluded.subject_key,
+             subject_is_reply = excluded.subject_is_reply"
+    };
+}
+
+/// Upsert of a message row without threading headers.
+const UPSERT_MESSAGE_SQL: &str = concat!(
+    upsert_message_head!(),
+    ")\n         ",
+    upsert_message_values!(),
+    ")\n         ",
+    upsert_message_update!(),
+    "\n         WHERE messages.account_id = excluded.account_id"
+);
+
+/// Upsert of a message row with its threading headers and size (`?20`–
+/// `?24`; a missing server thread id keeps the stored one).
+const UPSERT_MESSAGE_WITH_META_SQL: &str = concat!(
+    upsert_message_head!(),
+    ", message_id, in_reply_to_json, references_json, size, remote_thread_id)\n         ",
+    upsert_message_values!(),
+    ", ?20, ?21, ?22, ?23, ?24)\n         ",
+    upsert_message_update!(),
+    ",
+             message_id = excluded.message_id, in_reply_to_json = excluded.in_reply_to_json,
+             references_json = excluded.references_json, size = excluded.size,
+             remote_thread_id = COALESCE(excluded.remote_thread_id, messages.remote_thread_id)
+         WHERE messages.account_id = excluded.account_id"
+);
+
 pub(crate) fn upsert_message_in_tx(
     tx: &Transaction<'_>,
     msg: &StoredMessage,
@@ -453,69 +522,68 @@ pub(crate) fn upsert_message_in_tx(
         }
     }
 
-    let changed = tx.execute(
-        "INSERT INTO messages (id, account_id, folder_id, uid, subject, from_name, from_email,
-             to_json, date, date_sort, seen, flagged, answered, draft, has_attachments, preview,
-             blob_hash, thread_key)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, COALESCE(unixepoch(?9), 0), ?10, ?11, ?12,
-             ?13, ?14, nail_seal('messages.preview', ?15), ?16, ?17)
-         ON CONFLICT (id) DO UPDATE SET
-             folder_id = excluded.folder_id, uid = excluded.uid, subject = excluded.subject,
-             from_name = excluded.from_name, from_email = excluded.from_email,
-             to_json = excluded.to_json, date = excluded.date, date_sort = excluded.date_sort,
-             seen = excluded.seen, flagged = excluded.flagged, answered = excluded.answered,
-             draft = excluded.draft, has_attachments = excluded.has_attachments,
-             preview = excluded.preview, blob_hash = excluded.blob_hash,
-             thread_key = excluded.thread_key
-         WHERE messages.account_id = excluded.account_id",
-        params![
-            s.id.as_str(),
-            s.account_id.as_str(),
-            s.folder_id.as_str(),
-            msg.uid,
-            s.subject,
-            s.from.as_ref().and_then(|a| a.name.as_deref()),
-            s.from.as_ref().map(|a| a.email.as_str()),
-            serde_json::to_string(&s.to)?,
-            s.date,
-            flags.seen,
-            flags.flagged,
-            flags.answered,
-            flags.draft,
-            s.has_attachments,
-            s.preview,
-            msg.blob_hash.as_ref().map(BlobHash::as_str),
-            msg.thread_key,
-        ],
-    )?;
+    // One cached statement writes the row with its subject key and, with
+    // `meta`, its threading headers: the sync stores every message through
+    // here, and separate UPDATEs (each preparing its SQL) were a measurable
+    // share of a sync (post-M4c).
+    let subject = crate::thread::subject::normalize_subject(&s.subject);
+    let subject_kind = subject.kind.to_sql();
+    let to_json = serde_json::to_string(&s.to)?;
+    let from_name = s.from.as_ref().and_then(|a| a.name.as_deref());
+    let from_email = s.from.as_ref().map(|a| a.email.as_str());
+    let blob_hash = msg.blob_hash.as_ref().map(BlobHash::as_str);
+    let base: [&dyn rusqlite::ToSql; 19] = [
+        &s.id.0,
+        &s.account_id.0,
+        &s.folder_id.0,
+        &msg.uid,
+        &s.subject,
+        &from_name,
+        &from_email,
+        &to_json,
+        &s.date,
+        &flags.seen,
+        &flags.flagged,
+        &flags.answered,
+        &flags.draft,
+        &s.has_attachments,
+        &s.preview,
+        &blob_hash,
+        &msg.thread_key,
+        &subject.key,
+        &subject_kind,
+    ];
+    let changed = match meta {
+        None => tx.prepare_cached(UPSERT_MESSAGE_SQL)?.execute(&base[..])?,
+        Some(meta) => {
+            let size = meta
+                .size
+                .map(|n| {
+                    i64::try_from(n).map_err(|_| Error::InvalidData(format!("size {n} too large")))
+                })
+                .transpose()?;
+            let in_reply_to = serde_json::to_string(&normalize_msgids(&meta.in_reply_to))?;
+            let references = serde_json::to_string(&normalize_msgids(&meta.references))?;
+            let message_id = meta.message_id.as_deref().and_then(normalize_msgid);
+            let remote_thread = meta.remote_thread_id.as_deref().filter(|t| !t.is_empty());
+            let mut all: Vec<&dyn rusqlite::ToSql> = base.to_vec();
+            all.extend([
+                &message_id as &dyn rusqlite::ToSql,
+                &in_reply_to,
+                &references,
+                &size,
+                &remote_thread,
+            ]);
+            tx.prepare_cached(UPSERT_MESSAGE_WITH_META_SQL)?
+                .execute(all.as_slice())?
+        }
+    };
     if changed == 0 {
         return Err(Error::InvalidData(format!(
             "message {} already exists in another account",
             s.id
         )));
     }
-    if let Some(meta) = meta {
-        let size = meta
-            .size
-            .map(|n| {
-                i64::try_from(n).map_err(|_| Error::InvalidData(format!("size {n} too large")))
-            })
-            .transpose()?;
-        tx.execute(
-            "UPDATE messages SET message_id = ?2, in_reply_to_json = ?3, references_json = ?4,
-                 size = ?5, remote_thread_id = COALESCE(?6, remote_thread_id)
-             WHERE id = ?1",
-            params![
-                s.id.as_str(),
-                meta.message_id.as_deref().and_then(normalize_msgid),
-                serde_json::to_string(&normalize_msgids(&meta.in_reply_to))?,
-                serde_json::to_string(&normalize_msgids(&meta.references))?,
-                size,
-                meta.remote_thread_id.as_deref().filter(|t| !t.is_empty()),
-            ],
-        )?;
-    }
-    crate::thread::set_subject_key(tx, s.id.as_str(), &s.subject)?;
     tags.sort();
     tags.dedup();
     set_tags_in_tx(tx, &s.id, &tags)?;
@@ -857,6 +925,100 @@ impl Store {
         self.with_tx(|tx| message_in_tx(tx, id))
     }
 
+    /// The id of the message with this UID in a folder, if present (the
+    /// sync's lookup; [`Store::find_message_by_uid`] loads the message).
+    pub fn message_id_by_uid(&self, folder: &FolderId, uid: u32) -> Result<Option<MessageId>> {
+        self.with_conn(|conn| {
+            Ok(conn
+                .prepare_cached("SELECT id FROM messages WHERE folder_id = ?1 AND uid = ?2")?
+                .query_row(params![folder.as_str(), uid], |r| r.get(0))
+                .optional()?
+                .map(MessageId))
+        })
+    }
+
+    /// Whether a message with this id is stored.
+    pub fn message_exists(&self, id: &MessageId) -> Result<bool> {
+        self.with_conn(|conn| {
+            Ok(conn
+                .prepare_cached("SELECT 1 FROM messages WHERE id = ?1")?
+                .query_row([id.as_str()], |_| Ok(()))
+                .optional()?
+                .is_some())
+        })
+    }
+
+    /// The oldest message in `folder` with this `Message-ID` (angle brackets
+    /// optional) and no UID: a row moved there by the user whose UID the
+    /// sync has not learned yet.
+    pub fn uidless_message_by_message_id(
+        &self,
+        folder: &FolderId,
+        message_id: &str,
+    ) -> Result<Option<MessageId>> {
+        let Some(mid) = normalize_msgid(message_id) else {
+            return Ok(None);
+        };
+        self.with_conn(|conn| {
+            Ok(conn
+                .prepare_cached(UIDLESS_BY_MESSAGE_ID_SQL)?
+                .query_row(params![mid, folder.as_str()], |r| r.get(0))
+                .optional()?
+                .map(MessageId))
+        })
+    }
+
+    /// `(uid, id, flags, tags)` of a folder's messages that have a UID, by
+    /// UID: what a flag resync compares with the server (two queries
+    /// instead of loading every summary).
+    pub fn folder_uid_flags(&self, folder: &FolderId) -> Result<Vec<UidFlags>> {
+        self.with_conn(|conn| {
+            let mut tags: HashMap<String, Vec<String>> = HashMap::new();
+            {
+                let mut stmt = conn.prepare_cached(
+                    "SELECT t.message_id, t.tag FROM message_tags t
+                     JOIN messages m ON m.id = t.message_id
+                     WHERE m.folder_id = ?1 AND m.uid IS NOT NULL
+                     ORDER BY t.message_id, t.tag",
+                )?;
+                let rows = stmt.query_map([folder.as_str()], |r| {
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+                })?;
+                for row in rows {
+                    let (id, tag) = row?;
+                    tags.entry(id).or_default().push(tag);
+                }
+            }
+            let mut stmt = conn.prepare_cached(
+                "SELECT uid, id, seen, flagged, answered, draft FROM messages
+                 WHERE folder_id = ?1 AND uid IS NOT NULL ORDER BY uid",
+            )?;
+            let rows = stmt.query_map([folder.as_str()], |r| {
+                Ok((
+                    r.get::<_, u32>(0)?,
+                    r.get::<_, String>(1)?,
+                    Flags {
+                        seen: r.get(2)?,
+                        flagged: r.get(3)?,
+                        answered: r.get(4)?,
+                        draft: r.get(5)?,
+                    },
+                ))
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (uid, id, flags) = row?;
+                out.push(UidFlags {
+                    uid,
+                    tags: tags.remove(&id).unwrap_or_default(),
+                    id: MessageId(id),
+                    flags,
+                });
+            }
+            Ok(out)
+        })
+    }
+
     /// The message with this UID in a folder, if present.
     pub fn find_message_by_uid(
         &self,
@@ -865,11 +1027,10 @@ impl Store {
     ) -> Result<Option<StoredMessage>> {
         self.with_conn(|conn| {
             let found = conn
-                .query_row(
-                    &format!("SELECT {MESSAGE_COLS} FROM messages m WHERE m.folder_id = ?1 AND m.uid = ?2"),
-                    params![folder.as_str(), uid],
-                    message_from_row,
-                )
+                .prepare_cached(&format!(
+                    "SELECT {MESSAGE_COLS} FROM messages m WHERE m.folder_id = ?1 AND m.uid = ?2"
+                ))?
+                .query_row(params![folder.as_str(), uid], message_from_row)
                 .optional()?;
             found
                 .map(|mut m| {
@@ -1174,3 +1335,32 @@ impl Store {
 /// Whether a blob is referenced by a message or a draft attachment.
 const REFERENCED_SQL: &str = "SELECT 1 WHERE EXISTS (SELECT 1 FROM messages WHERE blob_hash = ?1)
     OR EXISTS (SELECT 1 FROM draft_attachments WHERE blob_hash = ?1)";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plan(conn: &Connection, sql: &str, params: impl rusqlite::Params) -> String {
+        let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+        let rows = stmt
+            .query_map(params, |r| r.get::<_, String>(3))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        rows.join("\n")
+    }
+
+    /// Post-M4c: SQLite chose the folder's date index for the moved-row
+    /// lookup (no sort), so every synced message scanned its folder.
+    #[test]
+    fn the_moved_row_lookup_searches_the_message_id_index() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::schema::migrate(&mut conn).unwrap();
+        let plan = plan(&conn, UIDLESS_BY_MESSAGE_ID_SQL, params!["m@x", "folder"]);
+        assert!(
+            plan.contains("USING INDEX messages_message_id"),
+            "the lookup does not use the Message-ID index:\n{plan}"
+        );
+        assert!(!plan.contains("messages_folder_date"), "{plan}");
+    }
+}

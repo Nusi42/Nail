@@ -454,31 +454,19 @@ pub fn write_bundle(
     entries: &[PreparedEntry],
     overwrite: bool,
 ) -> Result<DiagnosticsBundle> {
-    if path.exists() && !overwrite {
-        return Err(PortabilityError::TargetExists(path.display().to_string()));
-    }
+    crate::files::check_target(path, overwrite)?;
     let io = |e: std::io::Error| PortabilityError::io(path.display().to_string(), e);
-    let zip_error = |e: zip::result::ZipError| {
-        PortabilityError::io(path.display().to_string(), std::io::Error::other(e))
-    };
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(io)?;
     }
-    let file = File::create(path).map_err(io)?;
-    let mut zip = ZipWriter::new(BufWriter::new(file));
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-    zip.start_file(DIAGNOSTICS_MANIFEST_ENTRY, options)
-        .map_err(zip_error)?;
-    serde_json::to_writer_pretty(&mut zip, manifest).map_err(|e| io(e.into()))?;
-    for prepared in entries {
-        zip.start_file(prepared.entry.name.as_str(), options)
-            .map_err(zip_error)?;
-        zip.write_all(&prepared.content).map_err(io)?;
+    // Written under a temporary name and renamed into place: a confirmed
+    // overwrite replaces the old bundle atomically.
+    let temp = crate::files::temp_path(path);
+    if let Err(err) = write_zip(&temp, manifest, entries) {
+        let _ = fs::remove_file(&temp);
+        return Err(err);
     }
-    let buffered = zip.finish().map_err(zip_error)?;
-    let file = buffered.into_inner().map_err(|e| io(e.into_error()))?;
-    file.sync_all().map_err(io)?;
-    drop(file);
+    crate::files::persist(&temp, path, overwrite)?;
     let mut hasher = Sha256::new();
     let mut size = 0u64;
     let mut file = File::open(path).map_err(io)?;
@@ -497,6 +485,29 @@ pub fn write_bundle(
         size_bytes: size,
         sha256: hex::encode(hasher.finalize()),
     })
+}
+
+/// Writes the bundle's zip to `temp` (synced).
+fn write_zip(temp: &Path, manifest: &DiagnosticsManifest, entries: &[PreparedEntry]) -> Result<()> {
+    let io = |e: std::io::Error| PortabilityError::io(temp.display().to_string(), e);
+    let zip_error = |e: zip::result::ZipError| {
+        PortabilityError::io(temp.display().to_string(), std::io::Error::other(e))
+    };
+    let file = File::create(temp).map_err(io)?;
+    let mut zip = ZipWriter::new(BufWriter::new(file));
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    zip.start_file(DIAGNOSTICS_MANIFEST_ENTRY, options)
+        .map_err(zip_error)?;
+    serde_json::to_writer_pretty(&mut zip, manifest).map_err(|e| io(e.into()))?;
+    for prepared in entries {
+        zip.start_file(prepared.entry.name.as_str(), options)
+            .map_err(zip_error)?;
+        zip.write_all(&prepared.content).map_err(io)?;
+    }
+    let buffered = zip.finish().map_err(zip_error)?;
+    let file = buffered.into_inner().map_err(|e| io(e.into_error()))?;
+    file.sync_all().map_err(io)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -642,6 +653,15 @@ mod tests {
             write_bundle(&path, &manifest, &prepared, false),
             Err(PortabilityError::TargetExists(_))
         ));
+        // Post-M4c: a confirmed overwrite replaces the file (through a
+        // temporary file that is gone afterwards). Windows renames only
+        // over files nobody holds open.
+        drop(archive);
+        fs::write(&path, b"old").unwrap();
+        let again = write_bundle(&path, &manifest, &prepared, true).unwrap();
+        assert_eq!(again.sha256, bundle.sha256);
+        assert_eq!(again.size_bytes, fs::metadata(&path).unwrap().len());
+        assert!(!crate::files::temp_path(&path).exists());
     }
 
     #[test]

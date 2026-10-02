@@ -327,7 +327,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     .into())
             }
         }
-        Request::CreateRecoveryKey { save_to } => service.create_recovery_key(save_to).await,
+        Request::CreateRecoveryKey { save_to, overwrite } => {
+            service.create_recovery_key(save_to, overwrite).await
+        }
         Request::VerifyRecoveryKey { key } => service.verify_recovery_key(key).await,
         Request::RestoreVaultKey { key } => Ok(Response::VaultStatus {
             status: service.restore_vault_key(key).await?,

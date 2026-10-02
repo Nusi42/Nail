@@ -50,6 +50,7 @@ mod outbox;
 mod palette;
 pub mod paths;
 mod pim;
+mod pipeline;
 mod plugin_host;
 mod plugin_http;
 mod plugins;

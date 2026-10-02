@@ -32,6 +32,8 @@ rand.workspace = true
 zeroize.workspace = true
 # Thunderbird address books (abook.sqlite) and calendars (local.sqlite).
 rusqlite.workspace = true
+# Atomic replacement of confirmed overwrites (files.rs).
+tempfile.workspace = true
 base64.workspace = true
 
 [features]
@@ -41,7 +43,6 @@ testing = []
 
 [dev-dependencies]
 pretty_assertions.workspace = true
-tempfile.workspace = true
 
 [lints]
 workspace = true

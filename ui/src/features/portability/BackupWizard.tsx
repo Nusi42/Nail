@@ -45,7 +45,7 @@ import {
   plainText,
   restoreEffectId,
 } from "./model";
-import { PathField } from "./PathField";
+import { PathField, useSavePath } from "./PathField";
 import { rememberJob } from "./queries";
 
 /** What an archive holds: when, by which Nail, items with sizes. */
@@ -129,7 +129,8 @@ export function BackupWizard({ close }: { close(): void }) {
   const [items, setItems] = useState<BackupItem[]>(() => defaultBackupContents().items);
   const [passphrase, setPassphrase] = useState("");
   const [repeat, setRepeat] = useState("");
-  const [path, setPath] = useState("");
+  // `overwrite`: the Save dialog confirmed replacing an existing archive.
+  const { path, overwrite, onChange: setPath } = useSavePath();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -151,7 +152,13 @@ export function BackupWizard({ close }: { close(): void }) {
       const answer = await client.request(
         verify
           ? { type: "VerifyBackup", path: path.trim(), passphrase }
-          : { type: "CreateBackup", path: path.trim(), contents: { items }, passphrase },
+          : {
+              type: "CreateBackup",
+              path: path.trim(),
+              contents: { items },
+              passphrase,
+              overwrite,
+            },
         "PortabilityJob",
       );
       rememberJob(queryClient, answer.job);

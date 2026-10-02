@@ -146,6 +146,13 @@ Wherever Nail needs a file or folder — importing, exporting, backups, the
 recovery kit, a PDF — **Browse…** opens the usual Windows dialog. In a
 browser (the local web mode) you type the full path instead.
 
+Nail never writes over an existing file unless you agreed to it: when you
+pick an existing file in the Save dialog, Windows asks whether to replace
+it, and only then Nail replaces it (in one step — the old file stays
+complete until the new one is written). A typed path that already exists
+is refused; choose another name or pick the file with **Browse…**.
+Exports also have **Replace existing files**.
+
 **Print** (Ctrl+P on a message) uses the Windows print dialog. **Save as
 PDF** writes the message, conversation, event or agenda straight to a PDF
 file with the page size and orientation you chose, without a printer

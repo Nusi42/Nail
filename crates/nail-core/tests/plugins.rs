@@ -16,8 +16,8 @@ use std::time::{Duration, Instant};
 use nail_api::customize::MergeTake;
 use nail_api::plugins::admin::{PluginRunState, PluginStopReason};
 use nail_api::plugins::{
-    PluginCommandSurface, PluginGrant, PluginInfo, PluginPackageSource, PluginPermission,
-    PluginUiNode,
+    PluginCommandSurface, PluginGrant, PluginInfo, PluginLogEntry, PluginPackageSource,
+    PluginPermission, PluginUiNode,
 };
 use nail_api::security::SecuritySettings;
 use nail_api::{
@@ -746,7 +746,6 @@ async fn dev_folders_load_and_reload() {
         .0,
         ErrorCode::InvalidRequest
     );
-    let mut events = f.service.subscribe();
     let loaded = plugin(
         f.service
             .handle(Request::LoadDevPlugin {
@@ -761,97 +760,108 @@ async fn dev_folders_load_and_reload() {
 
     // A change reloads it; a new manifest version reaches the store. The
     // host's log line names the plug-in by its resolved name, not by the
-    // manifest's `%name%` (post-M2 verify finding).
+    // manifest's `%name%` (post-M2 verify finding). Waits are on the
+    // host's reload notices and the stored state (post-M4c: the event
+    // stream with a 20 s bound flaked under load).
+    let mut reloads = f.service.subscribe_plugin_reloads();
     std::fs::write(folder.join("index.js"), DEV_JS_2).unwrap();
     write_manifest("1.0.1");
-    let reloading = wait_event(&mut events, "the host's reload line", reload_line).await;
-    assert_eq!(reloading, "Follow-up reminders");
-    wait_event(&mut events, "the reloaded plug-in", |e| match e {
-        Event::PluginLogLine { entry } if entry.message == "dev two" => Some(()),
-        _ => None,
+    wait_reloaded(&f, &mut reloads, "the reload to 1.0.1", |plugin, logs| {
+        plugin.manifest.version == "1.0.1"
+            && plugin.state == PluginRunState::Running
+            && logs.iter().any(|l| l.message == "dev two")
     })
     .await;
-    wait_until("the new manifest", || {
-        let service = f.service.clone();
-        async move {
-            match service
-                .handle(Request::GetPlugin {
-                    plugin_id: PluginId::new("devplug"),
-                })
-                .await
-            {
-                Response::Plugin { plugin } => plugin.manifest.version == "1.0.1",
-                _ => false,
-            }
-        }
-    })
-    .await;
-    // The new manifest is stored before the reloaded runtime has started
-    // (`starting` under load): wait for it to run.
-    wait_until("the reloaded plug-in to run", || {
-        let service = f.service.clone();
-        async move {
-            matches!(
-                service
-                    .handle(Request::GetPlugin {
-                        plugin_id: PluginId::new("devplug"),
-                    })
-                    .await,
-                Response::Plugin { plugin } if plugin.state == PluginRunState::Running
-            )
-        }
-    })
-    .await;
+    let names = reload_names(&dev_logs(&f).await);
+    assert!(!names.is_empty());
+    assert!(
+        names.iter().all(|n| n == "Follow-up reminders"),
+        "resolved names: {names:?}"
+    );
 
     // A change of only the plug-in's locale file (the manifest stays the
     // same) reloads its texts too (post-M2 verify finding).
+    let reloads_before = names.len();
     std::fs::write(
         folder.join("locales/en.ftl"),
         "name = Follow-up reminders, edited\nfollow-up = Follow up…\n",
     )
     .unwrap();
-    let reloading = wait_event(&mut events, "the host's reload line", reload_line).await;
+    wait_reloaded(
+        &f,
+        &mut reloads,
+        "the edited plug-in name",
+        |plugin, logs| {
+            plugin.manifest.name == "Follow-up reminders, edited"
+                && plugin.state == PluginRunState::Running
+                && reload_names(logs).len() > reloads_before
+        },
+    )
+    .await;
+    let names = reload_names(&dev_logs(&f).await);
     assert!(
-        reloading.starts_with("Follow-up reminders"),
-        "resolved name: {reloading}"
+        names.iter().all(|n| n.starts_with("Follow-up reminders")),
+        "resolved names: {names:?}"
     );
-    wait_until("the edited plug-in name", || {
-        let service = f.service.clone();
-        async move {
-            match service
-                .handle(Request::GetPlugin {
-                    plugin_id: PluginId::new("devplug"),
-                })
-                .await
-            {
-                Response::Plugin { plugin } => {
-                    plugin.manifest.name == "Follow-up reminders, edited"
-                }
-                _ => false,
-            }
-        }
-    })
-    .await;
     assert_eq!(get(&f, "devplug").await.manifest.version, "1.0.1");
-    wait_until("the reloaded plug-in running", || {
-        let f = &f;
-        async move { get(f, "devplug").await.state == PluginRunState::Running }
-    })
-    .await;
 }
 
-/// The `plugin` argument of the host's "is being reloaded" log line.
-fn reload_line(event: &Event) -> Option<String> {
-    match event {
-        Event::PluginLogLine { entry } => match entry.localized.as_deref() {
+/// The bound of the dev reload waits: only there so a broken watcher fails
+/// instead of hanging; generous because the full workspace suite loads the
+/// machine.
+const RELOAD_WAIT: Duration = Duration::from_secs(120);
+
+/// The stored log of the dev plug-in.
+async fn dev_logs(f: &Fixture) -> Vec<PluginLogEntry> {
+    match f
+        .service
+        .handle(Request::ListPluginLogs {
+            plugin_id: Some(PluginId::new("devplug")),
+            after_seq: None,
+            limit: 1000,
+        })
+        .await
+    {
+        Response::PluginLogs { entries } => entries,
+        other => panic!("{other:?}"),
+    }
+}
+
+/// Waits until the stored plug-in and its stored log satisfy `check`;
+/// woken by the host's reload notices (the store follows a reload a moment
+/// later, so it also rechecks every 100 ms).
+async fn wait_reloaded(
+    f: &Fixture,
+    reloads: &mut broadcast::Receiver<nail_plugins::PluginReload>,
+    what: &str,
+    check: impl Fn(&PluginInfo, &[PluginLogEntry]) -> bool,
+) {
+    let deadline = Instant::now() + RELOAD_WAIT;
+    loop {
+        let plugin = get(f, "devplug").await;
+        let logs = dev_logs(f).await;
+        if check(&plugin, &logs) {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{what} did not happen in {RELOAD_WAIT:?}: {plugin:?} {logs:#?}"
+        );
+        let _ = tokio::time::timeout(Duration::from_millis(100), reloads.recv()).await;
+    }
+}
+
+/// The plug-in names of the host's "stopped for a reload" lines.
+fn reload_names(logs: &[PluginLogEntry]) -> Vec<String> {
+    logs.iter()
+        .filter_map(|entry| match entry.localized.as_deref() {
             Some(m) if m.id == "plugin-stopped-reloaded" => match m.args.get("plugin") {
                 Some(MessageArg::Text(name)) => Some(name.clone()),
                 other => panic!("plug-in argument {other:?}"),
             },
             _ => None,
-        },
-        _ => None,
-    }
+        })
+        .collect()
 }
 
 #[tokio::test(flavor = "multi_thread")]

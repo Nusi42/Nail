@@ -533,3 +533,111 @@ fn unreferenced_blobs_are_collected() {
     // Removing again is a no-op.
     assert_eq!(store.remove_unreferenced_blobs(&blobs, &hashes).unwrap(), 0);
 }
+
+/// Post-M4c sync lookups: ids by UID, existence, the moved-row lookup by
+/// Message-ID and the lean flag listing for resyncs.
+#[test]
+fn sync_lookups_find_ids_moved_rows_and_flags() {
+    use nail_store::{MessageMeta, SyncedMessage, UidFlags};
+    let store = seeded_store();
+    let row = |id: &str, folder: &str, date: &str, uid: Option<u32>, mid: &str| {
+        let mut message = message(id, "a1", folder, date);
+        message.uid = uid;
+        SyncedMessage {
+            message,
+            meta: Some(MessageMeta {
+                message_id: Some(format!("<{mid}>")),
+                ..MessageMeta::default()
+            }),
+        }
+    };
+    let mut flagged = row("m2", "inbox", "2024-01-02T00:00:00Z", Some(7), "two@x");
+    flagged.message.summary.flags = Flags {
+        seen: true,
+        flagged: true,
+        ..Flags::default()
+    };
+    flagged.message.summary.tags = vec!["work".into(), "$label1".into()];
+    store
+        .merge_messages(&[
+            row("m1", "inbox", "2024-01-01T00:00:00Z", Some(3), "one@x"),
+            flagged,
+            // Two UID-less copies of one mail in the inbox (moved there by
+            // the user) and one in the archive.
+            row("late", "inbox", "2024-03-01T00:00:00Z", None, "moved@x"),
+            row("early", "inbox", "2024-02-01T00:00:00Z", None, "moved@x"),
+            row(
+                "elsewhere",
+                "archive",
+                "2024-01-15T00:00:00Z",
+                None,
+                "moved@x",
+            ),
+        ])
+        .unwrap();
+    let inbox = FolderId::from("inbox");
+
+    assert_eq!(
+        store.message_id_by_uid(&inbox, 7).unwrap(),
+        Some(MessageId::from("m2"))
+    );
+    assert_eq!(store.message_id_by_uid(&inbox, 8).unwrap(), None);
+    assert_eq!(store.message_id_by_uid(&"archive".into(), 7).unwrap(), None);
+
+    assert!(store.message_exists(&"m1".into()).unwrap());
+    assert!(!store.message_exists(&"nope".into()).unwrap());
+
+    // The oldest UID-less row of this folder, brackets optional.
+    for mid in ["moved@x", "<moved@x>", " <moved@x> "] {
+        assert_eq!(
+            store.uidless_message_by_message_id(&inbox, mid).unwrap(),
+            Some(MessageId::from("early")),
+            "{mid:?}"
+        );
+    }
+    assert_eq!(
+        store
+            .uidless_message_by_message_id(&"archive".into(), "moved@x")
+            .unwrap(),
+        Some(MessageId::from("elsewhere"))
+    );
+    // Rows with a UID are not "moved"; empty ids find nothing.
+    assert_eq!(
+        store
+            .uidless_message_by_message_id(&inbox, "one@x")
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        store.uidless_message_by_message_id(&inbox, "<>").unwrap(),
+        None
+    );
+
+    assert_eq!(
+        store.folder_uid_flags(&inbox).unwrap(),
+        vec![
+            UidFlags {
+                uid: 3,
+                id: "m1".into(),
+                flags: Flags::default(),
+                tags: Vec::new(),
+            },
+            UidFlags {
+                uid: 7,
+                id: "m2".into(),
+                flags: Flags {
+                    seen: true,
+                    flagged: true,
+                    ..Flags::default()
+                },
+                tags: vec!["$label1".into(), "work".into()],
+            },
+        ]
+    );
+    assert!(
+        store
+            .folder_uid_flags(&"archive".into())
+            .unwrap()
+            .is_empty()
+    );
+}

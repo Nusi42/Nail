@@ -28,6 +28,7 @@ pub mod diagnostics;
 pub mod eml;
 pub mod error;
 pub mod export;
+pub mod files;
 pub mod folder;
 pub mod import;
 pub mod job;

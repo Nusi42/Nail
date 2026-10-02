@@ -139,8 +139,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             path,
             contents,
             passphrase,
+            overwrite,
         } => {
-            let job = start_backup(service, &path, contents, passphrase)?;
+            let job = start_backup(service, &path, contents, passphrase, overwrite)?;
             Ok(Response::PortabilityJob { job: Box::new(job) })
         }
         Request::InspectBackup { path, passphrase } => {
@@ -211,7 +212,11 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                 manifest: Box::new(manifest),
             })
         }
-        Request::CreateDiagnosticsBundle { options, path } => {
+        Request::CreateDiagnosticsBundle {
+            options,
+            path,
+            overwrite,
+        } => {
             let file = absolute(&path)?;
             let bundle = service
                 .blocking(move |s| {
@@ -219,8 +224,10 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                         Some(previewed) => previewed,
                         None => diagnostics::preview(s, &options)?,
                     };
-                    nail_portability::diagnostics::write_bundle(&file, &manifest, &entries, false)
-                        .map_err(api)
+                    nail_portability::diagnostics::write_bundle(
+                        &file, &manifest, &entries, overwrite,
+                    )
+                    .map_err(api)
                 })
                 .await?;
             Ok(Response::DiagnosticsBundle {
@@ -384,6 +391,7 @@ fn start_backup(
     path: &str,
     contents: BackupContents,
     passphrase: String,
+    overwrite: bool,
 ) -> Result<nail_api::portability::JobStatus> {
     let file = absolute(path)?;
     if let Some(issue) = contents.issues().first() {
@@ -398,13 +406,9 @@ fn start_backup(
             &issue.message_id(),
         ));
     }
-    if file.exists() {
-        return Err(
-            nail_portability::PortabilityError::TargetExists(file.display().to_string())
-                .to_api_error()
-                .into(),
-        );
-    }
+    // An existing archive is replaced only when the user confirmed it
+    // (`overwrite`, the Save dialog); the job then replaces it atomically.
+    nail_portability::files::check_target(&file, overwrite).map_err(api)?;
     let work: jobs::JobWork = Box::new(move |service, ctx| {
         let mut source = backup::CoreBackupSource {
             service: service.clone(),
@@ -413,7 +417,7 @@ fn start_backup(
             contents,
             passphrase,
             kdf: KdfParams::STANDARD,
-            overwrite: false,
+            overwrite,
             now: chrono::Utc::now(),
         };
         let result = nail_portability::backup::write_backup(&file, &options, &mut source, ctx);

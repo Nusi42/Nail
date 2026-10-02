@@ -97,7 +97,10 @@ function request(uid: string, title: string, days: number, sequence = 0, stamp?:
 
 async function deliver(page: Page, raw: string, subject: string): Promise<Locator> {
   await control(server, "imap-deliver", { raw });
-  const row = rows(page).filter({ hasText: subject });
+  // Case-sensitive: a string `hasText` ignores case, and "Retro" also
+  // matched a demo message's "retrouve" whenever its row was rendered.
+  const literal = subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const row = rows(page).filter({ hasText: new RegExp(literal) });
   await expect(row).toHaveCount(1, { timeout: 20_000 });
   return row;
 }

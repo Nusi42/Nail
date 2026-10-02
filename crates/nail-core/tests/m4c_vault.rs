@@ -64,7 +64,10 @@ async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
     assert_eq!(
         error_of(
             service
-                .handle(Request::CreateRecoveryKey { save_to: None })
+                .handle(Request::CreateRecoveryKey {
+                    save_to: None,
+                    overwrite: false,
+                })
                 .await
         ),
         (ErrorCode::Conflict, Some("vault-not-encrypted".into()))
@@ -80,6 +83,7 @@ async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
     } = service
         .handle(Request::CreateRecoveryKey {
             save_to: Some(kit.display().to_string()),
+            overwrite: false,
         })
         .await
     else {
@@ -101,6 +105,7 @@ async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
             service
                 .handle(Request::CreateRecoveryKey {
                     save_to: Some(kit.display().to_string()),
+                    overwrite: false,
                 })
                 .await
         ),
@@ -186,4 +191,106 @@ async fn a_recovery_key_opens_the_data_after_the_keychain_entry_is_lost() {
         panic!("status expected");
     };
     assert!(!removed.recovery.configured);
+}
+
+/// Post-M4c: `nail serve --seed demo-multi` passes the data directory's
+/// file keychain; demo-multi's options keep it (instead of swapping in the
+/// in-memory one), so the data key of encrypted data survives a restart.
+#[tokio::test(flavor = "multi_thread")]
+async fn demo_multi_keeps_the_file_keychain_across_a_restart() {
+    use nail_core::demo::{DEMO_KEYCHAIN_FILE, FileSecretStore, MULTI_WORK_ID};
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    let keychain = data.path().join(DEMO_KEYCHAIN_FILE);
+    let open_multi = |demo: &nail_core::demo::DemoMulti| {
+        let mut options = ServiceOptions::new(data.path(), config.path());
+        options.secrets = Some(Arc::new(FileSecretStore::open(&keychain)) as Arc<dyn SecretStore>);
+        let mut options = demo.service_options(options);
+        options.watch_config = false;
+        options.start_engines = false;
+        Service::open(options).unwrap()
+    };
+
+    let demo = nail_core::demo::start_demo_multi().await.unwrap();
+    let service = open_multi(&demo);
+    // The demo accounts' passwords went into the file, not only memory.
+    let password = SecretRef::default_for(
+        &nail_api::AccountId::new(MULTI_WORK_ID),
+        nail_api::accounts::SecretKind::Password,
+    );
+    assert!(
+        FileSecretStore::open(&keychain)
+            .get(&password)
+            .unwrap()
+            .is_some()
+    );
+    let seed = nail_core::demo::seed_demo(service.store(), service.blobs()).unwrap();
+    encrypted(&service).await;
+    let file = nail_vault::VaultFile::load(&data.path().join(nail_vault::VAULT_FILE_NAME)).unwrap();
+    let key_ref = SecretRef(file.key_ref.clone().unwrap());
+    assert!(
+        FileSecretStore::open(&keychain)
+            .get(&key_ref)
+            .unwrap()
+            .is_some(),
+        "the data key is in the file keychain"
+    );
+    assert!(
+        demo.secrets.get(&key_ref).unwrap().is_none(),
+        "not in the in-memory one"
+    );
+    service.shutdown().await;
+    drop(service);
+    drop(demo);
+
+    // A restart: new mock servers, the same data directory and keychain file.
+    let demo = nail_core::demo::start_demo_multi().await.unwrap();
+    let reopened = open_multi(&demo);
+    let s = status(&reopened).await;
+    assert!(!s.needs_recovery && s.error.is_none(), "{s:?}");
+    assert_eq!(s.state, VaultState::Encrypted);
+    let Response::Accounts { accounts } = reopened.handle(Request::ListAccounts).await else {
+        panic!("accounts expected");
+    };
+    assert!(accounts.iter().any(|a| a.id == seed.account.id));
+    reopened.shutdown().await;
+}
+
+/// Post-M4c: a kit file the user chose to replace in the Save dialog
+/// (`overwrite`) is replaced atomically with the new key's kit.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_confirmed_overwrite_replaces_the_recovery_kit() {
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(MemorySecretStore::new());
+    let service = open(data.path(), config.path(), &secrets);
+    encrypted(&service).await;
+    let out = tempfile::tempdir().unwrap();
+    let kit = out.path().join("recovery-kit.txt");
+    std::fs::write(&kit, "an older kit").unwrap();
+    let create = |overwrite: bool| Request::CreateRecoveryKey {
+        save_to: Some(kit.display().to_string()),
+        overwrite,
+    };
+    assert_eq!(
+        error_of(service.handle(create(false)).await),
+        (
+            ErrorCode::Conflict,
+            Some("portability-error-target-exists".into())
+        )
+    );
+    assert_eq!(std::fs::read_to_string(&kit).unwrap(), "an older kit");
+    let Response::RecoveryKeyCreated { key, saved_to, .. } = service.handle(create(true)).await
+    else {
+        panic!("a recovery key expected");
+    };
+    assert_eq!(saved_to, Some(kit.display().to_string()));
+    let text = std::fs::read_to_string(&kit).unwrap();
+    assert!(text.contains(&key), "the new kit holds the new key");
+    assert_eq!(
+        std::fs::read_dir(out.path()).unwrap().count(),
+        1,
+        "no temporary file left"
+    );
+    service.shutdown().await;
 }

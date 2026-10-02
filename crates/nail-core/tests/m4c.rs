@@ -89,7 +89,11 @@ impl DesktopHost for FakeHost {
             .lock()
             .unwrap()
             .push((job.job_id.clone(), path.to_owned()));
-        Box::pin(async { Ok(4096) })
+        // Like WebView2's PrintToPdf: writes (or replaces) the file it is
+        // given.
+        let written =
+            std::fs::write(path, vec![b'%'; 4096]).map_err(|e| ApiError::internal(e.to_string()));
+        Box::pin(async move { written.map(|()| 4096) })
     }
     fn print_view_ready(&self, job_id: &PrintJobId) {
         self.ready.lock().unwrap().push(job_id.clone());
@@ -216,17 +220,48 @@ async fn print_jobs_round_trip_and_pdfs_go_through_the_host() {
         Response::Done
     );
     assert_eq!(*host.ready.lock().unwrap(), vec![job.job_id.clone()]);
-    let Response::PdfSaved { file } = service
-        .handle(Request::SavePrintPdf {
-            job_id: job.job_id.clone(),
-            path: r"C:\Users\a\week.pdf".into(),
-        })
-        .await
-    else {
+    let out = tempfile::tempdir().unwrap();
+    let pdf = out.path().join("week.pdf");
+    let save = |overwrite: bool| Request::SavePrintPdf {
+        job_id: job.job_id.clone(),
+        path: pdf.display().to_string(),
+        overwrite,
+    };
+    let Response::PdfSaved { file } = service.handle(save(false)).await else {
         panic!("pdf expected");
     };
     assert_eq!(file.size_bytes, 4096);
-    assert_eq!(host.pdfs.lock().unwrap()[0].1, r"C:\Users\a\week.pdf");
+    assert_eq!(file.path, pdf.display().to_string());
+    // The shell writes a temporary file next to the target; it is renamed
+    // into place.
+    let written_to = host.pdfs.lock().unwrap()[0].1.clone();
+    assert!(written_to.ends_with("week.pdf.nail-part"), "{written_to}");
+    assert_eq!(std::fs::read(&pdf).unwrap().len(), 4096);
+    // Post-M4c: an existing file is replaced only when the user confirmed
+    // it in the Save dialog.
+    std::fs::write(&pdf, b"old").unwrap();
+    assert_eq!(
+        error_of(service.handle(save(false)).await),
+        (
+            ErrorCode::Conflict,
+            Some("portability-error-target-exists".into())
+        )
+    );
+    assert_eq!(std::fs::read(&pdf).unwrap(), b"old");
+    assert_eq!(
+        host.pdfs.lock().unwrap().len(),
+        1,
+        "the shell was not asked"
+    );
+    let Response::PdfSaved { .. } = service.handle(save(true)).await else {
+        panic!("pdf expected");
+    };
+    assert_eq!(std::fs::read(&pdf).unwrap().len(), 4096);
+    assert_eq!(
+        std::fs::read_dir(out.path()).unwrap().count(),
+        1,
+        "no temporary file left"
+    );
     // Unknown jobs and bad agendas.
     assert_eq!(
         error_of(
@@ -278,7 +313,8 @@ async fn without_the_desktop_pdfs_and_file_dialogs_are_unsupported() {
             service
                 .handle(Request::SavePrintPdf {
                     job_id: job.job_id,
-                    path: "C:/x.pdf".into()
+                    path: "C:/x.pdf".into(),
+                    overwrite: false,
                 })
                 .await
         ),
@@ -401,6 +437,7 @@ async fn the_m4c_requests_are_served() {
                     path: "relative.nailbackup".into(),
                     contents: BackupContents::default(),
                     passphrase: "a long passphrase".into(),
+                    overwrite: false,
                 })
                 .await
         )
@@ -419,7 +456,10 @@ async fn the_m4c_requests_are_served() {
     assert_eq!(
         error_of(
             service
-                .handle(Request::CreateRecoveryKey { save_to: None })
+                .handle(Request::CreateRecoveryKey {
+                    save_to: None,
+                    overwrite: false,
+                })
                 .await
         ),
         (ErrorCode::Conflict, Some("vault-not-encrypted".into()))

@@ -192,6 +192,11 @@ describe("printing", () => {
       await within(dialog).findByText(/Saved to C:\\Users\\Ada\\Documents\\mail\.pdf/),
     ).toBeVisible();
     expect(env.transport.data.features.print.pdfs).toHaveLength(1);
+    // The Save dialog asked before replacing an existing file.
+    expect(env.transport.requests.find((r) => r.type === "SavePrintPdf")).toMatchObject({
+      path: "C:\\Users\\Ada\\Documents\\mail.pdf",
+      overwrite: true,
+    });
     expect(print).not.toHaveBeenCalled();
   });
 

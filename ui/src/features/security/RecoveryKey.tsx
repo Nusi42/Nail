@@ -26,7 +26,7 @@ import { useDateFormat } from "../../i18n/format";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
-import { PathField } from "../portability/PathField";
+import { PathField, useSavePath } from "../portability/PathField";
 import { printSheet } from "../print";
 import { securityKeys, useVaultStatus } from "./queries";
 import { parseRecoveryKey, recoveryIssueId, recoveryKeyGroups } from "./recoveryKeyText";
@@ -144,7 +144,8 @@ export function RecoveryKeyCreate({ close }: { close(): void }) {
   const updateRecovery = useUpdateRecovery();
   const [step, setStep] = useState<CreateStep>("intro");
   const [saveKit, setSaveKit] = useState(false);
-  const [kitPath, setKitPath] = useState("");
+  // `overwrite`: the Save dialog confirmed replacing an existing file.
+  const { path: kitPath, overwrite, onChange: setKitPath } = useSavePath();
   const [key, setKey] = useState<string | null>(null);
   const [savedTo, setSavedTo] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
@@ -163,6 +164,7 @@ export function RecoveryKeyCreate({ close }: { close(): void }) {
         {
           type: "CreateRecoveryKey",
           save_to: saveKit && kitPath.trim() !== "" ? kitPath.trim() : null,
+          overwrite: saveKit && overwrite,
         },
         "RecoveryKeyCreated",
       );

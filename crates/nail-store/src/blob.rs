@@ -22,6 +22,11 @@
 //!   ([`BlobStore::convert`], atomic per file) while the store is in use.
 //!   File names stay the plaintext hash (the database holds it anyway).
 //!
+//! * Removals are counted ([`BlobStore::removal_mark`] /
+//!   [`BlobStore::removed_since`]), so a writer that stored blobs before the
+//!   rows referencing them can tell cheaply whether a garbage collection
+//!   may have deleted one in between (and only then check the files again).
+//!
 //! The API is synchronous (file I/O); async callers run it on
 //! `tokio::task::spawn_blocking`.
 
@@ -29,6 +34,8 @@ use std::fmt;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -98,6 +105,23 @@ pub struct BlobStore {
     level: i32,
     /// Encryption at rest, shared by every clone.
     cipher: CipherSlot,
+    /// Removal counters, shared by every clone.
+    removals: Arc<RemovalCounters>,
+}
+
+/// Removals started and finished (see [`BlobStore::removal_mark`]).
+#[derive(Debug, Default)]
+struct RemovalCounters {
+    started: AtomicU64,
+    finished: AtomicU64,
+}
+
+/// The removal counters at one moment ([`BlobStore::removal_mark`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemovalMark {
+    started: u64,
+    /// No removal was running when the mark was taken.
+    idle: bool,
 }
 
 fn blob_context(hash: &BlobHash) -> Vec<u8> {
@@ -118,13 +142,34 @@ impl BlobStore {
             root,
             level: zstd::DEFAULT_COMPRESSION_LEVEL,
             cipher: CipherSlot::default(),
+            removals: Arc::default(),
         })
+    }
+
+    /// Marks the current point in the blob store's removals. Take it before
+    /// storing blobs that rows will reference; [`Self::removed_since`] then
+    /// says whether a removal may have deleted one of them meanwhile.
+    pub fn removal_mark(&self) -> RemovalMark {
+        // `finished` first: a removal that starts in between makes the
+        // counters differ, so the mark is not idle (conservative).
+        let finished = self.removals.finished.load(Ordering::SeqCst);
+        let started = self.removals.started.load(Ordering::SeqCst);
+        RemovalMark {
+            started,
+            idle: started == finished,
+        }
+    }
+
+    /// Whether a removal ran (or was running) since `mark`: only then can a
+    /// blob stored after the mark be gone again.
+    pub fn removed_since(&self, mark: RemovalMark) -> bool {
+        !mark.idle || self.removals.started.load(Ordering::SeqCst) != mark.started
     }
 
     /// Installs (or removes, with `None`) the data cipher. Every clone of
     /// this blob store sees the change. With [`SealMode::Seal`] new blobs
     /// are sealed; sealed blobs are readable whenever a cipher is installed.
-    pub fn set_cipher(&self, cipher: Option<std::sync::Arc<dyn DataCipher>>, mode: SealMode) {
+    pub fn set_cipher(&self, cipher: Option<Arc<dyn DataCipher>>, mode: SealMode) {
         self.cipher.set(cipher, mode);
     }
 
@@ -323,11 +368,14 @@ impl BlobStore {
     /// Deletes a blob. Returns whether it existed. The caller is responsible
     /// for making sure no message references it any more.
     pub fn remove(&self, hash: &BlobHash) -> Result<bool> {
-        match std::fs::remove_file(self.path_of(hash)) {
+        self.removals.started.fetch_add(1, Ordering::SeqCst);
+        let result = match std::fs::remove_file(self.path_of(hash)) {
             Ok(()) => Ok(true),
             Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
             Err(err) => Err(err.into()),
-        }
+        };
+        self.removals.finished.fetch_add(1, Ordering::SeqCst);
+        result
     }
 }
 
@@ -339,6 +387,38 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = BlobStore::open(dir.path().join("blobs")).unwrap();
         (dir, store)
+    }
+
+    #[test]
+    fn removal_marks_see_removals_of_every_clone() {
+        let (_dir, store) = store();
+        let hash = store.put(b"kept").unwrap();
+        let mark = store.removal_mark();
+        assert!(!store.removed_since(mark));
+        store.put(b"more").unwrap();
+        store.get(&hash).unwrap();
+        assert!(
+            !store.removed_since(mark),
+            "writes and reads are no removals"
+        );
+        let clone = store.clone();
+        clone.remove(&hash).unwrap();
+        assert!(store.removed_since(mark));
+        // Removing a missing blob still counts (it may race a writer).
+        let mark = store.removal_mark();
+        assert!(!clone.remove(&hash).unwrap());
+        assert!(store.removed_since(mark));
+        let after = store.removal_mark();
+        assert!(!store.removed_since(after));
+    }
+
+    #[test]
+    fn a_mark_taken_during_a_removal_is_not_idle() {
+        let (_dir, store) = store();
+        store.removals.started.fetch_add(1, Ordering::SeqCst);
+        let mark = store.removal_mark();
+        store.removals.finished.fetch_add(1, Ordering::SeqCst);
+        assert!(store.removed_since(mark));
     }
 
     #[test]
@@ -455,8 +535,8 @@ mod tests {
         assert!(blobs.get(&hash).unwrap_err().is_not_found());
     }
 
-    fn xor() -> std::sync::Arc<dyn DataCipher> {
-        std::sync::Arc::new(crate::seal::tests::XorCipher)
+    fn xor() -> Arc<dyn DataCipher> {
+        Arc::new(crate::seal::tests::XorCipher)
     }
 
     #[test]

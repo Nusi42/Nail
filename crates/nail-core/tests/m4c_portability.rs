@@ -354,6 +354,7 @@ async fn requests_with_bad_paths_or_targets_are_refused() {
                     path: out.path().join("b.nailbackup").display().to_string(),
                     contents: BackupContents::default(),
                     passphrase: "short".into(),
+                    overwrite: false,
                 })
                 .await
         ),
@@ -691,6 +692,7 @@ async fn backup_new_data_directory_restore_round_trip() {
             path: archive.display().to_string(),
             contents: BackupContents::default(),
             passphrase: PASSPHRASE.into(),
+            overwrite: false,
         },
     )
     .await;
@@ -874,18 +876,31 @@ async fn the_diagnostics_bundle_holds_exactly_the_preview() {
     assert!(!preview.contains("ada@work.example"), "{preview}");
     let out = tempfile::tempdir().unwrap();
     let path = out.path().join("diagnostics.zip");
-    let Response::DiagnosticsBundle { bundle } = ok(
-        &service,
-        Request::CreateDiagnosticsBundle {
-            options,
-            path: path.display().to_string(),
-        },
-    )
-    .await
-    else {
+    let bundle_request = |overwrite: bool| Request::CreateDiagnosticsBundle {
+        options: options.clone(),
+        path: path.display().to_string(),
+        overwrite,
+    };
+    let Response::DiagnosticsBundle { bundle } = ok(&service, bundle_request(false)).await else {
         panic!("bundle expected");
     };
     assert_eq!(bundle.manifest.entries, manifest.entries);
     assert!(path.exists());
     assert_eq!(bundle.size_bytes, std::fs::metadata(&path).unwrap().len());
+    // Post-M4c: the existing bundle is replaced only when the user
+    // confirmed it in the Save dialog (`overwrite`).
+    std::fs::write(&path, b"old").unwrap();
+    assert_eq!(
+        error_of(service.handle(bundle_request(false)).await),
+        (
+            ErrorCode::Conflict,
+            Some("portability-error-target-exists".into())
+        )
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"old");
+    let Response::DiagnosticsBundle { bundle } = ok(&service, bundle_request(true)).await else {
+        panic!("bundle expected");
+    };
+    assert_eq!(bundle.size_bytes, std::fs::metadata(&path).unwrap().len());
+    assert_eq!(std::fs::read_dir(out.path()).unwrap().count(), 1);
 }

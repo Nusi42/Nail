@@ -696,6 +696,7 @@ function createBackup(
   path: string,
   contents: BackupContents,
   passphrase: string,
+  overwrite: boolean,
 ): Response {
   const state = core.data.features.portability;
   const problem = [...backupContentsIssues(contents), ...passphraseIssues(passphrase)][0];
@@ -706,6 +707,11 @@ function createBackup(
       `not an absolute path: ${path}`,
       "portability-path-not-absolute",
     );
+  }
+  // Like the core: an existing file is replaced only when the Save dialog
+  // confirmed it (`overwrite`).
+  if (!overwrite && state.existing.includes(path)) {
+    return fail("conflict", `${path} exists`, "portability-error-target-exists");
   }
   const manifest = manifestFor(core, contents);
   state.backups[path] = { passphrase, manifest, damaged: [] };
@@ -1036,7 +1042,13 @@ export function answerPortability(core: MockCore, request: PortabilityRequest): 
         request.options.overwrite,
       );
     case "CreateBackup":
-      return createBackup(core, request.path, request.contents, request.passphrase);
+      return createBackup(
+        core,
+        request.path,
+        request.contents,
+        request.passphrase,
+        request.overwrite ?? false,
+      );
     case "InspectBackup": {
       const opened = openBackup(state, request.path, request.passphrase);
       return (
@@ -1082,6 +1094,9 @@ export function answerPortability(core: MockCore, request: PortabilityRequest): 
       if (problem) return problem;
       if (!isAbsolutePath(request.path)) {
         return fail("invalid_request", "not an absolute path", "portability-path-not-absolute");
+      }
+      if (!request.overwrite && state.existing.includes(request.path)) {
+        return fail("conflict", `${request.path} exists`, "portability-error-target-exists");
       }
       const manifest = diagnosticsManifest(core, request.options);
       state.bundles.push(request.path);
