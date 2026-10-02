@@ -524,13 +524,88 @@ Wire both engines into the core's account manager, sync engines, op replayers, P
 - An Exchange Online test tenant (Microsoft 365 developer program or similar) and access to an Exchange Server on-premises (2019 / Subscription Edition) for the human interop gate.
 - A Google test account for Gmail API and Google CalDAV/CardDAV, and the Google OAuth client with the restricted Gmail scope.
 
-## 9. Later milestones (outline; each gets a detailed section before it starts)
+## 9. Milestone M4 — Agents, extensibility, Windows integration and release (detailed)
+
+**Goal:** a v1.0 release candidate for Windows.
+**Automated gate:** all suites green including every wave's Playwright scenarios; the installers (NSIS and MSI) build, install, update and uninstall in CI; performance budgets hold on the 100k-message benchmark.
+**Human gates for v1.0** (not blocking the automated gate): security review sign-off of the whole product, the EV code-signing certificate and a signed build, the real-account tests in `docs/backlog.md` as far as the owner wants them before release, and the external pentest only if internet mode is to be unlocked.
+
+**Scope decisions for M4**
+- Same rules as before: licence allowlist, no non-loopback sockets (ADR 0057), tests from day 1, docs split.
+- **Writes by agents and plug-ins always go through the operation queue and the audit log**, and every destructive or outgoing action (delete, send, forward, calendar invitations, rule changes) needs a confirmation the user sees in Nail, unless the user relaxed it per client / plug-in for non-destructive actions (drafts, flags, tags). Permanent delete is never auto-confirmed.
+- **Code signing:** the pipeline gets signing steps that run only when a certificate is configured (the EV certificate comes later, decided); unsigned builds stay possible for development.
+- **Updates:** the Tauri updater with signed update manifests (its own key, separate from Authenticode), stable and beta channels, disabled by policy for MSI installs.
+- **Curated plug-in / theme gallery** stays after v1.0 (decided: "curated when we're done").
+
+M4 runs as three waves on the wave workflow.
+
+### Wave M4a — Agents and full extensibility
+
+#### WP100 — Contract (sequential)
+MCP write tools and prompts (the design's tool table: `update_messages`, `delete_messages`, `create_draft`, `update_draft`, `send_message`, `create_event`, `update_event`, `respond_to_invite`, `upsert_contact`, `upsert_task`, `create_rule`, `test_rule`; prompts `summarize_thread`, `triage_folder`, `draft_reply`, `prepare_meeting`), confirmation requests/events (pending action with a human-readable summary, approve / deny, per-client "always allow" for non-destructive kinds), per-client rate limits; plug-in permissions for writes and hooks (`mail.organize`, `mail.send`, `calendar.write`, `contacts.write`, `tasks.write`, `hooks.arrival`, `hooks.beforeSend`, `hooks.open`, `composer`, `attachments`, `background`, `mcp.expose`), hook result types (veto with reason, banner, added headers/content), composer extension points (insert / transform text, custom Markdown block renderers), attachment preview and link/attachment action contributions, background job schedules and event subscriptions, `nail.l10n` runtime catalogs, binary bodies for `nail.http.fetch`.
+
+#### WP101 — MCP writes, confirmations, prompts (parallel)
+`nail-mcp`: the write tools on top of the core's data trait with the permission gate, confirmation flow (tool call waits for the user's decision with a timeout; MCP elicitation where the client supports it, Nail's own dialog always), idempotency keys, per-client rate limits, audit entries for every write with before/after summaries, the four prompts with localized templates, `nail mcp` stdio bridge carrying confirmations. Tests with an rmcp client incl. denial, timeout and rate limiting.
+
+#### WP102 — Plug-in host: writes, hooks, extensions (parallel)
+`nail-plugins`: write APIs behind the new permissions (all through the core trait → op queue), hooks with per-hook time budgets (arrival: conditions/actions like rules; beforeSend: inspect, add headers/content, veto with reason the user can override; open: banner/badge), composer extensions, attachment preview renderers (sandboxed output as declarative trees or images, never HTML), link/attachment actions, background jobs (cron-like schedules, event subscriptions) with a cumulative CPU quota and wall-clock limits for pending promises, `nail.l10n` from the plug-in's own catalogs, binary `fetch` bodies, panel action values filtered against the last rendered tree, plug-in commands exposed as MCP tools under `mcp.expose`. Tests for every hook and limit.
+
+#### WP103 — SDK, examples and docs (parallel)
+`@nail/plugin-api` updated (types generated, JSX runtime for new components, hook helpers), the scaffolder's templates for hook / composer / attachment plug-ins, examples: the design's full "Follow up" (creates a task — write access), a before-send checker (e.g. "forgot the attachment" with veto), a PDF/CSV attachment preview plug-in; `userDocs/en/plugins/` for all extension points and permissions; `userDocs/en/mcp.md` for write tools, confirmations and prompts.
+
+#### WP104 — UI for confirmations and extensions (parallel)
+Confirmation center (pending actions from MCP clients and plug-ins with clear attribution, diff/summary, approve / deny / always-allow for non-destructive kinds, history), before-send veto dialog with "Send anyway", plug-in banners and badges in the reader, composer extension buttons/menus, attachment preview panes for plug-in renderers, link/attachment action menus, MCP client settings for write scopes, rate limits and confirmation policy, plug-in manager additions (hooks, background jobs status, CPU usage). All themeable, all strings in Fluent catalogs, axe-clean.
+
+#### WP105 — Integration (sequential)
+Wire everything into the core (MCP write tools via the op queue with confirmations, plug-in writes and hooks in the arrival / send / open paths with budgets and veto handling, background jobs, MCP exposure of plug-in commands). **Playwright:** an MCP client creates a draft (no confirmation needed), sends it after the user approves, a denied delete changes nothing, permanent delete always asks; MCP prompt `summarize_thread` returns the thread content; rate limit trips; the full Follow-up example creates a task; the before-send example vetoes a mail without attachment and "Send anyway" works; an arrival hook tags mail; the attachment preview plug-in renders a CSV; a background job runs on schedule (controlled clock); a runaway hook is stopped and the mail still arrives.
+
+### Wave M4b — Windows integration and distribution
+
+#### WP110 — Contract (sequential)
+Update settings and status (channel, check now, download / install progress, policy-disabled state), tray settings (close to tray, start hidden), default-apps status, Simple MAPI request types (send mail with recipients, subject, body, attachments, UI or no-UI), installer/policy facts exposed to the UI (MSI-managed, per-user vs per-machine), local endpoint for `nail plugin dev` on the desktop.
+
+#### WP111 — Simple MAPI provider (parallel)
+`crates/nail-mapi` (cdylib): exports `MAPISendMail`, `MAPISendMailW`, `MAPILogon`/`MAPILogoff` stubs and the rest of Simple MAPI as safe no-ops or errors; forwards to the running app over a local channel (named pipe with an ACL for the current user, or the loopback endpoint with a per-install token) and starts the app if needed; x64, x86 (32-bit Office) and ARM64 builds; registration under `HKLM\Software\Clients\Mail\Nail` with the DLL paths; tests with a test harness calling the DLL exports.
+
+#### WP112 — Installers, signing, updates pipeline (parallel)
+Per-machine MSI (WiX via the Tauri bundler or WiX directly) with properties (`AUTOSTART`, `ADDTOPATH`, `DISABLEUPDATES`, `MAPI`) for silent installs, the NSIS installer kept as the per-user default, offline WebView2 variant, ARM64 builds, signing steps that run when a certificate is configured (EV later), Tauri updater artifacts and signed update manifests per channel, a winget manifest generator, CI jobs: build all installers, install → launch → update → uninstall smoke on `windows-latest`, artifact upload.
+
+#### WP113 — Desktop shell (parallel)
+`app/src-tauri`: tray icon with menu (open, new message, check mail, quit), close-to-tray and start-hidden autostart, single-instance handling forwarding launch arguments (already partly there — complete it), the updater client (check on start and daily, download in background, install on restart, respect the MSI policy), "Choose Nail in Default apps" (`ms-settings:defaultapps?registeredAppUser=Nail`), a local loopback endpoint for `nail plugin dev` on the desktop, OS notification look and Shift+F10 context-menu checks in the desktop smoke test.
+
+#### WP114 — UI (parallel)
+Update settings and "about" (version, channel, check now, release notes), tray and startup settings, default-apps status and button, MAPI "Send to" composer entry (attachments prefilled), first-run screen (default apps, start with Windows, import offer — the import UI itself is M4c).
+
+#### WP115 — Integration (sequential)
+Wire everything; **Playwright / desktop:** MAPI test harness sends a file and the composer opens with it attached; tray menu "new message"; start hidden; the updater finds a newer version on a loopback update server, installs on restart (desktop smoke); MSI silent install with `DISABLEUPDATES=1` hides the updater; `nail plugin dev` works against the desktop app.
+
+### Wave M4c — Data portability, release hardening and leftovers
+
+#### WP120 — Contract (sequential)
+Import/export requests with progress and reports (mbox, EML, Maildir, Thunderbird profile, ICS, vCard), backup / restore (what is included, encryption, verification), vault recovery key, command palette model, print requests, diagnostics bundle, performance-benchmark harness interfaces.
+
+#### WP121 — Import, export, backup (parallel)
+Importers: mbox (mboxrd/mboxo, large files streamed), EML folders, Maildir (incl. Courier/Dovecot flags), Thunderbird profile (accounts → `accounts.kdl` proposals, local folders, address books via Mork/SQLite where feasible, filters → rules where expressible), ICS/vCard; exporters: mbox, EML, Maildir, ICS, vCard; backup archive (settings, theme, layout, rules, accounts without secrets, local folders, keys optionally, PIM local data) encrypted with a passphrase, with verification and restore (dry run first).
+
+#### WP122 — Data protection completion and smartcards (parallel)
+Full-file database encryption via SQLite3MultipleCiphers (MIT) as a `[patch]` of `libsqlite3-sys` if it builds on Windows MSVC (ADR), otherwise a documented fallback; vault recovery key (export, verify, restore); PKCS#11 smartcard support for OpenPGP signing/decryption and S/MIME (via the `cryptoki` crate) with PIN prompts in the UI.
+
+#### WP123 — Performance and leftovers (parallel)
+A 100k-message benchmark (generated corpus) with budgets in CI: initial sync from the mock IMAP server, list scrolling (virtualization frame budget via Playwright traces), search latency, cold start, memory; fixes for what fails. Leftovers from M3: Graph upload sessions over 4 MB, send-as / on behalf of for shared mailboxes, Gmail thread ids as Nail thread ids, sync policies for Exchange folders, moves between mailboxes/accounts for API engines.
+
+#### WP124 — UI (parallel)
+Command palette (every action id, fuzzy search, recent actions, keyboard-first), print and save as PDF (print theme variant, WebView2 print to PDF), import / export / backup wizards with progress and reports, recovery-key flow, smartcard PIN dialogs, diagnostics bundle (user-initiated, shows exactly what is included, no mail content by default).
+
+#### WP125 — Integration and release candidate (sequential)
+Wire everything; **Playwright:** import an mbox and a Maildir with flags; import a Thunderbird profile fixture (accounts proposed, local folders and address book imported); export a folder to mbox and re-import it identically; backup → wipe → restore round trip; command palette runs an action; print to PDF produces a file; recovery key restores a vault after the keychain entry is deleted; performance budgets pass. Release preparation: version 1.0.0-rc.1, `CHANGELOG.md`, release notes in `userDocs/en`, a complete pass over `userDocs/en` (every feature documented), `docs/release-checklist.md` with the human gates.
+
+## 10. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.
 - **M3:** detailed in section 8.
-- **M4 Agents and release:** MCP write tools with grants/confirm/audit, full plug-in system (QuickJS), MAPI provider, MSI + winget + updater, EV signing, import/export, backup.
+- **M4:** detailed in section 9. After v1.0: curated plug-in / theme gallery, macOS and Linux, mobile apps, German translations (see `docs/backlog.md` for parked items).
 
-## 10. How milestones are executed (orchestration)
+## 11. How milestones are executed (orchestration)
 
 Agents: Opus 5.5 at medium effort, coordinated by a workflow. M0 ran as the sequence below; each M1 wave uses the same shape (contract, then parallel packages in disjoint directories, then integrate, two reviews, fix and an independent verify).
 
