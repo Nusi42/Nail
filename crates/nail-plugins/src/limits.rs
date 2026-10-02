@@ -17,8 +17,9 @@ pub struct HostLimits {
     pub activation_budget: Duration,
     /// CPU time of one call into the plug-in: a command, a resolved API
     /// call, a dialog result, a UI action, a panel render, a timer, with
-    /// the promise jobs it queues. Hooks (M4) get the same budget per hook
-    /// call. Exceeding it stops the plug-in (`cpu-budget`).
+    /// the promise jobs it queues. Hook, job and extension handler turns
+    /// (M4a) have it too, next to their own wall-clock limits. Exceeding it
+    /// stops the plug-in (`cpu-budget`).
     pub call_budget: Duration,
     /// Wall-clock time until `activate` must have settled.
     pub activation_timeout: Duration,
@@ -51,6 +52,27 @@ pub struct HostLimits {
     pub max_search_results: u32,
     /// Modules a plug-in may load (its main module and its imports).
     pub max_modules: usize,
+    /// M4a: CPU time a plug-in may use per hour across all its calls
+    /// (turns); over it, its background jobs are skipped (`cpu-quota`)
+    /// until the hour has passed.
+    pub cpu_quota_per_hour: Duration,
+    /// M4a: wall-clock time of one job run, pending promises included.
+    pub job_wall_clock: Duration,
+    /// M4a: how often the scheduler looks for due jobs (the core can also
+    /// ask at once, `PluginHost::run_due_jobs`).
+    pub job_tick: Duration,
+    /// M4a: how long event deliveries are collected into one job run.
+    pub event_coalesce: Duration,
+    /// M4a: wall-clock time of an exposed MCP tool call.
+    pub mcp_tool_timeout: Duration,
+    /// M4a: largest result of an MCP tool call (bytes of JSON).
+    pub max_tool_result_bytes: usize,
+    /// M4a: bytes a plug-in may hand over as `Uint8Array` / `ArrayBuffer`
+    /// in one turn (fetch bodies, attachments, preview images).
+    pub max_blob_bytes: usize,
+    /// M4a: how long after a composer action ran its plug-in may still edit
+    /// that draft (`nail.composer.*`).
+    pub composer_edit_window: Duration,
 }
 
 impl Default for HostLimits {
@@ -74,6 +96,16 @@ impl Default for HostLimits {
             http_timeout: Duration::from_secs(30),
             max_search_results: 500,
             max_modules: 500,
+            cpu_quota_per_hour: Duration::from_millis(
+                nail_api::plugins::jobs::CPU_QUOTA_MS_PER_HOUR,
+            ),
+            job_wall_clock: Duration::from_millis(nail_api::plugins::jobs::JOB_WALL_CLOCK_MS),
+            job_tick: Duration::from_secs(15),
+            event_coalesce: Duration::from_millis(nail_api::plugins::jobs::EVENT_COALESCE_MS),
+            mcp_tool_timeout: Duration::from_secs(60),
+            max_tool_result_bytes: 1024 * 1024,
+            max_blob_bytes: 32 * 1024 * 1024,
+            composer_edit_window: Duration::from_secs(5 * 60),
         }
     }
 }

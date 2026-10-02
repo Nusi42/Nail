@@ -1,6 +1,7 @@
 # Component reference
 
-Plug-ins build dialogs and panels from a fixed set of components. They are
+Plug-ins build dialogs, panels and attachment previews from a fixed set of
+components. They are
 data, not HTML: Nail draws them with its own controls, your theme styles
 them (parts `plugin.<plugin-id>.*`), and they look the same on the desktop
 and in a browser connected through remote access.
@@ -41,6 +42,10 @@ await nail.ui.showDialog({ title: "Follow up", body, buttons: [{ id: "save", lab
   has a value.
 - **Panels** (`ctx.panels.register`): Nail asks the plug-in to render the
   panel when it is shown; `nail.ui.updatePanel` replaces its content.
+- **Attachment previews** ([attachments and links](attachments-and-links.md)):
+  a preview renderer may return components (or a raster image); Nail
+  shows them in the preview pane. Previews are for showing data; use
+  attachment actions for things the user does with an attachment.
 - **Buttons inside the content** (`<button>`) do not close anything: they
   call the dialog's `onAction` option or the panel's `onAction` with the
   current values.

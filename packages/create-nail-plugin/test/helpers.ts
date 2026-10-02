@@ -83,6 +83,37 @@ export function readManifest(dir: string): PluginManifest {
   return JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as PluginManifest;
 }
 
+/** The example plug-ins in `examples/`. */
+export const EXAMPLES = ["follow-up", "attachment-check", "csv-preview"] as const;
+
+/** An example copied to a temp folder, type-checked and built. */
+export interface PreparedExample {
+  /** The example in the repository. */
+  source: string;
+  /** The copy (with linked dependencies and `dist/index.js`). */
+  dir: string;
+  /** The built bundle. */
+  bundle: string;
+  /** Removes the copy. */
+  cleanup: () => void;
+}
+
+/**
+ * Copies `examples/<name>` to a temp folder (without `dist/` and
+ * `node_modules/`), links the dependencies, type-checks and builds it
+ * with its own scripts — nothing is written into the repository.
+ */
+export function prepareExample(name: (typeof EXAMPLES)[number]): PreparedExample {
+  const source = path.join(REPO, "examples", name);
+  const t = tempDir(`nail-${name}-`);
+  const dir = path.join(t.dir, name);
+  copyPlugin(source, dir);
+  linkDependencies(dir);
+  typecheck(dir);
+  node(dir, "scripts/build.mjs");
+  return { source, dir, bundle: path.join(dir, "dist", "index.js"), cleanup: t.cleanup };
+}
+
 /** A loaded bundle with its test host. */
 export interface LoadedPlugin {
   host: TestHost;

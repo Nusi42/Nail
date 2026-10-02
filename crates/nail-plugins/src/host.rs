@@ -28,10 +28,11 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::dev::DevWatcher;
 use crate::gate::Gate;
-use crate::l10n;
+use crate::jobs::{CpuMeter, JobTable};
+use crate::l10n::{self, PluginCatalogs};
 use crate::limits::HostLimits;
 use crate::package::{PackageError, PackageFiles, load_folder};
-use crate::runtime::{self, Launch, ThreadEnd, ThreadMsg, host_line};
+use crate::runtime::{self, Invoke, Launch, Origin, Registry, ThreadEnd, ThreadMsg, host_line};
 use crate::services::{AccountScope, HostLogLine, PluginServices};
 
 /// What the host needs to start a plug-in.
@@ -123,7 +124,33 @@ pub(crate) struct Slot {
     alive: Arc<AtomicBool>,
     gate: Arc<RwLock<Gate>>,
     watcher: Option<DevWatcher>,
+    /// M4a: the plug-in's name in the core's language.
+    display_name: String,
+    /// M4a: CPU time of its turns (kept across restarts: the quota is per
+    /// plug-in, not per start).
+    cpu: Arc<Mutex<CpuMeter>>,
+    /// M4a: its jobs (rebuilt on every start).
+    jobs: Arc<Mutex<JobTable>>,
 }
+
+/// What a running plug-in offers to the host-side extension code.
+#[derive(Clone)]
+pub(crate) struct Running {
+    pub tx: mpsc::Sender<ThreadMsg>,
+    pub gate: Gate,
+    pub manifest: Arc<PluginManifest>,
+    pub generation: u64,
+    pub name: String,
+    pub files: PackageFiles,
+}
+
+/// Banners an open hook showed with a message: which buttons it may get
+/// presses for (`<plugin>` → banner id → button ids).
+pub(crate) type ShownBanners =
+    HashMap<(PluginId, nail_api::MessageId), HashMap<String, Vec<String>>>;
+
+/// Most (plug-in, message) pairs whose banners are remembered.
+const MAX_SHOWN_BANNERS: usize = 1000;
 
 pub(crate) struct DialogEntry {
     pub plugin: PluginId,
@@ -140,9 +167,18 @@ pub(crate) struct Inner {
     dialogs: Mutex<HashMap<PluginDialogId, DialogEntry>>,
     logs: broadcast::Sender<HostLogLine>,
     generation: AtomicU64,
+    /// M4a: banners of open hooks, in the order they were shown.
+    pub(crate) banners: Mutex<(
+        ShownBanners,
+        std::collections::VecDeque<(PluginId, nail_api::MessageId)>,
+    )>,
+    /// M4a: when a hook failure of a plug-in was last logged (one line a
+    /// minute per plug-in and hook; the rest is counted in the stats).
+    pub(crate) hook_logs:
+        Mutex<HashMap<(PluginId, nail_api::plugins::PluginHookKind), std::time::Instant>>,
 }
 
-fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
@@ -157,7 +193,7 @@ impl Inner {
         let _ = self.logs.send(line);
     }
 
-    fn host_log(
+    pub(crate) fn host_log(
         &self,
         id: &PluginId,
         level: PluginLogLevel,
@@ -174,8 +210,8 @@ impl Inner {
     }
 
     /// The thread finished activation.
-    pub(crate) fn activated(&self, id: &PluginId, generation: u64) {
-        let version = {
+    pub(crate) fn activated(self: &Arc<Self>, id: &PluginId, generation: u64) {
+        let (version, background) = {
             let mut slots = lock(&self.slots);
             let Some(slot) = slots.get_mut(id) else {
                 return;
@@ -185,8 +221,19 @@ impl Inner {
             }
             slot.state = PluginRunState::Running;
             slot.error = None;
-            slot.manifest.version.clone()
+            let background = slot
+                .gate
+                .read()
+                .is_ok_and(|g| g.has(&nail_api::plugins::PluginPermission::Background));
+            (slot.manifest.version.clone(), background)
         };
+        if background {
+            self.handle.spawn(crate::jobs::activated(
+                Arc::clone(self),
+                id.clone(),
+                generation,
+            ));
+        }
         self.host_log(
             id,
             PluginLogLevel::Info,
@@ -351,8 +398,147 @@ impl Inner {
         }
     }
 
-    fn expand(&self) -> impl Fn(&[AccountId]) -> Vec<AccountId> + '_ {
+    pub(crate) fn expand(&self) -> impl Fn(&[AccountId]) -> Vec<AccountId> + '_ {
         |a: &[AccountId]| self.services.expand_accounts(a)
+    }
+
+    /// Everything about a running plug-in the extension code needs.
+    pub(crate) fn running_info(&self, id: &PluginId) -> Result<Running, ApiError> {
+        let (tx, gate, manifest) = self.running(id)?;
+        let slots = lock(&self.slots);
+        let slot = slots
+            .get(id)
+            .ok_or_else(|| ApiError::not_found(format!("plug-in `{id}` is not loaded")))?;
+        Ok(Running {
+            tx,
+            gate,
+            manifest,
+            generation: slot.generation,
+            name: slot.display_name.clone(),
+            files: slot.spec.files.clone(),
+        })
+    }
+
+    /// Running plug-ins (by id) with what they offer.
+    pub(crate) fn running_all(&self) -> Vec<(PluginId, Running)> {
+        let mut ids: Vec<PluginId> = lock(&self.slots).keys().cloned().collect();
+        ids.sort();
+        ids.into_iter()
+            .filter_map(|id| self.running_info(&id).ok().map(|r| (id, r)))
+            .collect()
+    }
+
+    /// A plug-in's current grants (empty when unknown).
+    pub(crate) fn gate_of(&self, id: &PluginId) -> Gate {
+        lock(&self.slots)
+            .get(id)
+            .and_then(|s| s.gate.read().ok().map(|g| g.clone()))
+            .unwrap_or_default()
+    }
+
+    /// A plug-in's CPU meter.
+    pub(crate) fn cpu_of(&self, id: &PluginId) -> Option<Arc<Mutex<CpuMeter>>> {
+        lock(&self.slots).get(id).map(|s| Arc::clone(&s.cpu))
+    }
+
+    /// Running plug-ins with `background` granted and jobs declared.
+    pub(crate) fn background_plugins(&self) -> Vec<PluginId> {
+        let slots = lock(&self.slots);
+        let mut ids: Vec<PluginId> = slots
+            .iter()
+            .filter(|(_, s)| {
+                s.state == PluginRunState::Running
+                    && s.tx.is_some()
+                    && !s.manifest.contributes.jobs.is_empty()
+                    && s.gate
+                        .read()
+                        .is_ok_and(|g| g.has(&nail_api::plugins::PluginPermission::Background))
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    /// The generation, job table, CPU meter and name of a running plug-in
+    /// that may run jobs (`unavailable` otherwise).
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn job_context(
+        &self,
+        id: &PluginId,
+    ) -> Result<(u64, Arc<Mutex<JobTable>>, Arc<Mutex<CpuMeter>>, String), ApiError> {
+        let slots = lock(&self.slots);
+        let slot = slots
+            .get(id)
+            .ok_or_else(|| ApiError::not_found(format!("plug-in `{id}` is not loaded")))?;
+        let background = slot
+            .gate
+            .read()
+            .is_ok_and(|g| g.has(&nail_api::plugins::PluginPermission::Background));
+        if slot.tx.is_none() || slot.state != PluginRunState::Running {
+            return Err(ApiError::new(
+                ErrorCode::Unavailable,
+                format!("plug-in `{id}` is not running"),
+            ));
+        }
+        if !background {
+            return Err(ApiError::new(
+                ErrorCode::Unavailable,
+                format!("plug-in `{id}` has no permission for background jobs"),
+            ));
+        }
+        Ok((
+            slot.generation,
+            Arc::clone(&slot.jobs),
+            Arc::clone(&slot.cpu),
+            slot.display_name.clone(),
+        ))
+    }
+
+    /// Calls a registered handler of a running plug-in (of `generation`,
+    /// when given); the receiver gets its result.
+    pub(crate) fn invoke(
+        &self,
+        id: &PluginId,
+        generation: Option<u64>,
+        call: Invoke,
+    ) -> Result<oneshot::Receiver<Result<Value, ApiError>>, ApiError> {
+        let running = self.running_info(id)?;
+        if generation.is_some_and(|g| g != running.generation) {
+            return Err(ApiError::new(
+                ErrorCode::Unavailable,
+                "the plug-in restarted",
+            ));
+        }
+        let (reply, rx) = oneshot::channel();
+        send(&running.tx, ThreadMsg::Invoke(Box::new(call), reply))?;
+        Ok(rx)
+    }
+
+    /// Remembers the banners an open hook showed with a message.
+    pub(crate) fn remember_banners(
+        &self,
+        plugin: &PluginId,
+        message: &nail_api::MessageId,
+        banners: HashMap<String, Vec<String>>,
+    ) {
+        let mut guard = lock(&self.banners);
+        let (shown, order) = &mut *guard;
+        let key = (plugin.clone(), message.clone());
+        if banners.is_empty() {
+            shown.remove(&key);
+            return;
+        }
+        if shown.insert(key.clone(), banners).is_none() {
+            order.push_back(key);
+        }
+        while order.len() > MAX_SHOWN_BANNERS {
+            if let Some(old) = order.pop_front() {
+                shown.remove(&old);
+            }
+        }
+        // `order` may hold keys removed meanwhile; they are skipped above.
+        order.retain(|k| shown.contains_key(k));
     }
 }
 
@@ -402,11 +588,18 @@ impl PluginHost {
             dialogs: Mutex::new(HashMap::new()),
             logs,
             generation: AtomicU64::new(0),
+            banners: Mutex::new((HashMap::new(), std::collections::VecDeque::new())),
+            hook_logs: Mutex::new(HashMap::new()),
         });
+        crate::jobs::spawn_scheduler(&inner);
         Self {
             _guard: Arc::new(ShutdownGuard(Arc::downgrade(&inner))),
             inner,
         }
+    }
+
+    pub(crate) fn inner(&self) -> &Arc<Inner> {
+        &self.inner
     }
 
     /// The limits.
@@ -477,10 +670,25 @@ impl PluginHost {
             return false;
         };
         let gate = Gate::new(&slot.manifest, grants);
+        let background = &nail_api::plugins::PluginPermission::Background;
+        // M4a: `background` granted to a running plug-in starts its jobs.
+        let start_jobs = gate.has(background)
+            && slot.gate.read().is_ok_and(|g| !g.has(background))
+            && slot.state == PluginRunState::Running
+            && slot.tx.is_some();
         if let Ok(mut g) = slot.gate.write() {
             *g = gate;
         }
         slot.spec.grants = grants.to_vec();
+        let generation = slot.generation;
+        drop(slots);
+        if start_jobs {
+            self.inner.handle.spawn(crate::jobs::activated(
+                Arc::clone(&self.inner),
+                id.clone(),
+                generation,
+            ));
+        }
         true
     }
 
@@ -620,12 +828,72 @@ impl PluginHost {
                     },
                 )?;
             }
-            // Banner buttons of open hooks (M4a, ADR 0079): WP102.
-            PluginUiTarget::Banner { .. } => {
-                return Err(ApiError::unsupported("banner actions are not wired yet"));
+            // Banner buttons of open hooks (M4a): only buttons of a banner
+            // the plug-in showed with that message.
+            PluginUiTarget::Banner { message_id, banner } => {
+                return self
+                    .banner_action(message_id, banner, component_id, client_id)
+                    .await;
             }
         }
         self.wait(rx).await
+    }
+
+    async fn banner_action(
+        &self,
+        message_id: &nail_api::MessageId,
+        banner: &str,
+        component_id: &str,
+        client_id: Option<String>,
+    ) -> Result<(), ApiError> {
+        let missing = || ApiError::not_found("no such banner button");
+        let (plugin, banner_id) =
+            nail_api::plugins::extensions::parse_plugin_extension_id(banner).ok_or_else(missing)?;
+        let shown = {
+            let guard = lock(&self.inner.banners);
+            guard
+                .0
+                .get(&(plugin.clone(), message_id.clone()))
+                .and_then(|b| b.get(&banner_id))
+                .is_some_and(|buttons| buttons.iter().any(|b| b == component_id))
+        };
+        if !shown {
+            return Err(missing());
+        }
+        let running = self.inner.running_info(&plugin)?;
+        if !running
+            .gate
+            .has(&nail_api::plugins::PluginPermission::HooksOpen)
+        {
+            return Err(missing());
+        }
+        let mut call = Invoke::new(
+            Registry::BannerAction,
+            "default",
+            serde_json::json!({
+                "messageId": message_id,
+                "bannerId": banner_id,
+                "buttonId": component_id,
+            }),
+        );
+        call.origin = Origin::client(client_id);
+        let rx = self.inner.invoke(&plugin, Some(running.generation), call)?;
+        // Answered once the handler settled (or the reply time ran out).
+        match self.wait(rx).await {
+            Ok(_) => Ok(()),
+            Err(e) if e.code == ErrorCode::Internal => {
+                self.inner.host_log(
+                    &plugin,
+                    PluginLogLevel::Warn,
+                    format!("banner action failed: {}", e.message),
+                    LocalizedMessage::new(l10n::HANDLER_FAILED)
+                        .arg("name", format!("bannerAction {banner_id}"))
+                        .arg("detail", e.message.as_str()),
+                );
+                Err(e)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Renders a panel (`<plugin>.<panel>`) for the UI's context.
@@ -662,8 +930,20 @@ impl PluginHost {
         self.wait(rx).await
     }
 
-    async fn wait<T>(&self, rx: oneshot::Receiver<Result<T, ApiError>>) -> Result<T, ApiError> {
-        match tokio::time::timeout(self.inner.limits.reply_timeout, rx).await {
+    pub(crate) async fn wait<T>(
+        &self,
+        rx: oneshot::Receiver<Result<T, ApiError>>,
+    ) -> Result<T, ApiError> {
+        self.wait_for(self.inner.limits.reply_timeout, rx).await
+    }
+
+    /// Waits for a plug-in's answer at most `limit`.
+    pub(crate) async fn wait_for<T>(
+        &self,
+        limit: std::time::Duration,
+        rx: oneshot::Receiver<Result<T, ApiError>>,
+    ) -> Result<T, ApiError> {
+        match tokio::time::timeout(limit, rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(ApiError::new(ErrorCode::Unavailable, "the plug-in stopped")),
             Err(_) => Err(ApiError::new(
@@ -786,6 +1066,16 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
     let generation = inner.generation.fetch_add(1, Ordering::SeqCst) + 1;
     let gate = Arc::new(RwLock::new(Gate::new(&manifest, &spec.grants)));
     let alive = Arc::new(AtomicBool::new(true));
+    // M4a: catalogs (`nail.l10n`, the name its writes are attributed to),
+    // the CPU meter (kept across restarts) and a fresh job table.
+    let catalogs = Arc::new(PluginCatalogs::load(&manifest, &spec.files));
+    let locale = inner.services.locale();
+    let display_name = catalogs.text(locale.as_deref(), &manifest.name);
+    let cpu = lock(&inner.slots)
+        .get(&id)
+        .map(|s| Arc::clone(&s.cpu))
+        .unwrap_or_default();
+    let jobs = Arc::new(Mutex::new(JobTable::new(&manifest.contributes.jobs)));
     if !is_supported_api_version(&manifest.api_version) {
         let error = ApiError::unsupported(format!(
             "plug-in API version {} is not supported",
@@ -808,6 +1098,9 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
                 alive,
                 gate,
                 watcher,
+                display_name,
+                cpu,
+                jobs,
             },
         );
         inner.services.emit(Event::PluginsChanged);
@@ -827,6 +1120,10 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
         rx,
         tx: tx.clone(),
         activated: reply,
+        catalogs,
+        locale,
+        display_name: display_name.clone(),
+        cpu: Arc::clone(&cpu),
     };
     lock(&inner.slots).insert(
         id.clone(),
@@ -840,6 +1137,9 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
             alive,
             gate,
             watcher,
+            display_name,
+            cpu,
+            jobs,
         },
     );
     inner.services.emit(Event::PluginsChanged);

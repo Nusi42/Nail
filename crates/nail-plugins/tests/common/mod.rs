@@ -7,14 +7,19 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, NaiveDateTime, Utc};
+use nail_api::mcp::tools::McpWriteResult;
 use nail_api::plugins::{
     PluginGrant, PluginLogSource, PluginManifest, PluginMessage, PluginMessageBody,
     PluginPermission, PluginStorageUsage,
 };
-use nail_api::{AccountId, ApiError, ErrorCode, Event, Flags, MessageId, PluginId, ThreadId};
+use nail_api::{
+    AccountId, ApiError, DraftId, ErrorCode, Event, Flags, MessageId, PluginId, ThreadId,
+};
 use nail_plugins::{
-    AccountScope, BoxFuture, HostLimits, HostLogLine, HttpRequest, HttpResponse, PackageFiles,
-    PluginHost, PluginServices, PluginSpec, ServiceResult,
+    AccountScope, AttachmentData, BoxFuture, HookCallRecord, HostLimits, HostLogLine, HttpRequest,
+    HttpResponse, JobRunRecord, PackageFiles, PluginCollection, PluginContact, PluginHost,
+    PluginServices, PluginSpec, PluginWriteRequest, ServiceResult, StoredJobState,
 };
 use serde_json::{Value, json};
 
@@ -28,6 +33,20 @@ pub struct Fake {
     pub events: Mutex<Vec<Event>>,
     pub logs: Mutex<Vec<HostLogLine>>,
     pub searches: Mutex<Vec<(String, AccountScope, AccountScope, u32)>>,
+    // --- M4a ---
+    pub writes: Mutex<Vec<PluginWriteRequest>>,
+    /// What `write` answers (default: done with one op).
+    pub write_result: Mutex<Option<Result<McpWriteResult, ApiError>>>,
+    pub attachments: Mutex<HashMap<(String, u32), AttachmentData>>,
+    pub drafts: Mutex<HashMap<String, String>>,
+    pub locale: Mutex<Option<String>>,
+    pub now: Mutex<Option<DateTime<Utc>>>,
+    pub job_states: Mutex<HashMap<(String, String), Option<i64>>>,
+    pub job_runs: Mutex<Vec<JobRunRecord>>,
+    pub hook_calls: Mutex<Vec<HookCallRecord>>,
+    pub cpu: Mutex<Vec<(String, i64, u64)>>,
+    /// Response body of `http_fetch` (default: a small JSON document).
+    pub fetch_body: Mutex<Option<Vec<u8>>>,
 }
 
 pub fn message(id: &str, account: &str, thread: &str, encrypted: bool) -> PluginMessage {
@@ -114,6 +133,54 @@ impl Fake {
             .iter()
             .filter(|l| l.plugin_id.as_str() == plugin)
             .cloned()
+            .collect()
+    }
+
+    pub fn writes(&self) -> Vec<PluginWriteRequest> {
+        self.writes.lock().unwrap().clone()
+    }
+
+    pub fn hook_calls(&self, plugin: &str) -> Vec<HookCallRecord> {
+        self.hook_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|c| c.plugin_id.as_str() == plugin)
+            .cloned()
+            .collect()
+    }
+
+    pub fn job_runs(&self, plugin: &str) -> Vec<JobRunRecord> {
+        self.job_runs
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| r.plugin_id.as_str() == plugin)
+            .cloned()
+            .collect()
+    }
+
+    pub fn set_now(&self, at: &str) {
+        *self.now.lock().unwrap() = Some(DateTime::parse_from_rfc3339(at).unwrap().to_utc());
+    }
+
+    pub fn add_attachment(&self, message: &str, index: u32, name: &str, mime: &str, bytes: &[u8]) {
+        self.attachments.lock().unwrap().insert(
+            (message.to_owned(), index),
+            AttachmentData {
+                name: name.into(),
+                mime_type: mime.into(),
+                size: bytes.len() as u64,
+                bytes: bytes.to_vec(),
+            },
+        );
+    }
+
+    /// Host log lines with this Fluent id.
+    pub fn localized(&self, plugin: &str, id: &str) -> Vec<HostLogLine> {
+        self.log_lines(plugin)
+            .into_iter()
+            .filter(|l| l.localized.as_ref().is_some_and(|m| m.id == id))
             .collect()
     }
 
@@ -289,6 +356,12 @@ impl PluginServices for Fake {
         request: HttpRequest,
     ) -> BoxFuture<'static, ServiceResult<HttpResponse>> {
         self.fetches.lock().unwrap().push(request);
+        let body = self
+            .fetch_body
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| br#"{"hello":"world"}"#.to_vec());
         ready(Ok(HttpResponse {
             status: 200,
             headers: vec![
@@ -296,7 +369,7 @@ impl PluginServices for Fake {
                 ("x-multi".into(), "a".into()),
                 ("x-multi".into(), "b".into()),
             ],
-            body: br#"{"hello":"world"}"#.to_vec(),
+            body,
         }))
     }
 
@@ -306,6 +379,207 @@ impl PluginServices for Fake {
 
     fn log(&self, line: HostLogLine) {
         self.logs.lock().unwrap().push(line);
+    }
+
+    fn write(
+        &self,
+        request: PluginWriteRequest,
+    ) -> BoxFuture<'static, ServiceResult<McpWriteResult>> {
+        self.writes.lock().unwrap().push(request);
+        let result =
+            self.write_result
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or(Ok(McpWriteResult::Done {
+                    op_ids: vec!["op-1".into()],
+                    created: vec!["new-1".into()],
+                    confirmation_id: None,
+                }));
+        ready(result)
+    }
+
+    fn calendars(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        ready(Ok(vec![collection("cal-1", "Work")]))
+    }
+
+    fn address_books(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        ready(Ok(vec![collection("book-1", "Contacts")]))
+    }
+
+    fn task_lists(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        ready(Ok(vec![collection("list-1", "Inbox")]))
+    }
+
+    fn find_contacts(
+        &self,
+        email: String,
+        _limit: u32,
+    ) -> BoxFuture<'static, ServiceResult<Vec<PluginContact>>> {
+        let found = (email == "ada@example.com")
+            .then(|| PluginContact {
+                id: "c-1".into(),
+                address_book_id: "book-1".into(),
+                full_name: Some("Ada".into()),
+                emails: vec![email.clone()],
+                organization: None,
+            })
+            .into_iter()
+            .collect();
+        ready(Ok(found))
+    }
+
+    fn attachment(
+        &self,
+        message: MessageId,
+        index: u32,
+        max_bytes: u64,
+    ) -> BoxFuture<'static, ServiceResult<Option<AttachmentData>>> {
+        let found = self
+            .attachments
+            .lock()
+            .unwrap()
+            .get(&(message.to_string(), index))
+            .cloned()
+            .map(|mut a| {
+                if a.size > max_bytes {
+                    a.bytes.clear();
+                }
+                a
+            });
+        ready(Ok(found))
+    }
+
+    fn draft_mode(&self, draft: DraftId) -> BoxFuture<'static, ServiceResult<Option<String>>> {
+        ready(Ok(self.drafts.lock().unwrap().get(draft.as_str()).cloned()))
+    }
+
+    /// Filters for the tests: `subject:<word>` (subject contains it),
+    /// `none` (never), `fail` (an error).
+    fn message_matches(
+        &self,
+        message: MessageId,
+        query: String,
+    ) -> BoxFuture<'static, ServiceResult<bool>> {
+        if query == "fail" {
+            return ready(Err(ApiError::invalid_request("bad query")));
+        }
+        let subject = self
+            .find(&message)
+            .map(|(m, _)| m.subject)
+            .unwrap_or_default();
+        let matched = match query.strip_prefix("subject:") {
+            Some(word) => subject.contains(word),
+            None => false,
+        };
+        ready(Ok(matched))
+    }
+
+    fn locale(&self) -> Option<String> {
+        self.locale.lock().unwrap().clone()
+    }
+
+    fn now(&self) -> DateTime<Utc> {
+        self.now.lock().unwrap().unwrap_or_else(Utc::now)
+    }
+
+    fn local_time(&self, at: DateTime<Utc>) -> NaiveDateTime {
+        at.naive_utc()
+    }
+
+    fn job_states(
+        &self,
+        plugin: PluginId,
+    ) -> BoxFuture<'static, ServiceResult<Vec<StoredJobState>>> {
+        let states = self
+            .job_states
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|((p, _), _)| p == plugin.as_str())
+            .map(|((_, job), next)| StoredJobState {
+                job: job.clone(),
+                next_run_at: *next,
+            })
+            .collect();
+        ready(Ok(states))
+    }
+
+    fn set_job_next_run(
+        &self,
+        plugin: PluginId,
+        job: String,
+        next_run_at: Option<i64>,
+    ) -> BoxFuture<'static, ServiceResult<()>> {
+        self.job_states
+            .lock()
+            .unwrap()
+            .insert((plugin.to_string(), job), next_run_at);
+        ready(Ok(()))
+    }
+
+    fn record_job_run(&self, record: JobRunRecord) -> BoxFuture<'static, ServiceResult<()>> {
+        self.job_states.lock().unwrap().insert(
+            (record.plugin_id.to_string(), record.job.clone()),
+            record.next_run_at,
+        );
+        self.job_runs.lock().unwrap().push(record);
+        ready(Ok(()))
+    }
+
+    fn record_hook_call(&self, record: HookCallRecord) -> BoxFuture<'static, ServiceResult<()>> {
+        self.hook_calls.lock().unwrap().push(record);
+        ready(Ok(()))
+    }
+
+    fn record_cpu(
+        &self,
+        plugin: PluginId,
+        at: i64,
+        cpu_ms: u64,
+    ) -> BoxFuture<'static, ServiceResult<()>> {
+        self.cpu
+            .lock()
+            .unwrap()
+            .push((plugin.to_string(), at, cpu_ms));
+        ready(Ok(()))
+    }
+}
+
+fn collection(id: &str, name: &str) -> PluginCollection {
+    PluginCollection {
+        id: id.into(),
+        name: name.into(),
+        default: true,
+        read_only: false,
+    }
+}
+
+/// A manifest like [`manifest`] with more contributions merged in.
+pub fn manifest_with(id: &str, permissions: &[&str], extra: Value) -> PluginManifest {
+    let mut value = serde_json::to_value(manifest(id, permissions)).unwrap();
+    if let Value::Object(map) = extra {
+        for (key, v) in map {
+            value["contributes"][key] = v;
+        }
+    }
+    PluginManifest::parse(value.to_string().as_bytes())
+        .unwrap_or_else(|issues| panic!("{issues:?}"))
+}
+
+/// A plug-in with extra contributions, every permission granted.
+pub fn spec_with(id: &str, permissions: &[&str], extra: Value, js: &str) -> PluginSpec {
+    let manifest = manifest_with(id, permissions, extra);
+    let mut map = BTreeMap::new();
+    map.insert("index.js".to_owned(), js.as_bytes().to_vec());
+    map.insert("assets/logo.png".into(), vec![0x89, b'P', b'N', b'G']);
+    let grants = all_grants(&manifest);
+    PluginSpec {
+        manifest,
+        files: PackageFiles::from_map(map),
+        grants,
+        settings: BTreeMap::new(),
+        dev_folder: None,
     }
 }
 

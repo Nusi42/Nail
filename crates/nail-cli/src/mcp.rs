@@ -21,12 +21,22 @@
 //!      twice.
 //!
 //! stdout carries only JSON-RPC messages; notices and errors go to stderr.
+//!
+//! Confirmations (M4a, ADR 0079): the bridge is a transparent pump, so a
+//! write's elicitation form (in-band for sessions, MRTR rounds for
+//! stateless clients) reaches the MCP client and its answer comes back
+//! unchanged. A headless core has no window to confirm in: `nail mcp`
+//! prints each pending confirmation to stderr ([`confirmation_notice`]);
+//! the client's form can approve what elicitation may approve, everything
+//! else expires.
 
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::time::Duration;
 
-use nail_api::LocalizedMessage;
+use nail_api::agents::Confirmation;
+use nail_api::{Event, LocalizedMessage};
+use nail_config::l10n::Catalog;
 use nail_core::{Service, ServiceOptions};
 use nail_mcp::bridge::{self, BridgeError, BridgeOptions, TOKEN_ENV};
 use nail_mcp::endpoint::{endpoint_path, read_endpoint};
@@ -137,6 +147,32 @@ pub fn choose_target(
     }
 }
 
+/// The stderr notice of a confirmation a headless `nail mcp` waits for.
+pub fn confirmation_notice(catalog: &Catalog, confirmation: &Confirmation) -> String {
+    catalog.render(
+        &LocalizedMessage::new("mcp-tool-bridge-confirmation-pending")
+            .arg("actor", confirmation.requested_by.name.as_str())
+            .arg("summary", catalog.render(&confirmation.summary)),
+    )
+}
+
+/// Prints every new confirmation to stderr until the event stream ends.
+async fn print_confirmations(
+    mut events: tokio::sync::broadcast::Receiver<Event>,
+    catalog: Catalog,
+) {
+    use tokio::sync::broadcast::error::RecvError;
+    loop {
+        match events.recv().await {
+            Ok(Event::ConfirmationRequested { confirmation }) => {
+                eprintln!("{}", confirmation_notice(&catalog, &confirmation));
+            }
+            Ok(_) | Err(RecvError::Lagged(_)) => {}
+            Err(RecvError::Closed) => return,
+        }
+    }
+}
+
 fn bridge_options(url: String, token: String, args: &McpArgs) -> BridgeOptions {
     BridgeOptions {
         url,
@@ -213,12 +249,17 @@ async fn run_headless(
                 .arg("url", running.url())
         )
     );
+    let notices = tokio::spawn(print_confirmations(
+        service.subscribe(),
+        messages::catalog(),
+    ));
     let result = bridge::run(
         bridge_options(running.url(), token, args),
         tokio::io::stdin(),
         tokio::io::stdout(),
     )
     .await;
+    notices.abort();
     running.shutdown().await;
     service.shutdown().await;
     drop(lock);
@@ -247,6 +288,43 @@ mod tests {
     }
 
     const NO_WAIT: Duration = Duration::ZERO;
+
+    #[test]
+    fn pending_confirmations_are_announced_on_stderr() {
+        use nail_api::agents::{ActionActor, ActionAttribution, ActionKind, ConfirmationState};
+        let confirmation = Confirmation {
+            id: "1".into(),
+            requested_by: ActionAttribution {
+                actor: ActionActor::mcp_client("c1"),
+                name: "Claude".into(),
+                on_behalf_of: None,
+            },
+            kind: ActionKind::Send,
+            operation: "send_message".into(),
+            summary: LocalizedMessage::new("confirmation-summary-send")
+                .arg("actor", "Claude")
+                .arg("subject", "Plan")
+                .arg("count", 2),
+            targets: vec![],
+            more_targets: 0,
+            changes: vec![],
+            account_ids: vec![],
+            created_at: String::new(),
+            expires_at: String::new(),
+            state: ConfirmationState::Pending,
+            decided_at: None,
+            decided_via: None,
+            can_always_allow: true,
+            error: None,
+        };
+        let text = confirmation_notice(&Catalog::english(), &confirmation);
+        assert!(
+            text.starts_with("Claude is waiting for your confirmation"),
+            "{text}"
+        );
+        assert!(text.contains("2 recipients"), "{text}");
+        assert!(!text.contains("mcp-tool-"), "{text}");
+    }
 
     #[test]
     fn the_token_is_required() {
@@ -328,7 +406,7 @@ mod tests {
         assert_eq!(lock.info().owner, "mcp");
         // A second `nail mcp` while the first runs without an endpoint.
         let err = choose_target(None, dir.path(), false, NO_WAIT, |_| false).unwrap_err();
-        let text = messages::render_error(&err, &nail_config::l10n::Catalog::english());
+        let text = messages::render_error(&err, &Catalog::english());
         assert!(text.contains("mcp") && text.contains("MCP"), "{text}");
         drop(lock);
         assert!(matches!(

@@ -6,7 +6,24 @@
  * disable, grants, settings, logs, uninstall, development folders) and
  * placements proposed through the merge flow.
  *
- * Only WP62 edits the files in this directory (and `locales/{en,de}/
+ * M4a WP104 (contract ADR 0079) adds the extension points' UI. Mount
+ * points for the integrator (components exported below):
+ * - reader: `PluginBanners` (above the body), `PluginBadges` (header),
+ *   `AttachmentPreviewPane` (attachment preview), `AttachmentActionMenu`
+ *   (each attachment), `LinkActionMenu` (where a link is offered);
+ * - composer: `ComposerExtensionBar` (toolbar), `useComposerEdits` +
+ *   `applyComposerEdit` (apply edits of plug-ins / agents),
+ *   `ComposerEditNotices` (who edited), `PluginMarkdownBlock` (Markdown
+ *   preview of `<plugin>.<block>` fences), `sendDraftChecked` (instead of
+ *   `SendDraft` → `SendQueued`; the veto dialog is the effect
+ *   `SendVetoDialog`);
+ * - mock core: `answerSendDraft` (route `SendDraft` through it),
+ *   `installDemoExtensions` (demo plug-ins).
+ * The plug-in manager gains the confirmation policy of writing plug-ins
+ * and the activity (hooks, jobs, CPU, what it adds); the install dialog
+ * lists every contribution and highlights write permissions.
+ *
+ * Only WP62 / WP104 edit the files in this directory (and `locales/{en,de}/
  * plugins.ftl`). The central registry (`../registry.ts`) merges these
  * exports into the app; see `../README.md`.
  */
@@ -20,6 +37,7 @@ import { MANAGER_DIALOG, PluginManager, PluginManagerDialog } from "./PluginMana
 import { PluginNotifications } from "./PluginNotifications";
 import { PluginPanel } from "./PluginPanel";
 import { appendLogLine, pluginKeys } from "./queries";
+import { SendVetoDialog } from "./SendVeto";
 import { pluginsStoreFor } from "./store";
 import type { PluginInfo, PluginLogEntry, PluginUiNode } from "../../api/generated";
 
@@ -27,6 +45,28 @@ export { pluginKeys } from "./queries";
 export { RUN_COMMAND, usePluginLayout, withPluginActions } from "./commands";
 export { PLUGIN_BASE_CSS, PLUGIN_PARTS, pluginPartSelector } from "./parts";
 export { INSTALL_DIALOG, MANAGER_DIALOG };
+export { PluginBadges, PluginBanners } from "./MessageAnnotations";
+export { AttachmentPreviewPane, previewImageSrc } from "./AttachmentPreview";
+export { AttachmentActionMenu, LinkActionMenu, runPluginAction } from "./ActionMenus";
+export {
+  ComposerEditNotices,
+  ComposerExtensionBar,
+  PluginMarkdownBlock,
+  useComposerEdits,
+} from "./ComposerExtensions";
+export { SendVetoDialog, sendDraftChecked } from "./SendVeto";
+export {
+  applyComposerEdit,
+  attachmentActionsFor,
+  composerActionsFor,
+  linkActionsFor,
+  markdownBlockOwner,
+  markdownBlocksFor,
+  previewRenderersFor,
+} from "./extensions";
+export { answerSendDraft, checkSendVeto } from "./extensionsMock";
+export { installDemoExtensions } from "./extensionsSeed";
+export type { PendingEdit } from "./store";
 
 /** Layout widget kinds → components. */
 export const widgets: Feature["widgets"] = {
@@ -71,6 +111,14 @@ export const handlePluginsEvent: FeatureEventHandler = (event, { client, queryCl
   switch (event.type) {
     case "PluginsChanged":
       void queryClient.invalidateQueries({ queryKey: pluginKeys.all });
+      break;
+    case "PluginActivityChanged":
+      void queryClient.invalidateQueries({ queryKey: pluginKeys.activity(event.plugin_id) });
+      break;
+    case "ComposerEditRequested":
+      if (isForThisUi(client, event.client_id)) {
+        plugins.pushEdit({ draftId: event.draft_id, by: event.by, edit: event.edit });
+      }
       break;
     case "PluginDialogOpened":
       if (isForThisUi(client, event.dialog.client_id)) plugins.openDialog(event.dialog);
@@ -127,5 +175,5 @@ export const handlePluginsEvent: FeatureEventHandler = (event, { client, queryCl
 
 /** Handlers for the core's events. */
 export const events: Feature["events"] = [handlePluginsEvent];
-/** Background components: plug-in dialogs and notifications of this UI. */
-export const effects: Feature["effects"] = [PluginDialogs, PluginNotifications];
+/** Background components: plug-in dialogs, notifications and the send veto of this UI. */
+export const effects: Feature["effects"] = [PluginDialogs, PluginNotifications, SendVetoDialog];

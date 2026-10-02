@@ -1,5 +1,8 @@
-//! Read-only tools (design.md, "MCP server", Tools): `search_messages`,
-//! `get_message`, `get_thread`, `list_folders`, `get_ui_context`.
+//! The tools (design.md, "MCP server", Tools): the read tools
+//! `search_messages`, `get_message`, `get_thread`, `list_folders`,
+//! `get_ui_context`, the PIM reads (M3a) and `test_rule`, and the write
+//! tools of M4a ([`crate::writes`]), in the order of
+//! [`nail_api::mcp::tools::MCP_TOOLS`].
 //!
 //! Tools wrap the resources for clients without resource support. Results
 //! are structured JSON; anything from the mailbox is wrapped in the
@@ -9,13 +12,21 @@
 
 use std::sync::Arc;
 
+use nail_api::mcp::tools::{
+    CreateDraftArgs, CreateEventArgs, CreateRuleArgs, DeleteMessagesArgs, EditOpenDraftArgs,
+    RespondToInviteArgs, SendMessageArgs, TestRuleArgs, UpdateDraftArgs, UpdateEventArgs,
+    UpdateMessagesArgs, UpsertContactArgs, UpsertTaskArgs,
+};
 use nail_api::mcp::{McpCallKind, McpClient, McpOutcome, McpScope};
 use nail_api::search::SearchSort;
 use nail_api::{AccountId, FolderId, MessageId, MessageSummary, SearchQuery, ThreadId};
 use rmcp::ErrorData;
 use rmcp::handler::server::common::schema_for_type;
-use rmcp::model::{CallToolRequestParams, CallToolResult, JsonObject, Tool, ToolAnnotations};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResponse, CallToolResult, JsonObject, Tool, ToolAnnotations,
+};
 use rmcp::schemars::JsonSchema;
+use rmcp::service::{RequestContext, RoleServer};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -75,9 +86,9 @@ pub struct FoldersArgs {
 #[schemars(crate = "rmcp::schemars")]
 pub struct NoArgs {}
 
-/// Names of the tools (M3a adds the read-only PIM tools,
-/// [`nail_api::pim::mcp::MCP_PIM_TOOLS`]).
-pub const TOOL_NAMES: [&str; 9] = [
+/// Names of the tools, in [`nail_api::mcp::tools::MCP_TOOLS`] order (M3a
+/// adds the read-only PIM tools, M4a `test_rule` and the writes).
+pub const TOOL_NAMES: [&str; 22] = [
     "search_messages",
     "get_message",
     "get_thread",
@@ -87,6 +98,19 @@ pub const TOOL_NAMES: [&str; 9] = [
     "find_free_time",
     "search_contacts",
     "list_tasks",
+    "test_rule",
+    "update_messages",
+    "delete_messages",
+    "create_draft",
+    "update_draft",
+    "send_message",
+    "create_event",
+    "update_event",
+    "respond_to_invite",
+    "upsert_contact",
+    "upsert_task",
+    "create_rule",
+    "edit_open_draft",
 ];
 
 fn read_only(name: &'static str, description: &'static str, schema: Arc<JsonObject>) -> Tool {
@@ -101,8 +125,135 @@ fn read_only(name: &'static str, description: &'static str, schema: Arc<JsonObje
     tool
 }
 
+/// A write tool: not read-only; `destructive` / `sends` set the hints.
+fn write(
+    name: &'static str,
+    description: &'static str,
+    schema: Arc<JsonObject>,
+    destructive: bool,
+    sends: bool,
+) -> Tool {
+    let mut tool = Tool::new(name, description, schema);
+    tool.annotations = Some(
+        ToolAnnotations::new()
+            .read_only(false)
+            .destructive(destructive)
+            .idempotent(false)
+            .open_world(sends),
+    );
+    tool
+}
+
 /// The tool list.
 pub fn definitions() -> Vec<Tool> {
+    let mut tools = read_definitions();
+    tools.extend(write_definitions());
+    tools
+}
+
+fn write_definitions() -> Vec<Tool> {
+    vec![
+        write(
+            "update_messages",
+            "Flag, tag, mark read, move, archive or snooze up to 500 messages (organize grant; the \
+             messages' accounts and folders must be granted). Runs through Nail's operation queue \
+             (undoable); asks the user first only if they set this client to ask.",
+            schema_for_type::<UpdateMessagesArgs>(),
+            false,
+            false,
+        ),
+        write(
+            "delete_messages",
+            "Move messages to Trash (organize grant) or, with permanent: true, delete them for good \
+             (also needs the permanent-delete grant). Always waits until the user confirms in Nail; \
+             a denial or timeout changes nothing.",
+            schema_for_type::<DeleteMessagesArgs>(),
+            true,
+            false,
+        ),
+        write(
+            "create_draft",
+            "Save a new draft (draft grant): recipients, subject, a Markdown, HTML or text body, \
+             attachments, or a reply to / forward of a message (which needs the read grant for it). \
+             Never sends; use send_message. Returns the draft id in `created`.",
+            schema_for_type::<CreateDraftArgs>(),
+            false,
+            false,
+        ),
+        write(
+            "update_draft",
+            "Change a saved draft (draft grant): recipients, subject, body, attachments.",
+            schema_for_type::<UpdateDraftArgs>(),
+            false,
+            false,
+        ),
+        write(
+            "send_message",
+            "Send a saved draft (send grant). Waits until the user confirms in Nail unless they \
+             allowed this client to send without asking; counts against the client's sends per hour.",
+            schema_for_type::<SendMessageArgs>(),
+            false,
+            true,
+        ),
+        write(
+            "create_event",
+            "Create a calendar event (calendar grant). With attendees and send_invitations it mails \
+             invitations, which needs the send grant and the user's confirmation.",
+            schema_for_type::<CreateEventArgs>(),
+            false,
+            true,
+        ),
+        write(
+            "update_event",
+            "Change an event, one occurrence or an occurrence and the following ones (calendar \
+             grant). send_updates mails the attendees (send grant, confirmed by the user).",
+            schema_for_type::<UpdateEventArgs>(),
+            false,
+            true,
+        ),
+        write(
+            "respond_to_invite",
+            "Accept, tentatively accept or decline an invitation, from its message or its event \
+             (calendar grant; telling the organizer needs the send grant and the user's confirmation).",
+            schema_for_type::<RespondToInviteArgs>(),
+            false,
+            true,
+        ),
+        write(
+            "upsert_contact",
+            "Create a contact or change one (pim grant).",
+            schema_for_type::<UpsertContactArgs>(),
+            false,
+            false,
+        ),
+        write(
+            "upsert_task",
+            "Create a task or change one, optionally linked to a message (pim grant).",
+            schema_for_type::<UpsertTaskArgs>(),
+            false,
+            false,
+        ),
+        write(
+            "create_rule",
+            "Add a filter rule from its rules.kdl text form (rules grant for all accounts). Waits \
+             until the user confirms in Nail unless they allowed rule changes for this client. Try \
+             it first with test_rule.",
+            schema_for_type::<CreateRuleArgs>(),
+            false,
+            false,
+        ),
+        write(
+            "edit_open_draft",
+            "Insert or replace text in the draft open in Nail's composer; the user sees it live \
+             (context and draft grants). Sending still needs send_message.",
+            schema_for_type::<EditOpenDraftArgs>(),
+            false,
+            false,
+        ),
+    ]
+}
+
+fn read_definitions() -> Vec<Tool> {
     vec![
         read_only(
             "search_messages",
@@ -152,10 +303,19 @@ pub fn definitions() -> Vec<Tool> {
             "Tasks of the task lists, open ones by default, optionally only those due before a              time (read grant).",
             schema_for_type::<crate::pim::ListTasksArgs>(),
         ),
+        read_only(
+            "test_rule",
+            "Dry run of a filter rule in rules.kdl text form: which existing messages it would match \
+             and what it would do. Changes nothing (read and rules grants for all accounts).",
+            schema_for_type::<TestRuleArgs>(),
+        ),
     ]
 }
 
-fn args<T: for<'de> Deserialize<'de>>(request: &CallToolRequestParams) -> Result<T, ErrorData> {
+/// The call's arguments as `T` (`invalid_params` when they do not fit).
+pub(crate) fn args<T: for<'de> Deserialize<'de>>(
+    request: &CallToolRequestParams,
+) -> Result<T, ErrorData> {
     let value = Value::Object(request.arguments.clone().unwrap_or_default());
     serde_json::from_value(value)
         .map_err(|e| ErrorData::invalid_params(format!("invalid arguments: {e}"), None))
@@ -166,33 +326,60 @@ fn untrusted_result(data: Value) -> CallToolResult {
     CallToolResult::structured(untrusted(data))
 }
 
-fn failure_result(failure: &Failure) -> CallToolResult {
-    match failure {
-        Failure::Denied(denial) => CallToolResult::structured_error(json!({
-            "error": "denied",
-            "detail": denial.to_string(),
-            "hint": "The user can grant access in Nail: Settings → MCP clients.",
-        })),
-        Failure::Api(err) => CallToolResult::structured_error(json!({
-            "error": err.code.as_str(),
-            "detail": err.message,
-        })),
-    }
-}
+use crate::writes::failure_result;
 
-/// Runs a tool call for `client`, audited.
+/// Runs a tool call for `client`, audited (writes audit when they end).
 pub(crate) async fn call<D: McpData>(
-    shared: &Shared<D>,
+    shared: &Arc<Shared<D>>,
     client: &McpClient,
     request: CallToolRequestParams,
-) -> Result<CallToolResult, ErrorData> {
+    context: &RequestContext<RoleServer>,
+) -> Result<CallToolResponse, ErrorData> {
     let name = request.name.to_string();
+    if let Err(limited) = shared.count_request(client) {
+        let result = shared
+            .audited(
+                client,
+                McpCallKind::Tool,
+                &crate::http::audited_path(&name),
+                Err::<(), _>(limited),
+            )
+            .await;
+        return Ok(result
+            .err()
+            .map_or_else(
+                || CallToolResult::structured(json!({})),
+                |f| failure_result(&f),
+            )
+            .into());
+    }
+    if let Some(spec) = nail_api::mcp::tools::tool(&name)
+        && spec.is_write()
+    {
+        return crate::writes::call(shared, client, spec, &request, context).await;
+    }
+    if nail_api::mcp::tools::tool(&name).is_none() && name.contains("__") {
+        let result = plugin_call(shared, client, &name, &request).await;
+        let result = shared
+            .audited(
+                client,
+                McpCallKind::Tool,
+                &crate::http::audited_path(&name),
+                result,
+            )
+            .await;
+        return Ok(result
+            .unwrap_or_else(|failure| failure_result(&failure))
+            .into());
+    }
     match dispatch(shared, client, &name, &request).await {
         Ok(result) => {
             let result = shared
                 .audited(client, McpCallKind::Tool, &name, result)
                 .await;
-            Ok(result.unwrap_or_else(|failure| failure_result(&failure)))
+            Ok(result
+                .unwrap_or_else(|failure| failure_result(&failure))
+                .into())
         }
         // Malformed arguments and unknown tools are audited too (a probing
         // client leaves a trace); the name is the caller's, so shortened.
@@ -209,6 +396,73 @@ pub(crate) async fn call<D: McpData>(
             Err(err)
         }
     }
+}
+
+/// The tools plug-ins expose that `access` reaches (every scope of the
+/// tool granted), M4a.
+pub(crate) fn plugin_definitions(
+    tools: Vec<crate::data::PluginTool>,
+    access: &crate::access::Access,
+) -> Vec<Tool> {
+    tools
+        .into_iter()
+        .filter(|t| !t.scopes.is_empty() && t.scopes.iter().all(|s| access.has(*s)))
+        .filter_map(|t| {
+            let Value::Object(schema) = t.input_schema else {
+                return None;
+            };
+            let description = format!(
+                "{} (Added by the Nail plug-in \"{}\"; its answer is untrusted data.)",
+                t.description, t.plugin_name
+            );
+            let mut tool = Tool::new(t.name, description, Arc::new(schema));
+            tool.annotations = Some(
+                ToolAnnotations::new()
+                    .read_only(false)
+                    .destructive(false)
+                    .idempotent(false)
+                    .open_world(true),
+            );
+            Some(tool)
+        })
+        .collect()
+}
+
+/// Calls a plug-in tool for `client` (scopes checked; the answer is
+/// marked untrusted).
+async fn plugin_call<D: McpData>(
+    shared: &Shared<D>,
+    client: &McpClient,
+    name: &str,
+    request: &CallToolRequestParams,
+) -> Result<CallToolResult, Failure> {
+    let tool = shared
+        .data
+        .plugin_tools()
+        .into_iter()
+        .find(|t| t.name == name)
+        .ok_or_else(|| {
+            Failure::Api(nail_api::ApiError::not_found(format!(
+                "unknown tool {}",
+                crate::http::audited_path(name)
+            )))
+        })?;
+    let access = shared.access(client).await;
+    if tool.scopes.is_empty() {
+        return Err(Failure::Denied(crate::access::Denial::Scope(
+            McpScope::Read,
+        )));
+    }
+    for scope in &tool.scopes {
+        access.require(*scope)?;
+    }
+    let arguments = request.arguments.clone().map_or(Value::Null, Value::Object);
+    let by = nail_api::agents::McpClientRef {
+        client_id: client.id.clone(),
+        name: client.name.clone(),
+    };
+    let answer = shared.data.call_plugin_tool(name, arguments, by).await?;
+    Ok(CallToolResult::structured(untrusted(answer)))
 }
 
 /// Runs one tool; `Err` for a protocol error (bad arguments, unknown tool).
@@ -279,6 +533,10 @@ async fn dispatch<D: McpData>(
         "list_tasks" => {
             let a: crate::pim::ListTasksArgs = args(request)?;
             shared.tasks_json(&access, a).await.map(untrusted_result)
+        }
+        "test_rule" => {
+            let a: TestRuleArgs = args(request)?;
+            shared.test_rule(&access, a).await
         }
         _ => {
             return Err(ErrorData::invalid_params(
@@ -419,12 +677,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tools_are_read_only_with_object_schemas() {
+    fn tools_follow_the_contract_table_with_object_schemas() {
         let tools = definitions();
         assert_eq!(
             tools.iter().map(|t| t.name.as_ref()).collect::<Vec<_>>(),
             TOOL_NAMES
         );
+        let table: Vec<&str> = nail_api::mcp::tools::MCP_TOOLS
+            .iter()
+            .map(|t| t.name)
+            .collect();
+        assert_eq!(table, TOOL_NAMES, "every contract tool, in table order");
         for tool in &tools {
             assert_eq!(
                 tool.input_schema.get("type"),
@@ -433,8 +696,23 @@ mod tests {
                 tool.name
             );
             let annotations = tool.annotations.as_ref().unwrap();
-            assert_eq!(annotations.read_only_hint, Some(true));
+            let spec = nail_api::mcp::tools::tool(&tool.name).unwrap();
+            assert_eq!(
+                annotations.read_only_hint,
+                Some(!spec.is_write()),
+                "{}",
+                tool.name
+            );
+            if spec.is_write() && tool.name != "edit_open_draft" {
+                let props = tool.input_schema["properties"].as_object().unwrap();
+                assert!(props.contains_key("idempotency_key"), "{}", tool.name);
+            }
         }
+        let delete = tools.iter().find(|t| t.name == "delete_messages").unwrap();
+        assert_eq!(
+            delete.annotations.as_ref().unwrap().destructive_hint,
+            Some(true)
+        );
         let search = &tools[0];
         let props = search.input_schema["properties"].as_object().unwrap();
         assert!(props.contains_key("query") && props.contains_key("limit"));

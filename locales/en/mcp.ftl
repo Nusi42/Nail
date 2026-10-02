@@ -104,3 +104,43 @@ mcp-settings-issue-port = Choose a port between 1024 and 65535.
 
 mcp-rate-limit-issue-zero = A limit cannot be 0. Remove the client's permissions instead.
 mcp-rate-limit-issue-too-high = A limit can be at most 10,000.
+
+## Writing scopes, rate limits, confirmations (M4a WP104, ADR 0079)
+
+mcp-grant-write-scopes = What it may change
+mcp-grant-write-intro = Changes go through Nail like your own and can be undone. What the client has to ask you about first is set under “Confirmations” below; deleting always asks.
+mcp-scope-organize = Organize mail
+mcp-scope-organize-hint = Flag, tag, mark as read, move, archive and snooze messages, and move them to Trash (Trash always asks first).
+mcp-scope-permanent-delete = Delete mail permanently
+mcp-scope-permanent-delete-hint = Delete messages for good. Always asks first, every time.
+mcp-scope-draft = Write drafts
+mcp-scope-draft-hint = Create and change drafts, and edit the draft you have open.
+mcp-scope-send = Send mail
+mcp-scope-send-hint = Send drafts, invitations and answers to invitations.
+mcp-scope-calendar = Change calendars
+mcp-scope-calendar-hint = Create and change events and answer invitations.
+mcp-scope-pim = Change contacts and tasks
+mcp-scope-pim-hint = Create and change contacts and tasks.
+mcp-scope-rules = Filter rules
+mcp-scope-rules-hint = Create filter rules and test them.
+mcp-rate-label = Limits for { $name }
+mcp-rate-title = Limits
+mcp-rate-intro = Calls over a limit are refused and shown as denied in the activity.
+mcp-rate-requests = Calls per minute
+mcp-rate-requests-hint = Reading, searching, tools and prompts together.
+mcp-rate-requests-unlimited = No limit for calls
+mcp-rate-writes = Changes per minute
+mcp-rate-writes-hint = Every call of a writing tool, whether it runs, asks or is refused.
+mcp-rate-writes-unlimited = No limit for changes
+mcp-rate-sends = Messages sent per hour
+mcp-rate-sends-hint = Sent mail, invitations and answers to invitations.
+mcp-rate-sends-unlimited = No limit for sending
+mcp-rate-save = Save limits
+mcp-rate-saved = Limits saved.
+mcp-rate-defaults = Use the default limits
+mcp-client-pending =
+    { $count ->
+        [one] { $name } is waiting for your confirmation.
+       *[other] { $name } is waiting for { $count } confirmations.
+    }
+mcp-client-pending-review = Review

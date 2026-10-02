@@ -80,7 +80,7 @@ describe("checkManifest", () => {
       homepage: "http://example.com",
       permissions: [
         "mail.read.body",
-        "tasks.write",
+        "tasks.read",
         "mail.delete",
         "network:*.com",
         "storage",

@@ -1,0 +1,19 @@
+{
+  "name": "nail-plugin-attachment-check",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Example Nail plug-in: stops mail that mentions a missing attachment",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc -p .",
+    "package": "npm run typecheck && npm run build && node scripts/pack.mjs"
+  },
+  "devDependencies": {
+    "@nail/plugin-api": "*",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3"
+  }
+}

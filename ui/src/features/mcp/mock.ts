@@ -10,8 +10,6 @@ import type {
   McpAuditEntry,
   McpClient,
   McpGrant,
-  McpRateLimitIssue,
-  McpRateLimits,
   McpServerInfo,
   McpSettings,
   Request,
@@ -51,21 +49,10 @@ export interface McpMockState {
 
 const DEMO_TIME = "2026-09-28T09:00:00Z";
 
-/** The rate limits a client starts with (`McpRateLimits::default`, M4a). */
-export const DEFAULT_RATE_LIMITS: McpRateLimits = {
-  requests_per_minute: 120,
-  writes_per_minute: 20,
-  sends_per_hour: 10,
-};
+import { DEFAULT_RATE_LIMITS, rateLimitIssues } from "./queries";
 
-/** Problems with rate limits (`McpRateLimits::issues`). */
-export function rateLimitIssues(limits: McpRateLimits): McpRateLimitIssue[] {
-  const values = [limits.requests_per_minute, limits.writes_per_minute, limits.sends_per_hour];
-  const issues: McpRateLimitIssue[] = [];
-  if (values.includes(0)) issues.push("zero");
-  if (values.some((v) => v !== null && v > 10_000)) issues.push("too-high");
-  return issues;
-}
+/** The rate limit defaults and checks (moved to `./queries` for the editor). */
+export { DEFAULT_RATE_LIMITS, rateLimitIssues };
 
 /** One demo client with a read grant and a few audit entries. */
 export function createMcpMockState(): McpMockState {

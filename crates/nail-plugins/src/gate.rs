@@ -138,6 +138,33 @@ impl Gate {
         Ok(read.intersect(&Self::scope_of(body, expand)))
     }
 
+    /// The accounts a granted `permission` reaches on its own (M4a; every
+    /// account for permissions that are not account-limited).
+    pub fn scope(
+        &self,
+        permission: &PluginPermission,
+        call: &str,
+        expand: &dyn Fn(&[AccountId]) -> Vec<AccountId>,
+    ) -> Result<AccountScope, Denied> {
+        let grant = self
+            .grant(permission)
+            .ok_or_else(|| Denied::new(call, permission))?;
+        Ok(Self::scope_of(grant, expand))
+    }
+
+    /// The accounts where `permission` and `mail.read` are both granted
+    /// (M4a: `mail.organize`, `hooks.arrival`, `hooks.open` — they act on
+    /// messages the plug-in must be able to read).
+    pub fn scope_with_read(
+        &self,
+        permission: &PluginPermission,
+        call: &str,
+        expand: &dyn Fn(&[AccountId]) -> Vec<AccountId>,
+    ) -> Result<AccountScope, Denied> {
+        let own = self.scope(permission, call, expand)?;
+        Ok(self.mail_scope(call, expand)?.intersect(&own))
+    }
+
     /// The granted `network:` host patterns.
     pub fn network_patterns(&self) -> Vec<String> {
         self.grants
@@ -376,6 +403,54 @@ mod tests {
         let nothing = Gate::new(&m, &[]);
         assert_eq!(
             nothing.body_scope("y", &no_expand).unwrap_err().permission,
+            "mail.read"
+        );
+    }
+
+    /// M4a: account-limited write and hook permissions intersect with
+    /// `mail.read`; others reach every account.
+    #[test]
+    fn write_and_hook_scopes() {
+        let m = manifest(&[
+            "mail.read",
+            "mail.organize",
+            "hooks.arrival",
+            "hooks.beforeSend",
+            "tasks.write",
+        ]);
+        let gate = Gate::new(
+            &m,
+            &[
+                grant("mail.read", Some(&["work", "home"])),
+                grant("mail.organize", Some(&["work", "other"])),
+                grant("hooks.beforeSend", Some(&["home"])),
+                grant("tasks.write", Some(&["work"])),
+            ],
+        );
+        let organize = gate
+            .scope_with_read(&PluginPermission::MailOrganize, "x", &no_expand)
+            .unwrap();
+        assert_eq!(organize, AccountScope::Only(vec!["work".into()]));
+        let send = gate
+            .scope(&PluginPermission::HooksBeforeSend, "x", &no_expand)
+            .unwrap();
+        assert_eq!(send, AccountScope::Only(vec!["home".into()]));
+        // Account lists only where the permission takes them.
+        assert_eq!(
+            gate.scope(&PluginPermission::TasksWrite, "x", &no_expand)
+                .unwrap(),
+            AccountScope::All
+        );
+        let denied = gate
+            .scope_with_read(&PluginPermission::HooksArrival, "hooks.arrival", &no_expand)
+            .unwrap_err();
+        assert_eq!(denied.permission, "hooks.arrival");
+        let no_read = Gate::new(&m, &[grant("mail.organize", None)]);
+        assert_eq!(
+            no_read
+                .scope_with_read(&PluginPermission::MailOrganize, "x", &no_expand)
+                .unwrap_err()
+                .permission,
             "mail.read"
         );
     }

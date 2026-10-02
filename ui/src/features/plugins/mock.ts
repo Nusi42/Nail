@@ -20,6 +20,7 @@ import type {
 } from "../../api/generated";
 import { errorResponse, type MockCore } from "../../api/mockMail";
 import { ACCOUNT_PERMISSIONS } from "./grants";
+import { createExtensionsMockState, type ExtensionsMockState } from "./extensionsMock";
 import { answerHost, createMockHost, type MockHost } from "./mockHost";
 
 /** The requests this feature answers. */
@@ -78,10 +79,19 @@ export interface PluginsMockState {
   host: MockHost | null;
   /** Next log sequence number. */
   nextSeq: number;
+  /** Hooks, extensions, jobs and vetoes (M4a; `./extensionsMock.ts`). */
+  extensions: ExtensionsMockState;
 }
 
 export function createPluginsMockState(): PluginsMockState {
-  return { plugins: [], logs: [], settings: {}, host: createMockHost(), nextSeq: 1 };
+  return {
+    plugins: [],
+    logs: [],
+    settings: {},
+    host: createMockHost(),
+    nextSeq: 1,
+    extensions: createExtensionsMockState(),
+  };
 }
 
 /** The value a setting has until the user changes it (like the core). */

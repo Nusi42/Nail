@@ -5,9 +5,17 @@
 //! [`CoreData`]; every read then goes through the same code paths the UI
 //! uses. Raw sources come from the blob store, attachments are cut out of
 //! the raw source with `nail-mime`.
+//!
+//! M4a (WP101): writes go through [`CoreAccess::handle_write`] (by default
+//! the core's request handler, so they run through its operation queue
+//! like the UI's own); [`CoreAccess::confirmations`] and
+//! [`CoreAccess::render`] let the core bring its confirmation broker and
+//! its locale (defaults: the server's store-backed broker, English).
 
 use std::future::Future;
+use std::sync::Arc;
 
+use nail_api::agents::ActionAttribution;
 use nail_api::compose::Draft;
 use nail_api::{
     Account, AccountId, ApiError, DraftId, ErrorCode, Event, Folder, FolderId, Identity,
@@ -16,6 +24,7 @@ use nail_api::{
 };
 use nail_store::{BlobStore, Store};
 
+use crate::broker::ConfirmationBroker;
 use crate::data::{AttachmentData, DataResult, McpData, MessagePage, SearchOutcome, ThreadData};
 
 /// What [`CoreData`] needs from the core.
@@ -42,6 +51,63 @@ pub trait CoreAccess: Send + Sync + 'static {
     /// Messages whose body is not downloaded are not encrypted (there is no
     /// content to read).
     fn is_encrypted(&self, id: &MessageId) -> impl Future<Output = Result<bool, ApiError>> + Send;
+
+    /// Runs a write of an MCP client (M4a). The default is
+    /// [`Self::handle`]: the request goes through the operation queue like
+    /// the UI's; the core may override it to attribute the operation to
+    /// `by` (audit, undo history).
+    fn handle_write(
+        &self,
+        by: &ActionAttribution,
+        request: Request,
+    ) -> impl Future<Output = Response> + Send {
+        let _ = by;
+        self.handle(request)
+    }
+
+    /// The core's confirmation broker; `None` = the server's store-backed
+    /// one ([`crate::broker::StoreBroker`]).
+    fn confirmations(&self) -> Option<Arc<dyn ConfirmationBroker>> {
+        None
+    }
+
+    /// Renders a user-facing text in the core's locale (default English).
+    fn render(&self, message: &nail_api::LocalizedMessage) -> String {
+        nail_config::l10n::english(message)
+    }
+
+    /// Tools plug-ins expose (default none).
+    fn plugin_tools(&self) -> Vec<crate::data::PluginTool> {
+        Vec::new()
+    }
+
+    /// Calls a plug-in tool (default `not_found`).
+    fn call_plugin_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+        client: nail_api::agents::McpClientRef,
+    ) -> impl Future<Output = Result<serde_json::Value, ApiError>> + Send {
+        let _ = (arguments, client);
+        let name = name.to_owned();
+        async move { Err(ApiError::not_found(format!("no plug-in tool {name}"))) }
+    }
+}
+
+/// A response, or its error.
+fn answered(response: Response) -> DataResult<Response> {
+    match response {
+        Response::Error {
+            code,
+            message,
+            localized,
+        } => Err(ApiError {
+            code,
+            message,
+            localized,
+        }),
+        other => Ok(other),
+    }
 }
 
 /// [`McpData`] for any [`CoreAccess`].
@@ -188,18 +254,36 @@ impl<C: CoreAccess> McpData for CoreData<C> {
     }
 
     async fn pim(&self, request: Request) -> DataResult<Response> {
-        match self.0.handle(request).await {
-            Response::Error {
-                code,
-                message,
-                localized,
-            } => Err(ApiError {
-                code,
-                message,
-                localized,
-            }),
-            other => Ok(other),
-        }
+        answered(self.0.handle(request).await)
+    }
+
+    async fn query(&self, request: Request) -> DataResult<Response> {
+        answered(self.0.handle(request).await)
+    }
+
+    async fn write(&self, by: &ActionAttribution, request: Request) -> DataResult<Response> {
+        answered(self.0.handle_write(by, request).await)
+    }
+
+    fn confirmations(&self) -> Option<Arc<dyn ConfirmationBroker>> {
+        self.0.confirmations()
+    }
+
+    fn render(&self, message: &nail_api::LocalizedMessage) -> String {
+        self.0.render(message)
+    }
+
+    fn plugin_tools(&self) -> Vec<crate::data::PluginTool> {
+        self.0.plugin_tools()
+    }
+
+    async fn call_plugin_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+        client: nail_api::agents::McpClientRef,
+    ) -> DataResult<serde_json::Value> {
+        self.0.call_plugin_tool(name, arguments, client).await
     }
 
     async fn pim_raw(&self, item: &nail_api::pim::PimItemRef) -> DataResult<Option<String>> {

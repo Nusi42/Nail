@@ -2,7 +2,14 @@
  * Server data of the MCP settings (TanStack Query through `NailClient`).
  */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import type { McpAuditEntry, McpClientId, McpGrant, McpScope } from "../../api/generated";
+import type {
+  McpAuditEntry,
+  McpClientId,
+  McpGrant,
+  McpRateLimitIssue,
+  McpRateLimits,
+  McpScope,
+} from "../../api/generated";
 import { useClient } from "../../state/queries";
 
 /** Audit entries per page. */
@@ -17,10 +24,7 @@ export const mcpKeys = {
   allAudit: ["mcp", "audit"] as const,
 };
 
-/**
- * The scopes the read-only server of M1 checks, in display order. The
- * others (write scopes) are kept as they are when a grant is saved.
- */
+/** The reading scopes, in display order. */
 export const READ_SCOPES: readonly McpScope[] = [
   "read",
   "raw-source",
@@ -28,6 +32,40 @@ export const READ_SCOPES: readonly McpScope[] = [
   "encrypted",
   "context",
 ];
+
+/**
+ * The writing scopes (M4a, ADR 0079), in display order. Writes also follow
+ * the client's confirmation policy; permanent delete is its own scope and
+ * always asks.
+ */
+export const WRITE_SCOPES: readonly McpScope[] = [
+  "organize",
+  "permanent-delete",
+  "draft",
+  "send",
+  "calendar",
+  "pim",
+  "rules",
+];
+
+/** Every scope in display order. */
+export const ALL_SCOPES: readonly McpScope[] = [...READ_SCOPES, ...WRITE_SCOPES];
+
+/** The rate limits a client starts with (`McpRateLimits::default`, M4a). */
+export const DEFAULT_RATE_LIMITS: McpRateLimits = {
+  requests_per_minute: 120,
+  writes_per_minute: 20,
+  sends_per_hour: 10,
+};
+
+/** Problems with rate limits (`McpRateLimits::issues`). */
+export function rateLimitIssues(limits: McpRateLimits): McpRateLimitIssue[] {
+  const values = [limits.requests_per_minute, limits.writes_per_minute, limits.sends_per_hour];
+  const issues: McpRateLimitIssue[] = [];
+  if (values.includes(0)) issues.push("zero");
+  if (values.some((v) => v !== null && v > 10_000)) issues.push("too-high");
+  return issues;
+}
 
 /** A grant with nothing in it (the state of a new client). */
 export function emptyGrant(): McpGrant {

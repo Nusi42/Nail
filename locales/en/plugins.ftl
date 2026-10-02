@@ -205,3 +205,94 @@ plugin-notification-dismiss = Dismiss
 
 plugin-panel-missing = The plug-in for this panel is not installed or not enabled.
 plugin-panel-label = Plug-in panel
+
+## M4a (WP104, ADR 0079): permissions that change data, contributions
+
+plugin-permission-write = Can change your data
+plugin-install-hook = Mail hook: { $hook }
+plugin-install-composer-action = Composer action “{ $title }”
+plugin-install-markdown-block = Markdown block “{ $title }”
+plugin-install-attachment-preview = Attachment preview “{ $title }”
+plugin-install-attachment-action = Attachment action “{ $title }”
+plugin-install-link-action = Link action “{ $title }”
+plugin-install-job = Background job “{ $title }”
+plugin-install-mcp-tool = Tool for AI agents: { $tool }
+plugin-manager-show-confirmations = Confirmations
+plugin-manager-show-activity = Activity
+
+## Plug-in manager: activity (hooks, background jobs, CPU time)
+
+plugin-activity-cpu = CPU time in the last hour
+plugin-activity-cpu-value = { $used } s of { $quota } s ({ $percent } %)
+plugin-activity-cpu-exhausted = The plug-in used all its CPU time for this hour. Its jobs are skipped until the hour is over.
+plugin-activity-hooks = Mail hooks
+plugin-activity-hook = Hook
+plugin-activity-calls = Calls
+plugin-activity-failures = Failed
+plugin-activity-timeouts = Too slow
+plugin-activity-vetoes = Stopped mail
+plugin-activity-time = Time (average / longest)
+plugin-activity-time-value = { $average } ms / { $max } ms
+plugin-activity-last = Last call
+plugin-activity-count = { NUMBER($count) }
+plugin-activity-never = Never
+plugin-activity-last-error = Last problem: { $error }
+plugin-activity-jobs = Background jobs
+plugin-activity-schedule = Schedule
+plugin-activity-events = Runs when
+plugin-activity-last-run = Last run
+plugin-activity-running = Running now
+plugin-activity-last-run-value = { $time }: { $outcome }
+plugin-activity-next-run = Next run
+plugin-activity-no-next-run = Not scheduled
+plugin-activity-runs = Runs
+plugin-activity-runs-value =
+    { $failures ->
+        [0] { $runs }, none failed
+       *[other] { $runs }, { $failures } failed
+    }
+plugin-activity-run-now = Run “{ $job }” now
+plugin-activity-none = This plug-in has no mail hooks and no background jobs.
+
+## Reader: banners and badges of open hooks, attachment previews, actions
+
+plugin-banners-label = Notes from plug-ins
+plugin-banner-from = { $plugin }:
+plugin-badges-label = Plug-in badges
+plugin-badge-from = Added by the plug-in { $plugin }
+plugin-badge-tooltip = { $tooltip } (added by the plug-in { $plugin })
+plugin-extension-from = { $plugin }
+plugin-attachment-actions = Plug-in actions for { $name }
+plugin-link-actions = Plug-in actions for this link
+plugin-preview-label = Preview of { $name }
+plugin-preview-by = { $renderer }, shown by the plug-in { $plugin }
+plugin-preview-choose = Preview with
+plugin-preview-option = { $renderer } ({ $plugin })
+plugin-preview-loading = Preparing the preview…
+plugin-preview-invalid = The plug-in { $plugin } returned a preview Nail cannot show.
+plugin-preview-image-alt = Preview drawn by the plug-in { $plugin }
+
+## Composer: plug-in actions, Markdown blocks, edits
+
+plugin-composer-label = Plug-ins
+plugin-composer-actions = Plug-in actions
+plugin-composer-blocks = Insert block
+plugin-composer-save-first = The draft could not be saved, so the plug-in cannot work on it yet.
+plugin-composer-edited-insert = { $actor } inserted text.
+plugin-composer-edited-replace-selection = { $actor } replaced the selected text.
+plugin-composer-edited-replace-all = { $actor } replaced the whole text.
+plugin-block-rendered-by = { $block }: rendered by the plug-in { $plugin } when the message is sent
+plugin-block-unknown = No plug-in renders “{ $block }”; it is sent as a code block.
+
+## Before-send veto
+
+plugin-veto-title =
+    { $count ->
+        [one] A plug-in stopped this message
+       *[other] { $count } plug-ins stopped this message
+    }
+plugin-veto-intro = The message was not sent. Check the reason, then keep editing or send it anyway.
+plugin-veto-plugin = Plug-in “{ $plugin }”:
+plugin-veto-keep-editing = Keep editing
+plugin-veto-send-anyway = Send anyway
+plugin-veto-expired = This was too long ago. Send the message again to check it once more.

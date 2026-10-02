@@ -64,23 +64,40 @@ export interface UiIntrinsicElements {
 /** A function component: props in, content out. */
 export type UiComponent<P = Record<string, unknown>> = (props: P) => UiContent | null;
 
-const NODE_TYPES: ReadonlySet<string> = new Set<PluginUiNodeType>([
-  "text",
-  "markdown",
-  "input",
-  "textarea",
-  "select",
-  "checkbox",
-  "date",
-  "contact-picker",
-  "folder-picker",
-  "message-list",
-  "table",
-  "button",
-  "progress",
-  "image",
-  "stack",
-]);
+/**
+ * Every node type of the contract. A `Record` over the generated union, so
+ * a component added to `PluginUiNode` in Rust fails to compile here until
+ * the runtime knows it (and `UiIntrinsicElements` below gives it props).
+ */
+const NODE_TYPE_TABLE: Record<PluginUiNodeType, "leaf" | "text" | "container"> = {
+  text: "text",
+  markdown: "text",
+  input: "leaf",
+  textarea: "leaf",
+  select: "leaf",
+  checkbox: "leaf",
+  date: "leaf",
+  "contact-picker": "leaf",
+  "folder-picker": "leaf",
+  "message-list": "leaf",
+  table: "leaf",
+  button: "leaf",
+  progress: "leaf",
+  image: "leaf",
+  stack: "container",
+};
+
+/** Every node type, in the contract's order. */
+export const NODE_TYPES: readonly PluginUiNodeType[] = Object.keys(
+  NODE_TYPE_TABLE,
+) as PluginUiNodeType[];
+
+const NODE_TYPE_SET: ReadonlySet<string> = new Set<string>(NODE_TYPES);
+
+/** Compile-time check: every node type has JSX props. */
+type MissingElements = Exclude<PluginUiNodeType, keyof UiIntrinsicElements>;
+const everyElementTyped: MissingElements extends never ? true : MissingElements = true;
+void everyElementTyped;
 
 /** Whether `value` looks like a {@link PluginUiNode} (an object with a known `type`). */
 export function isUiNode(value: unknown): value is PluginUiNode {
@@ -89,7 +106,7 @@ export function isUiNode(value: unknown): value is PluginUiNode {
     value !== null &&
     !Array.isArray(value) &&
     typeof (value as { type?: unknown }).type === "string" &&
-    NODE_TYPES.has((value as { type: string }).type)
+    NODE_TYPE_SET.has((value as { type: string }).type)
   );
 }
 
@@ -167,12 +184,13 @@ function toFlat(children: unknown): unknown[] {
 }
 
 function intrinsic(type: string, props: Record<string, unknown>): PluginUiNode {
-  if (!NODE_TYPES.has(type)) {
+  if (!NODE_TYPE_SET.has(type)) {
     throw new TypeError(`Unknown Nail UI element <${type}>`);
   }
   const node: Record<string, unknown> = { type, ...fields(props) };
   const children = props.children;
-  if (type === "text" || type === "markdown") {
+  const shape = NODE_TYPE_TABLE[type as PluginUiNodeType];
+  if (shape === "text") {
     if (hasChildren(children)) {
       if (props.value !== undefined) {
         throw new TypeError(`<${type}> takes either a value or children, not both`);
@@ -181,7 +199,7 @@ function intrinsic(type: string, props: Record<string, unknown>): PluginUiNode {
     } else if (node.value === undefined) {
       node.value = "";
     }
-  } else if (type === "stack") {
+  } else if (shape === "container") {
     node.children = toNodes(children as UiChild);
   } else if (hasChildren(children)) {
     throw new TypeError(`<${type}> takes no children`);

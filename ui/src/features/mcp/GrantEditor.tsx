@@ -1,6 +1,6 @@
 /**
- * Editor of one MCP client's grant: scopes, accounts (or all accounts) and
- * hidden folders. Nothing is granted until the user saves a grant here.
+ * Editor of one MCP client's grant: reading and (M4a) writing scopes,
+ * accounts (or all accounts) and hidden folders. Nothing is granted until the user saves a grant here.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -9,7 +9,7 @@ import type { Account, McpClient, McpGrant } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { useAccounts, useClient, useFolders } from "../../state/queries";
 import { CheckField, Section } from "../../widgets/forms";
-import { READ_SCOPES, grantIsEmpty, mcpKeys, toggled } from "./queries";
+import { ALL_SCOPES, READ_SCOPES, WRITE_SCOPES, grantIsEmpty, mcpKeys, toggled } from "./queries";
 
 function FolderExclusions({
   account,
@@ -116,7 +116,23 @@ export function GrantEditor({ client }: { client: McpClient }) {
                 name={`scope-${scope}`}
                 checked={grant.scopes.includes(scope)}
                 onChange={(on) =>
-                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, READ_SCOPES) })
+                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) })
+                }
+              />
+              <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>
+            </div>
+          ))}
+        </Section>
+        <Section titleId="mcp-grant-write-scopes">
+          <p data-part="mcp-grants.write-intro">{t("mcp-grant-write-intro")}</p>
+          {WRITE_SCOPES.map((scope) => (
+            <div key={scope} data-part="mcp-grants.scope" data-scope={scope} data-write="">
+              <CheckField
+                labelId={`mcp-scope-${scope}`}
+                name={`scope-${scope}`}
+                checked={grant.scopes.includes(scope)}
+                onChange={(on) =>
+                  change({ ...grant, scopes: toggled(grant.scopes, scope, on, ALL_SCOPES) })
                 }
               />
               <span data-part="mcp-grants.scope.hint">{t(`mcp-scope-${scope}-hint`)}</span>

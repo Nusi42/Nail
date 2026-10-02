@@ -9,12 +9,12 @@ runs a quick check of the same rules before packing.
 {
   "id": "follow-up",
   "name": "%plugin-name%",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "apiVersion": "1",
   "main": "dist/index.js",
   "description": "%plugin-description%",
   "author": "Nail",
-  "permissions": ["mail.read", "ui.dialogs", "storage", "notifications"],
+  "permissions": ["mail.read", "tasks.write", "ui.dialogs", "notifications", "storage", "background"],
   "contributes": {
     "commands": [
       { "id": "follow-up", "title": "%follow-up-title%", "icon": "flag", "contexts": ["list", "reader"] }
@@ -22,6 +22,7 @@ runs a quick check of the same rules before packing.
     "placements": [{ "toolbar": "reader", "after": "mail.forward", "command": "follow-up" }],
     "keys": [{ "key": "shift+f", "command": "follow-up", "context": "list" }],
     "panels": [{ "id": "due", "title": "%due-title%", "icon": "flag" }],
+    "jobs": [{ "id": "remind", "title": "%remind-title%", "schedule": "@hourly", "events": ["app.started"] }],
     "settings": [
       { "type": "number", "key": "default-days", "title": "%setting-days-title%", "default": 1, "min": 0, "max": 365 }
     ],
@@ -42,7 +43,7 @@ runs a quick check of the same rules before packing.
 | `description` | no | One paragraph, at most 1000 characters (or a `%text-id%`). |
 | `author` | no | Who wrote it. |
 | `homepage` | no | A web page about it; `https:` only, shown as text. |
-| `permissions` | no | What it may do; see [permissions](permissions.md). Each at most once; `mail.read.body` needs `mail.read`. |
+| `permissions` | no | What it may do; see [permissions](permissions.md). Each at most once; `mail.read.body`, `mail.organize`, `hooks.arrival` and `hooks.open` need `mail.read`. |
 | `contributes` | no | What it adds to Nail (below). |
 
 Paths inside the package use `/`, letters, digits, `.`, `-` and `_`, and
@@ -66,7 +67,8 @@ follow-up-title = Follow up…
 ```
 
 Keys of `locales` are language tags (`en`, `de`, `pt-BR`); values are
-`.ftl` files in the package. At most 50.
+`.ftl` files in the package. At most 50. The plug-in's code reads the same
+catalogs with `nail.l10n.t(id)` ([translations](localization.md)).
 
 ## `contributes.commands`
 
@@ -143,6 +145,87 @@ the plug-in reads the values with `nail.settings.get(key)`.
 
 Every setting has `key` (same rule as the plug-in id), `title` and an
 optional `description`. At most 50 settings.
+
+## `contributes.hooks`
+
+Mail hooks, at most one of each kind; see [mail hooks](hooks.md). Each
+needs its permission (`hooks.arrival`, `hooks.beforeSend`, `hooks.open`).
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `hook` | yes | `arrival`, `beforeSend` or `open`. |
+| `filter` | no | Only messages matching this query of the [search language](../search.md) (at most 500 characters); `arrival` and `open` only. |
+| `timeoutMs` | no | The time budget of one call, 50–10 000 ms (default 2000 / 3000 / 1000). |
+
+## `contributes.composerActions` and `contributes.markdownBlocks`
+
+Need `composer`; see [composer](composer.md). At most 50 of each.
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `id` | yes | The name (same rule as the plug-in id). A block's fence is `<plugin-id>.<id>`. |
+| `title` | yes | The label in the composer (or `%text-id%`). |
+| `icon` | no | Actions: an icon name. |
+| `description` | no | Actions: a tooltip (or `%text-id%`). |
+| `template` | no | Blocks: the text inserted as the block's content (at most 1000 characters). |
+
+## `contributes.attachmentPreviews` and `contributes.attachmentActions`
+
+Need `attachments`; see [attachments and links](attachments-and-links.md).
+At most 50 of each.
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `id` | yes | The name. |
+| `title` | yes | The label (or `%text-id%`). |
+| `mimeTypes` | no | MIME types, lower case (`text/csv`, `image/*`); at most 20. |
+| `extensions` | no | File extensions, lower case without the dot (`csv`); at most 20. A preview needs types or extensions; an action without either applies to every attachment. |
+| `maxBytes` | no | Previews: the largest attachment it renders (at most 10 MB, the default). |
+| `icon` | no | Actions: an icon name. |
+
+## `contributes.linkActions`
+
+Entries in the link menu; no permission needed. At most 50.
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `id` | yes | The name. |
+| `title` | yes | The label (or `%text-id%`). |
+| `icon` | no | An icon name. |
+| `hosts` | no | Host patterns as for `network:` (`jira.example.com`, `*.example.com`); empty: every link. |
+
+## `contributes.jobs`
+
+Background jobs; need `background`; see [background jobs](background-jobs.md).
+At most 10.
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `id` | yes | The name. |
+| `title` | no | What the plug-in manager calls it (or `%text-id%`). |
+| `schedule` | one of the two | Five cron fields in local time or `@hourly` / `@daily` / `@weekly`; at most every 5 minutes. |
+| `events` | one of the two | `message.received`, `message.sent`, `selection.changed`, `event.reminder`, `app.started`. |
+
+## `contributes.mcpTools`
+
+Tools for AI agents; need `mcp.expose`; see [tools for AI agents](mcp-tools.md).
+At most 50.
+
+| Field | Required | What it is |
+| --- | --- | --- |
+| `id` | yes | The name; agents see `<plugin-id>__<id>` (at most 64 characters in all). |
+| `description` | yes | What it does, for the agent (at most 1000 characters). |
+| `inputSchema` | no | The JSON Schema of the arguments: an object schema, at most 16 KB. |
+| `scopes` | no | The MCP permissions a client needs to call it (default `["read"]`). |
+
+## Problems Nail reports
+
+Besides the rules above, Nail refuses a manifest when a contribution's
+permission is missing ("… needs the permission …"), a permission another
+one needs is missing, a name repeats, or an entry is invalid (a hook with a
+filter where none is allowed, a schedule that runs too often, a preview
+without types, a tool whose name is too long). `npm run package` and
+`nail-plugin check` report the same problems before you pack.
 
 ## Limits
 

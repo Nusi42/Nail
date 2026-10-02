@@ -33,8 +33,8 @@ use serde_json::json;
 use crate::data::McpData;
 use crate::endpoint::{Endpoint, remove_endpoint, write_endpoint};
 use crate::server::{AuthedClient, ClientSource, NailMcp, Shared, now};
-use crate::subscriptions::Hub;
 use crate::uri::ResourceRef;
+use crate::writes::WriteSettings;
 
 /// Path of the MCP endpoint.
 pub const MCP_PATH: &str = "/mcp";
@@ -219,11 +219,18 @@ impl<D: McpData> McpServer<D> {
         data: Arc<D>,
         options: ServerOptions,
     ) -> std::io::Result<Self> {
-        let shared = Arc::new(Shared {
-            store: store.clone(),
-            data,
-            hub: Arc::new(Hub::default()),
-        });
+        Self::start_with(store, data, options, WriteSettings::default()).await
+    }
+
+    /// [`Self::start`] with other confirmation settings (M4a: how long a
+    /// write waits for the user, how often the store is checked).
+    pub async fn start_with(
+        store: Store,
+        data: Arc<D>,
+        options: ServerOptions,
+        settings: WriteSettings,
+    ) -> std::io::Result<Self> {
+        let shared = Arc::new(Shared::new(store.clone(), data, settings));
         let config = StreamableHttpServerConfig::default().enforce_origin_validation();
         let sessions_ct = config.cancellation_token.clone();
         let factory_shared = shared.clone();
@@ -312,6 +319,8 @@ impl<D: McpData> McpServer<D> {
                 }
             }
             Event::AccountsChanged => self.shared.notify(&ResourceRef::Accounts).await,
+            // M4a: a decision in Nail wakes the write waiting for it.
+            Event::ConfirmationResolved { .. } => self.shared.broker.wake(),
             _ => {}
         }
     }

@@ -1,0 +1,22 @@
+{
+  "id": "__PLUGIN_ID__",
+  "name": "__PLUGIN_NAME__",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "main": "dist/index.js",
+  "description": "%plugin-description%",
+  "permissions": ["mail.read", "hooks.beforeSend", "hooks.open"],
+  "contributes": {
+    "hooks": [{ "hook": "beforeSend" }, { "hook": "open", "timeoutMs": 500 }],
+    "settings": [
+      {
+        "type": "string",
+        "key": "internal-domain",
+        "title": "%setting-domain-title%",
+        "description": "%setting-domain-description%",
+        "default": "example.com"
+      }
+    ],
+    "locales": { "en": "locales/en.ftl" }
+  }
+}

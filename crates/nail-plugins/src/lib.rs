@@ -34,26 +34,56 @@
 //! * [`l10n`]: the host's Fluent ids and the plug-ins' own catalogs
 //!   (`%fluent-id%` manifest texts).
 //! * [`tree`]: component trees on their way to the UI.
+//!
+//! **M4a (ADR 0079, WP102).** The full plug-in API:
+//!
+//! * [`writes`]: `nail.mail.update` / `delete` / `createDraft` /
+//!   `updateDraft` / `send`, `nail.calendar.createEvent` / `updateEvent` /
+//!   `deleteEvent` / `respond` / `calendars`, `nail.contacts.*`,
+//!   `nail.tasks.*` behind `mail.organize`, `mail.send`, `calendar.write`,
+//!   `contacts.write`, `tasks.write` — always through the core
+//!   ([`PluginServices::write`]: policy, confirmation, operation queue,
+//!   audit), in the MCP write tools' argument shapes.
+//! * [`hooks`]: arrival, before-send and open hooks with per-hook time
+//!   budgets ([`PluginHost::arrival_hooks`], [`PluginHost::before_send_hooks`],
+//!   [`PluginHost::open_hooks`]); banner buttons via `ui_action`.
+//! * [`extensions`]: composer actions and `nail.composer.*` edits, Markdown
+//!   block renderers, attachment previews (trees or images, never HTML) and
+//!   actions, link actions, MCP tools (`mcp.expose`).
+//! * [`jobs`]: background jobs on cron schedules and events with a
+//!   cumulative CPU quota per plug-in and a wall-clock limit per run.
+//! * `nail.l10n` from the plug-in's own catalogs, binary `nail.http.fetch`
+//!   bodies (`Uint8Array` / `ArrayBuffer` in, `bytes()` / `arrayBuffer()`
+//!   out), and panel actions checked against the tree the UI was shown.
 
 #![warn(missing_docs)]
 
 pub mod dev;
+pub mod extensions;
 pub mod gate;
+pub mod hooks;
 pub mod host;
+pub mod jobs;
 pub mod l10n;
 pub mod limits;
 pub mod package;
 pub(crate) mod runtime;
 pub mod services;
 pub mod tree;
+pub mod writes;
 
+pub use extensions::PluginMcpTool;
+pub use hooks::{ArrivalReport, BeforeSendReport, HookRun, OpenReport};
 pub use host::{DevLoadError, PluginHost, PluginSpec, effective_settings};
 pub use l10n::PluginCatalogs;
 pub use limits::HostLimits;
 pub use package::{PackageError, PackageErrorKind, PackageFiles, PackageStore, PluginPackage};
 pub use services::{
-    AccountScope, BoxFuture, HostLogLine, HttpRequest, HttpResponse, PluginServices, ServiceResult,
+    AccountScope, AttachmentData, BoxFuture, HookCallRecord, HostLogLine, HttpRequest,
+    HttpResponse, JobRunRecord, PluginCollection, PluginContact, PluginServices,
+    PluginWriteRequest, ServiceResult, StoredJobState,
 };
+pub use writes::PluginWrite;
 
 /// Name of the crate, for diagnostics.
 pub const CRATE: &str = env!("CARGO_PKG_NAME");

@@ -25,31 +25,153 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, RwLock, mpsc};
+use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::time::{Duration, Instant};
 
+use base64::Engine as _;
+use nail_api::agents::{ActionActor, ActionAttribution, McpClientRef};
 use nail_api::plugins::admin::{MAX_LOG_MESSAGE, MAX_STORAGE_KEY, MAX_STORAGE_VALUE};
+use nail_api::plugins::extensions::{ComposerEdit, ComposerEditOp, ComposerTextFormat};
 use nail_api::plugins::ui::{PluginValueKind, is_value_id};
 use nail_api::plugins::{
-    PluginCommandContext, PluginDialog, PluginDialogResult, PluginDialogSpec, PluginLogLevel,
-    PluginLogSource, PluginManifest, PluginNotification, PluginNotificationSpec, PluginPermission,
-    PluginStopReason, PluginUiIssue, PluginUiNode, plugin_panel_id,
+    PluginCommandContext, PluginDialog, PluginDialogResult, PluginDialogSpec, PluginHookKind,
+    PluginLogLevel, PluginLogSource, PluginManifest, PluginNotification, PluginNotificationSpec,
+    PluginPermission, PluginStopReason, PluginUiIssue, PluginUiNode, plugin_panel_id,
 };
 use nail_api::{
-    AccountId, ApiError, ErrorCode, Event, LocalizedMessage, MessageId, PluginDialogId, PluginId,
-    ThreadId,
+    AccountId, ApiError, DraftId, ErrorCode, Event, LocalizedMessage, MessageArg, MessageId,
+    PluginDialogId, PluginId, ThreadId,
 };
 use rquickjs::loader::{ImportAttributes, Loader, Resolver};
-use rquickjs::{Context, Ctx, Function, Module, Object, Persistent, Runtime, Value};
+use rquickjs::{Context, Ctx, Function, Module, Object, Persistent, Runtime, TypedArray, Value};
 use serde_json::json;
 use tokio::sync::oneshot;
 
 use crate::gate::{Denied, FetchInit, FetchRefusal, Gate};
 use crate::host::{DialogEntry, Inner};
-use crate::l10n;
+use crate::jobs::{CpuMeter, minute_of};
+use crate::l10n::{self, PluginCatalogs};
 use crate::package::{PackageFiles, is_safe_path};
-use crate::services::{AccountScope, HostLogLine, HttpRequest};
+use crate::services::{AccountScope, HostLogLine, HttpRequest, PluginWriteRequest};
 use crate::tree;
+use crate::writes::{self, Blobs};
+
+/// Longest text of a composer edit (bytes).
+pub(crate) const MAX_COMPOSER_TEXT: usize = 256 * 1024;
+
+/// Who a turn runs for: the UI whose request started it (dialogs and
+/// notifications go there) and, while a plug-in serves an exposed MCP
+/// tool, the client it acts for (its writes are attributed to both).
+/// Pending API calls and timers carry the origin of the turn that started
+/// them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Origin {
+    pub client: Option<String>,
+    pub on_behalf: Option<McpClientRef>,
+}
+
+impl Origin {
+    pub(crate) fn client(client: Option<String>) -> Self {
+        Self {
+            client,
+            on_behalf: None,
+        }
+    }
+}
+
+/// The kinds of handlers a plug-in registers in code (M4a). Each is
+/// declared in the manifest; the host calls them with [`Invoke`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Registry {
+    /// A mail hook (`name` = the hook kind).
+    Hook,
+    /// Banner buttons of the open hook (`name` = `default`).
+    BannerAction,
+    ComposerAction,
+    MarkdownBlock,
+    AttachmentPreview,
+    AttachmentAction,
+    LinkAction,
+    Job,
+    McpTool,
+}
+
+impl Registry {
+    const ALL: [Registry; 9] = [
+        Self::Hook,
+        Self::BannerAction,
+        Self::ComposerAction,
+        Self::MarkdownBlock,
+        Self::AttachmentPreview,
+        Self::AttachmentAction,
+        Self::LinkAction,
+        Self::Job,
+        Self::McpTool,
+    ];
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Hook => "hook",
+            Self::BannerAction => "bannerAction",
+            Self::ComposerAction => "composerAction",
+            Self::MarkdownBlock => "markdownBlock",
+            Self::AttachmentPreview => "attachmentPreview",
+            Self::AttachmentAction => "attachmentAction",
+            Self::LinkAction => "linkAction",
+            Self::Job => "job",
+            Self::McpTool => "mcpTool",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|r| r.as_str() == text)
+    }
+
+    /// Whether the manifest declares a handler of this kind and name.
+    pub(crate) fn declared(self, manifest: &PluginManifest, name: &str) -> bool {
+        let c = &manifest.contributes;
+        match self {
+            Self::Hook => PluginHookKind::parse(name).is_some_and(|k| manifest.hook(k).is_some()),
+            Self::BannerAction => {
+                name == "default" && manifest.hook(PluginHookKind::Open).is_some()
+            }
+            Self::ComposerAction => c.composer_actions.iter().any(|a| a.id == name),
+            Self::MarkdownBlock => c.markdown_blocks.iter().any(|a| a.id == name),
+            Self::AttachmentPreview => c.attachment_previews.iter().any(|a| a.id == name),
+            Self::AttachmentAction => c.attachment_actions.iter().any(|a| a.id == name),
+            Self::LinkAction => c.link_actions.iter().any(|a| a.id == name),
+            Self::Job => manifest.job(name).is_some(),
+            Self::McpTool => c.mcp_tools.iter().any(|a| a.id == name),
+        }
+    }
+}
+
+/// A call of a registered handler: it settles with the handler's
+/// (awaited) result or its error — a throw never stops the plug-in.
+#[derive(Debug)]
+pub(crate) struct Invoke {
+    pub registry: Registry,
+    pub name: String,
+    pub input: serde_json::Value,
+    /// Handed to the handler as a second argument (`Uint8Array`).
+    pub bytes: Option<Vec<u8>>,
+    pub origin: Origin,
+    /// A composer action: the plug-in may edit this draft for a while.
+    pub composer_draft: Option<DraftId>,
+}
+
+impl Invoke {
+    pub(crate) fn new(registry: Registry, name: &str, input: serde_json::Value) -> Self {
+        Self {
+            registry,
+            name: name.to_owned(),
+            input,
+            bytes: None,
+            origin: Origin::default(),
+            composer_draft: None,
+        }
+    }
+}
 
 const PRELUDE: &str = include_str!("prelude.js");
 
@@ -58,11 +180,15 @@ pub(crate) type Reply<T> = oneshot::Sender<Result<T, ApiError>>;
 
 /// What a plug-in thread is asked to do.
 pub(crate) enum ThreadMsg {
-    /// An API call finished.
+    /// An API call finished (`bytes`: a binary body handed to the plug-in
+    /// as a `Uint8Array` next to the value).
     Resolve {
         id: u64,
         result: Result<serde_json::Value, ApiError>,
+        bytes: Option<Vec<u8>>,
     },
+    /// Call a registered handler (M4a).
+    Invoke(Box<Invoke>, Reply<serde_json::Value>),
     /// Run a registered command.
     Command {
         name: String,
@@ -157,6 +283,14 @@ pub(crate) struct Launch {
     pub rx: mpsc::Receiver<ThreadMsg>,
     pub tx: mpsc::Sender<ThreadMsg>,
     pub activated: Reply<()>,
+    /// The plug-in's own catalogs (`nail.l10n`).
+    pub catalogs: Arc<PluginCatalogs>,
+    /// The core's language.
+    pub locale: Option<String>,
+    /// The plug-in's name in that language (attribution of its writes).
+    pub display_name: String,
+    /// CPU time of its turns (the hourly quota).
+    pub cpu: Arc<Mutex<CpuMeter>>,
 }
 
 /// The CPU budget of the current turn, checked by the interrupt handler.
@@ -220,12 +354,30 @@ impl Budget {
 }
 
 struct PendingCall {
-    client: Option<String>,
+    origin: Origin,
     op: &'static str,
 }
 
-struct OpenDialog {
+/// The inputs and buttons of the tree a panel last rendered (UI actions
+/// are checked against it).
+struct PanelTree {
+    kinds: HashMap<String, PluginValueKind>,
+    buttons: HashSet<String>,
+}
+
+/// A panel render waiting for the plug-in: the panel, the UI, the reply.
+type PanelRequest = (String, Option<String>, Reply<Vec<PluginUiNode>>);
+
+/// A draft a composer action of this plug-in ran on: it may edit it until
+/// `until`.
+struct ComposerGrant {
     client: Option<String>,
+    until: Instant,
+    seq: u64,
+}
+
+struct OpenDialog {
+    origin: Origin,
     kinds: HashMap<String, PluginValueKind>,
     buttons: HashSet<String>,
     actions: HashSet<String>,
@@ -233,7 +385,7 @@ struct OpenDialog {
 
 struct Timer {
     due: Instant,
-    client: Option<String>,
+    origin: Origin,
 }
 
 /// A token bucket over every log line a plug-in causes (its own lines,
@@ -284,21 +436,41 @@ struct State {
     tx: mpsc::Sender<ThreadMsg>,
     alive: Arc<AtomicBool>,
     dev: bool,
-    /// The UI whose call is being handled (`client_id` of what it raises).
-    client: Option<String>,
+    /// Who the turn runs for (`client_id` of what it raises, MCP client of
+    /// its writes).
+    origin: Origin,
     next_id: u64,
     calls: HashMap<u64, PendingCall>,
     commands: HashSet<String>,
     panels: HashSet<String>,
     dialogs: HashMap<u64, OpenDialog>,
     timers: HashMap<u64, Timer>,
-    panel_requests: HashMap<u64, Reply<Vec<PluginUiNode>>>,
+    panel_requests: HashMap<u64, PanelRequest>,
     fatal: Option<String>,
     activated: bool,
     logs_this_turn: u32,
     dropped_logs: u32,
     log_rate: LogRate,
     notifications: VecDeque<Instant>,
+    // --- M4a ---
+    /// Handlers registered in code (kind, name).
+    registered: HashSet<(Registry, String)>,
+    /// Handler calls waiting for their result.
+    invocations: HashMap<u64, Reply<serde_json::Value>>,
+    /// The last tree of each panel, per UI (`None`: an update for all).
+    panel_trees: HashMap<(String, Option<String>), (u64, PanelTree)>,
+    panel_seq: u64,
+    /// Drafts composer actions ran on.
+    composer_drafts: HashMap<DraftId, ComposerGrant>,
+    /// Bytes for the plug-in (`hostTakeBytes`), cleared after each turn.
+    blobs_in: HashMap<u64, Vec<u8>>,
+    /// Bytes from the plug-in (`hostPutBytes`), cleared after each turn.
+    blobs_out: Blobs,
+    blob_out_bytes: usize,
+    catalogs: Arc<PluginCatalogs>,
+    locale: Option<String>,
+    display_name: String,
+    cpu: Arc<Mutex<CpuMeter>>,
 }
 
 /// The answer of `hostCall`.
@@ -457,6 +629,15 @@ impl State {
     where
         F: Future<Output = Result<serde_json::Value, ApiError>> + Send + 'static,
     {
+        self.spawn_bytes(op, payload, async move { fut.await.map(|v| (v, None)) })
+    }
+
+    /// Like [`Self::spawn`], with bytes handed to the plug-in next to the
+    /// value (binary fetch bodies).
+    fn spawn_bytes<F>(&mut self, op: &'static str, payload: &serde_json::Value, fut: F) -> Answer
+    where
+        F: Future<Output = Result<(serde_json::Value, Option<Vec<u8>>), ApiError>> + Send + 'static,
+    {
         if let Err(e) = self.check_capacity() {
             return Answer::Error(e);
         }
@@ -464,7 +645,7 @@ impl State {
         self.calls.insert(
             id,
             PendingCall {
-                client: self.client.clone(),
+                origin: self.origin.clone(),
                 op,
             },
         );
@@ -478,10 +659,79 @@ impl State {
         }
         let tx = self.tx.clone();
         self.inner.handle.spawn(async move {
-            let result = fut.await;
-            let _ = tx.send(ThreadMsg::Resolve { id, result });
+            let (result, bytes) = match fut.await {
+                Ok((value, bytes)) => (Ok(value), bytes),
+                Err(e) => (Err(e), None),
+            };
+            let _ = tx.send(ThreadMsg::Resolve { id, result, bytes });
         });
         Answer::Pending(id)
+    }
+
+    /// Who writes: this plug-in (and the MCP client it serves).
+    fn attribution(&self) -> ActionAttribution {
+        ActionAttribution {
+            actor: ActionActor::plugin(self.id.clone()),
+            name: self.display_name.clone(),
+            on_behalf_of: self.origin.on_behalf.clone(),
+        }
+    }
+
+    /// Keeps bytes for the plug-in; the id goes into the dispatched JSON.
+    fn stash(&mut self, bytes: Vec<u8>) -> u64 {
+        let id = self.next_id();
+        self.blobs_in.insert(id, bytes);
+        id
+    }
+
+    /// Records the tree a panel rendered (for one UI, or for all).
+    fn remember_panel(&mut self, name: &str, client: Option<String>, nodes: &[PluginUiNode]) {
+        self.panel_seq += 1;
+        let tree = PanelTree {
+            kinds: tree::input_kinds(nodes),
+            buttons: tree::button_ids(nodes),
+        };
+        if client.is_none() {
+            // An update replaces what every UI was shown.
+            self.panel_trees.retain(|(n, _), _| n != name);
+        }
+        // UIs come and go: keep the newest trees only.
+        while self.panel_trees.len() >= 256 {
+            let Some(oldest) = self
+                .panel_trees
+                .iter()
+                .min_by_key(|(_, (seq, _))| *seq)
+                .map(|(k, _)| k.clone())
+            else {
+                break;
+            };
+            self.panel_trees.remove(&oldest);
+        }
+        self.panel_trees
+            .insert((name.to_owned(), client), (self.panel_seq, tree));
+    }
+
+    /// The tree a UI last saw of a panel: its own render or a later update
+    /// for all UIs; for a UI without either (or without an id), the latest
+    /// tree of the panel.
+    fn panel_tree(&self, name: &str, client: &Option<String>) -> Option<&PanelTree> {
+        let own = client
+            .as_ref()
+            .and_then(|c| self.panel_trees.get(&(name.to_owned(), Some(c.clone()))));
+        let all = self.panel_trees.get(&(name.to_owned(), None));
+        let newest = match (own, all) {
+            (Some(a), Some(b)) => Some(if a.0 >= b.0 { a } else { b }),
+            (x, None) | (None, x) => x,
+        };
+        newest
+            .or_else(|| {
+                self.panel_trees
+                    .iter()
+                    .filter(|((n, _), _)| n == name)
+                    .map(|(_, t)| t)
+                    .max_by_key(|t| t.0)
+            })
+            .map(|t| &t.1)
     }
 
     fn tree_issues(&mut self, what: &str, issues: &[PluginUiIssue]) -> ApiError {
@@ -515,6 +765,32 @@ impl State {
             ))
         }
     }
+}
+
+/// Copies the bytes of a `Uint8Array` (the prelude passes every
+/// `ArrayBuffer` / view as one) out of the engine.
+#[allow(unsafe_code)] // rquickjs offers byte access only as an unsafe slice.
+fn copy_bytes(array: &TypedArray<'_, u8>) -> Option<Vec<u8>> {
+    // SAFETY: the slice is copied at once; no JavaScript runs while it is
+    // borrowed (rquickjs' condition for `as_bytes`).
+    unsafe { array.as_bytes() }.map(<[u8]>::to_vec)
+}
+
+/// `hostPutBytes(u8)`: keeps bytes the plug-in hands over for this turn;
+/// the id goes into the JSON of the call that uses them.
+fn put_bytes(state: &Rc<RefCell<State>>, array: &TypedArray<'_, u8>) -> rquickjs::Result<f64> {
+    let Ok(mut s) = state.try_borrow_mut() else {
+        return Err(rquickjs::Error::new_from_js("bytes", "re-entrant call"));
+    };
+    let too_large = || rquickjs::Error::new_from_js_message("Uint8Array", "bytes", "too large");
+    if s.blob_out_bytes.saturating_add(array.len()) > s.inner.limits.max_blob_bytes {
+        return Err(too_large());
+    }
+    let bytes = copy_bytes(array).ok_or_else(too_large)?;
+    s.blob_out_bytes += bytes.len();
+    let id = s.next_id();
+    s.blobs_out.insert(id, bytes);
+    Ok(id as f64)
 }
 
 fn host_call(state: &Rc<RefCell<State>>, op: &str, payload: &str) -> String {
@@ -601,12 +877,12 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 .unwrap_or(0.0)
                 .max(0.0);
             let delay = Duration::from_millis(ms as u64).min(s.inner.limits.max_timer_delay);
-            let client = s.client.clone();
+            let origin = s.origin.clone();
             s.timers.insert(
                 id,
                 Timer {
                     due: Instant::now() + delay,
-                    client,
+                    origin,
                 },
             );
             Answer::Ok(serde_json::Value::Null)
@@ -622,7 +898,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 .get("req")
                 .and_then(serde_json::Value::as_u64)
                 .ok_or_else(|| invalid("panel request"))?;
-            let Some(reply) = s.panel_requests.remove(&req) else {
+            let Some((name, client, reply)) = s.panel_requests.remove(&req) else {
                 return Ok(Answer::Ok(serde_json::Value::Null));
             };
             let nodes: Result<Vec<PluginUiNode>, _> =
@@ -634,6 +910,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
             };
             match prepared {
                 Ok(nodes) => {
+                    s.remember_panel(&name, client, &nodes);
                     let scope = s.gate().mail_scope("panel", &s.expand()).ok();
                     s.inner.handle.spawn(async move {
                         let filled =
@@ -811,7 +1088,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 notification: Box::new(PluginNotification {
                     id: format!("pn-{:032x}", rand::random::<u128>()),
                     plugin_id: s.id.clone(),
-                    client_id: s.client.clone(),
+                    client_id: s.origin.client.clone(),
                     spec,
                 }),
             });
@@ -831,6 +1108,7 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                     .map_err(|e| invalid(format!("the panel is not a component tree: {e}")))?;
             let nodes = tree::prepare_tree(&s.files, nodes)
                 .map_err(|issues| s.tree_issues("panel", &issues))?;
+            s.remember_panel(&name, None, &nodes);
             let scope = s.gate().mail_scope("panel", &s.expand()).ok();
             let panel = plugin_panel_id(&s.id, &name);
             let inner = Arc::clone(&s.inner);
@@ -849,8 +1127,301 @@ fn op_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answe
                 },
             )
         }
+        // --- M4a ---
+        "register" => {
+            let kind = str_field(payload, "registry")?;
+            let registry = Registry::parse(kind)
+                .ok_or_else(|| invalid(format!("unknown handler `{kind}`")))?;
+            let name = str_field(payload, "name")?;
+            if !registry.declared(&s.manifest, name) {
+                return Err(invalid(format!(
+                    "{} `{name}` is not declared in manifest.json",
+                    registry.as_str()
+                )));
+            }
+            s.registered.insert((registry, name.to_owned()));
+            Answer::Ok(serde_json::Value::Null)
+        }
+        "invokeResult" => {
+            let req = payload
+                .get("req")
+                .and_then(serde_json::Value::as_u64)
+                .ok_or_else(|| invalid("invocation"))?;
+            let Some(reply) = s.invocations.remove(&req) else {
+                return Ok(Answer::Ok(serde_json::Value::Null));
+            };
+            let result = match payload.get("error") {
+                Some(error) if !error.is_null() => {
+                    let message = error
+                        .get("message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("the handler failed");
+                    Err(ApiError::internal(cut(message, 2000)))
+                }
+                _ => {
+                    let mut value = payload.get("value").cloned().unwrap_or_default();
+                    inline_blobs(&mut value, &s.blobs_out, 0);
+                    Ok(value)
+                }
+            };
+            let _ = reply.send(result);
+            Answer::Ok(serde_json::Value::Null)
+        }
+        "l10n.t" => {
+            let id = str_field(payload, "id")?;
+            let mut message = LocalizedMessage::new(id);
+            if let Some(args) = payload.get("args").and_then(serde_json::Value::as_object) {
+                for (name, value) in args {
+                    let arg = match value {
+                        serde_json::Value::Number(n) if n.is_i64() => {
+                            MessageArg::Number(n.as_i64().unwrap_or_default())
+                        }
+                        serde_json::Value::String(text) => MessageArg::Text(text.clone()),
+                        other => MessageArg::Text(other.to_string()),
+                    };
+                    message.args.insert(name.clone(), arg);
+                }
+            }
+            Answer::Ok(json!(s.catalogs.message(s.locale.as_deref(), &message)))
+        }
+        "l10n.has" => {
+            let id = str_field(payload, "id")?;
+            Answer::Ok(json!(s.catalogs.has(s.locale.as_deref(), id)))
+        }
+        "calendar.calendars" | "contacts.addressBooks" | "contacts.find" | "tasks.lists" => {
+            collections_call(s, op, payload)?
+        }
+        "composer.edit" => composer_call(s, payload)?,
+        op if writes::api_name(op).is_some() => write_call(s, op, payload)?,
         other => return Err(invalid(format!("unknown host call `{other}`"))),
     })
+}
+
+/// Replaces `{"$nailBytes": id}` markers a plug-in's result carries with
+/// the bytes as base64 (preview images).
+fn inline_blobs(value: &mut serde_json::Value, blobs: &Blobs, depth: usize) {
+    if depth > 64 {
+        return;
+    }
+    if let Some(bytes) = writes::blob_id(value).and_then(|id| blobs.get(&id)) {
+        *value = json!(base64::engine::general_purpose::STANDARD.encode(bytes));
+        return;
+    }
+    match value {
+        serde_json::Value::Array(items) => {
+            for item in items {
+                inline_blobs(item, blobs, depth + 1);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for item in map.values_mut() {
+                inline_blobs(item, blobs, depth + 1);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// `nail.calendar.calendars`, `nail.contacts.addressBooks` /
+/// `find`, `nail.tasks.lists`: the collections the write permissions reach.
+fn collections_call(
+    s: &mut State,
+    op: &str,
+    payload: &serde_json::Value,
+) -> Result<Answer, ApiError> {
+    let gate = s.gate();
+    let services = Arc::clone(&s.inner.services);
+    let (call, allowed, needed) = match op {
+        "calendar.calendars" => (
+            "nail.calendar.calendars",
+            gate.has(&PluginPermission::CalendarWrite) || gate.has(&PluginPermission::CalendarRead),
+            PluginPermission::CalendarWrite,
+        ),
+        "contacts.addressBooks" => (
+            "nail.contacts.addressBooks",
+            gate.has(&PluginPermission::ContactsWrite),
+            PluginPermission::ContactsWrite,
+        ),
+        "contacts.find" => (
+            "nail.contacts.find",
+            gate.has(&PluginPermission::ContactsWrite),
+            PluginPermission::ContactsWrite,
+        ),
+        _ => (
+            "nail.tasks.lists",
+            gate.has(&PluginPermission::TasksWrite),
+            PluginPermission::TasksWrite,
+        ),
+    };
+    if !allowed {
+        return Ok(s.deny(&Denied::new(call, needed)));
+    }
+    Ok(match op {
+        "calendar.calendars" => s.spawn(call, payload, async move {
+            to_json(services.calendars().await?)
+        }),
+        "contacts.addressBooks" => s.spawn(call, payload, async move {
+            to_json(services.address_books().await?)
+        }),
+        "contacts.find" => {
+            let email = str_field(payload, "email")?.trim().to_owned();
+            if email.is_empty() || email.len() > 320 || !email.contains('@') {
+                return Err(invalid("`email` must be an address"));
+            }
+            let limit = payload
+                .get("limit")
+                .and_then(serde_json::Value::as_u64)
+                .map_or(20, |l| u32::try_from(l).unwrap_or(100))
+                .clamp(1, 100);
+            s.spawn(call, payload, async move {
+                to_json(services.find_contacts(email, limit).await?)
+            })
+        }
+        _ => s.spawn(call, payload, async move {
+            to_json(services.task_lists().await?)
+        }),
+    })
+}
+
+/// `nail.composer.insert` / `replaceSelection` / `replaceAll`: edits a
+/// draft a composer action of this plug-in ran on (within
+/// [`crate::HostLimits::composer_edit_window`]); the composer applies it
+/// live ([`Event::ComposerEditRequested`]).
+fn composer_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, ApiError> {
+    let op = match str_field(payload, "op")? {
+        "insert" => ComposerEditOp::Insert,
+        "replaceSelection" => ComposerEditOp::ReplaceSelection,
+        "replaceAll" => ComposerEditOp::ReplaceAll,
+        other => return Err(invalid(format!("unknown composer edit `{other}`"))),
+    };
+    let call = match op {
+        ComposerEditOp::Insert => "nail.composer.insert",
+        ComposerEditOp::ReplaceSelection => "nail.composer.replaceSelection",
+        ComposerEditOp::ReplaceAll => "nail.composer.replaceAll",
+    };
+    if let Err(d) = s.gate().require(&PluginPermission::Composer, call) {
+        return Ok(s.deny(&d));
+    }
+    let text = str_field(payload, "text")?.to_owned();
+    if text.len() > MAX_COMPOSER_TEXT {
+        return Err(ApiError::new(ErrorCode::TooLarge, "the text is too long"));
+    }
+    let format = match payload.get("format").and_then(serde_json::Value::as_str) {
+        None | Some("text") => ComposerTextFormat::Text,
+        Some("markdown") => ComposerTextFormat::Markdown,
+        Some("html") => ComposerTextFormat::Html,
+        Some(other) => return Err(invalid(format!("unknown format `{other}`"))),
+    };
+    let now = Instant::now();
+    s.composer_drafts.retain(|_, g| g.until > now);
+    let draft = match payload.get("draftId").and_then(serde_json::Value::as_str) {
+        Some(id) => Some(DraftId::from(id)).filter(|d| s.composer_drafts.contains_key(d)),
+        // The draft of the latest composer action of this UI (any UI when
+        // the turn has none).
+        None => s
+            .composer_drafts
+            .iter()
+            .filter(|(_, g)| s.origin.client.is_none() || g.client == s.origin.client)
+            .max_by_key(|(_, g)| g.seq)
+            .map(|(d, _)| d.clone()),
+    };
+    let Some(draft) = draft else {
+        return Err(ApiError::not_found(
+            "no draft to edit: composer edits work only on the draft a composer action ran on",
+        ));
+    };
+    let client = s.composer_drafts.get(&draft).and_then(|g| g.client.clone());
+    s.inner.services.emit(Event::ComposerEditRequested {
+        draft_id: draft,
+        client_id: client,
+        by: Box::new(s.attribution()),
+        edit: ComposerEdit { op, text, format },
+    });
+    Ok(Answer::Ok(serde_json::Value::Null))
+}
+
+/// A write call (`nail.mail.update`, `nail.tasks.create`, …): parsed, gated
+/// (every permission it needs; messages it names must be readable, those
+/// it changes within `mail.organize`, attachments it copies within
+/// `mail.read.body` and not end-to-end encrypted), then run by the core.
+fn write_call(s: &mut State, op: &str, payload: &serde_json::Value) -> Result<Answer, ApiError> {
+    let call = writes::api_name(op).unwrap_or("nail.write");
+    let write = writes::parse(op, payload, &s.blobs_out)?;
+    let gate = s.gate();
+    let expand = s.expand();
+    for permission in write.permissions() {
+        if let Err(d) = gate.require(&permission, call) {
+            return Ok(s.deny(&d));
+        }
+    }
+    let read_ids = write.read_messages();
+    let content_ids = write.content_messages();
+    let read_scope = if read_ids.is_empty() {
+        None
+    } else {
+        match gate.mail_scope(call, &expand) {
+            Ok(scope) => Some(scope),
+            Err(d) => return Ok(s.deny(&d)),
+        }
+    };
+    let organize_scope = if write.organizes_messages() {
+        match gate.scope_with_read(&PluginPermission::MailOrganize, call, &expand) {
+            Ok(scope) => Some(scope),
+            Err(d) => return Ok(s.deny(&d)),
+        }
+    } else {
+        None
+    };
+    let content_scope = if content_ids.is_empty() {
+        None
+    } else {
+        match gate.body_scope(call, &expand) {
+            Ok(scope) => Some(scope),
+            Err(d) => return Ok(s.deny(&d)),
+        }
+    };
+    let scope = if let Some(scope) = &organize_scope {
+        scope.clone()
+    } else if write.uses_send_scope() {
+        match gate.scope(&PluginPermission::MailSend, call, &expand) {
+            Ok(scope) => scope,
+            Err(d) => return Ok(s.deny(&d)),
+        }
+    } else {
+        AccountScope::All
+    };
+    let request = PluginWriteRequest {
+        attribution: s.attribution(),
+        kind: write.kind(),
+        operation: call.to_owned(),
+        write,
+        scope,
+    };
+    let services = Arc::clone(&s.inner.services);
+    // The payload is logged without its texts and bytes.
+    let summary = json!({ "kind": request.kind.as_str() });
+    Ok(s.spawn(call, &summary, async move {
+        let check_scope = organize_scope.or(read_scope);
+        for id in read_ids {
+            let found = services.mail_get(id).await?;
+            match (&found, &check_scope) {
+                (Some(m), Some(scope)) if scope.contains(&m.account_id) => {}
+                _ => return Err(ApiError::not_found("message not found")),
+            }
+        }
+        for id in content_ids {
+            let found = services.mail_get(id).await?;
+            match (&found, &content_scope) {
+                (Some(m), Some(scope)) if scope.contains(&m.account_id) && !m.encrypted => {}
+                (Some(m), Some(scope)) if scope.contains(&m.account_id) => {
+                    return Err(Denied::new(call, "mail.read.encrypted").to_api_error());
+                }
+                _ => return Err(ApiError::not_found("message not found")),
+            }
+        }
+        let result = services.write(request).await?;
+        Ok(writes::result_json(&result))
+    }))
 }
 
 fn storage_key(payload: &serde_json::Value) -> Result<String, ApiError> {
@@ -947,10 +1518,20 @@ fn fetch_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, ApiE
             headers.push((name.clone(), value.to_owned()));
         }
     }
-    let body = payload
-        .get("body")
-        .and_then(serde_json::Value::as_str)
-        .map(|b| b.as_bytes().to_vec());
+    // A string, or a `Uint8Array` / `ArrayBuffer` the prelude handed over
+    // as a blob (M4a).
+    let body = match payload.get("body") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::String(text)) => Some(text.as_bytes().to_vec()),
+        Some(marker) => Some(
+            writes::blob_id(marker)
+                .and_then(|id| s.blobs_out.get(&id))
+                .cloned()
+                .ok_or_else(|| {
+                    invalid("the body must be a string, a Uint8Array or an ArrayBuffer")
+                })?,
+        ),
+    };
     if body
         .as_ref()
         .is_some_and(|b| b.len() > s.inner.limits.http_max_request_bytes)
@@ -986,23 +1567,33 @@ fn fetch_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, ApiE
     };
     let services = Arc::clone(&s.inner.services);
     let plugin = s.id.clone();
-    Ok(s.spawn(call, &json!({ "url": checked.url }), async move {
-        let response = services.http_fetch(plugin, request).await?;
-        let mut headers = serde_json::Map::new();
-        for (name, value) in response.headers {
-            let name = name.to_ascii_lowercase();
-            let merged = match headers.get(&name).and_then(serde_json::Value::as_str) {
-                Some(old) => format!("{old}, {value}"),
-                None => value,
-            };
-            headers.insert(name, serde_json::Value::String(merged));
-        }
-        Ok(json!({
-            "status": response.status,
-            "headers": headers,
-            "body": String::from_utf8_lossy(&response.body),
-        }))
-    }))
+    let max = s.inner.limits.http_max_response_bytes;
+    Ok(
+        s.spawn_bytes(call, &json!({ "url": checked.url }), async move {
+            let response = services.http_fetch(plugin, request).await?;
+            if response.body.len() as u64 > max {
+                return Err(ApiError::new(
+                    ErrorCode::TooLarge,
+                    "the response body is too large",
+                ));
+            }
+            let mut headers = serde_json::Map::new();
+            for (name, value) in response.headers {
+                let name = name.to_ascii_lowercase();
+                let merged = match headers.get(&name).and_then(serde_json::Value::as_str) {
+                    Some(old) => format!("{old}, {value}"),
+                    None => value,
+                };
+                headers.insert(name, serde_json::Value::String(merged));
+            }
+            let value = json!({
+                "status": response.status,
+                "headers": headers,
+                "body": String::from_utf8_lossy(&response.body),
+            });
+            Ok((value, Some(response.body)))
+        }),
+    )
 }
 
 fn dialog_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, ApiError> {
@@ -1039,7 +1630,7 @@ fn dialog_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, Api
     let body = tree::prepare_tree(&s.files, spec.body)
         .map_err(|issues| s.tree_issues("dialog", &issues))?;
     let open = OpenDialog {
-        client: s.client.clone(),
+        origin: s.origin.clone(),
         kinds: tree::input_kinds(&body),
         buttons,
         actions: tree::button_ids(&body),
@@ -1060,7 +1651,7 @@ fn dialog_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, Api
     s.calls.insert(
         call_id,
         PendingCall {
-            client: s.client.clone(),
+            origin: s.origin.clone(),
             op: call,
         },
     );
@@ -1079,7 +1670,7 @@ fn dialog_call(s: &mut State, payload: &serde_json::Value) -> Result<Answer, Api
     let dialog = PluginDialog {
         dialog_id,
         plugin_id: s.id.clone(),
-        client_id: s.client.clone(),
+        client_id: s.origin.client.clone(),
         spec: PluginDialogSpec { body, ..spec },
     };
     s.inner.handle.spawn(async move {
@@ -1233,6 +1824,37 @@ impl Drop for Sandbox {
     }
 }
 
+/// The native functions the prelude builds on: `hostCall(op, json)`,
+/// `hostPutBytes(u8) -> id` and `hostTakeBytes(id) -> Uint8Array`.
+fn natives<'js>(
+    ctx: &Ctx<'js>,
+    state: &Rc<RefCell<State>>,
+) -> rquickjs::Result<(Function<'js>, Function<'js>, Function<'js>)> {
+    let call_state = Rc::clone(state);
+    let host = Function::new(ctx.clone(), move |op: String, payload: String| {
+        host_call(&call_state, &op, &payload)
+    })?;
+    let put_state = Rc::clone(state);
+    let put = Function::new(ctx.clone(), move |array: TypedArray<'js, u8>| {
+        put_bytes(&put_state, &array)
+    })?;
+    let take_state = Rc::clone(state);
+    let take = Function::new(
+        ctx.clone(),
+        move |ctx: Ctx<'js>, id: f64| -> rquickjs::Result<Value<'js>> {
+            let bytes = take_state
+                .try_borrow_mut()
+                .ok()
+                .and_then(|mut s| s.blobs_in.remove(&(id as u64)));
+            match bytes {
+                Some(bytes) => Ok(TypedArray::<u8>::new(ctx, bytes)?.into_value()),
+                None => Ok(Value::new_undefined(ctx)),
+            }
+        },
+    )?;
+    Ok((host, put, take))
+}
+
 impl Sandbox {
     fn new(state: Rc<RefCell<State>>, info: String) -> Result<Self, String> {
         let (limits, files, main, alive) = {
@@ -1286,11 +1908,9 @@ impl Sandbox {
         let (load, dispatch) = ctx.with(|ctx| {
             let made = (|| -> rquickjs::Result<_> {
                 let factory: Function<'_> = ctx.eval(PRELUDE)?;
-                let host = Function::new(ctx.clone(), move |op: String, payload: String| {
-                    host_call(&host_state, &op, &payload)
-                })?;
+                let (host, put, take) = natives(&ctx, &host_state)?;
                 let info = ctx.json_parse(info)?;
-                let api: Object<'_> = factory.call((host, info))?;
+                let api: Object<'_> = factory.call((host, info, put, take))?;
                 let load: Function<'_> = api.get("load")?;
                 let dispatch: Function<'_> = api.get("dispatch")?;
                 Ok((
@@ -1312,12 +1932,13 @@ impl Sandbox {
     }
 
     /// One entry into plug-in code (see the module docs).
-    fn turn(&self, client: Option<String>, budget: Duration, call: Call) -> Result<(), Crash> {
+    fn turn(&self, origin: Origin, budget: Duration, call: Call) -> Result<(), Crash> {
         {
             let mut s = self.state.borrow_mut();
-            s.client = client;
+            s.origin = origin;
             s.logs_this_turn = 0;
         }
+        let started = Instant::now();
         self.budget.arm(budget);
         let result = self.ctx.with(|ctx| {
             let run = || -> rquickjs::Result<()> {
@@ -1372,6 +1993,11 @@ impl Sandbox {
         let fatal = {
             let mut s = self.state.borrow_mut();
             s.log_dropped();
+            // Bytes live for one turn only.
+            s.blobs_in.clear();
+            s.blobs_out.clear();
+            s.blob_out_bytes = 0;
+            s.meter(started.elapsed());
             s.fatal.take()
         };
         if fired {
@@ -1385,12 +2011,12 @@ impl Sandbox {
 
     fn dispatch(
         &self,
-        client: Option<String>,
+        origin: Origin,
         budget: Duration,
         kind: &'static str,
         payload: serde_json::Value,
     ) -> Result<(), Crash> {
-        self.turn(client, budget, Call::Dispatch(kind, payload.to_string()))
+        self.turn(origin, budget, Call::Dispatch(kind, payload.to_string()))
     }
 
     /// The plug-in was stopped: `deactivate` runs (short budget; the API
@@ -1399,12 +2025,37 @@ impl Sandbox {
     fn deactivate(&self, budget: Duration) -> ThreadEnd {
         self.budget.deactivating.store(true, Ordering::SeqCst);
         let _ = self.dispatch(
-            None,
+            Origin::default(),
             budget.min(Duration::from_millis(250)),
             "deactivate",
             json!({}),
         );
         ThreadEnd::Requested
+    }
+}
+
+impl State {
+    /// Counts a turn's time against the CPU quota and reports it to the
+    /// core about once a minute.
+    fn meter(&self, used: Duration) {
+        let now = self.inner.services.now();
+        let minute = minute_of(now);
+        let report = {
+            let mut cpu = self
+                .cpu
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            cpu.add(minute, used);
+            cpu.take_report(minute)
+        };
+        if let Some(ms) = report {
+            let services = Arc::clone(&self.inner.services);
+            let plugin = self.id.clone();
+            let at = now.timestamp();
+            self.inner.handle.spawn(async move {
+                let _ = services.record_cpu(plugin, at, ms).await;
+            });
+        }
     }
 }
 
@@ -1422,12 +2073,17 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         rx,
         tx,
         activated,
+        catalogs,
+        locale,
+        display_name,
+        cpu,
     } = launch;
     let limits = inner.limits.clone();
     let info = json!({
         "plugin": { "id": id.as_str(), "version": manifest.version },
         "apiVersion": manifest.api_version,
         "settings": settings,
+        "locale": locale.clone().unwrap_or_else(|| "en".to_owned()),
     })
     .to_string();
     let main = manifest.main.clone();
@@ -1441,7 +2097,7 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         tx,
         alive,
         dev,
-        client: None,
+        origin: Origin::default(),
         next_id: 0,
         calls: HashMap::new(),
         commands: HashSet::new(),
@@ -1455,6 +2111,18 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         dropped_logs: 0,
         log_rate: LogRate::new(limits.max_log_lines_per_minute),
         notifications: VecDeque::new(),
+        registered: HashSet::new(),
+        invocations: HashMap::new(),
+        panel_trees: HashMap::new(),
+        panel_seq: 0,
+        composer_drafts: HashMap::new(),
+        blobs_in: HashMap::new(),
+        blobs_out: Blobs::new(),
+        blob_out_bytes: 0,
+        catalogs,
+        locale,
+        display_name,
+        cpu,
     }));
     let mut activated = Some(activated);
     // The crash is recorded before anyone waiting hears about it.
@@ -1469,7 +2137,11 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         Ok(sandbox) => sandbox,
         Err(message) => return fail(&mut activated, Crash::error(message)),
     };
-    if let Err(crash) = sandbox.turn(None, limits.activation_budget, Call::Load(main)) {
+    if let Err(crash) = sandbox.turn(
+        Origin::default(),
+        limits.activation_budget,
+        Call::Load(main),
+    ) {
         return fail(&mut activated, crash);
     }
     let stopped = || !state.borrow().alive.load(Ordering::SeqCst);
@@ -1477,6 +2149,12 @@ pub(crate) fn run(inner: Arc<Inner>, launch: Launch) -> ThreadEnd {
         if stopped() {
             return sandbox.deactivate(limits.call_budget);
         }
+        // Handler calls nobody waits for any more (their time ran out) are
+        // forgotten; a late result is ignored.
+        state
+            .borrow_mut()
+            .invocations
+            .retain(|_, reply| !reply.is_closed());
         if activated.is_some() && state.borrow().activated {
             inner.activated(&id, generation);
             if let Some(reply) = activated.take() {
@@ -1539,7 +2217,7 @@ fn fire_timers(
     budget: Duration,
 ) -> Result<(), Crash> {
     let now = Instant::now();
-    let mut due: Vec<(Instant, u64, Option<String>)> = {
+    let mut due: Vec<(Instant, u64, Origin)> = {
         let mut s = state.borrow_mut();
         let ids: Vec<u64> = s
             .timers
@@ -1548,14 +2226,67 @@ fn fire_timers(
             .map(|(id, _)| *id)
             .collect();
         ids.into_iter()
-            .filter_map(|id| s.timers.remove(&id).map(|t| (t.due, id, t.client)))
+            .filter_map(|id| s.timers.remove(&id).map(|t| (t.due, id, t.origin)))
             .collect()
     };
-    due.sort();
-    for (_, id, client) in due {
-        sandbox.dispatch(client, budget, "timer", json!({ "id": id }))?;
+    due.sort_by_key(|(due, id, _)| (*due, *id));
+    for (_, id, origin) in due {
+        sandbox.dispatch(origin, budget, "timer", json!({ "id": id }))?;
     }
     Ok(())
+}
+
+/// Calls a registered handler; its result comes back with `invokeResult`.
+fn invoke(
+    sandbox: &Sandbox,
+    state: &Rc<RefCell<State>>,
+    call: Invoke,
+    reply: Reply<serde_json::Value>,
+    budget: Duration,
+) -> Result<(), Crash> {
+    // Nobody waits any more (its time ran out while it was queued).
+    if reply.is_closed() {
+        return Ok(());
+    }
+    let payload = {
+        let mut s = state.borrow_mut();
+        if !s.registered.contains(&(call.registry, call.name.clone())) {
+            let _ = reply.send(Err(ApiError::not_found(format!(
+                "the plug-in has not registered the {} `{}`",
+                call.registry.as_str(),
+                call.name
+            ))));
+            return Ok(());
+        }
+        let req = s.next_id();
+        s.invocations.insert(req, reply);
+        if let Some(draft) = call.composer_draft {
+            let now = Instant::now();
+            s.composer_drafts.retain(|_, g| g.until > now);
+            let seq = s.next_id();
+            let until = now + s.inner.limits.composer_edit_window;
+            s.composer_drafts.insert(
+                draft,
+                ComposerGrant {
+                    client: call.origin.client.clone(),
+                    until,
+                    seq,
+                },
+            );
+        }
+        let bytes = call.bytes.map(|b| s.stash(b));
+        let mut payload = json!({
+            "req": req,
+            "registry": call.registry.as_str(),
+            "name": call.name,
+            "input": call.input,
+        });
+        if let Some(id) = bytes {
+            payload["bytes"] = json!(id);
+        }
+        payload
+    };
+    sandbox.dispatch(call.origin, budget, "invoke", payload)
 }
 
 fn answer<T>(state: &Rc<RefCell<State>>, reply: Reply<T>, outcome: &Result<(), Crash>, ok: T) {
@@ -1580,14 +2311,18 @@ fn handle(
     budget: Duration,
 ) -> Result<(), Crash> {
     match message {
-        ThreadMsg::Resolve { id, result } => {
+        ThreadMsg::Invoke(call, reply) => invoke(sandbox, state, *call, reply, budget),
+        ThreadMsg::Resolve { id, result, bytes } => {
             let Some(call) = state.borrow_mut().calls.remove(&id) else {
                 return Ok(());
             };
-            let payload = match &result {
+            let mut payload = match &result {
                 Ok(value) => json!({ "id": id, "value": value }),
                 Err(e) => json!({ "id": id, "error": error_json(e) }),
             };
+            if let Some(bytes) = bytes {
+                payload["bytes"] = json!(state.borrow_mut().stash(bytes));
+            }
             {
                 let mut s = state.borrow_mut();
                 if s.dev {
@@ -1603,7 +2338,7 @@ fn handle(
                     );
                 }
             }
-            sandbox.dispatch(call.client, budget, "resolve", payload)
+            sandbox.dispatch(call.origin, budget, "resolve", payload)
         }
         ThreadMsg::DialogResponse {
             call_id,
@@ -1622,7 +2357,7 @@ fn handle(
                 values: tree::clean_values(&dialog.kinds, values),
             };
             sandbox.dispatch(
-                dialog.client,
+                dialog.origin,
                 budget,
                 "resolve",
                 json!({ "id": call_id, "value": result }),
@@ -1639,15 +2374,18 @@ fn handle(
                 (
                     d.actions.contains(&component_id),
                     tree::clean_values(&d.kinds, values),
-                    d.client.clone(),
+                    d.origin.clone(),
                 )
             });
-            let Some((true, values, client)) = found else {
+            let Some((true, values, origin)) = found else {
                 let _ = reply.send(Err(ApiError::not_found("no such button in the dialog")));
                 return Ok(());
             };
             let outcome = sandbox.dispatch(
-                client_id.or(client),
+                Origin {
+                    client: client_id.or(origin.client),
+                    on_behalf: origin.on_behalf,
+                },
                 budget,
                 "dialogAction",
                 json!({ "id": call_id, "componentId": component_id, "values": values }),
@@ -1668,7 +2406,7 @@ fn handle(
                 return Ok(());
             }
             let outcome = sandbox.dispatch(
-                client_id,
+                Origin::client(client_id),
                 budget,
                 "command",
                 json!({ "name": name, "context": context }),
@@ -1691,11 +2429,12 @@ fn handle(
                     return Ok(());
                 }
                 let req = s.next_id();
-                s.panel_requests.insert(req, reply);
+                s.panel_requests
+                    .insert(req, (name.clone(), client_id.clone(), reply));
                 req
             };
             sandbox.dispatch(
-                client_id,
+                Origin::client(client_id),
                 budget,
                 "panel",
                 json!({ "req": req, "name": name, "context": context }),
@@ -1714,8 +2453,22 @@ fn handle(
                 ))));
                 return Ok(());
             }
+            // Only buttons and inputs of the tree this UI was last shown
+            // (M4a): anything else is refused or dropped.
+            let values = {
+                let s = state.borrow();
+                match s.panel_tree(&name, &client_id) {
+                    Some(tree) if tree.buttons.contains(&component_id) => {
+                        tree::clean_values(&tree.kinds, values)
+                    }
+                    _ => {
+                        let _ = reply.send(Err(ApiError::not_found("no such button in the panel")));
+                        return Ok(());
+                    }
+                }
+            };
             let outcome = sandbox.dispatch(
-                client_id,
+                Origin::client(client_id),
                 budget,
                 "panelAction",
                 json!({ "name": name, "componentId": component_id, "values": values }),
@@ -1723,9 +2476,12 @@ fn handle(
             answer(state, reply, &outcome, ());
             outcome
         }
-        ThreadMsg::Settings(values) => {
-            sandbox.dispatch(None, budget, "settings", json!({ "values": values }))
-        }
+        ThreadMsg::Settings(values) => sandbox.dispatch(
+            Origin::default(),
+            budget,
+            "settings",
+            json!({ "values": values }),
+        ),
         ThreadMsg::Stop => Ok(()),
     }
 }

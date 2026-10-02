@@ -26,6 +26,7 @@ import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts, useClient } from "../../state/queries";
 import { TextField } from "../../widgets/forms";
+import { contributionItems } from "./extensions";
 import { allGranted, grantsValid, orderedGrants } from "./grants";
 import { Permissions } from "./Permissions";
 import { Placements } from "./Placements";
@@ -65,22 +66,17 @@ type Stage =
 
 function Contributions({ manifest }: { manifest: PluginManifest }) {
   const t = useT();
-  const c = manifest.contributes;
-  const commands = c?.commands ?? [];
-  const panels = c?.panels ?? [];
-  if (commands.length === 0 && panels.length === 0) return null;
+  const items = contributionItems(manifest);
+  if (items.length === 0) return null;
   return (
     <section data-part="plugin-install.adds">
       <h3 data-part="plugin-install.heading">{t("plugin-install-adds")}</h3>
       <ul data-part="plugin-install.contributions">
-        {commands.map((command) => (
-          <li key={`c-${command.id}`} data-part="plugin-install.contribution" data-kind="command">
-            {t("plugin-install-command", { title: command.title })}
-          </li>
-        ))}
-        {panels.map((panel) => (
-          <li key={`p-${panel.id}`} data-part="plugin-install.contribution" data-kind="panel">
-            {t("plugin-install-panel", { title: panel.title })}
+        {items.map((item) => (
+          <li key={item.key} data-part="plugin-install.contribution" data-kind={item.kind}>
+            {item.kind === "hook"
+              ? t(item.id, { hook: t(item.args.hook ?? "") })
+              : t(item.id, item.args)}
           </li>
         ))}
       </ul>

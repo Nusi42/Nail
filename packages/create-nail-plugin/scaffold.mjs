@@ -2,6 +2,9 @@
  * Scaffolds a Nail plug-in folder from `template/`: manifest.json,
  * src/index.tsx, tsconfig.json, package.json, scripts/build.mjs (esbuild),
  * scripts/pack.mjs (.nailplugin), locales/en.ftl, README.md, .gitignore.
+ * A template other than `command` replaces manifest.json, src/index.tsx
+ * and locales/en.ftl with those of `templates/<name>/` (M4a: `hook`,
+ * `composer`, `attachment`).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -11,8 +14,12 @@ import { isKebabName } from "@nail/plugin-api/tools";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-/** The template folder. */
+/** The template folder (the `command` template, and the files every template shares). */
 export const TEMPLATE_DIR = path.join(here, "template");
+/** The folder of the other templates' files. */
+export const TEMPLATES_DIR = path.join(here, "templates");
+/** The templates: a command with a dialog, mail hooks, composer extensions, an attachment preview. */
+export const TEMPLATES = ["command", "hook", "composer", "attachment"];
 /** The SDK package in this repository (`packages/plugin-api`). */
 export const SDK_DIR = path.resolve(here, "..", "plugin-api");
 
@@ -106,15 +113,20 @@ export function fill(file, text, values) {
  * @property {string} [id] plug-in id (default: from the folder name)
  * @property {string} [name] display name (default: from the id)
  * @property {string} [sdk] version spec of `@nail/plugin-api` (default: `file:` path to this repository's SDK)
+ * @property {string} [template] one of {@link TEMPLATES} (default `command`)
  * @property {boolean} [force] write into a non-empty folder
  */
 
 /**
  * Creates a plug-in folder.
  * @param {ScaffoldOptions} options
- * @returns {{ dir: string, id: string, name: string, files: string[] }}
+ * @returns {{ dir: string, id: string, name: string, template: string, files: string[] }}
  */
 export function scaffold(options) {
+  const template = options.template ?? "command";
+  if (!TEMPLATES.includes(template)) {
+    throw new ScaffoldError(`unknown template "${template}": use ${TEMPLATES.join(", ")}`);
+  }
   const dir = path.resolve(options.dir);
   if (existsSync(dir) && readdirSync(dir).length > 0 && !options.force) {
     throw new ScaffoldError(`${dir} is not empty (use --force to write into it)`);
@@ -138,18 +150,24 @@ export function scaffold(options) {
     TYPESCRIPT_SPEC: sdkDevDependency("typescript"),
   };
 
+  /** @type {Map<string, string>} template path → source folder */
+  const sources = new Map(walk(TEMPLATE_DIR).map((rel) => [rel, TEMPLATE_DIR]));
+  if (template !== "command") {
+    const overlay = path.join(TEMPLATES_DIR, template);
+    for (const rel of walk(overlay)) sources.set(rel, overlay);
+  }
   const files = [];
-  for (const rel of walk(TEMPLATE_DIR)) {
+  for (const [rel, source] of [...sources].sort(([a], [b]) => a.localeCompare(b))) {
     const base = path.posix.basename(rel);
     const target = path.posix.join(
       path.posix.dirname(rel),
       RENAMES[/** @type {keyof typeof RENAMES} */ (base)] ?? base,
     );
-    const text = fill(rel, readFileSync(path.join(TEMPLATE_DIR, rel), "utf8"), values);
+    const text = fill(rel, readFileSync(path.join(source, rel), "utf8"), values);
     const out = path.join(dir, ...target.split("/"));
     mkdirSync(path.dirname(out), { recursive: true });
     writeFileSync(out, text);
     files.push(target.startsWith("./") ? target.slice(2) : target);
   }
-  return { dir, id, name, files: files.sort() };
+  return { dir, id, name, template, files: files.sort() };
 }

@@ -11,10 +11,26 @@ export interface ManifestIssue {
   detail?: string;
 }
 
-/** Permissions of the preview API (plus `network:<host>`). */
-export declare const PREVIEW_PERMISSIONS: string[];
-/** Permissions of the full API, refused in the preview. */
+/** Every permission Nail offers (plus `network:<host>`). */
+export declare const PERMISSIONS: string[];
+/** Permissions of the design this version refuses (`permission-not-in-preview`). */
 export declare const FUTURE_PERMISSIONS: string[];
+/** Permissions another one needs in the same manifest. */
+export declare const REQUIRED_PERMISSIONS: Record<string, string[]>;
+/** Permissions a grant can limit to accounts. */
+export declare const ACCOUNT_PERMISSIONS: string[];
+/** Permissions that change the user's data. */
+export declare const WRITE_PERMISSIONS: string[];
+/** Hook kinds and their permissions. */
+export declare const HOOK_PERMISSIONS: Record<"arrival" | "beforeSend" | "open", string>;
+/** Events a background job can subscribe to. */
+export declare const JOB_EVENTS: string[];
+/** MCP scopes an exposed tool may require. */
+export declare const MCP_SCOPES: string[];
+/** A MIME type pattern of a contribution (`text/csv`, `image/*`). */
+export declare function isMimePattern(mime: unknown): boolean;
+/** A file extension of a contribution (`csv`). */
+export declare function isExtension(ext: unknown): boolean;
 /** kebab-case, 1–64 characters, starting with a letter. */
 export declare function isKebabName(s: unknown): boolean;
 /** A semantic version. */
@@ -73,3 +89,33 @@ export interface ZipEntry {
 export declare function createZip(entries: ZipEntry[]): Buffer;
 /** Reads a zip archive (stored / deflated entries). */
 export declare function readZip(bytes: Uint8Array): { name: string; data: Buffer }[];
+
+/** A parsed background job schedule. */
+export interface CronSchedule {
+  minutes: Set<number>;
+  hours: Set<number>;
+  days: Set<number>;
+  months: Set<number>;
+  /** 0–6, Sunday = 0. */
+  weekdays: Set<number>;
+  dayRestricted: boolean;
+  weekdayRestricted: boolean;
+}
+/** Why a schedule is refused (Nail's `CronIssue`). */
+export declare class CronError extends Error {
+  constructor(issue: "field-count" | "invalid-field" | "too-frequent");
+  issue: "field-count" | "invalid-field" | "too-frequent";
+}
+/** Shortest interval between two runs (minutes). */
+export declare const MIN_JOB_INTERVAL_MINUTES: number;
+/** Parses a schedule (five cron fields or `@hourly` / `@daily` / `@weekly`); throws {@link CronError}. */
+export declare function parseCron(text: string): CronSchedule;
+/** Whether a schedule is valid. */
+export declare function isCron(text: unknown): boolean;
+/** Whether the schedule fires at this local time. */
+export declare function cronMatches(schedule: CronSchedule, date: Date): boolean;
+/** The next local time after `after` the schedule fires. */
+export declare function nextCronRun(schedule: CronSchedule, after: Date): Date | null;
+
+/** The plug-in's Fluent catalogs (language tag → `.ftl` text) for the test host's `nail.l10n`. */
+export declare function loadCatalogs(dir: string, manifest?: unknown): Record<string, string>;

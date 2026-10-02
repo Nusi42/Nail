@@ -11,12 +11,20 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
+use nail_api::agents::{ActionAttribution, ActionKind};
+use nail_api::mcp::tools::McpWriteResult;
 use nail_api::plugins::{
-    PluginCalendarEvent, PluginLogLevel, PluginLogSource, PluginMessage, PluginMessageBody,
-    PluginStorageUsage,
+    PluginCalendarEvent, PluginHookKind, PluginHookOutcome, PluginJobOutcome, PluginLogLevel,
+    PluginLogSource, PluginMessage, PluginMessageBody, PluginStorageUsage,
 };
-use nail_api::{AccountId, ApiError, Event, LocalizedMessage, MessageId, PluginId, ThreadId};
+use nail_api::{
+    AccountId, ApiError, DraftId, Event, LocalizedMessage, MessageId, PluginId, ThreadId,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::writes::PluginWrite;
 
 /// A boxed, sendable future (the trait is object safe).
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -107,6 +115,142 @@ pub struct HostLogLine {
     pub message: String,
     /// For host lines: the user-facing text.
     pub localized: Option<LocalizedMessage>,
+}
+
+/// A write a plug-in asks for (M4a), after the permission gate: the core
+/// runs it like the matching MCP write tool — through the operation queue
+/// and the audit log, asking the user first when the plug-in's action
+/// policy for `kind` says so (a pending confirmation attributed to
+/// `attribution`) — and answers how it ended.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PluginWriteRequest {
+    /// Who writes (the plug-in, its resolved name, and the MCP client it
+    /// serves while it handles an exposed tool call).
+    pub attribution: ActionAttribution,
+    /// The action kind (whose policy applies).
+    pub kind: ActionKind,
+    /// The API that asked (`nail.mail.update`, `hooks.arrival`).
+    pub operation: String,
+    /// What to do.
+    pub write: PluginWrite,
+    /// The accounts the plug-in's mail permission reaches for this write
+    /// (`mail.organize` ∩ `mail.read` for message changes, `mail.send` for
+    /// drafts and sending; [`AccountScope::All`] for calendar, contact and
+    /// task writes). The host already checked the message ids it names; the
+    /// core must refuse identities, folders and drafts outside it
+    /// (`not_found`).
+    pub scope: AccountScope,
+}
+
+impl PluginWriteRequest {
+    /// The plug-in.
+    pub fn plugin_id(&self) -> Option<&PluginId> {
+        match &self.attribution.actor {
+            nail_api::agents::ActionActor::Plugin { plugin_id } => Some(plugin_id),
+            nail_api::agents::ActionActor::McpClient { .. } => None,
+        }
+    }
+}
+
+/// A calendar, address book or task list a plug-in may write to
+/// (plug-in-facing, camelCase).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCollection {
+    /// The collection.
+    pub id: String,
+    /// Its name.
+    pub name: String,
+    /// The default one of its kind.
+    #[serde(default)]
+    pub default: bool,
+    /// Read-only (a subscription): writes fail.
+    #[serde(default)]
+    pub read_only: bool,
+}
+
+/// A contact as `nail.contacts.find` returns it (plug-in-facing).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginContact {
+    /// The contact.
+    pub id: String,
+    /// Its address book.
+    pub address_book_id: String,
+    /// The full name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    /// Email addresses.
+    #[serde(default)]
+    pub emails: Vec<String>,
+    /// Organization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
+}
+
+/// An attachment with its bytes (attachment previews and actions).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttachmentData {
+    /// File name.
+    pub name: String,
+    /// MIME type.
+    pub mime_type: String,
+    /// Size in bytes (of the decoded content).
+    pub size: u64,
+    /// The content; empty when it is larger than the `max_bytes` asked for
+    /// ([`PluginServices::attachment`]).
+    pub bytes: Vec<u8>,
+}
+
+/// A job's stored state, as the host needs it to schedule it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct StoredJobState {
+    /// The job.
+    pub job: String,
+    /// The next scheduled run (Unix seconds) the host stored.
+    pub next_run_at: Option<i64>,
+}
+
+/// One finished (or skipped) job run (`Store::record_plugin_job_run`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobRunRecord {
+    /// The plug-in.
+    pub plugin_id: PluginId,
+    /// The job.
+    pub job: String,
+    /// When it ended (Unix seconds, [`PluginServices::now`]).
+    pub at: i64,
+    /// How it ended.
+    pub outcome: PluginJobOutcome,
+    /// Why it failed (English).
+    pub error: Option<String>,
+    /// The next scheduled run (Unix seconds).
+    pub next_run_at: Option<i64>,
+}
+
+/// One hook call (`Store::record_plugin_hook_call`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HookCallRecord {
+    /// The plug-in.
+    pub plugin_id: PluginId,
+    /// The hook.
+    pub hook: PluginHookKind,
+    /// When it ended (Unix seconds).
+    pub at: i64,
+    /// How long it took (ms).
+    pub ms: u64,
+    /// How it ended.
+    pub outcome: PluginHookOutcome,
+    /// Why it failed (English).
+    pub error: Option<String>,
+}
+
+fn unsupported<T: Send + 'static>(what: &'static str) -> BoxFuture<'static, ServiceResult<T>> {
+    Box::pin(async move { Err(ApiError::unsupported(what)) })
+}
+
+fn done() -> BoxFuture<'static, ServiceResult<()>> {
+    Box::pin(async { Ok(()) })
 }
 
 /// The core's side of the plug-in host (implemented by `nail-core`).
@@ -221,4 +365,146 @@ pub trait PluginServices: Send + Sync + 'static {
 
     /// Stores a log line and emits it as [`Event::PluginLogLine`].
     fn log(&self, line: HostLogLine);
+
+    // --- M4a (ADR 0079, WP102). Every method has a default, so a core that
+    // does not offer it yet answers `unsupported` (or does nothing). ---
+
+    /// Runs a plug-in write ([`PluginWriteRequest`]): policy, confirmation,
+    /// operation queue, audit. Answers [`McpWriteResult::Done`] (queued
+    /// operations, created ids), `Denied`, `Expired` or `Vetoed` (a send
+    /// stopped by a before-send hook); errors as for the MCP tool
+    /// (`not_found`, `invalid_request`, `rate_limited` over the pending
+    /// confirmations cap, …).
+    fn write(
+        &self,
+        request: PluginWriteRequest,
+    ) -> BoxFuture<'static, ServiceResult<McpWriteResult>> {
+        let _ = request;
+        unsupported("plug-in writes")
+    }
+
+    /// The calendars a plug-in may write to (`calendar.write`) or read
+    /// (`calendar.read`).
+    fn calendars(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        unsupported("calendars")
+    }
+
+    /// The address books (`contacts.write`).
+    fn address_books(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        unsupported("address books")
+    }
+
+    /// The task lists (`tasks.write`).
+    fn task_lists(&self) -> BoxFuture<'static, ServiceResult<Vec<PluginCollection>>> {
+        unsupported("task lists")
+    }
+
+    /// Contacts with this email address (case-insensitive), at most
+    /// `limit` (`contacts.write`).
+    fn find_contacts(
+        &self,
+        email: String,
+        limit: u32,
+    ) -> BoxFuture<'static, ServiceResult<Vec<PluginContact>>> {
+        let _ = (email, limit);
+        unsupported("contacts")
+    }
+
+    /// An attachment of a message by index: its name, type and size, and
+    /// its bytes when `size <= max_bytes` (else `bytes` stays empty).
+    /// `None` when the message or attachment does not exist. Called only
+    /// for messages that are not end-to-end encrypted; the core must never
+    /// return decrypted end-to-end encrypted content here.
+    fn attachment(
+        &self,
+        message: MessageId,
+        index: u32,
+        max_bytes: u64,
+    ) -> BoxFuture<'static, ServiceResult<Option<AttachmentData>>> {
+        let _ = (message, index, max_bytes);
+        unsupported("attachments")
+    }
+
+    /// The mode of a saved draft (`plain`, `html`, `markdown`); `None` when
+    /// it does not exist (composer actions).
+    fn draft_mode(&self, draft: DraftId) -> BoxFuture<'static, ServiceResult<Option<String>>> {
+        let _ = draft;
+        unsupported("drafts")
+    }
+
+    /// Whether a message matches a query of Nail's search language (the
+    /// `filter` of arrival and open hooks). An error skips the hook.
+    fn message_matches(
+        &self,
+        message: MessageId,
+        query: String,
+    ) -> BoxFuture<'static, ServiceResult<bool>> {
+        let _ = (message, query);
+        unsupported("hook filters")
+    }
+
+    /// The core's language (`nail.l10n.locale`, plug-in names); `None` =
+    /// English.
+    fn locale(&self) -> Option<String> {
+        None
+    }
+
+    /// Now (job schedules, the CPU quota window, records). The core passes
+    /// its adjustable clock (`ServiceOptions::clock`), so tests and the
+    /// Playwright scenarios control when jobs run.
+    fn now(&self) -> DateTime<Utc> {
+        Utc::now()
+    }
+
+    /// The local wall-clock time of `at` (cron schedules are local time).
+    fn local_time(&self, at: DateTime<Utc>) -> NaiveDateTime {
+        at.with_timezone(&chrono::Local).naive_local()
+    }
+
+    /// The stored state of a plug-in's jobs (`Store::plugin_job_states`).
+    fn job_states(
+        &self,
+        plugin: PluginId,
+    ) -> BoxFuture<'static, ServiceResult<Vec<StoredJobState>>> {
+        let _ = plugin;
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Stores when a job runs next (`Store::set_plugin_job_next_run`).
+    fn set_job_next_run(
+        &self,
+        plugin: PluginId,
+        job: String,
+        next_run_at: Option<i64>,
+    ) -> BoxFuture<'static, ServiceResult<()>> {
+        let _ = (plugin, job, next_run_at);
+        done()
+    }
+
+    /// Records a job run (`Store::record_plugin_job_run`); the host emits
+    /// [`Event::PluginActivityChanged`] afterwards.
+    fn record_job_run(&self, record: JobRunRecord) -> BoxFuture<'static, ServiceResult<()>> {
+        let _ = record;
+        done()
+    }
+
+    /// Records a hook call (`Store::record_plugin_hook_call`). The core
+    /// decides when to emit [`Event::PluginActivityChanged`] for hooks
+    /// (they run often; the host does not emit for them).
+    fn record_hook_call(&self, record: HookCallRecord) -> BoxFuture<'static, ServiceResult<()>> {
+        let _ = record;
+        done()
+    }
+
+    /// Adds CPU time a plug-in used (`Store::add_plugin_cpu`; `at` in Unix
+    /// seconds; flushed about once a minute per plug-in).
+    fn record_cpu(
+        &self,
+        plugin: PluginId,
+        at: i64,
+        cpu_ms: u64,
+    ) -> BoxFuture<'static, ServiceResult<()>> {
+        let _ = (plugin, at, cpu_ms);
+        done()
+    }
 }

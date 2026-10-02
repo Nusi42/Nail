@@ -6,31 +6,105 @@
  * (`invalid-id`, `unknown-command`, …).
  */
 
-/** Permissions of the preview API (plus `network:<host>`). */
-export const PREVIEW_PERMISSIONS = [
+import { isCron } from "./cron.mjs";
+
+/** Every permission Nail offers (plus `network:<host>`), in display order. */
+export const PERMISSIONS = [
   "mail.read",
   "mail.read.body",
   "calendar.read",
   "ui.dialogs",
   "notifications",
   "storage",
-];
-
-/** Permissions of the full API (M4) — refused in the preview. */
-export const FUTURE_PERMISSIONS = [
-  "mail.read.encrypted",
   "mail.organize",
   "mail.send",
   "calendar.write",
-  "contacts.read",
   "contacts.write",
-  "tasks.read",
   "tasks.write",
   "hooks.arrival",
   "hooks.beforeSend",
-  "ui.webview",
+  "hooks.open",
+  "composer",
+  "attachments",
+  "background",
   "mcp.expose",
 ];
+
+/** Permissions of the design that this version refuses (`permission-not-in-preview`). */
+export const FUTURE_PERMISSIONS = [
+  "mail.read.encrypted",
+  "contacts.read",
+  "tasks.read",
+  "ui.webview",
+];
+
+/** Permissions another one needs in the same manifest (`missing-required-permission`). */
+export const REQUIRED_PERMISSIONS = {
+  "mail.read.body": ["mail.read"],
+  "mail.organize": ["mail.read"],
+  "hooks.arrival": ["mail.read"],
+  "hooks.open": ["mail.read"],
+};
+
+/** Permissions a grant can limit to accounts. */
+export const ACCOUNT_PERMISSIONS = [
+  "mail.read",
+  "mail.read.body",
+  "mail.organize",
+  "mail.send",
+  "hooks.arrival",
+  "hooks.beforeSend",
+  "hooks.open",
+  "attachments",
+];
+
+/** Permissions that let a plug-in change the user's data (the install dialog highlights them). */
+export const WRITE_PERMISSIONS = [
+  "mail.organize",
+  "mail.send",
+  "calendar.write",
+  "contacts.write",
+  "tasks.write",
+];
+
+/** Hook kinds and their permissions. */
+export const HOOK_PERMISSIONS = {
+  arrival: "hooks.arrival",
+  beforeSend: "hooks.beforeSend",
+  open: "hooks.open",
+};
+
+/** Events a background job can subscribe to. */
+export const JOB_EVENTS = [
+  "message.received",
+  "message.sent",
+  "selection.changed",
+  "event.reminder",
+  "app.started",
+];
+
+/** MCP scopes (what an exposed tool may require of a client). */
+export const MCP_SCOPES = [
+  "read",
+  "raw-source",
+  "attachments",
+  "encrypted",
+  "context",
+  "organize",
+  "permanent-delete",
+  "draft",
+  "send",
+  "calendar",
+  "pim",
+  "rules",
+];
+
+/** Largest attachment a preview renderer may declare (bytes). */
+export const MAX_PREVIEW_INPUT = 10 * 1024 * 1024;
+/** Longest MCP tool name (`<plugin>__<tool>`). */
+export const MAX_MCP_TOOL_NAME = 64;
+/** Largest `inputSchema` (bytes of JSON). */
+export const MAX_MCP_TOOL_SCHEMA = 16 * 1024;
 
 const COMMAND_CONTEXTS = ["list", "reader", "composer", "global"];
 const KEY_CONTEXTS = ["global", "list", "reader", "composer", "search", "window"];
@@ -157,12 +231,22 @@ export function checkManifest(manifest) {
       if (!isNetworkHost(p.slice(8))) issue("invalid-network-domain", path, p);
     } else if (FUTURE_PERMISSIONS.includes(p)) {
       issue("permission-not-in-preview", path, p);
-    } else if (!PREVIEW_PERMISSIONS.includes(p)) {
+    } else if (!PERMISSIONS.includes(p)) {
       issue("unknown-permission", path, p);
     }
   });
   if (seen.has("mail.read.body") && !seen.has("mail.read")) {
     issue("body-without-read", "permissions", "mail.read.body");
+  }
+  for (const p of seen) {
+    if (p === "mail.read.body") continue;
+    for (const needed of REQUIRED_PERMISSIONS[
+      /** @type {keyof typeof REQUIRED_PERMISSIONS} */ (p)
+    ] ?? []) {
+      if (!seen.has(needed)) {
+        issue("missing-required-permission", "permissions", `${p} needs ${needed}`);
+      }
+    }
   }
 
   /** @type {Record<string, any>} */
@@ -231,6 +315,7 @@ export function checkManifest(manifest) {
       issue("invalid-locale", `contributes.locales.${tag}`, file);
     }
   }
+  checkExtensions(manifest, seen, issue);
   /** @type {[string, number][]} */
   const counts = [
     ["commands", 100],
@@ -238,9 +323,223 @@ export function checkManifest(manifest) {
     ["keys", 100],
     ["panels", 50],
     ["settings", 50],
+    ["composerActions", 50],
+    ["markdownBlocks", 50],
+    ["attachmentPreviews", 50],
+    ["attachmentActions", 50],
+    ["linkActions", 50],
+    ["jobs", 10],
+    ["mcpTools", 50],
   ];
   for (const [name, max] of counts) {
     if ((c[name] ?? []).length > max) issue("too-many-contributions", `contributes.${name}`);
   }
+  if (Object.keys(c.locales ?? {}).length > 50) {
+    issue("too-many-contributions", "contributes.locales");
+  }
   return issues;
+}
+
+/**
+ * A title: not blank, at most 100 characters.
+ * @param {unknown} s
+ */
+function isTitle(s) {
+  return typeof s === "string" && s.trim().length > 0 && [...s].length <= 100;
+}
+
+/**
+ * At most 1000 characters (or absent).
+ * @param {unknown} s
+ */
+function isDescription(s) {
+  return s === undefined || (typeof s === "string" && [...s].length <= 1000);
+}
+
+/**
+ * A MIME type pattern: `type/sub` or `type/*`, lower case.
+ * @param {unknown} mime
+ */
+export function isMimePattern(mime) {
+  if (typeof mime !== "string") return false;
+  const [ty, sub, ...rest] = mime.split("/");
+  const token = (/** @type {string | undefined} */ t) =>
+    typeof t === "string" && t.length > 0 && t.length <= 64 && /^[a-z0-9.+-]+$/.test(t);
+  return rest.length === 0 && token(ty) && (sub === "*" || token(sub));
+}
+
+/**
+ * A file extension: 1–16 lower-case letters and digits, no dot.
+ * @param {unknown} ext
+ */
+export function isExtension(ext) {
+  return typeof ext === "string" && /^[a-z0-9]{1,16}$/.test(ext);
+}
+
+/**
+ * MIME types and extensions of a contribution are valid (at most 20 each).
+ * @param {unknown} mimes
+ * @param {unknown} exts
+ */
+function matchersOk(mimes, exts) {
+  const m = mimes ?? [];
+  const e = exts ?? [];
+  return (
+    Array.isArray(m) &&
+    Array.isArray(e) &&
+    m.length <= 20 &&
+    e.length <= 20 &&
+    m.every(isMimePattern) &&
+    e.every(isExtension)
+  );
+}
+
+/**
+ * The M4a contributions: hooks, composer actions, Markdown blocks,
+ * attachment previews and actions, link actions, jobs, MCP tools (each
+ * needs its permission).
+ * @param {any} manifest
+ * @param {Set<unknown>} permissions
+ * @param {(kind: string, path: string, detail?: unknown) => void} issue
+ */
+function checkExtensions(manifest, permissions, issue) {
+  /** @type {Record<string, any>} */
+  const c = manifest.contributes ?? {};
+  const list = (/** @type {string} */ name) => (Array.isArray(c[name]) ? c[name] : []);
+  const hooks = list("hooks");
+  /** @type {[string, string, boolean][]} */
+  const needs = [
+    [
+      "hooks.arrival",
+      "contributes.hooks",
+      hooks.some((/** @type {any} */ h) => h?.hook === "arrival"),
+    ],
+    [
+      "hooks.beforeSend",
+      "contributes.hooks",
+      hooks.some((/** @type {any} */ h) => h?.hook === "beforeSend"),
+    ],
+    ["hooks.open", "contributes.hooks", hooks.some((/** @type {any} */ h) => h?.hook === "open")],
+    ["composer", "contributes.composerActions", list("composerActions").length > 0],
+    ["composer", "contributes.markdownBlocks", list("markdownBlocks").length > 0],
+    ["attachments", "contributes.attachmentPreviews", list("attachmentPreviews").length > 0],
+    ["attachments", "contributes.attachmentActions", list("attachmentActions").length > 0],
+    ["background", "contributes.jobs", list("jobs").length > 0],
+    ["mcp.expose", "contributes.mcpTools", list("mcpTools").length > 0],
+  ];
+  for (const [permission, path, used] of needs) {
+    if (used && !permissions.has(permission)) {
+      issue("contribution-needs-permission", path, permission);
+    }
+  }
+
+  const seenHooks = new Set();
+  hooks.forEach((/** @type {any} */ hook, /** @type {number} */ i) => {
+    const path = `contributes.hooks[${i}]`;
+    const kind = hook?.hook;
+    const filterOk =
+      hook?.filter === undefined ||
+      (kind !== "beforeSend" &&
+        typeof hook.filter === "string" &&
+        hook.filter.trim().length > 0 &&
+        [...hook.filter].length <= 500);
+    const timeoutOk =
+      hook?.timeoutMs === undefined ||
+      (Number.isInteger(hook.timeoutMs) && hook.timeoutMs >= 50 && hook.timeoutMs <= 10_000);
+    if (!(kind in HOOK_PERMISSIONS) || !filterOk || !timeoutOk) {
+      issue("invalid-hook", path, kind);
+    } else if (seenHooks.has(kind)) {
+      issue("duplicate-hook", path, kind);
+    } else {
+      seenHooks.add(kind);
+    }
+  });
+
+  /**
+   * @param {string} name
+   * @param {(item: any) => boolean} valid
+   */
+  const extensions = (name, valid) => {
+    const seen = new Set();
+    list(name).forEach((/** @type {any} */ item, /** @type {number} */ i) => {
+      const path = `contributes.${name}[${i}]`;
+      if (!isKebabName(item?.id) || !valid(item)) {
+        issue("invalid-extension", path, item?.id);
+      } else if (seen.has(item.id)) {
+        issue("duplicate-extension", path, item.id);
+      } else {
+        seen.add(item.id);
+      }
+    });
+  };
+  extensions("composerActions", (a) => isTitle(a.title) && isDescription(a.description));
+  extensions(
+    "markdownBlocks",
+    (b) => isTitle(b.title) && (b.template === undefined || isDescription(b.template)),
+  );
+  extensions(
+    "attachmentPreviews",
+    (p) =>
+      isTitle(p.title) &&
+      ((p.mimeTypes ?? []).length > 0 || (p.extensions ?? []).length > 0) &&
+      (p.maxBytes === undefined ||
+        (Number.isInteger(p.maxBytes) && p.maxBytes > 0 && p.maxBytes <= MAX_PREVIEW_INPUT)) &&
+      matchersOk(p.mimeTypes, p.extensions),
+  );
+  extensions("attachmentActions", (a) => isTitle(a.title) && matchersOk(a.mimeTypes, a.extensions));
+  extensions(
+    "linkActions",
+    (a) =>
+      isTitle(a.title) &&
+      Array.isArray(a.hosts ?? []) &&
+      (a.hosts ?? []).length <= 20 &&
+      (a.hosts ?? []).every(isNetworkHost),
+  );
+
+  const jobs = new Set();
+  list("jobs").forEach((/** @type {any} */ job, /** @type {number} */ i) => {
+    const path = `contributes.jobs[${i}]`;
+    const events = job?.events ?? [];
+    const valid =
+      isKebabName(job?.id) &&
+      (job.title === undefined || isTitle(job.title)) &&
+      Array.isArray(events) &&
+      events.every((/** @type {unknown} */ e) => JOB_EVENTS.includes(String(e))) &&
+      (job.schedule !== undefined || events.length > 0) &&
+      (job.schedule === undefined || isCron(job.schedule));
+    if (!valid) issue("invalid-job", path, job?.id);
+    else if (jobs.has(job.id)) issue("duplicate-job", path, job.id);
+    else jobs.add(job.id);
+  });
+
+  const tools = new Set();
+  list("mcpTools").forEach((/** @type {any} */ tool, /** @type {number} */ i) => {
+    const path = `contributes.mcpTools[${i}]`;
+    const nameOk =
+      isKebabName(tool?.id) && `${manifest.id}__${tool.id}`.length <= MAX_MCP_TOOL_NAME;
+    const descriptionOk =
+      typeof tool?.description === "string" &&
+      tool.description.trim().length > 0 &&
+      [...tool.description].length <= 1000;
+    const schema = tool?.inputSchema;
+    const schemaOk =
+      schema === undefined ||
+      (typeof schema === "object" &&
+        schema !== null &&
+        !Array.isArray(schema) &&
+        schema.type === "object" &&
+        Buffer.byteLength(JSON.stringify(schema)) <= MAX_MCP_TOOL_SCHEMA);
+    const scopes = tool?.scopes ?? ["read"];
+    const scopesOk =
+      Array.isArray(scopes) &&
+      scopes.length > 0 &&
+      scopes.every((/** @type {unknown} */ s) => MCP_SCOPES.includes(String(s)));
+    if (!nameOk || !descriptionOk || !schemaOk || !scopesOk) {
+      issue("invalid-mcp-tool", path, tool?.id);
+    } else if (tools.has(tool.id)) {
+      issue("duplicate-mcp-tool", path, tool.id);
+    } else {
+      tools.add(tool.id);
+    }
+  });
 }

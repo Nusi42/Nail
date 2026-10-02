@@ -1,0 +1,24 @@
+{
+  "id": "__PLUGIN_ID__",
+  "name": "__PLUGIN_NAME__",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "main": "dist/index.js",
+  "description": "%plugin-description%",
+  "permissions": ["attachments", "notifications"],
+  "contributes": {
+    "attachmentPreviews": [
+      {
+        "id": "text",
+        "title": "%preview-title%",
+        "mimeTypes": ["text/plain"],
+        "extensions": ["txt", "log"],
+        "maxBytes": 1048576
+      }
+    ],
+    "attachmentActions": [
+      { "id": "count-words", "title": "%count-words-title%", "mimeTypes": ["text/*"] }
+    ],
+    "locales": { "en": "locales/en.ftl" }
+  }
+}

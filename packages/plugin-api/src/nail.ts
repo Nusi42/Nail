@@ -8,11 +8,15 @@ import type {
   NailApi,
   NailCalendarApi,
   NailCommandsApi,
+  NailComposerApi,
+  NailContactsApi,
   NailHttpApi,
+  NailL10nApi,
   NailLogApi,
   NailMailApi,
   NailSettingsApi,
   NailStorageApi,
+  NailTasksApi,
   PluginApiError,
   PluginApiErrorCode,
   PluginCommandHandler,
@@ -74,10 +78,16 @@ export interface SdkNail {
   readonly plugin: PluginIdentity;
   /** The API version of the host. */
   readonly apiVersion: string;
-  /** Mail (read only in the preview). */
+  /** Mail: reading, organizing, drafts and sending. */
   readonly mail: NailMailApi;
-  /** Calendars (read only; `calendar.read`). */
+  /** Calendars: reading (`calendar.read`) and writing (`calendar.write`). */
   readonly calendar: NailCalendarApi;
+  /** Contacts (`contacts.write`). */
+  readonly contacts: NailContactsApi;
+  /** Tasks (`tasks.write`). */
+  readonly tasks: NailTasksApi;
+  /** Edits of the open draft (`composer`). */
+  readonly composer: NailComposerApi;
   /** Commands, panels, dialogs and notifications. */
   readonly ui: SdkUiApi;
   /** Command handlers. */
@@ -88,6 +98,8 @@ export interface SdkNail {
   readonly http: NailHttpApi;
   /** The plug-in's settings. */
   readonly settings: NailSettingsApi;
+  /** The plug-in's own translations. */
+  readonly l10n: NailL10nApi;
   /** The plug-in's log. */
   readonly log: NailLogApi;
 }
@@ -179,10 +191,14 @@ export const nail: SdkNail = {
   },
   mail: forward((api) => api.mail),
   calendar: forward((api) => api.calendar),
+  contacts: forward((api) => api.contacts),
+  tasks: forward((api) => api.tasks),
+  composer: forward((api) => api.composer),
   ui,
   commands: forward((api) => api.commands),
   storage: forward((api) => api.storage),
   http: forward((api) => api.http),
   settings: forward((api) => api.settings),
+  l10n: forward((api) => api.l10n),
   log: forward((api) => api.log),
 };

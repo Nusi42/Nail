@@ -139,6 +139,20 @@ impl Access {
         }
     }
 
+    /// Fails unless the message's account is granted and its folder not
+    /// excluded — without asking for `read`: a write tool names items by
+    /// id and needs its own scope instead (M4a).
+    pub fn require_place(&self, message: &MessageSummary) -> Result<(), Denial> {
+        if !self.allows_account(&message.account_id) {
+            return Err(Denial::Account(message.account_id.clone()));
+        }
+        if self.allows_folder(&message.folder_id) {
+            Ok(())
+        } else {
+            Err(Denial::Folder(message.folder_id.clone()))
+        }
+    }
+
     /// Whether the message may be read (see [`Self::require_message`]).
     pub fn allows_message(&self, message: &MessageSummary) -> bool {
         self.require_message(message).is_ok()
@@ -227,6 +241,33 @@ mod tests {
             "scope `raw-source` not granted"
         );
         assert!(!access.all_accounts() && access.excludes_folders());
+        // Writes check the place without the `read` scope.
+        let organize_only = Access::resolve(
+            &McpGrant {
+                scopes: vec![McpScope::Organize],
+                accounts: vec!["work".into()],
+                excluded_folders: vec!["work/hr".into()],
+                ..McpGrant::default()
+            },
+            &[],
+        );
+        assert_eq!(
+            organize_only.require_place(&summary("work", "work/inbox")),
+            Ok(())
+        );
+        assert_eq!(
+            organize_only.require_place(&summary("work", "work/hr")),
+            Err(Denial::Folder("work/hr".into()))
+        );
+        assert_eq!(
+            organize_only.require_place(&summary("home", "home/inbox")),
+            Err(Denial::Account("home".into()))
+        );
+        assert!(
+            organize_only
+                .require_message(&summary("work", "work/inbox"))
+                .is_err()
+        );
     }
 
     #[test]

@@ -14,7 +14,8 @@
   "files": [
     "index.mjs",
     "scaffold.mjs",
-    "template"
+    "template",
+    "templates"
   ],
   "scripts": {
     "test": "vitest run",

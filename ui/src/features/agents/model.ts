@@ -6,9 +6,12 @@
  */
 import type {
   ActionActor,
+  ActionAttribution,
   ActionKind,
   ActionPolicy,
   ActionPolicyMode,
+  ActionTargetKind,
+  ConfirmationSource,
   ConfirmationState,
 } from "../../api/generated";
 
@@ -84,4 +87,44 @@ export function kindMessageId(kind: ActionKind): string {
 /** Fluent id of a state's name (in `core-agents.ftl`). */
 export function stateMessageId(state: ConfirmationState): string {
   return `confirmation-state-${state}`;
+}
+
+/** Every kind of affected item (`ActionTargetKind`). */
+export const ACTION_TARGET_KINDS: readonly ActionTargetKind[] = [
+  "message",
+  "draft",
+  "folder",
+  "event",
+  "contact",
+  "task",
+  "rule",
+  "recipient",
+];
+
+/** Where a decision can come from (`ConfirmationSource`). */
+export const CONFIRMATION_SOURCES: readonly ConfirmationSource[] = [
+  "nail",
+  "elicitation",
+  "system",
+];
+
+/** Fluent id of an affected item's kind (in `agents.ftl`). */
+export function targetMessageId(kind: ActionTargetKind): string {
+  return `agents-target-${kind}`;
+}
+
+/** Fluent id of where a decision came from (in `agents.ftl`). */
+export function sourceMessageId(source: ConfirmationSource): string {
+  return `agents-via-${source}`;
+}
+
+/**
+ * Who asks, as the confirmation center names it: always the kind of actor
+ * (AI agent or plug-in) next to its name, so a plug-in cannot pass itself
+ * off as Nail or as an agent.
+ */
+export function attributionMessage(by: ActionAttribution): { id: string; args: { name: string } } {
+  return by.actor.kind === "plugin"
+    ? { id: "agents-actor-plugin", args: { name: by.name } }
+    : { id: "agents-actor-mcp-client", args: { name: by.name } };
 }

@@ -23,6 +23,12 @@
 //! * M2c (WP53): a fixed port from the MCP settings ([`configured_port`]);
 //!   user-facing texts as Fluent ids ([`messages`]: audit details, start
 //!   and bridge errors, admin errors). Agents keep reading English.
+//! * M4a (WP101, ADR 0079): the write tools ([`writes`]: grant, idempotency
+//!   keys, rate limits ([`limits`]), action policies and confirmations
+//!   through a [`broker::ConfirmationBroker`] — Nail's confirmation center
+//!   always, MCP elicitation where the client supports it — and audit
+//!   entries with before / after lines), `test_rule`, `edit_open_draft`
+//!   and the four prompts ([`prompts`], templates in `core-mcp.ftl`).
 //!
 //! Data comes through the [`McpData`] trait, which the core implements
 //! (usually via [`CoreData`]) and tests fake.
@@ -32,19 +38,27 @@
 pub mod access;
 pub mod admin;
 pub mod bridge;
+pub mod broker;
 pub mod content;
 pub mod core_data;
 pub mod data;
 pub mod endpoint;
 pub mod http;
+pub mod limits;
 pub mod messages;
 pub mod pim;
+mod prompts;
 pub mod server;
 mod subscriptions;
 pub mod tools;
 pub mod uri;
+mod writes;
 
 pub use core_data::{CoreAccess, CoreData};
-pub use data::{AttachmentData, DataResult, McpData, MessagePage, SearchOutcome, ThreadData};
+pub use data::{
+    AttachmentData, DataResult, McpData, MessagePage, PluginTool, SearchOutcome, ThreadData,
+};
 pub use http::{McpServer, ServerOptions, configured_port};
 pub use server::{AuthedClient, ClientSource, NailMcp};
+pub use writes::WriteSettings;
+pub use writes::actor::{ActorWrite, ActorWriteRequest, ActorWrites, PimDelete};

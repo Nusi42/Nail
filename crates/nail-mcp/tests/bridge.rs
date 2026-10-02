@@ -105,3 +105,71 @@ async fn the_bridge_checks_token_and_client_name() {
         Err(BridgeError::NotRunning(_))
     ));
 }
+
+/// A stdio client that approves every elicitation form.
+#[derive(Clone, Default)]
+struct Approving(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl rmcp::ClientHandler for Approving {
+    fn get_info(&self) -> ClientConfig {
+        let mut config = ClientConfig::default();
+        config.capabilities.elicitation = Some(
+            rmcp::model::ElicitationCapability::new()
+                .with_form(rmcp::model::FormElicitationCapability::new()),
+        );
+        config
+    }
+
+    async fn create_elicitation(
+        &self,
+        request: rmcp::model::ElicitRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleClient>,
+    ) -> Result<rmcp::model::ElicitResult, rmcp::model::ErrorData> {
+        if let rmcp::model::ElicitRequestParams::FormElicitationParams { message, .. } = request {
+            self.0.lock().unwrap().push(message);
+        }
+        Ok(
+            rmcp::model::ElicitResult::new(rmcp::model::ElicitationAction::Accept)
+                .with_content(serde_json::json!({"approve": true})),
+        )
+    }
+}
+
+/// M4a: a confirmation's elicitation form reaches the stdio client through
+/// the bridge, and its answer comes back.
+#[tokio::test]
+async fn the_bridge_carries_confirmations_both_ways() {
+    let env = start().await;
+    let (id, token) = create_client(&env.store, "desktop").await;
+    grant(&env.store, &id, &[McpScope::Send], &["work"]).await;
+    let (client_out, bridge_in) = tokio::io::duplex(64 * 1024);
+    let (bridge_out, client_in) = tokio::io::duplex(64 * 1024);
+    let options = BridgeOptions {
+        url: env.server.url().to_owned(),
+        token,
+        client_name: None,
+    };
+    let bridge = tokio::spawn(bridge::run(options, bridge_in, bridge_out));
+    let approving = Approving::default();
+    let client = approving
+        .clone()
+        .serve((client_in, client_out))
+        .await
+        .unwrap();
+    let params = rmcp::model::CallToolRequestParams::new("send_message").with_arguments(
+        serde_json::json!({"draft_id": "d1"})
+            .as_object()
+            .unwrap()
+            .clone(),
+    );
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), client.call_tool(params))
+        .await
+        .expect("answered through the bridge")
+        .unwrap();
+    let value = result.structured_content.unwrap();
+    assert_eq!(value["status"], "done", "{value}");
+    assert_eq!(approving.0.lock().unwrap().len(), 1, "the form was shown");
+    assert_eq!(env.data.write_names(), ["SendDraft"]);
+    let _ = client.cancel().await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), bridge).await;
+}

@@ -1,10 +1,12 @@
-//! Shared fixtures of the nail-mcp integration tests: a fake data source,
-//! a running server and an rmcp client with a token.
+//! Shared fixtures of the nail-mcp integration tests: a fake data source
+//! (M4a: with writes, calendars, contacts, tasks and rules), a running
+//! server and an rmcp client with a token.
 
 #![allow(dead_code)]
 
 use std::sync::{Arc, Mutex};
 
+use nail_api::agents::ActionAttribution;
 use nail_api::compose::Draft;
 use nail_api::mcp::{McpGrant, McpScope};
 use nail_api::search::SearchHit;
@@ -16,7 +18,7 @@ use nail_api::{
 };
 use nail_mcp::{
     AttachmentData, DataResult, McpData, McpServer, MessagePage, SearchOutcome, ServerOptions,
-    ThreadData,
+    ThreadData, WriteSettings,
 };
 use nail_store::Store;
 use rmcp::model::{ClientConfig, ResourceUpdatedNotificationParam};
@@ -71,6 +73,10 @@ pub struct FakeData {
     pub events: Mutex<Vec<Event>>,
     /// The index holds decrypted content (decrypted indexing opted in).
     pub decrypted_index: bool,
+    /// M4a: every write the server ran, with who asked.
+    pub writes: Mutex<Vec<(ActionAttribution, Request)>>,
+    /// M4a WP105: tools plug-ins expose (calls answer with their input).
+    pub plugin_tools: Vec<nail_mcp::PluginTool>,
 }
 
 impl Default for FakeData {
@@ -84,6 +90,8 @@ impl Default for FakeData {
             context: Mutex::new(UiContext::default()),
             events: Mutex::new(Vec::new()),
             decrypted_index: false,
+            writes: Mutex::new(Vec::new()),
+            plugin_tools: Vec::new(),
         }
     }
 }
@@ -91,6 +99,31 @@ impl Default for FakeData {
 impl FakeData {
     pub fn events(&self) -> Vec<Event> {
         self.events.lock().unwrap().clone()
+    }
+
+    /// The writes run so far (request type names).
+    pub fn write_names(&self) -> Vec<String> {
+        self.writes
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, r)| {
+                serde_json::to_value(r).unwrap()["type"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    /// The writes run so far.
+    pub fn written(&self) -> Vec<Request> {
+        self.writes
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, r)| r.clone())
+            .collect()
     }
 
     pub fn set_context(&self, context: UiContext) {
@@ -330,6 +363,14 @@ impl McpData for FakeData {
         let mut draft = Draft::new(IdentityId::new(identity));
         draft.id = Some(id.clone());
         draft.subject = "Re: Plan".into();
+        if id.as_str() != "draft-empty" {
+            draft.to = vec![Address {
+                name: Some("Bob".into()),
+                email: "bob@example.org".into(),
+            }];
+            draft.markdown = Some("Hello Bob".into());
+            draft.mode = nail_api::accounts::ComposerMode::Markdown;
+        }
         if id.as_str() == "draft-reply-m2" {
             draft.context = Some(nail_api::DraftContext {
                 mode: nail_api::DraftContextMode::Reply,
@@ -339,9 +380,386 @@ impl McpData for FakeData {
         Ok(draft)
     }
 
+    async fn pim(&self, request: Request) -> DataResult<Response> {
+        pim_answer(request)
+    }
+
+    async fn query(&self, request: Request) -> DataResult<Response> {
+        pim_answer(request)
+    }
+
+    async fn write(&self, by: &ActionAttribution, request: Request) -> DataResult<Response> {
+        self.writes
+            .lock()
+            .unwrap()
+            .push((by.clone(), request.clone()));
+        let n = self.writes.lock().unwrap().len();
+        let op = || vec![nail_api::OpId::new(format!("op-{n}"))];
+        Ok(match request {
+            Request::DeleteEvent { .. }
+            | Request::DeleteContacts { .. }
+            | Request::DeleteTask { .. } => Response::Queued { op_ids: op() },
+            Request::UpdateFlags { .. }
+            | Request::MoveMessages { .. }
+            | Request::DeleteMessages { .. }
+            | Request::SnoozeMessages { .. } => Response::Queued { op_ids: op() },
+            Request::UploadAttachment {
+                filename,
+                mime,
+                data,
+                ..
+            } => Response::AttachmentUploaded {
+                attachment: nail_api::DraftAttachment {
+                    filename,
+                    mime,
+                    size: data.len() as u64,
+                    blob: format!("blob-{n}"),
+                    content_id: None,
+                },
+            },
+            Request::SaveDraft { draft } => Response::DraftSaved {
+                draft_id: draft.id.unwrap_or_else(|| DraftId::new("draft-new")),
+            },
+            Request::SendDraft { draft_id, .. } if draft_id.as_str() == "draft-veto" => {
+                Response::SendVetoed {
+                    draft_id,
+                    veto_id: "veto-1".into(),
+                    vetoes: vec![nail_api::plugins::PluginSendVeto {
+                        plugin_id: "checker".into(),
+                        plugin_name: "Attachment checker".into(),
+                        reason: "The text mentions an attachment".into(),
+                    }],
+                }
+            }
+            Request::SendDraft {
+                draft_id, send_at, ..
+            } => Response::SendQueued {
+                entry: Box::new(nail_api::compose::OutboxEntry {
+                    id: format!("outbox-{n}").into(),
+                    draft_id,
+                    account_id: "work".into(),
+                    identity_id: "me@work.example".into(),
+                    subject: "Re: Plan".into(),
+                    recipients: vec![],
+                    send_at: send_at.unwrap_or_else(|| "2026-10-02T10:00:00Z".into()),
+                    state: nail_api::compose::OutboxState::Scheduled,
+                    attempts: 0,
+                    error: None,
+                    message: None,
+                    localized: None,
+                }),
+            },
+            Request::CreateEvent {
+                calendar_id,
+                fields,
+                recurrence,
+            } => Response::EventSaved {
+                event: Box::new(event("e-new", calendar_id.as_str(), *fields, recurrence)),
+                split: None,
+                op_ids: op(),
+            },
+            Request::UpdateEvent {
+                event_id,
+                fields,
+                recurrence,
+                ..
+            } => Response::EventSaved {
+                event: Box::new(event(event_id.as_str(), "cal-work", *fields, recurrence)),
+                split: None,
+                op_ids: op(),
+            },
+            Request::SendInvitations { .. } | Request::RespondToInvitation { .. } => {
+                Response::Scheduled {
+                    result: Box::new(nail_api::SchedulingResult {
+                        event: None,
+                        removed_event_id: None,
+                        sent: vec![],
+                        op_ids: op(),
+                        invitation: None,
+                    }),
+                }
+            }
+            Request::CreateContact {
+                address_book_id,
+                fields,
+            } => Response::ContactSaved {
+                contact: Box::new(contact("c-new", address_book_id.as_str(), *fields)),
+                op_ids: op(),
+            },
+            Request::UpdateContact { contact_id, fields } => Response::ContactSaved {
+                contact: Box::new(contact(contact_id.as_str(), "ab-work", *fields)),
+                op_ids: op(),
+            },
+            Request::CreateTask {
+                calendar_id,
+                fields,
+                ..
+            } => Response::TaskSaved {
+                task: Box::new(task("task-new", calendar_id.as_str(), *fields)),
+                op_ids: op(),
+            },
+            Request::UpdateTask {
+                task_id, fields, ..
+            } => Response::TaskSaved {
+                task: Box::new(task(task_id.as_str(), "tasks-work", *fields)),
+                op_ids: op(),
+            },
+            Request::CompleteTask { task_id, completed } => {
+                let mut fields = nail_api::pim::TaskFields::titled("Follow up");
+                if completed {
+                    fields.status = nail_api::pim::TaskStatus::Completed;
+                }
+                Response::TaskSaved {
+                    task: Box::new(task(task_id.as_str(), "tasks-work", fields)),
+                    op_ids: op(),
+                }
+            }
+            Request::SaveRule { rule, .. } => {
+                let mut rule = *rule;
+                rule.id = "rule-new".into();
+                Response::RuleSaved {
+                    rule: Box::new(rule),
+                }
+            }
+            other => {
+                return Err(ApiError::unsupported(format!(
+                    "fake write {}",
+                    serde_json::to_value(&other).unwrap()["type"]
+                )));
+            }
+        })
+    }
+
     fn emit(&self, event: Event) {
         self.events.lock().unwrap().push(event);
     }
+
+    fn plugin_tools(&self) -> Vec<nail_mcp::PluginTool> {
+        self.plugin_tools.clone()
+    }
+
+    async fn call_plugin_tool(
+        &self,
+        name: &str,
+        arguments: serde_json::Value,
+        client: nail_api::agents::McpClientRef,
+    ) -> DataResult<serde_json::Value> {
+        Ok(serde_json::json!({"tool": name, "arguments": arguments, "client": client.name}))
+    }
+}
+
+fn calendar(id: &str, account: &str, tasks: bool, read_only: bool) -> nail_api::pim::Calendar {
+    nail_api::pim::Calendar {
+        id: id.into(),
+        source_id: format!("source-{account}").into(),
+        account_id: Some(account.into()),
+        settings: nail_api::pim::CalendarSettings::named(id),
+        components: vec![if tasks {
+            nail_api::pim::CalendarComponent::Task
+        } else {
+            nail_api::pim::CalendarComponent::Event
+        }],
+        read_only,
+        timezone: None,
+        exchange: None,
+    }
+}
+
+pub fn event(
+    id: &str,
+    calendar: &str,
+    fields: nail_api::pim::EventFields,
+    recurrence: Option<nail_api::pim::Recurrence>,
+) -> nail_api::pim::CalendarEvent {
+    nail_api::pim::CalendarEvent {
+        id: id.into(),
+        calendar_id: calendar.into(),
+        uid: format!("uid-{id}"),
+        fields,
+        recurrence,
+        overrides: vec![],
+        sequence: 0,
+        created_at: None,
+        updated_at: None,
+        read_only: false,
+        sync: Default::default(),
+    }
+}
+
+fn planning() -> nail_api::pim::EventFields {
+    let mut fields = nail_api::pim::EventFields::new(
+        "Planning",
+        nail_api::pim::PimTime::zoned("2026-10-05T09:00:00", "Europe/Berlin"),
+        nail_api::pim::PimTime::zoned("2026-10-05T10:00:00", "Europe/Berlin"),
+    );
+    fields.attendees = vec![nail_api::pim::Attendee::new("ada@example.org")];
+    fields
+}
+
+fn contact(id: &str, book: &str, fields: nail_api::pim::ContactFields) -> nail_api::pim::Contact {
+    nail_api::pim::Contact {
+        id: id.into(),
+        address_book_id: book.into(),
+        uid: format!("uid-{id}"),
+        fields,
+        version: Default::default(),
+        group_ids: vec![],
+        linked_ids: vec![],
+        updated_at: None,
+        read_only: false,
+        sync: Default::default(),
+    }
+}
+
+fn task(id: &str, list: &str, fields: nail_api::pim::TaskFields) -> nail_api::pim::Task {
+    nail_api::pim::Task {
+        id: id.into(),
+        calendar_id: list.into(),
+        uid: format!("uid-{id}"),
+        fields,
+        recurrence: None,
+        subtask_ids: vec![],
+        created_at: None,
+        updated_at: None,
+        read_only: false,
+        sync: Default::default(),
+    }
+}
+
+/// Reads the write tools need: calendars `cal-work` (events), `tasks-work`
+/// (tasks), `cal-ro` (read-only, work), `cal-home` (home); event `e1`
+/// (work, with attendee ada) and `e-home`; address book `ab-work` with
+/// contact `c1`; task `t1`; composer drafts; rules parsed from text
+/// (`broken` fails).
+pub fn pim_answer(request: Request) -> DataResult<Response> {
+    Ok(match request {
+        Request::ListCalendars { .. } => Response::Calendars {
+            calendars: vec![
+                calendar("cal-work", "work", false, false),
+                calendar("tasks-work", "work", true, false),
+                calendar("cal-ro", "work", false, true),
+                calendar("cal-home", "home", false, false),
+            ],
+        },
+        Request::GetEvent { event_id } => match event_id.as_str() {
+            "e1" => Response::PimEvent {
+                event: Box::new(event("e1", "cal-work", planning(), None)),
+            },
+            "e-home" => Response::PimEvent {
+                event: Box::new(event("e-home", "cal-home", planning(), None)),
+            },
+            _ => return Err(ApiError::not_found("event")),
+        },
+        Request::ListAddressBooks { .. } => Response::AddressBooks {
+            address_books: vec![nail_api::pim::AddressBook {
+                id: "ab-work".into(),
+                source_id: "source-work".into(),
+                account_id: Some("work".into()),
+                settings: serde_json::from_value(serde_json::json!({"name": "Work"})).unwrap(),
+                read_only: false,
+                role: None,
+                exchange: None,
+            }],
+        },
+        Request::GetContact { contact_id } if contact_id.as_str() == "c1" => {
+            let mut fields = nail_api::pim::ContactFields::named("Ada Lovelace");
+            fields.emails = vec![nail_api::pim::LabeledValue {
+                value: "ada@example.org".into(),
+                kinds: vec![],
+                label: None,
+                preferred: true,
+            }];
+            Response::PimContact {
+                contact: Box::new(contact("c1", "ab-work", fields)),
+            }
+        }
+        Request::GetTask { task_id } if task_id.as_str() == "t1" => Response::PimTask {
+            task: Box::new(task(
+                "t1",
+                "tasks-work",
+                nail_api::pim::TaskFields::titled("Follow up"),
+            )),
+        },
+        Request::SearchContacts { query, .. } if query == "ada@example.org" => {
+            Response::ContactMatches { matches: vec![] }
+        }
+        Request::NewDraft {
+            identity_id,
+            mode,
+            context,
+            ..
+        } => {
+            let mut draft =
+                Draft::new(identity_id.unwrap_or_else(|| IdentityId::new("me@work.example")));
+            draft.mode = mode.unwrap_or_default();
+            let signature = "-- \nMe".to_owned();
+            match draft.mode {
+                nail_api::accounts::ComposerMode::Plain => draft.text = signature,
+                nail_api::accounts::ComposerMode::Html => draft.html = Some(signature),
+                nail_api::accounts::ComposerMode::Markdown => draft.markdown = Some(signature),
+            }
+            if let Some(context) = context {
+                draft.subject = format!("Re: Subject of {}", context.message_id);
+                draft.to = vec![Address {
+                    name: Some("Ada".into()),
+                    email: "ada@example.org".into(),
+                }];
+                draft.context = Some(context);
+            }
+            Response::Draft {
+                draft: Box::new(draft),
+            }
+        }
+        Request::RuleFromText { text } => {
+            if text.contains("broken") {
+                Response::RuleParsed {
+                    rule: None,
+                    errors: vec![
+                        serde_json::from_value(serde_json::json!({
+                            "line": 1, "column": 6, "message": "expected a rule name"
+                        }))
+                        .unwrap(),
+                    ],
+                }
+            } else {
+                Response::RuleParsed {
+                    rule: Some(Box::new(
+                        serde_json::from_value(serde_json::json!({
+                            "id": "receipts", "name": "Receipts",
+                        }))
+                        .unwrap(),
+                    )),
+                    errors: vec![],
+                }
+            }
+        }
+        Request::TestRule { .. } => Response::RuleTested {
+            scanned: 3,
+            matches: ["m1", "m2", "m3"]
+                .into_iter()
+                .map(|id| nail_api::rules::RuleMatch {
+                    message: summary(
+                        id,
+                        if id == "m2" { "home" } else { "work" },
+                        if id == "m2" {
+                            "home-inbox"
+                        } else {
+                            "work-inbox"
+                        },
+                        "t1",
+                    ),
+                    actions: vec![],
+                    explanation: vec![],
+                })
+                .collect(),
+        },
+        other => {
+            return Err(ApiError::unsupported(format!(
+                "fake read {}",
+                serde_json::to_value(&other).unwrap()["type"]
+            )));
+        }
+    })
 }
 
 pub struct Env {
@@ -356,11 +774,28 @@ pub async fn start() -> Env {
 
 /// A server over `data`.
 pub async fn start_with(data: FakeData) -> Env {
+    start_with_settings(
+        data,
+        WriteSettings {
+            poll_interval: std::time::Duration::from_millis(50),
+            ..WriteSettings::default()
+        },
+    )
+    .await
+}
+
+/// A server over `data` with other confirmation settings.
+pub async fn start_with_settings(data: FakeData, settings: WriteSettings) -> Env {
     let store = Store::open_in_memory().unwrap();
     let data = Arc::new(data);
-    let server = McpServer::start(store.clone(), data.clone(), ServerOptions::default())
-        .await
-        .unwrap();
+    let server = McpServer::start_with(
+        store.clone(),
+        data.clone(),
+        ServerOptions::default(),
+        settings,
+    )
+    .await
+    .unwrap();
     Env {
         store,
         data,

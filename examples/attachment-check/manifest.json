@@ -1,0 +1,31 @@
+{
+  "id": "attachment-check",
+  "name": "%plugin-name%",
+  "version": "1.0.0",
+  "apiVersion": "1",
+  "main": "dist/index.js",
+  "description": "%plugin-description%",
+  "author": "Nail",
+  "permissions": ["hooks.beforeSend"],
+  "contributes": {
+    "hooks": [{ "hook": "beforeSend", "timeoutMs": 1000 }],
+    "settings": [
+      {
+        "type": "string",
+        "key": "extra-keywords",
+        "title": "%setting-keywords-title%",
+        "description": "%setting-keywords-description%",
+        "default": "",
+        "maxLength": 1000
+      },
+      {
+        "type": "boolean",
+        "key": "check-quoted",
+        "title": "%setting-quoted-title%",
+        "description": "%setting-quoted-description%",
+        "default": false
+      }
+    ],
+    "locales": { "en": "locales/en.ftl", "de": "locales/de.ftl" }
+  }
+}

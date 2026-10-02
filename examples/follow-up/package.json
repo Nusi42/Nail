@@ -1,8 +1,8 @@
 {
   "name": "nail-plugin-follow-up",
   "private": true,
-  "version": "1.0.0",
-  "description": "Example Nail plug-in: follow-up reminders for messages",
+  "version": "2.0.0",
+  "description": "Example Nail plug-in: follow-up tasks for messages, with reminders",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {

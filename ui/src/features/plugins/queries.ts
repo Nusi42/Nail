@@ -3,7 +3,14 @@
  * `PluginsChanged` refreshes it all.
  */
 import { useQuery } from "@tanstack/react-query";
-import type { PluginInfo, PluginLogEntry } from "../../api/generated";
+import type {
+  MessageId,
+  PluginActivity,
+  PluginInfo,
+  PluginLogEntry,
+  PluginPreview,
+} from "../../api/generated";
+import { clientIdOf } from "./context";
 import { useClient } from "../../state/queries";
 
 /** Lines the log viewer loads. */
@@ -16,6 +23,10 @@ export const pluginKeys = {
   settings: (pluginId: string) => ["plugins", "settings", pluginId] as const,
   panels: ["plugins", "panel"] as const,
   panel: (panel: string, contextKey: string) => ["plugins", "panel", panel, contextKey] as const,
+  annotations: (messageId: string) => ["plugins", "annotations", messageId] as const,
+  preview: (messageId: string, index: number, renderer: string) =>
+    ["plugins", "preview", messageId, index, renderer] as const,
+  activity: (pluginId: string) => ["plugins", "activity", pluginId] as const,
 };
 
 /** The installed plug-ins (empty when the core cannot list them). */
@@ -60,5 +71,58 @@ export function usePluginSettings(pluginId: string) {
     queryKey: pluginKeys.settings(pluginId),
     queryFn: async () =>
       await client.request({ type: "GetPluginSettings", plugin_id: pluginId }, "PluginSettings"),
+  });
+}
+
+/** The banners and badges the plug-ins' open hooks show with a message. */
+export function useMessageAnnotations(messageId: MessageId | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: pluginKeys.annotations(messageId ?? ""),
+    enabled: messageId !== null,
+    staleTime: 60_000,
+    queryFn: async () =>
+      await client.request(
+        {
+          type: "GetMessagePluginAnnotations",
+          message_id: messageId ?? "",
+          client_id: clientIdOf(client),
+        },
+        "MessagePluginAnnotations",
+      ),
+  });
+}
+
+/** A plug-in's preview of an attachment (`renderer` = `<plugin>.<name>`). */
+export function useAttachmentPreview(messageId: MessageId, index: number, renderer: string | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: pluginKeys.preview(messageId, index, renderer ?? ""),
+    enabled: renderer !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async (): Promise<PluginPreview> =>
+      (
+        await client.request(
+          {
+            type: "RenderAttachmentPreview",
+            message_id: messageId,
+            index,
+            renderer: renderer ?? "",
+            client_id: clientIdOf(client),
+          },
+          "AttachmentPreview",
+        )
+      ).preview,
+  });
+}
+
+/** A plug-in's jobs, hooks and CPU use. */
+export function usePluginActivity(pluginId: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: pluginKeys.activity(pluginId),
+    queryFn: async (): Promise<PluginActivity> =>
+      (await client.request({ type: "GetPluginActivity", plugin_id: pluginId }, "PluginActivity"))
+        .activity,
   });
 }

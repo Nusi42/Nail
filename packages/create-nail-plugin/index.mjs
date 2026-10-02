@@ -3,8 +3,11 @@
  * create-nail-plugin — scaffolds a Nail plug-in folder (English output; a
  * developer tool, not part of Nail's UI).
  *
- *   node packages/create-nail-plugin/index.mjs <dir> [--id ID] [--name NAME] [--sdk SPEC] [--force]
+ *   node packages/create-nail-plugin/index.mjs <dir> [--template NAME] [--id ID] [--name NAME] [--sdk SPEC] [--force]
  *
+ * Templates: `command` (default; a command with a dialog), `hook` (mail
+ * hooks), `composer` (composer actions and a Markdown block),
+ * `attachment` (an attachment preview and action).
  * `--sdk` is the version spec written for `@nail/plugin-api` in the new
  * package.json; the default is a `file:` path to this repository's SDK.
  */
@@ -12,9 +15,9 @@ import path from "node:path";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { scaffold, ScaffoldError } from "./scaffold.mjs";
+import { scaffold, ScaffoldError, TEMPLATES } from "./scaffold.mjs";
 
-const USAGE = "usage: create-nail-plugin <dir> [--id ID] [--name NAME] [--sdk SPEC] [--force]";
+const USAGE = `usage: create-nail-plugin <dir> [--template ${TEMPLATES.join("|")}] [--id ID] [--name NAME] [--sdk SPEC] [--force]`;
 
 /**
  * Runs the CLI.
@@ -29,9 +32,13 @@ export function main(argv, io = console) {
     const arg = argv[i] ?? "";
     const value = argv[i + 1];
     if (arg === "--force") options.force = true;
-    else if ((arg === "--id" || arg === "--name" || arg === "--sdk") && value !== undefined) {
+    else if (
+      (arg === "--id" || arg === "--name" || arg === "--sdk" || arg === "--template") &&
+      value !== undefined
+    ) {
       if (arg === "--id") options.id = value;
       else if (arg === "--name") options.name = value;
+      else if (arg === "--template") options.template = value;
       else options.sdk = value;
       i += 1;
     } else if (!arg.startsWith("--") && !options.dir) options.dir = arg;
@@ -47,7 +54,7 @@ export function main(argv, io = console) {
   try {
     const result = scaffold(options);
     const rel = path.relative(process.cwd(), result.dir) || ".";
-    io.log(`Created ${result.name} (${result.id}) in ${rel}:`);
+    io.log(`Created ${result.name} (${result.id}, ${result.template} template) in ${rel}:`);
     for (const file of result.files) io.log(`  ${file}`);
     io.log("");
     io.log("Next steps:");

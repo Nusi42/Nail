@@ -18,6 +18,18 @@ export const ACCOUNT_PERMISSIONS: readonly PluginPermission[] = [
   "attachments",
 ];
 
+/** Permissions that need `mail.read` (`PluginPermission::requires`). */
+export const NEEDS_READ: readonly PluginPermission[] = [
+  "mail.read.body",
+  "mail.organize",
+  "hooks.arrival",
+  "hooks.open",
+];
+
+export function requiresRead(permission: PluginPermission): boolean {
+  return NEEDS_READ.includes(permission);
+}
+
 export function takesAccounts(permission: PluginPermission): boolean {
   return ACCOUNT_PERMISSIONS.includes(permission);
 }
@@ -34,7 +46,7 @@ export function grantOf(
   return grants.find((g) => g.permission === permission);
 }
 
-/** Grants or denies a permission (denying `mail.read` also denies bodies). */
+/** Grants or denies a permission (denying `mail.read` also denies what needs it). */
 export function setGranted(
   grants: readonly PluginGrant[],
   permission: PluginPermission,
@@ -43,10 +55,10 @@ export function setGranted(
   const rest = grants.filter(
     (g) =>
       g.permission !== permission &&
-      !(!on && permission === "mail.read" && g.permission === "mail.read.body"),
+      !(!on && permission === "mail.read" && requiresRead(g.permission)),
   );
   if (!on) return rest;
-  if (permission === "mail.read.body" && !grantOf(grants, "mail.read")) return [...grants];
+  if (requiresRead(permission) && !grantOf(grants, "mail.read")) return [...grants];
   return [...rest, grantOf(grants, permission) ?? { permission, accounts: null }];
 }
 

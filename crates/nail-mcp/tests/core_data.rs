@@ -214,3 +214,39 @@ async fn core_data_reads_through_requests_store_and_blobs() {
     let requests = data.0.requests.lock().unwrap().clone();
     assert!(requests.contains(&"ListRules".to_owned()), "{requests:?}");
 }
+
+/// M4a: writes and other queries go through the core's handler (its
+/// operation queue); without overrides the server uses its own broker and
+/// English texts.
+#[tokio::test]
+async fn core_data_writes_through_the_handler() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = CoreData(core(dir.path()));
+    let by = nail_api::agents::ActionAttribution {
+        actor: nail_api::agents::ActionActor::mcp_client("c1"),
+        name: "Claude".into(),
+        on_behalf_of: None,
+    };
+    let response = data
+        .write(
+            &by,
+            Request::UpdateFlags {
+                message_ids: vec!["m1".into()],
+                change: Default::default(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(response, Response::Done);
+    assert_eq!(
+        data.query(Request::ListRules).await.unwrap_err().code,
+        ErrorCode::Unsupported
+    );
+    let requests = data.0.requests.lock().unwrap().clone();
+    assert!(requests.contains(&"UpdateFlags".to_owned()), "{requests:?}");
+    assert!(data.confirmations().is_none());
+    assert_eq!(
+        data.render(&nail_api::LocalizedMessage::new("mcp-tool-value-yes")),
+        "Yes"
+    );
+}

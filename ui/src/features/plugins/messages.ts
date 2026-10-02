@@ -6,6 +6,9 @@
  * listed by `runtimeIds`.
  */
 import type {
+  ComposerEditOp,
+  PluginHookKind,
+  PluginJobOutcome,
   PluginLogLevel,
   PluginLogSource,
   PluginManifestIssueKind,
@@ -13,6 +16,7 @@ import type {
   PluginRunState,
   PluginStopReason,
 } from "../../api/generated";
+import { contributionMessageId, hookMessageId, type ContributionItem } from "./extensions";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["plugin-"];
@@ -27,6 +31,18 @@ export const notMessages: readonly string[] = [
   "plugin-placements",
   "plugin-logs",
   "plugin-settings",
+  // M4a parts (WP104).
+  "plugin-actions",
+  "plugin-activity",
+  "plugin-badge",
+  "plugin-badges",
+  "plugin-banner",
+  "plugin-banners",
+  "plugin-block",
+  "plugin-composer",
+  "plugin-extension-menu",
+  "plugin-preview",
+  "plugin-veto",
 ];
 
 /** The permissions without an argument (`PluginPermission::FIXED`). */
@@ -37,13 +53,27 @@ export const FIXED_PERMISSIONS: readonly PluginPermission[] = [
   "ui.dialogs",
   "notifications",
   "storage",
+  "mail.organize",
+  "mail.send",
+  "calendar.write",
+  "contacts.write",
+  "tasks.write",
+  "hooks.arrival",
+  "hooks.beforeSend",
+  "hooks.open",
+  "composer",
+  "attachments",
+  "background",
+  "mcp.expose",
 ];
 
 /** The Fluent id of a permission's label (`PluginPermission::label`). */
 export function permissionMessageId(permission: PluginPermission): string {
   return permission.startsWith("network:")
     ? "plugin-permission-network"
-    : `plugin-permission-${permission.replaceAll(".", "-")}`;
+    : `plugin-permission-${permission
+        .replaceAll(".", "-")
+        .replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
 }
 
 /** The arguments of a permission's label (`$domain` of `network:<host>`). */
@@ -96,7 +126,38 @@ const ISSUES: readonly PluginManifestIssueKind[] = [
   "duplicate-setting",
   "invalid-locale",
   "too-many-contributions",
+  "missing-required-permission",
+  "contribution-needs-permission",
+  "invalid-hook",
+  "duplicate-hook",
+  "invalid-extension",
+  "duplicate-extension",
+  "invalid-job",
+  "duplicate-job",
+  "invalid-mcp-tool",
+  "duplicate-mcp-tool",
 ];
+const HOOKS: readonly PluginHookKind[] = ["arrival", "beforeSend", "open"];
+const JOB_OUTCOMES: readonly PluginJobOutcome[] = [
+  "ok",
+  "error",
+  "timeout",
+  "cpu-quota",
+  "overlap",
+];
+const CONTRIBUTIONS: readonly ContributionItem["kind"][] = [
+  "command",
+  "panel",
+  "hook",
+  "composerAction",
+  "markdownBlock",
+  "attachmentPreview",
+  "attachmentAction",
+  "linkAction",
+  "job",
+  "mcpTool",
+];
+const EDIT_OPS: readonly ComposerEditOp[] = ["insert", "replace-selection", "replace-all"];
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {
@@ -117,7 +178,13 @@ export function runtimeIds(): string[] {
       `plugin-install-source-${k}`,
       `plugin-install-location-${k}`,
     ]),
-    ...["permissions", "settings", "log", "layout"].map((s) => `plugin-manager-show-${s}`),
+    ...["permissions", "confirmations", "activity", "settings", "log", "layout"].map(
+      (s) => `plugin-manager-show-${s}`,
+    ),
+    ...HOOKS.map(hookMessageId),
+    ...JOB_OUTCOMES.map((o) => `plugin-job-outcome-${o}`),
+    ...CONTRIBUTIONS.map(contributionMessageId),
+    ...EDIT_OPS.map((op) => `plugin-composer-edited-${op}`),
     // Layout labels for the integrator's default layout (`@plugin.…`).
     "plugin-manager-tab",
     "plugin-action-install",

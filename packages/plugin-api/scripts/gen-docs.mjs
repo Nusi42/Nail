@@ -25,6 +25,9 @@ const DOCS = path.join(REPO, "userDocs", "en", "plugins");
 export const BEGIN = "<!-- BEGIN GENERATED (npm run docs -w packages/plugin-api) -->";
 export const END = "<!-- END GENERATED -->";
 
+/** Member names that tag the variants of a union (`"type"` quoted by ts-rs). */
+const TAGS = new Set(['"type"', '"kind"', '"status"', "type", "kind", "status"]);
+
 /** Paragraph separator of the generated Markdown. */
 const NL2 = "\n\n";
 
@@ -36,6 +39,9 @@ const API_SECTIONS = [
     [
       ["define.ts", "definePlugin"],
       ["define.ts", "PluginSetup"],
+      ["define.ts", "PluginSetupHooks"],
+      ["define.ts", "PluginSetupComposer"],
+      ["define.ts", "PluginSetupAttachments"],
       ["define.ts", "PluginContext"],
       ["api.ts", "PluginCommandHandler"],
       ["api.ts", "PluginIdentity"],
@@ -64,7 +70,129 @@ const API_SECTIONS = [
       ["api.ts", "PluginHttpMethod"],
       ["api.ts", "PluginHttpResponse"],
       ["api.ts", "NailSettingsApi"],
+      ["api.ts", "NailL10nApi"],
+      ["api.ts", "PluginL10nArgs"],
       ["api.ts", "NailLogApi"],
+    ],
+  ],
+  [
+    "Writing data",
+    "Writes go through Nail's operation queue (undoable, in the audit log) and follow the plug-in's action policies: some ask the user first. Every write resolves with a `PluginWriteResult`.",
+    [
+      ["api.ts", "PluginWriteResult"],
+      ["api.ts", "PluginActionKind"],
+      ["extensions.ts", "isDone"],
+      ["extensions.ts", "createdId"],
+      ["api.ts", "PluginMessageChanges"],
+      ["api.ts", "PluginDeleteOptions"],
+      ["api.ts", "PluginDraftInput"],
+      ["api.ts", "PluginDraftAttachment"],
+      ["api.ts", "PluginDraftChanges"],
+      ["api.ts", "PluginSendOptions"],
+      ["api.ts", "PluginTextFormat"],
+      ["api.ts", "PluginCollection"],
+      ["api.ts", "PluginEventInput"],
+      ["api.ts", "PluginEventChanges"],
+      ["api.ts", "PluginEventDeleteOptions"],
+      ["api.ts", "PluginEditScope"],
+      ["api.ts", "PluginInviteAnswer"],
+      ["api.ts", "NailContactsApi"],
+      ["api.ts", "PluginContact"],
+      ["api.ts", "PluginContactInput"],
+      ["api.ts", "PluginContactFindOptions"],
+      ["api.ts", "NailTasksApi"],
+      ["api.ts", "PluginTaskInput"],
+      ["api.ts", "PluginTaskChanges"],
+    ],
+  ],
+  [
+    "Mail hooks",
+    "Declared in `contributes.hooks` and registered with `definePlugin({ hooks })` or `ctx.hooks.register`.",
+    [
+      ["api.ts", "PluginHooksRegistry"],
+      ["api.ts", "PluginHookMessage"],
+      ["api.ts", "PluginArrivalHook"],
+      ["generated/PluginArrivalResult.ts", "PluginArrivalResult"],
+      ["generated/PluginMailAction.ts", "PluginMailAction"],
+      ["api.ts", "PluginBeforeSendHook"],
+      ["generated/PluginOutgoingMessage.ts", "PluginOutgoingMessage"],
+      ["generated/PluginBeforeSendResult.ts", "PluginBeforeSendResult"],
+      ["generated/PluginVetoSpec.ts", "PluginVetoSpec"],
+      ["generated/PluginHeader.ts", "PluginHeader"],
+      ["generated/PluginContentAddition.ts", "PluginContentAddition"],
+      ["generated/PluginContentPosition.ts", "PluginContentPosition"],
+      ["extensions.ts", "veto"],
+      ["extensions.ts", "addContent"],
+      ["extensions.ts", "mergeBeforeSend"],
+      ["api.ts", "PluginOpenHook"],
+      ["generated/PluginOpenResult.ts", "PluginOpenResult"],
+      ["generated/PluginBannerSpec.ts", "PluginBannerSpec"],
+      ["generated/PluginBannerButton.ts", "PluginBannerButton"],
+      ["generated/PluginBadgeSpec.ts", "PluginBadgeSpec"],
+      ["extensions.ts", "banner"],
+      ["extensions.ts", "badge"],
+      ["api.ts", "PluginBannerAction"],
+      ["api.ts", "PluginBannerActionHandler"],
+    ],
+  ],
+  [
+    "Composer",
+    "Composer actions and Markdown blocks (`composer`).",
+    [
+      ["api.ts", "NailComposerApi"],
+      ["api.ts", "PluginComposerRegistry"],
+      ["api.ts", "PluginComposerEditOptions"],
+      ["api.ts", "PluginActionHandler"],
+      ["generated/PluginActionContext.ts", "PluginActionContext"],
+      ["generated/PluginComposerContext.ts", "PluginComposerContext"],
+      ["generated/ComposerSelection.ts", "ComposerSelection"],
+      ["api.ts", "PluginMarkdownBlockRenderer"],
+      ["generated/PluginMarkdownBlockInput.ts", "PluginMarkdownBlockInput"],
+      ["generated/PluginMarkdownBlockResult.ts", "PluginMarkdownBlockResult"],
+      ["generated/PluginRenderPurpose.ts", "PluginRenderPurpose"],
+    ],
+  ],
+  [
+    "Attachments and links",
+    "Attachment previews and actions (`attachments`) and link actions.",
+    [
+      ["define.ts", "SdkAttachmentsRegistry"],
+      ["define.ts", "SdkPreviewRenderer"],
+      ["generated/PluginAttachmentRef.ts", "PluginAttachmentRef"],
+      ["generated/PluginPreview.ts", "PluginPreview"],
+      ["extensions.ts", "previewTree"],
+      ["extensions.ts", "previewImage"],
+      ["api.ts", "PluginLinksRegistry"],
+      ["generated/PluginLink.ts", "PluginLink"],
+    ],
+  ],
+  [
+    "Background jobs",
+    "Declared in `contributes.jobs` (`background`).",
+    [
+      ["api.ts", "PluginJobsRegistry"],
+      ["api.ts", "PluginJobHandler"],
+      ["generated/PluginJobTrigger.ts", "PluginJobTrigger"],
+      ["generated/PluginEventName.ts", "PluginEventName"],
+    ],
+  ],
+  [
+    "MCP tools",
+    "Declared in `contributes.mcpTools` (`mcp.expose`).",
+    [
+      ["api.ts", "PluginMcpRegistry"],
+      ["api.ts", "PluginMcpToolHandler"],
+    ],
+  ],
+  [
+    "Bytes",
+    "The sandbox has no `TextDecoder`, `TextEncoder`, `atob` or `btoa`; these helpers fill in.",
+    [
+      ["bytes.ts", "decodeText"],
+      ["bytes.ts", "decodeUtf8"],
+      ["bytes.ts", "encodeUtf8"],
+      ["bytes.ts", "toBase64"],
+      ["bytes.ts", "fromBase64"],
     ],
   ],
   [
@@ -139,6 +267,11 @@ const API_SECTIONS = [
       ["testing.ts", "createTestHost"],
       ["testing.ts", "TestHostOptions"],
       ["testing.ts", "TestHost"],
+      ["testing.ts", "TestHookRun"],
+      ["testing.ts", "TestJobRun"],
+      ["testing.ts", "TestConfirmation"],
+      ["testing.ts", "TestDecision"],
+      ["testing.ts", "TestWrite"],
     ],
   ],
 ];
@@ -154,6 +287,16 @@ const MANIFEST_TYPES = [
   ["generated/PluginSettingDef.ts", "PluginSettingDef"],
   ["generated/PluginSelectOption.ts", "PluginSelectOption"],
   ["generated/PluginPermission.ts", "PluginPermission"],
+  ["generated/PluginHookDef.ts", "PluginHookDef"],
+  ["generated/PluginHookKind.ts", "PluginHookKind"],
+  ["generated/PluginComposerActionDef.ts", "PluginComposerActionDef"],
+  ["generated/PluginMarkdownBlockDef.ts", "PluginMarkdownBlockDef"],
+  ["generated/PluginAttachmentPreviewDef.ts", "PluginAttachmentPreviewDef"],
+  ["generated/PluginAttachmentActionDef.ts", "PluginAttachmentActionDef"],
+  ["generated/PluginLinkActionDef.ts", "PluginLinkActionDef"],
+  ["generated/PluginJobDef.ts", "PluginJobDef"],
+  ["generated/PluginMcpToolDef.ts", "PluginMcpToolDef"],
+  ["generated/McpScope.ts", "McpScope"],
 ];
 
 /** @typedef {[file: string, name: string]} Item */
@@ -300,9 +443,10 @@ function renderDeclaration(decl, sf, name, level) {
       parts.push(membersTable(type.members, sf));
     } else if (ts.isUnionTypeNode(type) && type.types.every(ts.isTypeLiteralNode)) {
       for (const member of type.types) {
-        const tag = member.members.find((m) => m.name?.getText(sf) === '"type"');
+        const tag = member.members.find((m) => TAGS.has(m.name?.getText(sf) ?? ""));
         const label = tag ? typeText(memberType(tag), sf) : "variant";
-        parts.push(`**\`type: ${label}\`**`);
+        const key = (tag?.name?.getText(sf) ?? "type").replace(/"/g, "");
+        parts.push(`**\`${key}: ${label}\`**`);
         parts.push(
           membersTable(
             member.members.filter((m) => m !== tag),

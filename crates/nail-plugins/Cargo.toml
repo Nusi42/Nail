@@ -33,8 +33,11 @@ rand.workspace = true
 # `%fluent-id%` texts of manifests from the plug-in's own catalogs.
 fluent-bundle.workspace = true
 unic-langid.workspace = true
-# Ranges of `nail.calendar.events` (M3a).
+# Ranges of `nail.calendar.events` (M3a); job schedules (M4a).
 chrono.workspace = true
+# M4a: HTML a plug-in hands back (Markdown blocks, before-send content) is
+# sanitized like a message body before it leaves the host.
+nail-mime.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

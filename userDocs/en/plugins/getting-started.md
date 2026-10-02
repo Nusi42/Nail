@@ -18,13 +18,26 @@ node packages/create-nail-plugin/index.mjs ../my-plugin --name "My plug-in"
 ```
 
 The id is taken from the folder name (`my-plugin`) unless you pass
-`--id`. The new folder contains:
+`--id`. `--template` picks what the starter does:
+
+| Template | Starts with | Permissions |
+| --- | --- | --- |
+| `command` (default) | A toolbar command that opens a dialog and shows a notification | `ui.dialogs`, `notifications` |
+| `hook` | A before-send check (no subject) and an "External" badge on open | `mail.read`, `hooks.beforeSend`, `hooks.open` |
+| `composer` | Composer actions (insert the date, upper-case the selection) and a Markdown block | `composer` |
+| `attachment` | A preview for text files and a "Count words" attachment action | `attachments`, `notifications` |
+
+```sh
+node packages/create-nail-plugin/index.mjs ../my-checker --template hook
+```
+
+The new folder contains:
 
 | File | Purpose |
 | --- | --- |
 | `manifest.json` | Id, name, version, permissions, commands, toolbar placements, translations ([manifest reference](manifest.md)) |
 | `src/index.tsx` | The plug-in's code |
-| `locales/en.ftl` | Texts the manifest refers to as `%id%` |
+| `locales/en.ftl` | Texts the manifest refers to as `%id%` and the code reads with `nail.l10n.t` ([translations](localization.md)) |
 | `scripts/build.mjs` | Bundles `src/index.tsx` into `dist/index.js` with esbuild |
 | `scripts/pack.mjs` | Packs `dist/<id>.nailplugin` |
 | `tsconfig.json` | TypeScript settings: JSX through `@nail/plugin-api`, only the sandbox's globals |
@@ -90,6 +103,26 @@ export default definePlugin({
   }
   ```
 
+Instead of registering in `activate`, handlers can be declared as data;
+this is how hooks, composer actions, previews and jobs are usually written:
+
+```ts
+import { definePlugin, veto } from "@nail/plugin-api";
+
+export default definePlugin({
+  commands: { hello: async () => { /* … */ } },
+  hooks: { beforeSend: (message) => (message.subject ? null : veto("The subject is empty.")) },
+  attachments: { previews: { table: (attachment, bytes) => <text>{bytes.length} bytes</text> } },
+  jobs: { digest: async (trigger) => { /* … */ } },
+});
+```
+
+Each name must match an entry of the manifest (`contributes.commands`,
+`hooks`, `attachmentPreviews`, `jobs`, …). The extension points are
+described in [mail hooks](hooks.md), [composer](composer.md),
+[attachments and links](attachments-and-links.md),
+[background jobs](background-jobs.md) and [tools for AI agents](mcp-tools.md);
+changing mail, events, contacts and tasks in [writing data](writing-data.md).
 The full API is in the [API reference](api-reference.md).
 
 ## 3. Try it: `nail plugin dev`
@@ -130,7 +163,10 @@ sockets. Imports work only relative to the plug-in's own files
 
 | Limit | Value |
 | --- | --- |
-| CPU time per call (a command, a dialog answer, a panel render, a timer, a resolved API call) | 1 s |
+| CPU time per call (a command, a dialog answer, a panel render, a hook, a timer, a resolved API call) | 1 s |
+| CPU time per hour, everything together | 120 s (jobs are skipped beyond it) |
+| Time budget of a mail hook | 2 s on arrival, 3 s before send, 1 s on open (the manifest may set 50 ms – 10 s) |
+| Time of a background job run, waiting included | 60 s |
 | CPU time while starting (`activate`) / time for `activate` to finish | 2 s / 30 s |
 | Memory | 64 MiB (deep recursion throws a `RangeError` you can catch) |
 | Pending API calls | 64 |
@@ -138,12 +174,14 @@ sockets. Imports work only relative to the plug-in's own files
 | Timers | 100 |
 | Notifications | 20 per minute |
 | Log lines | 200 per call |
-| `nail.http.fetch` | 1 MiB request body, 5 MiB response, text bodies |
+| `nail.http.fetch` | 1 MiB request body, 5 MiB response; text or bytes (`Uint8Array`) |
 
 **Crashes.** A plug-in that exceeds its CPU time or memory, or whose
 command, panel, dialog action, timer or `activate` throws (or returns a
 rejected promise), is stopped at once and marked in the plug-in manager
-until the user turns it on again. A rejected promise nobody handles is
+until the user turns it on again. A hook, composer / attachment / link
+action, preview, Markdown block, job or tool for AI agents that throws only
+fails that call (a hook is skipped) and is counted under **Activity**. A rejected promise nobody handles is
 only logged. Catch the errors you expect: every refused call rejects with a
 `NailError` whose `code` says why (`forbidden`, `not_found`, `too_large`,
 `rate_limited`, …).
@@ -154,39 +192,68 @@ only for `127.0.0.1` when the permission names that address). Nail makes
 the request: redirects are checked against the same hosts, host names
 never lead to local or private network addresses, and the headers `Host`,
 `Cookie`, `Content-Length`, connection headers and `Proxy-*` are refused.
-Methods: GET, HEAD, POST, PUT, PATCH, DELETE.
+Methods: GET, HEAD, POST, PUT, PATCH, DELETE. Request bodies are text or
+bytes (`Uint8Array`, `ArrayBuffer`); `response.bytes()` and
+`response.arrayBuffer()` give the response's bytes, `text()` / `json()` /
+`body` its text.
+
+**No `TextDecoder`, `atob` or `btoa`.** Use `decodeText`, `decodeUtf8`,
+`encodeUtf8`, `toBase64` and `fromBase64` from `@nail/plugin-api`.
 
 ## Testing a plug-in
 
 `@nail/plugin-api/testing` has an in-memory stand-in for Nail with the same
-permission rules. With Vitest, for example:
+permission rules, the same checks of hook and preview answers, hook
+budgets, write policies and a scripted user for confirmations. With
+Vitest, for example:
 
 ```ts
 import { createTestHost } from "@nail/plugin-api/testing";
+import { loadCatalogs } from "@nail/plugin-api/tools";
 import manifest from "../manifest.json";
 import plugin from "../src/index";
 
 const host = createTestHost({
   manifest,
+  catalogs: loadCatalogs("."),            // nail.l10n in tests
+  locale: "en",
   dialog: () => ({ button: "ok", values: { greeting: "Hi" } }),
+  confirm: () => "approve",               // or "deny" / "expire"
 });
 const restore = host.install();
 await plugin.activate(host.activationContext());
 await host.runCommand("hello", { selection: { messageIds: ["m1"] } });
-console.log(host.dialogs, host.notifications);
+console.log(host.dialogs, host.notifications, host.writes, host.confirmations);
 restore();
 ```
 
-## The "Follow up" example
+It also runs hooks (`runArrival`, `runBeforeSend`, `runOpen`,
+`clickBanner`), composer actions and blocks (`runComposerAction`,
+`renderMarkdownBlock`), previews and actions (`renderPreview`,
+`runAttachmentAction`, `runLinkAction`), jobs (`runJob`) and tools
+(`callMcpTool`); see the [API reference](api-reference.md#testing-plug-ins).
+The tests of the templates and examples in
+`packages/create-nail-plugin/test/` use it.
 
-`examples/follow-up` in the repository is a complete plug-in: a **Follow
-up…** button in the reader toolbar (and Shift+F in the message list) opens a
-dialog with a due date and a note, keeps the reminder in the plug-in's
-storage and confirms it with a notification. Its **Follow-ups** panel
-(`plugin-panel "follow-up.due"`) lists every reminder. It asks for
-`mail.read`, `ui.dialogs`, `storage` and `notifications`, and has a setting
-for how many days ahead the dialog suggests. Build it with
+## Examples
+
+The repository's `examples/` folder has complete plug-ins, each with its
+build and pack scripts and tests against the test host. Build one with
 `npm run package` in its folder.
+
+- **`follow-up`** — the design's "Follow up": a **Follow up…** button in the
+  reader toolbar (and Shift+F in the message list) opens a dialog with a due
+  date, a task list and a note, and creates a task linked to the message
+  (`tasks.write`). Its **Follow-ups** panel (`plugin-panel "follow-up.due"`)
+  lists the follow-ups, and a background job reminds you when one is due.
+  Permissions: `mail.read`, `tasks.write`, `ui.dialogs`, `notifications`,
+  `storage`, `background`.
+- **`attachment-check`** — a before-send hook that stops a message which
+  mentions an attachment ("attached", „anbei“) but has none; the keyword
+  lists come from its catalogs per language (`nail.l10n`). Permission:
+  `hooks.beforeSend`.
+- **`csv-preview`** — an attachment preview that shows CSV and TSV files as
+  a table. Permission: `attachments`.
 
 ## Limits
 

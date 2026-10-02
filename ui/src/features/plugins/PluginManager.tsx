@@ -3,7 +3,9 @@
  * `plugin-manager`; ADR 0050): the installed plug-ins with their state,
  * turning them on and off, their permissions (grants), settings, log,
  * layout placements and removal, plus installing a package and loading a
- * development folder (both through the install dialog).
+ * development folder (both through the install dialog). M4a: the
+ * confirmation policy of plug-ins that may write, and the activity (hooks,
+ * background jobs, CPU time, what the plug-in adds).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -13,6 +15,9 @@ import { useLabel, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useAccounts, useClient } from "../../state/queries";
 import { useUi, useUiStoreApi } from "../../state/uiStore";
+import { PolicyEditor } from "../agents/PolicyEditor";
+import { Activity } from "./Activity";
+import { isWritePermission } from "./extensions";
 import { grantsValid, orderedGrants } from "./grants";
 import { INSTALL_DIALOG } from "./InstallDialog";
 import { Logs } from "./Logs";
@@ -25,8 +30,24 @@ import { pluginsStoreFor, type InstallMode } from "./store";
 /** Dialog name. */
 export const MANAGER_DIALOG = "plugin-manager";
 
-type Section = "permissions" | "settings" | "log" | "layout";
-const SECTIONS: readonly Section[] = ["permissions", "settings", "log", "layout"];
+type Section = "permissions" | "confirmations" | "activity" | "settings" | "log" | "layout";
+const SECTIONS: readonly Section[] = [
+  "permissions",
+  "confirmations",
+  "activity",
+  "settings",
+  "log",
+  "layout",
+];
+
+/** The sections a plug-in's row offers (confirmations only for plug-ins that may write). */
+export function sectionsOf(plugin: PluginInfo): Section[] {
+  const hasSettings = (plugin.manifest.contributes?.settings?.length ?? 0) > 0;
+  const writes = (plugin.manifest.permissions ?? []).some(isWritePermission);
+  return SECTIONS.filter(
+    (s) => (s !== "settings" || hasSettings) && (s !== "confirmations" || writes),
+  );
+}
 
 function sourceText(plugin: PluginInfo): { id: string; args: Record<string, string> } {
   switch (plugin.source.kind) {
@@ -108,8 +129,7 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const hasSettings = (plugin.manifest.contributes?.settings?.length ?? 0) > 0;
-  const sections = SECTIONS.filter((s) => s !== "settings" || hasSettings);
+  const sections = sectionsOf(plugin);
   const source = sourceText(plugin);
   const sectionId = `plugin-${plugin.id}-section`;
 
@@ -240,6 +260,13 @@ function PluginRow({ plugin }: { plugin: PluginInfo }) {
       {open !== null && (
         <div data-part="plugin-manager.section" data-section={open} id={sectionId}>
           {open === "permissions" && <GrantsEditor plugin={plugin} />}
+          {open === "confirmations" && (
+            <PolicyEditor
+              actor={{ kind: "plugin", plugin_id: plugin.id }}
+              name={plugin.manifest.name}
+            />
+          )}
+          {open === "activity" && <Activity plugin={plugin} />}
           {open === "settings" && <Settings pluginId={plugin.id} />}
           {open === "log" && <Logs pluginId={plugin.id} />}
           {open === "layout" && <Placements pluginId={plugin.id} onDone={() => setOpen(null)} />}

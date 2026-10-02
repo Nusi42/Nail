@@ -186,7 +186,7 @@ async fn every_call_is_audited() {
     assert!(client.call_tool(bad_args).await.is_err());
     assert!(
         client
-            .call_tool(CallToolRequestParams::new("send_message"))
+            .call_tool(CallToolRequestParams::new("format_disk"))
             .await
             .is_err()
     );
@@ -213,7 +213,7 @@ async fn every_call_is_audited() {
             (McpCallKind::Tool, "search_messages", McpOutcome::Allowed),
             (McpCallKind::Resource, "nail://nothing", McpOutcome::Error),
             (McpCallKind::Tool, "get_message", McpOutcome::Error),
-            (McpCallKind::Tool, "send_message", McpOutcome::Error),
+            (McpCallKind::Tool, "format_disk", McpOutcome::Error),
         ]
     );
     assert_eq!(

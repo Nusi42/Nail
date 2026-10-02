@@ -7,7 +7,12 @@
 //! started for one client ([`ClientSource::Fixed`]) looks it up by id. The
 //! grant is read from the store on every call, so revoking or narrowing it
 //! takes effect at once. Every `resources/read`, `resources/subscribe`,
-//! `subscriptions/listen` and `tools/call` writes one audit entry.
+//! `subscriptions/listen`, `tools/call` and `prompts/get` writes one audit
+//! entry (a write that waits for a confirmation writes it when it ends).
+//!
+//! M4a (ADR 0079): calls count against the client's rate limits
+//! ([`crate::limits`]); write tools ([`crate::writes`]) and prompts
+//! ([`crate::prompts`]).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -20,22 +25,25 @@ use nail_api::{
 use nail_store::{McpAuditRecord, Store};
 use rmcp::ErrorData;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, Extensions, Implementation,
-    ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-    ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
-    ResourceTemplate, ServerCapabilities, ServerConfig, SubscribeRequestParams, SubscriptionFilter,
-    UnsubscribeRequestParams,
+    CallToolRequestParams, CallToolResponse, Extensions, GetPromptRequestParams, GetPromptResponse,
+    Implementation, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+    ListToolsResult, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse,
+    ReadResourceResult, Resource, ResourceTemplate, ServerCapabilities, ServerConfig,
+    SubscribeRequestParams, SubscriptionFilter, UnsubscribeRequestParams,
 };
 use rmcp::service::{RequestContext, RoleServer, SubscriptionContext};
 use serde_json::{Value, json};
 
 use crate::access::{Access, Denial};
+use crate::broker::{ConfirmationBroker, StoreBroker};
 use crate::content::{
     UNTRUSTED_NOTICE, json_resource, untrusted_blob_resource, untrusted_json_resource,
 };
 use crate::data::McpData;
+use crate::limits::{Limited, RateLimiter, Window};
 use crate::subscriptions::{Hub, SessionGuard};
 use crate::uri::{self, ResourceRef};
+use crate::writes::{WriteSettings, WriteState};
 
 /// The authenticated client of an HTTP request (set by the auth layer in
 /// the request's extensions).
@@ -58,6 +66,8 @@ pub(crate) enum Failure {
     Denied(Denial),
     /// A data error (not found, invalid query, …).
     Api(ApiError),
+    /// Over one of the client's rate limits (M4a).
+    Limited(Limited),
 }
 
 impl From<Denial> for Failure {
@@ -77,7 +87,11 @@ impl Failure {
     fn audit(&self) -> (McpOutcome, Option<String>) {
         match self {
             Self::Denied(denial) => (McpOutcome::Denied, Some(denial.to_string())),
+            Self::Api(err) if err.code == ErrorCode::RateLimited => {
+                (McpOutcome::Denied, Some(err.to_string()))
+            }
             Self::Api(err) => (McpOutcome::Error, Some(err.to_string())),
+            Self::Limited(limited) => (McpOutcome::Denied, Some(limited.to_string())),
         }
     }
 
@@ -94,7 +108,19 @@ impl Failure {
             Self::Api(err) if err.code == ErrorCode::InvalidRequest => {
                 ErrorData::invalid_params(err.message.clone(), None)
             }
+            Self::Api(err) if err.code == ErrorCode::RateLimited => ErrorData::invalid_request(
+                err.message.clone(),
+                Some(json!({"nail": "rate_limited"})),
+            ),
             Self::Api(err) => ErrorData::internal_error(err.to_string(), None),
+            Self::Limited(limited) => ErrorData::invalid_request(
+                format!("rate limited: {limited}"),
+                Some(json!({
+                    "nail": "rate_limited",
+                    "limit": limited.window.name(),
+                    "retry_after_secs": limited.retry_after_secs,
+                })),
+            ),
         }
     }
 }
@@ -112,9 +138,45 @@ pub(crate) struct Shared<D> {
     pub store: Store,
     pub data: Arc<D>,
     pub hub: Arc<Hub>,
+    /// Confirmations (the core's, or the store-backed one).
+    pub broker: Arc<dyn ConfirmationBroker>,
+    /// Per-client rate limits.
+    pub limiter: RateLimiter,
+    /// Writes waiting for a decision, MRTR continuations, idempotency keys.
+    pub writes: WriteState,
+    /// Confirmation timeout and polling.
+    pub settings: WriteSettings,
 }
 
 impl<D: McpData> Shared<D> {
+    /// The state of one server over `store` and `data`.
+    pub(crate) fn new(store: Store, data: Arc<D>, settings: WriteSettings) -> Self {
+        let broker = data.confirmations().unwrap_or_else(|| {
+            let sink = data.clone();
+            Arc::new(StoreBroker::new(
+                store.clone(),
+                Arc::new(move |event| sink.emit(event)),
+                settings.poll_interval,
+            ))
+        });
+        Self {
+            store,
+            data,
+            hub: Arc::new(Hub::default()),
+            broker,
+            limiter: RateLimiter::default(),
+            writes: WriteState::default(),
+            settings,
+        }
+    }
+
+    /// Counts a call against the client's calls per minute.
+    pub(crate) fn count_request(&self, client: &McpClient) -> Result<(), Failure> {
+        self.limiter
+            .check(client, Window::Requests, 1)
+            .map_err(Failure::Limited)
+    }
+
     /// Appends an audit entry; failures are logged, never returned.
     pub(crate) async fn audit(
         &self,
@@ -621,9 +683,14 @@ pub(crate) fn summary_json(summary: &MessageSummary) -> Value {
 
 /// Server instructions sent at initialization.
 pub const INSTRUCTIONS: &str = "Nail is the user's email client. Read accounts, folders, messages, \
-threads and rules through the nail:// resources or the read tools. Access is limited to what the \
-user granted this client in Nail (Settings → MCP clients); a denied call names the missing grant. \
-Every call is written to an audit log the user can see.";
+threads, calendars, contacts, tasks and rules through the nail:// resources or the read tools. \
+Write tools change mail, drafts, events, contacts, tasks and rules through Nail's operation queue \
+(undoable). Deleting, sending, invitations and rule changes wait until the user confirms in Nail \
+(or in your client's form where it offers one); a denied or expired confirmation changed nothing. \
+Pass an idempotency_key to retry a write safely. Prompts: summarize_thread, triage_folder, \
+draft_reply, prepare_meeting. Access is limited to what the user granted this client in Nail \
+(Settings → MCP clients); a denied call names the missing grant. Calls are rate limited per client \
+and every call is written to an audit log the user can see.";
 
 /// The rmcp handler of one session.
 #[derive(Clone)]
@@ -649,11 +716,17 @@ impl<D: McpData> NailMcp<D> {
     /// A handler for one client over any transport (stdio, tests); the
     /// grant and audit log are the same as over HTTP.
     pub fn for_client(store: Store, data: Arc<D>, client: McpClientId) -> Self {
-        let shared = Arc::new(Shared {
-            store,
-            data,
-            hub: Arc::new(Hub::default()),
-        });
+        Self::for_client_with(store, data, client, WriteSettings::default())
+    }
+
+    /// [`Self::for_client`] with other confirmation settings.
+    pub fn for_client_with(
+        store: Store,
+        data: Arc<D>,
+        client: McpClientId,
+        settings: WriteSettings,
+    ) -> Self {
+        let shared = Arc::new(Shared::new(store, data, settings));
         Self::new(shared, ClientSource::Fixed(client))
     }
 
@@ -683,6 +756,7 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
                 .enable_resources()
                 .enable_resources_subscribe()
                 .enable_tools()
+                .enable_prompts()
                 .build(),
         )
         .with_server_info(Implementation::new("nail", env!("CARGO_PKG_VERSION")))
@@ -774,14 +848,16 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         context: RequestContext<RoleServer>,
     ) -> Result<ReadResourceResponse, ErrorData> {
         let client = self.client(&context.extensions).await?;
-        let result = match ResourceRef::parse(&request.uri) {
-            Some(resource) => {
+        let counted = self.shared.count_request(&client);
+        let result = match counted.map(|()| ResourceRef::parse(&request.uri)) {
+            Err(limited) => Err(limited),
+            Ok(Some(resource)) => {
                 let access = self.shared.access(&client).await;
                 self.shared
                     .read(&access, &client, &resource, &request.uri)
                     .await
             }
-            None => Err(Failure::Api(ApiError::not_found(format!(
+            Ok(None) => Err(Failure::Api(ApiError::not_found(format!(
                 "unknown resource {}",
                 request.uri
             )))),
@@ -800,15 +876,17 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         context: RequestContext<RoleServer>,
     ) -> Result<(), ErrorData> {
         let client = self.client(&context.extensions).await?;
-        let result = match ResourceRef::parse(&request.uri) {
-            Some(resource) => {
+        let counted = self.shared.count_request(&client);
+        let result = match counted.map(|()| ResourceRef::parse(&request.uri)) {
+            Err(limited) => Err(limited),
+            Ok(Some(resource)) => {
                 let access = self.shared.access(&client).await;
                 self.shared
                     .may_subscribe(&access, &resource)
                     .await
                     .map(|()| resource)
             }
-            None => Err(Failure::Api(ApiError::not_found(format!(
+            Ok(None) => Err(Failure::Api(ApiError::not_found(format!(
                 "unknown resource {}",
                 request.uri
             )))),
@@ -889,9 +967,17 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(crate::tools::definitions()))
+        let mut tools = crate::tools::definitions();
+        if let Ok(client) = self.client(&context.extensions).await {
+            let access = self.shared.access(&client).await;
+            tools.extend(crate::tools::plugin_definitions(
+                self.shared.data.plugin_tools(),
+                &access,
+            ));
+        }
+        Ok(ListToolsResult::with_all_items(tools))
     }
 
     async fn call_tool(
@@ -900,8 +986,27 @@ impl<D: McpData> rmcp::ServerHandler for NailMcp<D> {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
         let client = self.client(&context.extensions).await?;
-        crate::tools::call(&self.shared, &client, request)
+        crate::tools::call(&self.shared, &client, request, &context).await
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListPromptsResult, ErrorData> {
+        Ok(ListPromptsResult::with_all_items(
+            crate::prompts::definitions(self.shared.data.as_ref()),
+        ))
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<GetPromptResponse, ErrorData> {
+        let client = self.client(&context.extensions).await?;
+        crate::prompts::get(&self.shared, &client, request)
             .await
-            .map(CallToolResponse::from)
+            .map(GetPromptResponse::from)
     }
 }

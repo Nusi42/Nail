@@ -205,7 +205,10 @@ impl<D: McpData> Shared<D> {
     }
 
     /// The calendars (and task lists) the client may see.
-    async fn visible_calendars(&self, access: &Access) -> Result<Vec<Calendar>, Failure> {
+    pub(crate) async fn visible_calendars(
+        &self,
+        access: &Access,
+    ) -> Result<Vec<Calendar>, Failure> {
         access.require(McpScope::Read)?;
         match self.pim(Request::ListCalendars { source_id: None }).await? {
             Response::Calendars { calendars } => Ok(calendars

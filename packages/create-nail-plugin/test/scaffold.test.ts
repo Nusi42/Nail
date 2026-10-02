@@ -122,7 +122,7 @@ describe("scaffold", () => {
     const err: string[] = [];
     const io = { log: (s: string) => out.push(s), error: (s: string) => err.push(s) };
     expect(main([dir, "--name", "CLI plug-in"], io)).toBe(0);
-    expect(out[0]).toMatch(/^Created CLI plug-in \(cli-plugin\) in /);
+    expect(out[0]).toMatch(/^Created CLI plug-in \(cli-plugin, command template\) in /);
     expect(out).toContain("  npm run package      # -> dist/cli-plugin.nailplugin");
     expect(main([dir], io)).toBe(1);
     expect(err.at(-1)).toMatch(/not empty/);

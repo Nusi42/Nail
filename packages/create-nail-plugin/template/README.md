@@ -1,6 +1,6 @@
 # __PLUGIN_NAME__
 
-A Nail plug-in (preview API, `apiVersion` 1).
+A Nail plug-in (plug-in API, `apiVersion` 1).
 
 | Command             | What it does                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------ |
@@ -12,9 +12,14 @@ A Nail plug-in (preview API, `apiVersion` 1).
 
 Install the `.nailplugin` file in Nail from the plug-in manager ("Install from file").
 
-- `manifest.json` — id, name, permissions, commands, toolbar placements, locales.
-- `src/index.tsx` — the code; JSX builds dialogs and panels from Nail's components.
-- `locales/en.ftl` — texts that `manifest.json` references as `%id%`.
+- `manifest.json` — id, name, permissions and what the plug-in adds to Nail
+  (commands, hooks, composer actions, attachment previews, …).
+- `src/index.tsx` — the code; JSX builds dialogs, panels and previews from Nail's components.
+- `locales/en.ftl` — texts the manifest references as `%id%` and the code reads with
+  `nail.l10n.t(id)`; add `locales/<language>.ftl` files for translations.
+
+Test the plug-in with the SDK's test host (`@nail/plugin-api/testing`), which runs
+commands, hooks and previews with Nail's permission rules.
 
 See Nail's user documentation, "Plug-ins", for the manifest, the permissions,
-the API and the components.
+the extension points, the API and the components.

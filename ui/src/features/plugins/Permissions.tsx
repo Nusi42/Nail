@@ -7,7 +7,8 @@ import { useId } from "react";
 import type { Account, PluginGrant, PluginPermission } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { ALL_ACCOUNTS, useAccountName } from "../../widgets/AccountSwitcher";
-import { grantOf, setAccounts, setGranted, takesAccounts } from "./grants";
+import { isWritePermission } from "./extensions";
+import { grantOf, requiresRead, setAccounts, setGranted, takesAccounts } from "./grants";
 import { permissionArgs, permissionMessageId } from "./messages";
 
 interface Props {
@@ -29,16 +30,23 @@ function PermissionRow({
   const name = useId();
   const accountName = useAccountName();
   const grant = grantOf(grants, permission);
-  const needsRead = permission === "mail.read.body" && !grantOf(grants, "mail.read");
+  const needsRead = requiresRead(permission) && !grantOf(grants, "mail.read");
   const text = t(permissionMessageId(permission), permissionArgs(permission));
+  const write = isWritePermission(permission);
   return (
     <li
       data-part="plugin-permissions.item"
       data-permission={permission}
       data-state={grant ? "allowed" : "denied"}
+      data-write={write ? "" : undefined}
     >
       <fieldset data-part="plugin-permissions.choice" disabled={disabled}>
-        <legend data-part="plugin-permissions.label">{text}</legend>
+        <legend data-part="plugin-permissions.label">
+          {text}
+          {write && (
+            <span data-part="plugin-permissions.write">{t("plugin-permission-write")}</span>
+          )}
+        </legend>
         <label data-part="plugin-permissions.option">
           <input
             type="radio"

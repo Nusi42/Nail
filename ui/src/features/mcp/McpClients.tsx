@@ -1,6 +1,7 @@
 /**
  * Settings → MCP clients (layout widget `mcp-clients`): register agents,
- * show each new token once, edit grants, revoke, read the audit log.
+ * show each new token once, edit grants (reading and writing scopes), rate
+ * limits and the confirmation policy (M4a), revoke, read the audit log.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -10,7 +11,12 @@ import { useLabel, useLocale, useT } from "../../i18n/I18nProvider";
 import type { WidgetProps } from "../../layout/widgetRegistry";
 import { useClient } from "../../state/queries";
 import { CheckField, TextField } from "../../widgets/forms";
+import { useUi } from "../../state/uiStore";
+import { CENTER_DIALOG } from "../agents/names";
+import { PolicyEditor } from "../agents/PolicyEditor";
+import { pendingOf, usePendingConfirmations } from "../agents/queries";
 import { AuditLog, formatAuditTime } from "./AuditLog";
+import { RateLimitsEditor } from "./RateLimits";
 import { GrantEditor } from "./GrantEditor";
 import { emptyGrant, grantIsEmpty, mcpKeys, useMcpClients, useMcpServerInfo } from "./queries";
 
@@ -118,6 +124,30 @@ function CreateForm({ onCreated }: { onCreated: (client: McpClient, token: strin
   );
 }
 
+/** "N writes of this client wait for you" with a way to the confirmation center. */
+function PendingNote({ client }: { client: McpClient }) {
+  const t = useT();
+  const pending = usePendingConfirmations();
+  const openWindow = useUi((s) => s.openWindow);
+  const count = pendingOf(pending.data, { kind: "mcp-client", client_id: client.id }).length;
+  if (count === 0) return null;
+  return (
+    <p data-part="mcp-clients.pending" role="note">
+      <span data-part="mcp-clients.pending.text">
+        {t("mcp-client-pending", { name: client.name, count })}
+      </span>
+      <button
+        type="button"
+        data-part="form.button"
+        data-action="review-confirmations"
+        onClick={() => openWindow(CENTER_DIALOG)}
+      >
+        {t("mcp-client-pending-review")}
+      </button>
+    </p>
+  );
+}
+
 function ClientDetail({ client }: { client: McpClient }) {
   const t = useT();
   const nail = useClient();
@@ -139,7 +169,14 @@ function ClientDetail({ client }: { client: McpClient }) {
 
   return (
     <div data-part="mcp-clients.detail" data-client={client.id}>
+      <PendingNote client={client} />
       <GrantEditor key={`${client.id}:${client.revoked_at ?? ""}`} client={client} />
+      <RateLimitsEditor key={`rate:${client.id}:${client.revoked_at ?? ""}`} client={client} />
+      <PolicyEditor
+        actor={{ kind: "mcp-client", client_id: client.id }}
+        name={client.name}
+        disabled={revoked}
+      />
       {!revoked && (
         <div data-part="mcp-clients.revoke">
           {!confirm ? (

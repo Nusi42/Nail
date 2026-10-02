@@ -111,6 +111,17 @@ plugin-host-log-dropped = { $count ->
     [one] One log line was dropped because the plug-in wrote too many.
    *[other] { $count } log lines were dropped because the plug-in wrote too many.
 }
+# M4a (WP102): hooks, background jobs and extension handlers.
+# `hook` is the hook's name (plugin-hook-*, already translated); `detail` is the reason in English.
+plugin-host-hook-failed = { $plugin } failed in its hook “{ $hook }” and was skipped: { $detail }
+plugin-host-hook-timed-out = { $plugin } took longer than { $ms } ms in its hook “{ $hook }” and was skipped.
+plugin-host-hook-actions-denied = { $plugin } asked to change new mail in an account where it may not organize mail; nothing was changed.
+plugin-host-job-overlap = The background job “{ $job }” of { $plugin } was skipped because its previous run has not finished.
+plugin-host-job-cpu-quota = The background job “{ $job }” of { $plugin } was skipped because the plug-in used its processor time for this hour.
+plugin-host-job-failed = The background job “{ $job }” failed: { $detail }
+plugin-host-job-timed-out = The background job “{ $job }” took too long: { $detail }
+# `name` is the plug-in's action, renderer, tool or banner (`<kind> <name>`).
+plugin-host-handler-failed = { $name } failed: { $detail }
 
 ## Plug-in packages (.nailplugin) and folders ($path = the file, $detail = more detail)
 

@@ -29,6 +29,28 @@ pub const API_DENIED: &str = "plugin-host-api-denied";
 pub const UNHANDLED_REJECTION: &str = "plugin-host-unhandled-rejection";
 /// Log lines dropped because a call wrote too many (`$count`).
 pub const LOG_DROPPED: &str = "plugin-host-log-dropped";
+/// A hook threw or answered something invalid and was skipped (`$plugin`,
+/// `$hook` = the hook's name, `$detail`).
+pub const HOOK_FAILED: &str = "plugin-host-hook-failed";
+/// A hook ran out of its time budget and was skipped (`$plugin`, `$hook`,
+/// `$ms`).
+pub const HOOK_TIMED_OUT: &str = "plugin-host-hook-timed-out";
+/// Arrival hook actions were dropped: the plug-in may not organize mail in
+/// that account (`$plugin`).
+pub const HOOK_ACTIONS_DENIED: &str = "plugin-host-hook-actions-denied";
+/// A job was skipped because its previous run had not finished (`$plugin`,
+/// `$job`).
+pub const JOB_OVERLAP: &str = "plugin-host-job-overlap";
+/// A job was skipped because the plug-in used its CPU time for this hour
+/// (`$plugin`, `$job`).
+pub const JOB_CPU_QUOTA: &str = "plugin-host-job-cpu-quota";
+/// A job failed (`$job`, `$detail`).
+pub const JOB_FAILED: &str = "plugin-host-job-failed";
+/// A job ran out of wall-clock time (`$job`, `$detail`).
+pub const JOB_TIMED_OUT: &str = "plugin-host-job-timed-out";
+/// An extension handler (composer / attachment / link action, preview,
+/// Markdown block, MCP tool, banner button) failed (`$name`, `$detail`).
+pub const HANDLER_FAILED: &str = "plugin-host-handler-failed";
 /// The archive is larger than allowed.
 pub const PACKAGE_TOO_LARGE: &str = "plugin-package-too-large";
 /// Not a zip archive (`$detail`).
@@ -64,6 +86,14 @@ pub const ALL: &[&str] = &[
     API_DENIED,
     UNHANDLED_REJECTION,
     LOG_DROPPED,
+    HOOK_FAILED,
+    HOOK_TIMED_OUT,
+    HOOK_ACTIONS_DENIED,
+    JOB_OVERLAP,
+    JOB_CPU_QUOTA,
+    JOB_FAILED,
+    JOB_TIMED_OUT,
+    HANDLER_FAILED,
     PACKAGE_TOO_LARGE,
     PACKAGE_NOT_A_ZIP,
     PACKAGE_TOO_MANY_FILES,
@@ -177,6 +207,14 @@ impl PluginCatalogs {
             }
         }
         message.id.clone()
+    }
+
+    /// Whether a message exists for `language` or in English
+    /// (`nail.l10n.has`).
+    pub fn has(&self, language: Option<&str>, id: &str) -> bool {
+        self.chain(language)
+            .iter()
+            .any(|bundle| bundle.get_message(id).and_then(|m| m.value()).is_some())
     }
 
     /// Resolves one manifest text: `%id%` is looked up, anything else is

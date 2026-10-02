@@ -12,6 +12,9 @@
 //! * starting the server on a fixed port ([`start_error`]);
 //! * the stdio bridge's errors ([`crate::bridge::BridgeError::localized`]),
 //!   which `nail mcp` prints.
+//! * M4a (ids `mcp-tool-*` in `core-mcp.ftl`): the audit details of writes
+//!   (`write {…}` with the content-free before / after lines), replayed
+//!   idempotent calls and rate-limited calls.
 
 use nail_api::mcp::McpScope;
 use nail_api::{ErrorCode, LocalizedMessage};
@@ -24,6 +27,10 @@ pub const DETAIL_MISSING_TOKEN: &str = "missing bearer token";
 pub const DETAIL_REFUSED_TOKEN: &str = "unknown or revoked token";
 /// Suffix of the summary entry of refused connections not logged one by one.
 const MORE_REFUSED_SUFFIX: &str = " more refused connections not logged";
+/// Prefix of a write's audit detail (followed by JSON).
+pub const WRITE_DETAIL_PREFIX: &str = "write ";
+/// Audit detail of a write answered from its idempotency key.
+pub const DETAIL_REPLAYED: &str = "idempotent replay of an earlier result";
 
 /// The audit detail summing up `count` refused connections.
 pub fn refused_summary(count: u32) -> String {
@@ -65,12 +72,44 @@ pub fn audit_detail(detail: &str) -> Option<LocalizedMessage> {
     if let Some(parsed) = parse_denial(detail) {
         return Some(denial(&parsed));
     }
+    if detail == DETAIL_REPLAYED {
+        return Some(LocalizedMessage::new("mcp-tool-audit-replayed"));
+    }
+    if let Some(json) = detail.strip_prefix(WRITE_DETAIL_PREFIX) {
+        return write_detail(json);
+    }
+    if let Some(rest) = detail.strip_prefix("rate limit `") {
+        let limit = rest.split('`').next().unwrap_or_default();
+        return Some(LocalizedMessage::new("mcp-tool-audit-rate-limited").arg("limit", limit));
+    }
     // `ApiError`'s display form: `<code>: <message>`.
     let (code, _) = detail.split_once(": ")?;
     ErrorCode::ALL
         .iter()
         .find(|c| c.as_str() == code)
         .map(|c| LocalizedMessage::for_code(*c))
+}
+
+/// The text of a write's audit detail: what happened, to how many items,
+/// with how many changed fields.
+fn write_detail(json: &str) -> Option<LocalizedMessage> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let targets = value["targets"].as_array().map_or(0, Vec::len)
+        + usize::try_from(value["more_targets"].as_u64().unwrap_or(0)).unwrap_or(0);
+    let changes = value["changes"].as_array().map_or(0, Vec::len);
+    let id = match value["status"].as_str()? {
+        "done" => "mcp-tool-audit-done",
+        "denied" => "mcp-tool-audit-denied",
+        "expired" => "mcp-tool-audit-expired",
+        "vetoed" => "mcp-tool-audit-vetoed",
+        "failed" => "mcp-tool-audit-failed",
+        _ => return None,
+    };
+    Some(
+        LocalizedMessage::new(id)
+            .arg("count", targets)
+            .arg("changes", changes),
+    )
 }
 
 /// Reads back a [`Denial`]'s display form.
@@ -148,6 +187,32 @@ mod tests {
         let scope = audit_detail("scope `raw-source` not granted").unwrap();
         assert_eq!(scope.args["scope"], "raw-source".into());
         assert_eq!(audit_detail("something else"), None);
+        // M4a: writes, replays, rate limits.
+        let write = audit_detail(
+            r#"write {"targets":["m1","m2"],"changes":[{"field":"flagged"}],"status":"done"}"#,
+        )
+        .unwrap();
+        assert_eq!(write.id, "mcp-tool-audit-done");
+        assert_eq!(write.args["count"], 2u32.into());
+        assert_eq!(write.args["changes"], 1u32.into());
+        for (status, id) in [
+            ("denied", "mcp-tool-audit-denied"),
+            ("expired", "mcp-tool-audit-expired"),
+            ("vetoed", "mcp-tool-audit-vetoed"),
+            ("failed", "mcp-tool-audit-failed"),
+        ] {
+            let detail = format!(r#"write {{"targets":[],"changes":[],"status":"{status}"}}"#);
+            assert_eq!(audit_detail(&detail).map(|m| m.id), Some(id.to_owned()));
+        }
+        assert_eq!(audit_detail("write {broken"), None);
+        assert_eq!(
+            audit_detail(DETAIL_REPLAYED).map(|m| m.id).as_deref(),
+            Some("mcp-tool-audit-replayed")
+        );
+        let limited =
+            audit_detail("rate limit `writes_per_minute` (20) reached; retry after 3 s").unwrap();
+        assert_eq!(limited.id, "mcp-tool-audit-rate-limited");
+        assert_eq!(limited.args["limit"], "writes_per_minute".into());
         assert_eq!(audit_detail("bogus_code: x"), None);
         assert_eq!(audit_detail("scope `nope` not granted"), None);
     }
@@ -173,7 +238,17 @@ mod tests {
     #[test]
     fn every_message_id_is_in_the_catalog() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let missing = nail_config::l10n::missing_message_ids(&src, &["mcp-core-", "error-"]);
+        let missing = nail_config::l10n::missing_message_ids(
+            &src,
+            &[
+                "mcp-core-",
+                "error-",
+                "mcp-tool-",
+                "mcp-prompt-",
+                "confirmation-summary-",
+                "action-field-",
+            ],
+        );
         assert!(missing.is_empty(), "{missing:#?}");
         let english = nail_config::l10n::english(&start_error(
             4799,
