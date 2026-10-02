@@ -504,11 +504,19 @@ impl PluginHost {
                 continue;
             }
             for def in &running.manifest.contributes.mcp_tools {
+                // In the core's language (`%id%` resolved).
+                let description = running
+                    .localized
+                    .contributes
+                    .mcp_tools
+                    .iter()
+                    .find(|t| t.id == def.id)
+                    .map_or_else(|| def.description.clone(), |t| t.description.clone());
                 tools.push(PluginMcpTool {
                     name: plugin_mcp_tool_name(&plugin, &def.id),
                     plugin_id: plugin.clone(),
                     plugin_name: running.name.clone(),
-                    description: def.description.clone(),
+                    description,
                     input_schema: def
                         .input_schema
                         .clone()

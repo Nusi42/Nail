@@ -353,9 +353,15 @@ async fn a_draft_changed_after_the_send_request_is_not_sent() {
         waiting.await.unwrap().unwrap(),
         McpWriteResult::Done { .. }
     ));
+    // The send is pinned to the approved revision: the core checks it in
+    // the transaction that queues the draft (post-M4a, ADR 0086).
+    let approved = {
+        use nail_mcp::McpData as _;
+        nail_store::draft_revision(&data.draft(&"d1".into()).await.unwrap())
+    };
     assert!(matches!(
         data.written().as_slice(),
-        [Request::SendDraft { .. }]
+        [Request::SendDraft { expected_revision: Some(r), .. }] if *r == approved
     ));
 }
 

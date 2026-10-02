@@ -79,7 +79,8 @@ pub struct PluginMarkdownBlockDef {
     pub id: String,
     /// What the composer's block menu shows (or `%fluent-id%`).
     pub title: String,
-    /// Text inserted as the block's body when picked from the menu.
+    /// Text inserted as the block's body when picked from the menu (or
+    /// `%fluent-id%`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub template: Option<String>,
@@ -196,8 +197,9 @@ pub struct PluginMcpToolDef {
     /// [`plugin_mcp_tool_name`], at most [`MAX_MCP_TOOL_NAME`]
     /// characters).
     pub id: String,
-    /// What it does, for the agent (English is fine: agents read it; at
-    /// most [`MAX_MCP_TOOL_DESCRIPTION`] characters).
+    /// What it does, for the agent (English is fine: agents read it; or
+    /// `%fluent-id%`, given in Nail's language; at most
+    /// [`MAX_MCP_TOOL_DESCRIPTION`] characters).
     pub description: String,
     /// The JSON Schema of its arguments (an object schema; default: no
     /// arguments).

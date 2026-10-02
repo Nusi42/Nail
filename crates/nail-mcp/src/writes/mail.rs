@@ -867,11 +867,11 @@ pub(crate) async fn send_message<D: McpData>(
         ],
         sends: 1,
         // The draft as the confirmation shows it: sending refuses a draft
-        // that changed since (review M4a).
+        // that changed since (review M4a; atomic in the core, ADR 0086).
         action: Action::SendDraft {
             draft_id: id,
             send_at: a.send_at,
-            expected: Box::new(draft),
+            revision: nail_store::draft_revision(&draft),
         },
     })
 }

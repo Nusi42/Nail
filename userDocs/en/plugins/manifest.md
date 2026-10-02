@@ -167,7 +167,7 @@ Need `composer`; see [composer](composer.md). At most 50 of each.
 | `title` | yes | The label in the composer (or `%text-id%`). |
 | `icon` | no | Actions: an icon name. |
 | `description` | no | Actions: a tooltip (or `%text-id%`). |
-| `template` | no | Blocks: the text inserted as the block's content (at most 1000 characters). |
+| `template` | no | Blocks: the text inserted as the block's content, at most 1000 characters (or `%text-id%`). |
 
 ## `contributes.attachmentPreviews` and `contributes.attachmentActions`
 
@@ -216,7 +216,7 @@ At most 50.
 | Field | Required | What it is |
 | --- | --- | --- |
 | `id` | yes | The name; agents see `<plugin-id>__<id>` (at most 64 characters in all). |
-| `description` | yes | What it does, for the agent (at most 1000 characters). |
+| `description` | yes | What it does, for the agent, at most 1000 characters (or `%text-id%`: agents get it in Nail's language). |
 | `inputSchema` | no | The JSON Schema of the arguments: an object schema, at most 16 KB. |
 | `scopes` | no | The MCP permissions a client needs to call it (default `["read"]`). |
 

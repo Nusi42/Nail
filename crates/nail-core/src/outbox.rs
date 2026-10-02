@@ -106,7 +106,30 @@ impl Service {
 
     /// Stores a draft; `upload`: schedule the copy in the server's Drafts
     /// folder (not for rule mail, which is sent at once).
-    pub(crate) async fn store_draft(&self, mut draft: Draft, upload: bool) -> Result<DraftId> {
+    pub(crate) async fn store_draft(&self, draft: Draft, upload: bool) -> Result<DraftId> {
+        let draft = self.checked_draft(draft)?;
+        let id = self.inner.store.call(move |s| s.save_draft(&draft)).await?;
+        if upload {
+            self.schedule_draft_upload(&id);
+        }
+        Ok(id)
+    }
+
+    /// [`Service::store_draft`] (no upload) for a stored draft still at
+    /// revision `expected` (check and write in one store transaction);
+    /// returns the new revision (ADR 0086).
+    pub(crate) async fn store_draft_at(&self, draft: Draft, expected: String) -> Result<String> {
+        let draft = self.checked_draft(draft)?;
+        Ok(self
+            .inner
+            .store
+            .call(move |s| s.save_draft_at(&draft, &expected))
+            .await?)
+    }
+
+    /// A draft ready to store: its identity exists, its HTML is sanitized
+    /// and its attachments are uploaded blobs.
+    fn checked_draft(&self, mut draft: Draft) -> Result<Draft> {
         self.identity(&draft.identity_id)?;
         if let Some(html) = &draft.html {
             draft.html = Some(nail_compose::sanitize_outgoing(html));
@@ -122,11 +145,7 @@ impl Service {
                 .into());
             }
         }
-        let id = self.inner.store.call(move |s| s.save_draft(&draft)).await?;
-        if upload {
-            self.schedule_draft_upload(&id);
-        }
-        Ok(id)
+        Ok(draft)
     }
 
     /// `GetDraftAttachment`: the content of a blob the draft lists in its
@@ -200,10 +219,34 @@ impl Service {
         send_at: Option<String>,
         crypto: Option<SendCrypto>,
     ) -> Result<OutboxEntry> {
+        self.send_draft_at(draft_id, delay_secs, send_at, crypto, None)
+            .await
+    }
+
+    /// `SendDraft` of the draft at revision `expected` only (`None` = as
+    /// it is): the crypto choice written into the draft and the outbox
+    /// entry each check the revision in their store transaction, so a
+    /// draft edited after a confirmation's approval is never queued
+    /// (`DraftChanged`; ADR 0086).
+    pub(crate) async fn send_draft_at(
+        &self,
+        draft_id: DraftId,
+        delay_secs: Option<u32>,
+        send_at: Option<String>,
+        crypto: Option<SendCrypto>,
+        expected: Option<String>,
+    ) -> Result<OutboxEntry> {
+        let mut expected = expected;
         let draft = {
             let id = draft_id.clone();
             self.inner.store.call(move |s| s.get_draft(&id)).await?
         };
+        if expected
+            .as_deref()
+            .is_some_and(|rev| nail_store::draft_revision(&draft) != rev)
+        {
+            return Err(nail_store::Error::DraftChanged(draft_id.to_string()).into());
+        }
         let (account, identity) = self.identity(&draft.identity_id)?;
         // Sign / encrypt: the request's choice, else the draft's, else the
         // identity's defaults (ADR 0029). Checked now (`no_key`, `locked`)
@@ -223,10 +266,22 @@ impl Service {
             // The sender applies what was checked here.
             let mut updated = draft.clone();
             updated.crypto = Some(crypto.clone());
-            self.inner
-                .store
-                .call(move |s| s.save_draft(&updated))
-                .await?;
+            match expected {
+                Some(revision) => {
+                    expected = Some(
+                        self.inner
+                            .store
+                            .call(move |s| s.save_draft_at(&updated, &revision))
+                            .await?,
+                    );
+                }
+                None => {
+                    self.inner
+                        .store
+                        .call(move |s| s.save_draft(&updated))
+                        .await?;
+                }
+            }
         }
         if !account.can_send() {
             return Err(ApiError::invalid_request(format!(
@@ -257,7 +312,7 @@ impl Service {
         let entry = self
             .inner
             .store
-            .call(move |s| s.schedule_send(&draft_id, &account_id, at))
+            .call(move |s| s.schedule_send_at(&draft_id, &account_id, at, expected.as_deref()))
             .await?;
         send_status(self, &entry);
         self.inner.outbox_wake.notify_one();

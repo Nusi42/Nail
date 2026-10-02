@@ -126,6 +126,9 @@ pub(crate) struct Slot {
     watcher: Option<DevWatcher>,
     /// M4a: the plug-in's name in the core's language.
     display_name: String,
+    /// The manifest with its texts in the core's language (MCP tool
+    /// descriptions).
+    localized: Arc<PluginManifest>,
     /// M4a: CPU time of its turns (kept across restarts: the quota is per
     /// plug-in, not per start).
     cpu: Arc<Mutex<CpuMeter>>,
@@ -141,6 +144,8 @@ pub(crate) struct Running {
     pub manifest: Arc<PluginManifest>,
     pub generation: u64,
     pub name: String,
+    /// The manifest with its texts in the core's language.
+    pub localized: Arc<PluginManifest>,
     pub files: PackageFiles,
 }
 
@@ -415,6 +420,7 @@ impl Inner {
             manifest,
             generation: slot.generation,
             name: slot.display_name.clone(),
+            localized: Arc::clone(&slot.localized),
             files: slot.spec.files.clone(),
         })
     }
@@ -1071,6 +1077,7 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
     let catalogs = Arc::new(PluginCatalogs::load(&manifest, &spec.files));
     let locale = inner.services.locale();
     let display_name = catalogs.text(locale.as_deref(), &manifest.name);
+    let localized = Arc::new(catalogs.localize_manifest(&manifest, locale.as_deref()));
     let cpu = lock(&inner.slots)
         .get(&id)
         .map(|s| Arc::clone(&s.cpu))
@@ -1099,6 +1106,7 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
                 gate,
                 watcher,
                 display_name,
+                localized,
                 cpu,
                 jobs,
             },
@@ -1138,6 +1146,7 @@ async fn start(inner: &Arc<Inner>, spec: PluginSpec) -> Result<(), ApiError> {
             gate,
             watcher,
             display_name,
+            localized,
             cpu,
             jobs,
         },

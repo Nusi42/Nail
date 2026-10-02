@@ -631,6 +631,7 @@ async fn shared_mailboxes_sending_and_free_busy() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
@@ -1594,6 +1595,7 @@ async fn ews_writes_sending_settings_and_pim() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;

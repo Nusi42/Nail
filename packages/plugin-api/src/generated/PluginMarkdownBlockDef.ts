@@ -14,6 +14,7 @@ id: string,
  */
 title: string, 
 /**
- * Text inserted as the block's body when picked from the menu.
+ * Text inserted as the block's body when picked from the menu (or
+ * `%fluent-id%`).
  */
 template?: string, };

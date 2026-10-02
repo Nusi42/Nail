@@ -4,8 +4,9 @@
 //! another adds a header and content, an open hook shows a banner), plug-in
 //! writes through the shared write path (a task created without asking, a
 //! Trash that waits for the user's approval), a background job on the
-//! controlled clock, plug-in tools offered to MCP clients, and revoking a
-//! client cancelling its confirmations.
+//! controlled clock, plug-in tools offered to MCP clients, revoking a
+//! client cancelling its confirmations, and (post-M4a, ADR 0086) confirmed
+//! sends pinned to the approved draft revision.
 
 use std::future::Future;
 use std::time::Duration;
@@ -108,6 +109,11 @@ async fn synced(f: &Fixture) {
 
 /// Installs and starts a plug-in package with every permission granted.
 async fn install(f: &Fixture, manifest: Value, js: &str) -> PluginId {
+    install_with(f, manifest, js, &[]).await
+}
+
+/// [`install`] with more files in the package (catalogs).
+async fn install_with(f: &Fixture, manifest: Value, js: &str, files: &[(&str, &str)]) -> PluginId {
     let id = manifest["id"].as_str().unwrap().to_owned();
     let permissions: Vec<String> = manifest["permissions"]
         .as_array()
@@ -116,11 +122,12 @@ async fn install(f: &Fixture, manifest: Value, js: &str) -> PluginId {
         .map(|p| p.as_str().unwrap().to_owned())
         .collect();
     let text = manifest.to_string();
-    let bytes = build_package([
+    let mut entries = vec![
         ("manifest.json", text.as_bytes()),
         ("index.js", js.as_bytes()),
-    ])
-    .unwrap();
+    ];
+    entries.extend(files.iter().map(|(path, body)| (*path, body.as_bytes())));
+    let bytes = build_package(entries).unwrap();
     let path = f.files.path().join(format!("{id}.nailplugin"));
     std::fs::write(&path, bytes).unwrap();
     let source = PluginPackageSource::File {
@@ -187,6 +194,7 @@ fn send(draft_id: nail_api::DraftId) -> Request {
         delay_secs: Some(0),
         send_at: None,
         crypto: None,
+        expected_revision: None,
     }
 }
 
@@ -383,7 +391,7 @@ async fn log_lines(f: &Fixture, plugin: &PluginId) -> Vec<String> {
 async fn plugin_writes_jobs_and_tools_run_through_the_core() {
     let f = setup().await;
     synced(&f).await;
-    let plugin = install(
+    let plugin = install_with(
         &f,
         manifest(
             "writer",
@@ -397,11 +405,16 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
             ],
             json!({
                 "commands": [{"id": "go", "title": "Go", "contexts": ["list"]}],
-                "jobs": [{"id": "tick", "schedule": "@hourly"}],
-                "mcpTools": [{"id": "lookup", "description": "Look something up", "scopes": ["read"]}],
+                "jobs": [{"id": "tick", "title": "%tick-title%", "schedule": "@hourly"}],
+                "mcpTools": [{"id": "lookup", "description": "%lookup-description%", "scopes": ["read"]}],
+                "locales": {"en": "locales/en.ftl"},
             }),
         ),
         WRITER_JS,
+        &[(
+            "locales/en.ftl",
+            "tick-title = Count the hours\nlookup-description = Look something up\n",
+        )],
     )
     .await;
     let target = inbox(&f, FolderRole::Inbox).await.remove(0);
@@ -514,12 +527,42 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
             .any(|j| j.job == "tick" && j.run_count >= 1 && j.next_run_at.is_some())
     })
     .await;
+    // Post-M4a: the job's `%id%` title is localized, in the activity and
+    // in the manifest the plug-in manager lists.
+    let Response::PluginActivity { activity } = f
+        .service
+        .handle(Request::GetPluginActivity {
+            plugin_id: plugin.clone(),
+        })
+        .await
+    else {
+        panic!("activity expected")
+    };
+    assert_eq!(activity.jobs[0].title.as_deref(), Some("Count the hours"));
+    let Response::Plugin { plugin: info } = f
+        .service
+        .handle(Request::GetPlugin {
+            plugin_id: plugin.clone(),
+        })
+        .await
+    else {
+        panic!("plug-in expected")
+    };
+    assert_eq!(
+        info.manifest.contributes.jobs[0].title.as_deref(),
+        Some("Count the hours")
+    );
+    assert_eq!(
+        info.manifest.contributes.mcp_tools[0].description,
+        "Look something up"
+    );
 
     // The plug-in's tool is offered to MCP clients and answers.
     let core = nail_core::McpCore(f.service.clone());
     let tools = core.plugin_tools();
     assert_eq!(tools.len(), 1, "{tools:?}");
     assert_eq!(tools[0].name, "writer__lookup");
+    assert_eq!(tools[0].description, "Look something up");
     let Response::McpClientCreated { client, .. } = f
         .service
         .handle(Request::CreateMcpClient {
@@ -596,6 +639,223 @@ async fn plugin_writes_jobs_and_tools_run_through_the_core() {
         names.contains(&"plugin:writer nail.tasks.create")
             && names.contains(&"plugin:writer nail.mail.delete"),
         "{names:?}"
+    );
+}
+
+async fn stored_draft(f: &Fixture, id: &nail_api::DraftId) -> Draft {
+    match f
+        .service
+        .handle(Request::GetDraft {
+            draft_id: id.clone(),
+        })
+        .await
+    {
+        Response::Draft { draft } => *draft,
+        other => panic!("{other:?}"),
+    }
+}
+
+async fn outbox_len(f: &Fixture) -> usize {
+    let Response::Outbox { entries } = f.service.handle(Request::ListOutbox).await else {
+        panic!("outbox expected")
+    };
+    entries.len()
+}
+
+fn send_revision(draft_id: nail_api::DraftId, revision: String) -> Request {
+    Request::SendDraft {
+        draft_id,
+        delay_secs: Some(0),
+        send_at: None,
+        crypto: None,
+        expected_revision: Some(revision),
+    }
+}
+
+fn assert_draft_changed(response: Response) {
+    match response {
+        Response::Error {
+            code: ErrorCode::Conflict,
+            localized: Some(localized),
+            ..
+        } => assert_eq!(localized.id, "mcp-tool-error-draft-changed"),
+        other => panic!("draft-changed expected, got {other:?}"),
+    }
+}
+
+/// Post-M4a (ADR 0086): a send pinned to the draft revision a
+/// confirmation showed queues exactly that draft. An edit after the
+/// approval makes the send fail with `draft-changed` and nothing is queued
+/// or sent; the hooks' own content keeps the pin intact; a plug-in's send
+/// approved after the user edited the draft fails the confirmation.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_confirmed_send_queues_only_the_approved_draft() {
+    let f = setup().await;
+    synced(&f).await;
+
+    // The draft changes between the approval and the send: refused in the
+    // transaction that would queue it.
+    let id = save(&f, draft("Approved send", "Hello Bob")).await;
+    let approved = nail_store::draft_revision(&stored_draft(&f, &id).await);
+    let mut edited = stored_draft(&f, &id).await;
+    edited.to[0].email = "mallory@example.org".into();
+    save(&f, edited).await;
+    assert_draft_changed(f.service.handle(send_revision(id.clone(), approved)).await);
+    assert_eq!(outbox_len(&f).await, 0, "nothing queued");
+
+    // With before-send hooks: a stale revision never reaches them, the
+    // current one is sent with the hook's content.
+    install(
+        &f,
+        manifest(
+            "checker",
+            &[
+                "mail.read",
+                "mail.organize",
+                "hooks.arrival",
+                "hooks.beforeSend",
+                "hooks.open",
+            ],
+            json!({"hooks": [{"hook": "arrival"}, {"hook": "beforeSend"}, {"hook": "open"}]}),
+        ),
+        HOOKS_JS,
+    )
+    .await;
+    let current = nail_store::draft_revision(&stored_draft(&f, &id).await);
+    let mut again = stored_draft(&f, &id).await;
+    again.subject = "Approved send (edited)".into();
+    save(&f, again).await;
+    assert_draft_changed(f.service.handle(send_revision(id.clone(), current)).await);
+    assert_eq!(outbox_len(&f).await, 0, "nothing queued");
+    let current = nail_store::draft_revision(&stored_draft(&f, &id).await);
+    assert!(matches!(
+        f.service.handle(send_revision(id.clone(), current)).await,
+        Response::SendQueued { .. }
+    ));
+    eventually(
+        "the approved draft went out with the hook's content",
+        || async {
+            smtp_data(&f).iter().any(|d| {
+                d.contains("Subject: Approved send (edited)")
+                    && d.contains("mallory@example.org")
+                    && d.contains("-- checked")
+            })
+        },
+    )
+    .await;
+    assert!(
+        !smtp_data(&f)
+            .iter()
+            .any(|d| d.contains("Subject: Approved send\r\n")),
+        "the stale revisions were never sent"
+    );
+
+    // A plug-in's send waits for the user; the draft is edited before the
+    // approval: the confirmation fails and nothing is sent.
+    let pinned = save(&f, draft("Plug-in send", "Hello from the plug-in")).await;
+    let js = format!(
+        r#"export default {{
+  activate(ctx) {{
+    ctx.commands.register("send", async () => {{
+      try {{
+        const r = await nail.mail.send({id});
+        nail.log.info("SEND " + r.status);
+      }} catch (e) {{
+        nail.log.info("SEND error " + e.code);
+      }}
+    }});
+  }},
+}};"#,
+        id = serde_json::to_string(pinned.as_str()).unwrap()
+    );
+    let sender = install(
+        &f,
+        manifest(
+            "sender",
+            &["mail.read", "mail.send"],
+            json!({"commands": [{"id": "send", "title": "Send", "contexts": ["list"]}]}),
+        ),
+        &js,
+    )
+    .await;
+    let response = f
+        .service
+        .handle(Request::RunPluginCommand {
+            command: "plugin.sender.send".into(),
+            surface: nail_api::plugins::PluginCommandSurface::List,
+            context: UiContext::default(),
+            client_id: None,
+        })
+        .await;
+    assert_eq!(response, Response::Done);
+    let pending = loop {
+        let Response::Confirmations { confirmations } = f
+            .service
+            .handle(Request::ListConfirmations {
+                filter: ConfirmationFilter::Pending,
+                actor: None,
+                before: None,
+                limit: 10,
+            })
+            .await
+        else {
+            panic!()
+        };
+        if let Some(first) = confirmations.into_iter().next() {
+            break first;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(pending.kind, ActionKind::Send);
+    let mut changed = stored_draft(&f, &pinned).await;
+    changed.bcc.push(Address {
+        name: None,
+        email: "eve@example.org".into(),
+    });
+    save(&f, changed).await;
+    let decided = f
+        .service
+        .handle(Request::DecideConfirmation {
+            confirmation_id: pending.id.clone(),
+            decision: ConfirmationDecision::Approve,
+            always_allow: false,
+        })
+        .await;
+    assert!(
+        matches!(decided, Response::ConfirmationDecided { .. }),
+        "{decided:?}"
+    );
+    eventually("the plug-in heard the send failed", || async {
+        log_lines(&f, &sender)
+            .await
+            .iter()
+            .any(|l| l.starts_with("SEND error"))
+    })
+    .await;
+    let Response::Confirmations { confirmations } = f
+        .service
+        .handle(Request::ListConfirmations {
+            filter: ConfirmationFilter::Decided,
+            actor: None,
+            before: None,
+            limit: 10,
+        })
+        .await
+    else {
+        panic!()
+    };
+    let ended = confirmations
+        .into_iter()
+        .find(|c| c.id == pending.id)
+        .unwrap();
+    assert_eq!(ended.state, ConfirmationState::Failed);
+    assert_eq!(ended.error.unwrap().id, "mcp-tool-error-draft-changed");
+    assert_eq!(outbox_len(&f).await, 0, "nothing queued");
+    assert!(
+        !smtp_data(&f)
+            .iter()
+            .any(|d| d.contains("Subject: Plug-in send")),
+        "nothing sent"
     );
 }
 

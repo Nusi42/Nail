@@ -50,6 +50,10 @@ pub enum Error {
     /// message that is already being sent).
     #[error("conflict: {0}")]
     Conflict(String),
+    /// A draft is no longer at the revision a revision-checked write
+    /// expected (it was edited since; post-M4a, ADR 0086).
+    #[error("draft {0} changed since it was approved")]
+    DraftChanged(String),
     /// Sealed data (encryption at rest) cannot be read or written because
     /// the data key is not available.
     #[error("locked: {0}")]
@@ -97,7 +101,7 @@ impl From<Error> for ApiError {
         let code = match &err {
             Error::NotFound { .. } => ErrorCode::NotFound,
             Error::InvalidData(_) | Error::InvalidHash(_) => ErrorCode::InvalidRequest,
-            Error::Conflict(_) => ErrorCode::Conflict,
+            Error::Conflict(_) | Error::DraftChanged(_) => ErrorCode::Conflict,
             Error::Locked(_) => ErrorCode::Locked,
             Error::Crypto(_) => ErrorCode::Crypto,
             Error::QuotaExceeded { .. } => ErrorCode::TooLarge,
@@ -121,6 +125,8 @@ mod tests {
         assert_eq!(api.code, ErrorCode::InvalidRequest);
 
         let api: ApiError = Error::Conflict("sending".into()).into();
+        assert_eq!(api.code, ErrorCode::Conflict);
+        let api: ApiError = Error::DraftChanged("draft-1".into()).into();
         assert_eq!(api.code, ErrorCode::Conflict);
 
         let api: ApiError = Error::Locked("vault".into()).into();

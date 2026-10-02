@@ -163,6 +163,9 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                     .map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string())
             };
             let host = service.inner.plugins.existing_host();
+            // Job titles in the core's language (`%id%` resolved).
+            let catalogs = service.plugin_catalogs(&record).await;
+            let locale = service.inner.locale.as_deref();
             let jobs = record
                 .manifest
                 .contributes
@@ -179,7 +182,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
                         .or(state.and_then(|s| s.next_run_at));
                     PluginJobStatus {
                         job: def.id.clone(),
-                        title: def.title.clone(),
+                        title: def.title.as_deref().map(|t| catalogs.text(locale, t)),
                         schedule: def.schedule.clone(),
                         events: def.events.clone(),
                         running,
@@ -284,6 +287,9 @@ struct PendingVeto {
     delay_secs: Option<u32>,
     send_at: Option<String>,
     crypto: Option<SendCrypto>,
+    /// The draft revision a confirmed send pinned (ADR 0086): "Send
+    /// anyway" sends only that draft too.
+    expected: Option<String>,
     /// What the other plug-ins' hooks added (applied on "Send anyway").
     headers: Vec<PluginHeader>,
     additions: Vec<PluginContentAddition>,
@@ -425,17 +431,30 @@ impl Service {
 
     /// `SendDraft` with the plug-ins' before-send hooks: a veto answers
     /// `SendVetoed` (nothing queued); otherwise the hooks' headers and
-    /// content are applied and the draft is queued.
+    /// content are applied and the draft is queued. With `expected` (the
+    /// revision a confirmation pinned; ADR 0086) every write of the draft
+    /// on the way (the hooks' content, the crypto choice, the outbox
+    /// entry) checks the revision in its store transaction and carries it
+    /// forward, so only the approved draft can be queued.
     pub(crate) async fn send_draft_checked(
         &self,
         draft_id: DraftId,
         delay_secs: Option<u32>,
         send_at: Option<String>,
         crypto: Option<SendCrypto>,
+        expected: Option<String>,
     ) -> Result<Response> {
+        let mut expected = expected;
         if let Some(host) = self.inner.plugins.existing_host().cloned() {
             let id = draft_id.clone();
             let draft = self.inner.store.call(move |s| s.get_draft(&id)).await?;
+            // Hooks only ever see the approved draft.
+            if expected
+                .as_deref()
+                .is_some_and(|rev| nail_store::draft_revision(&draft) != rev)
+            {
+                return Err(nail_store::Error::DraftChanged(draft_id.to_string()).into());
+            }
             let message = self.outgoing_message(&draft_id, &draft, crypto.as_ref())?;
             let report = host.before_send_hooks(&message).await;
             self.hooks_ran(report.runs.iter().map(|r| &r.plugin_id));
@@ -462,6 +481,7 @@ impl Service {
                         delay_secs,
                         send_at,
                         crypto,
+                        expected,
                         headers,
                         additions,
                         at: Instant::now(),
@@ -473,11 +493,12 @@ impl Service {
                     vetoes: report.vetoes,
                 });
             }
-            self.apply_before_send(&draft_id, draft, headers, &additions)
+            expected = self
+                .apply_before_send(&draft_id, draft, headers, &additions, expected)
                 .await?;
         }
         let entry = self
-            .send_draft(draft_id, delay_secs, send_at, crypto)
+            .send_draft_at(draft_id, delay_secs, send_at, crypto, expected)
             .await?;
         Ok(Response::SendQueued {
             entry: Box::new(entry),
@@ -499,19 +520,22 @@ impl Service {
         };
         let id = pending.draft_id.clone();
         let draft = self.inner.store.call(move |s| s.get_draft(&id)).await?;
-        self.apply_before_send(
-            &pending.draft_id,
-            draft,
-            pending.headers,
-            &pending.additions,
-        )
-        .await?;
+        let expected = self
+            .apply_before_send(
+                &pending.draft_id,
+                draft,
+                pending.headers,
+                &pending.additions,
+                pending.expected,
+            )
+            .await?;
         let entry = self
-            .send_draft(
+            .send_draft_at(
                 pending.draft_id,
                 pending.delay_secs,
                 pending.send_at,
                 pending.crypto,
+                expected,
             )
             .await?;
         Ok(Response::SendQueued {
@@ -520,17 +544,28 @@ impl Service {
     }
 
     /// Writes the hooks' added content into the draft and remembers their
-    /// headers for when the message is built.
+    /// headers for when the message is built. With `expected` the write
+    /// happens only while the draft is at that revision; returns the
+    /// revision to send (the new one when content was added).
     async fn apply_before_send(
         &self,
         draft_id: &DraftId,
         mut draft: Draft,
         headers: Vec<PluginHeader>,
         additions: &[PluginContentAddition],
-    ) -> Result<()> {
+        expected: Option<String>,
+    ) -> Result<Option<String>> {
+        let mut expected = expected;
         if !additions.is_empty() {
             add_content(&mut draft, additions);
-            self.store_draft(draft, false).await?;
+            match expected {
+                Some(revision) => {
+                    expected = Some(self.store_draft_at(draft, revision).await?);
+                }
+                None => {
+                    self.store_draft(draft, false).await?;
+                }
+            }
         }
         let mut stored = lock(&self.inner.agents.headers);
         if headers.is_empty() {
@@ -538,7 +573,7 @@ impl Service {
         } else {
             stored.insert(draft_id.clone(), headers);
         }
-        Ok(())
+        Ok(expected)
     }
 
     /// The headers before-send hooks added to a draft (applied by the

@@ -750,6 +750,7 @@ async fn drafts_and_the_composer_respect_the_encrypted_gate() {
             delay_secs: None,
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
         Request::SaveDraft {
             draft: reply_draft(identity.clone(), &secret),
@@ -846,6 +847,7 @@ async fn requests_naming_data_outside_the_grant_are_refused() {
             delay_secs: None,
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
         Request::CheckRecipientKeys {
             identity_id: identity.clone(),

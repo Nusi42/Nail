@@ -3,6 +3,11 @@
 use nail_api::engine::EngineError;
 use nail_api::{ApiError, ErrorCode};
 
+/// The text of a confirmed send whose draft was edited after the user
+/// approved it (the MCP tools' text: confirmations are what pin a draft's
+/// revision; post-M4a, ADR 0086).
+pub(crate) const DRAFT_CHANGED: &str = "mcp-tool-error-draft-changed";
+
 /// Result alias of this crate.
 pub type Result<T, E = CoreError> = std::result::Result<T, E>;
 
@@ -80,6 +85,11 @@ impl CoreError {
             Self::Engine(err) => err.localized.as_deref().cloned(),
             Self::Config(err) => Some((*err.localized).clone()),
             Self::Pgp(err) => err.localized(),
+            // A confirmed send whose draft was edited after the approval
+            // (post-M4a, ADR 0086).
+            Self::Store(nail_store::Error::DraftChanged(_)) => {
+                Some(nail_api::LocalizedMessage::new(DRAFT_CHANGED))
+            }
             _ => None,
         }
     }
@@ -100,7 +110,10 @@ impl CoreError {
 fn store_error_code(err: &nail_store::Error) -> ErrorCode {
     if err.is_not_found() {
         ErrorCode::NotFound
-    } else if matches!(err, nail_store::Error::Conflict(_)) {
+    } else if matches!(
+        err,
+        nail_store::Error::Conflict(_) | nail_store::Error::DraftChanged(_)
+    ) {
         ErrorCode::Conflict
     } else if matches!(
         err,
@@ -124,6 +137,10 @@ impl From<CoreError> for ApiError {
             CoreError::Api(api) => api,
             CoreError::Config(config) => config.into(),
             CoreError::Pgp(err) => err.into(),
+            CoreError::Store(err @ nail_store::Error::DraftChanged(_)) => {
+                ApiError::new(ErrorCode::Conflict, err.to_string())
+                    .with_localized(nail_api::LocalizedMessage::new(DRAFT_CHANGED))
+            }
             other => ApiError::new(other.code(), other.to_string()),
         }
     }
@@ -156,6 +173,13 @@ mod tests {
 
         let err: ApiError = CoreError::from(nail_store::Error::Conflict("busy".into())).into();
         assert_eq!(err.code, ErrorCode::Conflict);
+
+        let err = CoreError::from(nail_store::Error::DraftChanged("draft-1".into()));
+        assert_eq!(err.code(), ErrorCode::Conflict);
+        assert_eq!(err.localized().unwrap().id, DRAFT_CHANGED);
+        let err: ApiError = err.into();
+        assert_eq!(err.code, ErrorCode::Conflict);
+        assert_eq!(err.localized.unwrap().id, DRAFT_CHANGED);
 
         let err: ApiError = CoreError::from(nail_proto_imap::ImapError::AuthFailed(
             "bad password".into(),

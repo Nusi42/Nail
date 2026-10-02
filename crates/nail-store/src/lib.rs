@@ -119,7 +119,7 @@ use std::path::Path;
 pub use agents::InsertedConfirmation;
 pub use blob::{BlobHash, BlobStore};
 pub use bodies::{BodyFetchTarget, StoredBody};
-pub use compose::{DraftServerCopy, SendOutcome};
+pub use compose::{DraftServerCopy, SendOutcome, draft_revision};
 pub use crypto::{
     AutocryptPeerRecord, KeyData, MessageSecurityRecord, SECURITY_SETTINGS_KEY, SecretKeyData,
     StoredKey, VaultRecord,

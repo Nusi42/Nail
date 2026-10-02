@@ -20,8 +20,10 @@ items = { $count ->
 The same catalogs serve two purposes:
 
 - **Manifest texts** written as `%id%` (`name`, `description`, every
-  `title` and `description` of a contribution, setting labels) are shown
-  in Nail's language.
+  `title` and `description` of a contribution — commands, panels,
+  composer actions, Markdown blocks and their `template`, attachment
+  previews, attachment and link actions, jobs, MCP tool descriptions —
+  and setting labels) are shown in Nail's language.
 - **Texts in code** come from `nail.l10n`:
 
   ```ts

@@ -173,6 +173,7 @@ async fn send(f: &Fixture, draft: Draft, crypto: Option<SendCrypto>) -> Response
             delay_secs: Some(0),
             send_at: None,
             crypto,
+            expected_revision: None,
         },
     )
     .await

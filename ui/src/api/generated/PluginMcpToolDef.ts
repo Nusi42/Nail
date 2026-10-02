@@ -14,8 +14,9 @@ export type PluginMcpToolDef = {
  */
 id: string, 
 /**
- * What it does, for the agent (English is fine: agents read it; at
- * most [`MAX_MCP_TOOL_DESCRIPTION`] characters).
+ * What it does, for the agent (English is fine: agents read it; or
+ * `%fluent-id%`, given in Nail's language; at most
+ * [`MAX_MCP_TOOL_DESCRIPTION`] characters).
  */
 description: string, 
 /**

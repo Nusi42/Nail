@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 use fluent_bundle::concurrent::FluentBundle;
 use fluent_bundle::{FluentArgs, FluentResource, FluentValue};
+use nail_api::plugins::extensions::MAX_MCP_TOOL_DESCRIPTION;
 use nail_api::plugins::manifest::text_key;
 use nail_api::plugins::{PluginManifest, PluginSettingDef};
 use nail_api::{LocalizedMessage, MessageArg};
@@ -226,9 +227,23 @@ impl PluginCatalogs {
         }
     }
 
-    /// The manifest with every user-visible text resolved for `language`
-    /// (name, description, command / panel titles and descriptions,
-    /// setting titles, descriptions and option labels).
+    /// An MCP tool's description (`%id%` resolved), cut to
+    /// [`nail_api::plugins::extensions::MAX_MCP_TOOL_DESCRIPTION`]
+    /// characters like the manifest's own.
+    pub fn mcp_description(&self, language: Option<&str>, description: &str) -> String {
+        let text = self.text(language, description);
+        if text.chars().count() <= MAX_MCP_TOOL_DESCRIPTION {
+            return text;
+        }
+        text.chars().take(MAX_MCP_TOOL_DESCRIPTION).collect()
+    }
+
+    /// The manifest with every user-visible text resolved for `language`:
+    /// name, description, command / panel titles and descriptions,
+    /// setting titles, descriptions and option labels, and (M4a) the
+    /// titles of composer actions, Markdown blocks (and their templates),
+    /// attachment previews, attachment and link actions and jobs,
+    /// composer action tooltips and MCP tool descriptions.
     pub fn localize_manifest(
         &self,
         manifest: &PluginManifest,
@@ -244,6 +259,30 @@ impl PluginCatalogs {
         }
         for p in &mut m.contributes.panels {
             p.title = t(&p.title);
+        }
+        let c = &mut m.contributes;
+        for a in &mut c.composer_actions {
+            a.title = t(&a.title);
+            a.description = a.description.as_deref().map(t);
+        }
+        for b in &mut c.markdown_blocks {
+            b.title = t(&b.title);
+            b.template = b.template.as_deref().map(t);
+        }
+        for p in &mut c.attachment_previews {
+            p.title = t(&p.title);
+        }
+        for a in &mut c.attachment_actions {
+            a.title = t(&a.title);
+        }
+        for a in &mut c.link_actions {
+            a.title = t(&a.title);
+        }
+        for j in &mut c.jobs {
+            j.title = j.title.as_deref().map(t);
+        }
+        for tool in &mut c.mcp_tools {
+            tool.description = self.mcp_description(language, &tool.description);
         }
         for s in &mut m.contributes.settings {
             match s {
@@ -333,6 +372,138 @@ mod tests {
         assert_eq!(en.name, "Follow up");
         let fr = catalogs.localize_manifest(&manifest, Some("fr_FR.UTF-8"));
         assert_eq!(fr.contributes.commands[0].title, "Go");
+    }
+
+    /// A manifest with only `contributes` (not validated: these tests are
+    /// about texts).
+    fn with_contributes(contributes: serde_json::Value) -> PluginManifest {
+        serde_json::from_value(serde_json::json!({
+            "id": "x", "name": "X", "version": "1.0.0", "apiVersion": "1", "main": "index.js",
+            "contributes": contributes,
+        }))
+        .unwrap()
+    }
+
+    fn m4a_catalogs() -> PluginCatalogs {
+        PluginCatalogs::from_sources([
+            (
+                "en",
+                "t-title = Title\nt-tip = Tooltip\nt-template = Template body\n\
+                 t-tool = Looks things up\n",
+            ),
+            ("de", "t-title = Titel\nt-tip = Hinweis\n"),
+        ])
+    }
+
+    #[test]
+    fn composer_action_texts_resolve() {
+        let m = with_contributes(serde_json::json!({"composerActions": [
+            {"id": "a", "title": "%t-title%", "description": "%t-tip%"},
+            {"id": "b", "title": "Plain"}]}));
+        let de = m4a_catalogs().localize_manifest(&m, Some("de"));
+        let actions = &de.contributes.composer_actions;
+        assert_eq!(actions[0].title, "Titel");
+        assert_eq!(actions[0].description.as_deref(), Some("Hinweis"));
+        assert_eq!(actions[1].title, "Plain");
+        assert_eq!(actions[1].description, None);
+    }
+
+    #[test]
+    fn markdown_block_texts_resolve() {
+        let m = with_contributes(serde_json::json!({"markdownBlocks": [
+            {"id": "chart", "title": "%t-title%", "template": "%t-template%"},
+            {"id": "raw", "title": "Raw", "template": "a,b\n1,2"}]}));
+        let de = m4a_catalogs().localize_manifest(&m, Some("de-CH"));
+        let blocks = &de.contributes.markdown_blocks;
+        assert_eq!(blocks[0].title, "Titel");
+        // Not in German: English.
+        assert_eq!(blocks[0].template.as_deref(), Some("Template body"));
+        assert_eq!(blocks[1].template.as_deref(), Some("a,b\n1,2"));
+    }
+
+    #[test]
+    fn attachment_preview_title_resolves() {
+        let m = with_contributes(serde_json::json!({"attachmentPreviews": [
+            {"id": "table", "title": "%t-title%", "extensions": ["csv"]}]}));
+        let en = m4a_catalogs().localize_manifest(&m, None);
+        assert_eq!(en.contributes.attachment_previews[0].title, "Title");
+        // Matching data is untouched.
+        assert_eq!(en.contributes.attachment_previews[0].extensions, ["csv"]);
+    }
+
+    #[test]
+    fn attachment_action_title_resolves() {
+        let m = with_contributes(serde_json::json!({"attachmentActions": [
+            {"id": "save", "title": "%t-title%"}]}));
+        let de = m4a_catalogs().localize_manifest(&m, Some("de"));
+        assert_eq!(de.contributes.attachment_actions[0].title, "Titel");
+    }
+
+    #[test]
+    fn link_action_title_resolves() {
+        let m = with_contributes(serde_json::json!({"linkActions": [
+            {"id": "check", "title": "%t-title%", "hosts": ["*.example.com"]}]}));
+        let de = m4a_catalogs().localize_manifest(&m, Some("de"));
+        assert_eq!(de.contributes.link_actions[0].title, "Titel");
+        assert_eq!(de.contributes.link_actions[0].hosts, ["*.example.com"]);
+    }
+
+    #[test]
+    fn job_title_resolves() {
+        let m = with_contributes(serde_json::json!({"jobs": [
+            {"id": "tick", "title": "%t-title%", "schedule": "@hourly"},
+            {"id": "quiet", "schedule": "@daily"}]}));
+        let de = m4a_catalogs().localize_manifest(&m, Some("de"));
+        assert_eq!(de.contributes.jobs[0].title.as_deref(), Some("Titel"));
+        assert_eq!(de.contributes.jobs[0].schedule.as_deref(), Some("@hourly"));
+        assert_eq!(de.contributes.jobs[1].title, None);
+    }
+
+    #[test]
+    fn mcp_tool_description_resolves_and_is_bounded() {
+        let m = with_contributes(serde_json::json!({"mcpTools": [
+            {"id": "lookup", "description": "%t-tool%"},
+            {"id": "long", "description": "%t-long%"}]}));
+        let long = "x".repeat(MAX_MCP_TOOL_DESCRIPTION + 50);
+        let source = format!("t-tool = Looks things up\nt-long = {long}\n");
+        let catalogs = PluginCatalogs::from_sources([("en", source.as_str())]);
+        let en = catalogs.localize_manifest(&m, None);
+        assert_eq!(en.contributes.mcp_tools[0].description, "Looks things up");
+        assert_eq!(
+            en.contributes.mcp_tools[1].description.chars().count(),
+            MAX_MCP_TOOL_DESCRIPTION
+        );
+        assert_eq!(catalogs.mcp_description(None, "Plain words"), "Plain words");
+    }
+
+    /// The examples' M4a texts resolve (the CSV preview's renderer title,
+    /// the follow-up reminder job).
+    #[test]
+    fn example_contribution_texts_resolve() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+        let load = |name: &str| {
+            let dir = root.join(name);
+            let manifest =
+                PluginManifest::parse(&std::fs::read(dir.join("manifest.json")).unwrap()).unwrap();
+            let en = std::fs::read_to_string(dir.join("locales/en.ftl")).unwrap();
+            let catalogs = PluginCatalogs::from_sources([("en", en.as_str())]);
+            catalogs.localize_manifest(&manifest, Some("de"))
+        };
+        let csv = load("csv-preview");
+        assert_eq!(csv.contributes.attachment_previews[0].title, "Table");
+        let follow_up = load("follow-up");
+        assert_eq!(
+            follow_up.contributes.jobs[0].title.as_deref(),
+            Some("Due follow-up reminders")
+        );
+        for manifest in [&csv, &follow_up] {
+            let text = serde_json::to_string(manifest).unwrap();
+            assert!(
+                !text.contains("\"%"),
+                "unresolved manifest text in {}: {text}",
+                manifest.id
+            );
+        }
     }
 
     #[test]

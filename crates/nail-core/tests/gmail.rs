@@ -301,6 +301,7 @@ async fn gmail_writes_replay_as_label_changes_and_mail_is_sent_through_the_api()
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;

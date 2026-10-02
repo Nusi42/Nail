@@ -10,8 +10,9 @@ import { examplePackage, packFiles } from "../support/plugins";
  * an arrival hook tags new mail (through the plug-in write path and the
  * operation queue, so the tag reaches the IMAP server) and its open hook's
  * banner button reaches the plug-in; the attachment preview example
- * renders a CSV; a background job runs on schedule on the controlled clock
- * and "Run now" runs it again; a runaway arrival hook is stopped while the
+ * renders a CSV under its localized renderer title; a background job (with
+ * a localized `%id%` title) runs on schedule on the controlled clock and
+ * "Run now" runs it again; a runaway arrival hook is stopped while the
  * mail still arrives.
  */
 const test = base.extend<{ nail: NailServer }>({
@@ -209,7 +210,10 @@ test("the attachment preview example renders a CSV", async ({ page, nail }) => {
   await expect(preview).toBeVisible({ timeout: 20_000 });
   await expect(preview.getByRole("table")).toBeVisible();
   await expect(preview.getByRole("cell", { name: "Grace" })).toBeVisible();
-  await expect(preview).toContainText("shown by the plug-in");
+  // The renderer's `%preview-title%` and the plug-in's `%plugin-name%`
+  // come from the example's catalog.
+  await expect(preview).toContainText("Table, shown by the plug-in CSV preview");
+  await expect(preview).not.toContainText("%");
 });
 
 test("a background job runs on schedule on the controlled clock and Run now runs it again", async ({
@@ -224,8 +228,12 @@ test("a background job runs on schedule on the controlled clock and Run now runs
       apiVersion: "1",
       main: "index.js",
       permissions: ["background", "storage"],
-      contributes: { jobs: [{ id: "tick", title: "Count the hours", schedule: "@hourly" }] },
+      contributes: {
+        jobs: [{ id: "tick", title: "%tick-title%", schedule: "@hourly" }],
+        locales: { en: "locales/en.ftl" },
+      },
     },
+    files: { "locales/en.ftl": "tick-title = Count the hours\n" },
     main: `export default {
       activate(ctx) {
         ctx.jobs.register("tick", async (trigger) => {
@@ -250,7 +258,9 @@ test("a background job runs on schedule on the controlled clock and Run now runs
   await expect(settings.getByText(/tick schedule 1/)).toBeVisible({ timeout: 20_000 });
   await entry.getByRole("button", { name: "Activity" }).click();
   const jobs = settings.getByRole("region", { name: "Background jobs" });
+  // The job's `%tick-title%` title comes from the plug-in's catalog.
   await expect(jobs).toContainText("Count the hours");
+  await expect(jobs).not.toContainText("%tick-title%");
   await expect(jobs).toContainText("@hourly");
   await expect(jobs).toContainText("1, none failed");
 

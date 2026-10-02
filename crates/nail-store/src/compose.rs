@@ -20,6 +20,11 @@
 //! State machine: `scheduled ─claim─▶ sending ─▶ sent | failed | scheduled
 //! (retry later)`; `scheduled | failed ─cancel─▶ cancelled`;
 //! `failed ─retry─▶ scheduled`.
+//! * Post-M4a (ADR 0086): a draft's [`draft_revision`] is a hash of its
+//!   content. A confirmed send pins the revision the user approved;
+//!   [`Store::save_draft_at`] and [`Store::schedule_send_at`] check it and
+//!   write in one transaction ([`Error::DraftChanged`] otherwise), so an
+//!   approved send can never queue a different draft.
 
 use nail_api::accounts::ComposerMode;
 use nail_api::{
@@ -28,9 +33,36 @@ use nail_api::{
 };
 use rusqlite::{OptionalExtension, Row, Transaction, params};
 
+use sha2::{Digest, Sha256};
+
 use crate::blob::BlobHash;
 use crate::error::{Error, Result};
 use crate::store::Store;
+
+/// A draft's revision: a hash of everything it holds except its id (the
+/// JSON the store keeps). Any edit — recipients, subject, text, an
+/// attachment, the crypto choice — gives another revision.
+pub fn draft_revision(draft: &Draft) -> String {
+    let mut content = draft.clone();
+    content.id = None;
+    // A `Draft` always serializes (plain data, string keys).
+    let json = serde_json::to_vec(&content).unwrap_or_default();
+    hex::encode(&Sha256::digest(&json)[..16])
+}
+
+/// Fails with [`Error::DraftChanged`] unless `current` is at `expected`.
+fn check_revision(current: &Draft, expected: Option<&str>) -> Result<()> {
+    match expected {
+        Some(expected) if draft_revision(current) != expected => Err(Error::DraftChanged(
+            current
+                .id
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_default(),
+        )),
+        _ => Ok(()),
+    }
+}
 
 const NOW: &str = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
 
@@ -277,6 +309,24 @@ impl Store {
     /// the draft is scheduled or being sent, and with [`Error::NotFound`]
     /// for an unknown id.
     pub fn save_draft(&self, draft: &Draft) -> Result<DraftId> {
+        self.save_draft_checked(draft, None)
+    }
+
+    /// Replaces a stored draft only while it is still at revision
+    /// `expected` (check and write in one transaction); returns the new
+    /// revision. Fails with [`Error::DraftChanged`] when it was edited
+    /// since, and like [`Store::save_draft`] otherwise.
+    pub fn save_draft_at(&self, draft: &Draft, expected: &str) -> Result<String> {
+        if draft.id.is_none() {
+            return Err(Error::InvalidData(
+                "a revision-checked save needs a stored draft".into(),
+            ));
+        }
+        self.save_draft_checked(draft, Some(expected))?;
+        Ok(draft_revision(draft))
+    }
+
+    fn save_draft_checked(&self, draft: &Draft, expected: Option<&str>) -> Result<DraftId> {
         let mut stored = draft.clone();
         stored.id = None;
         let payload = serde_json::to_string(&stored)?;
@@ -295,6 +345,9 @@ impl Store {
                 let n = parse_draft_id(id)?;
                 if draft_is_queued(tx, n)? {
                     return Err(Error::Conflict(format!("draft {id} is in the outbox")));
+                }
+                if expected.is_some() {
+                    check_revision(&draft_in_tx(tx, n)?, expected)?;
                 }
                 let changed = tx.execute(
                     &format!(
@@ -357,9 +410,25 @@ impl Store {
         account: &AccountId,
         send_at: i64,
     ) -> Result<OutboxEntry> {
+        self.schedule_send_at(draft, account, send_at, None)
+    }
+
+    /// [`Store::schedule_send`] for the draft at revision `expected` only
+    /// (`None` = any): the check and the outbox entry are one
+    /// transaction, and a queued draft cannot be edited, so what is sent
+    /// is exactly that revision. Fails with [`Error::DraftChanged`] when
+    /// the draft was edited since.
+    pub fn schedule_send_at(
+        &self,
+        draft: &DraftId,
+        account: &AccountId,
+        send_at: i64,
+        expected: Option<&str>,
+    ) -> Result<OutboxEntry> {
         let n = parse_draft_id(draft)?;
         self.with_tx(|tx| {
             let d = draft_in_tx(tx, n)?;
+            check_revision(&d, expected)?;
             if draft_is_queued(tx, n)? {
                 return Err(Error::Conflict(format!("draft {draft} is already in the outbox")));
             }
@@ -729,6 +798,91 @@ mod tests {
             ..draft("x")
         };
         assert!(store.save_draft(&missing).unwrap_err().is_not_found());
+    }
+
+    #[test]
+    fn revisions_follow_the_content_not_the_id() {
+        let a = draft("Same");
+        let b = Draft {
+            id: Some("draft-7".into()),
+            ..draft("Same")
+        };
+        assert_eq!(draft_revision(&a), draft_revision(&b));
+        assert_eq!(draft_revision(&a).len(), 32);
+        for changed in [
+            Draft {
+                subject: "Other".into(),
+                ..draft("Same")
+            },
+            Draft {
+                text: "Hello!".into(),
+                ..draft("Same")
+            },
+            Draft {
+                bcc: vec![Address {
+                    name: None,
+                    email: "eve@example.org".into(),
+                }],
+                ..draft("Same")
+            },
+        ] {
+            assert_ne!(draft_revision(&a), draft_revision(&changed));
+        }
+    }
+
+    /// Post-M4a (ADR 0086): a revision-checked send queues exactly the
+    /// approved draft; an edit in between makes it fail and nothing is
+    /// queued.
+    #[test]
+    fn revision_checked_writes_refuse_a_changed_draft() {
+        let store = store();
+        let id = store.save_draft(&draft("Approved")).unwrap();
+        let approved = draft_revision(&store.get_draft(&id).unwrap());
+
+        // Edited after the approval: neither a checked save nor the send
+        // goes through, and the outbox stays empty.
+        let mut edited = store.get_draft(&id).unwrap();
+        edited.to[0].email = "mallory@example.org".into();
+        store.save_draft(&edited).unwrap();
+        let err = store
+            .schedule_send_at(&id, &"a1".into(), 0, Some(&approved))
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::DraftChanged(ref d) if d == id.as_str()),
+            "{err:?}"
+        );
+        let mut footer = store.get_draft(&id).unwrap();
+        footer.text.push_str("\n-- footer");
+        assert!(matches!(
+            store.save_draft_at(&footer, &approved),
+            Err(Error::DraftChanged(_))
+        ));
+        assert!(store.list_outbox().unwrap().is_empty());
+        assert!(!store.get_draft(&id).unwrap().text.ends_with("footer"));
+
+        // At the expected revision: the checked save returns the next
+        // revision, which the send then pins.
+        let current = draft_revision(&store.get_draft(&id).unwrap());
+        let next = store.save_draft_at(&footer, &current).unwrap();
+        assert_eq!(next, draft_revision(&store.get_draft(&id).unwrap()));
+        assert!(matches!(
+            store.schedule_send_at(&id, &"a1".into(), 0, Some(&current)),
+            Err(Error::DraftChanged(_))
+        ));
+        let entry = store
+            .schedule_send_at(&id, &"a1".into(), 0, Some(&next))
+            .unwrap();
+        assert_eq!(entry.draft_id, id);
+        // Queued, the draft cannot change under the send.
+        assert!(matches!(
+            store.save_draft_at(&footer, &next),
+            Err(Error::Conflict(_))
+        ));
+        // A checked save needs a stored draft.
+        assert!(matches!(
+            store.save_draft_at(&draft("New"), &next),
+            Err(Error::InvalidData(_))
+        ));
     }
 
     #[test]

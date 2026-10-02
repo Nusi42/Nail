@@ -526,6 +526,56 @@ async fn l10n_uses_the_plugins_own_catalogs() {
     );
 }
 
+/// Post-M4a: an MCP tool's `%id%` description reaches MCP clients in the
+/// core's language.
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_tool_descriptions_are_localized() {
+    let fake = Fake::new();
+    *fake.locale.lock().unwrap() = Some("de".into());
+    let host = host(&fake);
+    let js = r#"
+      export default { activate(ctx) {
+        ctx.mcp.registerTool("lookup", async () => ({ ok: true }));
+        ctx.mcp.registerTool("plain", async () => ({ ok: true }));
+      } };
+    "#;
+    let mut s = spec_with(
+        "crm",
+        &["mcp.expose"],
+        json!({
+            "mcpTools": [
+                { "id": "lookup", "description": "%lookup-description%" },
+                { "id": "plain", "description": "Plain description" }
+            ],
+            "locales": { "en": "locales/en.ftl", "de": "locales/de.ftl" }
+        }),
+        js,
+    );
+    s = add_files(
+        s,
+        &[
+            ("locales/en.ftl", b"lookup-description = Finds a customer\n"),
+            (
+                "locales/de.ftl",
+                b"lookup-description = Sucht einen Kunden\n",
+            ),
+        ],
+    );
+    host.start(s).await.unwrap();
+    let listed = host.mcp_tools();
+    let described: Vec<(&str, &str)> = listed
+        .iter()
+        .map(|t| (t.name.as_str(), t.description.as_str()))
+        .collect();
+    assert_eq!(
+        described,
+        [
+            ("crm__lookup", "Sucht einen Kunden"),
+            ("crm__plain", "Plain description")
+        ]
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn fetch_bodies_may_be_binary_both_ways() {
     let fake = Fake::new();

@@ -962,7 +962,17 @@ impl Service {
                 delay_secs,
                 send_at,
                 crypto,
-            } => Box::pin(self.send_draft_checked(draft_id, delay_secs, send_at, crypto)).await?,
+                expected_revision,
+            } => {
+                Box::pin(self.send_draft_checked(
+                    draft_id,
+                    delay_secs,
+                    send_at,
+                    crypto,
+                    expected_revision,
+                ))
+                .await?
+            }
             Request::CancelSend { outbox_id } => Response::SendCancelled {
                 draft_id: self.cancel_send(outbox_id).await?,
             },

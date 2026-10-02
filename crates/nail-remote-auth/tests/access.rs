@@ -46,6 +46,7 @@ async fn scopes_of_the_session_decide() {
         delay_secs: None,
         send_at: None,
         crypto: None,
+        expected_revision: None,
     };
     assert_eq!(
         h.auth.authorize(&ctx, &send).unwrap_err().code,

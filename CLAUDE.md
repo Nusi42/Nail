@@ -598,6 +598,11 @@ npm run tauri dev                          # desktop app with Vite hot reload
   content into the draft, `X-` headers on the built message), open hooks for `GetMessagePluginAnnotations`; the
   `clock-set` / `clock-advance` controls run due plug-in jobs (`Service::clock_moved`); plug-in tools appear in MCP
   `tools/list` for clients with their scopes. Core tests: `tests/m4a_wired.rs` (demo-multi, `multi_thread`).
+- Post-M4a (ADR 0086): `PluginCatalogs::localize_manifest` resolves every `%id%` text of every contribution kind
+  (a new contribution text must be added there, with a test); confirmed sends pin the draft's content-hash
+  revision (`nail_store::draft_revision`, `SendDraft.expected_revision`), checked in the store transaction of each
+  draft write on the send path (`Store::save_draft_at`, `Store::schedule_send_at`; mismatch = `DraftChanged` →
+  `conflict` / `mcp-tool-error-draft-changed`).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

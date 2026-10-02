@@ -94,13 +94,15 @@ pub(crate) enum Action {
         recurrence: Option<Recurrence>,
         invite: bool,
     },
-    /// Send a saved draft — only while it is still `expected`, the draft
-    /// the confirmation showed (an edit after the request would otherwise
-    /// send something the user never approved).
+    /// Send a saved draft — only while it is still at `revision`
+    /// ([`nail_store::draft_revision`]), the draft the confirmation showed
+    /// (an edit after the request would otherwise send something the user
+    /// never approved). The core checks the revision and queues the draft
+    /// in one store transaction (post-M4a, ADR 0086).
     SendDraft {
         draft_id: DraftId,
         send_at: Option<String>,
-        expected: Box<Draft>,
+        revision: String,
     },
     /// Edit the draft open in the composer (shown live).
     ComposerEdit {
@@ -470,11 +472,12 @@ impl<D: McpData> Shared<D> {
             Action::SendDraft {
                 draft_id,
                 send_at,
-                expected,
+                revision,
             } => {
-                let mut current = self.data.draft(draft_id).await?;
-                current.id = Some(draft_id.clone());
-                if current != **expected {
+                // Early answer for a draft edited while the user decided;
+                // the core checks again atomically with queueing it.
+                let current = self.data.draft(draft_id).await?;
+                if nail_store::draft_revision(&current) != *revision {
                     return Err(Failure::Api(
                         ApiError::new(
                             nail_api::ErrorCode::Conflict,
@@ -491,6 +494,7 @@ impl<D: McpData> Shared<D> {
                             delay_secs: None,
                             send_at: send_at.clone(),
                             crypto: None,
+                            expected_revision: Some(revision.clone()),
                         },
                     )
                     .await?;

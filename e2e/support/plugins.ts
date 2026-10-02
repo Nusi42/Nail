@@ -62,16 +62,25 @@ export function followUpPackage(): string {
   return examplePackage("follow-up");
 }
 
-/** A plug-in written as files: `manifest` becomes manifest.json, `main` index.js. */
+/**
+ * A plug-in written as files: `manifest` becomes manifest.json, `main`
+ * index.js, `files` more files by relative path (catalogs).
+ */
 export interface PluginFiles {
   manifest: Record<string, unknown>;
   main: string;
+  files?: Record<string, string>;
 }
 
 /** Writes a plug-in folder (a development folder); returns its path. */
 export function writePluginFolder(files: PluginFiles, dir = tempDir("plugin")): string {
   writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(files.manifest, null, 2));
   writeFileSync(path.join(dir, "index.js"), files.main);
+  for (const [relative, text] of Object.entries(files.files ?? {})) {
+    const file = path.join(dir, relative);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  }
   return dir;
 }
 

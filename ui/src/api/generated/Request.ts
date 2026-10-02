@@ -321,7 +321,15 @@ send_at: string | null,
  * key is missing, `locked` when the signing key needs its
  * passphrase. It never falls back to sending unprotected.
  */
-crypto?: SendCrypto, } | { "type": "CancelSend", 
+crypto?: SendCrypto, 
+/**
+ * Post-M4a (ADR 0086): send only the draft at this revision (the
+ * one a confirmation showed; `nail_store::draft_revision`). The
+ * check and the outbox entry are one store transaction; a draft
+ * edited since answers `conflict` (`mcp-tool-error-draft-changed`)
+ * and nothing is queued. Absent = whatever the draft holds.
+ */
+expected_revision?: string, } | { "type": "CancelSend", 
 /**
  * The outbox entry.
  */

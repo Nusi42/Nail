@@ -376,6 +376,14 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         crypto: Option<SendCrypto>,
+        /// Post-M4a (ADR 0086): send only the draft at this revision (the
+        /// one a confirmation showed; `nail_store::draft_revision`). The
+        /// check and the outbox entry are one store transaction; a draft
+        /// edited since answers `conflict` (`mcp-tool-error-draft-changed`)
+        /// and nothing is queued. Absent = whatever the draft holds.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        expected_revision: Option<String>,
     },
     /// Stop a scheduled message and turn it back into a draft. Answered with
     /// [`Response::SendCancelled`]; `conflict` when it is already being sent.
@@ -3871,6 +3879,7 @@ mod tests {
                 delay_secs: None,
                 send_at: None,
                 crypto: None,
+                expected_revision: None,
             })
             .unwrap(),
             json!({"type": "SendDraft", "draft_id": "d1", "delay_secs": null, "send_at": null})

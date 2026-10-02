@@ -1834,7 +1834,7 @@ A Markdown block renderer (`contributes.markdownBlocks`).
 | --- | --- | --- |
 | `id` | `string` | The block name; fences use `markdown_block_info` (`<plugin>.<block>`). |
 | `title` | `string` | What the composer's block menu shows (or `%fluent-id%`). |
-| `template?` | `string` | Text inserted as the block's body when picked from the menu. |
+| `template?` | `string` | Text inserted as the block's body when picked from the menu (or `%fluent-id%`). |
 
 ### `PluginAttachmentPreviewDef`
 
@@ -1889,7 +1889,7 @@ A tool offered to MCP clients (`contributes.mcpTools`, needs `mcp.expose`).
 | Member | Type | Description |
 | --- | --- | --- |
 | `id` | `string` | The tool's name within the plug-in (the MCP name is `plugin_mcp_tool_name`, at most `MAX_MCP_TOOL_NAME` characters). |
-| `description` | `string` | What it does, for the agent (English is fine: agents read it; at most `MAX_MCP_TOOL_DESCRIPTION` characters). |
+| `description` | `string` | What it does, for the agent (English is fine: agents read it; or `%fluent-id%`, given in Nail's language; at most `MAX_MCP_TOOL_DESCRIPTION` characters). |
 | `inputSchema?` | `JsonValue` | The JSON Schema of its arguments (an object schema; default: no arguments). |
 | `scopes?` | `Array<McpScope>` | The scopes an MCP client needs to see and call it (default `read`). Writes the plug-in makes while serving the call need the plug-in's own permissions and follow its action policies. |
 

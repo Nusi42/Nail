@@ -133,7 +133,8 @@ plug-in's own log stays for the developer.
 
 ## Follow-ups
 
-- Compare-and-send inside the core's `SendDraft` (a draft revision on
-  `Draft`) to close the one-request window.
+- Compare-and-send inside the core's `SendDraft` to close the
+  one-request window — done post-M4a (ADR 0086: content-hash revisions
+  checked in the store transaction that queues the draft).
 - An "all entries" view of the MCP activity log in the UI (plug-in writes
   of no client are listed only without a client filter).

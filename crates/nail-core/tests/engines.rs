@@ -601,6 +601,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
             delay_secs: Some(0),
             send_at: None,
             crypto: Some(sign.clone()),
+            expected_revision: None,
         },
     )
     .await;
@@ -631,6 +632,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
@@ -652,6 +654,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
             delay_secs: Some(0),
             send_at: None,
             crypto: Some(SendCrypto::none()),
+            expected_revision: None,
         },
     )
     .await
@@ -699,6 +702,7 @@ async fn signed_or_encrypted_mail_is_refused_not_sent_plain() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
@@ -734,6 +738,7 @@ async fn sending_with_undo_and_for_real() {
             delay_secs: Some(30),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await
@@ -772,6 +777,7 @@ async fn sending_with_undo_and_for_real() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await
@@ -845,6 +851,7 @@ async fn sending_with_undo_and_for_real() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
@@ -1338,6 +1345,7 @@ async fn failed_sends_are_retried_or_reported() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
@@ -1366,6 +1374,7 @@ async fn failed_sends_are_retried_or_reported() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
@@ -1531,6 +1540,7 @@ async fn send_later_waits_for_its_time() {
             delay_secs: None,
             send_at: Some(at.into()),
             crypto: None,
+            expected_revision: None,
         },
     )
     .await
@@ -1577,6 +1587,7 @@ async fn send_later_waits_for_its_time() {
                 delay_secs: None,
                 send_at: Some("tomorrow".into()),
                 crypto: None,
+                expected_revision: None,
             },
         )
         .await,
@@ -1986,6 +1997,7 @@ async fn the_sent_copy_waits_for_the_imap_server() {
             delay_secs: Some(0),
             send_at: None,
             crypto: None,
+            expected_revision: None,
         },
     )
     .await;
