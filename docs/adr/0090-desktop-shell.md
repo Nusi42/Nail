@@ -1,6 +1,10 @@
 # ADR 0090 (WP113): Desktop shell — host, tray, startup, updater, Simple MAPI pipe, dev endpoint
 
-Status: accepted · 2026-10-02 · M4b WP113 (the integrator renumbers)
+Status: accepted · 2026-10-02 · M4b WP113 (the integrator renumbers) · amended by ADR 0093
+(`NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` / `NAIL_UPDATE_PUBKEY` and
+`NAIL_MAPI_PIPE` only with the test-only `test-overrides` feature; HKLM
+install facts before HKCU; the pipe carries an integrity label;
+`start_with_windows_managed`)
 
 ## Context
 

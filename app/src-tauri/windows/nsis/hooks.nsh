@@ -18,9 +18,17 @@
 ;   * Simple MAPI (nail_api::mapi::registry): Windows reads the provider from
 ;     HKLM\Software\Clients\Mail\Nail (64-bit view: mapi\<arch>\NailMapi.dll,
 ;     32-bit view: mapi\x86\NailMapi.dll). Only this component needs admin
-;     rights: the installer writes a .reg file and imports it with one
-;     elevated reg.exe (one UAC prompt); declining leaves Nail installed
-;     without it. Updates (/UPDATE) keep the registration as it is.
+;     rights. A machine-wide registration must never name a file the user
+;     (or any of the user's unelevated programs) can replace: elevated
+;     programs and other users load it. So one elevated cmd.exe (one UAC
+;     prompt) copies the DLLs from $INSTDIR to "Program Files\Nail MAPI"
+;     (writable by administrators only) and points HKLM there with reg.exe.
+;     Everything it runs is on its command line, fixed at the UAC prompt; no
+;     file in the user's %TEMP% is read elevated. HKLM gets no
+;     shell\open\command (it would name the per-user Nail.exe); the DLL
+;     starts each user's own Nail from HKCU\Software\Nail\Install. Declining
+;     leaves Nail installed without it. Updates (/UPDATE) keep the
+;     registration as it is (the pipe protocol is versioned).
 ;   * Uninstall keeps settings, mail data and credentials unless the user
 ;     ticks the checkbox on the confirm page (silent: /DELETEDATA); then
 ;     %APPDATA%\Nail, %LOCALAPPDATA%\Nail and Nail's Credential Manager
@@ -45,10 +53,15 @@
 ; Installation facts (nail_api::desktop::registry::INSTALL_KEY).
 !define NAIL_INSTALL_KEY "Software\Nail\Install"
 ; Simple MAPI client (nail_api::mapi::registry::NAIL_MAIL_CLIENT_KEY), in the
-; machine hive; the .reg files spell the hive out.
+; machine hive; reg.exe spells the hive out (/reg:64 native, /reg:32 the
+; 32-bit view).
 !define NAIL_MAPI_CLIENT_KEY "Software\Clients\Mail\Nail"
-!define NAIL_MAPI_REG_NATIVE "HKEY_LOCAL_MACHINE\SOFTWARE\Clients\Mail\Nail"
-!define NAIL_MAPI_REG_WOW "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Clients\Mail\Nail"
+!define NAIL_MAPI_REG_KEY "HKLM\SOFTWARE\Clients\Mail\Nail"
+; The protected copy of the DLLs the registration names (administrators
+; only): <dir>\mapi\<arch>\NailMapi.dll, as nail_api::mapi_dll_relative_path.
+!define NAIL_MAPI_MACHINE_DIR "$PROGRAMFILES64\Nail MAPI"
+; Longest installation folder the elevated MAPI command line has room for.
+!define NAIL_MAPI_MAX_DIR 110
 ; ProgIDs.
 !define NAIL_PROGID_MAILTO "Nail.Url.mailto"
 !define NAIL_PROGID_WEBCAL "Nail.Url.webcal"
@@ -142,55 +155,53 @@ Var NailMapiBox
 !macroend
 
 ; ---------------------------------------------------------------------------
-; Simple MAPI (installer side). One elevated `reg.exe import` per change:
-; reg.exe is told /reg:64, and the 32-bit view is addressed as
-; WOW6432Node, so one file (and one UAC prompt) covers both views even from
-; this 32-bit installer.
+; Simple MAPI (installer side). One elevated cmd.exe per change (one UAC
+; prompt): its whole work is on its command line, so nothing the user's
+; programs can modify is read with administrator rights.
 
 !macro NAIL_MAPI_FUNCTIONS
-  ; $0 in: a path; $0 out: the path escaped for a .reg string ("\" -> "\\",
-  ; quote -> backslash quote).
-  Function NailRegEscape
+  ; $0 in: a string; $0 out: 1 when it contains "%" (cmd.exe would expand
+  ; it on the elevated command line), else 0.
+  Function NailHasPercent
     Push $1
     Push $2
-    Push $3
-    StrCpy $1 ""
     StrCpy $2 0
     ${Do}
-      StrCpy $3 $0 1 $2
-      ${If} $3 == ""
+      StrCpy $1 $0 1 $2
+      ${If} $1 == ""
+        StrCpy $0 0
         ${Break}
       ${EndIf}
-      ${If} $3 == "\"
-        StrCpy $1 "$1\\"
-      ${ElseIf} $3 == '"'
-        StrCpy $1 '$1\"'
-      ${Else}
-        StrCpy $1 "$1$3"
+      ${If} $1 == "%"
+        StrCpy $0 1
+        ${Break}
       ${EndIf}
       IntOp $2 $2 + 1
     ${Loop}
-    StrCpy $0 $1
-    Pop $3
     Pop $2
     Pop $1
   FunctionEnd
 
-  ; $0 = 1 when HKLM already names this installation's DLL (64-bit view).
+  ; $0 = 1 when HKLM names the protected machine copy and it exists, 2 when
+  ; it names this installation's own DLL (left by an earlier build: replaced
+  ; by the protected copy), else 0.
   Function NailMapiRegisteredHere
     SetRegView 64
     ReadRegStr $1 HKLM "${NAIL_MAPI_CLIENT_KEY}" "DLLPath"
     SetRegView lastused
-    ${If} $1 == "$INSTDIR\mapi\${ARCH}\NailMapi.dll"
+    ${If} $1 == "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}\NailMapi.dll"
+    ${AndIf} ${FileExists} "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}\NailMapi.dll"
       StrCpy $0 1
+    ${ElseIf} $1 == "$INSTDIR\mapi\${ARCH}\NailMapi.dll"
+      StrCpy $0 2
     ${Else}
       StrCpy $0 0
     ${EndIf}
   FunctionEnd
 
-  ; Writes $PLUGINSDIR\nail-mapi.reg (UTF-16LE, as regedit expects for
-  ; "Version 5.00") and imports it elevated. Sets Mapi in the facts to what
-  ; the registry says afterwards.
+  ; Copies the DLLs to the protected folder and registers them there, in
+  ; one elevated cmd.exe. Sets Mapi in the facts to what the registry says
+  ; afterwards.
   Function NailRegisterMapi
     Call NailMapiRegisteredHere
     ${If} $0 = 1
@@ -202,60 +213,59 @@ Var NailMapiBox
       WriteRegDWORD HKCU "${NAIL_INSTALL_KEY}" "Mapi" 0
       Return
     ${EndIf}
-    InitPluginsDir
-    FileOpen $9 "$PLUGINSDIR\nail-mapi.reg" w
-    FileWriteWord $9 0xFEFF
-    FileWriteUTF16LE $9 "Windows Registry Editor Version 5.00$\r$\n$\r$\n"
-    StrCpy $0 "$INSTDIR\mapi\${ARCH}\NailMapi.dll"
-    Call NailRegEscape
-    StrCpy $5 $0
-    StrCpy $0 "$INSTDIR\mapi\x86\NailMapi.dll"
-    Call NailRegEscape
-    StrCpy $6 $0
-    StrCpy $0 "$INSTDIR\${MAINBINARYNAME}.exe"
-    Call NailRegEscape
-    StrCpy $7 $0
-    FileWriteUTF16LE $9 "[${NAIL_MAPI_REG_NATIVE}]$\r$\n@=$\"${PRODUCTNAME}$\"$\r$\n"
-    FileWriteUTF16LE $9 "$\"DLLPath$\"=$\"$5$\"$\r$\n$\"DLLPathEx$\"=$\"$5$\"$\r$\n$\r$\n"
-    FileWriteUTF16LE $9 "[${NAIL_MAPI_REG_NATIVE}\shell\open\command]$\r$\n@=$\"\$\"$7\$\"$\"$\r$\n$\r$\n"
-    ${If} ${FileExists} "$INSTDIR\mapi\x86\NailMapi.dll"
-      FileWriteUTF16LE $9 "[${NAIL_MAPI_REG_WOW}]$\r$\n@=$\"${PRODUCTNAME}$\"$\r$\n"
-      FileWriteUTF16LE $9 "$\"DLLPath$\"=$\"$6$\"$\r$\n$\"DLLPathEx$\"=$\"$6$\"$\r$\n$\r$\n"
-      FileWriteUTF16LE $9 "[${NAIL_MAPI_REG_WOW}\shell\open\command]$\r$\n@=$\"\$\"$7\$\"$\"$\r$\n$\r$\n"
+    ; The command line must fit NSIS_MAX_STRLEN (1024): short commands,
+    ; and installation folders up to NAIL_MAPI_MAX_DIR characters.
+    StrCpy $0 "$INSTDIR"
+    Call NailHasPercent
+    StrLen $1 "$INSTDIR"
+    ${If} $0 = 1
+    ${OrIf} $1 > ${NAIL_MAPI_MAX_DIR}
+      DetailPrint "$(nailMapiPathUnsupported)"
+      WriteRegDWORD HKCU "${NAIL_INSTALL_KEY}" "Mapi" 0
+      Return
     ${EndIf}
-    FileClose $9
+    ; Every path is quoted (cmd.exe takes & | < > ^ ( ) literally inside
+    ; quotes; Windows paths cannot contain quotes; "%" was refused above).
+    ; `reg` runs from the system folder (the current directory, searched
+    ; first). %v is the loop variable of `for` on a command line.
+    StrCpy $5 "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}"
+    StrCpy $6 "${NAIL_MAPI_MACHINE_DIR}\mapi\x86"
+    StrCpy $7 'reg add "${NAIL_MAPI_REG_KEY}"'
+    StrCpy $8 'cd /d "$SYSDIR" & md "$5" 2>nul & md "$6" 2>nul & copy /b /y "$INSTDIR\mapi\${ARCH}\NailMapi.dll" "$5\NailMapi.dll"'
+    StrCpy $8 '$8 && $7 /ve /d "${PRODUCTNAME}" /f /reg:64 && (for %v in (DLLPath DLLPathEx) do @$7 /v %v /d "$5\NailMapi.dll" /f /reg:64)'
+    ${If} ${FileExists} "$INSTDIR\mapi\x86\NailMapi.dll"
+      StrCpy $8 '$8 && copy /b /y "$INSTDIR\mapi\x86\NailMapi.dll" "$6\NailMapi.dll"'
+      StrCpy $8 '$8 && $7 /ve /d "${PRODUCTNAME}" /f /reg:32 && (for %v in (DLLPath DLLPathEx) do @$7 /v %v /d "$6\NailMapi.dll" /f /reg:32)'
+    ${EndIf}
     DetailPrint "$(nailMapiElevating)"
-    ExecShellWait "runas" "$SYSDIR\reg.exe" 'import "$PLUGINSDIR\nail-mapi.reg" /reg:64' SW_HIDE
-    Delete "$PLUGINSDIR\nail-mapi.reg"
+    ExecShellWait "runas" "$SYSDIR\cmd.exe" '/d /v:off /s /c "$8"' SW_HIDE
     Call NailMapiRegisteredHere
-    WriteRegDWORD HKCU "${NAIL_INSTALL_KEY}" "Mapi" $0
-    ${If} $0 <> 1
+    ${If} $0 = 1
+      WriteRegDWORD HKCU "${NAIL_INSTALL_KEY}" "Mapi" 1
+    ${Else}
+      WriteRegDWORD HKCU "${NAIL_INSTALL_KEY}" "Mapi" 0
       DetailPrint "$(nailMapiFailed)"
     ${EndIf}
   FunctionEnd
 !macroend
 
-; Removes the machine-wide MAPI registration if it points into $INSTDIR
-; (another installation, e.g. the MSI, may own it). Used by the installer
-; (option turned off) and the uninstaller, so it is a macro, not a Function.
+; Removes the machine-wide MAPI registration if it names the protected copy
+; or this installation's own DLL (another installation, e.g. the MSI, may
+; own it), and the protected copy. Fixed command line, one UAC prompt. Used
+; by the installer (option turned off) and the uninstaller, so it is a
+; macro, not a Function.
 !macro NAIL_UNREGISTER_MAPI
   SetRegView 64
   ReadRegStr $1 HKLM "${NAIL_MAPI_CLIENT_KEY}" "DLLPath"
   SetRegView lastused
-  ${If} $1 == "$INSTDIR\mapi\${ARCH}\NailMapi.dll"
-    InitPluginsDir
-    FileOpen $9 "$PLUGINSDIR\nail-mapi-remove.reg" w
-    FileWriteWord $9 0xFEFF
-    FileWriteUTF16LE $9 "Windows Registry Editor Version 5.00$\r$\n$\r$\n"
-    FileWriteUTF16LE $9 "[-${NAIL_MAPI_REG_NATIVE}]$\r$\n$\r$\n[-${NAIL_MAPI_REG_WOW}]$\r$\n"
-    FileClose $9
+  ${If} $1 == "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}\NailMapi.dll"
+  ${OrIf} $1 == "$INSTDIR\mapi\${ARCH}\NailMapi.dll"
     DetailPrint "$(nailMapiElevating)"
-    ExecShellWait "runas" "$SYSDIR\reg.exe" 'import "$PLUGINSDIR\nail-mapi-remove.reg" /reg:64' SW_HIDE
-    Delete "$PLUGINSDIR\nail-mapi-remove.reg"
+    ExecShellWait "runas" "$SYSDIR\cmd.exe" '/d /v:off /s /c ""$SYSDIR\reg.exe" delete "${NAIL_MAPI_REG_KEY}" /f /reg:64 & "$SYSDIR\reg.exe" delete "${NAIL_MAPI_REG_KEY}" /f /reg:32 & rd /s /q "${NAIL_MAPI_MACHINE_DIR}""' SW_HIDE
     SetRegView 64
-    ReadRegStr $1 HKLM "${NAIL_MAPI_CLIENT_KEY}" "DLLPath"
+    ReadRegStr $2 HKLM "${NAIL_MAPI_CLIENT_KEY}" "DLLPath"
     SetRegView lastused
-    ${If} $1 == "$INSTDIR\mapi\${ARCH}\NailMapi.dll"
+    ${If} $2 == $1
       DetailPrint "$(nailMapiRemoveFailed)"
     ${EndIf}
   ${EndIf}
@@ -339,7 +349,7 @@ Var NailMapiBox
     ${If} $NailMapi == 1
       ${NSD_Check} $NailMapiBox
     ${EndIf}
-    ${NSD_CreateLabel} 12u 94u -12u 28u "$(nailOptionMapiHint)"
+    ${NSD_CreateLabel} 12u 94u -12u 40u "$(nailOptionMapiHint)"
     Pop $0
     nsDialogs::Show
   FunctionEnd

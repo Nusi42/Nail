@@ -62,6 +62,7 @@ import {
   tauriArch,
   updaterKeyFromEnv,
   updaterPluginConfig,
+  withoutUpdaterSecrets,
 } from "./lib/build.mjs";
 import { findSigntool, signingFromEnv, signtoolArgs, tauriSigning } from "./lib/sign.mjs";
 import { devKeyPaths } from "./lib/updater-key.mjs";
@@ -78,7 +79,14 @@ function quote(arg) {
 function run(command, args, options = {}) {
   const useShell = options.shell ?? shell;
   console.log(`> ${command} ${args.join(" ")}`);
-  const spawnOptions = { cwd: repoRoot, stdio: "inherit", ...options, shell: useShell };
+  // Without an explicit env a child never sees the update key.
+  const spawnOptions = {
+    cwd: repoRoot,
+    stdio: "inherit",
+    ...options,
+    env: options.env ?? withoutUpdaterSecrets(process.env),
+    shell: useShell,
+  };
   if (useShell) {
     // npm / npx are .cmd files: they need a shell, which takes one string.
     execFileSync([command, ...args].map(quote).join(" "), spawnOptions);
@@ -157,7 +165,10 @@ function main() {
   };
 
   // Update key: the release key from the environment, or the local dev key.
-  const childEnv = { ...process.env, CARGO_TARGET_DIR: targetDir };
+  // Only `tauri bundle` gets it (bundleEnv); everything else runs with
+  // buildEnv, which never holds it.
+  const buildEnv = withoutUpdaterSecrets({ ...process.env, CARGO_TARGET_DIR: targetDir });
+  const bundleEnv = { ...process.env, CARGO_TARGET_DIR: targetDir };
   let updaterKey;
   if (options.devUpdaterKey) {
     const dev = devKeyPaths({ base, repoRoot });
@@ -166,8 +177,8 @@ function main() {
         `no development update key at ${dev.privateKey}; run node scripts/updater-key.mjs`,
       );
     }
-    childEnv.TAURI_SIGNING_PRIVATE_KEY = dev.privateKey;
-    childEnv.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = process.env.NAIL_DEV_UPDATER_KEY_PASSWORD ?? "";
+    bundleEnv.TAURI_SIGNING_PRIVATE_KEY = dev.privateKey;
+    bundleEnv.TAURI_SIGNING_PRIVATE_KEY_PASSWORD = process.env.NAIL_DEV_UPDATER_KEY_PASSWORD ?? "";
     updaterKey = { pubkey: readFileSync(dev.publicKey, "utf8").trim() };
   } else {
     updaterKey = updaterKeyFromEnv(process.env, (file) => readFileSync(file, "utf8"));
@@ -191,7 +202,7 @@ function main() {
       : "Updater: no update key configured - no update artifacts, updates not configured in the app",
   );
 
-  if (!options.skipUi) run("npm", ["run", "build", "-w", "ui"]);
+  if (!options.skipUi) run("npm", ["run", "build", "-w", "ui"], { env: buildEnv });
   if (!existsSync(path.join(repoRoot, "ui", "dist", "index.html"))) {
     throw new Error("ui/dist is missing; run without --skip-ui");
   }
@@ -204,7 +215,7 @@ function main() {
     .join(" ");
   const cargoStatic = (args) =>
     run("cargo", ["build", "--release", ...locked, ...args, "--target-dir", staticTarget], {
-      env: { ...process.env, RUSTFLAGS: rustflags },
+      env: { ...buildEnv, CARGO_TARGET_DIR: staticTarget, RUSTFLAGS: rustflags },
       shell: false,
     });
   let cliExe = null;
@@ -252,7 +263,7 @@ function main() {
     "npx",
     ["tauri", "build", "--no-bundle", "--ci", "--target", triple, "--config", overlayFile],
     {
-      env: childEnv,
+      env: buildEnv,
     },
   );
   const release = path.join(targetDir, triple, "release");
@@ -281,7 +292,7 @@ function main() {
       "--config",
       overlayFile,
     ],
-    { env: childEnv },
+    { env: bundleEnv },
   );
   const artifacts = [];
   const copyArtifact = (from, name) => {
@@ -327,7 +338,7 @@ function main() {
       "npx",
       ["tauri", "bundle", "--ci", "--target", triple, "--bundles", "nsis", "--config", offlineFile],
       {
-        env: childEnv,
+        env: bundleEnv,
       },
     );
     copyFileSync(

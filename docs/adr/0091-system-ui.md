@@ -1,6 +1,7 @@
 # ADR 0091 (WP114): Desktop settings UI — updates and About, tray and startup, default apps, first run, drafts from other programs
 
-Status: accepted · 2026-10-02 · M4b WP114 (number to be assigned by the integrator)
+Status: accepted · 2026-10-02 · M4b WP114 (number to be assigned by the integrator) · amended by ADR 0093
+("Start with Windows" locked with a note when the machine's Run key manages it)
 
 ## Context
 

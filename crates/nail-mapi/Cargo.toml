@@ -20,6 +20,15 @@ crate-type = ["cdylib", "rlib"]
 name = "nail-mapi-harness"
 path = "src/bin/harness.rs"
 
+[features]
+# Test-only (M4b review): honour NAIL_MAPI_PIPE (another pipe) and
+# NAIL_MAPI_APP (the program to start) from the calling process's
+# environment. The DLL runs inside arbitrary programs, so a shipped DLL must
+# never let an environment variable pick its pipe or start a program:
+# installer and release builds never enable this. The tests below and the
+# e2e desktop build (e2e/scripts/build-desktop.mjs) do.
+test-overrides = []
+
 [dependencies]
 # The pipe protocol and request types (nail_api::mapi).
 nail-api.workspace = true
@@ -44,6 +53,9 @@ windows-sys = { workspace = true, features = [
 windows-registry.workspace = true
 
 [dev-dependencies]
+# The crate itself with the test-only overrides, for its unit and DLL tests
+# (dev-dependencies never reach `cargo build -p nail-mapi`).
+nail-mapi = { path = ".", features = ["test-overrides"] }
 tempfile.workspace = true
 pretty_assertions.workspace = true
 

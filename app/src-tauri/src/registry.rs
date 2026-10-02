@@ -9,7 +9,9 @@
 //!   `NAIL_REGISTRY_ROOT` variable, a key below `HKCU`) both hives map below
 //!   that key (`<root>\HKCU\…`, `<root>\HKLM\…`), so tests and e2e runs can
 //!   stage installer facts and policies without admin rights or side
-//!   effects.
+//!   effects. The variable is honoured only by builds with the
+//!   `test-overrides` feature ([`crate::shell::test_env`]): in a shipped
+//!   build it would let a normal user replace the admin's policy.
 //! * [`MemoryRegistry`] keeps values in memory. Seeded runs (`--seed`) use
 //!   it unless `NAIL_REGISTRY_ROOT` is set, so a demo never writes the real
 //!   Run key.
@@ -18,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 /// Environment variable naming a key below `HKCU` that replaces both hives
-/// (tests, e2e runs).
+/// (tests, e2e runs; `test-overrides` builds only).
 pub const REGISTRY_ROOT_ENV: &str = "NAIL_REGISTRY_ROOT";
 
 /// Which hive a key lives in.

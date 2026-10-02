@@ -11,7 +11,7 @@
  * The key has an empty password (it signs nothing anyone installs); set
  * NAIL_DEV_UPDATER_KEY_PASSWORD when you made one with a password. The
  * release key is made the same way (`npx tauri signer generate -w <file>`)
- * on an offline machine and stored only as CI secrets (packaging/README.md).
+ * on an offline machine and stored only as CI secrets (docs/release.md).
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";

@@ -177,6 +177,10 @@ impl DesktopHost for ShellHost {
         crate::startup::is_enabled(&*self.registry)
     }
 
+    fn start_with_windows_managed(&self) -> bool {
+        crate::startup::machine_enabled(&*self.registry)
+    }
+
     fn apply_desktop_settings(&self, settings: &DesktopSettings) -> Result<(), ApiError> {
         self.close_to_tray
             .store(settings.close_to_tray, Ordering::Relaxed);
@@ -382,11 +386,13 @@ mod tests {
         let Response::DesktopSettings {
             settings: stored,
             dev_endpoint_url,
+            start_with_windows_managed,
         } = response
         else {
             panic!("{response:?}")
         };
         assert_eq!(stored, settings);
+        assert!(!start_with_windows_managed);
         assert!(!f.host.close_to_tray());
         assert_eq!(
             f.registry
@@ -413,6 +419,29 @@ mod tests {
             panic!()
         };
         assert!(!read.start_with_windows);
+
+        // The MSI's machine-wide Run key: on, and reported as managed.
+        f.registry
+            .set_string(
+                Hive::LocalMachine,
+                keys::RUN_KEY,
+                keys::RUN_VALUE,
+                r#""C:\Program Files\Nail\Nail.exe" --autostart"#,
+            )
+            .unwrap();
+        let Response::DesktopSettings {
+            settings: read,
+            start_with_windows_managed,
+            ..
+        } = f.service.handle(Request::GetDesktopSettings).await
+        else {
+            panic!()
+        };
+        assert!(read.start_with_windows);
+        assert!(start_with_windows_managed);
+        f.registry
+            .delete_value(Hive::LocalMachine, keys::RUN_KEY, keys::RUN_VALUE)
+            .unwrap();
 
         let response = f
             .service

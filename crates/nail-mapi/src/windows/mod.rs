@@ -8,4 +8,5 @@ pub mod decode;
 pub mod exports;
 pub(crate) mod memory;
 pub mod server;
+pub mod staging_root;
 pub mod text;

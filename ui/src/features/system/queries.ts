@@ -45,7 +45,11 @@ export function useDesktopSettings() {
     queryKey: systemKeys.desktop,
     queryFn: async () => {
       const answer = await client.request({ type: "GetDesktopSettings" }, "DesktopSettings");
-      return { settings: answer.settings, devEndpointUrl: answer.dev_endpoint_url };
+      return {
+        settings: answer.settings,
+        devEndpointUrl: answer.dev_endpoint_url,
+        startWithWindowsManaged: answer.start_with_windows_managed,
+      };
     },
   });
 }

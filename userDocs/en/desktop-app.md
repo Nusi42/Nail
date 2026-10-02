@@ -81,6 +81,9 @@ In **Settings → Tray and startup**:
   window. Mail sync, rules, reminders and connected AI apps keep working.
   Choose *Quit* in the tray icon's menu to end Nail.
 - **Start Nail with Windows.** Nail starts when you sign in to Windows.
+  When your administrator installed Nail to start for everyone on the PC
+  (the MSI's `AUTOSTART=1`), the switch is on, locked, and says so: only
+  an administrator can turn it off.
 - **Start in the notification area, without a window.** Only when Nail
   starts with Windows; open it from the tray icon.
 - **Allow "nail plugin dev" to load plug-ins into this app.** For people
@@ -116,6 +119,12 @@ commands of other programs open Nail's composer with the recipients,
 subject, text and files the program passed. A note above the message
 names the program, for example *WINWORD.EXE prepared this message. Check
 it, then press Send.*
+
+If Nail is not running, the program starts it — except a program that
+runs as administrator: it never starts Nail (Nail would then run as
+administrator too), so start Nail normally first. A Nail you started as
+administrator takes messages only from programs that run as
+administrator.
 
 **Nail never sends for another program.** Some programs ask the mail
 program to send without showing a window. Nail opens the composer

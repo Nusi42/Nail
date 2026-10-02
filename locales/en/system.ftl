@@ -80,6 +80,7 @@ system-desktop-close-to-tray-hint = Mail sync, rules, reminders and connected AI
 system-desktop-startup = When Windows starts
 system-desktop-start-with-windows = Start Nail with Windows
 system-desktop-start-with-windows-hint = Nail starts when you sign in to Windows.
+system-desktop-start-with-windows-managed = Your administrator set Nail to start with Windows for everyone on this computer. Only an administrator can turn this off.
 system-desktop-start-hidden = Start in the notification area, without a window
 system-desktop-start-hidden-hint = Only when Nail starts with Windows. Open it from the tray icon.
 system-desktop-developer = Plug-in development

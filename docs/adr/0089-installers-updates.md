@@ -1,6 +1,10 @@
 # ADR 0089 (WP112): per-machine MSI, MAPI option, signing, update manifests, winget, installer CI
 
-Status: accepted · 2026-10-02 · M4b WP112 (number to be assigned by the integrator)
+Status: accepted · 2026-10-02 · M4b WP112 (number to be assigned by the integrator) · amended by ADR 0093
+(the NSIS MAPI option registers a protected copy in Program Files through one
+elevated cmd.exe instead of a `.reg` import naming the per-user DLL; the
+release update key reaches only `tauri bundle`; key handling moved to
+`docs/release.md`)
 
 ## Context
 
@@ -62,7 +66,10 @@ the installed Tauri CLI 2.12.0 (its embedded WiX template and CLI help),
   **one** `ExecShellWait runas reg.exe import … /reg:64` (the 32-bit view
   addressed as `WOW6432Node` in the same file) → one UAC prompt; the result
   is read back from the registry (declined → `Mapi=0`, a detail line, Nail
-  installed anyway). Chosen over an elevated `Nail.exe --setup-mapi-*`
+  installed anyway). **Superseded by ADR 0093:** the elevated step is one
+  `cmd.exe` that copies the DLLs to `%ProgramFiles%\Nail MAPI` and registers
+  that copy (a registration naming the per-user DLL let unelevated code run
+  in elevated programs and other users' sessions). Chosen over an elevated `Nail.exe --setup-mapi-*`
   helper because it stays inside the installer slot and needs no app flag.
   Updates keep the registration; uninstall removes it only when `DLLPath`
   points into this installation (the MSI may own it). Known limits: the
@@ -119,7 +126,7 @@ thumbprint path.
   `%LOCALAPPDATA%\nail-build\keys` (`scripts/updater-key.mjs`), only
   `packaging/updater/dev.pub` is committed; CI smoke runs use a throwaway
   key; the release key exists only as secrets (+ offline backup).
-  Details in `packaging/README.md`.
+  Details in `docs/release.md`.
 
 ### winget
 

@@ -335,10 +335,13 @@ crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (s
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
                        checked against windows-sys LPMAPI*), windows/decode.rs + memory.rs (VirtualQuery-checked
                        reads of caller structs), windows/client.rs (named-pipe client, same-user server check,
-                       starts Nail.exe, NAIL_MAPI_APP only together with NAIL_MAPI_PIPE), windows/server.rs
-                       (reference pipe server), forward.rs, staging.rs (attachment copies in %TEMP%\nail-mapi,
-                       limit nail_api::compose::MAX_ATTACHMENT_BYTES), registration.rs (HKLM Clients\Mail\Nail
-                       values, .reg rendering) (ADRs 0087, 0088)
+                       starts Nail.exe — never for an elevated caller; NAIL_MAPI_PIPE / NAIL_MAPI_APP only with
+                       the test-only feature `test-overrides`, which the crate's own tests and the e2e build
+                       enable), windows/server.rs (reference pipe server), windows/staging_root.rs (RootGuard:
+                       staging root not a reparse point, owned by user / Administrators / SYSTEM, pinned),
+                       forward.rs, staging.rs (attachment copies in %TEMP%\nail-mapi, sweep of own
+                       `<pid>-<hex>-<n>` folders only, limit nail_api::compose::MAX_ATTACHMENT_BYTES),
+                       registration.rs (HKLM Clients\Mail\Nail values, .reg rendering) (ADRs 0087, 0088, 0093)
 crates/nail-server     axum: UI bundle, WebSocket API, blobs, test controls (demo-multi only);
                        M2b: bind_with (TLS rustls + ring, rcgen certs, instant-acme, headers,
                        sandbox origin, proxy route, `auth`), remote_ui.rs RemoteUiHost (ADRs 0038, 0041);
@@ -358,9 +361,11 @@ app/src-tauri          Tauri 2 desktop shell (starts the MCP server on the setti
                        hooks + strings (ADR 0040), wix/nail.wxs MSI fragment + bundle.json (upgrade code)
                        (M4b WP112, ADR 0089); tests/installer.rs checks them);
                        M4b shell (WP113, ADR 0090): registry.rs (Registry trait; WindowsRegistry with
-                       NAIL_REGISTRY_ROOT; MemoryRegistry for seeded runs), install.rs (InstallationInfo,
-                       UpdateSource from plugins.updater with {{channel}} or <channel>/latest.json,
-                       NAIL_UPDATE_ENDPOINT / NAIL_UPDATE_PUBKEY loopback-only test override), default_apps.rs,
+                       NAIL_REGISTRY_ROOT; MemoryRegistry for seeded runs), install.rs (InstallationInfo, HKLM
+                       facts before HKCU, UpdateSource from plugins.updater with {{channel}} or
+                       <channel>/latest.json, NAIL_UPDATE_ENDPOINT / NAIL_UPDATE_PUBKEY loopback-only test
+                       override); every test variable only with the feature `test-overrides`
+                       (shell::test_env; e2e desktop build only, ADR 0093), default_apps.rs,
                        startup.rs (Run key; the MSI's machine-wide entry counts, never duplicated),
                        updater.rs + updater_tauri.rs (update states over tauri-plugin-updater; installs a
                        downloaded update on restart or quit), dev_endpoint.rs (127.0.0.1, bearer token, no
@@ -456,7 +461,7 @@ npm run check:sockets                      # only the socket-bind check (scripts
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
-npm run build:desktop                      # nail-app (custom-protocol) for the desktop smoke test, own target dir
+npm run build:desktop                      # nail-app (custom-protocol + test-overrides) + DLL / harness for the desktop smoke tests, own target dir
 npm run gen:api                            # regenerate ui/src/api/generated + packages/plugin-api/src/generated (a test fails when stale)
 npm run docs -w packages/plugin-api        # regenerate the reference sections of userDocs/en/plugins/{api-reference,components}.md (a test fails when stale)
 node packages/create-nail-plugin/index.mjs <dir> [--template command|hook|composer|attachment] [--id] [--name] [--sdk]   # scaffold a plug-in
@@ -675,7 +680,13 @@ npm run tauri dev                          # desktop app with Vite hot reload
   `GetUpdateStatus` instead of writing their answer (events may be newer). Seeded desktop runs never touch the real
   registry / Run key / pipe and register `nail_test_shell` (tray item ids, `window-visible`) for the smoke tests;
   shell test variables: `NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` + `NAIL_UPDATE_PUBKEY` (loopback only),
-  `NAIL_MAPI_PIPE` (docs/dev-setup.md). The real MSI install runs only in CI (`msi-smoke.ps1`, elevated).
+  `NAIL_MAPI_PIPE` (docs/dev-setup.md) — honoured only by builds with the `test-overrides` features
+  (`npm run build:desktop`), never by installer builds. The real MSI install runs only in CI (`msi-smoke.ps1`,
+  elevated).
+- M4b review (ADR 0093): no machine-wide registration may name a user-writable file (the NSIS MAPI option copies
+  the DLLs to `%ProgramFiles%\Nail MAPI` in one elevated `cmd.exe` and registers the copy); nothing elevated reads
+  from `%TEMP%`; secrets go to the one step that needs them (the update key reaches only `tauri bundle`);
+  release / signing / update-key procedures live in `docs/release.md`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

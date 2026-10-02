@@ -84,7 +84,16 @@ mail program (Settings > Apps > Default apps).
 Windows keeps this registration for the whole computer, so the per-user
 setup program asks for administrator rights for this one step. If you
 decline, Nail is installed without it; run the setup program again to add
-it later. On shared computers use the MSI with `MAPI=1`.
+it later. Because every program on the computer (including programs run
+as administrator) may load the component, the per-user setup copies it to
+`C:\Program Files\Nail MAPI`, where only administrators can change it, and
+registers that copy; it then starts each user's own Nail. Uninstalling
+removes the registration and that folder again. On shared computers use
+the MSI with `MAPI=1`.
+
+A program running as administrator can hand a message to a Nail that is
+already running, but it never starts Nail itself: Nail would run with
+administrator rights too. Start Nail normally first.
 
 Nail never sends mail on behalf of another program: even when a program
 asks to send "without showing anything", Nail opens the message so you

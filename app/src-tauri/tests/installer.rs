@@ -218,7 +218,7 @@ fn every_registered_scheme_and_type_is_handled_by_the_app() {
     );
     assert!(unregister.contains(r#"DeleteRegKey HKCU "${NAIL_CAPABILITIES}""#));
     // Only per-user keys: the machine hive is read (MAPI ownership) but
-    // changed only through the elevated reg.exe import of the MAPI step.
+    // changed only through the elevated cmd.exe of the MAPI step.
     for line in hooks.lines().map(str::trim) {
         if line.starts_with("WriteReg") || line.starts_with("DeleteReg") {
             assert!(
@@ -425,11 +425,22 @@ fn the_per_user_installer_writes_the_installation_facts() {
     let post = macro_body(&hooks, "NSIS_HOOK_POSTINSTALL");
     let facts_at = post.find("!insertmacro NAIL_WRITE_INSTALL_FACTS").unwrap();
     assert!(facts_at < post.find("${If} $UpdateMode <> 1").unwrap());
-    // The MAPI fact follows what the registry says after the elevated step.
-    assert!(hooks.contains(&format!(
-        r#"WriteRegDWORD HKCU "${{NAIL_INSTALL_KEY}}" "{}" $0"#,
-        registry::MAPI_VALUE
-    )));
+    // The MAPI fact follows what the registry says after the elevated step
+    // (1 only when HKLM names the protected copy and it exists).
+    let register = section(&hooks, "Function NailRegisterMapi", "FunctionEnd");
+    let after = &register[register.find("ExecShellWait").unwrap()..];
+    let check = after.find("Call NailMapiRegisteredHere").unwrap();
+    let on = after
+        .find(&format!(
+            r#"WriteRegDWORD HKCU "${{NAIL_INSTALL_KEY}}" "{}" 1"#,
+            registry::MAPI_VALUE
+        ))
+        .unwrap();
+    assert!(check < on && after[check..on].contains("${If} $0 = 1"));
+    let registered_here = section(&hooks, "Function NailMapiRegisteredHere", "FunctionEnd");
+    assert!(registered_here.contains(
+        r#"${AndIf} ${FileExists} "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}\NailMapi.dll""#
+    ));
     // A per-user install never disables its own updates (only the MSI or a
     // policy does).
     assert!(
@@ -465,55 +476,183 @@ fn the_per_user_installer_writes_the_installation_facts() {
     );
 }
 
+/// The `StrCpy $8 …` lines of `NailRegisterMapi` expanded with the given
+/// values: the command line the elevated cmd.exe gets.
+fn mapi_command(hooks: &str, instdir: &str, arch: &str, with_x86: bool) -> String {
+    let function = section(hooks, "Function NailRegisterMapi", "FunctionEnd");
+    let machine = r"C:\Program Files\Nail MAPI";
+    let five = format!(r"{machine}\mapi\{arch}");
+    let six = format!(r"{machine}\mapi\x86");
+    let seven = r#"reg add "HKLM\SOFTWARE\Clients\Mail\Nail""#;
+    let mut command = String::new();
+    let mut in_x86 = false;
+    for line in function.lines().map(str::trim) {
+        if line.starts_with("${If} ${FileExists}") && line.contains(r"mapi\x86") {
+            in_x86 = true;
+        } else if line == "${EndIf}" {
+            in_x86 = false;
+        }
+        let Some(value) = line
+            .strip_prefix("StrCpy $8 '")
+            .and_then(|l| l.strip_suffix('\''))
+        else {
+            continue;
+        };
+        if in_x86 && !with_x86 {
+            continue;
+        }
+        command = value
+            .replace("$8", &command)
+            .replace("$7", seven)
+            .replace("$5", &five)
+            .replace("$6", &six)
+            .replace("$SYSDIR", r"C:\WINDOWS\system32")
+            .replace("$INSTDIR", instdir)
+            .replace("${ARCH}", arch)
+            .replace("${PRODUCTNAME}", "Nail");
+    }
+    format!(r#"/d /v:off /s /c "{command}""#)
+}
+
+/// M4b review: a machine-wide registration that named the DLL in the
+/// user's profile let the user's unelevated programs plant code into
+/// elevated programs and other users' sessions. The per-user installer
+/// copies the DLLs to an administrators-only folder in the elevated step
+/// and registers that copy; nothing elevated reads a user-writable file.
 #[test]
-fn the_per_user_mapi_option_registers_only_with_elevation_and_only_its_own_dll() {
+fn the_per_user_mapi_option_registers_a_protected_copy_with_one_elevation() {
     let hooks = hooks();
     assert!(hooks.contains(&format!(
         r#"!define NAIL_MAPI_CLIENT_KEY "{}""#,
         mapi::registry::NAIL_MAIL_CLIENT_KEY
     )));
     assert!(hooks.contains(&format!(
-        r#"!define NAIL_MAPI_REG_NATIVE "HKEY_LOCAL_MACHINE\SOFTWARE\{}""#,
+        r#"!define NAIL_MAPI_REG_KEY "HKLM\SOFTWARE\{}""#,
         mapi::registry::NAIL_MAIL_CLIENT_KEY.trim_start_matches(r"Software\")
     )));
-    assert!(hooks.contains(
-        r#"!define NAIL_MAPI_REG_WOW "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Clients\Mail\Nail""#
-    ));
-    // The DLL paths are nail_api's (+ x86 for the 32-bit view).
-    let native = format!(r#""$INSTDIR\mapi\${{ARCH}}\{MAPI_DLL_FILE}""#);
-    let wow = format!(r#""$INSTDIR\{}""#, mapi_dll_relative_path(WindowsArch::X86));
-    assert!(hooks.contains(&native), "{native}");
-    assert!(hooks.contains(&wow), "{wow}");
-    for value in [
-        mapi::registry::DLL_PATH_VALUE,
-        mapi::registry::DLL_PATH_EX_VALUE,
-    ] {
-        for register in ["$5", "$6"] {
-            assert!(
-                hooks.contains(&format!(r#"$\"{value}$\"=$\"{register}$\""#)),
-                "{value} {register}"
-            );
-        }
-    }
-    // One elevated reg.exe per change, told to use the 64-bit view.
+    // The copy lives below Program Files (administrators only), laid out as
+    // nail_api expects (<dir>\mapi\<arch>\NailMapi.dll).
+    assert!(hooks.contains(r#"!define NAIL_MAPI_MACHINE_DIR "$PROGRAMFILES64\Nail MAPI""#));
+    let register = section(&hooks, "Function NailRegisterMapi", "FunctionEnd");
+    assert!(register.contains(r#"StrCpy $5 "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}""#));
+    assert_eq!(
+        format!(r"mapi\x86\{MAPI_DLL_FILE}"),
+        mapi_dll_relative_path(WindowsArch::X86)
+    );
+    assert!(register.contains(r#"StrCpy $6 "${NAIL_MAPI_MACHINE_DIR}\mapi\x86""#));
+
+    // Nothing elevated reads a file the user can change after the prompt:
+    // no .reg file, no plug-ins folder (%TEMP%).
+    assert!(!hooks.contains("PLUGINSDIR"));
+    assert!(!hooks.contains(".reg"));
+    assert!(!hooks.contains(" import "));
+
+    // Exactly two elevated steps (register, unregister), both cmd.exe with
+    // the whole work on the command line.
     let elevated: Vec<&str> = hooks
         .lines()
         .filter(|l| l.contains("ExecShellWait"))
         .collect();
     assert_eq!(elevated.len(), 2, "register + unregister");
-    for line in elevated {
+    for line in &elevated {
         assert!(
-            line.contains(r#""runas" "$SYSDIR\reg.exe" 'import "#),
+            line.contains(r#""runas" "$SYSDIR\cmd.exe" '/d /v:off /s /c ""#),
             "{line}"
         );
-        assert!(line.contains("/reg:64'"), "{line}");
     }
-    // Removal only when the registration points into this installation.
+
+    // The command: the copies first, then every HKLM value names the copy
+    // (never $INSTDIR), both views, no start command for the per-user exe.
+    let instdir = r"C:\Users\a b&c\AppData\Local\Programs\Nail";
+    let x64 = mapi_command(&hooks, instdir, "x64", true);
+    let copy64 = x64
+        .find(&format!(
+            r#"copy /b /y "{instdir}\mapi\x64\NailMapi.dll" "C:\Program Files\Nail MAPI\mapi\x64\NailMapi.dll""#
+        ))
+        .expect("x64 copy");
+    let copy86 = x64
+        .find(&format!(
+            r#"copy /b /y "{instdir}\mapi\x86\NailMapi.dll" "C:\Program Files\Nail MAPI\mapi\x86\NailMapi.dll""#
+        ))
+        .expect("x86 copy");
+    let reg64 = x64.find("/reg:64").unwrap();
+    let reg32 = x64.find("/reg:32").unwrap();
+    assert!(copy64 < reg64 && copy86 < reg32, "{x64}");
+    for (name, view, arch) in [
+        (mapi::registry::DLL_PATH_VALUE, "64", "x64"),
+        (mapi::registry::DLL_PATH_EX_VALUE, "64", "x64"),
+        (mapi::registry::DLL_PATH_VALUE, "32", "x86"),
+        (mapi::registry::DLL_PATH_EX_VALUE, "32", "x86"),
+    ] {
+        let values = format!(
+            "{} {}",
+            mapi::registry::DLL_PATH_VALUE,
+            mapi::registry::DLL_PATH_EX_VALUE
+        );
+        assert!(values.split(' ').any(|v| v == name));
+        assert!(
+            x64.contains(&format!(
+                r#"(for %v in ({values}) do @reg add "HKLM\SOFTWARE\Clients\Mail\Nail" /v %v /d "C:\Program Files\Nail MAPI\mapi\{arch}\NailMapi.dll" /f /reg:{view})"#
+            )),
+            "{name} {view}: {x64}"
+        );
+        assert!(x64.contains(&format!(
+            r#"reg add "HKLM\SOFTWARE\Clients\Mail\Nail" /ve /d "{}" /f /reg:{view}"#,
+            mapi::registry::CLIENT_NAME
+        )));
+    }
+    for segment in x64.split('&').filter(|s| s.contains("reg add")) {
+        let index = segment.find(" /d \"").expect("a value");
+        let value = &segment[index + 5..];
+        assert!(
+            value.starts_with(r"C:\Program Files\Nail MAPI\") || value.starts_with("Nail\""),
+            "HKLM value outside the protected copy: {value}"
+        );
+    }
+    assert!(!x64.contains(r"shell\open\command"));
+    // Every path is quoted: & in the folder name stays literal.
+    assert!(!x64.replace(&format!("\"{instdir}"), "").contains("a b&c"));
+    // A package without the x86 DLL registers the native view only.
+    let native = mapi_command(&hooks, instdir, "arm64", false);
+    assert!(native.contains(r"mapi\arm64\NailMapi.dll"));
+    assert!(!native.contains("/reg:32") && !native.contains(r"mapi\x86\NailMapi.dll"));
+    // The longest accepted folder still fits NSIS_MAX_STRLEN (1024).
+    let max: usize = hooks
+        .lines()
+        .find_map(|l| l.strip_prefix("!define NAIL_MAPI_MAX_DIR "))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let longest = format!(r"C:\{}", "x".repeat(max - 3));
+    for arch in ["x64", "arm64"] {
+        let command = mapi_command(&hooks, &longest, arch, true);
+        assert!(command.len() < 1024, "{} chars: {command}", command.len());
+    }
+    // Folders cmd.exe would expand (%) or that do not fit are refused before
+    // anything is elevated.
+    let guard = register.find("Call NailHasPercent").unwrap();
+    assert!(register[guard..].contains("${OrIf} $1 > ${NAIL_MAPI_MAX_DIR}"));
+    assert!(guard < register.find("ExecShellWait").unwrap());
+    assert!(register.contains(r#"DetailPrint "$(nailMapiPathUnsupported)""#));
+
+    // Removal only when the registration is the protected copy or this
+    // installation's own DLL (an earlier build), with a fixed command.
     let unregister = macro_body(&hooks, "NAIL_UNREGISTER_MAPI");
     let guard = unregister
-        .find(&format!("${{If}} $1 == {native}"))
+        .find(r#"${If} $1 == "${NAIL_MAPI_MACHINE_DIR}\mapi\${ARCH}\NailMapi.dll""#)
         .expect("ownership check");
+    assert!(unregister.contains(r#"${OrIf} $1 == "$INSTDIR\mapi\${ARCH}\NailMapi.dll""#));
     assert!(guard < unregister.find("ExecShellWait").unwrap());
+    let remove = elevated[1];
+    assert!(
+        !remove.contains("$INSTDIR") && !remove.contains("$8"),
+        "{remove}"
+    );
+    assert!(remove.contains(r#"delete "${NAIL_MAPI_REG_KEY}" /f /reg:64"#));
+    assert!(remove.contains(r#"delete "${NAIL_MAPI_REG_KEY}" /f /reg:32"#));
+    assert!(remove.contains(r#"rd /s /q "${NAIL_MAPI_MACHINE_DIR}""#));
+
     // Option: off by default, remembered, /MAPI=0|1; updates keep the
     // registration; uninstall removes it.
     let read_options = macro_body(&hooks, "NAIL_OPTIONS_FUNCTIONS");
@@ -530,7 +669,7 @@ fn the_per_user_mapi_option_registers_only_with_elevation_and_only_its_own_dll()
     let pre = macro_body(&hooks, "NSIS_HOOK_PREUNINSTALL");
     let pre_guarded = pre.split("${If} $UpdateMode <> 1").nth(1).unwrap();
     assert!(pre_guarded.contains("!insertmacro NAIL_UNREGISTER_MAPI"));
-    // The DLLs go with the app on uninstall.
+    // The DLLs (the copy's source) go with the app on uninstall.
     let post_uninstall = macro_body(&hooks, "NSIS_HOOK_POSTUNINSTALL");
     for arch in WindowsArch::ALL {
         assert!(post_uninstall.contains(&format!(

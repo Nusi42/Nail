@@ -1,13 +1,19 @@
 //! The DLL's end of the named pipe (ADR 0087, ADR 0088).
 //!
 //! * Pipe: `\\.\pipe\nail-mapi-<user SID>` ([`mapi_pipe_name`]), or
-//!   `NAIL_MAPI_PIPE` in tests. Opened with `SECURITY_IDENTIFICATION` so
-//!   the server can identify, not impersonate, the caller.
+//!   `NAIL_MAPI_PIPE` in builds with the test-only `test-overrides` feature
+//!   ([`TEST_OVERRIDES`]; never a shipped DLL: the DLL runs inside other
+//!   programs, whose environment a medium-integrity process can set for the
+//!   whole user). Opened with `SECURITY_IDENTIFICATION` so the server can
+//!   identify, not impersonate, the caller.
 //! * The server must run as the same user (`GetNamedPipeServerProcessId`
 //!   → its token's user SID = ours); otherwise `MAPI_E_ACCESS_DENIED`
 //!   (someone squatting the name).
 //! * Nothing listening: start `Nail.exe` ([`app_exe_from_dll`], else the
-//!   installation directory from the registry) and retry for
+//!   installation directory from the registry) — never from an elevated or
+//!   high-integrity caller ([`caller_is_elevated`]: Nail and its WebView
+//!   would run elevated, and a per-user Nail.exe is writable by the user's
+//!   unelevated programs) — and retry for
 //!   [`MAPI_CONNECT_TIMEOUT_MS`]; then wait up to
 //!   [`MAPI_RESPONSE_TIMEOUT_MS`] for the answer (overlapped I/O, so a hung
 //!   app cannot hang the calling program forever).
@@ -30,7 +36,9 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Security::Authorization::{ConvertSidToStringSidW, ConvertStringSidToSidW};
 use windows_sys::Win32::Security::{
-    EqualSid, GetLengthSid, GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    EqualSid, GetLengthSid, GetSidSubAuthority, GetSidSubAuthorityCount, GetTokenInformation,
+    TOKEN_ELEVATION, TOKEN_MANDATORY_LABEL, TOKEN_QUERY, TOKEN_USER, TokenElevation,
+    TokenIntegrityLevel, TokenUser,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_FLAG_OVERLAPPED, OPEN_EXISTING, ReadFile, SECURITY_IDENTIFICATION,
@@ -53,9 +61,19 @@ use super::text::to_wide;
 use crate::forward::Transport;
 
 /// Environment variable naming the program to start when nothing serves
-/// the pipe. Only read together with `NAIL_MAPI_PIPE` (tests: the harness
-/// plays `Nail.exe`); a real installation never needs it.
+/// the pipe. Only read together with `NAIL_MAPI_PIPE`, and only by builds
+/// with the `test-overrides` feature (tests: the harness plays
+/// `Nail.exe`); a shipped DLL ignores both.
 pub const MAPI_APP_ENV: &str = "NAIL_MAPI_APP";
+
+/// Whether this build honours `NAIL_MAPI_PIPE` / `NAIL_MAPI_APP`: only with
+/// the test-only `test-overrides` feature, which installer and release
+/// builds never enable.
+pub const TEST_OVERRIDES: bool = cfg!(feature = "test-overrides");
+
+/// `SECURITY_MANDATORY_MEDIUM_PLUS_RID`: callers above it run with more
+/// than a normal user's integrity (high = elevated, system = services).
+const MEDIUM_PLUS_RID: u32 = 0x2100;
 
 fn owned(handle: HANDLE) -> Option<OwnedHandle> {
     if handle.is_null() || handle == INVALID_HANDLE_VALUE {
@@ -181,12 +199,111 @@ pub fn current_user() -> Option<Sid> {
     process_user(unsafe { GetCurrentProcess() })
 }
 
-/// The pipe of the current user: `NAIL_MAPI_PIPE` when set, else
-/// [`mapi_pipe_name`] with the user's SID.
+fn current_token() -> Option<OwnedHandle> {
+    let mut token = std::ptr::null_mut();
+    // SAFETY: the pseudo handle of the current process; the token handle is
+    // owned below.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return None;
+    }
+    owned(token)
+}
+
+/// The integrity level RID of this process (`0x2000` medium, `0x3000`
+/// high, `0x4000` system).
+pub fn integrity_rid() -> Option<u32> {
+    let token = current_token()?;
+    let mut needed = 0u32;
+    // SAFETY: measuring call.
+    unsafe {
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenIntegrityLevel,
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
+    };
+    if needed == 0 {
+        return None;
+    }
+    let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
+    // SAFETY: `buffer` holds `needed` bytes.
+    let ok = unsafe {
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenIntegrityLevel,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    // SAFETY: Windows wrote a TOKEN_MANDATORY_LABEL whose SID points into
+    // the buffer; the last sub-authority is the level.
+    unsafe {
+        let label = &*buffer.as_ptr().cast::<TOKEN_MANDATORY_LABEL>();
+        let sid = label.Label.Sid;
+        let count = *GetSidSubAuthorityCount(sid);
+        if count == 0 {
+            return None;
+        }
+        Some(*GetSidSubAuthority(sid, u32::from(count) - 1))
+    }
+}
+
+/// Whether this process runs elevated (`TokenElevation`).
+fn token_elevated() -> Option<bool> {
+    let token = current_token()?;
+    let mut elevation = TOKEN_ELEVATION::default();
+    let mut needed = 0u32;
+    // SAFETY: `elevation` is a TOKEN_ELEVATION of the given size.
+    let ok = unsafe {
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenElevation,
+            (&raw mut elevation).cast(),
+            size_of::<TOKEN_ELEVATION>() as u32,
+            &mut needed,
+        )
+    };
+    (ok != 0).then_some(elevation.TokenIsElevated != 0)
+}
+
+/// Whether the calling program runs elevated or above medium integrity
+/// (unknown counts as elevated). Such a caller never starts Nail.exe.
+pub fn caller_is_elevated() -> bool {
+    is_elevated(token_elevated(), integrity_rid())
+}
+
+fn is_elevated(elevated: Option<bool>, integrity: Option<u32>) -> bool {
+    match (elevated, integrity) {
+        (Some(elevated), Some(rid)) => elevated || rid > MEDIUM_PLUS_RID,
+        _ => true,
+    }
+}
+
+/// The pipe override, when this build honours it (`test-overrides`).
+fn pipe_override() -> Option<String> {
+    if !TEST_OVERRIDES {
+        // Not even read: a release DLL carries no trace of the variable.
+        return None;
+    }
+    pipe_override_with(true, std::env::var(MAPI_PIPE_ENV).ok())
+}
+
+fn pipe_override_with(allowed: bool, value: Option<String>) -> Option<String> {
+    value.filter(|name| allowed && !name.trim().is_empty())
+}
+
+/// The pipe of the current user: `NAIL_MAPI_PIPE` when set (and honoured,
+/// [`TEST_OVERRIDES`]), else [`mapi_pipe_name`] with the user's SID.
 pub fn pipe_name() -> Option<String> {
-    match std::env::var(MAPI_PIPE_ENV) {
-        Ok(name) if !name.trim().is_empty() => Some(name),
-        _ => Some(mapi_pipe_name(&current_user()?.to_string_sid()?)),
+    match pipe_override() {
+        Some(name) => Some(name),
+        None => Some(mapi_pipe_name(&current_user()?.to_string_sid()?)),
     }
 }
 
@@ -240,13 +357,17 @@ fn registry_install_dir() -> Option<PathBuf> {
     None
 }
 
-/// The program to start when the app is not running.
+/// The program to start when the app is not running (`pipe_overridden`
+/// is only ever true in `test-overrides` builds).
 pub fn app_to_start(pipe_overridden: bool) -> Option<PathBuf> {
-    if pipe_overridden {
+    if pipe_overridden && TEST_OVERRIDES {
         // Test setups never start an installed Nail.
         return std::env::var_os(MAPI_APP_ENV)
             .filter(|v| !v.is_empty())
             .map(PathBuf::from);
+    }
+    if pipe_overridden {
+        return None;
     }
     own_module_path()
         .and_then(|dll| app_exe_from_dll(&dll))
@@ -306,12 +427,19 @@ pub struct PipeTransport {
 }
 
 impl PipeTransport {
-    /// The transport for the current user and installation.
+    /// The transport for the current user and installation. An elevated
+    /// caller gets no app to start: it reaches a Nail that already runs,
+    /// or fails.
     pub fn from_environment() -> Option<Self> {
-        let overridden = std::env::var(MAPI_PIPE_ENV).is_ok_and(|v| !v.trim().is_empty());
+        let overridden = pipe_override().is_some();
+        let app = if launch_allowed(caller_is_elevated(), overridden) {
+            app_to_start(overridden)
+        } else {
+            None
+        };
         Some(Self {
             pipe: pipe_name()?,
-            app: app_to_start(overridden),
+            app,
             connect_timeout: Duration::from_millis(MAPI_CONNECT_TIMEOUT_MS),
             response_timeout: Duration::from_millis(MAPI_RESPONSE_TIMEOUT_MS),
         })
@@ -371,6 +499,15 @@ impl PipeTransport {
             }
         }
     }
+}
+
+/// Whether the DLL may start a program when nothing serves the pipe: never
+/// for an elevated caller (Nail would run elevated, from a folder the
+/// user's unelevated programs can write). Test builds starting the harness
+/// (`test-overrides` with a pipe override) are exempt: CI runners are
+/// elevated.
+fn launch_allowed(elevated: bool, test_override: bool) -> bool {
+    !elevated || (TEST_OVERRIDES && test_override)
 }
 
 /// Checks that the pipe's server runs as `user`; returns its process id.
@@ -555,6 +692,42 @@ mod tests {
             assert_eq!(pipe_name().unwrap(), mapi_pipe_name(&sid));
         }
         assert!(own_module_path().unwrap().is_file());
+    }
+
+    #[test]
+    fn test_overrides_only_in_test_builds() {
+        // The tests run with the feature (the crate's own dev-dependency);
+        // a release build of the DLL has it off.
+        const { assert!(TEST_OVERRIDES) };
+        let pipe = Some(r"\\.\pipe\evil".to_owned());
+        assert_eq!(pipe_override_with(false, pipe.clone()), None);
+        assert_eq!(pipe_override_with(true, pipe.clone()), pipe);
+        assert_eq!(pipe_override_with(true, Some("  ".into())), None);
+    }
+
+    #[test]
+    fn elevated_callers_never_start_nail() {
+        assert!(!is_elevated(Some(false), Some(0x2000)));
+        assert!(is_elevated(Some(true), Some(0x2000)));
+        assert!(is_elevated(Some(false), Some(0x3000)), "high integrity");
+        assert!(is_elevated(Some(false), Some(0x4000)), "system");
+        assert!(!is_elevated(Some(false), Some(0x1000)), "low integrity");
+        assert!(
+            is_elevated(None, Some(0x2000)),
+            "unknown counts as elevated"
+        );
+        assert!(is_elevated(Some(false), None));
+        assert!(launch_allowed(false, false));
+        assert!(!launch_allowed(true, false));
+        // Only the harness in a test build (CI runs elevated).
+        assert_eq!(launch_allowed(true, true), TEST_OVERRIDES);
+        // This process's facts are readable.
+        let rid = integrity_rid().unwrap();
+        assert!(rid >= 0x1000, "{rid:#x}");
+        assert_eq!(
+            caller_is_elevated(),
+            is_elevated(token_elevated(), Some(rid))
+        );
     }
 
     #[test]

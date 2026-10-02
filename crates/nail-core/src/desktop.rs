@@ -354,6 +354,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             Ok(Response::DesktopSettings {
                 settings: service.desktop_settings().await?,
                 dev_endpoint_url: host.dev_endpoint_url(),
+                start_with_windows_managed: host.start_with_windows_managed(),
             })
         }
         Request::SetDesktopSettings { settings } => {
@@ -368,6 +369,7 @@ pub(crate) async fn handle(service: &Service, request: Request) -> Result<Respon
             Ok(Response::DesktopSettings {
                 settings: service.desktop_settings().await?,
                 dev_endpoint_url: host.dev_endpoint_url(),
+                start_with_windows_managed: host.start_with_windows_managed(),
             })
         }
         Request::GetDefaultApps => {

@@ -33,6 +33,10 @@ Run the setup program and follow the pages:
      files to Nail (see [Mail from other programs](desktop-app.md#mail-from-other-programs-send-to--mail-recipient)).
      Windows keeps this setting for the whole PC, so this one step asks for
      administrator rights; if you decline, Nail is installed without it.
+     The setup program copies this component to
+     `C:\Program Files\Nail MAPI`, where only administrators can change it,
+     because every program on the PC may load it. The installation folder
+     must not contain a percent sign (%) for this option.
 3. **Finish.** You can start Nail and create a desktop shortcut.
 
 If the Microsoft Edge WebView2 runtime is missing (it is part of

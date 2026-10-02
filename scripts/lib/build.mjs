@@ -372,3 +372,31 @@ export function updaterKeyFromEnv(env, readFile) {
   }
   return { pubkey };
 }
+
+/**
+ * The variables holding the update key's private half. Only `tauri bundle`
+ * (which writes the update signatures) gets them: cargo build scripts,
+ * npm scripts and `tauri build --no-bundle` run third-party code and must
+ * never see the root of trust of the auto-updater.
+ */
+export const UPDATER_SECRET_VARS = [
+  "TAURI_SIGNING_PRIVATE_KEY",
+  "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+  "TAURI_SIGNING_PRIVATE_KEY_PATH",
+];
+
+/** A copy of `env` without the update key ({@link UPDATER_SECRET_VARS}). */
+export function withoutUpdaterSecrets(env) {
+  const out = { ...env };
+  for (const name of Object.keys(out)) {
+    if (UPDATER_SECRET_VARS.includes(name.toUpperCase())) delete out[name];
+  }
+  return out;
+}
+
+/**
+ * Features that exist only for tests (they let environment variables
+ * redirect the registry, the update source or the Simple MAPI pipe). An
+ * installer build must never enable them.
+ */
+export const TEST_ONLY_FEATURES = ["test-overrides"];

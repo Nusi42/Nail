@@ -10,6 +10,12 @@
  * the feature changes the `tauri` crate, and sharing the workspace target
  * directory would rebuild it on every switch between `cargo test` and this.
  * Run `npm run build` first; the UI is embedded at compile time.
+ *
+ * The app and the DLL are built with their test-only `test-overrides`
+ * features (M4b review):
+ * the app then honours NAIL_REGISTRY_ROOT, NAIL_UPDATE_ENDPOINT /
+ * NAIL_UPDATE_PUBKEY and NAIL_MAPI_PIPE, the DLL NAIL_MAPI_PIPE /
+ * NAIL_MAPI_APP. Installer builds (scripts/build-installer.mjs) never do.
  */
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -26,26 +32,41 @@ const targetDir = path.join(base, "desktop-target");
 
 execFileSync(
   "cargo",
-  ["build", "-p", "nail-app", "--features", "tauri/custom-protocol", "--target-dir", targetDir],
+  [
+    "build",
+    "-p",
+    "nail-app",
+    "--features",
+    "tauri/custom-protocol,test-overrides",
+    "--target-dir",
+    targetDir,
+  ],
   { cwd: repoRoot, stdio: "inherit" },
 );
 // M4b (WP115): the Simple MAPI DLL + its harness (a program calling
-// MAPISendMailW) and the fake installer the updater scenario serves.
+// MAPISendMailW) with the test-only overrides, then the fake installer the
+// updater scenario serves. Two calls: cargo ignores `--features
+// <package>/<feature>` when several packages are selected (it built the DLL
+// without the overrides), and a plain feature name must exist in every
+// selected package.
 execFileSync(
   "cargo",
   [
     "build",
     "-p",
     "nail-mapi",
-    "-p",
-    "nail-testkit",
+    "--lib",
     "--bin",
     "nail-mapi-harness",
-    "--bin",
-    "nail-fake-installer",
-    "--lib",
+    "--features",
+    "test-overrides",
     "--target-dir",
     targetDir,
   ],
+  { cwd: repoRoot, stdio: "inherit" },
+);
+execFileSync(
+  "cargo",
+  ["build", "-p", "nail-testkit", "--bin", "nail-fake-installer", "--target-dir", targetDir],
   { cwd: repoRoot, stdio: "inherit" },
 );

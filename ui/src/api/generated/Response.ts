@@ -1039,7 +1039,13 @@ settings: DesktopSettings,
 /**
  * The running `nail plugin dev` endpoint, when on.
  */
-dev_endpoint_url: string | null, } | { "type": "DefaultApps", 
+dev_endpoint_url: string | null, 
+/**
+ * "Start with Windows" is on for every user by the machine-wide Run
+ * key (the MSI's `AUTOSTART=1`): only an administrator can turn it
+ * off, so the UI shows the switch as managed.
+ */
+start_with_windows_managed: boolean, } | { "type": "DefaultApps", 
 /**
  * Registration and status.
  */

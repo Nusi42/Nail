@@ -651,7 +651,7 @@ pub fn run() {
             }
             service.push_launch_requests(launch_requests.clone());
             // Simple MAPI ("Send to → Mail recipient"): the per-user pipe.
-            let mapi = shell::mapi_pipe(&args, std::env::var(nail_api::mapi::MAPI_PIPE_ENV).ok())
+            let mapi = shell::mapi_pipe(&args, shell::test_env(nail_api::mapi::MAPI_PIPE_ENV))
                 .and_then(|name| shell::start_mapi(app.handle(), &service, &name));
             let ui_dir = remote_ui_dir(
                 std::env::var_os("NAIL_UI_DIR").map(std::path::PathBuf::from),

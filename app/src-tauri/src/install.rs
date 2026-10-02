@@ -11,8 +11,14 @@
 //! The update source is the `plugins.updater` section of `tauri.conf.json`
 //! (endpoints with a `{{channel}}` placeholder, and the minisign public
 //! key); the release pipeline fills it in. `NAIL_UPDATE_ENDPOINT` /
-//! `NAIL_UPDATE_PUBKEY` replace it for tests, but only with a loopback
-//! endpoint (the e2e update server), and the policy still wins.
+//! `NAIL_UPDATE_PUBKEY` replace it for tests, but only in builds with the
+//! `test-overrides` feature ([`crate::shell::test_env`]; never an installer
+//! build), only with a loopback endpoint (the e2e update server), and the
+//! policy still wins.
+//!
+//! When both hives name the running copy's directory, the machine's facts
+//! win: `HKLM` is written by an administrator, `HKCU` by the user, who must
+//! not turn an MSI install (`DisableUpdates`) into a self-updating one.
 
 use std::path::{Path, PathBuf};
 
@@ -179,8 +185,9 @@ pub fn installation(
     source: &UpdateSource,
 ) -> InstallationInfo {
     let exe_dir = local.exe.as_deref().and_then(Path::parent);
-    // The hive whose installation directory is the one we run from.
-    let installed = [Hive::CurrentUser, Hive::LocalMachine]
+    // The hive whose installation directory is the one we run from; the
+    // machine's (admin-written) facts first.
+    let installed = [Hive::LocalMachine, Hive::CurrentUser]
         .into_iter()
         .find(|hive| {
             registry
@@ -356,6 +363,36 @@ mod tests {
         assert_eq!(
             installation(&reg, &local(dir), &configured()).updates_disabled,
             None
+        );
+    }
+
+    #[test]
+    fn user_facts_cannot_override_the_machine_install() {
+        // The MSI wrote HKLM; the user forges HKCU facts for the same folder.
+        let dir = r"C:\Program Files\Nail";
+        let reg = MemoryRegistry::new();
+        install(&reg, Hive::LocalMachine, "msi", dir);
+        install(&reg, Hive::CurrentUser, "nsis", &format!("{dir}\\"));
+        reg.put(
+            Hive::CurrentUser,
+            keys::INSTALL_KEY,
+            keys::SCOPE_VALUE,
+            RegValue::Str("per-user".into()),
+        );
+        let info = installation(&reg, &local(dir), &configured());
+        assert_eq!(info.kind, InstallKind::Msi);
+        assert_eq!(info.scope, Some(InstallScope::PerMachine));
+        assert_eq!(
+            info.updates_disabled,
+            Some(UpdateDisabledReason::MsiManaged)
+        );
+        // A per-user install elsewhere still reads its own HKCU facts.
+        let info = installation(&reg, &local(DIR), &configured());
+        assert_eq!(info.kind, InstallKind::Development);
+        install(&reg, Hive::CurrentUser, "nsis", DIR);
+        assert_eq!(
+            installation(&reg, &local(DIR), &configured()).kind,
+            InstallKind::Nsis
         );
     }
 

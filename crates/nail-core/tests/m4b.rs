@@ -30,6 +30,7 @@ struct FakeState {
     applied_updates: Vec<UpdateSettings>,
     applied_desktop: Vec<DesktopSettings>,
     run_key: Option<bool>,
+    run_key_managed: bool,
     calls: Vec<&'static str>,
 }
 
@@ -96,6 +97,9 @@ impl DesktopHost for FakeHost {
     }
     fn start_with_windows(&self) -> Option<bool> {
         self.state.lock().unwrap().run_key
+    }
+    fn start_with_windows_managed(&self) -> bool {
+        self.state.lock().unwrap().run_key_managed
     }
     fn apply_desktop_settings(&self, settings: &DesktopSettings) -> Result<(), ApiError> {
         let mut state = self.state.lock().unwrap();
@@ -342,12 +346,25 @@ async fn desktop_settings_are_stored_and_applied() {
     let Response::DesktopSettings {
         settings,
         dev_endpoint_url,
+        start_with_windows_managed,
     } = service.handle(Request::GetDesktopSettings).await
     else {
         panic!()
     };
     assert_eq!(settings, DesktopSettings::default());
     assert_eq!(dev_endpoint_url, None);
+    assert!(!start_with_windows_managed);
+    // The MSI's machine-wide Run key: the UI learns why the switch stays on.
+    host.state.lock().unwrap().run_key_managed = true;
+    let Response::DesktopSettings {
+        start_with_windows_managed,
+        ..
+    } = service.handle(Request::GetDesktopSettings).await
+    else {
+        panic!()
+    };
+    assert!(start_with_windows_managed);
+    host.state.lock().unwrap().run_key_managed = false;
 
     // The installer's Run key wins over the stored value.
     host.state.lock().unwrap().run_key = Some(true);
@@ -363,6 +380,7 @@ async fn desktop_settings_are_stored_and_applied() {
     let Response::DesktopSettings {
         settings,
         dev_endpoint_url,
+        ..
     } = service
         .handle(Request::SetDesktopSettings {
             settings: wanted.clone(),

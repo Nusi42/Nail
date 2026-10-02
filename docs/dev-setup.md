@@ -81,7 +81,8 @@ manifests and the winget manifests, and drafts a GitHub release (ADR 0089).
 Repository settings it reads: secrets `NAIL_SIGN_PFX_BASE64` /
 `NAIL_SIGN_PFX_PASSWORD` (optional; unsigned without), `NAIL_UPDATER_PRIVATE_KEY`
 / `NAIL_UPDATER_KEY_PASSWORD`; variables `NAIL_UPDATER_PUBKEY`,
-`NAIL_UPDATE_BASE_URL`. Key handling: `packaging/README.md`.
+`NAIL_UPDATE_BASE_URL`. Key handling, signing and the release steps:
+[`docs/release.md`](release.md).
 
 ### Installer, portable zip and SBOMs (ADR 0040)
 
@@ -104,7 +105,8 @@ CI imports a `.pfx` from secrets with `scripts/import-signing-cert.ps1` and
 checks the result with `scripts/verify-signatures.ps1`). The MSI is Tauri's
 WiX template plus one fragment (`app/src-tauri/windows/wix/nail.wxs`, added
 through `app/src-tauri/windows/bundle.json`, which also pins the upgrade
-code). Installers, updates and winget: ADR 0089, `packaging/README.md`.
+code). Installers, updates and winget: ADR 0089, `packaging/README.md`;
+keys, signing and releasing: `docs/release.md`.
 
 Nothing is written into the repository. The installer's NSIS template is a
 copy of Tauri's (`app/src-tauri/windows/nsis/installer.nsi`); a test fails when
@@ -219,7 +221,12 @@ How it works:
   `npm run build:desktop` (`e2e/scripts/build-desktop.mjs`: `nail-app` with
   `tauri/custom-protocol`, so it serves the embedded `ui/dist`) into its own
   target directory, `%LOCALAPPDATA%\nail-build\desktop-target`, so the
-  feature does not force rebuilds of the shared target directory.
+  feature does not force rebuilds of the shared target directory. The same
+  build enables the test-only cargo features `nail-app/test-overrides` and
+  `nail-mapi/test-overrides`: only then do the app and the DLL honour
+  `NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` / `NAIL_UPDATE_PUBKEY`,
+  `NAIL_MAPI_PIPE` and `NAIL_MAPI_APP` (a plain `cargo build` or an
+  installer build ignores them; ADR 0093).
   `NAIL_APP_BIN` selects another binary. A seeded app keeps its data,
   config and WebView2 profile in a temporary directory. The test always
   runs locally on Windows; in CI it is skipped unless `NAIL_E2E_DESKTOP=1`,

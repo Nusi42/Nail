@@ -67,7 +67,7 @@ function StartupStep() {
             data-part="form.checkbox"
             type="checkbox"
             checked={data.settings.start_with_windows}
-            disabled={busy}
+            disabled={busy || data.startWithWindowsManaged}
             onChange={(e) =>
               void save({
                 ...data.settings,
@@ -79,6 +79,11 @@ function StartupStep() {
           />
           <span data-part="form.check.label">{t("system-first-run-start-with-windows")}</span>
         </label>
+      )}
+      {data?.startWithWindowsManaged && (
+        <p data-part="first-run.step.text" data-note="managed">
+          {t("system-desktop-start-with-windows-managed")}
+        </p>
       )}
       <p data-part="first-run.step.text">{t("system-first-run-startup-text")}</p>
       {problem && (

@@ -51,7 +51,9 @@ DLL target is a warning locally and an error in CI.
 
 Signing (Authenticode: `NAIL_SIGN_THUMBPRINT`, …) and update keys
 (`TAURI_SIGNING_PRIVATE_KEY`, `NAIL_UPDATER_PUBKEY`, …) are environment
-only and optional: packaging/README.md.
+only and optional: docs/release.md. The update key reaches only
+`tauri bundle`; installer builds never enable the test-only
+`test-overrides` features.
 
 `installer-smoke.ps1` refuses to run when Nail is installed for the current
 user. It writes only per-user registry keys, removes them again, and keeps

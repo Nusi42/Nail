@@ -876,6 +876,11 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
     fn default_apps(&self) -> DefaultAppsStatus;
     /// Open Settings → Default apps ([`default_apps_settings_uri`]).
     fn open_default_apps_settings(&self) -> Result<(), ApiError>;
+    /// Whether "start with Windows" is set for every user by the machine
+    /// (the MSI's `HKLM` Run value), so the user cannot turn it off.
+    fn start_with_windows_managed(&self) -> bool {
+        false
+    }
 }
 
 fn default_true() -> bool {

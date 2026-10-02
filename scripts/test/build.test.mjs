@@ -315,3 +315,57 @@ test("checksum lines are sorted and sha256sum-compatible", () => {
     "11  a\n22  b\n",
   );
 });
+
+test("the update key reaches only tauri bundle", async () => {
+  const { withoutUpdaterSecrets, UPDATER_SECRET_VARS } = await import("../lib/build.mjs");
+  const env = {
+    PATH: "p",
+    TAURI_SIGNING_PRIVATE_KEY: "secret",
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD: "pw",
+    tauri_signing_private_key_path: "k",
+    NAIL_UPDATER_PUBKEY: "pub",
+  };
+  const clean = withoutUpdaterSecrets(env);
+  assert.deepEqual(clean, { PATH: "p", NAIL_UPDATER_PUBKEY: "pub" });
+  assert.equal(env.TAURI_SIGNING_PRIVATE_KEY, "secret", "input untouched");
+  assert.equal(UPDATER_SECRET_VARS.length, 3);
+
+  // build-installer.mjs: every child process but `tauri bundle` gets the
+  // clean environment.
+  const { readFileSync } = await import("node:fs");
+  const script = readFileSync(new URL("../build-installer.mjs", import.meta.url), "utf8");
+  const runs = [...script.matchAll(/run\(\s*"(npx|npm|cargo)",\s*\[([^\]]*)\]/g)];
+  assert.ok(runs.length >= 4, "found the child processes");
+  for (const [call, command, args] of runs) {
+    const start = script.indexOf(call);
+    const rest = script.slice(start, script.indexOf(");", start));
+    if (command === "npx" && args.includes('"bundle"')) {
+      assert.match(rest, /env: bundleEnv/, call);
+    } else {
+      assert.doesNotMatch(rest, /bundleEnv|process\.env/, call);
+    }
+  }
+  assert.doesNotMatch(script, /test-overrides/, "no test-only feature in installer builds");
+});
+
+test("release.yml hands the update key to the build step only", async () => {
+  const { readFileSync } = await import("node:fs");
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/release.yml", import.meta.url),
+    "utf8",
+  );
+  const lines = workflow.split(/\r?\n/);
+  const uses = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => /^\s*TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)?:/.test(line));
+  assert.equal(uses.length, 2);
+  for (const { line, index } of uses) {
+    // Step-level env: indented below a step, and that step is the build.
+    assert.match(line, /^ {10}\S/, line);
+    const step = lines
+      .slice(0, index)
+      .reverse()
+      .find((l) => /^ {6}- name:/.test(l));
+    assert.equal(step?.trim(), "- name: Build installers");
+  }
+});

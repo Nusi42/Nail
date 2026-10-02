@@ -1,7 +1,9 @@
 /**
  * Widget `desktop-settings`: tray and startup — keep running in the tray
  * when the window closes, start with Windows (the per-user Run key; the
- * shell's value wins), start in the tray when started with Windows — and
+ * shell's value wins; locked with a note when the machine-wide Run key of
+ * an MSI install turns it on for everyone), start in the tray when started
+ * with Windows — and
  * the local endpoint `nail plugin dev` connects to (loopback only, with a
  * token; off by default). Every change is saved at once.
  *
@@ -33,6 +35,7 @@ export function useSaveDesktopSettings() {
       queryClient.setQueryData(systemKeys.desktop, {
         settings: answer.settings,
         devEndpointUrl: answer.dev_endpoint_url,
+        startWithWindowsManaged: answer.start_with_windows_managed,
       });
       return true;
     } catch (error) {
@@ -129,8 +132,13 @@ export function DesktopSettingsWidget({ node }: WidgetProps) {
             <Check
               field="start-with-windows"
               checked={data.settings.start_with_windows}
+              disabled={data.startWithWindowsManaged}
               label={t("system-desktop-start-with-windows")}
-              hint={t("system-desktop-start-with-windows-hint")}
+              hint={t(
+                data.startWithWindowsManaged
+                  ? "system-desktop-start-with-windows-managed"
+                  : "system-desktop-start-with-windows-hint",
+              )}
               onChange={(start_with_windows) => change({ start_with_windows })}
             />
             <Check

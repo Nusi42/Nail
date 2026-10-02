@@ -5,8 +5,11 @@
 //!   `NAIL_MAPI_PIPE` overrides it for tests).
 //! * Created with `FILE_FLAG_FIRST_PIPE_INSTANCE` (another process that
 //!   already owns the name — a squatter — makes the server refuse to start
-//!   instead of sharing it), remote clients rejected, and a protected DACL
-//!   granting only the current user access ([`crate::win::pipe_sddl`]).
+//!   instead of sharing it), remote clients rejected, a protected DACL
+//!   granting only the current user access, and a mandatory label at the
+//!   app's own integrity level with no-write-up, so an elevated Nail takes
+//!   no messages from the user's unelevated programs
+//!   ([`crate::win::server_pipe_sddl`]).
 //!   No network sockets.
 //! * Frames: 4-byte little-endian length + JSON (`MapiPipeRequest` →
 //!   `MapiPipeResponse`), at most `MAX_MAPI_FRAME_BYTES`; another protocol
@@ -333,7 +336,7 @@ mod tests {
         let (handler, seen) = recording(MapiResult::AttachmentTooLarge);
         let server = MapiServer::start(
             &name,
-            &crate::win::pipe_sddl(&sid),
+            &crate::win::server_pipe_sddl(&sid),
             handler,
             &tokio::runtime::Handle::current(),
         )
@@ -436,5 +439,31 @@ mod tests {
         .unwrap();
         let err = ClientOptions::new().open(&name).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied, "{err}");
+    }
+
+    /// The integrity label: a client below the pipe's label cannot send.
+    /// Labelling above our own level (system) is either refused when the
+    /// pipe is created or locks us out as a lower-integrity client.
+    #[cfg(windows)]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn clients_below_the_label_cannot_send() {
+        use tokio::net::windows::named_pipe::ClientOptions;
+        let rid = crate::win::current_integrity_rid().unwrap();
+        if rid >= 0x4000 {
+            return; // running as SYSTEM: nothing is above us
+        }
+        let name = test_pipe("label");
+        let sid = crate::win::current_user_sid().unwrap();
+        let (handler, _) = recording(MapiResult::Success);
+        let server = MapiServer::start(
+            &name,
+            &crate::win::pipe_sddl_at(&sid, "SI"),
+            handler,
+            &tokio::runtime::Handle::current(),
+        );
+        if server.is_ok() {
+            let err = ClientOptions::new().open(&name).unwrap_err();
+            assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied, "{err}");
+        }
     }
 }

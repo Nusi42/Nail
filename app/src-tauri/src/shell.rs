@@ -55,9 +55,35 @@ pub fn closes_to_tray(setting: bool, has_tray: bool, quitting: bool) -> bool {
     setting && has_tray && !quitting
 }
 
+/// Whether this build honours the test-only environment overrides
+/// (`NAIL_REGISTRY_ROOT`, `NAIL_UPDATE_ENDPOINT` / `NAIL_UPDATE_PUBKEY`,
+/// `NAIL_MAPI_PIPE`): only with the `test-overrides` feature, which the e2e
+/// desktop build enables and installer builds never do.
+pub const TEST_OVERRIDES: bool = cfg!(feature = "test-overrides");
+
+/// A test-only environment variable: its value in `test-overrides` builds,
+/// else `None` (a set variable is logged and ignored).
+pub fn test_env(name: &str) -> Option<String> {
+    test_env_with(TEST_OVERRIDES, name, |n| std::env::var(n).ok())
+}
+
+fn test_env_with(
+    allowed: bool,
+    name: &str,
+    read: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+    let value = read(name)?;
+    if allowed {
+        Some(value)
+    } else {
+        tracing::warn!("ignoring {name}: test overrides are not part of this build");
+        None
+    }
+}
+
 /// Which registry the shell uses: a test root when `NAIL_REGISTRY_ROOT`
-/// is set, memory for seeded runs (a demo never writes the real Run key),
-/// else the real one.
+/// is set (`test-overrides` builds), memory for seeded runs (a demo never
+/// writes the real Run key), else the real one.
 pub fn registry_for(root: Option<String>, seeded: bool) -> Arc<dyn Registry> {
     match root.filter(|r| !r.trim().is_empty()) {
         Some(root) => Arc::new(WindowsRegistry::below(root)),
@@ -72,12 +98,9 @@ pub fn desktop_host<R: Runtime>(
     args: &AppArgs,
     data_dir: &Path,
 ) -> Arc<ShellHost> {
-    let registry = registry_for(std::env::var(REGISTRY_ROOT_ENV).ok(), args.seed.is_some());
+    let registry = registry_for(test_env(REGISTRY_ROOT_ENV), args.seed.is_some());
     let source = UpdateSource::from_plugin_config(app.config().plugins.0.get("updater"))
-        .with_test_override(
-            std::env::var(UPDATE_ENDPOINT_ENV).ok(),
-            std::env::var(UPDATE_PUBKEY_ENV).ok(),
-        );
+        .with_test_override(test_env(UPDATE_ENDPOINT_ENV), test_env(UPDATE_PUBKEY_ENV));
     let exe = std::env::current_exe().ok();
     let local = LocalFacts {
         version: app.package_info().version.to_string(),
@@ -240,7 +263,8 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>, service: &Service) -> tauri::R
     builder.build(app)
 }
 
-/// The Simple MAPI pipe for this run: `NAIL_MAPI_PIPE`, else the user's —
+/// The Simple MAPI pipe for this run: `NAIL_MAPI_PIPE` (`test-overrides`
+/// builds, read by the caller through [`test_env`]), else the user's —
 /// never for seeded runs without the variable (they must not take the real
 /// Nail's pipe).
 pub fn mapi_pipe(args: &AppArgs, env: Option<String>) -> Option<String> {
@@ -282,7 +306,7 @@ pub fn start_mapi<R: Runtime>(
         })
     });
     let runtime = tauri::async_runtime::handle().inner().clone();
-    match MapiServer::start(name, &crate::win::pipe_sddl(&sid), handler, &runtime) {
+    match MapiServer::start(name, &crate::win::server_pipe_sddl(&sid), handler, &runtime) {
         Ok(server) => {
             tracing::info!(pipe = name, "Simple MAPI pipe ready");
             Some(server)
@@ -352,6 +376,26 @@ mod tests {
             Some(TestControl::WindowVisible)
         );
         assert_eq!(TestControl::parse("tray-format-disk"), None);
+    }
+
+    #[test]
+    fn test_overrides_are_ignored_unless_built_in() {
+        let read = |name: &str| (name == "NAIL_REGISTRY_ROOT").then(|| r"Software\X".to_owned());
+        assert_eq!(test_env_with(false, "NAIL_REGISTRY_ROOT", read), None);
+        assert_eq!(
+            test_env_with(true, "NAIL_REGISTRY_ROOT", read).as_deref(),
+            Some(r"Software\X")
+        );
+        assert_eq!(test_env_with(true, "NAIL_UPDATE_PUBKEY", read), None);
+        // `cargo test --workspace` builds without the feature: the real
+        // environment is ignored too.
+        #[cfg(not(feature = "test-overrides"))]
+        {
+            const { assert!(!TEST_OVERRIDES) };
+            // PATH is always set, and still ignored.
+            assert!(std::env::var_os("PATH").is_some());
+            assert_eq!(test_env("PATH"), None);
+        }
     }
 
     #[test]

@@ -4562,6 +4562,7 @@ name = "nail-mapi"
 version = "0.1.0"
 dependencies = [
  "nail-api",
+ "nail-mapi",
  "pretty_assertions",
  "serde_json",
  "tempfile",

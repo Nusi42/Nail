@@ -7,6 +7,13 @@
 //! app the copies, and removes the folder once the app has answered (the
 //! core reads every attachment before answering, ADR 0087). A folder left
 //! behind by a killed process is swept away by a later call after a day.
+//!
+//! The root may have been prepared by someone else (M4b review): it is
+//! refused unless it is a real directory owned by the caller (or the
+//! Administrators group / SYSTEM), and it stays pinned while the call works
+//! below it (`windows::staging_root`). The sweep removes only folders named
+//! the way this DLL names them (`<pid>-<hex nanos>-<n>`) and never follows a
+//! junction or symlink.
 
 use std::fs;
 use std::io;
@@ -33,6 +40,9 @@ pub fn default_staging_root() -> PathBuf {
 #[derive(Debug)]
 pub struct StagedFiles {
     dir: Option<PathBuf>,
+    /// The pinned root (released after the folder is gone).
+    #[cfg(windows)]
+    _root: Option<crate::windows::staging_root::RootGuard>,
 }
 
 impl StagedFiles {
@@ -67,7 +77,11 @@ pub fn stage_attachments(
     root: &Path,
 ) -> Result<StagedFiles, MapiResult> {
     if message.attachments.is_empty() {
-        return Ok(StagedFiles { dir: None });
+        return Ok(StagedFiles {
+            dir: None,
+            #[cfg(windows)]
+            _root: None,
+        });
     }
     for attachment in &message.attachments {
         let meta = fs::metadata(&attachment.path).map_err(|e| io_result(&e))?;
@@ -78,10 +92,16 @@ pub fn stage_attachments(
             return Err(MapiResult::AttachmentTooLarge);
         }
     }
+    fs::create_dir_all(root).map_err(|_| MapiResult::Failure)?;
+    #[cfg(windows)]
+    let guard =
+        crate::windows::staging_root::RootGuard::open(root).map_err(|_| MapiResult::Failure)?;
     sweep_stale(root, STALE_AFTER);
     let dir = create_unique_dir(root).map_err(|_| MapiResult::Failure)?;
     let staged = StagedFiles {
         dir: Some(dir.clone()),
+        #[cfg(windows)]
+        _root: Some(guard),
     };
     for (index, attachment) in message.attachments.iter_mut().enumerate() {
         let name = attachment.display_name();
@@ -99,7 +119,6 @@ pub fn stage_attachments(
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
 fn create_unique_dir(root: &Path) -> io::Result<PathBuf> {
-    fs::create_dir_all(root)?;
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
@@ -115,7 +134,53 @@ fn create_unique_dir(root: &Path) -> io::Result<PathBuf> {
     Err(io::Error::from(io::ErrorKind::AlreadyExists))
 }
 
-/// Removes staging folders under `root` last modified more than `age` ago.
+/// Whether `name` is one of this DLL's staging folders
+/// (`<pid>-<hex nanos>-<n>`, [`create_unique_dir`]).
+pub fn is_staging_dir_name(name: &str) -> bool {
+    let mut parts = name.split('-');
+    let (Some(pid), Some(nanos), Some(n), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    let digits = |s: &str, hex: bool| {
+        !s.is_empty()
+            && s.len() <= 32
+            && s.chars().all(|c| {
+                if hex {
+                    c.is_ascii_digit() || ('a'..='f').contains(&c)
+                } else {
+                    c.is_ascii_digit()
+                }
+            })
+    };
+    digits(pid, false) && digits(nanos, true) && digits(n, false)
+}
+
+/// Whether a directory entry is a junction, symlink or other reparse point
+/// (read from the listing itself, never by following it).
+fn is_link(entry: &fs::DirEntry) -> bool {
+    !entry.file_type().is_ok_and(|t| !t.is_symlink()) || is_reparse_point(entry)
+}
+
+#[cfg(windows)]
+fn is_reparse_point(entry: &fs::DirEntry) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    // DirEntry::metadata does not traverse links on Windows.
+    !entry
+        .metadata()
+        .is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0)
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(_entry: &fs::DirEntry) -> bool {
+    false
+}
+
+/// Removes this DLL's staging folders under `root` last modified more than
+/// `age` ago. Anything else (other names, junctions, symlinks, files) is
+/// left alone; `remove_dir_all` does not follow links inside a folder.
 pub fn sweep_stale(root: &Path, age: Duration) {
     let Ok(entries) = fs::read_dir(root) else {
         return;
@@ -124,6 +189,9 @@ pub fn sweep_stale(root: &Path, age: Duration) {
         return;
     };
     for entry in entries.flatten() {
+        if !entry.file_name().to_str().is_some_and(is_staging_dir_name) || is_link(&entry) {
+            continue;
+        }
         let Ok(meta) = entry.metadata() else {
             continue;
         };
@@ -275,13 +343,79 @@ mod tests {
     #[test]
     fn stale_folders_are_swept() {
         let root = tempfile::tempdir().unwrap();
-        let old = root.path().join("old");
-        fs::create_dir(&old).unwrap();
+        let old = create_unique_dir(root.path()).unwrap();
+        fs::write(old.join("f"), b"x").unwrap();
         sweep_stale(root.path(), Duration::from_secs(3600));
         assert!(old.exists());
         sweep_stale(root.path(), Duration::ZERO);
         assert!(!old.exists());
         sweep_stale(&root.path().join("missing"), Duration::ZERO);
+    }
+
+    #[test]
+    fn only_own_folders_are_swept() {
+        let root = tempfile::tempdir().unwrap();
+        let other = root.path().join("SomeAppData");
+        fs::create_dir(&other).unwrap();
+        let file = root.path().join("12-ab-0");
+        fs::write(&file, b"x").unwrap();
+        sweep_stale(root.path(), Duration::ZERO);
+        assert!(other.exists());
+        assert!(file.exists());
+        assert!(is_staging_dir_name("1234-18a2b3c4d5e6f-0"));
+        assert!(is_staging_dir_name(
+            create_unique_dir(root.path())
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+        ));
+        for name in [
+            "old", "1-2", "1-2-3-4", "a-2-3", "1-g-3", "1--3", "1-AB-3", "",
+        ] {
+            assert!(!is_staging_dir_name(name), "{name}");
+        }
+    }
+
+    /// A junction named like a staging folder: the sweep must not delete
+    /// what it points to (an elevated caller would delete with its rights).
+    #[cfg(windows)]
+    #[test]
+    fn junctions_are_never_followed() {
+        use crate::windows::staging_root::tests::junction;
+        let root = tempfile::tempdir().unwrap();
+        let protected = tempfile::tempdir().unwrap();
+        let precious = protected.path().join("precious");
+        fs::create_dir(&precious).unwrap();
+        fs::write(precious.join("data"), b"keep").unwrap();
+        junction(&root.path().join("1-ab-0"), protected.path());
+        sweep_stale(root.path(), Duration::ZERO);
+        assert_eq!(fs::read(precious.join("data")).unwrap(), b"keep");
+    }
+
+    /// The root itself is a junction (pre-created by another process):
+    /// nothing is swept or copied through it.
+    #[cfg(windows)]
+    #[test]
+    fn a_junction_root_is_refused() {
+        use crate::windows::staging_root::tests::junction;
+        let base = tempfile::tempdir().unwrap();
+        let protected = tempfile::tempdir().unwrap();
+        let victim = protected.path().join("1-ab-0");
+        fs::create_dir(&victim).unwrap();
+        let root = base.path().join("nail-mapi");
+        junction(&root, protected.path());
+        let src = base.path().join("a.txt");
+        fs::write(&src, b"a").unwrap();
+        let mut m = message(&[(&src, None)]);
+        assert_eq!(
+            stage_attachments(&mut m, &root).unwrap_err(),
+            MapiResult::Failure
+        );
+        assert!(victim.exists(), "nothing deleted through the junction");
+        assert_eq!(fs::read_dir(protected.path()).unwrap().count(), 1);
+        assert_eq!(m.attachments[0].path, src.to_str().unwrap());
     }
 
     #[test]

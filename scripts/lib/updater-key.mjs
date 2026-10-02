@@ -1,6 +1,6 @@
 /**
  * Where the development update key lives (plan M4b WP112; key handling in
- * packaging/README.md). The private key never enters the repository: it
+ * docs/release.md). The private key never enters the repository: it
  * is generated into `<build dir>/keys/` (default
  * `%LOCALAPPDATA%\nail-build\keys`), and only its public half is committed
  * as packaging/updater/dev.pub, so development builds and the loopback

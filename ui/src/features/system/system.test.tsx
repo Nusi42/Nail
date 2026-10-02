@@ -245,6 +245,30 @@ describe("About Nail", () => {
 });
 
 describe("desktop-settings widget", () => {
+  it("explains a start with Windows the administrator manages", async () => {
+    const env = createEnv();
+    env.transport.data.features.system.startWithWindowsManaged = true;
+    renderWithProviders(<NodeView node={widget("desktop-settings")} path="t/0" />, env);
+    const start = await screen.findByRole("checkbox", { name: "Start Nail with Windows" });
+    expect(start).toBeChecked();
+    expect(start).toBeDisabled();
+    expect(start).toHaveAccessibleDescription(
+      "Your administrator set Nail to start with Windows for everyone on this computer. Only an administrator can turn this off.",
+    );
+    // "Start hidden" still applies to the machine's start.
+    expect(screen.getByRole("checkbox", { name: /without a window/ })).toBeEnabled();
+  });
+
+  it("explains it on the first-run screen too", async () => {
+    const env = createEnv();
+    env.transport.data.features.system.startWithWindowsManaged = true;
+    renderWithProviders(<FirstRun close={() => {}} />, env);
+    const start = await screen.findByRole("checkbox", { name: /Start Nail with Windows/ });
+    expect(start).toBeChecked();
+    expect(start).toBeDisabled();
+    expect(screen.getByText(/Only an administrator can turn this off/)).toBeVisible();
+  });
+
   it("saves tray and startup settings and shows the dev endpoint", async () => {
     const env = createEnv();
     const user = userEvent.setup();

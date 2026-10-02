@@ -124,7 +124,7 @@ jobs:
         run: npx -w e2e playwright install --with-deps chromium
 
       - name: Playwright (desktop)
-        run: npm run e2e:only -- tests/desktop.spec.ts
+        run: npm run e2e:only -- tests/desktop.spec.ts tests/desktop-m4b.spec.ts
         env:
           NAIL_E2E_DESKTOP: "1"
 
@@ -172,6 +172,17 @@ jobs:
           ./target/i686-pc-windows-msvc/release/nail-mapi-harness.exe exports --dll target/i686-pc-windows-msvc/release/nail_mapi.dll
           if ($LASTEXITCODE -ne 0) { throw 'x86 DLL: an export is missing' }
           if (-not (Test-Path target/aarch64-pc-windows-msvc/release/nail_mapi.dll)) { throw 'no ARM64 DLL' }
+
+      # ADR 0093: a shipped DLL must not read the test-only variables.
+      - name: No test overrides in release DLLs
+        shell: pwsh
+        run: |
+          foreach ($dll in 'target/release/nail_mapi.dll', 'target/i686-pc-windows-msvc/release/nail_mapi.dll', 'target/aarch64-pc-windows-msvc/release/nail_mapi.dll') {
+            $text = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($dll))
+            foreach ($name in 'NAIL_MAPI_PIPE', 'NAIL_MAPI_APP') {
+              if ($text.Contains($name)) { throw "$dll reads $name (test-overrides enabled?)" }
+            }
+          }
 
   # The installers (plan M4b WP112, ADR 0089): per-user NSIS, the
   # per-machine MSI, the offline-WebView2 NSIS variant, portable zip, SBOMs,

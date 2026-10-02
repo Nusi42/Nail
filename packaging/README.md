@@ -58,51 +58,10 @@ foreign file nor pair a new version number with an old installer. The
 manifest generator verifies every signature (and version) before it writes
 anything.
 
-## Update key handling
+## Update key, signing and releasing
 
-The update key is a minisign key pair (Tauri's `tauri signer`), separate
-from the Authenticode certificate.
-
-- **Never commit a private key.** Only public halves are in the repository.
-- **Development key**: `node scripts/updater-key.mjs --generate` writes the
-  private key to `%LOCALAPPDATA%\nail-build\keys\nail-updater-dev.key`
-  (empty password) and its public half to `packaging/updater/dev.pub`;
-  `node scripts/updater-key.mjs` checks the pair. Builds with
-  `--dev-updater-key` embed `dev.pub` and sign with the local key. Such
-  builds are for testing only: anyone with the dev key could sign updates
-  for them.
-- **CI smoke tests** generate a throwaway key per run (ci.yml), so no secret
-  is needed for pull requests.
-- **Release key**: generate it once on a trusted, offline machine
-  (`npx tauri signer generate -w nail-updater.key`, with a strong password),
-  store the private key and password **only** as the repository secrets
-  `NAIL_UPDATER_PRIVATE_KEY` (file content) and `NAIL_UPDATER_KEY_PASSWORD`,
-  and the public half as the repository variable `NAIL_UPDATER_PUBKEY`.
-  Keep an offline backup (two copies, e.g. password manager + encrypted USB
-  stick): **losing it means installed copies can never be updated again**,
-  and a leak means an attacker who also controls the update host can ship
-  "updates". Rotating the key needs one release signed with the old key
-  that embeds the new public key.
-- Locally a build picks up `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`) and
-  `NAIL_UPDATER_PUBKEY` / `NAIL_UPDATER_PUBKEY_FILE`; one half without the
-  other is an error.
-
-## Authenticode signing
-
-Only when configured; otherwise builds are unsigned (SmartScreen warns) and
-everything else works the same. The EV certificate comes later.
-
-- `NAIL_SIGN_THUMBPRINT` (SHA-1 of a code-signing certificate in the
-  Windows certificate store), optional `NAIL_SIGN_TIMESTAMP_URL` (RFC 3161;
-  default DigiCert's), `NAIL_SIGN_DESCRIPTION`, `NAIL_SIGNTOOL`.
-- The bundler signs Nail.exe, the uninstaller, the NSIS installer and the
-  MSI; `build-installer.mjs` signs `bin\nail.exe`, the MAPI DLLs and the
-  portable Nail.exe with signtool (SHA-256, timestamped).
-- CI: the secrets `NAIL_SIGN_PFX_BASE64` / `NAIL_SIGN_PFX_PASSWORD` (a .pfx)
-  are imported by `scripts/import-signing-cert.ps1`; then
-  `scripts/verify-signatures.ps1` checks every file. An EV certificate on a
-  hardware token or in a cloud HSM is used through `NAIL_SIGN_THUMBPRINT`
-  (and the vendor's signtool / CSP) on a runner that can reach it.
+The procedures (update key handling and rotation, Authenticode signing,
+the release steps) are internal documentation: [`docs/release.md`](../docs/release.md).
 
 ## winget
 
@@ -117,13 +76,3 @@ The package wraps the per-user `setup.exe` (`nullsoft`, scope user, silent
 `/S`, ProductCode `Nail`). Submitting is a pull request to
 `microsoft/winget-pkgs` (manual, owner task); the installers must be public
 at the URLs first.
-
-## Releasing (summary)
-
-1. Bump the version (`tauri.conf.json`, workspace `Cargo.toml`), add
-   `packaging/release-notes/<version>.md`, tag `v<version>`.
-2. `release.yml` builds x64 + ARM64 (NSIS, MSI, offline NSIS, portable,
-   SBOMs, `.sig`), signs if configured, writes the update and winget
-   manifests, creates a draft GitHub release.
-3. Check the draft, publish it, then upload `updates/<channel>/latest.json`
-   to the update host and open the winget pull request.

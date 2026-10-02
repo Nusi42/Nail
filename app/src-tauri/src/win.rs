@@ -48,6 +48,92 @@ pub fn pipe_sddl(user_sid: &str) -> String {
     format!("D:P(A;;GA;;;{user_sid})")
 }
 
+/// The pipe's SDDL with a mandatory label at `label` (`ME`, `HI`, …) and
+/// no-write-up: a client below that integrity level cannot send to the
+/// pipe (M4b review — an elevated Nail must not take attachment paths from
+/// the user's unelevated programs and read files only admins may read).
+pub fn pipe_sddl_at(user_sid: &str, label: &str) -> String {
+    format!("{}S:(ML;;NW;;;{label})", pipe_sddl(user_sid))
+}
+
+/// The SDDL integrity label for a mandatory-label RID.
+pub fn integrity_label(rid: u32) -> &'static str {
+    match rid {
+        0x4000.. => "SI",
+        0x3000.. => "HI",
+        0x2100.. => "MP",
+        0x2000.. => "ME",
+        _ => "LW",
+    }
+}
+
+/// The SDDL of the Simple MAPI pipe for this process: the user-only DACL
+/// labelled at this process's integrity level (medium if unknown).
+pub fn server_pipe_sddl(user_sid: &str) -> String {
+    let rid = current_integrity_rid()
+        .map_err(|err| tracing::warn!(%err, "integrity level unknown, labelling the pipe medium"))
+        .unwrap_or(0x2000);
+    pipe_sddl_at(user_sid, integrity_label(rid))
+}
+
+/// The current process's integrity level RID (`0x2000` medium, `0x3000`
+/// high, …).
+#[cfg(windows)]
+pub fn current_integrity_rid() -> Result<u32, String> {
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Security::{
+        GetSidSubAuthority, GetSidSubAuthorityCount, GetTokenInformation, TOKEN_MANDATORY_LABEL,
+        TOKEN_QUERY, TokenIntegrityLevel,
+    };
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    let mut token = HANDLE::default();
+    // SAFETY: the pseudo handle of the current process; `token` receives a
+    // handle closed below.
+    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }
+        .map_err(|e| format!("OpenProcessToken: {e}"))?;
+    let result = (|| {
+        let mut len = 0u32;
+        // SAFETY: a size query (no buffer).
+        let _ = unsafe { GetTokenInformation(token, TokenIntegrityLevel, None, 0, &mut len) };
+        if len == 0 {
+            return Err("GetTokenInformation returned no size".to_owned());
+        }
+        let mut buffer = vec![0u64; (len as usize).div_ceil(8)];
+        // SAFETY: the buffer holds at least `len` bytes.
+        unsafe {
+            GetTokenInformation(
+                token,
+                TokenIntegrityLevel,
+                Some(buffer.as_mut_ptr().cast()),
+                len,
+                &mut len,
+            )
+        }
+        .map_err(|e| format!("GetTokenInformation: {e}"))?;
+        // SAFETY: the call filled the buffer with a TOKEN_MANDATORY_LABEL
+        // whose SID points into it; the last sub-authority is the level.
+        unsafe {
+            let label = &*buffer.as_ptr().cast::<TOKEN_MANDATORY_LABEL>();
+            let sid = label.Label.Sid;
+            let count = *GetSidSubAuthorityCount(sid);
+            if count == 0 {
+                return Err("integrity SID without sub-authority".to_owned());
+            }
+            Ok(*GetSidSubAuthority(sid, u32::from(count) - 1))
+        }
+    })();
+    // SAFETY: the token handle opened above.
+    let _ = unsafe { CloseHandle(token) };
+    result
+}
+
+/// Not on this system.
+#[cfg(not(windows))]
+pub fn current_integrity_rid() -> Result<u32, String> {
+    Err("no integrity levels on this system".into())
+}
+
 /// The current process's user SID as a string (`S-1-5-21-…`).
 #[cfg(windows)]
 pub fn current_user_sid() -> Result<String, String> {
@@ -240,5 +326,28 @@ mod tests {
         let attributes = SecurityAttributes::from_sddl(&sddl).unwrap();
         assert!(!attributes.as_ptr().is_null());
         assert!(SecurityAttributes::from_sddl("D:P(nonsense").is_err());
+        // The server's descriptor carries its integrity label.
+        let rid = current_integrity_rid().unwrap();
+        assert!(rid >= 0x1000, "{rid:#x}");
+        let labelled = server_pipe_sddl(&sid);
+        assert_eq!(
+            labelled,
+            format!("D:P(A;;GA;;;{sid})S:(ML;;NW;;;{})", integrity_label(rid))
+        );
+        assert!(SecurityAttributes::from_sddl(&labelled).is_ok());
+    }
+
+    #[test]
+    fn integrity_labels() {
+        assert_eq!(integrity_label(0x1000), "LW");
+        assert_eq!(integrity_label(0x2000), "ME");
+        assert_eq!(integrity_label(0x2100), "MP");
+        assert_eq!(integrity_label(0x3000), "HI");
+        assert_eq!(integrity_label(0x4000), "SI");
+        assert_eq!(integrity_label(0x5000), "SI");
+        assert_eq!(
+            pipe_sddl_at("S-1-5-21-1", "HI"),
+            "D:P(A;;GA;;;S-1-5-21-1)S:(ML;;NW;;;HI)"
+        );
     }
 }

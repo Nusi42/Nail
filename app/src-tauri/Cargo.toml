@@ -15,6 +15,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "nail-app"
 path = "src/main.rs"
 
+[features]
+# Test-only (M4b review): honour the environment overrides of the registry
+# root (NAIL_REGISTRY_ROOT), the update source (NAIL_UPDATE_ENDPOINT /
+# NAIL_UPDATE_PUBKEY) and the Simple MAPI pipe (NAIL_MAPI_PIPE). Enabled by
+# the e2e desktop build (e2e/scripts/build-desktop.mjs) only; installer
+# builds never enable it, so a normal user cannot redirect the admin's
+# policy or the update key of a shipped Nail.exe.
+test-overrides = []
+
 [build-dependencies]
 tauri-build.workspace = true
 

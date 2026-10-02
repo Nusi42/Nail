@@ -74,6 +74,8 @@ export interface SystemMockState {
   updateState: UpdateState;
   lastCheckedAt: string | null;
   desktopSettings: DesktopSettings;
+  /** The machine-wide Run key (MSI `AUTOSTART=1`) starts Nail for everyone. */
+  startWithWindowsManaged: boolean;
   defaultApps: DefaultAppsStatus;
   firstRun: FirstRunState;
   /** Host calls, in order (`check`, `download`, `install`, `open-settings`). */
@@ -119,6 +121,7 @@ export function createSystemMockState(): SystemMockState {
       start_with_windows: false,
       plugin_dev_endpoint: false,
     },
+    startWithWindowsManaged: false,
     defaultApps: {
       registered: true,
       associations: DEFAULT_APP_TARGETS.map((target) => ({
@@ -309,8 +312,13 @@ export function answerSystem(core: MockCore, request: SystemRequest): Response {
   const status = (): Response => ({ type: "UpdateStatus", status: updateStatusOf(state) });
   const desktop = (): Response => ({
     type: "DesktopSettings",
-    settings: structuredClone(state.desktopSettings),
+    settings: {
+      ...structuredClone(state.desktopSettings),
+      // As the shell: the machine's Run key keeps it on.
+      start_with_windows: state.desktopSettings.start_with_windows || state.startWithWindowsManaged,
+    },
     dev_endpoint_url: state.desktopSettings.plugin_dev_endpoint ? "http://127.0.0.1:47811/" : null,
+    start_with_windows_managed: state.startWithWindowsManaged,
   });
   switch (request.type) {
     case "GetInstallation":
