@@ -169,6 +169,17 @@ pub fn required_access(request: &Request) -> RequestAccess {
         // data, shared with the desktop.
         Request::GetUiState => ("GetUiState", Session),
         Request::SetUiState { .. } => ("SetUiState", Session),
+        // M5c: remembered window geometry (no mail data, shared with the
+        // desktop; the UI keeps windows on its own page); pop-out windows
+        // exist only in the desktop app.
+        Request::GetWindowStates => ("GetWindowStates", Session),
+        Request::SetWindowState { .. } => ("SetWindowState", Session),
+        Request::ResetWindowStates => ("ResetWindowStates", Session),
+        Request::ListPopOuts => ("ListPopOuts", DesktopOnly),
+        Request::PopOutWindow { .. } => ("PopOutWindow", DesktopOnly),
+        Request::ReturnPopOut { .. } => ("ReturnPopOut", DesktopOnly),
+        Request::ClosePopOut { .. } => ("ClosePopOut", DesktopOnly),
+        Request::FocusPopOut { .. } => ("FocusPopOut", DesktopOnly),
         Request::PreviewConfigMerge { .. } => ("PreviewConfigMerge", Admin),
         Request::ResolveConfigMerge { .. } => ("ResolveConfigMerge", Admin),
         Request::ApplyConfigMerge { .. } => ("ApplyConfigMerge", Admin),

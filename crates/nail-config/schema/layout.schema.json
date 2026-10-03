@@ -93,6 +93,14 @@
         }
       ]
     },
+    "window-frames": {
+      "description": "The window-model properties of `window` nodes (M5c, ADR 0116:\n`size=`, `min-size=`, `modal=`, `resizable=`, `pop-out=`,\n`instances=`), merged over the window's nodes; a sparse file's\nproperties override the base's field by field.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/WindowFrameSchema"
+      },
+      "default": {}
+    },
     "windows": {
       "description": "Window trees: `window \"<name>\" { <node> }`, optionally inside\n`breakpoint min-width=… max-width=… { … }`. A window defined in a\nsparse file replaces all breakpoints of that window in the base.",
       "type": "object",
@@ -944,6 +952,73 @@
       },
       "required": [
         "views"
+      ]
+    },
+    "WindowFrameSchema": {
+      "description": "The window-model properties of a `window \"<name>\"` node (M5c).",
+      "type": "object",
+      "properties": {
+        "instances": {
+          "description": "`single` (default) or `multiple` (e.g. one composer per draft).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WindowInstancesSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min-size": {
+          "description": "Smallest size, `\"<width>x<height>\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modal": {
+          "description": "Blocks the rest of the window while open (only confirmations).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "pop-out": {
+          "description": "May open as its own OS window in the desktop app.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "resizable": {
+          "description": "The user can resize it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Default size, `\"<width>x<height>\"` in CSS pixels (e.g. `\"760x600\"`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "WindowInstancesSchema": {
+      "description": "How many windows of a kind may be open (M5c).",
+      "oneOf": [
+        {
+          "description": "One at a time.",
+          "type": "string",
+          "const": "single"
+        },
+        {
+          "description": "Several.",
+          "type": "string",
+          "const": "multiple"
+        }
       ]
     }
   }

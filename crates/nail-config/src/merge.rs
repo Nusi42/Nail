@@ -354,7 +354,9 @@ fn layout_items(file: &LayoutFile, keys: &[KeyBinding]) -> Items {
     let mut items = Items::new();
     items.insert(Item::Name, format!("layout {}", quote(&file.name.value)));
     for (name, breakpoints) in &file.windows {
-        if let Some(text) = render::window(name, breakpoints, 0, &style) {
+        if let Some(text) =
+            render::window(name, breakpoints, file.window_frames.get(name), 0, &style)
+        {
             items.insert(Item::Window(name.clone()), text);
         }
     }
@@ -1166,7 +1168,10 @@ fn apply_layout_item(
             }
             editor.remove_window(name);
             if let Some(breakpoints) = taken {
-                editor.append(&render::window(name, breakpoints, 1, &style).ok_or_else(plain)?);
+                editor.append(
+                    &render::window(name, breakpoints, theirs.window_frames.get(name), 1, &style)
+                        .ok_or_else(plain)?,
+                );
             }
         }
         Item::Action(id) => {

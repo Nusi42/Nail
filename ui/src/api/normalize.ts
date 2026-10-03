@@ -27,6 +27,8 @@ import type {
   ToolbarItem,
   ToolbarSettings,
   ViewDef,
+  WindowFrame,
+  WindowSize,
 } from "./generated";
 
 type Loose = Record<string, unknown>;
@@ -327,6 +329,8 @@ export function normalizeLayout(raw: unknown): ResolvedLayout {
     default_view: strOrNull(l.default_view),
     rail: arr(l.rail).map(railItem),
     settings: arr(l.settings).map(settingsGroup),
+    // M5c (ADR 0116): window-model properties of `window` nodes.
+    window_frames: mapValues(l.window_frames, windowFrame),
   };
   for (const [name, raw] of Object.entries(obj(l.toolbar_settings))) {
     if (!Object.hasOwn(layout.toolbar_settings, name)) continue;
@@ -337,6 +341,29 @@ export function normalizeLayout(raw: unknown): ResolvedLayout {
     };
   }
   return layout;
+}
+
+function boolOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function sizeOrNull(value: unknown): WindowSize | null {
+  const s = obj(value);
+  const width = numOrNull(s.width);
+  const height = numOrNull(s.height);
+  return width !== null && height !== null ? { width, height } : null;
+}
+
+function windowFrame(raw: unknown): WindowFrame {
+  const f = obj(raw);
+  return {
+    modal: boolOrNull(f.modal),
+    resizable: boolOrNull(f.resizable),
+    min_size: sizeOrNull(f.min_size),
+    size: sizeOrNull(f.size),
+    pop_out: boolOrNull(f.pop_out),
+    instances: f.instances === "single" || f.instances === "multiple" ? f.instances : null,
+  };
 }
 
 /** `ToolbarSettings::default()`. */

@@ -586,6 +586,11 @@ pub struct ResolvedLayout {
     /// The settings page (M5b): groups of sections.
     #[serde(default)]
     pub settings: Vec<SettingsGroup>,
+    /// The window-model properties of `window` nodes (M5c, ADR 0116:
+    /// `size=`, `min-size=`, `modal=`, `resizable=`, `pop-out=`,
+    /// `instances=`) by window name; only windows that set one.
+    #[serde(default)]
+    pub window_frames: IndexMap<String, crate::windows::WindowFrame>,
 }
 
 impl ResolvedLayout {
@@ -596,6 +601,20 @@ impl ResolvedLayout {
             .as_deref()
             .filter(|id| self.views.contains_key(*id))
             .or_else(|| self.views.keys().next().map(String::as_str))
+    }
+
+    /// The window model of a window kind: `base` (the defaults or the
+    /// feature's registration) with the layout's `window` properties over
+    /// it (M5c).
+    pub fn window_spec(
+        &self,
+        kind: &str,
+        base: crate::windows::WindowSpec,
+    ) -> crate::windows::WindowSpec {
+        match self.window_frames.get(kind) {
+            Some(frame) => base.with_frame(frame),
+            None => base.normalized(),
+        }
     }
 
     /// The settings section with this id.

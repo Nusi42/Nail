@@ -35,6 +35,8 @@ import type { PluginLogEntry } from "./PluginLogEntry";
 import type { PluginNotification } from "./PluginNotification";
 import type { PluginStopReason } from "./PluginStopReason";
 import type { PluginUiNode } from "./PluginUiNode";
+import type { PopOut } from "./PopOut";
+import type { PopOutChange } from "./PopOutChange";
 import type { Reminder } from "./Reminder";
 import type { RemoteAlert } from "./RemoteAlert";
 import type { RemoteSessionId } from "./RemoteSessionId";
@@ -45,6 +47,7 @@ import type { RuleRun } from "./RuleRun";
 import type { SessionEndReason } from "./SessionEndReason";
 import type { UpdateStatus } from "./UpdateStatus";
 import type { VaultStatus } from "./VaultStatus";
+import type { WindowState } from "./WindowState";
 import type { JsonValue } from "./serde_json/JsonValue";
 
 /**
@@ -392,4 +395,24 @@ key: string,
 /**
  * The new value, `null` = removed.
  */
-value: JsonValue | null, };
+value: JsonValue | null, } | { "type": "WindowStateChanged", 
+/**
+ * The window kind.
+ */
+window: string, 
+/**
+ * The new state, `null` = forgotten.
+ */
+state: WindowState | null, } | { "type": "PopOutChanged", 
+/**
+ * The window id.
+ */
+window: string, 
+/**
+ * What happened.
+ */
+change: PopOutChange, 
+/**
+ * Every open pop-out after the change.
+ */
+pop_outs: Array<PopOut>, };

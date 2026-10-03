@@ -100,6 +100,7 @@ use crate::sync::FolderSyncPolicy;
 use crate::triage::{
     JunkSettings, JunkStatus, MailNotification, NotificationSettings, SnoozedMessage,
 };
+use crate::windows::{PopOut, PopOutChange, WindowState, WindowStates};
 // M4c (ADR 0094).
 use crate::backup::{BackupContents, BackupManifest, RestorePlan};
 use crate::desktop::PathPick;
@@ -2802,6 +2803,78 @@ pub enum Request {
         /// The new value, `null` = remove the key.
         value: Option<Value>,
     },
+
+    // --- Windows (M5c, ADR 0116) ---
+    /// Every remembered window state by kind (`<config-dir>/window-state.json`,
+    /// [`crate::windows`]). Answered with [`Response::WindowStates`].
+    GetWindowStates,
+    /// Remember (or, with `state` `null`, forget) the state of a window kind;
+    /// the file is rewritten atomically. Answered with
+    /// [`Response::WindowStates`]; `invalid_request` with a
+    /// `window-state-issue-*` id for an invalid kind (instance ids are not
+    /// accepted), an invalid geometry or too many kinds. Sends
+    /// [`Event::WindowStateChanged`] when the state changed.
+    SetWindowState {
+        /// The window kind, e.g. `composer`.
+        window: String,
+        /// The new state, `null` = forget it.
+        state: Option<WindowState>,
+    },
+    /// Forget every remembered window state ("Reset window positions").
+    /// Answered with [`Response::WindowStates`] (empty); sends
+    /// [`Event::WindowStateChanged`] with `null` for each kind that had one.
+    ResetWindowStates,
+    /// The open pop-out windows. Answered with [`Response::PopOuts`] (empty
+    /// where there are none). Desktop app only: remote sessions get
+    /// `forbidden`.
+    ListPopOuts,
+    /// Open a window as its own OS window (desktop app only; `unsupported`
+    /// elsewhere, `forbidden` remotely). The shell loads the UI at
+    /// [`crate::windows::pop_out_route`] in a new webview on the same core
+    /// connection, at the kind's remembered pop-out geometry. A window that
+    /// is already popped out is focused instead. Remembers `popped_out` for
+    /// the kind. Answered with [`Response::PopOuts`]; `invalid_request` with
+    /// a `pop-out-issue-*` id for an invalid id, a context above
+    /// `MAX_POP_OUT_CONTEXT_BYTES` / a title above `MAX_POP_OUT_TITLE_CHARS`
+    /// or `MAX_POP_OUTS` open. Sends [`Event::PopOutChanged`] (`opened` or
+    /// `focused`).
+    PopOutWindow {
+        /// The window id (`<kind>` or `<kind>:<instance>`).
+        window: String,
+        /// The OS window's title as the UI shows it (localized), `null` =
+        /// the shell's default.
+        #[serde(default)]
+        #[ts(optional)]
+        title: Option<String>,
+        /// What the new webview needs to show the window (e.g. the draft
+        /// id), returned in [`crate::windows::PopOut::context`].
+        #[serde(default)]
+        #[ts(optional)]
+        context: Option<Value>,
+    },
+    /// Close a pop-out and show the window in the page again (forgets
+    /// `popped_out` for the kind). `conflict` with `pop-out-issue-not-open`
+    /// when it is not popped out. Answered with [`Response::PopOuts`]; sends
+    /// [`Event::PopOutChanged`] `returned`.
+    ReturnPopOut {
+        /// The window id.
+        window: String,
+    },
+    /// Close a pop-out window (the window is gone, e.g. a sent composer).
+    /// `conflict` with `pop-out-issue-not-open` when it is not popped out.
+    /// Answered with [`Response::PopOuts`]; sends [`Event::PopOutChanged`]
+    /// `closed`.
+    ClosePopOut {
+        /// The window id.
+        window: String,
+    },
+    /// Bring a pop-out window to the front. `conflict` with
+    /// `pop-out-issue-not-open` when it is not popped out. Answered with
+    /// [`Response::PopOuts`]; sends [`Event::PopOutChanged`] `focused`.
+    FocusPopOut {
+        /// The window id.
+        window: String,
+    },
 }
 
 /// The largest attachment [`Request::GetMessageAttachment`] returns
@@ -3884,6 +3957,18 @@ pub enum Response {
         /// The UI state.
         state: BTreeMap<String, Value>,
     },
+    /// Answer to [`Request::GetWindowStates`], [`Request::SetWindowState`]
+    /// and [`Request::ResetWindowStates`] (M5c): every remembered window
+    /// state by kind.
+    WindowStates {
+        /// State by window kind.
+        states: WindowStates,
+    },
+    /// Answer to the pop-out requests (M5c): the open pop-out windows.
+    PopOuts {
+        /// Open pop-outs, in opening order.
+        pop_outs: Vec<PopOut>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -4359,6 +4444,26 @@ pub enum Event {
         key: String,
         /// The new value, `null` = removed.
         value: Option<Value>,
+    },
+    // --- Windows (M5c, ADR 0116) ---
+    /// A window kind's remembered state changed ([`Request::SetWindowState`],
+    /// [`Request::ResetWindowStates`], a pop-out moved; from any window or
+    /// session).
+    WindowStateChanged {
+        /// The window kind.
+        window: String,
+        /// The new state, `null` = forgotten.
+        state: Option<WindowState>,
+    },
+    /// A pop-out window was opened, moved, focused, closed or returned to
+    /// the page (desktop app only; not sent to remote sessions).
+    PopOutChanged {
+        /// The window id.
+        window: String,
+        /// What happened.
+        change: PopOutChange,
+        /// Every open pop-out after the change.
+        pop_outs: Vec<PopOut>,
     },
 }
 

@@ -119,7 +119,7 @@ layout "default" {
     // The calendar, contacts and tasks views (M3a, M5b;
     // userDocs/en/calendar-contacts-tasks.md). Opened with `window.open`
     // they show as windows over the main window.
-    window "calendar" {
+    window "calendar" size="1100x760" min-size="720x480" {
         stack id="calendar-root" sizes="auto 1fr" {
             toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
             split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
@@ -134,43 +134,46 @@ layout "default" {
     }
     // Contacts and Tasks: a header with the title, the search and "New …"
     // as the primary button (the rest in "More"), like the calendar.
-    window "contacts" {
+    window "contacts" size="900x640" min-size="600x420" {
         split "horizontal" id="contacts-panes" sizes="360px 1fr" {
             contact-list id="contacts-list" label="@pim.pane.contacts" header=#true
             contact-card id="contacts-card" label="@pim.pane.contact"
         }
     }
-    window "tasks" {
+    window "tasks" size="720x600" min-size="420x360" {
         task-list id="tasks" header=#true
     }
+    // The view windows open at these sizes when shown as windows (M5c).
     // The settings view: grouped sections with search (the `settings-page`
     // section below says which settings each section shows).
-    window "settings" {
+    window "settings" size="1000x720" min-size="640x480" {
         settings-page id="settings-page"
     }
 
-    // Secondary windows, opened over the main window.
-    window "composer" {
+    // Secondary windows, opened over the main window (M5c: movable,
+    // resizable and non-modal; `size` / `min-size` in pixels; several
+    // composers at once, one per draft).
+    window "composer" size="780x640" min-size="520x400" instances="multiple" {
         stack id="composer-stack" sizes="1fr auto" {
             composer id="composer"
             // Sign and Encrypt with the key status of every recipient.
             security-composer id="composer-security"
         }
     }
-    window "outbox" {
+    window "outbox" size="720x480" min-size="420x280" {
         outbox id="outbox"
     }
-    window "move" {
+    window "move" size="420x560" min-size="320x360" pop-out=#false {
         folder-picker id="move-picker"
     }
-    window "account-setup" {
+    window "account-setup" size="720x640" min-size="520x480" {
         account-setup id="account-setup"
     }
-    window "rules" {
+    window "rules" size="900x640" min-size="600x420" {
         rule-manager id="rules"
     }
     // Snoozed messages, with "Wake up now".
-    window "snoozed" {
+    window "snoozed" size="720x520" min-size="420x300" {
         snooze-list id="snoozed"
     }
 

@@ -83,6 +83,7 @@ fn layout_schema_snapshot() {
             "toolbar-settings",
             "toolbars",
             "views",
+            "window-frames",
             "windows"
         ]
     );
@@ -96,6 +97,8 @@ fn layout_schema_snapshot() {
         "\"header\"",
         "\"more\"",
         "\"rank\"",
+        "\"min-size\"",
+        "\"multiple\"",
     ] {
         assert!(text.contains(needle), "layout schema lacks {needle}");
     }

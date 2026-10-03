@@ -33,7 +33,7 @@ const TEST_DIALOG_TITLE = "window-test-dialog = Test dialog";
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the M1b … M5a and M5b slots and contains every built-in", () => {
+  it("has the M1b … M5b and M5c slots and contains every built-in", () => {
     expect(Object.keys(features)).toEqual([
       "composer",
       "rules",
@@ -60,6 +60,8 @@ describe("feature registry", () => {
       "shell",
       "settings",
       "mailWidgets",
+      "windows",
+      "popout",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);
@@ -104,6 +106,24 @@ describe("feature registry", () => {
         },
       ),
     ).toThrow(/settings info "x"/);
+
+    // M5c: window registrations merge and refuse duplicates.
+    expect(merged.windows).toEqual({});
+    expect(
+      mergeFeatures(
+        { widgets: {}, actions: {} },
+        { a: { ...empty, windows: { "x-confirm": { confirmation: true } } } },
+      ).windows,
+    ).toEqual({ "x-confirm": { confirmation: true } });
+    expect(() =>
+      mergeFeatures(
+        { widgets: {}, actions: {} },
+        {
+          a: { ...empty, windows: { x: { modal: false } } },
+          b: { ...empty, windows: { x: { modal: true } } },
+        },
+      ),
+    ).toThrow(/window "x"/);
 
     // M4c: palette descriptions merge like actions and refuse duplicates.
     const info = { title: "rules-run-title" };

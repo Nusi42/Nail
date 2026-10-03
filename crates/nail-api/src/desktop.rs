@@ -833,7 +833,7 @@ pub mod registry {
 /// event ([`crate::Event::UpdateStatusChanged`] with the composed status,
 /// [`crate::Event::DesktopSettingsChanged`],
 /// [`crate::Event::DefaultAppsChanged`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesktopChange {
     /// The updater's state or progress changed.
     Update,
@@ -842,6 +842,10 @@ pub enum DesktopChange {
     /// Default-app registration may have changed (e.g. the user came back
     /// from Settings).
     DefaultApps,
+    /// The user moved, resized, focused or closed a pop-out window (M5c,
+    /// ADR 0116); the core updates its pop-out list, remembers the geometry
+    /// and sends [`crate::Event::PopOutChanged`].
+    PopOut(crate::windows::PopOutReport),
 }
 
 /// The callback the core hands the host in [`DesktopHost::attach`].
@@ -915,6 +919,31 @@ pub trait DesktopHost: Send + Sync + fmt::Debug {
     /// ([`crate::Request::PrintViewReady`]).
     fn print_view_ready(&self, job_id: &PrintJobId) {
         let _ = job_id;
+    }
+
+    // --- M5c (ADR 0116): pop-out windows; defaults answer `unsupported` ---
+
+    /// Opens a window as its own OS window: a new webview window labelled
+    /// `open.label` that loads the UI at `open.route` and talks to the same
+    /// core, at `open.geometry` (screen coordinates) when given. Report what
+    /// the user does with it through the notifier
+    /// ([`DesktopChange::PopOut`]).
+    fn open_pop_out(&self, open: &crate::windows::PopOutOpen) -> Result<(), ApiError> {
+        let _ = open;
+        Err(desktop_unsupported())
+    }
+
+    /// Closes a pop-out's OS window (`ReturnPopOut` / `ClosePopOut`); the
+    /// core has already removed it from its list.
+    fn close_pop_out(&self, window: &str) -> Result<(), ApiError> {
+        let _ = window;
+        Err(desktop_unsupported())
+    }
+
+    /// Brings a pop-out's OS window to the front.
+    fn focus_pop_out(&self, window: &str) -> Result<(), ApiError> {
+        let _ = window;
+        Err(desktop_unsupported())
     }
 }
 

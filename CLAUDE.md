@@ -102,6 +102,13 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        settings / list / folder actions, ListFilter, FavoriteFolder, FolderPaneSectionKind,
                        folder_pane_sections, account_color_slot, overflow_order, step_view, UI-state keys); ui_state.rs
                        (`ui-state.json` keys / limits, UiStateIssue); GetUiState / SetUiState → UiState, UiStateChanged
+                       M5c (ADR 0116): windows.rs (window ids `<kind>[:<instance>]`, WindowSpec modal / resizable /
+                       sizes / pop_out / instances, DEFAULT_ / CONFIRMATION_WINDOW_SPEC, WindowFrame = `window` node
+                       properties → ResolvedLayout.window_frames + window_spec(), WindowState / WindowGeometry per kind,
+                       WindowStateFile = `window-state.json` v1, PopOut / PopOutChange / PopOutOpen / PopOutReport, issues);
+                       GetWindowStates / SetWindowState / ResetWindowStates → WindowStates, WindowStateChanged; ListPopOuts /
+                       PopOutWindow / ReturnPopOut / ClosePopOut / FocusPopOut → PopOuts, PopOutChanged; DesktopHost
+                       open_pop_out / close_pop_out / focus_pop_out, DesktopChange::PopOut (no longer Copy)
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -139,6 +146,10 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        (ConfigManager::ui_state / set_ui_state, atomic `ui-state.json`); ConfigManager::appearance_for
                        (appearance + theme for another OS state, per remote session); render / write-back keep the M5b
                        toolbar properties
+                       M5c (ADR 0116): `window` node properties size= / min-size= / modal= / resizable= / pop-out= /
+                       instances= (LayoutFile.window_frames, merged field by field; render / merge / write-back keep them);
+                       window_state.rs (ConfigManager::window_states / set_window_state / update_window_state /
+                       reset_window_states, atomic `window-state.json`); tests/m5c_windows.rs
 crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -411,6 +422,8 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        (remote sessions: ReportSystemAppearance kept per session in Inner.session_appearance,
                        Service::session_appearance; GetConfig / theme answers / ThemeChanged / ConfigChanged computed
                        per session in remote_access.rs)
+                       M5c (ADR 0116): windows.rs (window-state requests, pop-out list Inner.pop_outs, PopOutWindow /
+                       Return / Close / Focus through the DesktopHost, DesktopChange::PopOut reports keep the geometry per kind)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -533,6 +546,13 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        customization/LayoutMigration.tsx (offers the new default to a pre-rail layout once, UI-state key
                        `customize.layout-offer`, merge dialog prefilled with defaults/layout.kdl via ?raw);
                        i18n/localizer.ts availableLocales (browser languages only against non-empty catalogs);
+                       M5c (ADR 0116): state/windows.ts (window ids / specs / checks mirrored from nail_api::windows,
+                       resolveWindowSpec = defaults → Feature.windows → layout window_frames, WindowInstanceContext /
+                       useWindowInstance, pop-out routes `#/window/<id>`), state/windowState.ts (useWindowStates /
+                       useSetWindowState / usePopOuts / usePopOutActions; App.tsx applies WindowStateChanged /
+                       PopOutChanged), api/windowStateMock.ts (enableMockPopOuts / simulatePopOutReport), UiState.windows =
+                       window ids in z-order + focusWindow, UiState.composers (per instance), Feature.windows; slots
+                       features/windows (WP171), features/popout (WP173: PopOutHost rendered by App.tsx on a pop-out route);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -593,7 +613,9 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        M5a: core-appearance.ftl (contract ids: theme names / kinds / sources, densities, issues),
                        appearance.ftl (WP153); M5b: core-shell.ftl (contract ids: views, view actions, toolbar More /
                        group headings, settings groups / default sections, list filters, favorites, folder sections,
-                       UI-state issues), shell.ftl (WP161), settings.ftl (WP163); every file is embedded in nail-config l10n.rs
+                       UI-state issues), shell.ftl (WP161), settings.ftl (WP163); M5c: core-windows.ftl (contract ids: snap
+                       halves, instances, window-state / pop-out issues, pop-out changes), windows.ftl (WP171), popout.ftl
+                       (WP173); every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
@@ -927,6 +949,17 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   Pre-rail user layouts keep their main window (views open as windows) and get the new default offered once through
   the merge dialog. `ThemeInfo.preview` (a theme's own colours for the gallery); the UI negotiates browser languages
   only against non-empty catalogs (an empty `locales/de` keeps dates English).
+- M5c contract: ADR 0116 (window ids `<kind>` / `<kind>:<instance>` in `UiState.windows`, z-order topmost last,
+  `focusWindow`; WindowSpec resolved as defaults → `Feature.windows` (`{ confirmation: true }` = the only modal windows)
+  → `layout.kdl` `window` properties `size` / `min-size` / `modal` / `resizable` / `pop-out` / `instances`; remembered
+  state per kind in `<config-dir>/window-state.json` (versioned; GetWindowStates / SetWindowState / ResetWindowStates /
+  WindowStateChanged, served); desktop pop-outs (PopOutWindow / ReturnPopOut / ClosePopOut / FocusPopOut / ListPopOuts /
+  PopOutChanged through `DesktopHost::open_pop_out` …, served by the core; the shell's trait methods are WP173's; a
+  pop-out webview loads `#/window/<id>` and reads its `context` from ListPopOuts); `UiState.composers` for further
+  composers). The default layout sizes every secondary window, `composer` has `instances="multiple"`. Slots: WP171
+  `ui/src/layout/` + `features/windows/` + windows.ftl, WP172 `features/composer/` + `windows` registrations in other
+  features, WP173 `app/src-tauri/` + `features/popout/` + popout.ftl, WP175 `nail-core/tests/{gmail,exchange}.rs` + the
+  Gmail / Exchange engine sources.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

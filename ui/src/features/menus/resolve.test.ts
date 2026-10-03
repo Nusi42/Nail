@@ -35,6 +35,7 @@ function layout(menu: MenuItem[]): ResolvedLayout {
     default_view: null,
     rail: [],
     settings: [],
+    window_frames: {},
   };
 }
 

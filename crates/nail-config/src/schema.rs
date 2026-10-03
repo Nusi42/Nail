@@ -191,6 +191,34 @@ pub(crate) struct ToolbarSettingsSchema {
     overflow: Option<ToolbarOverflowSchema>,
 }
 
+/// The window-model properties of a `window "<name>"` node (M5c).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct WindowFrameSchema {
+    /// Default size, `"<width>x<height>"` in CSS pixels (e.g. `"760x600"`).
+    size: Option<String>,
+    /// Smallest size, `"<width>x<height>"`.
+    min_size: Option<String>,
+    /// Blocks the rest of the window while open (only confirmations).
+    modal: Option<bool>,
+    /// The user can resize it.
+    resizable: Option<bool>,
+    /// May open as its own OS window in the desktop app.
+    pop_out: Option<bool>,
+    /// `single` (default) or `multiple` (e.g. one composer per draft).
+    instances: Option<WindowInstancesSchema>,
+}
+
+/// How many windows of a kind may be open (M5c).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum WindowInstancesSchema {
+    /// One at a time.
+    Single,
+    /// Several.
+    Multiple,
+}
+
 /// Toolbar overflow (M5b).
 #[derive(JsonSchema)]
 #[serde(rename_all = "kebab-case")]

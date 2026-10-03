@@ -120,6 +120,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         "core-shell.ftl",
         include_str!("../../../locales/en/core-shell.ftl"),
     ),
+    (
+        "core-windows.ftl",
+        include_str!("../../../locales/en/core-windows.ftl"),
+    ),
     ("core.ftl", include_str!("../../../locales/en/core.ftl")),
     (
         "customization.ftl",
@@ -142,6 +146,7 @@ pub const EN_FILES: &[(&str, &str)] = &[
         "plugins.ftl",
         include_str!("../../../locales/en/plugins.ftl"),
     ),
+    ("popout.ftl", include_str!("../../../locales/en/popout.ftl")),
     (
         "portability.ftl",
         include_str!("../../../locales/en/portability.ftl"),
@@ -166,6 +171,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ("sync.ftl", include_str!("../../../locales/en/sync.ftl")),
     ("system.ftl", include_str!("../../../locales/en/system.ftl")),
     ("triage.ftl", include_str!("../../../locales/en/triage.ftl")),
+    (
+        "windows.ftl",
+        include_str!("../../../locales/en/windows.ftl"),
+    ),
 ];
 
 /// The German catalogs (may be empty; English fills the gaps per key).
@@ -264,6 +273,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
         "core-shell.ftl",
         include_str!("../../../locales/de/core-shell.ftl"),
     ),
+    (
+        "core-windows.ftl",
+        include_str!("../../../locales/de/core-windows.ftl"),
+    ),
     ("core.ftl", include_str!("../../../locales/de/core.ftl")),
     (
         "customization.ftl",
@@ -286,6 +299,7 @@ pub const DE_FILES: &[(&str, &str)] = &[
         "plugins.ftl",
         include_str!("../../../locales/de/plugins.ftl"),
     ),
+    ("popout.ftl", include_str!("../../../locales/de/popout.ftl")),
     (
         "portability.ftl",
         include_str!("../../../locales/de/portability.ftl"),
@@ -310,6 +324,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ("sync.ftl", include_str!("../../../locales/de/sync.ftl")),
     ("system.ftl", include_str!("../../../locales/de/system.ftl")),
     ("triage.ftl", include_str!("../../../locales/de/triage.ftl")),
+    (
+        "windows.ftl",
+        include_str!("../../../locales/de/windows.ftl"),
+    ),
 ];
 
 /// The languages with embedded catalogs, English first.

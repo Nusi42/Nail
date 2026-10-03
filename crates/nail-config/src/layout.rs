@@ -6,6 +6,7 @@ use std::collections::HashSet;
 use indexmap::IndexMap;
 use kdl::{KdlEntry, KdlNode};
 use nail_api::views::{NAV_RAIL_WIDGET, SETTINGS_PAGE_WIDGET, VIEW_HOST_WIDGET};
+use nail_api::windows::{WindowFrame, WindowInstances, WindowSize};
 use nail_api::{
     ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LocalizedMessage,
     MenuItem, Orientation, RailItem, ResolvedLayout, SettingsGroup, SettingsSection,
@@ -23,10 +24,20 @@ use crate::kdl_util::{
 use crate::l10n::msg;
 use crate::schema::{
     ActionSchema, BreakpointSchema, MenuItemSchema, RailItemSchema, SettingsGroupSchema,
-    ToolbarItemSchema, ToolbarSettingsSchema, ViewsSchema,
+    ToolbarItemSchema, ToolbarSettingsSchema, ViewsSchema, WindowFrameSchema,
 };
 use crate::theme::{read_extends, single_root};
 use crate::widgets::{self, OptionType};
+
+/// The window-model properties a `window` node may carry (M5c, ADR 0116).
+pub(crate) const WINDOW_FRAME_PROPS: &[&str] = &[
+    "size",
+    "min-size",
+    "modal",
+    "resizable",
+    "pop-out",
+    "instances",
+];
 
 /// Containers from the design that M0 does not support yet.
 const FUTURE_CONTAINERS: &[&str] = &["grid", "dock", "scroll", "overlay"];
@@ -97,6 +108,13 @@ pub struct LayoutFile {
     #[schemars(with = "Option<Vec<SettingsGroupSchema>>")]
     #[serde(default, rename = "settings-page")]
     pub settings_page: Option<Vec<SettingsGroup>>,
+    /// The window-model properties of `window` nodes (M5c, ADR 0116:
+    /// `size=`, `min-size=`, `modal=`, `resizable=`, `pop-out=`,
+    /// `instances=`), merged over the window's nodes; a sparse file's
+    /// properties override the base's field by field.
+    #[schemars(with = "IndexMap<String, WindowFrameSchema>")]
+    #[serde(default, rename = "window-frames")]
+    pub window_frames: IndexMap<String, WindowFrame>,
 }
 
 /// A `bind` or `unbind` entry.
@@ -145,6 +163,13 @@ impl LayoutFile {
         self.name = overlay.name;
         self.extends = None;
         self.windows.extend(overlay.windows);
+        // Window-model properties merge field by field, so a replaced window
+        // without them (every pre-M5c file) keeps the base's sizes and
+        // instances.
+        for (name, frame) in overlay.window_frames {
+            let base = self.window_frames.get(&name).copied().unwrap_or_default();
+            self.window_frames.insert(name, base.merged(&frame));
+        }
         for (id, def) in overlay.actions {
             let target = self.actions.entry(id).or_default();
             target.label = def.label.or(target.label.take());
@@ -202,6 +227,7 @@ impl LayoutReader<'_, '_> {
             views: None,
             rail: None,
             settings_page: None,
+            window_frames: IndexMap::new(),
         };
         for child in children(node) {
             e.ok(self.section(&mut file, child));
@@ -312,7 +338,7 @@ impl LayoutReader<'_, '_> {
         max_width: Option<u32>,
     ) -> Result<(), ConfigError> {
         let src = self.src;
-        check_props(src, node, &[])?;
+        check_props(src, node, WINDOW_FRAME_PROPS)?;
         check_max_args(src, node, 1)?;
         let (name, name_entry) = arg_str(src, node, 0)?;
         if !is_kebab(name) {
@@ -320,6 +346,19 @@ impl LayoutReader<'_, '_> {
                 name_entry,
                 msg("config-window-name-invalid").arg("name", name),
             ));
+        }
+        let frame = self.window_frame(node)?;
+        let merged = file
+            .window_frames
+            .get(name)
+            .copied()
+            .unwrap_or_default()
+            .merged(&frame);
+        if let Some(issue) = merged.issue() {
+            return Err(src.node_err(node, msg(&issue.message_id()).arg("name", name)));
+        }
+        if !merged.is_empty() {
+            file.window_frames.insert(name.to_owned(), merged);
         }
         let [root] = children(node) else {
             return Err(src.node_err(node, msg("config-window-one-root").arg("name", name)));
@@ -336,6 +375,43 @@ impl LayoutReader<'_, '_> {
                 root,
             });
         Ok(())
+    }
+
+    /// The window-model properties of a `window` node (M5c).
+    fn window_frame(&self, node: &KdlNode) -> Result<WindowFrame, ConfigError> {
+        let src = self.src;
+        let size = |key: &str| -> Result<Option<WindowSize>, ConfigError> {
+            match prop_str(src, node, key)? {
+                None => Ok(None),
+                Some((value, entry)) => WindowSize::parse(value).map(Some).ok_or_else(|| {
+                    src.entry_err(
+                        entry,
+                        msg("config-window-size-invalid")
+                            .arg("key", key)
+                            .arg("found", describe(entry.value())),
+                    )
+                }),
+            }
+        };
+        Ok(WindowFrame {
+            modal: self.bool_prop(node, "modal")?,
+            resizable: self.bool_prop(node, "resizable")?,
+            min_size: size("min-size")?,
+            size: size("size")?,
+            pop_out: self.bool_prop(node, "pop-out")?,
+            instances: match prop_str(src, node, "instances")? {
+                None => None,
+                Some((value, entry)) => Some(WindowInstances::parse(value).ok_or_else(|| {
+                    src.entry_err(
+                        entry,
+                        msg("config-option-one-of")
+                            .arg("key", "instances")
+                            .arg("choices", "single, multiple")
+                            .arg("found", describe(entry.value())),
+                    )
+                })?),
+            },
+        })
     }
 
     /// Checks that ids are unique within one window tree (the tree is
@@ -1561,6 +1637,12 @@ impl LayoutFile {
             views: views.views,
             rail,
             settings: settings_page,
+            window_frames: self
+                .window_frames
+                .iter()
+                .filter(|(name, frame)| self.windows.contains_key(*name) && !frame.is_empty())
+                .map(|(name, frame)| (name.clone(), *frame))
+                .collect(),
         })
     }
 

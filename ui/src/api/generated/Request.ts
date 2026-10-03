@@ -125,6 +125,7 @@ import type { UiContext } from "./UiContext";
 import type { UpdateSettings } from "./UpdateSettings";
 import type { VacationSettings } from "./VacationSettings";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
+import type { WindowState } from "./WindowState";
 import type { WindowsCertStore } from "./WindowsCertStore";
 import type { JsonValue } from "./serde_json/JsonValue";
 
@@ -2223,4 +2224,38 @@ key: string,
 /**
  * The new value, `null` = remove the key.
  */
-value: JsonValue | null, };
+value: JsonValue | null, } | { "type": "GetWindowStates" } | { "type": "SetWindowState", 
+/**
+ * The window kind, e.g. `composer`.
+ */
+window: string, 
+/**
+ * The new state, `null` = forget it.
+ */
+state: WindowState | null, } | { "type": "ResetWindowStates" } | { "type": "ListPopOuts" } | { "type": "PopOutWindow", 
+/**
+ * The window id (`<kind>` or `<kind>:<instance>`).
+ */
+window: string, 
+/**
+ * The OS window's title as the UI shows it (localized), `null` =
+ * the shell's default.
+ */
+title?: string, 
+/**
+ * What the new webview needs to show the window (e.g. the draft
+ * id), returned in [`crate::windows::PopOut::context`].
+ */
+context?: JsonValue, } | { "type": "ReturnPopOut", 
+/**
+ * The window id.
+ */
+window: string, } | { "type": "ClosePopOut", 
+/**
+ * The window id.
+ */
+window: string, } | { "type": "FocusPopOut", 
+/**
+ * The window id.
+ */
+window: string, };

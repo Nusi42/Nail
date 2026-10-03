@@ -36,6 +36,9 @@ use nail_api::ui_state::UiStateIssue;
 use nail_api::views::{
     BUILTIN_VIEWS, FavoriteFolder, FolderPaneSectionKind, ListFilter, SETTINGS_GROUPS,
 };
+use nail_api::windows::{
+    PopOutChange, PopOutIssue, WindowFrameIssue, WindowInstances, WindowSnap, WindowStateIssue,
+};
 // M4c (ADR 0094).
 use nail_api::backup::{BackupIssue, BackupItem, RestoreEffect};
 use nail_api::diagnostics::{DiagnosticsIssue, DiagnosticsItem, Redaction};
@@ -347,6 +350,17 @@ fn contract_message_ids_exist_in_english() {
             .map(|g| format!("settings-group-{g}")),
     );
     wanted.extend(["toolbar-more", "nav-rail-label", "account-color-slot"].map(str::to_owned));
+    // M5c (ADR 0116): the window manager's contract ids (core-windows.ftl;
+    // the frame issues are config errors in core.ftl).
+    labels!(
+        WindowSnap,
+        WindowInstances,
+        WindowFrameIssue,
+        WindowStateIssue,
+        PopOutChange,
+        PopOutIssue,
+    );
+    wanted.extend(["config-window-size-invalid"].map(str::to_owned));
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [

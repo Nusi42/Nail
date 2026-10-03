@@ -9,6 +9,7 @@
 
 use std::fmt::Write as _;
 
+use nail_api::windows::WindowFrame;
 use nail_api::{
     ActionDef, Breakpoint, LayoutNode, MenuItem, Orientation, ToolbarItem, ToolbarOverflow,
     ToolbarSettings,
@@ -189,19 +190,27 @@ pub(crate) fn layout_node(node: &LayoutNode, depth: usize, style: &Style) -> Opt
 pub(crate) fn window(
     name: &str,
     breakpoints: &[Breakpoint],
+    frame: Option<&WindowFrame>,
     depth: usize,
     style: &Style,
 ) -> Option<String> {
     let mut out = String::new();
+    // The window-model properties (M5c) go on the first node only.
+    let mut frame = frame.filter(|f| !f.is_empty());
+    let mut head = || {
+        let line = Line::new("window").str_arg(name);
+        match frame.take() {
+            Some(f) => window_frame(line, f),
+            None => line,
+        }
+    };
     for bp in breakpoints {
         if bp.min_width.is_none() && bp.max_width.is_none() {
             let root = layout_node(&bp.root, depth + 1, style)?;
-            out.push_str(&Line::new("window").str_arg(name).block(depth, style, &root));
+            out.push_str(&head().block(depth, style, &root));
         } else {
             let root = layout_node(&bp.root, depth + 2, style)?;
-            let win = Line::new("window")
-                .str_arg(name)
-                .block(depth + 1, style, &root);
+            let win = head().block(depth + 1, style, &root);
             let mut line = Line::new("breakpoint");
             if let Some(min) = bp.min_width {
                 line = line.prop("min-width", &min.to_string());
@@ -213,6 +222,24 @@ pub(crate) fn window(
         }
     }
     Some(out)
+}
+
+/// `size=… min-size=… modal=… resizable=… pop-out=… instances=…` (M5c).
+fn window_frame(line: Line, frame: &WindowFrame) -> Line {
+    let flag = |b: bool| if b { "#true" } else { "#false" };
+    let mut line = line
+        .str_prop("size", frame.size.map(|s| s.to_string()).as_deref())
+        .str_prop("min-size", frame.min_size.map(|s| s.to_string()).as_deref());
+    for (key, value) in [
+        ("modal", frame.modal),
+        ("resizable", frame.resizable),
+        ("pop-out", frame.pop_out),
+    ] {
+        if let Some(value) = value {
+            line = line.prop(key, flag(value));
+        }
+    }
+    line.str_prop("instances", frame.instances.map(|i| i.as_str()))
 }
 
 /// `action "<id>" label=… icon=… alias-of=… <args>…`.

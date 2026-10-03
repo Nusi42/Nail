@@ -80,6 +80,7 @@ mod ui_state;
 mod vault;
 mod virtuals;
 mod watch;
+mod windows;
 
 pub use clock::AdjustableClock;
 pub use error::{CoreError, Result};

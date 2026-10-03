@@ -30,6 +30,9 @@ import {
   type AppConfig,
 } from "./state/queries";
 import { applyUiStateChange } from "./state/uiState";
+import { applyPopOuts, applyWindowStateChange } from "./state/windowState";
+import { parsePopOutRoute } from "./state/windows";
+import { PopOutHost } from "./features/popout";
 import { UiStoreContext, createUiStore, useUi, useUiStoreApi, type UiStore } from "./state/uiStore";
 import { BootTheme } from "./theme/BootTheme";
 import { ThemeProvider } from "./theme/ThemeProvider";
@@ -222,6 +225,13 @@ function useCoreEvents(): void {
         case "UiStateChanged":
           applyUiStateChange(queryClient, event.key, event.value);
           break;
+        // M5c (ADR 0116): remembered window state and desktop pop-outs.
+        case "WindowStateChanged":
+          applyWindowStateChange(queryClient, event.window, event.state);
+          break;
+        case "PopOutChanged":
+          applyPopOuts(queryClient, event.pop_outs);
+          break;
         case "ConfigError":
           ui().setConfigError({
             file: event.file,
@@ -371,6 +381,10 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
   const modeOverride = useUi((s) => s.modeOverride);
   useCoreEvents();
   useDefaultSelection();
+  // A pop-out window of the desktop app shows one window (M5c, `#/window/<id>`).
+  const [popOut] = useState(() =>
+    typeof window === "undefined" ? null : parsePopOutRoute(window.location.hash),
+  );
 
   const locale = localeOverride ?? config.data?.locale ?? null;
   return (
@@ -389,8 +403,14 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
                         data-theme={config.data.theme.name}
                         data-density={config.data.theme.density}
                       >
-                        <WindowView layout={layout} name={windowName} />
-                        <WindowLayer layout={layout} />
+                        {popOut !== null ? (
+                          <PopOutHost layout={layout} window={popOut} />
+                        ) : (
+                          <>
+                            <WindowView layout={layout} name={windowName} />
+                            <WindowLayer layout={layout} />
+                          </>
+                        )}
                         {/* Inside the landmark: context menus open from here. */}
                         <FeatureEffects />
                       </main>

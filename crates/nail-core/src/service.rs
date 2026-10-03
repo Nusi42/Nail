@@ -321,6 +321,9 @@ pub(crate) struct Inner {
     /// host OS ([`crate::appearance::SESSION_APPEARANCE_LIMIT`] at most).
     pub(crate) session_appearance:
         Mutex<std::collections::HashMap<String, nail_api::appearance::SystemAppearance>>,
+    /// M5c (ADR 0116): the open pop-out windows of the desktop app, in
+    /// opening order.
+    pub(crate) pop_outs: Mutex<Vec<nail_api::windows::PopOut>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -521,6 +524,7 @@ impl Service {
                 watcher: Mutex::new(None),
                 appearance_watch: Mutex::new(None),
                 session_appearance: Mutex::new(std::collections::HashMap::new()),
+                pop_outs: Mutex::new(Vec::new()),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
             }),
@@ -1402,6 +1406,15 @@ impl Service {
             request @ (Request::GetUiState | Request::SetUiState { .. }) => {
                 crate::ui_state::handle(self, request).await?
             }
+            // M5c (ADR 0116): remembered window state and desktop pop-outs.
+            request @ (Request::GetWindowStates
+            | Request::SetWindowState { .. }
+            | Request::ResetWindowStates
+            | Request::ListPopOuts
+            | Request::PopOutWindow { .. }
+            | Request::ReturnPopOut { .. }
+            | Request::ClosePopOut { .. }
+            | Request::FocusPopOut { .. }) => crate::windows::handle(self, request).await?,
         })
     }
 }

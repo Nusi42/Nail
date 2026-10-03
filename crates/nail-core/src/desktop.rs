@@ -63,6 +63,7 @@ impl Service {
             }
             DesktopChange::Settings => self.broadcast(Event::DesktopSettingsChanged),
             DesktopChange::DefaultApps => self.broadcast(Event::DefaultAppsChanged),
+            DesktopChange::PopOut(report) => crate::windows::pop_out_reported(self, report),
         }
     }
 

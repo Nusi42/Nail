@@ -195,7 +195,11 @@ impl Service {
             | Request::ReportSystemAppearance { .. }
             // M5b: remembered UI state (no mail data).
             | Request::GetUiState
-            | Request::SetUiState { .. } => Ok(()),
+            | Request::SetUiState { .. }
+            // M5c: remembered window geometry (no mail data).
+            | Request::GetWindowStates
+            | Request::SetWindowState { .. }
+            | Request::ResetWindowStates => Ok(()),
             // M5a WP155: the attachment's message must be readable.
             Request::GetMessageAttachment { message_id, .. } => {
                 self.check_readable(access, message_id).await
@@ -279,6 +283,11 @@ impl Service {
             | Request::CancelPairingCode { .. }
             | Request::ListRemoteAudit { .. }
             | Request::TakeLaunchRequests
+            | Request::ListPopOuts
+            | Request::PopOutWindow { .. }
+            | Request::ReturnPopOut { .. }
+            | Request::ClosePopOut { .. }
+            | Request::FocusPopOut { .. }
             | Request::ImportMessageFile { .. }
             | Request::GetInstallation
             | Request::GetUpdateStatus
@@ -1297,6 +1306,7 @@ impl Service {
             | Event::RemoteContentPolicyChanged
             | Event::VaultProgress { .. }
             | Event::UiStateChanged { .. }
+            | Event::WindowStateChanged { .. }
             | Event::RulesChanged => true,
             Event::MailChanged { folder_ids } => {
                 let mut kept = Vec::with_capacity(folder_ids.len());
@@ -1416,6 +1426,8 @@ impl Service {
             | Event::PinRequested { .. }
             | Event::PinPromptClosed { .. }
             | Event::SmartcardsChanged => false,
+            // M5c: pop-out windows exist only in the desktop app.
+            Event::PopOutChanged { .. } => false,
         };
         allowed.then_some(event)
     }

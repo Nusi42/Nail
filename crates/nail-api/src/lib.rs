@@ -95,6 +95,10 @@
 //!   [`config::layout`]); [`ui_state`] — small UI state kept across restarts
 //!   (`ui-state.json`); remote sessions follow their own browser's light /
 //!   dark mode ([`appearance`]).
+//! * M5c (ADR 0116): [`windows`] — the window model (window ids with
+//!   instances, modal / resizable / sizes / pop-out / instances, the
+//!   `layout.kdl` window frame), remembered window state
+//!   (`window-state.json`) and desktop pop-out windows.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -155,6 +159,7 @@ pub mod sync;
 pub mod triage;
 pub mod ui_state;
 pub mod views;
+pub mod windows;
 
 use std::path::{Path, PathBuf};
 
@@ -404,6 +409,15 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     views::FavoriteFolder::export_all(&cfg)?;
     views::FolderPaneSectionKind::export_all(&cfg)?;
     ui_state::UiStateIssue::export_all(&cfg)?;
+    // M5c (ADR 0116): the window model the UI resolves itself, the file
+    // format, issues and the shell's pop-out types.
+    windows::WindowSpec::export_all(&cfg)?;
+    windows::WindowStateFile::export_all(&cfg)?;
+    windows::WindowStateIssue::export_all(&cfg)?;
+    windows::WindowFrameIssue::export_all(&cfg)?;
+    windows::PopOutIssue::export_all(&cfg)?;
+    windows::PopOutOpen::export_all(&cfg)?;
+    windows::PopOutReport::export_all(&cfg)?;
 
     write_index(out_dir)
 }

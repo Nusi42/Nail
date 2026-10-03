@@ -97,6 +97,34 @@ window "settings" {
 }
 ```
 
+### Window size and behaviour
+
+A `window` node can say how the window behaves when it opens over the main
+window (or, in the desktop app, in a window of its own):
+
+| Property | Meaning | Default |
+| --- | --- | --- |
+| `size="<width>x<height>"` | size when it first opens, in pixels | `720x520` |
+| `min-size="<width>x<height>"` | the smallest size you can resize it to | `360x240` |
+| `modal=#true` | blocks the rest of Nail while open (meant for confirmations) | `#false` |
+| `resizable=#false` | fixed size: no resize handles, no maximize or snap | `#true` |
+| `pop-out=#false` | the desktop app never opens it in a window of its own | `#true` |
+| `instances="multiple"` | several can be open at once (one composer per draft) | `"single"` |
+
+Sizes are between 120 and 16384 pixels, and `size` cannot be smaller than
+`min-size`. A window in several breakpoints takes its properties from all
+of them. If your file redefines a window without these properties, it keeps
+the default's; the ones you set replace the default's one by one.
+
+```kdl
+window "composer" size="900x700" min-size="520x400" instances="multiple" {
+    composer id="composer"
+}
+```
+
+Where you moved or resized a window is remembered separately (in
+`window-state.json` next to your configuration files), not in `layout.kdl`.
+
 ## Containers
 
 Every node can have an `id` (lowercase words, unique within one window

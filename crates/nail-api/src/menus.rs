@@ -305,6 +305,7 @@ mod tests {
             default_view: None,
             rail: vec![],
             settings: vec![],
+            window_frames: IndexMap::new(),
         }
     }
 

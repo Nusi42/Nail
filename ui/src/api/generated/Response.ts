@@ -92,6 +92,7 @@ import type { PluginPreview } from "./PluginPreview";
 import type { PluginSendVeto } from "./PluginSendVeto";
 import type { PluginSettingDef } from "./PluginSettingDef";
 import type { PluginUiNode } from "./PluginUiNode";
+import type { PopOut } from "./PopOut";
 import type { PrintJob } from "./PrintJob";
 import type { RecentActions } from "./RecentActions";
 import type { RecipientKeysReport } from "./RecipientKeysReport";
@@ -135,6 +136,7 @@ import type { UpdateStatus } from "./UpdateStatus";
 import type { VacationSettings } from "./VacationSettings";
 import type { VaultStatus } from "./VaultStatus";
 import type { VirtualAccountConfig } from "./VirtualAccountConfig";
+import type { WindowState } from "./WindowState";
 import type { WindowsCertificate } from "./WindowsCertificate";
 import type { JsonValue } from "./serde_json/JsonValue";
 
@@ -1160,7 +1162,15 @@ appearance: Appearance, } | { "type": "UiState",
 /**
  * The UI state.
  */
-state: { [key in string]: JsonValue }, } | { "type": "Error", 
+state: { [key in string]: JsonValue }, } | { "type": "WindowStates", 
+/**
+ * State by window kind.
+ */
+states: { [key in string]: WindowState }, } | { "type": "PopOuts", 
+/**
+ * Open pop-outs, in opening order.
+ */
+pop_outs: Array<PopOut>, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

@@ -3385,5 +3385,147 @@
         }
       ]
     }
-  ]
+  ],
+  "window_frames": {
+    "calendar": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 720,
+        "height": 480
+      },
+      "size": {
+        "width": 1100,
+        "height": 760
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "contacts": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 600,
+        "height": 420
+      },
+      "size": {
+        "width": 900,
+        "height": 640
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "tasks": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 420,
+        "height": 360
+      },
+      "size": {
+        "width": 720,
+        "height": 600
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "settings": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 640,
+        "height": 480
+      },
+      "size": {
+        "width": 1000,
+        "height": 720
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "composer": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 520,
+        "height": 400
+      },
+      "size": {
+        "width": 780,
+        "height": 640
+      },
+      "pop_out": null,
+      "instances": "multiple"
+    },
+    "outbox": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 420,
+        "height": 280
+      },
+      "size": {
+        "width": 720,
+        "height": 480
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "move": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 320,
+        "height": 360
+      },
+      "size": {
+        "width": 420,
+        "height": 560
+      },
+      "pop_out": false,
+      "instances": null
+    },
+    "account-setup": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 520,
+        "height": 480
+      },
+      "size": {
+        "width": 720,
+        "height": 640
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "rules": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 600,
+        "height": 420
+      },
+      "size": {
+        "width": 900,
+        "height": 640
+      },
+      "pop_out": null,
+      "instances": null
+    },
+    "snoozed": {
+      "modal": null,
+      "resizable": null,
+      "min_size": {
+        "width": 420,
+        "height": 300
+      },
+      "size": {
+        "width": 720,
+        "height": 520
+      },
+      "pop_out": null,
+      "instances": null
+    }
+  }
 }

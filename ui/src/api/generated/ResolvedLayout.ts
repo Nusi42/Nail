@@ -8,6 +8,7 @@ import type { SettingsGroup } from "./SettingsGroup";
 import type { ToolbarItem } from "./ToolbarItem";
 import type { ToolbarSettings } from "./ToolbarSettings";
 import type { ViewDef } from "./ViewDef";
+import type { WindowFrame } from "./WindowFrame";
 
 /**
  * A fully resolved layout.
@@ -61,4 +62,10 @@ rail: Array<RailItem>,
 /**
  * The settings page (M5b): groups of sections.
  */
-settings: Array<SettingsGroup>, };
+settings: Array<SettingsGroup>, 
+/**
+ * The window-model properties of `window` nodes (M5c, ADR 0116:
+ * `size=`, `min-size=`, `modal=`, `resizable=`, `pop-out=`,
+ * `instances=`) by window name; only windows that set one.
+ */
+window_frames: { [key in string]: WindowFrame }, };

@@ -3,11 +3,17 @@
  * shown as modal dialogs over the main window. Their content is the layout's
  * `window "<name>"` tree, so it is as customizable as the main window. The
  * desktop shell may later open them as real windows.
+ *
+ * M5c (ADR 0116): entries are window ids — a kind or `<kind>:<instance>`
+ * (several composers); the kind names the layout window / dialog and the
+ * title, the id the instance (`WindowInstanceContext`). WP171 replaces this
+ * frame with the window manager (move, resize, snap, non-modal windows).
  */
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { ResolvedLayout } from "../api/generated";
 import { useT } from "../i18n/I18nProvider";
 import { useUi } from "../state/uiStore";
+import { WindowInstanceContext, windowKind } from "../state/windows";
 import { Icon } from "../widgets/Icon";
 import { WindowView } from "./LayoutRenderer";
 import { useDialogRegistry } from "./dialogRegistry";
@@ -70,9 +76,10 @@ function WindowDialog({
   const closeWindow = useUi((s) => s.closeWindow);
   const dialogs = useDialogRegistry();
   const ref = useRef<HTMLDivElement>(null);
+  const kind = windowKind(name);
   // A layout window wins; a feature dialog fills in for a name the layout lacks.
-  const Dialog = Object.hasOwn(layout.windows, name) ? undefined : dialogs[name];
-  const titleId = `nail-window-${name}-title`;
+  const Dialog = Object.hasOwn(layout.windows, kind) ? undefined : dialogs[kind];
+  const titleId = `nail-window-${name.replace(":", "-")}-title`;
 
   // Focus the first field when the window opens; give focus back on close.
   useEffect(() => {
@@ -104,7 +111,7 @@ function WindowDialog({
     >
       <div data-part="window.header">
         <h2 data-part="window.title" id={titleId}>
-          {t(windowTitleId(name))}
+          {t(windowTitleId(kind))}
         </h2>
         <button
           type="button"
@@ -117,11 +124,13 @@ function WindowDialog({
         </button>
       </div>
       <div data-part="window.body">
-        {Dialog ? (
-          <Dialog name={name} close={() => closeWindow(name)} />
-        ) : (
-          <WindowView layout={layout} name={name} />
-        )}
+        <WindowInstanceContext.Provider value={name}>
+          {Dialog ? (
+            <Dialog name={name} close={() => closeWindow(name)} />
+          ) : (
+            <WindowView layout={layout} name={kind} />
+          )}
+        </WindowInstanceContext.Provider>
       </div>
     </div>
   );

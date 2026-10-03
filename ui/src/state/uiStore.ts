@@ -108,9 +108,23 @@ export interface UiState {
   localeOverride: string | null;
   /** The thread of the selected message, when known. */
   selectedThreadId: ThreadId | null;
-  /** Secondary windows open over the main window (layout window names), topmost last. */
+  /**
+   * Secondary windows open over the main window, in z-order: topmost (the
+   * focused one) last. Entries are window ids (M5c, ADR 0116): a layout
+   * window or dialog name, or `<kind>:<instance>` for one of several
+   * windows of a kind (`./windows.ts`).
+   */
   windows: string[];
+  /**
+   * The composer in the window `composer` (the single-instance composer of
+   * M1–M5b). Further composers (M5c, one per draft) live in `composers`.
+   */
   composer: ComposerState | null;
+  /**
+   * Composers of the windows `composer:<instance>` by window id (M5c, ADR
+   * 0116; WP172 moves the composer onto these).
+   */
+  composers: Record<string, ComposerState>;
   search: SearchState | null;
   /** What is typed in the search bar (not yet necessarily searched). */
   searchInput: string;
@@ -150,9 +164,16 @@ export interface UiState {
   setModeOverride(mode: ThemeMode | null): void;
   setLocaleOverride(locale: string | null): void;
   selectThread(id: ThreadId | null): void;
+  /** Opens a window (id) on top, or raises it when open. */
   openWindow(name: string): void;
   /** Closes the named window, or the topmost one. */
   closeWindow(name?: string): void;
+  /** Raises an open window to the top (focus order = z-order; M5c). */
+  focusWindow(name: string): void;
+  /** Sets (`null` removes) the composer of a `composer:<instance>` window (M5c). */
+  setComposerOf(windowId: string, composer: ComposerState | null): void;
+  /** Patches the composer of a `composer:<instance>` window (M5c). */
+  updateComposerOf(windowId: string, patch: Partial<ComposerState>): void;
   setComposer(composer: ComposerState | null): void;
   updateComposer(patch: Partial<ComposerState>): void;
   setSearch(search: SearchState | null): void;
@@ -203,6 +224,7 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     selectedThreadId: null,
     windows: [],
     composer: null,
+    composers: {},
     search: null,
     searchInput: "",
     focusRequest: null,
@@ -264,6 +286,29 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
       set((s) => ({
         windows: name === undefined ? s.windows.slice(0, -1) : s.windows.filter((w) => w !== name),
       })),
+    focusWindow: (name) =>
+      set((s) =>
+        !s.windows.includes(name) || s.windows[s.windows.length - 1] === name
+          ? s
+          : { windows: [...s.windows.filter((w) => w !== name), name] },
+      ),
+    setComposerOf: (windowId, composer) =>
+      set((s) => {
+        if (composer !== null) return { composers: { ...s.composers, [windowId]: composer } };
+        if (!Object.hasOwn(s.composers, windowId)) return s;
+        return {
+          composers: Object.fromEntries(
+            Object.entries(s.composers).filter(([id]) => id !== windowId),
+          ),
+        };
+      }),
+    updateComposerOf: (windowId, patch) =>
+      set((s) => {
+        const current = Object.hasOwn(s.composers, windowId) ? s.composers[windowId] : undefined;
+        return current
+          ? { composers: { ...s.composers, [windowId]: { ...current, ...patch } } }
+          : s;
+      }),
     setComposer: (composer) => set({ composer }),
     updateComposer: (patch) =>
       set((s) => (s.composer ? { composer: { ...s.composer, ...patch } } : s)),

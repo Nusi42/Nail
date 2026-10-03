@@ -12,6 +12,7 @@ import type { DialogRegistry } from "../layout/dialogRegistry";
 import type { SettingsWidgetInfo } from "../layout/settingsIndex";
 import type { WidgetRegistry } from "../layout/widgetRegistry";
 import type { UiStore } from "../state/uiStore";
+import type { WindowRegistry } from "../state/windows";
 
 /** What an event handler of a feature may use. */
 export interface FeatureEventContext {
@@ -48,6 +49,16 @@ export interface Feature {
    * belongs in `layout.kdl` as a window of widgets instead.
    */
   dialogs: DialogRegistry;
+  /**
+   * The window model of this feature's windows (M5c, ADR 0116): by window
+   * kind (a dialog name, or a layout window the feature owns), modal or
+   * not, resizable, minimum / default size, pop-out, instances
+   * (`../state/windows.ts`, `WindowRegistration`). Windows are non-modal by
+   * default; register confirmations with `{ confirmation: true }` (the only
+   * modal windows). The layout's `window` properties win over this.
+   * Optional.
+   */
+  windows?: WindowRegistry;
   /** Handlers for the events the core pushes. */
   events: readonly FeatureEventHandler[];
   /**

@@ -31,6 +31,7 @@ import {
 } from "../features/appearance/mock";
 import { answerAttachment, isAttachmentRequest } from "./mockAttachments";
 import { answerUiState, isUiStateRequest } from "./uiStateMock";
+import { answerWindowState, isWindowStateRequest } from "./windowStateMock";
 import { answerPrint, isPrintRequest } from "../features/print/mock";
 import { answerVault, isVaultRequest } from "../features/security/vaultMock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
@@ -151,6 +152,7 @@ export class MockTransport implements Transport, MockCore {
     if (isPrintRequest(request)) return answerPrint(this, request);
     if (isAppearanceRequest(request)) return answerAppearance(this, request);
     if (isUiStateRequest(request)) return answerUiState(this, request);
+    if (isWindowStateRequest(request)) return answerWindowState(this, request);
     if (isAttachmentRequest(request)) return answerAttachment(this, request);
     if (isVaultRequest(request)) return answerVault(this, request);
     if (isPluginExtensionRequest(request)) return answerPluginExtensions(this, request);

@@ -133,6 +133,7 @@ describe("plug-in commands", () => {
     default_view: null,
     rail: [],
     settings: [],
+    window_frames: {},
   });
 
   it("adds an action definition per command, keeping the user's label", () => {
@@ -428,6 +429,7 @@ describe("placement text", () => {
     default_view: null,
     rail: [],
     settings: [],
+    window_frames: {},
   });
 
   it("inserts after / before an anchor or at the end, once", () => {

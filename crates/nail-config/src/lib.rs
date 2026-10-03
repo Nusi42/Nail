@@ -72,6 +72,7 @@ mod theme;
 pub mod themes;
 mod ui_state;
 mod widgets;
+mod window_state;
 mod write_back;
 
 use std::sync::OnceLock;
@@ -103,6 +104,7 @@ pub use themes::{
     builtin_theme, builtin_theme_infos, resolve_builtin_theme, resolve_selected, theme_overrides,
 };
 pub use ui_state::{UiStateError, read_ui_state};
+pub use window_state::{WindowStateError, read_window_states};
 pub use write_back::{EditError, apply_layout_patches};
 
 /// File name of the user's theme in the config directory.

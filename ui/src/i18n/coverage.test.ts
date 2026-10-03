@@ -41,6 +41,8 @@ import * as printMessages from "../features/print/messages";
 import * as triageMessages from "../features/triage/messages";
 import * as appearanceMessages from "../features/appearance/messages";
 import * as shellMessages from "../features/shell/messages";
+import * as windowsMessages from "../features/windows/messages";
+import * as popoutMessages from "../features/popout/messages";
 import { KEY_CONTEXTS } from "../features/customization/editorModel";
 import { shippedCatalogs } from "./catalogs";
 
@@ -68,6 +70,8 @@ const FEATURE_MESSAGES = [
   printMessages,
   appearanceMessages,
   shellMessages,
+  windowsMessages,
+  popoutMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");
