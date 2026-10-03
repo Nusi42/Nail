@@ -37,6 +37,11 @@ export interface EventItemProps {
   part: string;
   /** How Alt + arrows move it. */
   keys: "time" | "days";
+  /**
+   * The visible time: the range (default) or only the start (the month
+   * view's chips, where the title needs the width; the label keeps both).
+   */
+  timeStyle?: "range" | "start";
   /** Extra states (`continues-before`, `dragging`, …). */
   states?: readonly string[];
   /** Pointer drag start (move or, from the bottom edge, resize). */
@@ -70,6 +75,7 @@ export function EventItem({
   position = {},
   part,
   keys,
+  timeStyle = "range",
   states = [],
   onDragStart,
   suppressClick,
@@ -97,6 +103,8 @@ export function EventItem({
         start: formatClock(format, instance.start_utc, tz),
         end: formatClock(format, instance.end_utc, tz),
       });
+  const shownTime =
+    instance.all_day || timeStyle === "range" ? time : formatClock(format, instance.start_utc, tz);
   const title = instance.title || t("pim-event-untitled");
   const label = t("pim-event-label", {
     title,
@@ -182,7 +190,7 @@ export function EventItem({
       }
     >
       <span data-part="event-card.title">{title}</span>
-      <span data-part="event-card.time">{time}</span>
+      <span data-part="event-card.time">{shownTime}</span>
       {instance.location && <span data-part="event-card.location">{instance.location}</span>}
       {instance.recurring && (
         <span data-part="event-card.badge" data-badge="recurring">

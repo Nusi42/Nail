@@ -147,3 +147,27 @@ The M5b reviews of the wave integrated by ADR 0114 found these defects
   `theme.kdl` still win over the skin; the default theme no longer does.
 - Visual baselines must be regenerated for the changed calendar screens
   and created for the eight new screens (5 themes × 2 densities).
+
+## Post-verify fixes
+
+The independent verify of these fixes found, and the same wave fixed:
+
+- `defaults/layout.kdl` and two nail-config `write_back` goldens had been
+  written with CRLF line endings in the working tree; `include_str!`
+  embedded the CR and the golden comparison failed. They are LF again and
+  `.gitattributes` names `*.kdl` / `*.ftl` (files the binaries and tests
+  embed) `text eol=lf` explicitly.
+- The reader bar's More showed no shortcut for "Print the message…": the
+  bar sits inside the view host's region, whose key context is `global`, so
+  the closest `data-key-context` won over `TOOLBAR_KEY_CONTEXTS`. A bar now
+  looks its shortcuts up in its own context first (`toolbarKeyContext`),
+  then the closest one, then `global`.
+- Settings search: a setting's highlighted label is one flex item
+  (`settings-page.result.label`), so the marks no longer split it into
+  pieces with gaps that wrap word by word.
+- Month chips show the title first and only the start time
+  (`EventItem timeStyle="start"`; the label keeps the range); a container
+  query hides the time when the chip is too narrow for both.
+- The week view's initial scroll lands on a whole hour
+  (`initialScrollTop`): a tall pane that cannot scroll to `scroll-to` no
+  longer cuts the topmost hour label in half.

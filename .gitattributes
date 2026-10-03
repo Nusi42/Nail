@@ -1,5 +1,9 @@
 # Normalize line endings: LF in the repository and working tree on every OS.
 * text=auto eol=lf
+# Embedded with include_str! (defaults, goldens, catalogs): a CR in the working
+# copy changes what the binaries and tests see, so never check them out as CRLF.
+*.kdl text eol=lf
+*.ftl text eol=lf
 *.png binary
 *.ico binary
 *.icns binary

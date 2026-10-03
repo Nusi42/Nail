@@ -83,6 +83,21 @@ export const TOOLBAR_KEY_CONTEXTS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The key context a toolbar's shortcuts are looked up in: the bar's own
+ * context from {@link TOOLBAR_KEY_CONTEXTS} first — the reader's bar sits in
+ * the view host's `global` region, so the closest `data-key-context` would
+ * hide the reader's bindings (Print's Ctrl+P) that its right-click menu
+ * shows — then the closest context around the bar, then `global`.
+ */
+export function toolbarKeyContext(name: string, closest: string | null | undefined): string {
+  return (
+    (Object.hasOwn(TOOLBAR_KEY_CONTEXTS, name) ? TOOLBAR_KEY_CONTEXTS[name] : undefined) ??
+    closest ??
+    "global"
+  );
+}
+
+/**
  * The "More" menu's entries: the actions that did not fit into the bar
  * first, by rank (unranked ones after them, in bar order), then — after a
  * separator — the `more` item's own entries (M5b review: overflowed bar

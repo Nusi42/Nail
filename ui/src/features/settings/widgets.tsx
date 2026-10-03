@@ -354,7 +354,10 @@ export function SettingsPage({ node }: WidgetProps) {
                           data-part="settings-page.result.setting"
                           onClick={() => open(hit.section, entry)}
                         >
-                          <Highlight text={entry.text} query={query} />
+                          {/* One flex item: marks must not split the text into items. */}
+                          <span data-part="settings-page.result.label">
+                            <Highlight text={entry.text} query={query} />
+                          </span>
                         </button>
                       </li>
                     ))}

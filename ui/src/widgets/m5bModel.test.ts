@@ -25,6 +25,7 @@ import {
   bindingOf,
   displayOf,
   moreMenuEntries,
+  toolbarKeyContext,
   toolbarSettingsOf,
   tooltipMessage,
   wrapEdges,
@@ -47,6 +48,15 @@ describe("toolbar model", () => {
     }).toolbars.t as Extract<ToolbarItem, { type: "action" }>[];
     expect(displayOf(plain as Extract<ToolbarItem, { type: "action" }>)).toBe("icon-label");
     expect(displayOf(icon as Extract<ToolbarItem, { type: "action" }>)).toBe("icon");
+  });
+
+  it("looks a bar's shortcuts up in its own key context before the one around it", () => {
+    // The reader bar sits in the view host's `global` region (M5b verify).
+    expect(toolbarKeyContext("reader", "global")).toBe("reader");
+    expect(toolbarKeyContext("calendar", null)).toBe("calendar");
+    expect(toolbarKeyContext("main", "window")).toBe("window");
+    expect(toolbarKeyContext("main", null)).toBe("global");
+    expect(toolbarKeyContext("toString", undefined)).toBe("global");
   });
 
   it("reads per-toolbar settings, with the defaults for toolbars that set nothing", () => {

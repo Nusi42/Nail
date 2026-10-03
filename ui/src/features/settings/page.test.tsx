@@ -121,6 +121,13 @@ describe("settings page (M5b)", () => {
     const results = screen.getByRole("list", { name: "Search results" });
     const marks = [...results.querySelectorAll('[data-part="settings-page.mark"]')];
     expect(marks.map((m) => m.textContent?.toLowerCase())).toContain("quiet");
+    // A setting's highlighted label is one flex item of its button (the
+    // marks must not split it into separately wrapping pieces).
+    for (const setting of results.querySelectorAll('[data-part="settings-page.result.setting"]')) {
+      expect(
+        [...setting.childNodes].map((n) => (n as Element).getAttribute?.("data-part")),
+      ).toEqual(["settings-page.result.label"]);
+    }
     // The groups give way to the results while searching.
     expect(within(nav()).queryByRole("group")).toBeNull();
     const section = within(results).getByRole("button", { name: "Notifications" });

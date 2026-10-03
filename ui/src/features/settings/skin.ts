@@ -140,6 +140,7 @@ ${p("settings-page.result.setting")} {
   min-height: calc(${T.control} - ${T.xs}); padding-inline-start: calc(${T.icon} + 2 * ${T.md});
   font-size: ${T.small}; color: ${T.muted};
 }
+${p("settings-page.result.label")} { min-width: 0; overflow-wrap: anywhere; }
 ${p("settings-page.result-count")} { margin: 0; padding: ${T.xs} ${T.md}; font-size: ${T.small}; color: ${T.muted}; }
 ${p("settings-page.mark")} {
   padding: 0; border-radius: 2px; font-weight: ${T.semibold}; color: inherit;

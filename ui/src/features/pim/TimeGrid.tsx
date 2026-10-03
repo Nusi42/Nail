@@ -32,7 +32,16 @@ import { EventItem, type DragMode } from "./EventItem";
 import { dayDate, formatDay, formatHour, formatInstant, zoneLabel } from "./fmt";
 import { usePimStore } from "./store";
 import { openNewEvent } from "./newEvent";
-import { dateString, minuteOfDay, placeDay, placeSpanning, snap, todayIn, toZoned } from "./time";
+import {
+  dateString,
+  initialScrollTop,
+  minuteOfDay,
+  placeDay,
+  placeSpanning,
+  snap,
+  todayIn,
+  toZoned,
+} from "./time";
 import { fromAbsolute } from "@internationalized/date";
 
 export interface TimeGridProps {
@@ -145,7 +154,11 @@ export function TimeGrid({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = ((scrollTo - hourStart) / Math.max(1, hours.length)) * el.scrollHeight;
+    el.scrollTop = initialScrollTop(
+      scrollTo - hourStart,
+      el.scrollHeight / Math.max(1, hours.length),
+      el.scrollHeight - el.clientHeight,
+    );
     // Only when the view is shown, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollTo, hourStart]);

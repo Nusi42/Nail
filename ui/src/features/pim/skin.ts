@@ -158,8 +158,10 @@ ${p("calendar.month.date")} { display: block; margin-bottom: ${T.xxs}; padding: 
 ${p("calendar.month.events")} { display: grid; gap: 1px; min-width: 0; }
 ${p("calendar.month.events")} > * { ${oneLine} }
 ${p("calendar.month.item")} > ${p("calendar.chip")} { width: 100%; max-width: 100%; }
-${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { flex: 0 3 auto; }
+${p("calendar.month.item")} { container-type: inline-size; }
 ${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.title")} { flex: 0 1 auto; }
+${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { order: 0; flex: 0 0 auto; }
+@container (max-width: 8.5rem) { ${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { display: none; } }
 ${p("calendar.month.more")} {
   padding: 0 ${T.xs}; border: none; border-radius: ${T.rSm}; font-size: ${T.label};
   color: ${T.muted}; background-color: transparent;

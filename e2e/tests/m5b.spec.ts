@@ -217,7 +217,7 @@ test("the command palette and the filter rules have visible entry points", async
   await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
   await page.keyboard.press("Escape");
   const settings = await openSettings(page, "Mail & junk");
-  await expect(settings.locator('[data-part="rule-manager"]').first()).toBeVisible();
+  await expect(settings.locator('[data-part="rules"]').first()).toBeVisible();
 });
 
 test("the calendar at 1024 px: every view reachable, month and free time drawn", async ({
@@ -245,7 +245,7 @@ test("the calendar at 1024 px: every view reachable, month and free time drawn",
 
   // Month: the weeks share the view's height; cells have lines.
   await views.selectOption("month");
-  const grid = calendar.getByRole("grid");
+  const grid = calendar.locator('[data-part="calendar.month"]');
   const frame = calendar.locator('[data-part="calendar.month.frame"]');
   const gridBox = await grid.boundingBox();
   const frameBox = await frame.boundingBox();

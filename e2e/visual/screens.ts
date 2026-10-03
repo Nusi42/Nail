@@ -184,7 +184,7 @@ export const SCREENS: readonly Screen[] = [
     async open(page) {
       const calendar = await calendarWeek(page);
       await chooseView(calendar, "Month", "month");
-      await expect(calendar.getByRole("grid")).toBeVisible();
+      await expect(calendar.locator('[data-part="calendar.month"]')).toBeVisible();
     },
   },
   {

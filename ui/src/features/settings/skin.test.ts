@@ -50,6 +50,7 @@ describe("settings page skin", () => {
       "settings-page.nav.item",
       "settings-page.result.section",
       "settings-page.result.setting",
+      "settings-page.result.label",
       "settings-page.result-count",
       "settings-page.mark",
       "settings-page.content",

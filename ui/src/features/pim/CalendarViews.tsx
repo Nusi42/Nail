@@ -200,6 +200,7 @@ export function MonthView({
                             geom={geomId(nodeKey, "m", key, instance.event_id, instance.start_utc)}
                             part="calendar.chip"
                             keys="days"
+                            timeStyle="start"
                             states={[
                               isAllDayLike(instance) ? "spanning" : null,
                               drag.dragging?.event_id === instance.event_id &&

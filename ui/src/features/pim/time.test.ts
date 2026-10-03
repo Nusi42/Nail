@@ -1,6 +1,7 @@
 import { CalendarDate, fromAbsolute } from "@internationalized/date";
 import type { EventInstance, PimTime } from "../../api/generated";
 import {
+  initialScrollTop,
   DEFAULT_VIEW_OPTIONS,
   busyDays,
   dateString,
@@ -276,5 +277,17 @@ describe("free time (M5b review)", () => {
       freeStretchesOfDay(slots, new CalendarDate(2026, 10, 8), "Europe/Berlin", 8, 18, 30),
     ).toEqual([{ start: "2026-10-08T06:00:00Z", end: "2026-10-08T10:00:00Z" }]);
     expect(freeStretchesOfDay(slots, new CalendarDate(2026, 10, 8), "UTC", 9, 18, 90)).toEqual([]);
+  });
+});
+
+describe("initial scroll of the time grid", () => {
+  it("starts at the hour, or on the last whole hour the grid can scroll to", () => {
+    // 24 rows of 48 px; a short pane can scroll to 8 AM.
+    expect(initialScrollTop(8, 48, 24 * 48 - 400)).toBe(8 * 48);
+    // A tall pane (max 330 px) stops at 6 AM, not mid-way through 7 AM's label.
+    expect(initialScrollTop(8, 48, 330)).toBe(6 * 48);
+    expect(initialScrollTop(8, 48, 0)).toBe(0);
+    expect(initialScrollTop(-2, 48, 500)).toBe(0);
+    expect(initialScrollTop(8, 0, 500)).toBe(0);
   });
 });

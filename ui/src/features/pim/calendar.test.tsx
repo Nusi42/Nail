@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { EVENT_DIALOG, SCOPE_DIALOG } from "./names";
+import { PIM_SKIN_CSS } from "./skin";
 import { pimStoreFor } from "./store";
 import { dateString, localZone, todayIn } from "./time";
 
@@ -419,6 +420,21 @@ describe("calendar views after the M5b review", () => {
     await settle(env);
     const grid = screen.getByRole("grid");
     expect(grid.parentElement).toHaveAttribute("data-part", "calendar.month.frame");
+  });
+
+  it("shows only the start time on month chips, after the title (the label keeps both)", async () => {
+    const env = createEnv();
+    renderNode(widget("calendar", { options: { view: "month" } }), env);
+    const lunch = await screen.findByRole("button", { name: /Lunch with Grace/ });
+    expect(lunch).toHaveAttribute("data-part", "calendar.chip");
+    const parts = [...lunch.children].map((c) => c.getAttribute("data-part"));
+    expect(parts.slice(0, 2)).toEqual(["event-card.title", "event-card.time"]);
+    const time = lunch.querySelector('[data-part="event-card.time"]')?.textContent ?? "";
+    expect(time).toMatch(/^\d{1,2}:\d{2}\s?(AM|PM)$/);
+    expect(lunch.getAttribute("aria-label")).toMatch(/–|-/);
+    expect(PIM_SKIN_CSS).toMatch(
+      /\[data-part="calendar\.month\.item"\] > \[data-part="calendar\.chip"\] > \[data-part="event-card\.time"\] \{ order: 0;/,
+    );
   });
 
   it("offers the view menu when the segmented switch does not fit, and returns", async () => {

@@ -645,3 +645,16 @@ export function minuteOfDay(value: ZonedDateTime): number {
 }
 
 export { CalendarDate, CalendarDateTime, toCalendarDate, toCalendarDateTime, toZoned };
+
+/**
+ * Where the time grid starts scrolled: at `hour` (rows from the top), but
+ * always on a whole hour — when the grid cannot scroll that far (a tall
+ * pane), the last whole hour that fits, so the topmost hour label is never
+ * cut in half.
+ */
+export function initialScrollTop(hour: number, hourHeight: number, maxScroll: number): number {
+  if (hourHeight <= 0) return 0;
+  const wanted = Math.max(0, hour) * hourHeight;
+  if (maxScroll <= 0) return 0;
+  return wanted <= maxScroll ? wanted : Math.floor(maxScroll / hourHeight) * hourHeight;
+}

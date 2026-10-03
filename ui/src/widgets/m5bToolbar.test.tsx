@@ -196,6 +196,28 @@ describe("reader action bar (M5b)", () => {
     expect(more).toHaveFocus();
   });
 
+  it("names the reader's shortcuts in More inside the view host's global region", async () => {
+    // The default layout puts the reader bar inside a view region whose key
+    // context is `global`: More must still show Print's Ctrl+P (a `reader`
+    // binding), like the message's right-click menu does.
+    const env = readerEnv();
+    renderWithProviders(
+      <div data-key-context="global">
+        <NodeView node={widget("toolbar", { options: { toolbar: "reader" } })} path="test" />
+      </div>,
+      env,
+      { layout: readerLayout(env) },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    const menu = await screen.findByRole("menu", { name: "More" });
+    const print = within(menu)
+      .getAllByRole("menuitem")
+      .find((i) => i.textContent?.includes("Print the message"));
+    expect(print?.querySelector('[data-part="context-menu.item.shortcut"]')).toHaveTextContent(
+      "Ctrl+P",
+    );
+  });
+
   it("opens More from the keyboard with the first entry focused, Escape returns", async () => {
     const env = readerEnv();
     renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
