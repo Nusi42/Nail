@@ -151,9 +151,14 @@ impl AccountManager {
     }
 
     /// Reads the file again (after a change on disk).
+    ///
+    /// The file is read under the lock that [`Self::edit`] saves under: a
+    /// text read before an edit's save must not replace the newer document
+    /// afterwards (the watcher's late reload of an earlier save would undo
+    /// the edit until the next change on disk).
     pub(crate) fn reload(&self) -> Reload {
-        let loaded = AccountsDocument::load(&self.dir);
         let mut state = self.state();
+        let loaded = AccountsDocument::load(&self.dir);
         match loaded {
             Ok(doc) => {
                 let changed = doc.config() != state.doc.config();

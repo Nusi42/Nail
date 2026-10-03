@@ -208,19 +208,35 @@ impl Throttle {
 
 impl Service {
     /// `SetVaultEncryption`: records the target and starts the migration
-    /// in the background. `conflict` while a migration runs (unless it
-    /// stopped with an error: then this retries or reverses it).
+    /// in the background. `conflict` while a migration converts data
+    /// (unless it stopped with an error: then this retries or reverses it).
+    ///
+    /// The vault records its final state (`encrypted` / `plain`) before the
+    /// migration has reopened the search index; a switch the status already
+    /// allows waits for that tail instead of failing with `conflict`.
     pub(crate) async fn set_vault_encryption(&self, enabled: bool) -> Result<VaultStatus> {
-        self.inner.vault.check()?;
-        if self.inner.vault.running.try_lock().is_err() {
-            return Err(ApiError::new(
-                nail_api::ErrorCode::Conflict,
-                "encryption at rest is being switched already",
-            )
-            .into());
-        }
-        let vault = Arc::clone(self.inner.vault.vault());
+        let ctl = &self.inner.vault;
+        ctl.check()?;
+        let vault = Arc::clone(ctl.vault());
+        // Held while the target is recorded: no migration overlaps it.
+        let switching = if let Ok(guard) = ctl.running.try_lock() {
+            guard
+        } else {
+            let converting = {
+                let vault = Arc::clone(&vault);
+                tokio::task::spawn_blocking(move || vault.needs_migration()).await??
+            };
+            if converting {
+                return Err(ApiError::new(
+                    nail_api::ErrorCode::Conflict,
+                    "encryption at rest is being switched already",
+                )
+                .into());
+            }
+            ctl.running.lock().await
+        };
         let status = tokio::task::spawn_blocking(move || vault.set_enabled(enabled)).await??;
+        drop(switching);
         self.broadcast(Event::VaultProgress {
             status: status.clone(),
         });

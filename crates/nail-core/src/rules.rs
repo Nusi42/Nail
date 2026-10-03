@@ -156,8 +156,11 @@ impl RulesManager {
         Ok(out)
     }
 
-    /// Reads the file again after a change on disk.
+    /// Reads the file again after a change on disk, under the lock that
+    /// [`Self::edit`] saves under (a text read before an edit's save must
+    /// not replace the newer document afterwards).
     pub(crate) fn reload(&self) -> RulesReload {
+        let mut state = self.state();
         let loaded = match std::fs::read_to_string(self.dir.join(RULES_FILE)) {
             Ok(text) => RulesDocument::parse(&text, RULES_FILE),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -165,7 +168,6 @@ impl RulesManager {
             }
             Err(e) => Err(io_errors(&e)),
         };
-        let mut state = self.state();
         match loaded {
             Ok(doc) => {
                 let was_invalid = !state.errors.is_empty();

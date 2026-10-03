@@ -1031,7 +1031,13 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
     assert!(!files.is_empty());
     assert!(files.iter().all(is_sealed), "{files:?}");
 
-    request(&f, Request::SetVaultEncryption { enabled: false }).await;
+    // Accepted at once: the state says the last switch is done.
+    let Response::VaultStatus { status } =
+        request(&f, Request::SetVaultEncryption { enabled: false }).await
+    else {
+        panic!()
+    };
+    assert_eq!(status.state, VaultState::Decrypting);
     eventually("plain again", || async {
         vault_state(&f).await.state == VaultState::Plain
     })
@@ -1045,13 +1051,16 @@ async fn encryption_at_rest_on_and_off_keeps_the_data() {
     f.service.shutdown().await;
 }
 
+/// The blob files under `dir`. A write in progress (sync of other folders,
+/// the conversion) is a `.tmp*` file that is renamed into place or gone a
+/// moment later; it is not a blob yet.
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         let path = entry.path();
         if path.is_dir() {
             out.extend(walk(&path));
-        } else {
+        } else if !entry.file_name().to_string_lossy().starts_with(".tmp") {
             out.push(path);
         }
     }
