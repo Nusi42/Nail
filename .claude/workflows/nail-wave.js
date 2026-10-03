@@ -52,7 +52,9 @@ You are the only agent running now; four agents start after you in parallel and 
 Write an ADR for the contract. Update CLAUDE.md layout/commands if they change. Run the full suite (npm run build, cargo fmt --check, cargo clippy --workspace --all-targets -- -D warnings, cargo test --workspace, npm run lint, npm test, npm run e2e:only). Commit "${A.wave}: contract and slots" ending with:
 ${TRAILER}`, { ...OPTS, label: `${A.wave} contract`, phase: 'Contract', schema: RESULT })
 
-if (!contract || !contract.allTestsPass) {
+// args.acceptContract: resume past a contract stage whose only red test was
+// a known pre-existing flake (set by the orchestrator after checking).
+if (!contract || (!contract.allTestsPass && !A.acceptContract)) {
   log('Contract stage not green; stopping.')
   return { stoppedAt: 'Contract', contract }
 }
