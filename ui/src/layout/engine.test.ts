@@ -5,6 +5,7 @@ import {
   defaultStackSize,
   flexForSize,
   parseSize,
+  renderedStackTracks,
   resizeSplit,
   selectBreakpoint,
   selectBreakpointIndex,
@@ -60,6 +61,24 @@ describe("sizes", () => {
     expect(trackForSize("auto")).toBe("auto");
     expect(trackForSize("48px")).toBe("48px");
     expect(trackForSize("}")).toBe("auto");
+  });
+
+  it("gives tracks only to stack children that rendered something", () => {
+    const tracks = ["auto", "auto", "auto", "minmax(0, 1fr)"];
+    // Child 0 and 3 rendered, 1 and 2 (banners without a reason) did not.
+    expect(renderedStackTracks(tracks, [0, null, 1, 2, 3, null])).toEqual([
+      "auto",
+      "minmax(0, 1fr)",
+    ]);
+    // A child rendering two elements: the second one gets `auto`.
+    expect(renderedStackTracks(["48px", "1fr"], [0, null, null, 1, null])).toEqual([
+      "48px",
+      "auto",
+      "1fr",
+    ]);
+    // Nothing rendered, and elements before any marker.
+    expect(renderedStackTracks(tracks, [0, 1, 2, 3])).toEqual([]);
+    expect(renderedStackTracks(tracks, [null])).toEqual(["auto"]);
   });
 
   it("defaults bar widgets to auto height", () => {

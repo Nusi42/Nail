@@ -1260,13 +1260,13 @@
   "actions": {
     "mail.next": {
       "label": "@mail.action.next",
-      "icon": null,
+      "icon": "chevron-down",
       "alias_of": null,
       "args": []
     },
     "mail.previous": {
       "label": "@mail.action.previous",
-      "icon": null,
+      "icon": "chevron-up",
       "alias_of": null,
       "args": []
     },
@@ -1344,7 +1344,7 @@
     },
     "composer.save": {
       "label": "@composer.action.save",
-      "icon": null,
+      "icon": "save",
       "alias_of": null,
       "args": []
     },
@@ -1356,19 +1356,19 @@
     },
     "composer.set-mode": {
       "label": "@composer.action.set-mode",
-      "icon": null,
+      "icon": "type",
       "alias_of": null,
       "args": []
     },
     "composer.toggle-preview": {
       "label": "@composer.action.toggle-preview",
-      "icon": null,
+      "icon": "eye",
       "alias_of": null,
       "args": []
     },
     "composer.toggle-source": {
       "label": "@composer.action.toggle-source",
-      "icon": null,
+      "icon": "code",
       "alias_of": null,
       "args": []
     },
@@ -1380,7 +1380,7 @@
     },
     "outbox.undo": {
       "label": "@outbox.action.undo",
-      "icon": null,
+      "icon": "undo-2",
       "alias_of": null,
       "args": []
     },
@@ -1400,7 +1400,7 @@
     },
     "search.clear": {
       "label": "@search.action.clear",
-      "icon": null,
+      "icon": "x",
       "alias_of": null,
       "args": []
     },
@@ -1420,7 +1420,7 @@
     },
     "window.open": {
       "label": "@window.action.open",
-      "icon": null,
+      "icon": "external-link",
       "alias_of": null,
       "args": []
     },
@@ -1432,7 +1432,7 @@
     },
     "view.toggle": {
       "label": "@view.action.toggle",
-      "icon": null,
+      "icon": "layout-panel-left",
       "alias_of": null,
       "args": []
     },
@@ -1456,55 +1456,55 @@
     },
     "mcp.indicator.dismiss": {
       "label": "@mcp.indicator.dismiss",
-      "icon": null,
+      "icon": "x",
       "alias_of": null,
       "args": []
     },
     "inspector.toggle": {
       "label": "@customize.action.inspector",
-      "icon": null,
+      "icon": "scan-search",
       "alias_of": null,
       "args": []
     },
     "customize.merge": {
       "label": "@customize.action.merge",
-      "icon": null,
+      "icon": "git-merge",
       "alias_of": null,
       "args": []
     },
     "customize.errors": {
       "label": "@customize.action.errors",
-      "icon": null,
+      "icon": "circle-alert",
       "alias_of": null,
       "args": []
     },
     "security.autocrypt.import": {
       "label": "@security.action.autocrypt-import",
-      "icon": null,
+      "icon": "key-round",
       "alias_of": null,
       "args": []
     },
     "remote.pair": {
       "label": "@remote.action.pair",
-      "icon": null,
+      "icon": "smartphone",
       "alias_of": null,
       "args": []
     },
     "remote.content.allow": {
       "label": "@remote.action.load-content",
-      "icon": null,
+      "icon": "image",
       "alias_of": null,
       "args": []
     },
     "remote.logout": {
       "label": "@remote.action.logout",
-      "icon": null,
+      "icon": "log-out",
       "alias_of": null,
       "args": []
     },
     "menu.context": {
       "label": "@context-menu.action.open",
-      "icon": null,
+      "icon": "ellipsis-vertical",
       "alias_of": null,
       "args": []
     },
@@ -1546,19 +1546,19 @@
     },
     "plugins.manage": {
       "label": "@plugin.action.manage",
-      "icon": null,
+      "icon": "puzzle",
       "alias_of": null,
       "args": []
     },
     "plugins.install": {
       "label": "@plugin.action.install",
-      "icon": null,
+      "icon": "package-plus",
       "alias_of": null,
       "args": []
     },
     "plugins.load-dev": {
       "label": "@plugin.action.load-dev",
-      "icon": null,
+      "icon": "code",
       "alias_of": null,
       "args": []
     },
@@ -1572,7 +1572,7 @@
     },
     "pim.contacts.open": {
       "label": "@pim.action.open-contacts",
-      "icon": null,
+      "icon": "book-user",
       "alias_of": "window.open",
       "args": [
         "contacts"
@@ -1580,7 +1580,7 @@
     },
     "pim.tasks.open": {
       "label": "@pim.action.open-tasks",
-      "icon": null,
+      "icon": "list-checks",
       "alias_of": "window.open",
       "args": [
         "tasks"
@@ -1588,7 +1588,7 @@
     },
     "calendar.goto-today": {
       "label": "@pim.action.calendar-today",
-      "icon": null,
+      "icon": "calendar-check",
       "alias_of": null,
       "args": []
     },
@@ -1606,7 +1606,7 @@
     },
     "calendar.view": {
       "label": "@pim.action.calendar-view",
-      "icon": null,
+      "icon": "calendar-range",
       "alias_of": null,
       "args": []
     },
@@ -1624,49 +1624,49 @@
     },
     "calendar.calendars": {
       "label": "@pim.action.sources",
-      "icon": null,
+      "icon": "layers",
       "alias_of": null,
       "args": []
     },
     "tasks.new": {
       "label": "@pim.action.new-task",
-      "icon": null,
+      "icon": "list-plus",
       "alias_of": null,
       "args": []
     },
     "tasks.from-message": {
       "label": "@pim.action.task-from-message",
-      "icon": null,
+      "icon": "square-check-big",
       "alias_of": null,
       "args": []
     },
     "contacts.new": {
       "label": "@pim.action.new-contact",
-      "icon": null,
+      "icon": "user-plus",
       "alias_of": null,
       "args": []
     },
     "contacts.groups": {
       "label": "@pim.action.contact-groups",
-      "icon": null,
+      "icon": "users",
       "alias_of": null,
       "args": []
     },
     "contacts.merge": {
       "label": "@pim.action.merge-contacts",
-      "icon": null,
+      "icon": "git-merge",
       "alias_of": null,
       "args": []
     },
     "pim.import": {
       "label": "@pim.action.import",
-      "icon": null,
+      "icon": "import",
       "alias_of": null,
       "args": []
     },
     "pim.sources": {
       "label": "@pim.action.sources",
-      "icon": null,
+      "icon": "layers",
       "alias_of": null,
       "args": []
     },
@@ -1678,19 +1678,19 @@
     },
     "scheduling.accept": {
       "label": "@scheduling.action.accept",
-      "icon": null,
+      "icon": "check",
       "alias_of": null,
       "args": []
     },
     "scheduling.tentative": {
       "label": "@scheduling.action.tentative",
-      "icon": null,
+      "icon": "circle-question-mark",
       "alias_of": null,
       "args": []
     },
     "scheduling.decline": {
       "label": "@scheduling.action.decline",
-      "icon": null,
+      "icon": "x",
       "alias_of": null,
       "args": []
     },
@@ -1702,7 +1702,7 @@
     },
     "scheduling.settings": {
       "label": "@scheduling.action.settings",
-      "icon": null,
+      "icon": "settings",
       "alias_of": null,
       "args": []
     },
@@ -1714,25 +1714,25 @@
     },
     "gmail.apply-labels": {
       "label": "@gmail.action.apply-labels",
-      "icon": null,
+      "icon": "tags",
       "alias_of": null,
       "args": []
     },
     "gmail.label-view": {
       "label": "@gmail.action.label-view",
-      "icon": null,
+      "icon": "tag",
       "alias_of": null,
       "args": []
     },
     "gmail.category": {
       "label": "@gmail.action.category",
-      "icon": null,
+      "icon": "inbox",
       "alias_of": null,
       "args": []
     },
     "exchange.automatic-replies": {
       "label": "@exchange.action.automatic-replies",
-      "icon": null,
+      "icon": "plane",
       "alias_of": null,
       "args": []
     },
@@ -1750,49 +1750,49 @@
     },
     "exchange.focus": {
       "label": "@exchange.action.focus",
-      "icon": null,
+      "icon": "focus",
       "alias_of": null,
       "args": []
     },
     "exchange.classify": {
       "label": "@exchange.action.classify",
-      "icon": null,
+      "icon": "list-filter",
       "alias_of": null,
       "args": []
     },
     "exchange.toggle-focused": {
       "label": "@exchange.action.toggle-focused",
-      "icon": null,
+      "icon": "arrow-left-right",
       "alias_of": null,
       "args": []
     },
     "exchange.apply-categories": {
       "label": "@exchange.action.apply-categories",
-      "icon": null,
+      "icon": "tags",
       "alias_of": null,
       "args": []
     },
     "system.about": {
       "label": "@system.action.about",
-      "icon": null,
+      "icon": "info",
       "alias_of": null,
       "args": []
     },
     "system.check-updates": {
       "label": "@system.action.check-updates",
-      "icon": null,
+      "icon": "refresh-cw",
       "alias_of": null,
       "args": []
     },
     "system.first-run": {
       "label": "@system.action.first-run",
-      "icon": null,
+      "icon": "sparkles",
       "alias_of": null,
       "args": []
     },
     "system.default-apps": {
       "label": "@system.action.default-apps",
-      "icon": null,
+      "icon": "app-window",
       "alias_of": null,
       "args": []
     },
@@ -1804,67 +1804,67 @@
     },
     "print.message": {
       "label": "@print.action.message",
-      "icon": null,
+      "icon": "printer",
       "alias_of": null,
       "args": []
     },
     "print.thread": {
       "label": "@print.action.thread",
-      "icon": null,
+      "icon": "printer",
       "alias_of": null,
       "args": []
     },
     "print.event": {
       "label": "@print.action.event",
-      "icon": null,
+      "icon": "printer",
       "alias_of": null,
       "args": []
     },
     "print.agenda": {
       "label": "@print.action.agenda",
-      "icon": null,
+      "icon": "printer",
       "alias_of": null,
       "args": []
     },
     "print.save-pdf": {
       "label": "@print.action.save-pdf",
-      "icon": null,
+      "icon": "file-down",
       "alias_of": null,
       "args": []
     },
     "import.open": {
       "label": "@portability.action.import",
-      "icon": null,
+      "icon": "import",
       "alias_of": null,
       "args": []
     },
     "export.open": {
       "label": "@portability.action.export",
-      "icon": null,
+      "icon": "upload",
       "alias_of": null,
       "args": []
     },
     "backup.create": {
       "label": "@portability.action.backup",
-      "icon": null,
+      "icon": "hard-drive-download",
       "alias_of": null,
       "args": []
     },
     "backup.restore": {
       "label": "@portability.action.restore",
-      "icon": null,
+      "icon": "hard-drive-upload",
       "alias_of": null,
       "args": []
     },
     "diagnostics.open": {
       "label": "@portability.action.diagnostics",
-      "icon": null,
+      "icon": "stethoscope",
       "alias_of": null,
       "args": []
     },
     "agents.open-center": {
-      "label": null,
-      "icon": null,
+      "label": "@agents.action.open-center",
+      "icon": "bot",
       "alias_of": null,
       "args": []
     }

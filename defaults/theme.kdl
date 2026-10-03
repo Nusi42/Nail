@@ -51,24 +51,25 @@ theme "default" mode="system" {
         color "quote-2"       "#3b8a5a" dark="#7cc49a"
         color "quote-3"       "#8a6d3b" dark="#d2b074"
         // Avatar initials / account dots and file-type badges (white text on
-        // every one meets WCAG AA, black in High contrast; the UI picks an
+        // every one meets WCAG AA; in High contrast white with black text, so
+        // their shapes stay visible on the black panes; the UI picks an
         // avatar colour per address).
-        color "avatar-fg"     "#ffffff"
-        color "avatar-1"      "#3b5bdb" high-contrast="#000000"
-        color "avatar-2"      "#0b7285" high-contrast="#000000"
-        color "avatar-3"      "#2f7d3a" high-contrast="#000000"
-        color "avatar-4"      "#a61e4d" high-contrast="#000000"
-        color "avatar-5"      "#7048e8" high-contrast="#000000"
-        color "avatar-6"      "#c2410c" high-contrast="#000000"
-        color "avatar-7"      "#5c5f66" high-contrast="#000000"
-        color "avatar-8"      "#1864ab" high-contrast="#000000"
-        color "file-pdf"      "#c92a2a" high-contrast="#000000"
-        color "file-image"    "#0b7285" high-contrast="#000000"
-        color "file-document" "#1864ab" high-contrast="#000000"
-        color "file-spreadsheet" "#2f7d3a" high-contrast="#000000"
-        color "file-archive"  "#7048e8" high-contrast="#000000"
-        color "file-calendar" "#c2410c" high-contrast="#000000"
-        color "file-other"    "#5c5f66" high-contrast="#000000"
+        color "avatar-fg"     "#ffffff" high-contrast="#000000"
+        color "avatar-1"      "#3b5bdb" high-contrast="#ffffff"
+        color "avatar-2"      "#0b7285" high-contrast="#ffffff"
+        color "avatar-3"      "#2f7d3a" high-contrast="#ffffff"
+        color "avatar-4"      "#a61e4d" high-contrast="#ffffff"
+        color "avatar-5"      "#7048e8" high-contrast="#ffffff"
+        color "avatar-6"      "#c2410c" high-contrast="#ffffff"
+        color "avatar-7"      "#5c5f66" high-contrast="#ffffff"
+        color "avatar-8"      "#1864ab" high-contrast="#ffffff"
+        color "file-pdf"      "#c92a2a" high-contrast="#ffffff"
+        color "file-image"    "#0b7285" high-contrast="#ffffff"
+        color "file-document" "#1864ab" high-contrast="#ffffff"
+        color "file-spreadsheet" "#2f7d3a" high-contrast="#ffffff"
+        color "file-archive"  "#7048e8" high-contrast="#ffffff"
+        color "file-calendar" "#c2410c" high-contrast="#ffffff"
+        color "file-other"    "#5c5f66" high-contrast="#ffffff"
         color "scrim"         "rgb(0 0 0 / 0.35)" dark="rgb(0 0 0 / 0.6)" high-contrast="rgb(0 0 0 / 0.8)"
 
         // Segoe UI Variable, the Windows 11 face, with the system stack as

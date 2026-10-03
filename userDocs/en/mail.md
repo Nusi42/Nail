@@ -29,7 +29,8 @@ font and keeps its line breaks.
 
 Attachments are cards with the file type, name and size. **Save** asks
 where to save the file in the desktop app (the Save dialog asks before
-replacing a file); in a browser the file is downloaded. **Preview** appears
+replacing a file); in a browser the file is downloaded. The card then says
+"Saved." or "Downloaded." next to the size. **Preview** appears
 when a plug-in can show that type, and the **…** button has the plug-ins'
 attachment actions.
 

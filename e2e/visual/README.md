@@ -1,7 +1,9 @@
 # e2e/visual — visual-regression harness (M5a WP154)
 
-Playwright screenshots of six screens — the main window with a message open,
-the composer, Settings, the calendar, a context menu and a dialog — for every
+Playwright screenshots of nine screens — the main window with a message open,
+the composer, Settings, the calendar, a context menu, an HTML newsletter (reader
+column and remote-content banner), a message with attachment cards before and
+after saving one, and a dialog — for every
 built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) × density
 (Comfortable, Compact), compared with reviewed baselines. ADR 0106 (package),
 contract ADR 0102.

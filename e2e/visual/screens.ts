@@ -74,11 +74,18 @@ export async function loadMainWindow(page: Page, url: string): Promise<void> {
   await expect(page.locator('[data-status="connecting"]')).toHaveCount(0, { timeout: 60_000 });
 }
 
+/** A demo newsletter with an HTML body and blocked remote images. */
+export const HTML_MESSAGE = "Your weekly garden digest";
+/** The demo invoice with a PDF and a CSV attachment. */
+export const ATTACHMENT_MESSAGE = "Your invoice for September 2026";
+
+async function selectMessage(page: Page, subject: string) {
+  await rows(page).filter({ hasText: subject }).first().click();
+  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(subject);
+}
+
 async function selectSample(page: Page) {
-  await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click();
-  await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
-    SAMPLE_MESSAGE,
-  );
+  await selectMessage(page, SAMPLE_MESSAGE);
 }
 
 export const SCREENS: readonly Screen[] = [
@@ -134,6 +141,37 @@ export const SCREENS: readonly Screen[] = [
       await selectSample(page);
       await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click({ button: "right" });
       await expect(page.getByRole("menu")).toBeVisible();
+    },
+  },
+  {
+    id: "html",
+    title: "An HTML newsletter with its remote content blocked (reader column and banner)",
+    async open(page) {
+      await selectMessage(page, HTML_MESSAGE);
+      await expect(page.locator('[data-part="remote-content"]')).toBeVisible();
+      await expect(
+        page.frameLocator('iframe[data-part="message-view.body"]').locator("body"),
+      ).not.toBeEmpty();
+    },
+  },
+  {
+    id: "attachment",
+    title: "A message with attachment cards",
+    async open(page) {
+      await selectMessage(page, ATTACHMENT_MESSAGE);
+      await expect(page.locator('[data-part="attachment-card"]')).toHaveCount(2);
+    },
+  },
+  {
+    id: "attachment-saved",
+    title: "The attachment cards after saving one (the status keeps the card height)",
+    async open(page) {
+      await selectMessage(page, ATTACHMENT_MESSAGE);
+      const card = page.locator('[data-part="attachment-card"]', { hasText: "usage.csv" });
+      const download = page.waitForEvent("download");
+      await card.getByRole("button", { name: "Save usage.csv" }).click();
+      await download;
+      await expect(card.getByRole("status")).toBeVisible();
     },
   },
   {

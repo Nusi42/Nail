@@ -64,6 +64,36 @@ export function trackForSize(size: string): string {
   return isValidSize(size) ? size : "auto";
 }
 
+/**
+ * The grid rows of a stack for what its children actually rendered. A
+ * widget may render nothing (a banner without a reason to show, the config
+ * errors while all files are valid); its track must not go to the next
+ * child, or a bar gets the `1fr` row and the flexible child an `auto` one.
+ *
+ * `marks` lists the stack's DOM children in order: the index of the visible
+ * child a slot marker stands before, or `null` for a rendered element.
+ * The first element after a marker takes that child's track; further
+ * elements of the same child (a fragment) get `auto`.
+ */
+export function renderedStackTracks(
+  tracks: readonly string[],
+  marks: readonly (number | null)[],
+): string[] {
+  const out: string[] = [];
+  let slot: number | null = null;
+  let used = false;
+  for (const mark of marks) {
+    if (mark !== null) {
+      slot = mark;
+      used = false;
+      continue;
+    }
+    out.push(slot !== null && !used ? (tracks[slot] ?? "auto") : "auto");
+    used = true;
+  }
+  return out;
+}
+
 const BAR_WIDGETS = new Set(["toolbar", "status-bar", "account-switcher", "text"]);
 
 /** Default stack size of a child: `auto` for bar-like widgets, else `1fr`. */

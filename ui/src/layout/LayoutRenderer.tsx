@@ -4,7 +4,9 @@
  * Leaves are looked up in the widget registry.
  */
 import {
+  Fragment,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -14,11 +16,12 @@ import {
 import type { LayoutNode, ResolvedLayout } from "../api/generated";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { useUi } from "../state/uiStore";
-import { useGeometry } from "../theme/ThemeProvider";
+import { useGeometry, useStyleManager } from "../theme/ThemeProvider";
 import {
   defaultStackSize,
   flexForSize,
   isValidSize,
+  renderedStackTracks,
   resizeSplit,
   selectBreakpointIndex,
   trackForSize,
@@ -105,21 +108,50 @@ function StackView({ node, path }: { node: StackNode; path: string }) {
   const label = useLabel();
   const geom = useId();
   const visible = useVisibleChildren(node.children);
-  const rows = visible.map(({ child, index }) => {
+  const tracks = visible.map(({ child, index }) => {
     const size = node.sizes[index];
     return trackForSize(size && isValidSize(size) ? size : defaultStackSize(child));
   });
-  useGeometry(geom, { "grid-template-rows": rows.join(" ") || "none" });
+  const element = useRef<HTMLDivElement>(null);
+  const manager = useStyleManager();
+  const tracksKey = JSON.stringify(tracks);
+  // The rows go only to the children that rendered something (see
+  // `renderedStackTracks`). Written straight to the stylesheet: widgets
+  // appear and disappear without this stack re-rendering.
+  useLayoutEffect(() => () => manager.removeGeometry(geom), [manager, geom]);
+  useLayoutEffect(() => {
+    const el = element.current;
+    if (!el) return;
+    const all = JSON.parse(tracksKey) as string[];
+    const update = () => {
+      const marks = [...el.children].map((child) =>
+        child.getAttribute("data-part") === "stack.slot"
+          ? Number(child.getAttribute("data-slot"))
+          : null,
+      );
+      const rows = renderedStackTracks(all, marks).join(" ");
+      manager.setGeometry(geom, { "grid-template-rows": rows || "none" });
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(el, { childList: true });
+    return () => observer.disconnect();
+  }, [manager, geom, tracksKey]);
   return (
     <div
+      ref={element}
       data-part="stack"
       data-geom={geom}
       data-node-id={node.id ?? undefined}
       role={node.label ? "region" : undefined}
       aria-label={node.label ? label(node.label) : undefined}
     >
-      {visible.map(({ child, index }) => (
-        <NodeView key={child.id ?? index} node={child} path={`${path}/${index}`} />
+      {visible.map(({ child, index }, i) => (
+        <Fragment key={child.id ?? index}>
+          {/* Not a grid item (hidden): marks where child `i` starts. */}
+          <span data-part="stack.slot" data-slot={i} hidden />
+          <NodeView node={child} path={`${path}/${index}`} />
+        </Fragment>
       ))}
     </div>
   );

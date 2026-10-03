@@ -135,6 +135,19 @@ export function AttachmentCard({
           {name}
         </span>
         <span data-part="attachment-card.size">{formatSize(attachment.size, locale)}</span>
+        {/* Next to the size, so the card keeps its height (M5a review). */}
+        {(save === "saved" ||
+          save === "downloaded" ||
+          save === "unsupported" ||
+          save === "failed") && (
+          <span
+            data-part="attachment-card.status"
+            role="status"
+            title={t(`message-view-attachment-save-${save}`)}
+          >
+            {t(`message-view-attachment-save-${save}`)}
+          </span>
+        )}
       </span>
       <span data-part="attachment-card.actions">
         <AttachmentWarningMark warnings={warnings} index={attachment.index} />
@@ -165,14 +178,6 @@ export function AttachmentCard({
         </button>
         <AttachmentActionMenu messageId={messageId} attachment={attachment} accountId={accountId} />
       </span>
-      {(save === "saved" ||
-        save === "downloaded" ||
-        save === "unsupported" ||
-        save === "failed") && (
-        <span data-part="attachment-card.status" role="status">
-          {t(`message-view-attachment-save-${save}`)}
-        </span>
-      )}
     </li>
   );
 }

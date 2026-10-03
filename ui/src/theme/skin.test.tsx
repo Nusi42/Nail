@@ -124,6 +124,66 @@ describe("M5a skin (theme/skin.ts)", () => {
     expect(reader).toMatch(/font-family: var\(--nail-font-reader\)/);
   });
 
+  /** The declarations of the skin's rule whose selector list is exactly `selector`. */
+  const ruleBody = (selector: string) =>
+    SKIN_CSS.split("}")
+      .map((block) => block.split("{"))
+      .find(([selectors = ""]) => selectors.trim() === selector)?.[1] ?? "";
+
+  it("draws an off switch as a visible thumb on a plain, outlined track", () => {
+    // Off: `fg-muted` thumb on a `bg` track (checked as a pair in
+    // tests/theme_contrast.rs), outlined like every input control
+    // (2px in High contrast).
+    const track = ruleBody('[data-part="switch"]');
+    expect(track).toContain("border: var(--nail-border-control,");
+    expect(track).toContain("background-color: var(--nail-color-bg);");
+    expect(ruleBody('[data-part="switch.thumb"]')).toContain(
+      "background-color: var(--nail-color-fg-muted);",
+    );
+    // On: the accent-fg thumb on the accent track.
+    expect(
+      ruleBody('[data-part="switch"][aria-checked="true"] [data-part="switch.thumb"]'),
+    ).toContain("background-color: var(--nail-color-accent-fg);");
+    expect(ruleBody('[data-part="switch"][aria-checked="true"]')).toContain(
+      "background-color: var(--nail-color-accent);",
+    );
+  });
+
+  it("rings the focused message list with the focus colour", () => {
+    expect(ruleBody('[data-part="message-list"]:focus-visible')).toContain(
+      "outline: 2px solid var(--nail-color-focus-ring)",
+    );
+  });
+
+  it("aligns the reader's banners with the centred column", () => {
+    const body = ruleBody(
+      [
+        "security-message",
+        "security-warnings",
+        "remote-content",
+        "junk-verdict",
+        "sync-message-body",
+      ]
+        .map((part) => `[data-part="${part}"]`)
+        .join(", "),
+    );
+    expect(body).toContain("margin-inline: auto");
+    expect(body).toContain("width: min(68ch, 100% - 2 * var(--nail-space-xxl))");
+    // The reader fills its row, so an HTML body gets the rest of the pane.
+    expect(ruleBody('[data-part="message-view"]')).toContain("height: 100%");
+    expect(ruleBody('[data-part="message-view.body"]')).toContain("flex: 1 1 auto");
+  });
+
+  it("puts the attachment save status next to the size, not on a new card row", () => {
+    expect(ruleBody('[data-part="attachment-card.text"]')).toContain(
+      "grid-template-columns: auto minmax(0, 1fr)",
+    );
+    expect(ruleBody('[data-part="attachment-card.name"]')).toContain("grid-column: 1 / -1");
+    const status = ruleBody('[data-part="attachment-card.status"]');
+    expect(status).toContain("grid-column: 2");
+    expect(status).toContain("white-space: nowrap");
+  });
+
   it("hides the tag line in Compact", () => {
     expect(SKIN_CSS).toContain(
       ':root[data-nail-density="compact"] [data-part="message-list.row.tag-line"]',

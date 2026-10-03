@@ -45,8 +45,10 @@ describe("layout engine", () => {
     expect(geometryOf(panes[0] as Element)).toContain("min-width: 160px");
     expect(geometryOf(panes[0] as Element)).toContain("max-width: 480px");
     expect(geometryOf(panes[2] as Element)).toContain("flex: 1.4 1 0px");
+    // The config errors render nothing while every file is valid: no track.
+    expect(container.querySelector('[data-part="config-errors"]')).toBeNull();
     expect(geometryOf(root as Element)).toContain(
-      "grid-template-rows: auto auto minmax(0, 1fr) auto auto",
+      "grid-template-rows: auto minmax(0, 1fr) auto auto;",
     );
     // Widgets from the registry.
     for (const kind of [
@@ -144,6 +146,38 @@ describe("layout engine", () => {
     expect(split.querySelectorAll(':scope > [data-part="split.divider"]')).toHaveLength(1);
     act(() => env.store.getState().toggleNode("sidebar"));
     expect(container.querySelector('[data-node-id="sidebar"]')).toBeInTheDocument();
+  });
+
+  it("gives the flexible track to the child that renders, not to an empty banner", () => {
+    const env = createEnv();
+    const layout = normalizeLayout({
+      windows: {
+        main: [
+          {
+            root: {
+              type: "stack",
+              id: "reader",
+              sizes: ["auto", "auto", "1fr"],
+              children: [
+                { type: "widget", kind: "text", options: { text: "Bar" } },
+                // Renders nothing while no junk message is selected.
+                { type: "widget", kind: "junk-verdict" },
+                { type: "widget", kind: "text", options: { text: "Body" } },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    const { container } = renderWithProviders(<WindowView layout={layout} />, env, { layout });
+    const stack = container.querySelector('[data-node-id="reader"]') as HTMLElement;
+    expect(container.querySelector('[data-part="junk-verdict"]')).toBeNull();
+    // Two rendered children, two tracks: the body keeps the 1fr row.
+    expect(geometryOf(stack)).toContain("grid-template-rows: auto minmax(0, 1fr);");
+    // The slot markers are hidden, so they are no grid items.
+    const markers = stack.querySelectorAll(':scope > [data-part="stack.slot"]');
+    expect(markers).toHaveLength(3);
+    for (const marker of markers) expect(marker).toHaveAttribute("hidden");
   });
 
   it("renders unknown widgets and missing windows with a message", () => {

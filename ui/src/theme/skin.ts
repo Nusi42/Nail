@@ -208,8 +208,8 @@ ${p("search-bar.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
 const SWITCH = `${p("switch")} {
   position: relative; display: inline-flex; align-items: center; flex: 0 0 auto;
   width: calc(2 * ${T.icon} + ${T.xs}); height: calc(${T.icon} + ${T.xs});
-  padding: 0; border: 1px solid ${T.line}; border-radius: ${T.pill};
-  background-color: ${T.raised}; transition: background-color ${T.fast} ${T.ease};
+  padding: 0; border: ${T.controlBorder}; border-radius: ${T.pill};
+  background-color: ${T.bg}; transition: background-color ${T.fast} ${T.ease};
 }
 ${p("switch")}[aria-checked="true"] { border-color: transparent; background-color: ${T.accent}; }
 ${p("switch")}:focus-visible { ${focusRing} }
@@ -217,7 +217,7 @@ ${p("switch")}:disabled { opacity: ${T.disabled}; }
 ${p("switch.thumb")} {
   position: absolute; inset-block-start: 1px; inset-inline-start: 1px;
   width: calc(${T.icon} + ${T.xxs} - 2px); height: calc(${T.icon} + ${T.xxs} - 2px);
-  border-radius: 50%; background-color: ${T.bg}; box-shadow: ${T.raisedShadow};
+  border-radius: 50%; background-color: ${T.muted}; box-shadow: ${T.raisedShadow};
   transition: inset-inline-start ${T.fast} ${T.ease};
 }
 ${p("switch")}[aria-checked="true"] ${p("switch.thumb")} { inset-inline-start: calc(100% - ${T.icon} - ${T.xxs} + 1px); background-color: ${T.accentFg}; }
@@ -318,6 +318,7 @@ ${p("message-list.row")}[data-view="columns"] { display: block; }
 ${p("message-list.row")}:hover { background-color: ${T.subtle}; }
 ${p("message-list.row")}[data-state~="selected"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
 ${p("message-list.row")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${p("message-list")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("message-list.row.unread-dot")} {
   position: absolute; inset-inline-start: calc((${T.pane} - ${T.xs} - ${T.xxs} - 1px) / 2); inset-block-start: calc(${T.row} + ${T.md} + 1px);
   width: calc(${T.xs} + ${T.xxs} + 1px); height: calc(${T.xs} + ${T.xxs} + 1px); border-radius: 50%; background-color: var(--nail-skin-unread-dot);
@@ -338,7 +339,20 @@ ${p("message-list.row.tag-line")} { display: flex; flex-wrap: wrap; align-items:
 :root[data-nail-density="compact"] ${p("message-list.row.tag-line")}, ${p("app")}[data-density="compact"] ${p("message-list.row.tag-line")} { display: none; }
 ${p("message-list.empty")} { padding: ${T.xl} ${T.pane}; text-align: center; color: ${T.muted}; }`;
 
-const READER = `${p("message-view")} { display: flex; flex-direction: column; overflow: hidden; background-color: ${T.bg}; }
+/** The reader's banners (security, remote content, junk, body status) above the column. */
+const READER_SLOTS = [
+  "security-message",
+  "security-warnings",
+  "remote-content",
+  "junk-verdict",
+  "sync-message-body",
+] as const;
+
+const READER = `${p("message-view")} { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; background-color: ${T.bg}; }
+${ps(...READER_SLOTS)} {
+  box-sizing: border-box; width: min(68ch, 100% - 2 * ${T.xxl}); margin-inline: auto; margin-block-start: ${T.sm};
+  font-family: ${T.fontUi};
+}
 ${p("message-view.column")} {
   display: flex; flex-direction: column; flex: 1 1 auto; gap: ${T.lg}; min-height: 0;
   width: 100%; max-width: calc(68ch + 2 * ${T.xxl}); margin-inline: auto; padding: ${T.xl} ${T.xxl} 0;
@@ -349,7 +363,7 @@ ${p("message-view.header.subject")} { margin: 0 0 ${T.xs}; font-family: ${T.font
 ${p("message-view.header.field")} { font-size: ${T.small}; color: ${T.muted}; }
 ${p("message-view.header.label")} { min-width: calc(4 * ${T.lg}); }
 ${p("message-view.text")} { max-width: 68ch; margin: 0; padding-bottom: ${T.xl}; color: ${T.fg}; }
-${p("message-view.body")} { flex: 1 1 auto; border: none; background-color: ${T.bg}; }
+${p("message-view.body")} { flex: 1 1 auto; min-height: 0; border: none; background-color: ${T.bg}; }
 ${p("message-view.attachments")} { display: flex; flex-wrap: wrap; gap: ${T.sm}; margin: 0; padding: 0; list-style: none; }
 ${p("attachment-card")} {
   display: grid; grid-template-columns: calc(${T.control} + ${T.xs}) minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
@@ -366,9 +380,11 @@ ${p("attachment-card.type")}[data-kind="document"] { background-color: var(--nai
 ${p("attachment-card.type")}[data-kind="spreadsheet"] { background-color: var(--nail-color-file-spreadsheet, #2f7d3a); }
 ${p("attachment-card.type")}[data-kind="archive"] { background-color: var(--nail-color-file-archive, #7048e8); }
 ${p("attachment-card.type")}[data-kind="calendar"] { background-color: var(--nail-color-file-calendar, #c2410c); }
-${p("attachment-card.text")} { display: grid; min-width: 0; }
-${p("attachment-card.name")} { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
+${p("attachment-card.text")} { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: ${T.sm}; min-width: 0; }
+${p("attachment-card.name")} { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
 ${p("attachment-card.size")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
+${p("attachment-card.status")} { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; color: ${T.muted}; }
+${p("attachment-card")}[data-state~="failed"] ${p("attachment-card.status")} { color: ${T.danger}; }
 ${p("attachment-card.actions")} { display: flex; align-items: center; gap: ${T.xxs}; }`;
 
 /** Folder pane, account switcher and status bar on the same grid. */

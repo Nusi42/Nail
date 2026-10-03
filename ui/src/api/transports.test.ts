@@ -164,11 +164,18 @@ describe("normalize", () => {
     expect(root).toMatchObject({ type: "stack", label: null });
     expect(layout.actions["mail.next"]).toEqual({
       label: "@mail.action.next",
-      icon: null,
+      icon: "chevron-down",
       alias_of: null,
       args: [],
     });
     expect(layout.keys[0]).toEqual({ context: "list", key: "j", action: "mail.next", args: [] });
+    // Every default action has an icon since the M5a review; an omitted one is null.
+    expect(normalizeLayout({ actions: { "x.y": { label: "@x" } } }).actions["x.y"]).toEqual({
+      label: "@x",
+      icon: null,
+      alias_of: null,
+      args: [],
+    });
   });
 
   it("keeps the file positions of widgets (inspector)", () => {

@@ -96,6 +96,11 @@ const PAIRS: &[Pair] = &[
         ],
     ),
     ui("flagged", &["bg", "bg-subtle", "bg-raised"]),
+    // Switches (M5a review): the off thumb (`fg-muted`) on the off track
+    // (`bg`) and the on thumb (`accent-fg`) on the on track (`accent`); the
+    // thumb's position is the only cue for the state.
+    ui("fg-muted", &["bg"]),
+    ui("accent-fg", &["accent"]),
     // Avatar initials and file-type badges (M5a WP155).
     text(
         "avatar-fg",
@@ -761,4 +766,53 @@ fn colour_values_are_evaluated_like_css_on_root() {
             .hex(),
         "#bfbfbf"
     );
+}
+
+/// Avatars, file-type badges and tag dots keep their shape in High
+/// contrast: their fill stands out from every surface they sit on (M5a
+/// review: they were black on the black panes).
+#[test]
+fn high_contrast_badges_stand_out_from_the_surfaces() {
+    const FILLS: &[&str] = &[
+        "avatar-1",
+        "avatar-2",
+        "avatar-3",
+        "avatar-4",
+        "avatar-5",
+        "avatar-6",
+        "avatar-7",
+        "avatar-8",
+        "file-pdf",
+        "file-image",
+        "file-document",
+        "file-spreadsheet",
+        "file-archive",
+        "file-calendar",
+        "file-other",
+    ];
+    let mut problems = Vec::new();
+    for case in cases() {
+        if !screen_modes(&case.theme).contains(&"high-contrast") {
+            continue;
+        }
+        let colors = Colors {
+            theme: &case.theme,
+            mode: "high-contrast",
+        };
+        for fill in FILLS {
+            for bg in SURFACES {
+                let (f, b) = (colors.get(fill).unwrap(), colors.get(bg).unwrap());
+                let ratio = contrast(f, b);
+                if ratio < AAA {
+                    problems.push(format!(
+                        "{} {fill} {} on {bg} {}: {ratio:.2}",
+                        case.id,
+                        f.hex(),
+                        b.hex()
+                    ));
+                }
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }

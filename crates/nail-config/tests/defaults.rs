@@ -191,3 +191,23 @@ fn the_base_theme_defines_the_token_schema() {
         }
     }
 }
+
+/// Every action of the default layout carries a bundled Lucide icon (M5a
+/// WP153: one consistent icon set in toolbars and menus, so labels in the
+/// same menu start at the same position).
+#[test]
+fn every_default_action_has_a_bundled_lucide_icon() {
+    let layout = nail_config::default_layout();
+    let mut problems = Vec::new();
+    for (id, def) in &layout.actions {
+        match def.icon.as_deref() {
+            None => problems.push(format!("{id}: no icon")),
+            Some(icon) if nail_api::icons::BUNDLED_ICONS.binary_search(&icon).is_err() => {
+                problems.push(format!("{id}: `{icon}` is not a bundled Lucide name"));
+            }
+            Some(_) => {}
+        }
+    }
+    assert!(!layout.actions.is_empty());
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}

@@ -79,7 +79,9 @@ It has pure black and white with yellow and cyan accents, and every text
 and outline reaches at least 7:1 contrast (WCAG AAA). Text is bigger (16 px
 body text, which the whole type scale follows), every control has a 2 px
 border, focus rings are thick and drawn outside the item, a selected item is
-a solid highlight, and there are no animations. Nail checks the contrast of
+a solid highlight, and there are no animations. Unread messages have a thick
+yellow bar on the left, hovered items a dark yellow fill, and avatars and
+file-type badges are white with black letters. Nail checks the contrast of
 every theme automatically.
 
 Your own changes still apply on top: the text size, corner radius and

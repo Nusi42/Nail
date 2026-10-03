@@ -206,7 +206,11 @@ describe("attachment cards (M5a)", () => {
       // No plug-in renders PDFs in the default mock: no preview action.
       expect(within(card).queryByRole("button", { name: "Preview report.pdf" })).toBeNull();
       fireEvent.click(within(card).getByRole("button", { name: "Save report.pdf" }));
-      expect(await within(card).findByRole("status")).toHaveTextContent("Downloaded.");
+      const status = await within(card).findByRole("status");
+      expect(status).toHaveTextContent("Downloaded.");
+      // In the text column next to the size, so the card keeps its height.
+      expect(status.parentElement).toHaveAttribute("data-part", "attachment-card.text");
+      expect(status.previousElementSibling).toHaveAttribute("data-part", "attachment-card.size");
       expect(env.transport.data.features.attachments.downloaded).toEqual([`${FIRST}#0`]);
       expect(createObjectURL).toHaveBeenCalledTimes(1);
       expect(clicked.map((a) => a.download)).toEqual(["report.pdf"]);

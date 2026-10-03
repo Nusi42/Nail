@@ -13,6 +13,8 @@ import type {
   AppearanceSettings,
   Density,
   ResolvedTheme,
+  ThemeInfo,
+  ThemeKind,
   ThemeMode,
   TokenSet,
 } from "../../api/generated";
@@ -113,6 +115,35 @@ export const BUILTIN_THEME_FILES: ReadonlyMap<string, ThemeFile> = new Map(
     })
     .sort(([a], [b]) => a.localeCompare(b)),
 );
+
+/** The built-in theme a user theme of each kind previews with when its chain names none. */
+const PREVIEW_FALLBACK: Readonly<Record<ThemeKind, string>> = {
+  light: "frost",
+  dark: "graphite",
+  "high-contrast": "high-contrast",
+};
+
+/**
+ * The colour tokens a gallery card previews `theme` with: a built-in's own
+ * palette; for a user theme the palette of the built-in it extends
+ * (following `extends` through other user themes), else of the built-in of
+ * its kind — never an empty strip.
+ */
+export function previewColors(
+  theme: ThemeInfo,
+  themes: readonly ThemeInfo[],
+): Readonly<Record<string, string>> {
+  const seen = new Set<string>();
+  let id: string | undefined = theme.id;
+  while (id !== undefined && !seen.has(id)) {
+    seen.add(id);
+    const builtin = BUILTIN_THEME_FILES.get(id);
+    if (builtin) return builtin.tokens.color ?? {};
+    const at: string = id;
+    id = at === theme.id ? theme.extends : themes.find((t) => t.id === at)?.extends;
+  }
+  return BUILTIN_THEME_FILES.get(PREVIEW_FALLBACK[theme.kind])?.tokens.color ?? {};
+}
 
 /**
  * `base` with the theme `id` laid over it, the user's density and overrides

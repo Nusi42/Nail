@@ -39,7 +39,17 @@ export const STATUSES = ["changed", "new", "error", "passed", "captured", "skipp
 const THEME_ORDER = ["frost", "sage", "graphite", "nocturne", "high-contrast"];
 const DENSITY_ORDER = ["comfortable", "compact"];
 /** Screen order of e2e/visual/screens.ts. */
-const SCREEN_ORDER = ["main", "composer", "settings", "calendar", "menu", "dialog"];
+const SCREEN_ORDER = [
+  "main",
+  "composer",
+  "settings",
+  "calendar",
+  "menu",
+  "html",
+  "attachment",
+  "attachment-saved",
+  "dialog",
+];
 
 /** `<build dir>`, as e2e/support/nail.ts `buildOutputDir` computes it. */
 export function buildBase(env = process.env) {

@@ -86,13 +86,41 @@ theme "High contrast" extends="default" mode="high-contrast" {
 
     // Selection and unread mail are told apart by more than colour.
     part "message-list.row:selected" { outline "2px solid $color.selection"; }
-    part "message-list.row:unread" { border-left-width 6; }
+    // Every row keeps a 6px left edge (so read and unread text lines up);
+    // unread rows fill it with the accent.
+    part "message-list.row" { border-left "6px solid transparent"; }
+    part "message-list.row:unread" { border-left-color "$color.accent"; }
     part "message-list.row:flagged" { text-decoration "underline"; }
     // Inside a selected item everything takes the highlight's text colour
     // (the light / dark themes keep accent icons and counts there).
     part "folder-tree.item:selected .icon" { color "inherit"; }
     part "folder-tree.item:selected .unread-count" { color "inherit"; }
     part "message-list.row:selected .unread-dot" { background-color "$color.selection-fg"; }
+    // Avatars and file-type badges are white with black text here; on the
+    // white-ish highlight a black ring keeps their shape.
+    part "message-list.row:selected .avatar" { box-shadow "inset 0 0 0 2px $color.selection-fg"; }
+    part "message-list:focus-visible" {
+        outline "3px solid $color.focus-ring"
+        outline-offset -3
+    }
+
+    // Hover is a visible fill, not a near-black shade of black.
+    part "message-list.row:hover" { background-color "$color.accent-soft"; }
+    part "folder-tree.item:hover" { background-color "$color.accent-soft"; }
+    part "context-menu.item:hover" { background-color "$color.accent-soft"; }
+    part "toolbar.button:hover" { background-color "$color.accent-soft"; }
+    part "account-switcher.item:hover" { background-color "$color.accent-soft"; }
+    part "context-menu.item:focus" { background-color "$color.accent-soft"; }
+    // A selected item keeps its solid highlight under the pointer.
+    part "message-list.row:selected:hover" { background-color "$color.selection"; }
+    part "folder-tree.item:selected:hover" { background-color "$color.selection"; }
+    part "account-switcher.item:selected:hover" { background-color "$color.selection"; }
+    // Check boxes get the same 2px outline as every other control.
+    part "form.checkbox" {
+        outline "$border.control"
+        outline-offset 1
+    }
+    part "form.checkbox:focus-visible" { outline "3px solid $color.focus-ring"; }
 
     // Dividers are easy to see and to grab.
     part "split.divider" { background-color "$color.border"; }

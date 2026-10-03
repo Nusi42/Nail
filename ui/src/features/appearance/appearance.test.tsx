@@ -4,11 +4,11 @@
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../../App";
-import type { Request } from "../../api/generated";
+import type { Request, ThemeInfo } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../../test/harness";
 import { setMockSystemAppearance } from "./mock";
-import { BUILTIN_THEME_FILES, parseThemeFile, resolveMockTheme } from "./themes";
+import { BUILTIN_THEME_FILES, parseThemeFile, previewColors, resolveMockTheme } from "./themes";
 import { overridesOf } from "./AppearanceSettings";
 
 let restoreSizes: () => void;
@@ -65,6 +65,41 @@ describe("theme files for the mock core", () => {
     expect(BUILTIN_THEME_FILES.get("graphite")?.mode).toBe("dark");
     expect(BUILTIN_THEME_FILES.get("high-contrast")?.mode).toBe("high-contrast");
     expect(BUILTIN_THEME_FILES.get("frost")?.tokens.color?.accent).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it("previews a user theme with the palette of the built-in it extends", () => {
+    const info = (id: string, extra: Partial<ThemeInfo> = {}): ThemeInfo => ({
+      id,
+      name: id,
+      kind: "light",
+      source: "user",
+      file: `themes/${id}.kdl`,
+      ...extra,
+    });
+    const frost = BUILTIN_THEME_FILES.get("frost")?.tokens.color;
+    const graphite = BUILTIN_THEME_FILES.get("graphite")?.tokens.color;
+    const sage = BUILTIN_THEME_FILES.get("sage")?.tokens.color;
+    expect(frost?.accent).toBeTruthy();
+    const ocean = info("ocean", { extends: "sage" });
+    const deep = info("deep", { extends: "ocean" });
+    const night = info("night", { kind: "dark", extends: "default" });
+    const loop = info("loop", { extends: "loop" });
+    const all = [ocean, deep, night, loop];
+    // Built-ins preview with their own palette.
+    expect(previewColors(info("graphite", { source: "builtin", kind: "dark" }), all)).toBe(
+      graphite,
+    );
+    // Through user themes to the built-in at the end of the chain.
+    expect(previewColors(ocean, all)).toBe(sage);
+    expect(previewColors(deep, all)).toBe(sage);
+    // No built-in in the chain (or a loop): the built-in of its kind.
+    expect(previewColors(night, all)).toBe(graphite);
+    expect(previewColors(loop, all)).toBe(frost);
+    for (const theme of all) {
+      expect(Object.keys(previewColors(theme, all))).toEqual(
+        expect.arrayContaining(["bg-subtle", "bg", "accent", "fg"]),
+      );
+    }
   });
 
   it("parses token values, variants, references and comments", () => {

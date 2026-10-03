@@ -23,7 +23,7 @@ import { Icon } from "../../widgets/Icon";
 import { Segmented, Switch } from "../../widgets/primitives";
 import { FONT_SIZE_RANGE, RADIUS_RANGE, isHexColor, overrideIssues } from "./mock";
 import { preferencesOf, useAppearance, useSetTheme, useSetThemePreferences } from "./queries";
-import { BUILTIN_THEME_FILES } from "./themes";
+import { previewColors } from "./themes";
 
 /** The display name of a theme: the built-in's Fluent label, else its own name. */
 function useThemeName(): (theme: ThemeInfo) => string {
@@ -31,7 +31,7 @@ function useThemeName(): (theme: ThemeInfo) => string {
   return (theme) => (theme.label ? t(theme.label) : theme.name || theme.id);
 }
 
-/** Colours of a built-in theme's preview (rail, list, accent, text). */
+/** Colours of a theme's preview (rail, list, accent, text). */
 const SWATCH_TOKENS = ["bg-subtle", "bg", "accent", "fg"] as const;
 
 function Swatch({ geom, color }: { geom: string; color: string }) {
@@ -41,11 +41,14 @@ function Swatch({ geom, color }: { geom: string; color: string }) {
 
 function ThemeCard({
   theme,
+  themes,
   selected,
   active,
   onPick,
 }: {
   theme: ThemeInfo;
+  /** Every listed theme (a user theme previews with the built-in it extends). */
+  themes: readonly ThemeInfo[];
   selected: boolean;
   active: boolean;
   onPick(): void;
@@ -53,7 +56,7 @@ function ThemeCard({
   const t = useT();
   const name = useThemeName()(theme);
   const geom = useId();
-  const colors = BUILTIN_THEME_FILES.get(theme.id)?.tokens.color ?? {};
+  const colors = previewColors(theme, themes);
   const usable = theme.problem === undefined;
   return (
     <button
@@ -361,6 +364,7 @@ export function AppearanceSettings({ node }: WidgetProps) {
               <ThemeCard
                 key={theme.id}
                 theme={theme}
+                themes={a.themes}
                 selected={selected(theme)}
                 active={theme.id === a.active}
                 onPick={() => setTheme.mutate(theme.id)}
