@@ -650,13 +650,76 @@ Command palette (every action id, fuzzy search, recent actions, keyboard-first),
 Follow-ups / deferrals: creating folders on servers during imports (no folder-create operation yet); ~~the Save dialog asks before replacing a file although the core refuses existing files~~ (done post-M4c, ADR 0101); a Playwright scan of the smartcard PIN dialog (needs a soft token in `nail serve`); re-opening a locked data directory without a restart; real PKCS#11 hardware, `CKA_ALWAYS_AUTHENTICATE` and EdDSA card keys; printing HTML mail (needs a measurable same-origin render); Thunderbird calendars (`local.sqlite`); ~~headroom of the sync budgets on slower CI runners (overlap fetch and ingest)~~ (done post-M4c, ADR 0101: ≥ 64 % headroom locally); German texts of the new catalogs.
 Wire everything; **Playwright:** import an mbox and a Maildir with flags; import a Thunderbird profile fixture (accounts proposed, local folders and address book imported); export a folder to mbox and re-import it identically; backup → wipe → restore round trip; command palette runs an action; print to PDF produces a file; recovery key restores a vault after the keychain entry is deleted; performance budgets pass. Release preparation: version 1.0.0-rc.1, `CHANGELOG.md`, release notes in `userDocs/en`, a complete pass over `userDocs/en` (every feature documented), `docs/release-checklist.md` with the human gates.
 
-## 10. Later milestones (outline; each gets a detailed section before it starts)
+## 10. Milestone M5 — UX overhaul (detailed)
+
+The owner approved the UX proposal, every decision included: a published page, not linked here (memory: `ux-overhaul-proposal`). M5 implements it in full. It also fixes the development-port conflicts with the owner's other Vite projects.
+
+**Automated gate:** all suites green, including the new Playwright scenarios per wave. Visual-regression baselines are regenerated and reviewed for all five themes (Frost, Sage, Graphite, Nocturne, High contrast) in both densities. axe is clean in every theme. No console warnings in tests, as the test setup enforces.
+**Human gate:** the owner looks at the real app (desktop and `nail serve`) and confirms the new look.
+
+**Scope decisions for M5**
+- Every structure and style stays expressible in `layout.kdl` / `theme.kdl`. The in-app editors write those files through the existing write-back with comments preserved, and offer undo. Nothing visual is hard-coded in components; they keep emitting `data-part`s.
+- **Font:** Segoe UI Variable, with the system stack as fallback. **Icons:** one set, Lucide (`lucide-react`, ISC licence).
+- **Themes:**
+  - Frost (light, default), Sage (light), Graphite (dark, default for "dark"), Nocturne (dark) and High contrast. Each ships as its own file in `defaults/themes/`.
+  - "Follow Windows" switches between a chosen light and a chosen dark theme.
+  - Density (Comfortable / Compact) is a theme setting that applies to every theme.
+- **Development ports:** no fixed development ports. The Vite dev server for `tauri dev` picks a free port (preferred default not 5173; `NAIL_DEV_PORT` overrides it) and passes the matching `devUrl` to Tauri. `nail serve` without `--port` falls back to a free port when 4780 is taken; with an explicit `--port` it still fails. This rule goes into `CLAUDE.md`.
+
+### Wave M5a — Visual foundation (and the port fix)
+- **WP150 (contract, sequential):**
+  - First, the port fix as a separate commit.
+  - Then theme metadata and selection: the theme list, active theme, the light/dark pair for "Follow Windows", density, and the user font-size / radius / accent overrides kept in the user's `theme.kdl` (`extends`).
+  - The token schema for spacing, type scale, radius and elevation.
+  - Icon names in the layout and toolbar models.
+  - Feature slots for the parallel packages.
+- **WP151 (parallel):** the five theme files plus the default token scales in `defaults/theme.kdl`. Comfortable / Compact density tokens. A contrast check of every theme (WCAG AA for text and UI parts, AAA for High contrast) as an automated test.
+- **WP152 (parallel):** theme loading and selection in nail-config and the core: the themes directory, user themes next to the built-ins, Follow Windows (OS light/dark changes push a theme switch), and density. Hot reload is kept.
+- **WP153 (parallel):** UI primitives restyled on the new tokens: buttons, icon buttons, inputs, selects, chips, tags, menus, tabs, cards and switches, with Lucide icons everywhere. Fixes:
+  - alignment on one 4 px grid;
+  - attachment cards with type, size and actions;
+  - the reader body in the UI face, at most about 68 characters per line, in a centred column aligned with the header;
+  - new list rows with avatar, unread dot and a tag line (hidden in Compact).
+- **WP154 (parallel):** visual-regression harness for 5 themes × 2 densities (Playwright screenshots of the main window, composer, settings, calendar, menus and dialogs), with baselines and a review page.
+- **WP155 (integration):** wiring, the defaults, every scenario (theme switching, Follow Windows, density, contrast test, regression baselines) and docs.
+
+### Wave M5b — Shell and views
+- **WP160 (contract):** a view/navigation model (Mail, Calendar, Contacts, Tasks, Settings as views behind a rail), the layout model for views and the rail, toolbar overflow (`more` menus with ranked items, disabled actions hidden), folder-pane sections (Favorites, per account, smart folders only when present), and a settings-page model (grouped sections, search index of setting labels).
+- **WP161 (parallel):** the navigation rail and view switching (keyboard shortcuts, badges for confirmations and unread), and Calendar, Contacts and Tasks as full views using the existing PIM widgets.
+- **WP162 (parallel):** the mail view: grouped folder pane with collapsible account sections and colours; the list header (search with the Ctrl+K hint, title with counts, filter chips All / Unread / Flagged / Attachments); the ranked reader action bar with "More" (shortcuts shown) and the matching right-click menu.
+- **WP163 (parallel):** Settings as a full page with grouped navigation (General, Look & feel, Security, Extensions), settings search, and the existing settings tabs moved into sections without losing any setting.
+- **WP164 (parallel):** the calendar view redesign: toolbar with the date range on one line, a segmented view switch, a calendar list with colour squares and per-calendar "…" menus instead of buttons, "New calendar" in a menu instead of an inline form, and readable event cards.
+- **WP165 (integration):** the default `layout.kdl` with rail and views (mirrored into the nail-api fixtures), migration of existing user layouts (keep working; offer the new default through the merge dialog), every scenario and docs.
+
+### Wave M5c — Window manager
+- **WP170 (contract):** dialog/window model (id, modal or not, min size, default size, remembered geometry, maximized and snapped state), a window-state store (per dialog, kept in a UI-state file in the config dir — not `layout.kdl`, which describes structure), and pop-out requests for the desktop.
+- **WP171 (parallel):** the window manager in the UI:
+  - move by the title bar, resize from 8 handles, maximize and restore (double-click), snap to the left or right half;
+  - keyboard move / resize (arrow keys and Shift+arrow keys on a focused title bar, Alt+F7 / Alt+F8 equivalents);
+  - focus order and z-order, minimum sizes, staying on screen when the window shrinks, and restoring geometry.
+- **WP172 (parallel):** non-modal by default. The composer, Settings, Rules, the plug-in manager and the other tool windows are non-modal; only confirmations stay modal. Several composers can be open at once.
+- **WP173 (parallel):** pop-out into OS windows in the desktop app (Tauri multi-window sharing the same core connection), with geometry remembered per pop-out. The browser UI keeps windows in the page.
+- **WP174 (integration):** every dialog migrated to the window manager, with scenarios for move, resize, snap, maximize, keyboard control, remembered geometry across a reload, multiple composers and a desktop pop-out.
+
+### Wave M5d — In-app editors
+- **WP180 (contract):** layout-edit operations (move, swap or dock a pane, add or remove a widget, hide or show it, apply a preset, toolbar item moves between the bar and "More") as typed write-back patches; theme-edit operations (set a token, set a part override, duplicate as a new theme, rename, delete user themes); undo history.
+- **WP181 (parallel):** customize-layout mode:
+  - pane headers with drag handles, dock and swap targets, and a hide/show eye;
+  - the widget palette ("Add to layout") and presets (Three panes, Reader below, Wide reader, Focus);
+  - Undo, Reset to default and Done;
+  - full keyboard alternative.
+- **WP182 (parallel):** toolbar customizer (right-click a toolbar → Customize; drag buttons between the bar, "More" and a palette of available actions, plug-in actions included).
+- **WP183 (parallel):** Appearance settings (theme gallery with live previews, "New theme", Follow Windows pair, accent, density, text size, corner radius) and the full theme editor (token groups for colour, type, spacing, radius and motion; per-part overrides; live preview; duplicate / rename / delete; the inspector's "Edit style" jumps to the part).
+- **WP184 (parallel):** write-back engine extensions in nail-config for all new patch kinds, with comment preservation, golden files and conflict handling when the file changed on disk.
+- **WP185 (integration):** wiring, every scenario (swap panes and confirm `layout.kdl`, add a widget, apply a preset, customize a toolbar, change accent and radius and confirm `theme.kdl`, duplicate a theme, undo), docs (`userDocs/en`: appearance, themes, customizing the layout, windows), the M5 gate status in this plan and the memory.
+
+## 11. Later milestones (outline; each gets a detailed section before it starts)
 
 - **M2:** detailed in section 7.
 - **M3:** detailed in section 8.
 - **M4:** detailed in section 9. After v1.0: curated plug-in / theme gallery, macOS and Linux, mobile apps, German translations (see `docs/backlog.md` for parked items).
 
-## 11. How milestones are executed (orchestration)
+## 12. How milestones are executed (orchestration)
 
 Agents: Opus 5.5 at medium effort, coordinated by a workflow. M0 ran as the sequence below; each M1 wave uses the same shape (contract, then parallel packages in disjoint directories, then integrate, two reviews, fix and an independent verify).
 
