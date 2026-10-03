@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Event as NailEvent } from "../../api/generated";
 import { createEnv, renderNode, widget, type Env } from "../../test/harness";
@@ -17,7 +17,11 @@ function wireEvents(env: Env) {
   );
 }
 
-afterEach(() => remoteStore.getState().clear());
+afterEach(() => {
+  // Unmount before resetting module-level stores.
+  cleanup();
+  remoteStore.getState().clear();
+});
 
 async function twoDevices() {
   const env = createEnv();

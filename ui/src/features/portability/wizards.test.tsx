@@ -7,7 +7,7 @@
  */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import axe from "axe-core";
+import { violations } from "../../test/axe";
 import { describe, expect, it } from "vitest";
 import { useActions } from "../../actions/ActionsProvider";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -26,13 +26,6 @@ import {
   handlePortabilityEvent,
 } from ".";
 import { defaultBackupContents } from "./model";
-
-async function violations(root: Element): Promise<string[]> {
-  const result = await axe.run(root, {
-    rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
-  });
-  return result.violations.map((v) => `${v.id}: ${v.help} — ${v.nodes[0]?.target.join(" ")}`);
-}
 
 /** Routes the core's events to the feature, like the app shell. */
 function listen(env: Env): () => void {

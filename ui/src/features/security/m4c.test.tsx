@@ -7,7 +7,7 @@
  */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import axe from "axe-core";
+import { violations } from "../../test/axe";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NodeView } from "../../layout/LayoutRenderer";
 import { WindowLayer } from "../../layout/WindowLayer";
@@ -20,13 +20,6 @@ import { handleSecurityEvent } from ".";
 import { closePinPrompt, simulateLostVaultKey, simulatePinRequest } from "./vaultMock";
 
 const MODULE = "C:\\Windows\\System32\\opensc-pkcs11.dll";
-
-async function violations(root: Element): Promise<string[]> {
-  const result = await axe.run(root, {
-    rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
-  });
-  return result.violations.map((v) => `${v.id}: ${v.help} — ${v.nodes[0]?.target.join(" ")}`);
-}
 
 function listen(env: Env): () => void {
   return env.client.subscribe((event) => {

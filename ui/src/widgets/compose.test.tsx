@@ -117,7 +117,9 @@ describe("composer", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "To" }), {
       target: { value: "other@client.example" },
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
     expect(env.store.getState().composer?.identityId).toBe("ada@example.org");
   });
 

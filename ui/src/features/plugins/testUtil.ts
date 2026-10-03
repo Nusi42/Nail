@@ -3,6 +3,7 @@
  * mock core, wire the feature's event handler like `App.tsx` does, and
  * render with a layout that knows the plug-in's commands.
  */
+import { act } from "@testing-library/react";
 import type { PluginGrant, PluginInfo, ResolvedLayout } from "../../api/generated";
 import type { Env } from "../../test/harness";
 import { handlePluginsEvent } from ".";
@@ -58,9 +59,14 @@ export function pluginLayout(env: Env, plugins: PluginInfo[]): ResolvedLayout {
   return withPluginActions(layout, plugins);
 }
 
-/** Lets queued mock work (`later(…, 0)`) and promise chains run. */
-export function tick(ms = 20): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Lets queued mock work (`later(…, 0)`) and promise chains run, inside
+ * `act` so React commits what they change.
+ */
+export async function tick(ms = 20): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
 }
 
 /** The value, failing the test when it is missing. */

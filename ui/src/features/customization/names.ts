@@ -7,4 +7,4 @@ import type { ConfigFile } from "../../api/generated";
 export const DIALOGS = { merge: "config-merge", errors: "config-errors" } as const;
 
 /** Files the merge dialog handles. */
-export const MERGE_FILES: readonly ConfigFile[] = ["theme", "layout"];
+export const MERGE_FILES = ["theme", "layout"] as const satisfies readonly ConfigFile[];

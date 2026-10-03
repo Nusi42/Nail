@@ -275,7 +275,9 @@ describe("UI context reporting", () => {
     act(() => {
       env.store.getState().setKeyContext("reader");
     });
-    await new Promise((resolve) => setTimeout(resolve, REPORT_DELAY_MS * 2));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, REPORT_DELAY_MS * 2));
+    });
     expect(requestsOf(env, "ReportUiContext")).toHaveLength(2);
   });
 

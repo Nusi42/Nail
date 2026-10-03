@@ -337,7 +337,13 @@ export function SecurityBadge({
 
 const METHODS = ["dmarc", "dkim", "spf", "arc"] as const;
 
-function MethodRow({ method, result }: { method: string; result: AuthMethodResult }) {
+function MethodRow({
+  method,
+  result,
+}: {
+  method: (typeof METHODS)[number];
+  result: AuthMethodResult;
+}) {
   const t = useT();
   return (
     <li data-part="auth-details.method" data-method={method} data-verdict={result.verdict}>
@@ -372,7 +378,7 @@ export function AuthBadge({ results }: { results: AuthResults }) {
   const t = useT();
   const verdict = authSummary(results);
   const tone = authTone(verdict);
-  const rows: { method: string; result: AuthMethodResult }[] = [];
+  const rows: { method: (typeof METHODS)[number]; result: AuthMethodResult }[] = [];
   for (const method of METHODS) {
     if (method === "dkim") rows.push(...results.dkim.map((result) => ({ method, result })));
     else {

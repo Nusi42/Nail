@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEnv, renderWithProviders } from "../../test/harness";
@@ -7,7 +7,11 @@ import { remoteStore } from "../remote";
 import { LaunchRequests } from "./LaunchRequests";
 import { systemStoreFor } from "../system";
 
-afterEach(() => remoteStore.getState().clear());
+afterEach(() => {
+  // Unmount before resetting the remote feature's module-level store.
+  cleanup();
+  remoteStore.getState().clear();
+});
 
 describe("launch requests", () => {
   it("opens the composer for a mailto: link taken at start-up", async () => {
@@ -154,7 +158,9 @@ describe("launch requests", () => {
     const env = createEnv();
     env.transport.data.launches.push({ type: "ImportCalendarFile", path: "C:\\a.ics" });
     renderWithProviders(<LaunchRequests />, env);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
     expect(env.transport.requests.some((r) => r.type === "TakeLaunchRequests")).toBe(false);
   });
 });

@@ -391,7 +391,11 @@ export const AUDIT_KINDS: readonly RemoteAuditKind[] = [
   "request",
 ];
 export const AUDIT_OUTCOMES: readonly RemoteAuditOutcome[] = ["success", "failure", "denied"];
-export const CONTENT_SCOPES: readonly RemoteContentScope[] = ["message", "sender", "domain"];
+export const CONTENT_SCOPES = [
+  "message",
+  "sender",
+  "domain",
+] as const satisfies readonly RemoteContentScope[];
 /** Longest security-log retention the core accepts (`MAX_AUDIT_RETENTION_DAYS`). */
 export const MAX_AUDIT_RETENTION_DAYS = 3650;
 export const PAIRING_STATES = ["pending", "used", "expired", "cancelled"] as const;

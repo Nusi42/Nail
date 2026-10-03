@@ -65,9 +65,11 @@ export function ContactList({ node }: WidgetProps) {
   const focusNext = useRef(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 150);
+    const next = query.trim();
+    if (next === debounced) return;
+    const timer = setTimeout(() => setDebounced(next), 150);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, debounced]);
 
   const contacts: ContactSummary[] = useMemo(() => {
     if (debounced) {

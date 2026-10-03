@@ -1,4 +1,4 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, cleanup, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { appRegistry } from "../registry";
 import { createEnv, renderWithProviders, type Env } from "../../test/harness";
@@ -33,6 +33,8 @@ function actionContext(env: Env) {
 }
 
 afterEach(() => {
+  // Unmount before resetting the feature's module-level stores.
+  cleanup();
   remoteStore.getState().clear();
   configureRemoteAuth(null);
 });

@@ -173,8 +173,11 @@ describe("key-binding-editor", () => {
     const capture = await screen.findByLabelText("Keys");
     act(() => capture.focus());
     const event = new KeyboardEvent("keydown", { key: "c", bubbles: true, cancelable: true });
-    capture.dispatchEvent(event);
+    act(() => {
+      capture.dispatchEvent(event);
+    });
     expect(event.defaultPrevented).toBe(true);
+    expect(capture).toHaveValue("C");
     expect(env.store.getState().windows).toEqual([]);
   });
 });

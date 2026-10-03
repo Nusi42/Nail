@@ -208,8 +208,13 @@ customize-keys-context-reader = Reader
 customize-keys-context-composer = Composer
 customize-keys-context-search = Search field
 customize-keys-context-folders = Folder list
+customize-keys-context-calendar = Calendar
+customize-keys-context-contacts = Contacts
+customize-keys-context-tasks = Tasks
 customize-keys-context-window = Dialogs
 customize-keys-context-menu = Context menus
+customize-keys-context-plugin-dialog = Plug-in dialogs
+customize-keys-context-plugin-veto = Message held by a plug-in
 
 customize-columns-tab = Columns
 customize-columns-label = Column editor

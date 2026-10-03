@@ -158,7 +158,7 @@ describe("remote.content.allow action", () => {
     await action.run(ctx, ["domain"]);
     expect(requestsOf(env, "AllowRemoteContent").at(-1)?.scope).toBe("domain");
     await waitFor(() => expect(action.enabled?.(ctx, [])).toBe(false));
-    env.store.getState().selectMessage(null);
+    act(() => env.store.getState().selectMessage(null));
     expect(action.enabled?.(ctx, [])).toBe(false);
   });
 });

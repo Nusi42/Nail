@@ -313,8 +313,11 @@ keys context="list" {
 
 - `context` is where the keys work: `list` (message list), `reader`
   (message and conversation), `folders`, `search` (search bar), `composer`,
-  `window` (any window over the main window). Without `context` they work
-  everywhere in the main window (`global`).
+  `calendar` (calendar and agenda), `contacts`, `tasks`, `window` (any
+  window over the main window), `menu` (an open context menu),
+  `plugin-dialog` (a plug-in's dialog) and `plugin-veto` (a message a
+  plug-in held back). Without `context` they work everywhere in the main
+  window (`global`).
 - While you type in a text field, only combinations with `Ctrl`, `Alt` or
   `Meta` and `escape` work, and only in that field's contexts (for example
   `ctrl+enter` in the composer). Global shortcuts do not work inside

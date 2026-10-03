@@ -317,7 +317,9 @@ describe("rich composer", () => {
     async () => {
       const env = composerEnv({ subject: "Draft" });
       renderNode(widget("composer"), env);
-      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_MS + 200));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_MS + 200));
+      });
       expect(env.transport.requests.some((r) => r.type === "SaveDraft")).toBe(false);
 
       fireEvent.change(screen.getByRole("textbox", { name: "Subject" }), {
@@ -332,7 +334,9 @@ describe("rich composer", () => {
       expect(env.transport.data.drafts.get(id)?.subject).toBe("Draft 2");
       expect(rich(env).autosave).toBe("saved");
       // No further save without a change.
-      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_MS + 200));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_MS + 200));
+      });
       expect(env.transport.requests.filter((r) => r.type === "SaveDraft")).toHaveLength(1);
     },
     AUTOSAVE_MS * 3 + 4000,

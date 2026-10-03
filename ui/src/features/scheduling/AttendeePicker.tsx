@@ -45,7 +45,11 @@ import { useMyAddresses } from "./queries";
 import { fromAbsolute } from "@internationalized/date";
 
 /** Kinds the picker offers (`CUTYPE`). */
-export const PICKER_KINDS: readonly AttendeeKind[] = ["individual", "room", "resource"];
+export const PICKER_KINDS = [
+  "individual",
+  "room",
+  "resource",
+] as const satisfies readonly AttendeeKind[];
 
 export interface AttendeePickerProps {
   value: Attendee[];

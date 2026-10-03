@@ -49,17 +49,21 @@ async function settleUntil<T>(query: () => T | null, what: string): Promise<T> {
   throw new Error(`${what} did not appear within ${TURNS} event-loop turns`);
 }
 
-/** Turns until `assertion` passes (a turn-bounded `waitFor`). */
+/**
+ * Turns until `assertion` passes (a turn-bounded `waitFor`). It starts with
+ * a turn, so what the last event started (an action's request and the store
+ * updates after its answer) finishes inside `act`.
+ */
 async function eventually(assertion: () => void): Promise<void> {
   let failure: unknown = null;
   for (let n = 0; n < TURNS; n++) {
+    await turn();
     try {
       assertion();
       return;
     } catch (error) {
       failure = error;
     }
-    await turn();
   }
   throw failure;
 }
@@ -246,6 +250,9 @@ describe("M1a flows", () => {
       message_ids: [next],
       target: { folder_id: "all/trash" },
     });
+    // The mock core replays the writes with OpStatus events; the status bar
+    // follows them until the queue is empty.
+    await eventually(() => expect(env.store.getState().pendingOps).toEqual([]));
   });
 
   it("searches with / and the query language, and clears with Escape", async () => {

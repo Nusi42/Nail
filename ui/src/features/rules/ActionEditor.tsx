@@ -54,7 +54,12 @@ function ActionFields({
   onChange: (a: RuleAction) => void;
 }) {
   const a = action;
-  const onOff = (field: string, value: boolean, prefix: string, set: (v: boolean) => void) => (
+  const onOff = (
+    field: string,
+    value: boolean,
+    prefix: "rules-set-flag" | "rules-set-read" | "rules-set-notify",
+    set: (v: boolean) => void,
+  ) => (
     <SelectField
       labelId={`${prefix}-label`}
       name={`${name}-${field}`}

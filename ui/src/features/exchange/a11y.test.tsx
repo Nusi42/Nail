@@ -6,7 +6,7 @@
  */
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import axe from "axe-core";
+import { violations } from "../../test/axe";
 import type { ComponentType } from "react";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -40,20 +40,6 @@ import {
 } from "./names";
 import { exchangeStoreFor } from "./store";
 import { cacheList, message, setup } from "./testing";
-
-async function violations(root: Element): Promise<string[]> {
-  const result = await axe.run(root, {
-    iframes: false,
-    rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
-  });
-  return result.violations.map(
-    (v) =>
-      `${v.id}: ${v.help} — ${v.nodes
-        .slice(0, 3)
-        .map((n) => n.target.join(" "))
-        .join(" | ")}`,
-  );
-}
 
 async function settle(env: Env): Promise<void> {
   await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));

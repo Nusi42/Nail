@@ -5,6 +5,7 @@ import { defaultLayout } from "../api/mockData";
 import { normalizeLayout } from "../api/normalize";
 import { createUiStore } from "../state/uiStore";
 import { createDispatcher, resolveAction, type ActionContext } from "./registry";
+import { expectConsole } from "../test/console";
 
 function context(layout = defaultLayout()): ActionContext & { transport: MockTransport } {
   const transport = new MockTransport();
@@ -73,13 +74,11 @@ describe("actions", () => {
   it("ignores unknown actions and contains handler failures", async () => {
     const ctx = context();
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    expectConsole('nail: action "boom" failed');
     await expect(createDispatcher(ctx).dispatch("no.such")).resolves.toBeUndefined();
     await createDispatcher(ctx, { boom: { run: () => Promise.reject(new Error("x")) } }).dispatch(
       "boom",
     );
-    expect(error).toHaveBeenCalled();
     info.mockRestore();
-    error.mockRestore();
   });
 });

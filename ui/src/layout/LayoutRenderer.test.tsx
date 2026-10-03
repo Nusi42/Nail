@@ -73,7 +73,7 @@ describe("layout engine", () => {
     );
     expect(container.querySelector('[data-part="split"]')).toBeInTheDocument();
 
-    act(() => setWindowWidth(600));
+    setWindowWidth(600);
     expect(container.querySelector('[data-part="split"]')).not.toBeInTheDocument();
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(["Folders", "Messages", "Message"]);
@@ -83,7 +83,7 @@ describe("layout engine", () => {
     expect(panels[0]).not.toBeVisible();
     expect(panels[1]).toBeVisible();
 
-    act(() => setWindowWidth(1000));
+    setWindowWidth(1000);
     expect(container.querySelector('[data-part="tabs"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-part="split"]')).toBeInTheDocument();
   });

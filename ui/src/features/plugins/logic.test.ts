@@ -12,7 +12,7 @@ import { allGranted, grantsValid, orderedGrants, setAccounts, setGranted } from 
 import { isPluginName, parsePluginCommandId, parsePluginPanelId, pluginCommandId } from "./ids";
 import { permissionArgs } from "./messages";
 import { followUpManifest } from "./mockHost";
-import { must } from "./testUtil";
+import { installFollowUp, must } from "./testUtil";
 import { PLUGIN_BASE_CSS, PLUGIN_PARTS, pluginPartSelector } from "./parts";
 import { insertItem, placementText } from "./placementText";
 import { appendLogLine, pluginKeys } from "./queries";
@@ -197,6 +197,9 @@ describe("plug-in commands", () => {
     const client = new TransportClient(transport);
     const store = createUiStore({ selectedMessageId: "m1", keyContext: "reader" });
     const queryClient = new QueryClient();
+    // The mock core runs the command once the plug-in is installed there (its
+    // own query cache: this one starts without the plug-in list).
+    await installFollowUp({ transport, client, store, queryClient: new QueryClient() });
     const ctx: ActionContext = {
       client,
       store,

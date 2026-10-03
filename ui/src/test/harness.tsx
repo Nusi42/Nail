@@ -3,7 +3,7 @@
  * needs, so each widget can be rendered on its own.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { ActionsProvider } from "../actions/ActionsProvider";
 import { TransportClient } from "../api/client";
@@ -98,6 +98,21 @@ export function Providers({
   );
 }
 
+/**
+ * Waits until the env's queries and mutations are idle, then lets React
+ * commit their last results inside `act` (a test that ends meanwhile would
+ * see those updates outside act).
+ */
+export async function settleQueries(env: Env): Promise<void> {
+  await waitFor(() => {
+    expect(env.queryClient.isFetching()).toBe(0);
+    expect(env.queryClient.isMutating()).toBe(0);
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 /** A widget node from a sparse description. */
 export function widget(kind: string, extra: Record<string, unknown> = {}): WidgetNode {
   return normalizeNode({ type: "widget", kind, id: kind, ...extra }) as WidgetNode;
@@ -147,8 +162,13 @@ export function stubElementSizes(): () => void {
   };
 }
 
-/** Sets the jsdom window width and notifies listeners. */
+/**
+ * Sets the jsdom window width and notifies listeners (inside `act`: a
+ * mounted layout re-renders for the new width, also from `afterEach`).
+ */
 export function setWindowWidth(width: number): void {
   Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
-  window.dispatchEvent(new Event("resize"));
+  act(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
 }

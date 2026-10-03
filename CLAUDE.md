@@ -539,6 +539,7 @@ cargo test --workspace                     # incl. the Tauri shell (after npm ru
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`
+cd ui && npx vitest run --silent=false --reporter=default   # Vitest with console output even when piped (expect no `stderr |` block)
 npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
 npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
@@ -576,6 +577,19 @@ nail mcp --client <name> [--config-dir DIR] [--mcp-port N] [--no-start]   # star
 npm run tauri dev                          # desktop app with Vite hot reload
 ```
 
+- **Vitest hides console output when stdout is not a terminal** (piped / agent runs), so warnings never show there.
+  `ui/src/test/setup.ts` therefore fails every test that logs `console.error` / `console.warn` (React's
+  "not wrapped in act(...)", `nail: missing message …`, `nail: formatting …`, a failed action) unless the test
+  declares it with `expectConsole(/…/)` / `allowConsole(/…/)` from `ui/src/test/console.ts`. Fix the cause
+  instead: await the state the UI settles into (`findBy*`, `waitFor`, `settleQueries(env)` from the harness),
+  wrap direct store updates / events / waits in `act`, unmount (`cleanup()`) before resetting module-level
+  stores in `afterEach`, mock what the test triggers, give fixture ids catalog entries; axe checks use
+  `ui/src/test/axe.ts` (runs inside `act`). `NAIL_CONSOLE_STACK=1` adds the call stack to each reported line.
+- `ui/src/i18n/coverage.test.ts` types every template-string message id (``t(`x-${v}`)``) with the TypeScript
+  checker: a literal-union `${v}` must have a message for every value; a plain-`string` `${v}` must be listed in
+  its `OPEN_TEMPLATES` (values covered by a feature's `runtimeIds()`). Key contexts: every `data-key-context`,
+  every `keys context=` of `defaults/layout.kdl` and the plug-in manifest's `KEY_CONTEXTS` must be in
+  `ui/src/features/customization/editorModel.ts` `KEY_CONTEXTS` with a `customize-keys-context-*` label.
 - The contract lives in `crates/nail-api`; its fixtures `fixtures/default-{theme,layout}.json` describe the default UI. See ADRs 0002 (protocol) and 0003 (config models, part/DOM conventions).
 - `nail-core::Service` is the single entry point for every transport (ADR 0009): add a `Request` variant → handle it in `Service::dispatch` → `npm run gen:api`.
 - `nail serve` prints only its URL on stdout; logs go to stderr (`NAIL_LOG`). Data dir: `nail.sqlite3` + `blobs/`; config dir: `theme.kdl`, `layout.kdl`, `accounts.kdl`. With `--seed` and no `--data-dir` / `--config-dir` it uses a temporary directory, never the real profile.

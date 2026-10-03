@@ -7,7 +7,7 @@
  */
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import axe from "axe-core";
+import { violations } from "./test/axe";
 import type { LayoutNode, ResolvedLayout } from "./api/generated";
 import { emptyComposer } from "./state/compose";
 import { appRegistry } from "./features/registry";
@@ -32,25 +32,6 @@ beforeEach(() => {
   restoreSizes = stubElementSizes();
 });
 afterEach(() => restoreSizes());
-
-async function violations(root: Element): Promise<string[]> {
-  const result = await axe.run(root, {
-    iframes: false,
-    rules: {
-      // jsdom has no layout: contrast is checked in the browser (Playwright).
-      "color-contrast": { enabled: false },
-      // Single widgets and windows are rendered outside the page's landmarks.
-      region: { enabled: false },
-    },
-  });
-  return result.violations.map(
-    (v) =>
-      `${v.id}: ${v.help} — ${v.nodes
-        .slice(0, 3)
-        .map((n) => n.target.join(" "))
-        .join(" | ")}`,
-  );
-}
 
 /** Waits until queries settled (nothing busy) and effects ran. */
 async function settle(env: Env): Promise<void> {

@@ -136,13 +136,13 @@ function Probe() {
   );
 }
 
+/** The catalogs plus the layout label `Probe` resolves. */
+const probeCatalogs = { ...catalogs, en: [...catalogs.en, "layout-pane-folders = Folders"] };
+
 describe("I18nProvider", () => {
   it("uses the override, falls back per key and sets <html lang>", () => {
     render(
-      <I18nProvider
-        locale="de"
-        catalogs={{ ...catalogs, en: [...catalogs.en, "layout-pane-folders = Folders"] }}
-      >
+      <I18nProvider locale="de" catalogs={probeCatalogs}>
         <Probe />
       </I18nProvider>,
     );
@@ -153,7 +153,7 @@ describe("I18nProvider", () => {
   it("follows navigator.language without an override", () => {
     const spy = vi.spyOn(navigator, "languages", "get").mockReturnValue(["de-CH", "en"]);
     render(
-      <I18nProvider catalogs={catalogs}>
+      <I18nProvider catalogs={probeCatalogs}>
         <Probe />
       </I18nProvider>,
     );

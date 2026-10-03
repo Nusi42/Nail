@@ -39,7 +39,7 @@ import {
   removeKeyBinding,
 } from "./writeBack";
 
-import { KEY_CONTEXTS } from "./editorModel";
+import { KEY_CONTEXTS, isKnownKeyContext } from "./editorModel";
 
 export { KEY_CONTEXTS };
 
@@ -328,6 +328,14 @@ function argsText(args: readonly JsonValue[]): string {
   return args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
 }
 
+/**
+ * The label of a key context: Nail's own contexts are translated, one a
+ * user's layout invents is the user's own text.
+ */
+function contextLabel(context: string, t: (id: string) => string): string {
+  return isKnownKeyContext(context) ? t(`customize-keys-context-${context}`) : context;
+}
+
 /** Settings → Customize → Keys (widget `key-binding-editor`). */
 export function KeyBindingEditor({ node }: WidgetProps) {
   const t = useT();
@@ -368,9 +376,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
             <span data-part="key-binding-editor.args">{argsText(binding.args)}</span>
           )}
         </td>
-        <td data-part="key-binding-editor.context">
-          {t(`customize-keys-context-${binding.context}`)}
-        </td>
+        <td data-part="key-binding-editor.context">{contextLabel(binding.context, t)}</td>
         <td data-part="key-binding-editor.row-actions">
           <button
             type="button"
@@ -429,7 +435,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
           >
             {contexts.map((c) => (
               <option key={c} value={c}>
-                {t(`customize-keys-context-${c}`)}
+                {contextLabel(c, t)}
               </option>
             ))}
           </select>
@@ -503,7 +509,7 @@ export function KeyBindingEditor({ node }: WidgetProps) {
           <option value="">{t("customize-keys-filter-all")}</option>
           {contexts.map((c) => (
             <option key={c} value={c}>
-              {t(`customize-keys-context-${c}`)}
+              {contextLabel(c, t)}
             </option>
           ))}
         </select>

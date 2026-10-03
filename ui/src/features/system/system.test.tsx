@@ -4,7 +4,7 @@
  * startup, default apps, the first-run screen and the composer notice for
  * drafts from other programs.
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionsProvider } from "../../actions/ActionsProvider";
@@ -29,7 +29,11 @@ import { AboutNail } from "./AboutNail";
 import { FirstRun, FirstRunGate } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
 
-afterEach(() => remoteStore.getState().clear());
+afterEach(() => {
+  // Unmount before resetting module-level stores.
+  cleanup();
+  remoteStore.getState().clear();
+});
 
 /** Forwards the core's events to the feature's handler, like the app. */
 function listen(env: Env): () => void {

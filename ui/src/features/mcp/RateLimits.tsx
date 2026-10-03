@@ -21,11 +21,11 @@ export const RATE_LIMIT_KEYS = [
 ] as const;
 type Key = (typeof RATE_LIMIT_KEYS)[number];
 
-const FIELD_ID: Record<Key, string> = {
+const FIELD_ID = {
   requests_per_minute: "mcp-rate-requests",
   writes_per_minute: "mcp-rate-writes",
   sends_per_hour: "mcp-rate-sends",
-};
+} as const satisfies Record<Key, string>;
 
 function LimitField({
   name,

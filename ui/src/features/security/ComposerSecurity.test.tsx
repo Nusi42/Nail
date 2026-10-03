@@ -1,9 +1,16 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import type { RecipientKeysReport, Request, SendCrypto } from "../../api/generated";
 import { emptyComposer } from "../../state/compose";
-import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import {
+  createEnv,
+  renderNode,
+  renderWithProviders,
+  settleQueries,
+  widget,
+  type Env,
+} from "../../test/harness";
 import { ComposerSecurity, composerRecipients } from "./ComposerSecurity";
 import {
   composerCrypto,
@@ -16,7 +23,11 @@ function requestsOf<T extends Request["type"]>(env: Env, type: T) {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
 }
 
-afterEach(() => composerCryptoStore.getState().reset());
+afterEach(() => {
+  // Unmount before resetting module-level stores.
+  cleanup();
+  composerCryptoStore.getState().reset();
+});
 
 function Harness({
   identityId = "ada@example.org",
@@ -260,7 +271,9 @@ describe("security-composer widget", () => {
     renderNode(widget("security-composer"), env);
     expect(await screen.findByRole("checkbox", { name: "Sign" })).toBeChecked();
     expect(screen.getByRole("combobox", { name: "Technology" })).toHaveValue("openpgp");
-    loadComposerCrypto(undefined);
+    // The recipient-key report arrives after the toggles show.
+    await settleQueries(env);
+    act(() => loadComposerCrypto(undefined));
     expect(composerCrypto()).toBeUndefined();
   });
 

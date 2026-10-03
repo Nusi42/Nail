@@ -1029,7 +1029,7 @@ export function AlarmEditor({
                   });
                 }}
               >
-                {["before-start", "after-start", "before-end", "after-end"].map((v) => (
+                {(["before-start", "after-start", "before-end", "after-end"] as const).map((v) => (
                   <option key={v} value={v}>
                     {t(`pim-alarm-${v}`)}
                   </option>

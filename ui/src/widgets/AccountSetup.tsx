@@ -143,7 +143,13 @@ export function secretsFor(
   return [];
 }
 
-function EndpointResult({ slot, result }: { slot: string; result: EndpointTestResult }) {
+function EndpointResult({
+  slot,
+  result,
+}: {
+  slot: "incoming" | "outgoing";
+  result: EndpointTestResult;
+}) {
   const t = useT();
   const ok = result.error === null;
   return (

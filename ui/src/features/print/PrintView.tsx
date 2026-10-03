@@ -80,7 +80,7 @@ function Addresses({
   header,
   list,
 }: {
-  header: string;
+  header: "from" | "to" | "cc" | "reply-to";
   list: readonly { name: string | null; email: string }[];
 }) {
   const t = useT();

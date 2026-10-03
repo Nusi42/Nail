@@ -54,6 +54,7 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Rust lints | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Rust formatting | `cargo fmt --all --check` |
 | Socket-bind check (ADR 0057), then UI unit tests (Vitest) incl. the lint-rule self-test, then the `test` scripts of `packages/*` | `npm test` |
+| UI unit tests with their console output, also when piped | `cd ui && npx vitest run --silent=false --reporter=default` (no `stderr \|` block expected) |
 | Socket-bind check only | `npm run check:sockets` |
 | ESLint, TypeScript, Prettier (ui and e2e) | `npm run lint` |
 | Playwright end to end (builds UI, `nail` and the desktop app first) | `npm run e2e` |
@@ -66,6 +67,41 @@ cargo build -p nail-app      # the desktop shell (needs ui/dist)
 | Merge benchmark reports and check the budgets | `nail-bench check --report A --report B [--tolerant] [--out F]` |
 | The whole performance job (Rust run → Playwright scroll / first render → check) | `node e2e/perf/run-perf.mjs [--corpus standard\|small] [--tolerant]` after `cargo build --release -p nail-cli -p nail-bench` and `npm run build`; reports in `%LOCALAPPDATA%/nail-build/perf/<corpus>` |
 | Only the UI perf scenario | `npx playwright test -c e2e/perf/playwright.perf.config.ts` (env `NAIL_PERF_CORPUS`, `NAIL_PERF_WORK`, `NAIL_PERF_TOLERANT`, `NAIL_PERF_FRESH`, `NAIL_BIN`, `NAIL_BENCH_BIN`) |
+
+### Console output in UI tests
+
+Vitest hides console output when stdout is not a terminal (piped output, CI
+logs, coding agents), so warnings printed by a test were easy to miss.
+`ui/src/test/setup.ts` turns them into failures: a test that logs
+`console.error` or `console.warn` fails — React's "An update to X inside a
+test was not wrapped in act(...)", `nail: missing message "…"`,
+`nail: formatting "…"`, a failed action, anything else. A test that expects
+such output declares it with `expectConsole(/pattern/)` (must appear) or
+`allowConsole(/pattern/)` (may appear) from `ui/src/test/console.ts`; lines
+logged after a test's checks fail the next test (or the file, after the last
+one). Prefer fixing the cause:
+
+- await the state the UI settles into (`findBy*`, `waitFor`, the harness's
+  `settleQueries(env)` for pending queries);
+- wrap direct store updates, dispatched DOM events and timed waits in `act`;
+- call `cleanup()` before resetting a module-level store in `afterEach`
+  (Testing Library unmounts only after the file's own `afterEach` hooks);
+- mock what the test triggers (e.g. install the plug-in in the mock core);
+- give fixture ids catalog entries (test catalogs, not the shipped files);
+- run axe through `ui/src/test/axe.ts` (inside `act`, so the DOM does not
+  change during the check).
+
+`NAIL_CONSOLE_STACK=1 npx vitest run <file>` adds the call stack to each
+reported line, which shows the state update behind an act(...) warning.
+
+The catalog coverage test (`ui/src/i18n/coverage.test.ts`) also types every
+template-string message id with the TypeScript checker: for
+``t(`pim-view-${view}`)`` with a literal union type every value needs a
+message; a plain-`string` value must be listed in `OPEN_TEMPLATES` with the
+`runtimeIds()` that cover it. Every key context the UI sets
+(`data-key-context`), the default layout binds or a plug-in manifest accepts
+must be in `KEY_CONTEXTS` (`ui/src/features/customization/editorModel.ts`)
+with a `customize-keys-context-*` label.
 
 CI (`.github/workflows/ci.yml`) runs these jobs:
 

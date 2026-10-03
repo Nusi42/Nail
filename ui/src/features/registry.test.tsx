@@ -23,6 +23,9 @@ import { appRegistry, features, mergeFeatures } from "./registry";
 import type { Feature } from "./types";
 import { createEnv, setWindowWidth, stubElementSizes } from "../test/harness";
 import type { DialogProps } from "../layout/dialogRegistry";
+import { shippedCatalogs } from "../i18n/catalogs";
+
+const TEST_DIALOG_TITLE = "window-test-dialog = Test dialog";
 
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
@@ -144,6 +147,9 @@ describe("feature slots in the app shell", () => {
       (appRegistry[name] as unknown[]).length = 0;
     }
     delete (appRegistry.dialogs as Record<string, unknown>)["test-dialog"];
+    shippedCatalogs.en = (shippedCatalogs.en ?? []).filter(
+      (source) => source !== TEST_DIALOG_TITLE,
+    );
   });
 
   it("opens a feature dialog, runs effects and passes events", async () => {
@@ -165,6 +171,8 @@ describe("feature slots in the app shell", () => {
     (appRegistry.events as unknown[]).push((event: { type: string }) => seen.push(event.type));
     (appRegistry.effects as unknown[]).push(Effect);
     (appRegistry.dialogs as Record<string, unknown>)["test-dialog"] = TestDialog;
+    // The window title of the fixture dialog (`window-<name>`).
+    shippedCatalogs.en = [...(shippedCatalogs.en ?? []), TEST_DIALOG_TITLE];
 
     const env = createEnv();
     render(<App client={env.client} queryClient={env.queryClient} store={env.store} />);

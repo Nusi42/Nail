@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Request } from "../../api/generated";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
@@ -24,7 +24,11 @@ function requestsOf<T extends Request["type"]>(env: Env, type: T) {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
 }
 
-afterEach(() => remoteStore.getState().clear());
+afterEach(() => {
+  // Unmount before resetting the feature's module-level stores.
+  cleanup();
+  remoteStore.getState().clear();
+});
 
 describe("remote-users", () => {
   it("adds a user with a preset using only the keyboard", async () => {
