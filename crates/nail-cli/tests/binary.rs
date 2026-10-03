@@ -87,6 +87,37 @@ fn config_schema_prints_json() {
 }
 
 #[test]
+fn serve_fails_when_an_explicit_port_is_taken() {
+    // Without --port a taken 4780 falls back to a free port (unit tests in
+    // serve.rs); an explicit port that is taken stays an error.
+    let held = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = held.local_addr().unwrap().port().to_string();
+    let data = tempfile::tempdir().unwrap();
+    let config = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_nail"))
+        .args([
+            "serve",
+            "--port",
+            &port,
+            "--seed",
+            "demo",
+            "--no-watch",
+            "--no-mcp",
+        ])
+        .arg("--data-dir")
+        .arg(data.path())
+        .arg("--config-dir")
+        .arg(config.path())
+        .env("NAIL_LOG", "off")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "no URL is printed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(&port), "{stderr}");
+}
+
+#[test]
 fn bad_arguments_fail() {
     let output = Command::new(env!("CARGO_BIN_EXE_nail"))
         .args(["serve", "--seed", "nothing"])

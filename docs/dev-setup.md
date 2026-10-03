@@ -355,14 +355,18 @@ npm run build
 cargo run -p nail-cli -- serve --seed demo --open
 ```
 
-This serves the UI and API on `http://127.0.0.1:4780/`. Useful options:
+This serves the UI and API on `http://127.0.0.1:4780/`, or on a free port
+when 4780 is taken (another Nail or another project): the URL printed on
+stdout is always the real one, and `nail plugin dev` finds it through
+`<data-dir>/ui-endpoint.json`. An explicit `--port N` that is taken is an
+error. Useful options:
 
 | Option | Meaning |
 | --- | --- |
 | `--seed demo` | Load the demo mail corpus as a local account (no network). Every seeded run keeps its secrets in `<data-dir>/demo-keychain.json` (a plain demo keychain file, never the OS keychain; a restart with the same `--data-dir` finds them — M4c, the recovery-key scenario), trusts only the corpus' S/MIME test root and looks up no keys online |
 | `--seed demo-imap` | Serve the demo corpus from an in-process mock IMAP server and sync it like a real account |
 | `--seed demo-multi` | Two configured accounts on in-process mock servers: "Work" (IMAP with IDLE, the demo corpus, a Junk folder, a folder `Newsletters` synced headers only, and a mock ManageSieve server whose `sieve` node starts switched off) and "Home" (POP3), SMTP for both, and `bob@new.example` (password `new-secret`) for trying account setup with discovery (`bob@elsewhere.example` shows an unverified SRV answer). Writes its `accounts.kdl` into the config dir (refusing one that holds real accounts), keeps passwords in memory (never the OS keychain) and exposes the test controls (below). Both accounts get an OpenPGP key (generated) and an S/MIME certificate (`ada-work.p12` / `ada-home.p12` of the corpus), `prefer-encrypt="mutual"` and `authserv-id "mx.nail.example"`. M3a: a mock CalDAV / CardDAV server (sources `work-calendars` / `work-contacts`, user `ada`, password `dav-secret` in the memory keychain) with sample events ("Team sync" weekly, "Quarterly review" tomorrow) and contacts (Grace Hopper, Charles Babbage), and the ICS subscription `holidays` on the mock HTTP server. M3b: the mock CalDAV server's user address is `ada@work.example`, a second principal `bob` (`bob@example.org`, busy tomorrow 10:00 and 14:00 UTC) answers free/busy through the schedule outbox, "Project kickoff" (in two days) is a meeting the work identity organizes with bob invited; a Gmail API account "Gmail" (`ada@gmail.example`, mock Gmail server with the demo mailbox, signed in through a mock OAuth2 server, polls every 10 s) is configured but **switched off** (`enabled=#false`) so the other suites keep their counts — Settings → Accounts → Gmail → "Synchronize this account" turns it on |
-| `--port 0` | Use a free port; the URL is the only line printed on stdout |
+| `--port N` | Use exactly port `N` (fails when it is taken); `--port 0` = a free port. Without `--port`: 4780, else a free port. The URL is the only line printed on stdout |
 | `--data-dir DIR` | Store location (default `%LOCALAPPDATA%\Nail`; with `--seed`, a temporary directory) |
 | `--config-dir DIR` | `theme.kdl` / `layout.kdl` location (default `%APPDATA%\Nail`; with `--seed`, a temporary directory) |
 | `--ui-dir DIR` | UI bundle (default `$NAIL_UI_DIR`, `ui/` next to the binary, or the repository's `ui/dist`) |
@@ -481,9 +485,35 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `clock-set` | `at` | Sets that clock to `at` (Unix seconds); it keeps running |
 | `clock-advance` | `seconds` | Moves that clock forward (or back, negative) |
 
-For UI work with hot module reloading, run `npm run dev` (Vite on
-`http://localhost:5173`). Add `?mock=1` to use the in-memory mock core. Add
-`?lang=de` or `?mode=dark` to override the locale or the colour mode.
+For UI work with hot module reloading, run `npm run dev`. It prints the
+dev server's URL (`http://127.0.0.1:5791/` when that port is free). Add
+`?mock=1` to use the in-memory mock core. Add `?lang=de` or `?mode=dark` to
+override the locale or the colour mode.
+
+### Development ports
+
+Nail uses no fixed development ports, so it runs next to other Vite / Tauri
+projects on the same machine (plan section 10):
+
+- `npm run dev` and `npm run tauri dev` go through `scripts/dev.mjs`
+  (helpers in `scripts/lib/dev-port.mjs`, tests in
+  `scripts/test/dev-port.test.mjs`). It picks the port — `NAIL_DEV_PORT`
+  exactly (an error when taken), else 5791 when free (deliberately not
+  Vite's 5173), else any free port — and starts Vite on exactly that port
+  (`strictPort`, host `127.0.0.1`).
+- For `npm run tauri dev` (`scripts/tauri.mjs` sends `dev` there; every
+  other Tauri command goes straight to the Tauri CLI) it then runs
+  `tauri dev --config <temp file>` with `build.devUrl` set to that port
+  and `beforeDevCommand` removed (`null` in the JSON merge patch the CLI
+  applies), so Tauri starts no second dev server. Arguments after `dev`
+  pass through: `npm run tauri dev -- --release`.
+  `tauri.conf.json` names `http://127.0.0.1:5791` and no `beforeDevCommand`;
+  a bare `npx tauri dev` therefore expects `npm run dev` on 5791.
+- `ui/vite.config.ts` reads `NAIL_DEV_PORT` too; `npx vite` in `ui/` without
+  it starts at 5791 and moves on when that is taken.
+- `nail serve` without `--port` falls back to a free port when 4780 is
+  taken (above); the MCP server already uses a free port unless one is
+  configured.
 
 ### Data and config directories
 
@@ -509,8 +539,9 @@ references (ADR 0013).
 npm run tauri dev
 ```
 
-This starts Vite and the desktop app. The app loads the UI from the dev
-server and uses the default directories. To run the built UI without a dev
+This starts Vite on a free port (see "Development ports") and the desktop
+app with the matching `devUrl`. The app loads the UI from the dev server and
+uses the default directories. To run the built UI without a dev
 server, with demo data in temporary directories:
 
 ```sh

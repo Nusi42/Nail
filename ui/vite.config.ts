@@ -7,6 +7,12 @@ const localesDir = fileURLToPath(new URL("../locales", import.meta.url));
 // Reference theme/layout fixtures of nail-api, used by the mock transport (`?mock=1`).
 const fixturesDir = fileURLToPath(new URL("../crates/nail-api/fixtures", import.meta.url));
 
+// No fixed development ports (plan section 10): `npm run dev` / `npm run tauri
+// dev` (scripts/dev.mjs) pick a free port and pass it as NAIL_DEV_PORT, which
+// Vite then uses exactly. Run directly, Vite starts at 5791 and moves on to the
+// next free port.
+const devPort = Number(process.env.NAIL_DEV_PORT) || 5791;
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -16,8 +22,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    strictPort: true,
+    host: "127.0.0.1",
+    port: devPort,
+    strictPort: Boolean(process.env.NAIL_DEV_PORT),
     fs: { allow: [".", localesDir, fixturesDir] },
   },
   build: {

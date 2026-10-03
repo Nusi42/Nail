@@ -15,6 +15,7 @@ Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Ta
 - **Everything themeable.** React components never use inline styles or literal class names. They emit `data-part` attributes; styling comes only from the compiled theme (`theme.kdl`). Structure comes only from `layout.kdl`.
 - **The core owns data.** The UI talks only to `NailClient`; business logic lives in Rust. Every write goes through the operation queue.
 - **Windows first.** macOS, Linux and mobile come later.
+- **No fixed development ports.** Take a free port or fall back to one, so Nail runs next to other projects (`scripts/dev.mjs`: Vite on `NAIL_DEV_PORT` / 5791 / a free port + Tauri `devUrl`; `nail serve` falls back from 4780; tests bind port 0).
 - **No non-loopback sockets.** Never open sockets on non-loopback/unspecified addresses (TCP or UDP), except the user-enabled remote UI listener; use the OS DNS API; tests bind 127.0.0.1 (ADR 0057; `scripts/check-socket-binds.mjs` runs in `npm test`).
 - **Record decisions.** New library choices or deviations from the design get an ADR.
 - **Keep this file current.** When commands, layout or conventions change, update this file in the same commit.
@@ -524,7 +525,8 @@ scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webvi
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
                        import-signing-cert.ps1 / verify-signatures.ps1, lib/ (minisign, sign, winget, …; M4b
                        ADR 0089), check-socket-binds.mjs (ADR 0057), test/ (node:test);
-                       interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040)
+                       interop/ = separate Cargo workspace (copy the root Cargo.lock in first) (ADR 0040);
+                       dev.mjs + tauri.mjs + lib/dev-port.mjs (free dev-server port, Tauri devUrl override)
 ```
 
 ## Commands
@@ -567,14 +569,15 @@ NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema   # rules.
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults  # nail-api fixtures after editing defaults/*.kdl (then prettier)
 bash crates/nail-testkit/corpus/crypto/pgp/generate.sh     # OpenPGP interop vectors (GnuPG 2.4 = Git for Windows /usr/bin/gpg)
 bash crates/nail-testkit/corpus/crypto/smime/generate.sh   # S/MIME test CA + vectors (OpenSSL 3.4+ = /mingw64/bin/openssl)
-cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780)
+cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780, else a free port; explicit --port N must be free)
 cargo run -p nail-cli -- serve --seed demo-imap                   # demo corpus synced from an in-process mock IMAP server
 cargo run -p nail-cli -- serve --seed demo-multi                  # IMAP + POP3 + SMTP mock accounts, mock CalDAV / CardDAV (+ principal bob) + ICS feeds, a mock Gmail account, mock Exchange Online (Graph) + Exchange Server (EWS) accounts (all three switched off) and mock Autodiscover (test controls at /api/test/…)
 cargo run -p nail-cli -- serve --seed demo --launch C:/path/x.ics  # hand a file / link to the UI like the desktop shell (M3a)
 cargo run -p nail-app --features tauri/custom-protocol -- --seed demo   # desktop app on the built ui/dist (temp dirs)
 NAIL_MCP_TOKEN=<token> nail mcp --client <name> [--url URL] [--data-dir DIR]   # stdio bridge to the running app's MCP server
 nail mcp --client <name> [--config-dir DIR] [--mcp-port N] [--no-start]   # starts a headless Nail when none runs
-npm run tauri dev                          # desktop app with Vite hot reload
+npm run dev                                # Vite dev server on a free port (NAIL_DEV_PORT, else 5791, else any; scripts/dev.mjs)
+npm run tauri dev                          # desktop app with Vite hot reload (same port choice + matching devUrl; scripts/tauri.mjs)
 ```
 
 - **Vitest hides console output when stdout is not a terminal** (piped / agent runs), so warnings never show there.

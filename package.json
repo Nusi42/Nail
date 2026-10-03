@@ -14,7 +14,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w ui",
+    "dev": "node scripts/dev.mjs",
     "build": "npm run build -w ui",
     "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs",
     "check:sockets": "node scripts/check-socket-binds.mjs",
@@ -24,7 +24,7 @@
     "e2e": "npm run build -w ui && cargo build -p nail-cli && npm run build:desktop && npm run test -w e2e",
     "build:desktop": "node e2e/scripts/build-desktop.mjs",
     "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
-    "tauri": "tauri",
+    "tauri": "node scripts/tauri.mjs",
     "e2e:only": "npm run test -w e2e"
   },
   "devDependencies": {

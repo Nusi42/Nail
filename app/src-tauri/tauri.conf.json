@@ -6,8 +6,7 @@
   "mainBinaryName": "Nail",
   "build": {
     "frontendDist": "../../ui/dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev -w ui",
+    "devUrl": "http://127.0.0.1:5791",
     "beforeBuildCommand": "npm run build -w ui"
   },
   "app": {

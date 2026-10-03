@@ -13,7 +13,7 @@ use nail_server::{
 };
 use nail_store::DataDirLock;
 
-use crate::cli::{Seed, ServeArgs};
+use crate::cli::{DEFAULT_PORT, Seed, ServeArgs};
 use crate::messages::{self, Localized};
 
 /// Environment variable naming the UI directory.
@@ -218,18 +218,22 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
         .clone()
         .map(|demo| Arc::new(DemoControl(demo, service.clone())) as Arc<dyn TestControl>);
     // The local UI: loopback, no login, with the remote-content proxy.
-    let server = Server::bind_with(
-        service.clone(),
-        ServerOptions {
-            addr: SocketAddr::from((Ipv4Addr::LOCALHOST, args.port)),
-            ui_dir: ui_dir.clone(),
-            test_control,
-        },
-        TransportOptions {
-            proxy: service.remote_proxy(),
-            ..TransportOptions::default()
-        },
-    )
+    // No fixed development ports: without `--port`, a taken 4780 falls back
+    // to a free port (the printed URL and the endpoint file name it).
+    let server = bind_with_fallback(args.port, DEFAULT_PORT, |port| {
+        Server::bind_with(
+            service.clone(),
+            ServerOptions {
+                addr: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+                ui_dir: ui_dir.clone(),
+                test_control: test_control.clone(),
+            },
+            TransportOptions {
+                proxy: service.remote_proxy(),
+                ..TransportOptions::default()
+            },
+        )
+    })
     .await?;
     // The remote UI (TLS + login), when enabled in the settings; the
     // desktop's settings start, restart and stop it (ADR 0041).
@@ -273,6 +277,54 @@ pub async fn run(args: ServeArgs) -> anyhow::Result<()> {
     drop(lock);
     drop(dirs);
     Ok(())
+}
+
+/// Ports `nail serve` tries in order: only an explicit `--port`; else the
+/// default port, then any free port (0).
+pub fn port_candidates(explicit: Option<u16>, default: u16) -> Vec<u16> {
+    match explicit {
+        Some(port) => vec![port],
+        None => vec![default, 0],
+    }
+}
+
+/// Whether a failed bind means "this port is taken" (or reserved, which
+/// Windows reports as access denied), so the next candidate may be tried.
+pub fn is_port_taken(err: &nail_server::ServerError) -> bool {
+    matches!(
+        err,
+        nail_server::ServerError::Bind { source, .. }
+            if matches!(
+                source.kind(),
+                std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied
+            )
+    )
+}
+
+/// Binds the first free candidate of [`port_candidates`]. Only a taken
+/// default port falls back; every other error (and a taken explicit port)
+/// is returned.
+pub async fn bind_with_fallback<T, F, Fut>(
+    explicit: Option<u16>,
+    default: u16,
+    mut bind: F,
+) -> Result<T, nail_server::ServerError>
+where
+    F: FnMut(u16) -> Fut,
+    Fut: Future<Output = Result<T, nail_server::ServerError>>,
+{
+    let candidates = port_candidates(explicit, default);
+    let last = candidates.len() - 1;
+    for (index, port) in candidates.into_iter().enumerate() {
+        match bind(port).await {
+            Ok(bound) => return Ok(bound),
+            Err(err) if index < last && is_port_taken(&err) => {
+                tracing::warn!(port, %err, "port taken; using a free port");
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    unreachable!("port_candidates is never empty")
 }
 
 /// The demo-multi mock servers as the server's test hooks.
@@ -321,6 +373,65 @@ pub fn resolve_ui_dir(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn bind_listener(port: u16) -> Result<tokio::net::TcpListener, nail_server::ServerError> {
+        let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+        tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, port))
+            .await
+            .map_err(|source| nail_server::ServerError::Bind { addr, source })
+    }
+
+    #[test]
+    fn port_candidates_fall_back_only_without_an_explicit_port() {
+        assert_eq!(port_candidates(None, 4780), vec![4780, 0]);
+        assert_eq!(port_candidates(Some(4780), 4780), vec![4780]);
+        assert_eq!(port_candidates(Some(0), 4780), vec![0]);
+    }
+
+    #[test]
+    fn only_taken_ports_count_as_taken() {
+        let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 1));
+        let bind = |kind| nail_server::ServerError::Bind {
+            addr,
+            source: std::io::Error::from(kind),
+        };
+        assert!(is_port_taken(&bind(std::io::ErrorKind::AddrInUse)));
+        assert!(is_port_taken(&bind(std::io::ErrorKind::PermissionDenied)));
+        assert!(!is_port_taken(&bind(std::io::ErrorKind::InvalidInput)));
+        assert!(!is_port_taken(&nail_server::ServerError::NotLoopback(addr)));
+    }
+
+    #[tokio::test]
+    async fn a_taken_default_port_falls_back_to_a_free_one() {
+        // A free port taken by this test plays the default port.
+        let held = bind_listener(0).await.unwrap();
+        let taken = held.local_addr().unwrap().port();
+        let listener = bind_with_fallback(None, taken, bind_listener)
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert_ne!(port, taken);
+        assert_ne!(port, 0);
+        // A free default port is used as is.
+        drop(listener);
+        let free = bind_listener(0).await.unwrap();
+        let wanted = free.local_addr().unwrap().port();
+        drop(free);
+        let listener = bind_with_fallback(None, wanted, bind_listener)
+            .await
+            .unwrap();
+        assert_eq!(listener.local_addr().unwrap().port(), wanted);
+    }
+
+    #[tokio::test]
+    async fn a_taken_explicit_port_is_an_error() {
+        let held = bind_listener(0).await.unwrap();
+        let taken = held.local_addr().unwrap().port();
+        let err = bind_with_fallback(Some(taken), 4780, bind_listener)
+            .await
+            .unwrap_err();
+        assert!(is_port_taken(&err), "{err}");
+    }
 
     #[test]
     fn the_portable_zip_keeps_data_beside_the_app() {

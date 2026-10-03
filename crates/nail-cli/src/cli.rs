@@ -82,8 +82,10 @@ pub enum Seed {
 #[derive(Debug, Clone, PartialEq, Eq, Args)]
 pub struct ServeArgs {
     /// Port on 127.0.0.1 (0 picks a free port; the URL is printed).
-    #[arg(long, default_value_t = DEFAULT_PORT)]
-    pub port: u16,
+    /// Default: 4780, or a free port when 4780 is taken. An explicit port
+    /// that is taken is an error.
+    #[arg(long)]
+    pub port: Option<u16>,
     /// Data directory (store and message blobs). Default: %LOCALAPPDATA%\Nail.
     #[arg(long, value_name = "DIR")]
     pub data_dir: Option<PathBuf>,
@@ -179,7 +181,7 @@ mod tests {
         assert_eq!(
             serve(&["serve"]),
             ServeArgs {
-                port: DEFAULT_PORT,
+                port: None,
                 data_dir: None,
                 config_dir: None,
                 ui_dir: None,
@@ -224,7 +226,7 @@ mod tests {
                 "-vv",
             ]),
             ServeArgs {
-                port: 0,
+                port: Some(0),
                 data_dir: Some("d".into()),
                 config_dir: Some("c".into()),
                 ui_dir: Some("u".into()),

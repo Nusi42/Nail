@@ -15,8 +15,10 @@ Nail runs in two ways, and both show the same interface:
 
 - **As a desktop app.** Start *Nail* like any other Windows program.
 - **In your browser.** Run `nail serve --open` in a terminal. Nail starts in
-  the background and opens `http://127.0.0.1:4780/` in your browser. Only
-  this computer can connect. Press `Ctrl+C` in the terminal to stop it.
+  the background and opens `http://127.0.0.1:4780/` in your browser (when
+  another program already uses port 4780, Nail picks a free port and opens
+  that address instead; the terminal shows it). Only this computer can
+  connect. Press `Ctrl+C` in the terminal to stop it.
 
 ### Try it with demo mail
 

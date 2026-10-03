@@ -20,6 +20,8 @@ in OneDrive): output goes to `%LOCALAPPDATA%\nail-build\` or
 | `verify-signatures.ps1` | CI: every exe / msi signed and timestamped |
 | `sbom.mjs` | CycloneDX SBOMs only (Rust crates from `cargo metadata`, UI packages from `package-lock.json`) |
 | `check-socket-binds.mjs` | fails on sockets bound to unspecified / non-loopback addresses outside the allowlist in `lib/socket-binds.mjs` (ADR 0057; first step of `npm test`) |
+| `dev.mjs` | `npm run dev`: Vite on a free port (`NAIL_DEV_PORT`, else 5791, else any free one); `dev.mjs tauri [args]` also runs `tauri dev` with the matching `devUrl` (docs/dev-setup.md "Development ports") |
+| `tauri.mjs` | `npm run tauri …`: the Tauri CLI, with `dev` routed through `dev.mjs` |
 | `lib/*.mjs` | the scripts' pure helpers; tests in `test/` |
 | `interop/` | engine tests against real Dovecot / Stalwart servers (own crate; see its README) |
 
