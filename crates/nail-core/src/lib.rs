@@ -21,6 +21,7 @@
 mod accounts;
 mod agents;
 mod api_moves;
+mod appearance;
 mod bodies;
 mod clock;
 mod composer;

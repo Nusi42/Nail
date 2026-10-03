@@ -1,0 +1,31 @@
+// Nail built-in theme: Graphite (dark).
+//
+// Neutral dark greys with a periwinkle accent; the default dark theme.
+// Colours only; spacing, type, radius and elevation come from the base
+// theme (defaults/theme.kdl). Pick it in Settings → Appearance, or name it
+// in your theme.kdl: `theme "My settings" extends="graphite" { … }`.
+// See userDocs/en/theme-reference.md.
+//
+// M5a contract placeholder (WP150): the palette of the approved proposal;
+// WP151 completes the theme and checks its contrast.
+
+theme "Graphite" extends="default" mode="dark" {
+    tokens {
+        color "bg"           "#1b1e24"
+        color "bg-subtle"    "#22262d"
+        color "bg-raised"    "#2b3039"
+        color "fg"           "#e6e9ef"
+        color "fg-muted"     "#a1aab8"
+        color "border"       "#2f3540"
+        color "accent"       "#7c9cff"
+        color "accent-fg"    "#0d1530"
+        color "selection"    "#26324f"
+        color "selection-fg" "#e6e9ef"
+        color "unread"       "#7c9cff"
+        color "flagged"      "#ff7a8e"
+        color "danger"       "#ff7a8e"
+        color "warning"      "#e3a847"
+        color "success"      "#59c995"
+        color "focus-ring"   "#7c9cff"
+    }
+}

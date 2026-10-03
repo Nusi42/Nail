@@ -211,7 +211,8 @@ impl Breakpoint {
 pub struct ActionDef {
     /// Label (literal or `@message.id`), `null` = the built-in default label.
     pub label: Option<String>,
-    /// Icon name from the theme's `icons`, `null` = no icon.
+    /// Icon name: a Lucide name (`"reply-all"`) or one of the theme's
+    /// `icons` (see [`crate::icons`]); `null` = no icon.
     pub icon: Option<String>,
     /// For user-defined aliases: the action this one invokes, e.g.
     /// `"nav.goto-folder"`. `null` for built-in and plug-in actions.
@@ -256,7 +257,8 @@ pub enum ToolbarItem {
         /// Label override, `null` = the action's label.
         #[serde(default)]
         label: Option<String>,
-        /// Icon override, `null` = the action's icon.
+        /// Icon override (a Lucide name or a theme icon, [`crate::icons`]),
+        /// `null` = the action's icon.
         #[serde(default)]
         icon: Option<String>,
     },
@@ -280,7 +282,8 @@ pub enum MenuItem {
         /// Label override, `null` = the action's label.
         #[serde(default)]
         label: Option<String>,
-        /// Icon override, `null` = the action's icon.
+        /// Icon override (a Lucide name or a theme icon, [`crate::icons`]),
+        /// `null` = the action's icon.
         #[serde(default)]
         icon: Option<String>,
     },

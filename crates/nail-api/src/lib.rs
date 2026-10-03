@@ -84,6 +84,11 @@
 //!   [`diagnostics`] — the user-made diagnostics bundle; send-as /
 //!   on-behalf identities ([`accounts::SendAs`]) and upload progress
 //!   ([`engine::OutgoingTransport::send_with_progress`]).
+//! * M5a (ADR 0102): [`appearance`] — theme metadata (built-in and user
+//!   themes), the selection (fixed theme or Follow Windows with a light /
+//!   dark pair), density, the font-size / radius / accent overrides kept in
+//!   the user's `theme.kdl`, the OS appearance source and the shared token
+//!   schema; [`icons`] — Lucide icon names and the pre-M5 name mapping.
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -104,6 +109,7 @@ mod labels;
 
 pub mod accounts;
 pub mod agents;
+pub mod appearance;
 pub mod backup;
 pub mod compose;
 pub mod config;
@@ -116,6 +122,7 @@ pub mod engine;
 pub mod error;
 pub mod exchange;
 pub mod gmail;
+pub mod icons;
 pub mod ids;
 pub mod launch;
 pub mod localized;
@@ -378,6 +385,10 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     diagnostics::DiagnosticsIssue::export_all(&cfg)?;
     diagnostics::Redaction::export_all(&cfg)?;
     accounts::SendAs::export_all(&cfg)?;
+    // M5a (ADR 0102): appearance types the UI names directly.
+    appearance::ThemeOverridesIssue::export_all(&cfg)?;
+    appearance::ThemeProblem::export_all(&cfg)?;
+    appearance::ColorScheme::export_all(&cfg)?;
 
     write_index(out_dir)
 }

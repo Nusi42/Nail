@@ -1,0 +1,31 @@
+// Nail built-in theme: Nocturne (dark).
+//
+// Deep blue night tones with a teal accent.
+// Colours only; spacing, type, radius and elevation come from the base
+// theme (defaults/theme.kdl). Pick it in Settings → Appearance, or name it
+// in your theme.kdl: `theme "My settings" extends="nocturne" { … }`.
+// See userDocs/en/theme-reference.md.
+//
+// M5a contract placeholder (WP150): the palette of the approved proposal;
+// WP151 completes the theme and checks its contrast.
+
+theme "Nocturne" extends="default" mode="dark" {
+    tokens {
+        color "bg"           "#121b2e"
+        color "bg-subtle"    "#17223a"
+        color "bg-raised"    "#1f2c49"
+        color "fg"           "#e2e8f5"
+        color "fg-muted"     "#97a5c2"
+        color "border"       "#263453"
+        color "accent"       "#45c9bb"
+        color "accent-fg"    "#062320"
+        color "selection"    "#183542"
+        color "selection-fg" "#e2e8f5"
+        color "unread"       "#45c9bb"
+        color "flagged"      "#ff7f96"
+        color "danger"       "#ff7f96"
+        color "warning"      "#f0b45b"
+        color "success"      "#45c9bb"
+        color "focus-ring"   "#45c9bb"
+    }
+}

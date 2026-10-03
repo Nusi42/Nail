@@ -1,0 +1,31 @@
+// Nail built-in theme: Frost (light).
+//
+// Cool blue-grey neutrals with an indigo accent; the default light theme.
+// Colours only; spacing, type, radius and elevation come from the base
+// theme (defaults/theme.kdl). Pick it in Settings → Appearance, or name it
+// in your theme.kdl: `theme "My settings" extends="frost" { … }`.
+// See userDocs/en/theme-reference.md.
+//
+// M5a contract placeholder (WP150): the palette of the approved proposal;
+// WP151 completes the theme and checks its contrast.
+
+theme "Frost" extends="default" mode="light" {
+    tokens {
+        color "bg"           "#ffffff"
+        color "bg-subtle"    "#f4f6fa"
+        color "bg-raised"    "#e6eaf1"
+        color "fg"           "#17202b"
+        color "fg-muted"     "#566375"
+        color "border"       "#dde3ec"
+        color "accent"       "#3b5bdb"
+        color "accent-fg"    "#ffffff"
+        color "selection"    "#dfe6fb"
+        color "selection-fg" "#17202b"
+        color "unread"       "#3b5bdb"
+        color "flagged"      "#d6455d"
+        color "danger"       "#d6455d"
+        color "warning"      "#a86a0c"
+        color "success"      "#2f9e6b"
+        color "focus-ring"   "#3b5bdb"
+    }
+}

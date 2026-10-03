@@ -33,6 +33,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     ("agents.ftl", include_str!("../../../locales/en/agents.ftl")),
     ("app.ftl", include_str!("../../../locales/en/app.ftl")),
     (
+        "appearance.ftl",
+        include_str!("../../../locales/en/appearance.ftl"),
+    ),
+    (
         "compose.ftl",
         include_str!("../../../locales/en/compose.ftl"),
     ),
@@ -43,6 +47,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
     (
         "core-agents.ftl",
         include_str!("../../../locales/en/core-agents.ftl"),
+    ),
+    (
+        "core-appearance.ftl",
+        include_str!("../../../locales/en/core-appearance.ftl"),
     ),
     (
         "core-crypto.ftl",
@@ -160,6 +168,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     ("agents.ftl", include_str!("../../../locales/de/agents.ftl")),
     ("app.ftl", include_str!("../../../locales/de/app.ftl")),
     (
+        "appearance.ftl",
+        include_str!("../../../locales/de/appearance.ftl"),
+    ),
+    (
         "compose.ftl",
         include_str!("../../../locales/de/compose.ftl"),
     ),
@@ -170,6 +182,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
     (
         "core-agents.ftl",
         include_str!("../../../locales/de/core-agents.ftl"),
+    ),
+    (
+        "core-appearance.ftl",
+        include_str!("../../../locales/de/core-appearance.ftl"),
     ),
     (
         "core-crypto.ftl",

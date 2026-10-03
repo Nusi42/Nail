@@ -126,6 +126,7 @@ export function normalizeTheme(raw: unknown): ResolvedTheme {
           : "smart",
     },
     sounds: stringMap(t.sounds),
+    density: t.density === "compact" ? "compact" : "comfortable",
     raw_css: arr(t.raw_css).map((r) => {
       const o = obj(r);
       return { selector: str(o.selector, ""), css: str(o.css, "") };

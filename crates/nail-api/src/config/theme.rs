@@ -39,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::SourceLocation;
+use crate::appearance::Density;
 
 /// Prefix of every CSS custom property generated from theme tokens.
 pub const CSS_VAR_PREFIX: &str = "--nail-";
@@ -233,13 +234,21 @@ pub struct ResolvedTheme {
     /// Base token values, applied in every mode.
     pub tokens: TokenSet,
     /// Per-mode token overrides keyed by mode name (`"light"`, `"dark"`,
-    /// `"high-contrast"`). Only tokens that differ from [`Self::tokens`] appear.
+    /// `"high-contrast"`, `"print"`) and the density variant `"compact"`
+    /// (M5a: applied under `:root[data-nail-density="compact"]`, after the
+    /// colour modes). Only tokens that differ from [`Self::tokens`] appear.
     #[serde(default)]
     pub modes: IndexMap<String, TokenSet>,
+    /// Comfortable or compact (M5a: the `appearance density=` of the user's
+    /// `theme.kdl`). The UI sets `data-nail-density` on the root and
+    /// `data-density` on the `app` part from it.
+    #[serde(default)]
+    pub density: Density,
     /// Part style rules in source order (later rules win on equal specificity).
     #[serde(default)]
     pub parts: Vec<PartRule>,
-    /// Icons by name, e.g. `"archive"`.
+    /// Icons by name, e.g. `"archive"`. They take precedence over the
+    /// Lucide icon of the same name (M5a, [`crate::icons`]).
     #[serde(default)]
     pub icons: IndexMap<String, Icon>,
     /// Reader display settings.

@@ -1263,7 +1263,7 @@
     },
     "mail.compose": {
       "label": "@mail.action.compose",
-      "icon": "compose",
+      "icon": "square-pen",
       "alias_of": null,
       "args": []
     },
@@ -1293,31 +1293,31 @@
     },
     "mail.move": {
       "label": "@mail.action.move",
-      "icon": "move",
+      "icon": "folder-input",
       "alias_of": null,
       "args": []
     },
     "mail.move-to": {
       "label": "@mail.action.move-to",
-      "icon": "move",
+      "icon": "folder-input",
       "alias_of": null,
       "args": []
     },
     "mail.delete": {
       "label": "@mail.action.delete",
-      "icon": "delete",
+      "icon": "trash",
       "alias_of": null,
       "args": []
     },
     "mail.delete-permanently": {
       "label": "@mail.action.delete-permanently",
-      "icon": "delete",
+      "icon": "trash",
       "alias_of": null,
       "args": []
     },
     "mail.toggle-read": {
       "label": "@mail.action.toggle-read",
-      "icon": "mark-read",
+      "icon": "mail-open",
       "alias_of": null,
       "args": []
     },
@@ -1329,7 +1329,7 @@
     },
     "composer.send": {
       "label": "@composer.action.send",
-      "icon": "sent",
+      "icon": "send",
       "alias_of": null,
       "args": []
     },
@@ -1341,7 +1341,7 @@
     },
     "composer.discard": {
       "label": "@composer.action.discard",
-      "icon": "delete",
+      "icon": "trash",
       "alias_of": null,
       "args": []
     },
@@ -1365,7 +1365,7 @@
     },
     "composer.attach": {
       "label": "@composer.action.attach",
-      "icon": "attachment",
+      "icon": "paperclip",
       "alias_of": null,
       "args": []
     },
@@ -1377,7 +1377,7 @@
     },
     "outbox.open": {
       "label": "@outbox.action.open",
-      "icon": "outbox",
+      "icon": "send-horizontal",
       "alias_of": "window.open",
       "args": [
         "outbox"
@@ -1397,7 +1397,7 @@
     },
     "account.add": {
       "label": "@account.action.add",
-      "icon": "account-add",
+      "icon": "user-plus",
       "alias_of": null,
       "args": []
     },
@@ -1417,7 +1417,7 @@
     },
     "window.close": {
       "label": "@window.action.close",
-      "icon": "close",
+      "icon": "x",
       "alias_of": null,
       "args": []
     },
@@ -1429,19 +1429,19 @@
     },
     "sync.now": {
       "label": "@sync.action.now",
-      "icon": "sync",
+      "icon": "refresh-cw",
       "alias_of": null,
       "args": []
     },
     "rules.open": {
       "label": "@rules.action.open",
-      "icon": "filter",
+      "icon": "funnel",
       "alias_of": null,
       "args": []
     },
     "rules.create-from-message": {
       "label": "@rules.action.create-from-message",
-      "icon": "filter",
+      "icon": "funnel",
       "alias_of": null,
       "args": []
     },
@@ -1501,7 +1501,7 @@
     },
     "junk.mark": {
       "label": "@junk.action.mark",
-      "icon": "junk",
+      "icon": "shield-alert",
       "alias_of": null,
       "args": []
     },
@@ -1513,13 +1513,13 @@
     },
     "snooze.open": {
       "label": "@snooze.action.open",
-      "icon": "snooze",
+      "icon": "alarm-clock",
       "alias_of": null,
       "args": []
     },
     "snooze.list": {
       "label": "@snooze.action.list",
-      "icon": "snooze",
+      "icon": "alarm-clock",
       "alias_of": null,
       "args": []
     },
@@ -1531,7 +1531,7 @@
     },
     "sync.folder-policy": {
       "label": "@sync.action.folder-policy",
-      "icon": "sync",
+      "icon": "refresh-cw",
       "alias_of": null,
       "args": []
     },
@@ -1663,7 +1663,7 @@
     },
     "pim.sync": {
       "label": "@pim.action.sync",
-      "icon": "sync",
+      "icon": "refresh-cw",
       "alias_of": null,
       "args": []
     },

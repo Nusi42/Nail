@@ -4,6 +4,7 @@ import type { AccountStatus } from "./AccountStatus";
 import type { ActionActor } from "./ActionActor";
 import type { ActionAttribution } from "./ActionAttribution";
 import type { AddressBookId } from "./AddressBookId";
+import type { Appearance } from "./Appearance";
 import type { CalendarId } from "./CalendarId";
 import type { ComposerEdit } from "./ComposerEdit";
 import type { ConfigIssue } from "./ConfigIssue";
@@ -378,4 +379,8 @@ sent_bytes: number,
 /**
  * Bytes in total.
  */
-total_bytes: number, };
+total_bytes: number, } | { "type": "ThemeChanged", 
+/**
+ * The new state.
+ */
+appearance: Appearance, };

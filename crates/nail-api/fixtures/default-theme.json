@@ -34,16 +34,23 @@
       "sm": "12px",
       "md": "14px",
       "lg": "16px",
-      "xl": "20px"
+      "xl": "20px",
+      "label": "11.5px",
+      "small": "12.5px",
+      "body": "14px",
+      "heading": "16px",
+      "title": "20px"
     },
     "font-weight": {
       "regular": "400",
       "medium": "500",
+      "semibold": "600",
       "bold": "650"
     },
     "line-height": {
       "tight": "1.25",
-      "normal": "1.5"
+      "normal": "1.5",
+      "relaxed": "1.65"
     },
     "space": {
       "xxs": "2px",
@@ -52,26 +59,34 @@
       "md": "12px",
       "lg": "16px",
       "xl": "24px",
-      "row": "6px"
+      "xxl": "32px",
+      "row": "6px",
+      "pane": "16px",
+      "gap": "8px",
+      "section": "24px"
     },
     "size": {
       "icon": "16px",
       "touch-target": "48px",
       "toolbar": "40px",
       "divider": "1px",
-      "divider-grab": "5px"
+      "divider-grab": "5px",
+      "control": "32px",
+      "avatar": "34px"
     },
     "radius": {
       "sm": "4px",
       "md": "6px",
-      "lg": "10px"
+      "lg": "10px",
+      "pill": "999px"
     },
     "border": {
       "thin": "1px solid var(--nail-color-border)"
     },
     "shadow": {
       "raised": "0 1px 3px rgb(0 0 0 / 0.12)",
-      "overlay": "0 8px 24px rgb(0 0 0 / 0.2)"
+      "overlay": "0 8px 24px rgb(0 0 0 / 0.2)",
+      "window": "0 12px 36px rgb(0 0 0 / 0.22)"
     },
     "motion": {
       "fast": "100ms",
@@ -109,7 +124,8 @@
       },
       "shadow": {
         "raised": "0 1px 3px rgb(0 0 0 / 0.5)",
-        "overlay": "0 8px 24px rgb(0 0 0 / 0.6)"
+        "overlay": "0 8px 24px rgb(0 0 0 / 0.6)",
+        "window": "0 12px 36px rgb(0 0 0 / 0.6)"
       }
     },
     "high-contrast": {
@@ -143,10 +159,26 @@
       },
       "shadow": {
         "raised": "none",
-        "overlay": "none"
+        "overlay": "none",
+        "window": "none"
+      }
+    },
+    "compact": {
+      "font-size": {
+        "body": "13px",
+        "title": "18px"
+      },
+      "space": {
+        "row": "4px",
+        "pane": "12px"
+      },
+      "size": {
+        "control": "28px",
+        "avatar": "28px"
       }
     }
   },
+  "density": "comfortable",
   "parts": [
     {
       "selector": "app",

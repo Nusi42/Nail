@@ -159,6 +159,10 @@ pub fn required_access(request: &Request) -> RequestAccess {
 
         // --- Customization: the desktop's files ---
         Request::UpdateLayout { .. } => ("UpdateLayout", Admin),
+        // M5a: the theme list is the session's; choosing writes theme.kdl.
+        Request::ListThemes => ("ListThemes", Session),
+        Request::SetTheme { .. } => ("SetTheme", Admin),
+        Request::SetThemePreferences { .. } => ("SetThemePreferences", Admin),
         Request::PreviewConfigMerge { .. } => ("PreviewConfigMerge", Admin),
         Request::ResolveConfigMerge { .. } => ("ResolveConfigMerge", Admin),
         Request::ApplyConfigMerge { .. } => ("ApplyConfigMerge", Admin),

@@ -18,7 +18,8 @@ args: Array<JsonValue>,
  */
 label: string | null, 
 /**
- * Icon override, `null` = the action's icon.
+ * Icon override (a Lucide name or a theme icon, [`crate::icons`]),
+ * `null` = the action's icon.
  */
 icon: string | null, } | { "type": "separator" } | { "type": "submenu", 
 /**

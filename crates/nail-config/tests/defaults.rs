@@ -148,3 +148,46 @@ fn example_themes_parse() {
     }
     assert!(count >= 1, "no example themes in {}", dir.display());
 }
+
+/// M5a (ADR 0102): the base theme defines every token of the shared schema
+/// (spacing, type scale, radius, elevation, sizes), with a `compact=`
+/// variant where density changes it; every built-in theme resolves with
+/// the whole schema.
+#[test]
+fn the_base_theme_defines_the_token_schema() {
+    let theme = nail_config::default_theme();
+    let compact = theme
+        .modes
+        .get(nail_api::appearance::COMPACT_VARIANT)
+        .expect("compact variant");
+    for spec in nail_api::appearance::token_schema() {
+        assert!(
+            theme.tokens.get(spec.category, spec.name).is_some(),
+            "{}.{} missing in defaults/theme.kdl",
+            spec.category,
+            spec.name
+        );
+        if spec.density {
+            assert!(
+                compact.get(spec.category, spec.name).is_some(),
+                "{}.{} needs a compact= value",
+                spec.category,
+                spec.name
+            );
+        }
+    }
+    for builtin in nail_config::BUILTIN_THEME_FILES {
+        let resolved = nail_config::resolve_builtin_theme(builtin.id)
+            .unwrap()
+            .unwrap_or_else(|e| panic!("{}: {e}", builtin.id));
+        for spec in nail_api::appearance::token_schema() {
+            assert!(
+                resolved.tokens.get(spec.category, spec.name).is_some(),
+                "{}: {}.{}",
+                builtin.id,
+                spec.category,
+                spec.name
+            );
+        }
+    }
+}

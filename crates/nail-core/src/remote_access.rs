@@ -159,7 +159,9 @@ impl Service {
             | Request::RecordActionUsed { .. }
             | Request::ClearRecentActions
             | Request::GetPrintJob { .. }
-            | Request::PrintViewReady { .. } => Ok(()),
+            | Request::PrintViewReady { .. }
+            // M5a: the theme list and selection (no mail data).
+            | Request::ListThemes => Ok(()),
 
             // M4c print jobs: the target must be readable by the session.
             Request::CreatePrintJob { target, .. } => match target {
@@ -194,6 +196,8 @@ impl Service {
             | Request::GetMcpServerInfo
             | Request::ReportUiContext { .. }
             | Request::UpdateLayout { .. }
+            | Request::SetTheme { .. }
+            | Request::SetThemePreferences { .. }
             | Request::PreviewConfigMerge { .. }
             | Request::ResolveConfigMerge { .. }
             | Request::ApplyConfigMerge { .. }
@@ -1230,6 +1234,7 @@ impl Service {
         let access = self.remote_access(ctx);
         let allowed = match &event {
             Event::ConfigChanged { .. }
+            | Event::ThemeChanged { .. }
             | Event::ConfigError { .. }
             | Event::ConfigErrors { .. }
             | Event::AccountsChanged

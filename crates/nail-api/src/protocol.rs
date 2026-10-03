@@ -113,6 +113,8 @@ use crate::portability::{
 use crate::print::{PdfFile, PrintJob, PrintOptions, PrintTarget};
 use crate::recovery::RecoveryKeyStatus;
 use crate::security::CryptoTechnology;
+// M5a (ADR 0102).
+use crate::appearance::{Appearance, ThemePreferences};
 use crate::smartcard::{
     PinPrompt, PinPromptCloseReason, SmartcardKeyRef, SmartcardSettings, SmartcardToken,
 };
@@ -2720,6 +2722,29 @@ pub enum Request {
         /// What to ask for.
         pick: PathPick,
     },
+
+    // --- Appearance (M5a, ADR 0102) ---
+    /// The themes (built-in and user), the selection, the active theme and
+    /// the OS light / dark state. Answered with [`Response::Themes`].
+    ListThemes,
+    /// Use one theme, whatever Windows does: writes `extends="<id>"` into
+    /// the user's `theme.kdl` and switches Follow Windows off. Answered
+    /// with [`Response::Themes`]; `invalid_request` for an unknown or
+    /// unusable theme (`theme-problem-*`), `config` when `theme.kdl` is
+    /// invalid. Sends [`Event::ThemeChanged`] and [`Event::ConfigChanged`].
+    SetTheme {
+        /// A usable theme id from [`Response::Themes`].
+        theme_id: String,
+    },
+    /// Follow Windows and its light / dark pair, density and the font-size
+    /// / radius / accent overrides: writes the `appearance` node and the
+    /// override tokens of the user's `theme.kdl` (format preserving).
+    /// Answered with [`Response::Themes`]; `invalid_request` for unusable
+    /// pair themes or invalid overrides (`theme-overrides-issue-*`).
+    SetThemePreferences {
+        /// The new preferences (all of them).
+        preferences: ThemePreferences,
+    },
 }
 
 fn default_true() -> bool {
@@ -3784,6 +3809,12 @@ pub enum Response {
         /// The chosen path; `null` = cancelled.
         path: Option<String>,
     },
+    /// Answer to [`Request::ListThemes`], [`Request::SetTheme`] and
+    /// [`Request::SetThemePreferences`] (M5a).
+    Themes {
+        /// Themes, selection, active theme, OS state.
+        appearance: Box<Appearance>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -4240,6 +4271,16 @@ pub enum Event {
         sent_bytes: u64,
         /// Bytes in total.
         total_bytes: u64,
+    },
+    // --- Appearance (M5a, ADR 0102) ---
+    /// The theme list, the selection, the active theme or the OS light /
+    /// dark state changed (`theme.kdl` / `themes/` edited, `SetTheme`,
+    /// `SetThemePreferences`, Windows switched modes). When the active
+    /// theme or the density changed, [`Event::ConfigChanged`] with the new
+    /// resolved theme follows.
+    ThemeChanged {
+        /// The new state.
+        appearance: Box<Appearance>,
     },
 }
 

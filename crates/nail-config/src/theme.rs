@@ -1008,6 +1008,8 @@ impl ThemeFile {
             message,
             sounds: self.sounds.clone(),
             raw_css,
+            // M5a: the user's `appearance density=` (WP152 reads it).
+            density: nail_api::appearance::Density::default(),
         })
     }
 }

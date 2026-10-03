@@ -1,0 +1,31 @@
+// Nail built-in theme: Sage (light).
+//
+// Soft green-grey neutrals with a green accent.
+// Colours only; spacing, type, radius and elevation come from the base
+// theme (defaults/theme.kdl). Pick it in Settings → Appearance, or name it
+// in your theme.kdl: `theme "My settings" extends="sage" { … }`.
+// See userDocs/en/theme-reference.md.
+//
+// M5a contract placeholder (WP150): the palette of the approved proposal;
+// WP151 completes the theme and checks its contrast.
+
+theme "Sage" extends="default" mode="light" {
+    tokens {
+        color "bg"           "#fbfcfa"
+        color "bg-subtle"    "#f2f5f0"
+        color "bg-raised"    "#e2e8df"
+        color "fg"           "#1b241d"
+        color "fg-muted"     "#5a695e"
+        color "border"       "#d6ded2"
+        color "accent"       "#2e7d5b"
+        color "accent-fg"    "#ffffff"
+        color "selection"    "#d9e9df"
+        color "selection-fg" "#1b241d"
+        color "unread"       "#2e7d5b"
+        color "flagged"      "#c24152"
+        color "danger"       "#c24152"
+        color "warning"      "#9a6518"
+        color "success"      "#2e7d5b"
+        color "focus-ring"   "#2e7d5b"
+    }
+}

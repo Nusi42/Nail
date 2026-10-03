@@ -57,6 +57,7 @@ pub mod rules;
 mod schema;
 mod selector;
 mod theme;
+pub mod themes;
 mod widgets;
 mod write_back;
 
@@ -80,6 +81,9 @@ pub use plugins::{InstalledPlugins, placement_layout};
 pub use schema::{layout_schema, theme_schema};
 pub use theme::{
     HtmlDarkModeSetting, IconDef, MessageDef, ModeSetting, PartDef, RawCssDef, ThemeFile, TokenDef,
+};
+pub use themes::{
+    BUILTIN_THEME_FILES, BuiltinTheme, builtin_theme, builtin_theme_infos, resolve_builtin_theme,
 };
 pub use write_back::{EditError, apply_layout_patches};
 

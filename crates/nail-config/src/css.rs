@@ -26,8 +26,9 @@ pub const TOKEN_CATEGORIES: &[&str] = &[
 /// Token categories whose unitless numbers are pixel lengths.
 pub const PX_TOKEN_CATEGORIES: &[&str] = &["font-size", "space", "size", "radius"];
 
-/// Colour modes that may override tokens.
-pub const MODES: &[&str] = &["light", "dark", "high-contrast", "print"];
+/// Colour modes that may override tokens, plus the density variant
+/// `compact` (M5a, ADR 0102: `space "row" 12 compact=8`).
+pub const MODES: &[&str] = &["light", "dark", "high-contrast", "print", "compact"];
 
 /// The CSS properties a part rule may set.
 pub const PROPERTIES: &[&str] = &[

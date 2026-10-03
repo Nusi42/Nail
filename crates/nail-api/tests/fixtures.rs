@@ -266,7 +266,6 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
 
 #[test]
 fn layout_references_resolve() {
-    let theme = theme();
     let layout = layout();
 
     // j/k navigate the list.
@@ -307,11 +306,12 @@ fn layout_references_resolve() {
         );
     }
 
+    // M5a: the default layout names Lucide icons only (no legacy names).
     for (id, def) in &layout.actions {
         if let Some(icon) = &def.icon {
             assert!(
-                theme.icons.contains_key(icon),
-                "action {id} uses unknown icon {icon}"
+                nail_api::icons::BUNDLED_ICONS.contains(&icon.as_str()),
+                "action {id} uses {icon}, which is not a bundled Lucide icon"
             );
         }
     }
@@ -382,4 +382,24 @@ fn every_locale_has_the_same_catalog_files() {
     let en = ftl_file_names("en");
     assert!(!en.is_empty());
     assert_eq!(ftl_file_names("de"), en);
+}
+
+/// `fixtures/icons.json` mirrors `nail_api::icons` for the UI's icon
+/// registry test. Regenerate with
+/// `NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test fixtures`
+/// (then `npx prettier --write crates/nail-api/fixtures`).
+#[test]
+fn icons_fixture_is_current() {
+    let expected = nail_api::icons::icons_fixture();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures")
+        .join("icons.json");
+    if std::env::var_os("NAIL_UPDATE_SNAPSHOTS").is_some() {
+        let mut text = serde_json::to_string_pretty(&expected).unwrap();
+        text.push('\n');
+        std::fs::write(&path, text).unwrap();
+    }
+    let actual: serde_json::Value =
+        serde_json::from_str(&read_fixture("icons.json")).expect("icons.json");
+    assert_eq!(actual, expected, "run with NAIL_UPDATE_SNAPSHOTS=1");
 }

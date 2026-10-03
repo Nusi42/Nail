@@ -169,6 +169,11 @@ pub struct ServiceOptions {
     /// tests and demos pass the soft token; `None` = load the configured
     /// DLLs.
     pub smartcard_modules: Option<Vec<Arc<dyn nail_pkcs11::Module>>>,
+    /// Where the OS light / dark and high-contrast state comes from (M5a,
+    /// Follow Windows). `None` = the platform default (WP152: the Windows
+    /// registry watcher); tests and seeded runs pass a
+    /// [`nail_api::appearance::ManualSystemAppearance`].
+    pub system_appearance: Option<Arc<dyn nail_api::appearance::SystemAppearanceSource>>,
 }
 
 impl std::fmt::Debug for ServiceOptions {
@@ -195,6 +200,7 @@ impl std::fmt::Debug for ServiceOptions {
                 "smartcard_modules",
                 &self.smartcard_modules.as_ref().map(Vec::len),
             )
+            .field("system_appearance", &self.system_appearance)
             .finish_non_exhaustive()
     }
 }
@@ -223,6 +229,7 @@ impl ServiceOptions {
             exchange: crate::exchange::ExchangeHooks::default(),
             desktop: None,
             smartcard_modules: None,
+            system_appearance: None,
         }
     }
 }
@@ -1360,6 +1367,12 @@ impl Service {
             | Request::PreviewDiagnostics { .. }
             | Request::CreateDiagnosticsBundle { .. }
             | Request::PickPath { .. }) => crate::portability::handle(self, request).await?,
+            // M5a (ADR 0102): themes, selection, Follow Windows (WP152).
+            request @ (Request::ListThemes
+            | Request::SetTheme { .. }
+            | Request::SetThemePreferences { .. }) => {
+                crate::appearance::handle(self, request).await?
+            }
         })
     }
 }

@@ -3,7 +3,7 @@
 Nail (working name) is an email + PIM client: Rust core, TypeScript/React UI, Tauri 2 desktop shell, a web-server mode that serves the same UI, and MCP access to all data.
 
 - What to build: `docs/design.md` (exported from the living doc linked in its header).
-- How and in which order: `docs/plan.md` (milestones M0–M4, work packages, gates).
+- How and in which order: `docs/plan.md` (milestones M0–M5, work packages, gates).
 - Decisions and deviations: `docs/adr/NNNN-title.md`.
 - Project memory: `.claude/memory/` (see "Memory" below).
 
@@ -89,6 +89,11 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        actions), print (PrintTarget / PrintOptions / PrintJob), diagnostics (items, redactions,
                        manifest); desktop PathPick + DesktopHost pick_path / print_to_pdf / print_view_ready;
                        accounts SendAs / SendingMailbox; OutgoingTransport::send_with_progress
+                       M5a (ADR 0102): appearance.rs (ThemeInfo / kinds / sources, AppearanceSettings = the
+                       user's theme.kdl `extends` + `appearance` node, ThemeOverrides font-size / radius / accent,
+                       active_theme rule, Density, token schema token_schema(), SystemAppearanceSource +
+                       ManualSystemAppearance), icons.rs (Lucide BUNDLED_ICONS, LEGACY_ICON_NAMES, lucide_name;
+                       fixtures/icons.json); ResolvedTheme.density, token variant `compact`
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -111,7 +116,9 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        hide-when-empty; ADRs 0079, 0084); M4b: widgets/system.rs (update-settings
                        show-installation, desktop-settings show-dev-endpoint, default-apps show-mapi;
                        ADRs 0087, 0092); M4c: identity `send-as=` / `sender=`, widgets/portability.rs + security
-                       future widgets security-recovery-key / security-smartcards (ADR 0094)
+                       future widgets security-recovery-key / security-smartcards (ADR 0094);
+                       M5a: themes.rs (embedded defaults/themes/*.kdl: BUILTIN_THEME_FILES, resolve_builtin_theme,
+                       builtin_theme_infos), css::MODES + `compact`; tests/theme_contrast.rs (WP151) (ADR 0102)
 crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -374,7 +381,9 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        FileSecretStore (`<data-dir>/demo-keychain.json` for seeded runs, demo-multi too);
                        post-M4c (ADR 0101): pipeline.rs (overlapping fetch → prepare → store, used by sync.rs
                        store_batches; MailChangedThrottle), ingest::prepare (blob writes + MIME parsing on worker
-                       threads) / ingest_prepared, Service::subscribe_plugin_reloads
+                       threads) / ingest_prepared, Service::subscribe_plugin_reloads;
+                       M5a (ADR 0102): appearance.rs (ListThemes / SetTheme / SetThemePreferences, Follow Windows via
+                       ServiceOptions::system_appearance; WP152), Windows deps windows-registry / windows-sys
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -473,6 +482,8 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        actions/palette.ts (ActionInfo, buildPalette) + Feature.actionInfo;
                        WP105 mounts: composer/pluginExtensions.tsx, reader in
                        widgets/MessageView.tsx (ADR 0084);
+                       M5a (ADR 0102): appearance/ (themes, Follow Windows, density, overrides; mock.ts mirrors
+                       nail_api::appearance), lucide-react icons;
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -507,8 +518,11 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        tests/vault-recovery.spec.ts (startNail({dirs}) restarts on the same directories, the demo
                        keychain file loses the data key), tests/desktop-m4c.spec.ts (Save as PDF); perf/ (M4c WP123, ADR 0097: budgets.json,
                        list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
-                       = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>))
-defaults/              shipped theme.kdl + layout.kdl; themes/ (example themes: high-contrast.kdl)
+                       = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>));
+                       visual/ (M5a WP154: visual regression, 5 themes × 2 densities; review page in
+                       scripts/visual-review/)
+defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names); themes/ = the built-in
+                       themes frost, sage (light), graphite, nocturne (dark), high-contrast (M5a, ADR 0102)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
                        M3c: core-exchange.ftl (WP93 + contract ids), core-graph.ftl (WP91), core-ews.ftl
@@ -519,7 +533,8 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        default apps, mapi-result-*; WP113 shell texts), system.ftl (WP114);
                        M4c: core-portability.ftl (WP121 + contract ids), core-vault.ftl (WP122 + contract ids),
                        portability.ftl / palette.ftl / print.ftl (WP124; palette / print contract ids);
-                       every file is embedded in nail-config l10n.rs
+                       M5a: core-appearance.ftl (contract ids: theme names / kinds / sources, densities, issues),
+                       appearance.ftl (WP153); every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
@@ -567,6 +582,7 @@ node scripts/sbom.mjs                      # CycloneDX SBOMs
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test schema   # regenerate config JSON Schemas (theme, layout, accounts)
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test rules_schema   # rules.kdl JSON Schema
 NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-config --test defaults  # nail-api fixtures after editing defaults/*.kdl (then prettier)
+NAIL_UPDATE_SNAPSHOTS=1 cargo test -p nail-api --test fixtures     # crates/nail-api/fixtures/icons.json after editing nail_api::icons
 bash crates/nail-testkit/corpus/crypto/pgp/generate.sh     # OpenPGP interop vectors (GnuPG 2.4 = Git for Windows /usr/bin/gpg)
 bash crates/nail-testkit/corpus/crypto/smime/generate.sh   # S/MIME test CA + vectors (OpenSSL 3.4+ = /mingw64/bin/openssl)
 cargo run -p nail-cli -- serve --seed demo --open                 # web mode with demo data (127.0.0.1:4780, else a free port; explicit --port N must be free)
@@ -810,6 +826,17 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `unsupported` (`m4c-not-ready`) until WP125. Slots: WP121 `nail-portability`, WP122 vault / store / pgp / smime /
   `nail-pkcs11` + `[patch.crates-io]`, WP123 Graph / Gmail / EWS / exchange + `nail-bench` + `e2e/perf/`, WP124
   `ui/src/features/{portability,palette,print}` + security additions.
+- M5a contract: ADR 0102 (`nail_api::appearance`: built-in themes `defaults/themes/<id>.kdl` + user themes
+  `<config-dir>/themes/<id>.kdl`; the selection lives in the user's `theme.kdl`: `extends` = fixed theme,
+  `appearance follow-system= light= dark= density=`, overrides = tokens `font-size "body"`, `radius "md"`,
+  `color "accent"`; `active_theme` rule (Follow Windows → high contrast / dark / light of the pair); density =
+  token variant `compact=` → `modes["compact"]` under `:root[data-nail-density="compact"]` + `app[density=…]`
+  part condition; token schema `token_schema()` checked by nail-config `tests/defaults.rs`; icons = Lucide names
+  (`nail_api::icons`, legacy names mapped); `ListThemes` / `SetTheme` / `SetThemePreferences` → `Themes`,
+  `ThemeChanged`; `SystemAppearanceSource` in `ServiceOptions::system_appearance`). The core answers
+  `unsupported` (`m5a-not-ready`) until WP152. Slots: WP151 `defaults/themes/` + `defaults/theme.kdl` +
+  `nail-config/tests/theme_contrast.rs`; WP152 rest of `nail-config` + `nail-core/src/appearance.rs`; WP153 `ui/` +
+  `locales/`; WP154 `e2e/visual/` + `scripts/visual-review/`.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

@@ -42,6 +42,11 @@ use nail_api::portability::{
 };
 use nail_api::print::{AgendaLayout, HeaderDetail, PageOrientation, PageSize, PrintTargetIssue};
 use nail_api::recovery::RecoveryKeyIssue;
+// M5a (ADR 0102).
+use nail_api::appearance::{
+    BUILTIN_THEMES, ColorScheme, Density, ThemeKind, ThemeOverridesIssue, ThemeProblem,
+    ThemeSource, builtin_theme_label,
+};
 use nail_api::smartcard::{
     PinPromptCloseReason, PinPurpose, SmartcardError, SmartcardKeyUsage, SmartcardObjectKind,
     SmartcardSettingsIssue,
@@ -310,6 +315,21 @@ fn contract_message_ids_exist_in_english() {
         ]
         .map(str::to_owned),
     );
+    // M5a (ADR 0102): appearance.
+    labels!(
+        ThemeKind,
+        ThemeSource,
+        Density,
+        ColorScheme,
+        ThemeOverridesIssue,
+        ThemeProblem,
+    );
+    wanted.extend(
+        BUILTIN_THEMES
+            .iter()
+            .filter_map(|(id, _)| builtin_theme_label(id)),
+    );
+    wanted.push("m5a-not-ready".to_owned());
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -359,6 +379,8 @@ fn german_catalogs_are_the_same_files() {
         "portability.ftl",
         "palette.ftl",
         "print.ftl",
+        "core-appearance.ftl",
+        "appearance.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

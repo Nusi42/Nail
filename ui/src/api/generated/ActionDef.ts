@@ -10,7 +10,8 @@ export type ActionDef = {
  */
 label: string | null, 
 /**
- * Icon name from the theme's `icons`, `null` = no icon.
+ * Icon name: a Lucide name (`"reply-all"`) or one of the theme's
+ * `icons` (see [`crate::icons`]); `null` = no icon.
  */
 icon: string | null, 
 /**

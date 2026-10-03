@@ -117,6 +117,7 @@ import type { SmartcardKeyRef } from "./SmartcardKeyRef";
 import type { SmartcardSettings } from "./SmartcardSettings";
 import type { TaskFields } from "./TaskFields";
 import type { TaskId } from "./TaskId";
+import type { ThemePreferences } from "./ThemePreferences";
 import type { ThreadId } from "./ThreadId";
 import type { TrustDecision } from "./TrustDecision";
 import type { UiContext } from "./UiContext";
@@ -2176,4 +2177,12 @@ overwrite?: boolean, } | { "type": "PickPath",
 /**
  * What to ask for.
  */
-pick: PathPick, };
+pick: PathPick, } | { "type": "ListThemes" } | { "type": "SetTheme", 
+/**
+ * A usable theme id from [`Response::Themes`].
+ */
+theme_id: string, } | { "type": "SetThemePreferences", 
+/**
+ * The new preferences (all of them).
+ */
+preferences: ThemePreferences, };

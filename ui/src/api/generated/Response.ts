@@ -9,6 +9,7 @@ import type { ActionActor } from "./ActionActor";
 import type { ActionPolicy } from "./ActionPolicy";
 import type { Address } from "./Address";
 import type { AddressBook } from "./AddressBook";
+import type { Appearance } from "./Appearance";
 import type { AutomaticReplies } from "./AutomaticReplies";
 import type { BackupManifest } from "./BackupManifest";
 import type { Calendar } from "./Calendar";
@@ -1151,7 +1152,11 @@ bundle: DiagnosticsBundle, } | { "type": "PathPicked",
 /**
  * The chosen path; `null` = cancelled.
  */
-path: string | null, } | { "type": "Error", 
+path: string | null, } | { "type": "Themes", 
+/**
+ * Themes, selection, active theme, OS state.
+ */
+appearance: Appearance, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */
