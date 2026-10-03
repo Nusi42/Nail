@@ -42,6 +42,7 @@ import {
 } from "../features/portability/mock";
 import { createPaletteMockState, type PaletteMockState } from "../features/palette/mock";
 import { createAppearanceMockState, type AppearanceMockState } from "../features/appearance/mock";
+import { createAttachmentsMockState, type AttachmentsMockState } from "./mockAttachments";
 import { createPrintMockState, type PrintMockState } from "../features/print/mock";
 import { createVaultMockState, type VaultMockState } from "../features/security/vaultMock";
 import { createExchangeMockState, type ExchangeMockState } from "../features/exchange/mock";
@@ -111,6 +112,8 @@ export interface MockFeatures {
   palette: PaletteMockState;
   /** Themes and selection (M5a, `features/appearance/mock.ts`). */
   appearance: AppearanceMockState;
+  /** Attachments of received mail: downloads and saves (M5a, `./mockAttachments.ts`). */
+  attachments: AttachmentsMockState;
   print: PrintMockState;
   /** Recovery key and smartcards (`features/security/vaultMock.ts`). */
   vault: VaultMockState;
@@ -496,6 +499,7 @@ export function createMockData(inboxSize = 250): MockData {
       portability: createPortabilityMockState(),
       palette: createPaletteMockState(),
       appearance: createAppearanceMockState(),
+      attachments: createAttachmentsMockState(),
       print: createPrintMockState(),
       vault: createVaultMockState(),
     },

@@ -14,7 +14,7 @@ import type { DraftAttachment } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
 import { Icon } from "../../widgets/Icon";
 import { toDisplayHtml, toStoredHtml } from "./draft";
-import { FORMAT_COMMANDS, TABLE_COMMANDS, type Command } from "./toolbar";
+import { FORMAT_COMMANDS, FORMAT_ICONS, TABLE_COMMANDS, type Command } from "./toolbar";
 
 const editors = new WeakMap<Element, Editor>();
 
@@ -61,7 +61,7 @@ function ToolButton({
       onMouseDown={(event) => event.preventDefault()}
       onClick={onClick}
     >
-      <Icon name={`format-${id}`} part="composer.format.icon" />
+      <Icon name={FORMAT_ICONS[id]} part="composer.format.icon" />
       <span data-part="composer.format.label">{t(`composer-format-${id}-short`)}</span>
     </button>
   );

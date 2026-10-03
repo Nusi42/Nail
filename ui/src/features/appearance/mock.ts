@@ -9,6 +9,7 @@ import type {
   Appearance,
   AppearanceSettings,
   Request,
+  ResolvedTheme,
   Response,
   SystemAppearance,
   ThemeInfo,
@@ -17,12 +18,15 @@ import type {
   ThemeOverridesIssue,
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
+import { defaultTheme } from "../../api/mockData";
+import { resolveMockTheme } from "./themes";
 
 /** The requests this feature answers. */
 export const APPEARANCE_REQUESTS = [
   "ListThemes",
   "SetTheme",
   "SetThemePreferences",
+  "ReportSystemAppearance",
 ] as const satisfies readonly Request["type"][];
 
 export type AppearanceRequest = Extract<Request, { type: (typeof APPEARANCE_REQUESTS)[number] }>;
@@ -136,17 +140,43 @@ function invalid(message: string, id: string): Response {
   return { type: "Error", code: "invalid_request", message, localized: { id } };
 }
 
-function changed(core: MockCore, state: AppearanceMockState): Response {
+let pristine: ResolvedTheme | null = null;
+
+/**
+ * The resolved theme `GetConfig` answers: the user's theme (`data.theme`)
+ * with the active built-in theme under it, density and overrides applied
+ * (`./themes.ts`). Tokens the user changed (they differ from the shipped
+ * default) stay the user's, like in the core where the user file wins.
+ */
+export function mockConfigTheme(core: MockCore): ResolvedTheme {
+  const state = core.data.features.appearance;
+  pristine ??= defaultTheme();
+  const active = activeTheme(state.settings, state.system, state.themes);
+  return resolveMockTheme(core.data.theme, active, state.settings, pristine);
+}
+
+function changed(core: MockCore, state: AppearanceMockState, before: string | null): Response {
   const appearance = snapshot(state);
   core.emit({ type: "ThemeChanged", appearance: structuredClone(appearance) });
+  // Like the core: `ConfigChanged` follows when the resolved theme changed.
+  const theme = mockConfigTheme(core);
+  if (before === null || JSON.stringify(theme) !== before) {
+    core.emit({ type: "ConfigChanged", theme, layout: structuredClone(core.data.layout) });
+  }
   return { type: "Themes", appearance };
+}
+
+/** The resolved theme before a change (to tell whether it changed). */
+function themeKey(core: MockCore): string {
+  return JSON.stringify(mockConfigTheme(core));
 }
 
 /** Windows switched light / dark or contrast (Follow Windows scenarios). */
 export function setMockSystemAppearance(core: MockCore, system: SystemAppearance): void {
   const state = core.data.features.appearance;
+  const before = themeKey(core);
   state.system = { ...system };
-  changed(core, state);
+  changed(core, state, before);
 }
 
 export function answerAppearance(core: MockCore, request: AppearanceRequest): Response {
@@ -156,12 +186,24 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
   switch (request.type) {
     case "ListThemes":
       return { type: "Themes", appearance: snapshot(state) };
-    case "SetTheme":
+    case "ReportSystemAppearance": {
+      // The mock has no OS source of its own: the page's report applies
+      // (like a core without the Windows watcher).
+      const now = state.system;
+      const next = request.system;
+      if (now?.scheme !== next.scheme || now.high_contrast !== next.high_contrast) {
+        setMockSystemAppearance(core, next);
+      }
+      return { type: "Themes", appearance: snapshot(state) };
+    }
+    case "SetTheme": {
       if (!usable(request.theme_id, ["light", "dark", "high-contrast"])) {
         return invalid(`no usable theme ${request.theme_id}`, "theme-problem-unknown");
       }
+      const before = themeKey(core);
       state.settings = { ...state.settings, theme: request.theme_id, follow_system: false };
-      return changed(core, state);
+      return changed(core, state, before);
+    }
     case "SetThemePreferences": {
       const p = request.preferences;
       if (!usable(p.light, ["light"]) || !usable(p.dark, ["dark"])) {
@@ -169,6 +211,7 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
       }
       const issue = overrideIssues(p.overrides)[0];
       if (issue) return invalid(issue, `theme-overrides-issue-${issue}`);
+      const before = themeKey(core);
       state.settings = {
         ...state.settings,
         follow_system: p.follow_system,
@@ -177,7 +220,7 @@ export function answerAppearance(core: MockCore, request: AppearanceRequest): Re
         density: p.density,
         overrides: structuredClone(p.overrides),
       };
-      return changed(core, state);
+      return changed(core, state, before);
     }
   }
 }

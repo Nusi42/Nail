@@ -4,8 +4,19 @@
   "description": "A `theme.kdl` file as written (possibly sparse).\n\nKDL mapping: the file holds one node `theme \"<name>\" extends=… mode=… { … }`;\neach property below is a child section of that node.",
   "type": "object",
   "properties": {
+    "appearance": {
+      "description": "`appearance follow-system=… light=… dark=… density=…` (M5a): the\ntheme selection, read from the user's `theme.kdl` only.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AppearanceDef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "extends": {
-      "description": "Base theme to merge onto; only `\"default\"` exists. Without it the file\nmust be complete.",
+      "description": "Theme to merge onto: `\"default\"` (the shipped base) or a theme id\n(a built-in such as `\"frost\"` or a user theme in `themes/`). Without\nit the file must be complete.",
       "type": [
         "string",
         "null"
@@ -74,6 +85,59 @@
     "name"
   ],
   "$defs": {
+    "AppearanceDef": {
+      "description": "The `appearance` node of the user's `theme.kdl` (M5a, ADR 0102): Follow\nWindows, its light / dark pair and the density. Every property is\noptional; it is read only from the user's `theme.kdl` (other theme files\nmay carry it, it is ignored there).",
+      "type": "object",
+      "properties": {
+        "dark": {
+          "description": "The dark theme of the pair (a theme id).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "density": {
+          "description": "`comfortable` or `compact`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DensitySetting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "follow-system": {
+          "description": "`follow-system=#true`: switch between `light` and `dark` with\nWindows' app mode.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "light": {
+          "description": "The light theme of the pair (a theme id).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "DensitySetting": {
+      "description": "Density setting of the `appearance` node (`density=\"compact\"`).",
+      "oneOf": [
+        {
+          "description": "The roomy default.",
+          "type": "string",
+          "const": "comfortable"
+        },
+        {
+          "description": "Smaller row padding, controls and text.",
+          "type": "string",
+          "const": "compact"
+        }
+      ]
+    },
     "HtmlDarkModeSetting": {
       "description": "How HTML mail is adapted in dark mode (`html-dark-mode`).",
       "oneOf": [

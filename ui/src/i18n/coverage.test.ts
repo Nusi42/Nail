@@ -39,6 +39,7 @@ import * as portabilityMessages from "../features/portability/messages";
 import * as paletteMessages from "../features/palette/messages";
 import * as printMessages from "../features/print/messages";
 import * as triageMessages from "../features/triage/messages";
+import * as appearanceMessages from "../features/appearance/messages";
 import { KEY_CONTEXTS } from "../features/customization/editorModel";
 import { shippedCatalogs } from "./catalogs";
 
@@ -64,6 +65,7 @@ const FEATURE_MESSAGES = [
   portabilityMessages,
   paletteMessages,
   printMessages,
+  appearanceMessages,
 ];
 
 const srcDir = resolve(process.cwd(), "src");

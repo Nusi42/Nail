@@ -93,7 +93,7 @@ theme "Nord Dense" extends="default" {
     assert_eq!(t.tokens.get("font", "ui"), Some("Inter, system-ui"));
     assert_eq!(t.tokens.get("space", "row"), Some("4px"));
 
-    // Same selector as a default rule: declarations merge into that rule.
+    // One rule per selector.
     let rows: Vec<_> = t
         .parts
         .iter()
@@ -108,10 +108,9 @@ theme "Nord Dense" extends="default" {
         row.declarations["border-bottom"],
         "1px solid var(--nail-color-border)"
     );
-    assert_eq!(
-        row.declarations["display"], "flex",
-        "default declarations stay"
-    );
+    // The base has no `message-list.row` rule since M5a (the UI skin styles
+    // rows): the user's rule holds only its own declarations.
+    assert!(!row.declarations.contains_key("display"));
     assert_eq!(row.source.as_ref().unwrap().file, "theme.kdl");
 
     let subject = t
@@ -143,7 +142,8 @@ theme "Nord Dense" extends="default" {
 
     assert_eq!(t.icons["archive"].path, "M3 3h18v4H3z M5 9h14v12H5z");
     assert_eq!(t.icons["archive"].view_box, "0 0 24 24");
-    assert!(t.icons.contains_key("reply"), "default icons stay");
+    // The base defines no icons since M5a (Lucide in the UI, ADR 0102).
+    assert_eq!(t.icons.len(), 1, "only the user's own icon");
 }
 
 #[test]
@@ -256,7 +256,14 @@ fn structural_errors_point_at_the_node() {
     assert_error("", 1, 1, "file is empty");
     assert_error("layout \"x\"", 1, 1, "unexpected `layout`");
     assert_error("theme \"a\"\ntheme \"b\"", 2, 1, "only one `theme`");
-    assert_error("theme \"x\" extends=\"nord\"", 1, 11, "unknown base `nord`");
+    // M5a: `extends` takes "default" or a theme id; whether the theme
+    // exists is checked by the theme list (tests/appearance.rs).
+    assert_error(
+        "theme \"x\" extends=\"Nord Theme\"",
+        1,
+        11,
+        "`Nord Theme` is not a theme name",
+    );
     assert_error("theme \"x\" mode=\"dim\"", 1, 11, "unknown mode `dim`");
     assert_error(
         "theme \"x\" {\n  colours {}\n}",
@@ -452,6 +459,28 @@ fn file_names_appear_in_errors_and_sources() {
     assert_eq!(err.file, "C:/cfg/theme.kdl");
     assert_eq!(
         err.to_string(),
-        "C:/cfg/theme.kdl:1:13: unknown theme section `bogus` (expected tokens, modes, part, parts, icon, icons, message, sounds or raw-css)"
+        "C:/cfg/theme.kdl:1:13: unknown theme section `bogus` (expected appearance, tokens, modes, part, parts, icon, icons, message, sounds or raw-css)"
+    );
+}
+
+#[test]
+fn a_rule_with_a_default_selector_merges_into_the_default_rule() {
+    let t = theme(
+        r##"
+theme "Mine" extends="default" {
+    part "app" { letter-spacing "0.01em" }
+}
+"##,
+    );
+    let apps: Vec<_> = t
+        .parts
+        .iter()
+        .filter(|r| r.selector == "app" && r.states.is_empty() && r.conditions.is_empty())
+        .collect();
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0].declarations["letter-spacing"], "0.01em");
+    assert_eq!(
+        apps[0].declarations["font-family"], "var(--nail-font-ui)",
+        "default declarations stay"
     );
 }

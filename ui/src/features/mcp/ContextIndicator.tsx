@@ -38,7 +38,7 @@ export function ContextIndicator({ node }: WidgetProps) {
             aria-label={t("mcp-indicator-dismiss")}
             onClick={clear}
           >
-            <Icon name="close" part="mcp-context-indicator.dismiss.icon" />
+            <Icon name="x" part="mcp-context-indicator.dismiss.icon" />
           </button>
         </>
       )}

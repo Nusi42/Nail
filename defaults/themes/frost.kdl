@@ -1,31 +1,47 @@
 // Nail built-in theme: Frost (light).
 //
 // Cool blue-grey neutrals with an indigo accent; the default light theme.
-// Colours only; spacing, type, radius and elevation come from the base
-// theme (defaults/theme.kdl). Pick it in Settings → Appearance, or name it
-// in your theme.kdl: `theme "My settings" extends="frost" { … }`.
-// See userDocs/en/theme-reference.md.
+// Colours only: spacing, type, corners, elevation and density come from
+// the base theme (defaults/theme.kdl). Pick it in Settings → Appearance.
+// See userDocs/en/theme-reference.md for every token.
 //
-// M5a contract placeholder (WP150): the palette of the approved proposal;
-// WP151 completes the theme and checks its contrast.
+// The palette is the approved M5 proposal's. Tertiary text and the state
+// colours are darker than the proposal's swatches so every text passes
+// WCAG AA (4.5:1) on every surface, the selection included; the contrast
+// test (crates/nail-config/tests/theme_contrast.rs) checks each pair.
+// `print=` is the print view (white paper, black text).
 
 theme "Frost" extends="default" mode="light" {
     tokens {
-        color "bg"           "#ffffff"
-        color "bg-subtle"    "#f4f6fa"
-        color "bg-raised"    "#e6eaf1"
-        color "fg"           "#17202b"
-        color "fg-muted"     "#566375"
-        color "border"       "#dde3ec"
-        color "accent"       "#3b5bdb"
-        color "accent-fg"    "#ffffff"
-        color "selection"    "#dfe6fb"
-        color "selection-fg" "#17202b"
-        color "unread"       "#3b5bdb"
-        color "flagged"      "#d6455d"
-        color "danger"       "#d6455d"
-        color "warning"      "#a86a0c"
-        color "success"      "#2f9e6b"
-        color "focus-ring"   "#3b5bdb"
+        // Surfaces.
+        color "bg"            "#ffffff" print="#ffffff"
+        color "bg-subtle"     "#f4f6fa" print="#ffffff"
+        color "bg-raised"     "#e6eaf1" print="#ffffff"
+        color "canvas"        "#eef1f6" print="#ffffff"
+        color "rail"          "#e3e8f0" print="#ffffff"
+
+        // Text.
+        color "fg"            "#17202b" print="#000000"
+        color "fg-muted"      "#566375" print="#444444"
+        color "fg-subtle"     "#5b6775" print="#555555"
+
+        // Lines.
+        color "border"        "#dde3ec" print="#999999"
+        color "border-strong" "#7e858f" print="#767676"
+
+        // Accent; the soft accent and the selection derive from it.
+        color "accent"        "#3b5bdb"
+        color "accent-fg"     "#ffffff"
+        color "accent-soft"   "color-mix(in srgb, $color.accent 12%, $color.bg)"
+        color "selection"     "color-mix(in srgb, $color.accent 16%, $color.bg)"
+        color "selection-fg"  "$color.fg"
+        color "unread"        "$color.accent"
+        color "focus-ring"    "$color.accent"
+
+        // States.
+        color "danger"        "#b03e53"
+        color "flagged"       "$color.danger"
+        color "warning"       "#875e1e"
+        color "success"       "#277355"
     }
 }

@@ -34,6 +34,7 @@ import type {
 } from "../../api/generated";
 import defaultLayoutJson from "../../../../crates/nail-api/fixtures/default-layout.json";
 import { errorResponse, type MockCore } from "../../api/mockMail";
+import { mockConfigTheme } from "../appearance/mock";
 import { normalizeLayout } from "../../api/normalize";
 import { parseQuery } from "../../api/mockSearch";
 
@@ -118,7 +119,7 @@ function saveSearch(core: MockCore, search: SavedSearch): Response {
 function announce(core: MockCore): void {
   core.emit({
     type: "ConfigChanged",
-    theme: structuredClone(core.data.theme),
+    theme: mockConfigTheme(core),
     layout: structuredClone(core.data.layout),
   });
 }

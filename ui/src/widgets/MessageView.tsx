@@ -1,14 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { errorMessageIdOf } from "../api/client";
-import { AttachmentWarningMark } from "../features/security";
 import { FocusMoveButton, MessageCategories } from "../features/exchange";
 import { MessageLabels } from "../features/gmail";
-import {
-  AttachmentActionMenu,
-  AttachmentPreviewPane,
-  PluginBadges,
-  PluginBanners,
-} from "../features/plugins";
+import { AttachmentPreviewPane, PluginBadges, PluginBanners } from "../features/plugins";
 import { InvitationCard } from "../features/scheduling";
 import type { Address, MessageBody } from "../api/generated";
 import { useLabel, useLocale, useT } from "../i18n/I18nProvider";
@@ -21,6 +15,7 @@ import { useReaderCss } from "../theme/ThemeProvider";
 import { proxyBase, readerDocument } from "../theme/reader";
 import { setSrcdoc } from "../theme/trustedHtml";
 import { FULL_DATE_TIME, formatDateTime } from "../i18n/format";
+import { AttachmentCard } from "./AttachmentCard";
 
 /** Header fields the widget can show (`headers` option). */
 export const HEADER_FIELDS = ["from", "to", "cc", "reply-to", "date"] as const;
@@ -50,21 +45,6 @@ function headerValue(message: MessageBody, field: HeaderField, locale: string): 
       return formatDateTime(h.date, locale, FULL_DATE_TIME);
     }
   }
-}
-
-function formatSize(bytes: number, locale: string): string {
-  const kb = bytes / 1024;
-  return kb < 1024
-    ? new Intl.NumberFormat(locale, {
-        style: "unit",
-        unit: "kilobyte",
-        maximumFractionDigits: 0,
-      }).format(Math.max(1, kb))
-    : new Intl.NumberFormat(locale, {
-        style: "unit",
-        unit: "megabyte",
-        maximumFractionDigits: 1,
-      }).format(kb / 1024);
 }
 
 /** The address of the message document on the remote UI's sandbox origin. */
@@ -146,6 +126,7 @@ export function MessageView({ node }: WidgetProps) {
   const fields = optionList(node, "headers", ["from", "to", "cc", "date"]).filter(isHeaderField);
   const markRead = optionBool(node, "mark-read", true);
   const ctx = useComposeContext();
+  const ids = useId();
   const message = query.data;
   const accountId = message ? (findSummary(ctx.queryClient, message.id)?.account_id ?? null) : null;
 
@@ -167,8 +148,11 @@ export function MessageView({ node }: WidgetProps) {
   } else if (!message) {
     content = <div data-part="message-view.loading">{t("message-view-loading")}</div>;
   } else {
+    const previewId = (index: number) => `${ids}-preview-${index}`;
     content = (
-      <>
+      // One centred column (M5a): header, attachments and body share their
+      // left edge; text lines stay at a readable length.
+      <div data-part="message-view.column">
         <header data-part="message-view.header">
           <h1 data-part="message-view.header.subject">
             {message.headers.subject || t("message-no-subject")}
@@ -188,37 +172,33 @@ export function MessageView({ node }: WidgetProps) {
         {summaryOf(ctx, message.id)}
         <InvitationCard messageId={message.id} invitation={message.invitation ?? null} />
         <PluginBanners messageId={message.id} />
-        <Body message={message} />
         {message.attachments.length > 0 && (
           <ul data-part="message-view.attachments" aria-label={t("message-view-attachments")}>
             {message.attachments.map((a) => (
-              <li
+              <AttachmentCard
                 key={a.index}
-                data-part="message-view.attachment"
-                data-mime={a.mime}
-                data-inline={a.inline ? "" : undefined}
-              >
-                <span data-part="message-view.attachment.name">
-                  {a.filename ?? t("message-view-attachment-unnamed")}
-                </span>
-                <span data-part="message-view.attachment.size">{formatSize(a.size, locale)}</span>
-                <AttachmentWarningMark warnings={message.warnings} index={a.index} />
-                <AttachmentActionMenu messageId={message.id} attachment={a} accountId={accountId} />
-              </li>
+                messageId={message.id}
+                attachment={a}
+                accountId={accountId}
+                warnings={message.warnings ?? []}
+                previewId={previewId(a.index)}
+              />
             ))}
           </ul>
         )}
+        <Body message={message} />
         {message.attachments
           .filter((a) => !a.inline)
           .map((a) => (
             <AttachmentPreviewPane
               key={a.index}
+              id={previewId(a.index)}
               messageId={message.id}
               attachment={a}
               accountId={accountId}
             />
           ))}
-      </>
+      </div>
     );
   }
 

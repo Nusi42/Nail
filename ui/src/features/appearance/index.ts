@@ -13,7 +13,11 @@
  * see `../README.md`. Texts: `locales/{en,de}/appearance.ftl` (contract
  * ids in `core-appearance.ftl`).
  */
+import { queryKeys } from "../../state/queries";
 import type { Feature } from "../types";
+import { AppearanceSettings } from "./AppearanceSettings";
+import { appearanceKeys } from "./queries";
+import { SystemAppearanceReporter } from "./SystemAppearance";
 
 export {
   APPEARANCE_REQUESTS,
@@ -24,27 +28,47 @@ export {
   activeTheme,
   isHexColor,
   overrideIssues,
+  setMockSystemAppearance,
 } from "./mock";
+export { AppearanceSettings } from "./AppearanceSettings";
+export { SystemAppearanceReporter, useBrowserAppearance } from "./SystemAppearance";
+export {
+  appearanceKeys,
+  preferencesOf,
+  useAppearance,
+  useSetTheme,
+  useSetThemePreferences,
+} from "./queries";
+export { BUILTIN_THEME_FILES, parseThemeFile, resolveMockTheme } from "./themes";
 
-/** Query keys of this feature. */
-export const appearanceKeys = {
-  all: ["appearance"] as const,
-  themes: ["appearance", "themes"] as const,
+/** Layout widget kinds → components (`appearance-settings`: Settings → Appearance). */
+export const widgets: Feature["widgets"] = {
+  "appearance-settings": AppearanceSettings,
 };
-
-/** Layout widget kinds → components. */
-export const widgets: Feature["widgets"] = {};
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {};
 /** Dialog names → components. */
 export const dialogs: Feature["dialogs"] = {};
-/** Keeps the theme list current when the core reports a change. */
+/**
+ * Keeps the theme list current when the core reports a change, and fetches
+ * the resolved theme again so the switch shows at once (the core also sends
+ * `ConfigChanged` when the resolved theme changed; the refetch covers a
+ * core or a remote session that only sent `ThemeChanged`).
+ */
 export const events: Feature["events"] = [
   (event, ctx) => {
     if (event.type === "ThemeChanged") {
+      const before = ctx.queryClient.getQueryData<typeof event.appearance>(appearanceKeys.themes);
       ctx.queryClient.setQueryData(appearanceKeys.themes, event.appearance);
+      const switched =
+        before === undefined ||
+        before.active !== event.appearance.active ||
+        before.settings.density !== event.appearance.settings.density ||
+        JSON.stringify(before.settings.overrides) !==
+          JSON.stringify(event.appearance.settings.overrides);
+      if (switched) void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.config });
     }
   },
 ];
-/** Background components. */
-export const effects: Feature["effects"] = [];
+/** Background components: Follow Windows from the browser / WebView. */
+export const effects: Feature["effects"] = [SystemAppearanceReporter];

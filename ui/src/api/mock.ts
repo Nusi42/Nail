@@ -24,7 +24,12 @@ import { answerAgents, isAgentsRequest } from "../features/agents/mock";
 import { answerSystem, isSystemRequest } from "../features/system/mock";
 import { answerPortability, isPortabilityRequest } from "../features/portability/mock";
 import { answerPalette, isPaletteRequest } from "../features/palette/mock";
-import { answerAppearance, isAppearanceRequest } from "../features/appearance/mock";
+import {
+  answerAppearance,
+  isAppearanceRequest,
+  mockConfigTheme,
+} from "../features/appearance/mock";
+import { answerAttachment, isAttachmentRequest } from "./mockAttachments";
 import { answerPrint, isPrintRequest } from "../features/print/mock";
 import { answerVault, isVaultRequest } from "../features/security/vaultMock";
 import { answerCustomization, isCustomizationRequest } from "../features/customization/mock";
@@ -144,13 +149,14 @@ export class MockTransport implements Transport, MockCore {
     if (isPaletteRequest(request)) return answerPalette(this, request);
     if (isPrintRequest(request)) return answerPrint(this, request);
     if (isAppearanceRequest(request)) return answerAppearance(this, request);
+    if (isAttachmentRequest(request)) return answerAttachment(this, request);
     if (isVaultRequest(request)) return answerVault(this, request);
     if (isPluginExtensionRequest(request)) return answerPluginExtensions(this, request);
     switch (request.type) {
       case "Ping":
         return { type: "Pong", version: "0.0.0-mock", protocol: 1 };
       case "GetConfig":
-        return { type: "Config", theme: d.theme, layout: d.layout, locale: d.locale };
+        return { type: "Config", theme: mockConfigTheme(this), layout: d.layout, locale: d.locale };
       case "ListAccounts":
         return { type: "Accounts", accounts: mail.listAccounts(d) };
       case "ListFolders": {

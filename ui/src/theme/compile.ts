@@ -4,6 +4,7 @@
  *
  * Output, in order:
  *   1. structural base rules (layout containers must work with any theme),
+ *      then the M5a skin of the primitives on the token schema (./skin.ts),
  *   2. tokens as custom properties on `:root`, with per-mode overrides keyed on
  *      `:root[data-nail-mode=…]`, so a mode switch only flips an attribute
  *      (the ThemeProvider sets it from the theme / user override and, for
@@ -24,6 +25,7 @@ import { SYSTEM_BASE_CSS } from "../features/system/parts";
 import { PORTABILITY_BASE_CSS } from "../features/portability/parts";
 import { PALETTE_BASE_CSS } from "../features/palette/parts";
 import { PRINT_BASE_CSS } from "../features/print/parts";
+import { SKIN_CSS } from "./skin";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
   AncestorSelector,
@@ -168,6 +170,7 @@ html, body { margin: 0; height: 100%; }
 [data-part="toolbar.button"] { font: inherit; }
 [data-part="account-switcher.item"], [data-part="folder-tree.item"] { font: inherit; }
 [data-part="message-list"] { overflow-y: auto; }
+[data-part="folder-tree"] { overflow-y: auto; }
 [data-part="message-list.row"] { outline-offset: -2px; }
 [data-part="message-list.row.line"] > * { overflow: hidden; text-overflow: ellipsis; }
 [data-part="message-list.row.chip"] { display: inline-block; }
@@ -177,7 +180,7 @@ html, body { margin: 0; height: 100%; }
 [data-part="folder-tree.list"], [data-part="account-switcher"] { list-style: none; margin: 0; }
 [data-part="folder-tree.list"] { padding: 0; }
 [data-part="message-view.header.field"] { display: flex; gap: 0.5em; }
-[data-part="window-layer"] { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+[data-part="window-layer"] { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
 [data-part="window"] { display: flex; flex-direction: column; max-width: 100%; max-height: 100%; min-height: 0; overflow: hidden; }
 [data-part="window"]:not([data-state~="active"]) { display: none; }
 [data-part="window.header"] { display: flex; align-items: center; flex: 0 0 auto; }
@@ -267,11 +270,15 @@ function colorScheme(mode: string): string {
   return mode === "dark" || mode === "high-contrast" ? "dark" : "light";
 }
 
+/** `nail_api::appearance::COMPACT_VARIANT`: the density variant in `modes`. */
+export const COMPACT_VARIANT = "compact";
+
 function tokenRules(theme: ResolvedTheme, warnings: string[]): string[] {
   const out: string[] = [];
   out.push(
     block(":root", { ...tokenDeclarations(theme.tokens, warnings), "color-scheme": "light" }),
   );
+  let compact: string | null = null;
   for (const [mode, tokens] of Object.entries(theme.modes)) {
     try {
       checkIdent("mode", mode, IDENT_RE);
@@ -279,9 +286,19 @@ function tokenRules(theme: ResolvedTheme, warnings: string[]): string[] {
       warnings.push((error as Error).message);
       continue;
     }
+    if (mode === COMPACT_VARIANT) {
+      // Density (M5a, ADR 0102): applied after the colour modes, keyed on
+      // its own attribute so it combines with any of them.
+      compact = block(
+        `:root[data-nail-density=${cssString(mode)}]`,
+        tokenDeclarations(tokens, warnings),
+      );
+      continue;
+    }
     const decls = { ...tokenDeclarations(tokens, warnings), "color-scheme": colorScheme(mode) };
     out.push(block(`:root[data-nail-mode=${cssString(mode)}]`, decls));
   }
+  if (compact !== null) out.push(compact);
   return out;
 }
 
@@ -294,7 +311,9 @@ export interface CompiledTheme {
 /** Compiles a resolved theme into one stylesheet. */
 export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   const warnings: string[] = [];
-  const sections: string[] = [BASE_CSS, ...tokenRules(theme, warnings)];
+  // The M5a look of the primitives (./skin.ts) sits between the structure
+  // and the theme, so every theme rule still wins over it.
+  const sections: string[] = [BASE_CSS, SKIN_CSS, ...tokenRules(theme, warnings)];
   try {
     sections.push(readerRules(theme.message));
   } catch (error) {
@@ -352,6 +371,7 @@ export function resolveTokenRefs(value: string, theme: ResolvedTheme, mode: stri
   };
   add(theme.tokens);
   add(theme.modes[mode]);
+  if (theme.density === "compact") add(theme.modes[COMPACT_VARIANT]);
   let current = value;
   for (let depth = 0; depth < 8 && current.includes("var(--nail-"); depth++) {
     current = current.replace(

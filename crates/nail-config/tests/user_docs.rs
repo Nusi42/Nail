@@ -152,3 +152,17 @@ fn accessibility_guide_examples_are_valid() {
         }
     }
 }
+
+#[test]
+fn appearance_guide_examples_are_valid() {
+    let blocks = kdl_blocks("appearance.md");
+    assert!(
+        blocks.len() >= 2,
+        "the guide has a settings and a theme example"
+    );
+    for block in blocks {
+        if let Err(e) = nail_config::parse_theme(&block, "theme.kdl") {
+            panic!("{e}\nin example:\n{block}");
+        }
+    }
+}

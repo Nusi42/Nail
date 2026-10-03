@@ -46,7 +46,11 @@ export { RUN_COMMAND, usePluginLayout, withPluginActions } from "./commands";
 export { PLUGIN_BASE_CSS, PLUGIN_PARTS, pluginPartSelector } from "./parts";
 export { INSTALL_DIALOG, MANAGER_DIALOG };
 export { PluginBadges, PluginBanners } from "./MessageAnnotations";
-export { AttachmentPreviewPane, previewImageSrc } from "./AttachmentPreview";
+export {
+  AttachmentPreviewPane,
+  previewImageSrc,
+  useHasAttachmentPreview,
+} from "./AttachmentPreview";
 export { AttachmentActionMenu, LinkActionMenu, runPluginAction } from "./ActionMenus";
 export {
   ComposerEditNotices,

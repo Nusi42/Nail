@@ -20,8 +20,46 @@ use crate::kdl_util::{
 use crate::l10n::msg;
 use crate::selector::{Selector, parse_selector};
 
-/// The only base a file can extend in M0.
+/// The shipped base theme (`defaults/theme.kdl`); every layout and theme
+/// chain ends there. Theme files may also extend a theme id (M5a, ADR 0102).
 pub const DEFAULT_BASE: &str = "default";
+
+/// Density setting of the `appearance` node (`density="compact"`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DensitySetting {
+    /// The roomy default.
+    Comfortable,
+    /// Smaller row padding, controls and text.
+    Compact,
+}
+
+impl From<DensitySetting> for nail_api::appearance::Density {
+    fn from(d: DensitySetting) -> Self {
+        match d {
+            DensitySetting::Comfortable => Self::Comfortable,
+            DensitySetting::Compact => Self::Compact,
+        }
+    }
+}
+
+/// The `appearance` node of the user's `theme.kdl` (M5a, ADR 0102): Follow
+/// Windows, its light / dark pair and the density. Every property is
+/// optional; it is read only from the user's `theme.kdl` (other theme files
+/// may carry it, it is ignored there).
+#[derive(Debug, Clone, PartialEq, Default, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct AppearanceDef {
+    /// `follow-system=#true`: switch between `light` and `dark` with
+    /// Windows' app mode.
+    pub follow_system: Option<bool>,
+    /// The light theme of the pair (a theme id).
+    pub light: Option<String>,
+    /// The dark theme of the pair (a theme id).
+    pub dark: Option<String>,
+    /// `comfortable` or `compact`.
+    pub density: Option<DensitySetting>,
+}
 
 /// Colour mode setting of a theme (`theme "x" mode="dark"`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
@@ -91,8 +129,9 @@ impl From<HtmlDarkModeSetting> for HtmlDarkMode {
 pub struct ThemeFile {
     /// Theme name (`theme "<name>"`).
     pub name: Located<String>,
-    /// Base theme to merge onto; only `"default"` exists. Without it the file
-    /// must be complete.
+    /// Theme to merge onto: `"default"` (the shipped base) or a theme id
+    /// (a built-in such as `"frost"` or a user theme in `themes/`). Without
+    /// it the file must be complete.
     pub extends: Option<String>,
     /// Which colour mode to use (default: follow the OS).
     pub mode: Option<ModeSetting>,
@@ -118,6 +157,10 @@ pub struct ThemeFile {
     /// `raw-css "<part>" "<declarations>"` (unstable escape hatch).
     #[serde(default)]
     pub raw_css: Vec<RawCssDef>,
+    /// `appearance follow-system=… light=… dark=… density=…` (M5a): the
+    /// theme selection, read from the user's `theme.kdl` only.
+    #[serde(default)]
+    pub appearance: Option<AppearanceDef>,
 }
 
 /// One token definition.
@@ -236,6 +279,7 @@ impl ThemeFile {
         m.html_dark_mode = o.html_dark_mode.or(m.html_dark_mode);
         self.sounds.extend(overlay.sounds);
         self.raw_css.extend(overlay.raw_css);
+        self.appearance = overlay.appearance;
         self
     }
 }
@@ -269,7 +313,21 @@ pub(crate) fn single_root<'d>(
     Ok(first)
 }
 
-/// Reads the `extends` property (only `"default"` is known).
+/// Reads the `extends` property of a theme: `"default"` or a theme id
+/// (whether that theme exists is checked where the theme list is known).
+fn read_theme_extends(src: &Source<'_>, node: &KdlNode) -> Result<Option<String>, ConfigError> {
+    match prop_str(src, node, "extends")? {
+        None => Ok(None),
+        Some((base, _)) if base == DEFAULT_BASE || nail_api::appearance::is_theme_id(base) => {
+            Ok(Some(base.to_owned()))
+        }
+        Some((base, entry)) => {
+            Err(src.entry_err(entry, msg("config-theme-extends-invalid").arg("base", base)))
+        }
+    }
+}
+
+/// Reads the `extends` property of a layout (only `"default"` is known).
 pub(crate) fn read_extends(
     src: &Source<'_>,
     node: &KdlNode,
@@ -311,7 +369,7 @@ impl ThemeReader<'_, '_> {
             });
         let mut file = ThemeFile {
             name,
-            extends: e.ok(read_extends(src, node)).flatten(),
+            extends: e.ok(read_theme_extends(src, node)).flatten(),
             mode,
             tokens: IndexMap::new(),
             parts: Vec::new(),
@@ -319,6 +377,7 @@ impl ThemeReader<'_, '_> {
             message: MessageDef::default(),
             sounds: IndexMap::new(),
             raw_css: Vec::new(),
+            appearance: None,
         };
         for child in children(node) {
             e.ok(self.section(&mut file, child));
@@ -365,6 +424,7 @@ impl ThemeReader<'_, '_> {
             }
             "message" => self.message(&mut file.message, node)?,
             "sounds" => self.sounds(file, node)?,
+            "appearance" => file.appearance = Some(self.appearance(node)?),
             "raw-css" => {
                 check_props(src, node, &[])?;
                 check_max_args(src, node, 2)?;
@@ -671,6 +731,57 @@ impl ThemeReader<'_, '_> {
         }
 
         Ok(())
+    }
+
+    /// `appearance follow-system=#true light="frost" dark="graphite"
+    /// density="compact"` (M5a, ADR 0102).
+    fn appearance(&self, node: &KdlNode) -> Result<AppearanceDef, ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["follow-system", "light", "dark", "density"])?;
+        check_max_args(src, node, 0)?;
+        check_no_children(src, node)?;
+        let mut def = AppearanceDef::default();
+        if let Some(entry) = node.entry("follow-system") {
+            def.follow_system = Some(entry.value().as_bool().ok_or_else(|| {
+                src.entry_err(
+                    entry,
+                    msg("config-expected-bool")
+                        .arg("what", "follow-system")
+                        .arg("found", k::describe(entry.value())),
+                )
+            })?);
+        }
+        for key in ["light", "dark"] {
+            if let Some((id, entry)) = prop_str(src, node, key)? {
+                if !nail_api::appearance::is_theme_id(id) {
+                    return Err(src.entry_err(
+                        entry,
+                        msg("config-appearance-theme-invalid")
+                            .arg("key", key)
+                            .arg("found", id),
+                    ));
+                }
+                let slot = if key == "light" {
+                    &mut def.light
+                } else {
+                    &mut def.dark
+                };
+                *slot = Some(id.to_owned());
+            }
+        }
+        if let Some((density, entry)) = prop_str(src, node, "density")? {
+            def.density = Some(match density {
+                "comfortable" => DensitySetting::Comfortable,
+                "compact" => DensitySetting::Compact,
+                _ => {
+                    return Err(src.entry_err(
+                        entry,
+                        msg("config-appearance-density-unknown").arg("found", density),
+                    ));
+                }
+            });
+        }
+        Ok(def)
     }
 
     fn sounds(&self, file: &mut ThemeFile, node: &KdlNode) -> Result<(), ConfigError> {

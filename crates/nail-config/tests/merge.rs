@@ -129,21 +129,23 @@ fn a_theme_preview_groups_items_by_section() {
     assert_eq!(work.conflicts[0].kind, MergeConflictKind::Invalid);
     assert!(work.conflicts[0].message.contains("$color.frost"));
 
+    // The base theme has no icons since M5a (Lucide in the UI): added.
     assert_eq!(
         item(&preview, MergeSection::Icons, "archive").change,
-        MergeChange::Changed
+        MergeChange::Added
     );
     assert_eq!(
         item(&preview, MergeSection::Message, "sounds.mail.new").change,
         MergeChange::Added
     );
-    // Only in mine: the unread part rule (the incoming file keeps the default).
+    // Only in mine: the unread part rule. The base has no such rule since
+    // M5a (the UI skin styles unread rows), so the incoming file drops it.
     let unread = item(
         &preview,
         MergeSection::Parts,
         "message-list.row:unread .subject",
     );
-    assert_eq!(unread.change, MergeChange::Changed);
+    assert_eq!(unread.change, MergeChange::Removed);
 }
 
 #[test]

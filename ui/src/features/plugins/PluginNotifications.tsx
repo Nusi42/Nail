@@ -68,7 +68,7 @@ function ToastView({ toast }: { toast: Toast }) {
         title={t("plugin-notification-dismiss")}
         onClick={() => dismiss(toast.id)}
       >
-        <Icon name="close" part="plugin.notification.dismiss.icon" />
+        <Icon name="x" part="plugin.notification.dismiss.icon" />
       </button>
     </li>
   );

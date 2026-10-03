@@ -177,7 +177,7 @@ function DialogView({ dialog, top }: { dialog: PluginDialog; top: boolean }) {
           disabled={busy}
           onClick={() => void respond(null)}
         >
-          <Icon name="close" part="plugin.dialog.close.icon" />
+          <Icon name="x" part="plugin.dialog.close.icon" />
         </button>
       </div>
       <form

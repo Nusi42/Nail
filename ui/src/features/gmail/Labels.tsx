@@ -119,7 +119,7 @@ export function LabelList({ node }: WidgetProps) {
                     store.getState().openWindow(LABEL_DELETE_DIALOG);
                   }}
                 >
-                  <Icon name="delete" part="label-list.icon" />
+                  <Icon name="trash" part="label-list.icon" />
                   <span data-part="label-list.action.text">{t("gmail-delete-short")}</span>
                 </button>
               </div>

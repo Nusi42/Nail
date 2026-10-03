@@ -67,7 +67,9 @@ describe("appearance slot (M5a contract)", () => {
       type: "Themes",
       appearance: { active: "nocturne", settings: { follow_system: false } },
     });
-    expect(events.at(-1)).toMatchObject({ type: "ThemeChanged" });
+    // ThemeChanged, then ConfigChanged with the newly resolved theme (like the core).
+    expect(events.map((e) => e.type).slice(-2)).toEqual(["ThemeChanged", "ConfigChanged"]);
+    expect(events.at(-1)).toMatchObject({ type: "ConfigChanged", theme: { mode: "dark" } });
     expect(await t.send({ type: "SetTheme", theme_id: "nope" })).toMatchObject({
       type: "Error",
       code: "invalid_request",

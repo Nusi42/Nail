@@ -65,7 +65,7 @@ export function ConfirmationNotices() {
                 title={t("agents-notice-dismiss")}
                 onClick={() => dismiss(confirmation.id)}
               >
-                <Icon name="close" part="confirmation-notice.dismiss.icon" />
+                <Icon name="x" part="confirmation-notice.dismiss.icon" />
               </button>
             </li>
           );

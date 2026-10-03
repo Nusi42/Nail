@@ -140,7 +140,7 @@ export function CategoryList({ node }: WidgetProps) {
                     store.getState().openWindow(CATEGORY_DELETE_DIALOG);
                   }}
                 >
-                  <Icon name="delete" part="exchange-categories.icon" />
+                  <Icon name="trash" part="exchange-categories.icon" />
                   <span data-part="exchange-categories.action.text">
                     {t("exchange-delete-short")}
                   </span>

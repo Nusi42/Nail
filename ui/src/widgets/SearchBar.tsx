@@ -193,7 +193,7 @@ export function SearchBar({ node }: WidgetProps) {
               inputRef.current?.focus();
             }}
           >
-            <Icon name="close" part="search-bar.clear.icon" />
+            <Icon name="x" part="search-bar.clear.icon" />
           </button>
         )}
       </div>

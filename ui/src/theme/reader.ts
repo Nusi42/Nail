@@ -62,7 +62,7 @@ export function readerCss(theme: ResolvedTheme, mode: string): string {
   const dark = mode === "dark" || mode === "high-contrast";
   const rules = [
     `:root { color-scheme: ${dark ? "dark" : "light"}; }`,
-    `body { margin: 0; padding: 16px 24px; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; color: ${fg}; background: ${bg}; overflow-wrap: anywhere; }`,
+    `body { margin: 0; padding: 0 0 24px; font-family: ${r(m.font_family, "sans-serif")}; font-size: ${r(m.font_size, "14px")}; line-height: ${r(m.line_height, "1.5")}; color: ${fg}; background: ${bg}; overflow-wrap: anywhere; }`,
     `body > * { max-width: ${r(m.max_width, "none")}; }`,
     `a { color: ${accent}; }`,
     `img { max-width: 100%; height: auto; }`,

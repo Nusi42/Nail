@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use nail_api::customize::{MergeChoice, MergeTake};
 use nail_api::{ConfigFile, ErrorCode, Event, LayoutNodeRef, LayoutPatch};
 use nail_config::{
-    BACKUP_DIR, ConfigKind, ConfigManager, ConfigUpdate, default_layout, default_theme,
+    BACKUP_DIR, ConfigKind, ConfigManager, ConfigUpdate, default_layout, default_selected_theme,
 };
 
 const TWO_ERRORS: &str =
@@ -81,14 +81,17 @@ fn reload_updates_report_first_error_then_all_then_the_fix() {
         ),
         "{updates:?}"
     );
-    // A valid file that was valid before gets no empty list.
+    // A valid file that was valid before gets no empty list. The accent
+    // is an override (M5a), so the appearance changed first.
     write(dir.path(), "theme.kdl", &ACCENT.replace("ff0000", "00ff00"));
     let updates = manager.reload_updates(ConfigKind::Theme);
     assert!(
-        matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]),
+        matches!(updates.as_slice(), [ConfigUpdate::ThemeChanged { appearance }, ConfigUpdate::Changed { .. }]
+            if appearance.settings.overrides.accent.as_deref() == Some("#00ff00")),
         "{updates:?}"
     );
-    // reload_all: errors first, then Changed, then the cleared lists.
+    // reload_all: errors first, then ThemeChanged (the accent override is
+    // back to #ff0000) and Changed, then the cleared lists.
     write(dir.path(), "theme.kdl", TWO_ERRORS);
     write(dir.path(), "layout.kdl", "layout \"x\" {");
     let updates = manager.reload_all();
@@ -100,6 +103,7 @@ fn reload_updates_report_first_error_then_all_then_the_fix() {
         matches!(
             updates.as_slice(),
             [
+                ConfigUpdate::ThemeChanged { .. },
                 ConfigUpdate::Changed { .. },
                 ConfigUpdate::Errors {
                     kind: ConfigKind::Theme,
@@ -139,16 +143,21 @@ fn the_watcher_sends_all_errors_after_the_first() {
     );
     write(dir.path(), "theme.kdl", ACCENT);
     let mut after = Vec::new();
-    while after.len() < 2 {
+    while after.len() < 3 {
         let left = deadline.saturating_duration_since(Instant::now());
         after.push(rx.recv_timeout(left).expect("updates"));
     }
+    // The accent override changed the appearance (M5a), then the theme.
     assert!(
-        matches!(after[0], ConfigUpdate::Changed { .. }),
+        matches!(after[0], ConfigUpdate::ThemeChanged { .. }),
         "{after:?}"
     );
     assert!(
-        matches!(&after[1], ConfigUpdate::Errors { errors, .. } if errors.is_empty()),
+        matches!(after[1], ConfigUpdate::Changed { .. }),
+        "{after:?}"
+    );
+    assert!(
+        matches!(&after[2], ConfigUpdate::Errors { errors, .. } if errors.is_empty()),
         "{after:?}"
     );
 }
@@ -236,7 +245,13 @@ fn merge_apply_backup_and_revert() {
             MergeTake::Mine,
         )
         .unwrap();
-    assert!(matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]));
+    assert!(matches!(
+        updates.as_slice(),
+        [
+            ConfigUpdate::ThemeChanged { .. },
+            ConfigUpdate::Changed { .. }
+        ]
+    ));
     assert_eq!(
         manager.theme().tokens.get("color", "accent"),
         Some("#0000ff")
@@ -251,7 +266,13 @@ fn merge_apply_backup_and_revert() {
     );
 
     let updates = manager.revert(ConfigFile::Theme, Some(&backup.id)).unwrap();
-    assert!(matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]));
+    assert!(matches!(
+        updates.as_slice(),
+        [
+            ConfigUpdate::ThemeChanged { .. },
+            ConfigUpdate::Changed { .. }
+        ]
+    ));
     assert_eq!(
         std::fs::read_to_string(dir.path().join("theme.kdl")).unwrap(),
         ACCENT
@@ -287,7 +308,7 @@ fn reverting_to_no_file_goes_back_to_the_defaults() {
         .unwrap();
     assert!(!dir.path().join("layout.kdl").exists());
     assert_eq!(*manager.layout(), default_layout());
-    assert_eq!(*manager.theme(), default_theme());
+    assert_eq!(*manager.theme(), default_selected_theme());
 }
 
 #[test]
@@ -317,7 +338,13 @@ fn replace_file_backs_up_and_can_be_reverted() {
     let manager = ConfigManager::load(dir.path());
     assert_eq!(manager.file_text(ConfigFile::Theme).unwrap(), None);
     let (first, updates) = manager.replace_file(ConfigFile::Theme, ACCENT).unwrap();
-    assert!(matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]));
+    assert!(matches!(
+        updates.as_slice(),
+        [
+            ConfigUpdate::ThemeChanged { .. },
+            ConfigUpdate::Changed { .. }
+        ]
+    ));
     assert_eq!(
         manager.file_text(ConfigFile::Theme).unwrap().as_deref(),
         Some(ACCENT)

@@ -4,7 +4,9 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use nail_api::Event;
-use nail_config::{ConfigKind, ConfigManager, ConfigUpdate, default_layout, default_theme};
+use nail_config::{
+    ConfigKind, ConfigManager, ConfigUpdate, default_layout, default_selected_theme,
+};
 
 const ACCENT_THEME: &str =
     r##"theme "Mine" extends="default" { tokens { color "accent" "#ff0000"; }; }"##;
@@ -21,13 +23,13 @@ fn write(dir: &std::path::Path, name: &str, text: &str) {
 fn an_empty_directory_uses_the_defaults() {
     let dir = tempfile::tempdir().unwrap();
     let manager = ConfigManager::load(dir.path());
-    assert_eq!(*manager.theme(), default_theme());
+    assert_eq!(*manager.theme(), default_selected_theme());
     assert_eq!(*manager.layout(), default_layout());
     assert!(manager.errors().is_empty());
     assert_eq!(manager.dir(), dir.path());
     // A directory that does not exist is fine, too.
     let manager = ConfigManager::load(dir.path().join("missing"));
-    assert_eq!(*manager.theme(), default_theme());
+    assert_eq!(*manager.theme(), default_selected_theme());
 }
 
 #[test]
@@ -51,7 +53,7 @@ fn an_invalid_file_at_start_up_falls_back_to_the_default() {
     write(dir.path(), "theme.kdl", BROKEN_THEME);
     write(dir.path(), "layout.kdl", NARROW_LAYOUT);
     let manager = ConfigManager::load(dir.path());
-    assert_eq!(*manager.theme(), default_theme());
+    assert_eq!(*manager.theme(), default_selected_theme());
     assert_eq!(manager.layout().name, "Mine");
     let errors = manager.errors();
     assert_eq!(errors.len(), 1);
@@ -102,9 +104,21 @@ fn reload_keeps_the_last_valid_configuration() {
         "theme.kdl",
         &ACCENT_THEME.replace("#ff0000", "#00ff00"),
     );
-    let Some(update @ ConfigUpdate::Changed { .. }) = manager.reload(ConfigKind::Theme) else {
-        panic!("expected a change");
+    // The accent is an override (M5a): the appearance changes first.
+    let updates = manager.reload_updates(ConfigKind::Theme);
+    let [
+        ConfigUpdate::ThemeChanged { appearance },
+        update @ ConfigUpdate::Changed { .. },
+        ConfigUpdate::Errors { errors, .. },
+    ] = updates.as_slice()
+    else {
+        panic!("expected a change: {updates:?}");
     };
+    assert!(errors.is_empty());
+    assert_eq!(
+        appearance.settings.overrides.accent.as_deref(),
+        Some("#00ff00")
+    );
     assert!(manager.errors().is_empty());
     assert_eq!(
         manager.theme().tokens.get("color", "accent"),
@@ -119,10 +133,16 @@ fn reload_keeps_the_last_valid_configuration() {
     std::fs::remove_file(dir.path().join("theme.kdl")).unwrap();
     let updates = manager.reload_all();
     assert!(
-        matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]),
+        matches!(
+            updates.as_slice(),
+            [
+                ConfigUpdate::ThemeChanged { .. },
+                ConfigUpdate::Changed { .. }
+            ]
+        ),
         "{updates:?}"
     );
-    assert_eq!(*manager.theme(), default_theme());
+    assert_eq!(*manager.theme(), default_selected_theme());
 }
 
 /// Waits for an update matching `pred`, skipping others.
@@ -162,7 +182,7 @@ fn the_watcher_reports_changes_and_errors() {
     let ConfigUpdate::Changed { theme, .. } = update else {
         unreachable!()
     };
-    assert_eq!(*theme, default_theme());
+    assert_eq!(*theme, default_selected_theme());
     assert_eq!(manager.layout().name, "Mine");
 
     write(&config_dir, "theme.kdl", BROKEN_THEME);
@@ -170,7 +190,11 @@ fn the_watcher_reports_changes_and_errors() {
         unreachable!()
     };
     assert_eq!((err.line, err.column), (2, 27));
-    assert_eq!(*manager.theme(), default_theme(), "last valid theme stays");
+    assert_eq!(
+        *manager.theme(),
+        default_selected_theme(),
+        "last valid theme stays"
+    );
 
     write(&config_dir, "theme.kdl", ACCENT_THEME);
     wait_for(
@@ -204,7 +228,7 @@ fn deeply_nested_files_are_errors_not_crashes() {
         .stack_size(1 << 20)
         .spawn(move || {
             let manager = ConfigManager::load(&path);
-            assert_eq!(*manager.theme(), default_theme());
+            assert_eq!(*manager.theme(), default_selected_theme());
             assert_eq!(*manager.layout(), default_layout());
             manager.errors()
         })

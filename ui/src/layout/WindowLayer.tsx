@@ -113,7 +113,7 @@ function WindowDialog({
           title={t("window-close")}
           onClick={() => closeWindow(name)}
         >
-          <Icon name="close" part="window.close.icon" />
+          <Icon name="x" part="window.close.icon" />
         </button>
       </div>
       <div data-part="window.body">

@@ -51,7 +51,16 @@ fn theme_schema_snapshot() {
     assert_eq!(
         properties(&schema),
         [
-            "extends", "icons", "message", "mode", "name", "parts", "raw-css", "sounds", "tokens"
+            "appearance",
+            "extends",
+            "icons",
+            "message",
+            "mode",
+            "name",
+            "parts",
+            "raw-css",
+            "sounds",
+            "tokens"
         ]
     );
     check_snapshot("theme.schema.json", &schema);

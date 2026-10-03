@@ -148,7 +148,7 @@ export function MailboxList({ node }: WidgetProps) {
                     store.getState().openWindow(MAILBOX_REMOVE_DIALOG);
                   }}
                 >
-                  <Icon name="delete" part="exchange-mailboxes.icon" />
+                  <Icon name="trash" part="exchange-mailboxes.icon" />
                   <span data-part="exchange-mailboxes.action.text">
                     {t("exchange-remove-short")}
                   </span>

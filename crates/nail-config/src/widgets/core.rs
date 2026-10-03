@@ -75,6 +75,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     widget("folder-picker", &[], &[], false),
     widget("account-setup", &[], &[], false),
     widget("account-settings", &[], &[], false),
+    // M5a (ADR 0102): theme gallery, Follow Windows, density, overrides.
+    widget("appearance-settings", &[], &[], false),
     widget("virtual-account-editor", &[], &[], false),
     widget(
         "toolbar",

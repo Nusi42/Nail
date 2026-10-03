@@ -7,10 +7,6 @@
 # nail-api/tests/catalog.rs checks they exist. WP152 adds the core's own
 # texts below its heading; the UI's texts are in appearance.ftl (WP153).
 
-## Not served yet (contract stage)
-
-m5a-not-ready = Themes cannot be changed in this version of Nail yet.
-
 ## Built-in themes (nail_api::appearance::builtin_theme_label)
 
 theme-name-frost = Frost
@@ -51,3 +47,14 @@ theme-problem-shadows-builtin = This theme has the same name as a built-in theme
 theme-problem-extends-cycle = This theme extends itself through other themes.
 
 ## Core texts (WP152)
+#
+# Errors in theme files (nail-config; arguments as named).
+
+config-theme-extends-invalid = `{ $base }` is not a theme name: use extends="default" or the name of a theme, for example extends="frost"
+config-appearance-theme-invalid = `{ $key }` must name a theme (lowercase letters, digits and hyphens), found `{ $found }`
+config-appearance-density-unknown = unknown density `{ $found }` (expected comfortable or compact)
+config-theme-file-name-invalid = `{ $name }` is not a valid theme name: name theme files with lowercase letters, digits and hyphens, for example ocean-blue.kdl
+config-theme-shadows-builtin = this theme has the same name as the built-in theme `{ $id }`; rename the file to use it
+config-theme-extends-cycle = this theme extends itself through other themes
+config-theme-extends-unknown = there is no theme `{ $base }` to extend
+config-theme-extends-broken = the theme `{ $base }` this theme extends has an error

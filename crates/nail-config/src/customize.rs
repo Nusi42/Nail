@@ -9,8 +9,9 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use nail_api::appearance::{self, Appearance, ThemeOverridesIssue, ThemePreferences, ThemeProblem};
 use nail_api::customize::{ConfigBackup, ConfigMergePreview, MergeChoice, MergeTake};
-use nail_api::{ApiError, ConfigBackupId, ConfigFile, ErrorCode, LayoutPatch};
+use nail_api::{ApiError, ConfigBackupId, ConfigFile, ErrorCode, LayoutPatch, LocalizedMessage};
 
 use crate::backup;
 use crate::error::ConfigError;
@@ -18,7 +19,9 @@ use crate::l10n::msg;
 use crate::manager::{ConfigKind, ConfigManager, ConfigUpdate};
 use crate::merge::{self, MergeOutcome};
 use crate::open;
-use crate::write_back;
+use crate::theme::ThemeFile;
+use crate::themes::ThemeCatalog;
+use crate::write_back::{self, EditError};
 
 fn io_error(file: ConfigFile, error: &std::io::Error) -> ApiError {
     ConfigError::io(file.file_name(), error).into()
@@ -244,5 +247,118 @@ impl ConfigManager {
             column.max(1),
             open::configured_editor().as_deref(),
         ))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Theme selection and preferences (M5a, ADR 0102)
+
+/// `invalid_request` with a localized message (English diagnostic).
+fn invalid_request(localized: LocalizedMessage) -> ApiError {
+    ApiError::invalid_request(crate::l10n::english(&localized)).with_localized(localized)
+}
+
+/// The error for a theme id that cannot be selected: `theme-problem-unknown`
+/// for an id no theme has, the theme's own problem for an unusable one.
+fn check_usable(catalog: &ThemeCatalog, id: &str) -> Result<(), ApiError> {
+    match catalog.get(id) {
+        None => Err(invalid_request(
+            LocalizedMessage::new(ThemeProblem::Unknown.message_id()).arg("theme", id),
+        )),
+        Some(info) => match &info.problem {
+            None => Ok(()),
+            Some(problem) => Err(invalid_request(problem.clone())),
+        },
+    }
+}
+
+/// The localized message of an override issue (`min` / `max` arguments).
+fn issue_message(issue: ThemeOverridesIssue) -> LocalizedMessage {
+    let message = LocalizedMessage::new(issue.message_id());
+    let range = match issue {
+        ThemeOverridesIssue::FontSizeRange => Some(appearance::FONT_SIZE_RANGE),
+        ThemeOverridesIssue::RadiusRange => Some(appearance::RADIUS_RANGE),
+        ThemeOverridesIssue::AccentInvalid => None,
+    };
+    match range {
+        Some((min, max)) => message.arg("min", min).arg("max", max),
+        None => message,
+    }
+}
+
+impl ConfigManager {
+    /// `SetTheme`: uses `theme_id` whatever Windows does — writes
+    /// `extends="<id>"` into `theme.kdl` (format preserving, the previous
+    /// file backed up) and switches Follow Windows off. Returns the new
+    /// [`Appearance`] and the updates to broadcast (`ThemeChanged`,
+    /// `Changed`, …). The themes directory is re-read first, so a theme
+    /// file just added can be selected before the watcher noticed it.
+    /// `invalid_request` for an unknown or unusable theme
+    /// (`theme-problem-*`), `config` when `theme.kdl` is invalid.
+    pub fn set_theme(&self, theme_id: &str) -> Result<(Appearance, Vec<ConfigUpdate>), ApiError> {
+        let _guard = self.lock_writes();
+        let mut updates = self.reload_themes();
+        let catalog = self.theme_catalog();
+        check_usable(&catalog, theme_id)?;
+        let file = ConfigFile::Theme;
+        let current = self.read_file(file)?;
+        let text = crate::apply_theme_selection(current.as_deref(), theme_id, file.file_name())?;
+        updates.extend(self.write_theme(current.as_deref(), &text, &catalog)?);
+        Ok((self.appearance(), updates))
+    }
+
+    /// `SetThemePreferences`: Follow Windows, its pair, the density and the
+    /// font-size / radius / accent overrides, written into `theme.kdl`
+    /// (the `appearance` node and the override tokens; format preserving,
+    /// the previous file backed up). Returns the new [`Appearance`] and the
+    /// updates to broadcast. `invalid_request` for invalid overrides
+    /// (`theme-overrides-issue-*`, the first issue) or an unknown /
+    /// unusable pair theme, `config` when `theme.kdl` is invalid.
+    pub fn set_theme_preferences(
+        &self,
+        preferences: &ThemePreferences,
+    ) -> Result<(Appearance, Vec<ConfigUpdate>), ApiError> {
+        if let Some(issue) = preferences.overrides.issues().first() {
+            return Err(invalid_request(issue_message(*issue)));
+        }
+        let _guard = self.lock_writes();
+        let mut updates = self.reload_themes();
+        let catalog = self.theme_catalog();
+        check_usable(&catalog, &preferences.light)?;
+        check_usable(&catalog, &preferences.dark)?;
+        let file = ConfigFile::Theme;
+        let current = self.read_file(file)?;
+        let text =
+            crate::apply_theme_preferences(current.as_deref(), preferences, file.file_name())?;
+        updates.extend(self.write_theme(current.as_deref(), &text, &catalog)?);
+        Ok((self.appearance(), updates))
+    }
+
+    /// Writes a new `theme.kdl` produced by a selection edit: refused when
+    /// it would not resolve; the previous file is backed up; nothing is
+    /// written when the text did not change.
+    fn write_theme(
+        &self,
+        current: Option<&str>,
+        text: &str,
+        catalog: &ThemeCatalog,
+    ) -> Result<Vec<ConfigUpdate>, ApiError> {
+        let file = ConfigFile::Theme;
+        if current == Some(text) {
+            return Ok(Vec::new());
+        }
+        let parsed = ThemeFile::parse_all(text, file.file_name()).map_err(EditError::Config)?;
+        if let Err(errors) =
+            crate::resolve_selected(catalog, Some(&parsed), self.system_appearance())
+        {
+            return Err(invalid_request(
+                msg("config-edit-makes-invalid")
+                    .arg("file", file.file_name())
+                    .arg("error", errors[0].to_string()),
+            ));
+        }
+        backup::take(self.dir(), file).map_err(|e| io_error(file, &e))?;
+        backup::write_atomic(&self.file_path(file), text).map_err(|e| io_error(file, &e))?;
+        Ok(self.updates_after_write(file))
     }
 }

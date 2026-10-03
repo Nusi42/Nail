@@ -33,17 +33,17 @@ describe("theme compiler", () => {
   });
 
   it("keys part rules on data-part with states, pseudo-classes and conditions", () => {
-    expect(css).toContain('[data-part="message-list.row"][data-state~="selected"] {');
+    expect(css).toContain('[data-part="thread-view.item"][data-state~="selected"] {');
     expect(css).toContain('[data-part="split.divider"]:hover {');
-    expect(css).toContain('[data-part="folder-tree.item"][data-role~="inbox"] {');
+    expect(css).toContain('[data-part="rules.list.item"][data-enabled~="false"] {');
     expect(css).toContain(
-      '[data-part="message-list.row"][data-state~="unread"] [data-part="message-list.row.subject"] {\n  font-weight: var(--nail-font-weight-bold);',
+      '[data-part="thread-view.item"][data-state~="unread"] [data-part="thread-view.item.from"] {\n  font-weight: var(--nail-font-weight-bold);',
     );
   });
 
   it("keeps part rules in source order", () => {
-    const plain = css.indexOf('[data-part="toolbar.button"] {');
-    const hover = css.indexOf('[data-part="toolbar.button"]:hover {');
+    const plain = css.indexOf('[data-part="status-bar.button"] {');
+    const hover = css.indexOf('[data-part="status-bar.button"]:hover {');
     expect(plain).toBeGreaterThan(0);
     expect(hover).toBeGreaterThan(plain);
   });

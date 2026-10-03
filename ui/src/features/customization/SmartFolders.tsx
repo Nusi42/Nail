@@ -145,7 +145,7 @@ export function SmartFolders({ node }: WidgetProps) {
                   title={t("saved-search-remove", { name: s.name })}
                   onClick={() => void remove(s)}
                 >
-                  <Icon name="delete" part="smart-folders.remove.icon" />
+                  <Icon name="trash" part="smart-folders.remove.icon" />
                 </button>
               )}
             </li>

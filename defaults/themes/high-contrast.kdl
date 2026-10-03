@@ -1,49 +1,61 @@
-// Nail example theme: high contrast.
+// Nail built-in theme: High contrast.
 //
 // Pure black and white with yellow and cyan accents, thick focus rings,
 // visible borders on every control, larger text and no animations. It is
-// always in high-contrast mode, whatever Windows is set to (the default
-// theme already follows Windows' contrast themes by itself).
+// always in high-contrast mode, whatever Windows is set to. Pick it in
+// Settings → Appearance; with "Follow Windows" on, Nail switches to it by
+// itself while a Windows contrast theme is active.
 //
-// To use it, copy this file to your configuration folder as theme.kdl (or
-// merge it with Settings → Customize → "Apply a theme or layout…").
-// See userDocs/en/accessibility.md.
+// Every text passes WCAG AAA (7:1) on every surface; the contrast test
+// (crates/nail-config/tests/theme_contrast.rs) checks each pair. The
+// selection is a solid highlight: everything inside a selected item uses
+// `selection-fg`. See userDocs/en/accessibility.md.
 
 theme "High contrast" extends="default" mode="high-contrast" {
     tokens {
-        // The same colours in every mode, so the theme never looks washed out.
-        color "bg"           "#000000"
-        color "bg-subtle"    "#000000"
-        color "bg-raised"    "#1f1f1f"
-        color "fg"           "#ffffff"
-        color "fg-muted"     "#ffffff"
-        color "border"       "#ffffff"
-        color "accent"       "#ffff00"
-        color "accent-fg"    "#000000"
-        color "selection"    "#ffff00"
-        color "selection-fg" "#000000"
-        color "unread"       "#ffff00"
-        color "flagged"      "#ff8080"
-        color "danger"       "#ff8080"
-        color "warning"      "#ffff00"
-        color "success"      "#80ff80"
-        color "focus-ring"   "#00ffff"
-        color "quote-1"      "#ffff00"
-        color "quote-2"      "#80ff80"
-        color "quote-3"      "#00ffff"
-        color "scrim"        "rgb(0 0 0 / 0.85)"
+        // Surfaces. `print=` is the print view (white paper, black text).
+        color "bg"            "#000000" print="#ffffff"
+        color "bg-subtle"     "#000000" print="#ffffff"
+        color "bg-raised"     "#141414" print="#ffffff"
+        color "canvas"        "#000000" print="#ffffff"
+        color "rail"          "#000000" print="#ffffff"
 
-        // One step larger text, more generous rows.
-        font-size "xs" 12
-        font-size "sm" 14
-        font-size "md" 16
-        font-size "lg" 18
-        font-size "xl" 22
-        space "row" 8
+        // Text: the same white for every level, so nothing looks washed out.
+        color "fg"            "#ffffff" print="#000000"
+        color "fg-muted"      "#ffffff" print="#000000"
+        color "fg-subtle"     "#ffffff" print="#000000"
 
-        border "thin" "2px solid $color.border"
+        // Lines.
+        color "border"        "#ffffff" print="#000000"
+        color "border-strong" "#ffffff" print="#000000"
+
+        // Accent and selection.
+        color "accent"        "#ffff00" print="#000000"
+        color "accent-fg"     "#000000" print="#ffffff"
+        color "accent-soft"   "#333300" print="#ffffff"
+        color "selection"     "#ffff00" print="#000000"
+        color "selection-fg"  "#000000" print="#ffffff"
+        color "unread"        "$color.accent"
+        color "focus-ring"    "#00ffff" print="#000000"
+
+        // States.
+        color "danger"        "#ff8080" print="#000000"
+        color "flagged"       "$color.danger"
+        color "warning"       "#ffff00" print="#000000"
+        color "success"       "#80ff80" print="#000000"
+        color "quote-1"       "#ffff00" print="#000000"
+        color "quote-2"       "#80ff80" print="#000000"
+        color "quote-3"       "#00ffff" print="#000000"
+        color "scrim"         "rgb(0 0 0 / 0.85)"
+
+        // One step larger text (the whole type scale follows `body`).
+        font-size "body" 16 compact=15
+
+        border "thin"    "2px solid $color.border"
+        border "control" "2px solid $color.border-strong"
         shadow "raised"  "none"
         shadow "overlay" "0 0 0 2px $color.border"
+        shadow "window"  "0 0 0 2px $color.border"
 
         // No motion at all.
         motion "fast"   "0ms"
@@ -76,11 +88,16 @@ theme "High contrast" extends="default" mode="high-contrast" {
     part "message-list.row:selected" { outline "2px solid $color.selection"; }
     part "message-list.row:unread" { border-left-width 6; }
     part "message-list.row:flagged" { text-decoration "underline"; }
+    // Inside a selected item everything takes the highlight's text colour
+    // (the light / dark themes keep accent icons and counts there).
+    part "folder-tree.item:selected .icon" { color "inherit"; }
+    part "folder-tree.item:selected .unread-count" { color "inherit"; }
+    part "message-list.row:selected .unread-dot" { background-color "$color.selection-fg"; }
 
     // Dividers are easy to see and to grab.
     part "split.divider" { background-color "$color.border"; }
 
-    // Invitations and free/busy (M3b): states differ by more than colour.
+    // Invitations and free/busy: states differ by more than colour.
     part "invitation" { border "$border.thin"; border-left-width 6; }
     part "invitation.issue[severity=\"danger\"]" { text-decoration "underline"; }
     part "freebusy.busy" { border "2px solid $color.border"; }

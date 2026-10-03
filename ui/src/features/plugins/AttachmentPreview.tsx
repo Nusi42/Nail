@@ -60,15 +60,27 @@ function PreviewBody({ renderer, preview }: { renderer: Offer; preview: PluginPr
   );
 }
 
+/** Whether a plug-in can preview this attachment (the reader offers "Preview" then). */
+export function useHasAttachmentPreview(
+  attachment: AttachmentInfo,
+  accountId: string | null = null,
+): boolean {
+  const plugins = usePlugins();
+  return previewRenderersFor(plugins.data ?? [], attachment, accountId).length > 0;
+}
+
 /** A plug-in's preview of one attachment, with a choice of renderer when several apply. */
 export function AttachmentPreviewPane({
   messageId,
   attachment,
   accountId = null,
+  id,
 }: {
   messageId: MessageId;
   attachment: AttachmentInfo;
   accountId?: string | null;
+  /** Element id, so the attachment card can move focus here (M5a). */
+  id?: string;
 }) {
   const t = useT();
   const plugins = usePlugins();
@@ -80,6 +92,8 @@ export function AttachmentPreviewPane({
   const name = attachment.filename ?? attachment.mime;
   return (
     <section
+      id={id}
+      tabIndex={id === undefined ? undefined : -1}
       data-part="plugin-preview"
       data-plugin={renderer.pluginId}
       data-renderer={renderer.id}

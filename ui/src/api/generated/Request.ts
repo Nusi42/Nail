@@ -115,6 +115,7 @@ import type { SendCrypto } from "./SendCrypto";
 import type { SendVetoId } from "./SendVetoId";
 import type { SmartcardKeyRef } from "./SmartcardKeyRef";
 import type { SmartcardSettings } from "./SmartcardSettings";
+import type { SystemAppearance } from "./SystemAppearance";
 import type { TaskFields } from "./TaskFields";
 import type { TaskId } from "./TaskId";
 import type { ThemePreferences } from "./ThemePreferences";
@@ -2185,4 +2186,33 @@ theme_id: string, } | { "type": "SetThemePreferences",
 /**
  * The new preferences (all of them).
  */
-preferences: ThemePreferences, };
+preferences: ThemePreferences, } | { "type": "ReportSystemAppearance", 
+/**
+ * What the page sees.
+ */
+system: SystemAppearance, } | { "type": "GetMessageAttachment", 
+/**
+ * The message.
+ */
+message_id: MessageId, 
+/**
+ * The attachment's index ([`crate::AttachmentInfo::index`]).
+ */
+index: number, } | { "type": "SaveAttachment", 
+/**
+ * The message.
+ */
+message_id: MessageId, 
+/**
+ * The attachment's index.
+ */
+index: number, 
+/**
+ * The file to write.
+ */
+path: string, 
+/**
+ * Replace an existing file (atomically). Only set when the user
+ * confirmed replacing it in the Save dialog.
+ */
+overwrite?: boolean, };

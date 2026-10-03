@@ -383,6 +383,7 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
                         data-part="app"
                         data-layout={layout.name}
                         data-theme={config.data.theme.name}
+                        data-density={config.data.theme.density}
                       >
                         <WindowView layout={layout} name={windowName} />
                         <WindowLayer layout={layout} />

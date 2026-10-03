@@ -13,7 +13,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import type { ResolvedTheme, ThemeMode } from "../api/generated";
+import type { Density, ResolvedTheme, ThemeMode } from "../api/generated";
 import { compileTheme, effectiveMode } from "./compile";
 import { readerCss } from "./reader";
 import { StyleManager, type Declarations } from "./styleManager";
@@ -74,6 +74,13 @@ export function ThemeProvider({ theme, modeOverride = null, children }: ThemePro
     document.documentElement.dataset.nailMode = mode;
   }, [mode]);
 
+  // Density (M5a): the compact token variant and density-dependent rules
+  // key on this attribute; the `app` part carries `data-density` too.
+  const density: Density = theme.density === "compact" ? "compact" : "comfortable";
+  useLayoutEffect(() => {
+    document.documentElement.dataset.nailDensity = density;
+  }, [density]);
+
   const value = useMemo(
     () => ({ theme, mode, manager, readerCss: readerCss(theme, mode) }),
     [theme, mode, manager],
@@ -92,6 +99,11 @@ function useThemeContext(): ThemeContextValue {
 /** The resolved theme (icons, message settings, …). */
 export function useTheme(): ResolvedTheme {
   return useThemeContext().theme;
+}
+
+/** The theme's density (Comfortable / Compact). */
+export function useDensity(): Density {
+  return useThemeContext().theme.density === "compact" ? "compact" : "comfortable";
 }
 
 /** The effective colour mode. */

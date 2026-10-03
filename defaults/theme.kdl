@@ -9,43 +9,95 @@ theme "default" mode="system" {
         // Colours: the first value is the light (base) value; `dark=` and
         // `high-contrast=` override it in those modes; `print=` applies while
         // the print view is shown (white paper, black text, no shadows).
-        color "bg"           "#ffffff" dark="#1b1e24" high-contrast="#000000" print="#ffffff"
-        color "bg-subtle"    "#f5f6f8" dark="#22262d" high-contrast="#000000" print="#ffffff"
-        color "bg-raised"    "#e9ebef" dark="#2c313a" high-contrast="#1a1a1a" print="#ffffff"
-        color "fg"           "#1d2129" dark="#e3e6eb" high-contrast="#ffffff" print="#000000"
-        color "fg-muted"     "#5c6370" dark="#9aa2ae" high-contrast="#ffffff" print="#444444"
-        color "border"       "#d8dce3" dark="#353b45" high-contrast="#ffffff" print="#999999"
-        color "accent"       "#2e5eaa" dark="#7aa7e8" high-contrast="#ffff00"
-        color "accent-fg"    "#ffffff" dark="#10233f" high-contrast="#000000"
-        color "selection"    "#dbe6f7" dark="#2b3f5e" high-contrast="#ffff00"
-        color "selection-fg" "#10233f" dark="#eef3fb" high-contrast="#000000"
-        color "unread"       "#2e5eaa" dark="#7aa7e8" high-contrast="#ffff00"
-        color "flagged"      "#c9302c" dark="#ef6b67" high-contrast="#ff6060"
-        color "danger"       "#c9302c" dark="#ef6b67" high-contrast="#ff6060"
-        color "focus-ring"   "#2e5eaa" dark="#7aa7e8" high-contrast="#00ffff"
-        color "quote-1"      "#2e5eaa" dark="#7aa7e8"
-        color "quote-2"      "#3b8a5a" dark="#7cc49a"
-        color "quote-3"      "#8a6d3b" dark="#d2b074"
-        color "success"      "#2f7d4f" dark="#6cc38f" high-contrast="#00ff00"
-        color "warning"      "#8a5a00" dark="#e0b050" high-contrast="#ffff00"
-        color "scrim"        "rgb(0 0 0 / 0.35)" dark="rgb(0 0 0 / 0.6)" high-contrast="rgb(0 0 0 / 0.8)"
+        // The built-in themes (defaults/themes/*.kdl) replace these colours.
+        // Every theme passes the contrast check in
+        // crates/nail-config/tests/theme_contrast.rs (WCAG AA; AAA for high
+        // contrast).
+        //
+        // Surfaces: `bg` for panes (list, reader, dialogs), `bg-subtle` for
+        // side panes, inputs and hovered rows, `bg-raised` for hovered
+        // controls and tags, `canvas` for the window behind the panes,
+        // `rail` for the navigation rail.
+        color "bg"            "#ffffff" dark="#1b1e24" high-contrast="#000000" print="#ffffff"
+        color "bg-subtle"     "#f5f6f8" dark="#22262d" high-contrast="#000000" print="#ffffff"
+        color "bg-raised"     "#e9ebef" dark="#2c313a" high-contrast="#141414" print="#ffffff"
+        color "canvas"        "#eff1f5" dark="#15181d" high-contrast="#000000" print="#ffffff"
+        color "rail"          "#e9ecf1" dark="#17191e" high-contrast="#000000" print="#ffffff"
+        // Text: primary, secondary (previews, labels) and tertiary (dates,
+        // hints, section labels). All three are readable text (AA).
+        color "fg"            "#1d2129" dark="#e3e6eb" high-contrast="#ffffff" print="#000000"
+        color "fg-muted"      "#5c6370" dark="#9aa2ae" high-contrast="#ffffff" print="#444444"
+        color "fg-subtle"     "#5f6672" dark="#959dab" high-contrast="#ffffff" print="#555555"
+        // Lines: `border` separates (dividers, cards); `border-strong`
+        // outlines controls such as inputs and selects (3:1 against every
+        // surface, so a field is recognisable).
+        color "border"        "#d8dce3" dark="#353b45" high-contrast="#ffffff" print="#999999"
+        color "border-strong" "#80868f" dark="#787f8b" high-contrast="#ffffff" print="#767676"
+        // The accent and what derives from it: the accent override (a
+        // `color "accent"` line in your theme.kdl) restyles them all alike.
+        color "accent"        "#2e5eaa" dark="#7aa7e8" high-contrast="#ffff00"
+        color "accent-fg"     "#ffffff" dark="#10233f" high-contrast="#000000"
+        color "accent-soft"   "color-mix(in srgb, $color.accent 12%, $color.bg)" dark="color-mix(in srgb, $color.accent 18%, $color.bg)" high-contrast="#333300"
+        color "selection"     "color-mix(in srgb, $color.accent 16%, $color.bg)" high-contrast="#ffff00"
+        color "selection-fg"  "#10233f" dark="#eef3fb" high-contrast="#000000"
+        color "unread"        "$color.accent"
+        color "focus-ring"    "$color.accent" high-contrast="#00ffff"
+        // States.
+        color "danger"        "#b92b28" dark="#f58a86" high-contrast="#ff8080"
+        color "flagged"       "$color.danger"
+        color "warning"       "#8a5a00" dark="#e0b050" high-contrast="#ffff00"
+        color "success"       "#286b44" dark="#6cc38f" high-contrast="#80ff80"
+        color "quote-1"       "#2e5eaa" dark="#7aa7e8"
+        color "quote-2"       "#3b8a5a" dark="#7cc49a"
+        color "quote-3"       "#8a6d3b" dark="#d2b074"
+        // Avatar initials / account dots and file-type badges (white text on
+        // every one meets WCAG AA, black in High contrast; the UI picks an
+        // avatar colour per address).
+        color "avatar-fg"     "#ffffff"
+        color "avatar-1"      "#3b5bdb" high-contrast="#000000"
+        color "avatar-2"      "#0b7285" high-contrast="#000000"
+        color "avatar-3"      "#2f7d3a" high-contrast="#000000"
+        color "avatar-4"      "#a61e4d" high-contrast="#000000"
+        color "avatar-5"      "#7048e8" high-contrast="#000000"
+        color "avatar-6"      "#c2410c" high-contrast="#000000"
+        color "avatar-7"      "#5c5f66" high-contrast="#000000"
+        color "avatar-8"      "#1864ab" high-contrast="#000000"
+        color "file-pdf"      "#c92a2a" high-contrast="#000000"
+        color "file-image"    "#0b7285" high-contrast="#000000"
+        color "file-document" "#1864ab" high-contrast="#000000"
+        color "file-spreadsheet" "#2f7d3a" high-contrast="#000000"
+        color "file-archive"  "#7048e8" high-contrast="#000000"
+        color "file-calendar" "#c2410c" high-contrast="#000000"
+        color "file-other"    "#5c5f66" high-contrast="#000000"
+        color "scrim"         "rgb(0 0 0 / 0.35)" dark="rgb(0 0 0 / 0.6)" high-contrast="rgb(0 0 0 / 0.8)"
 
-        font "ui"     #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
-        font "reader" #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
-        font "mono"   #""Cascadia Mono", Consolas, ui-monospace, monospace"#
+        // Segoe UI Variable, the Windows 11 face, with the system stack as
+        // the fallback. The reader uses the UI face for plain text, too;
+        // monospace is for code (and when you pick it).
+        font "ui"      #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
+        font "display" #""Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif"#
+        font "reader"  #""Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif"#
+        font "mono"    #""Cascadia Mono", Consolas, ui-monospace, monospace"#
 
         // Unitless numbers are pixels for font-size, space, size and radius.
-        font-size "xs" 11
-        font-size "sm" 12
-        font-size "md" 14
-        font-size "lg" 16
-        font-size "xl" 20
-        // The M5a type scale (ADR 0102); `compact=` is the Compact density.
-        font-size "label"   11.5
-        font-size "small"   12.5
+        //
+        // The type scale. Every step is relative to `body`, so changing the
+        // text size (Settings → Appearance, or `font-size "body" 15` in your
+        // theme.kdl) scales the whole scale; `compact=` is the Compact
+        // density. At body 14: label 11.5 (semibold, caps), small 12.5,
+        // heading 16 (semibold), title 20 (semibold; 18 in Compact, where
+        // body is 13).
         font-size "body"    14 compact=13
-        font-size "heading" 16
-        font-size "title"   20 compact=18
+        font-size "label"   "calc($font-size.body * 11.5 / 14)"
+        font-size "small"   "calc($font-size.body * 12.5 / 14)"
+        font-size "heading" "calc($font-size.body * 16 / 14)"
+        font-size "title"   "calc($font-size.body * 20 / 14)" compact="calc($font-size.body * 18 / 13)"
+        // The pre-M5 names, kept for existing themes: aliases of the scale.
+        font-size "xs" "$font-size.label"
+        font-size "sm" "$font-size.small"
+        font-size "md" "$font-size.body"
+        font-size "lg" "$font-size.heading"
+        font-size "xl" "$font-size.title"
 
         font-weight "regular" 400
         font-weight "medium"  500
@@ -53,9 +105,10 @@ theme "default" mode="system" {
         font-weight "bold"    650
 
         line-height "tight"  1.25
-        line-height "normal" 1.5
+        line-height "normal" 1.45
         line-height "relaxed" 1.65
 
+        // Spacing on a 4 px grid (`xxs` is the half step for hairline gaps).
         space "xxs" 2
         space "xs"  4
         space "sm"  8
@@ -63,11 +116,13 @@ theme "default" mode="system" {
         space "lg"  16
         space "xl"  24
         space "xxl" 32
-        space "row" 6 compact=4
-        // Semantic spacings (M5a): pane padding, control gaps, sections.
+        // Semantic spacings: pane padding (the same in every pane, so edges
+        // line up), gaps between controls, gaps between sections, and the
+        // vertical padding of list rows.
         space "pane"    16 compact=12
         space "gap"     8
         space "section" 24
+        space "row"     12 compact=8
 
         size "icon"         16
         size "touch-target" 48
@@ -77,16 +132,23 @@ theme "default" mode="system" {
         size "control"      32 compact=28
         size "avatar"       34 compact=28
 
-        radius "sm" 4
-        radius "md" 6
-        radius "lg" 10
+        // Corners: small for inputs and menu items, medium for buttons and
+        // cards, large for windows. `sm` and `lg` follow `md`, so changing
+        // the corner radius (`radius "md" 8`) rounds everything alike.
+        radius "md"   10
+        radius "sm"   "calc($radius.md * 0.6)"
+        radius "lg"   "calc($radius.md * 1.4)"
         radius "pill" 999
 
-        border "thin" "1px solid $color.border"
+        border "thin"    "1px solid $color.border"
+        border "control" "1px solid $color.border-strong"
 
-        shadow "raised"  "0 1px 3px rgb(0 0 0 / 0.12)" dark="0 1px 3px rgb(0 0 0 / 0.5)" print="none"
-        shadow "overlay" "0 8px 24px rgb(0 0 0 / 0.2)" dark="0 8px 24px rgb(0 0 0 / 0.6)" print="none"
-        shadow "window"  "0 12px 36px rgb(0 0 0 / 0.22)" dark="0 12px 36px rgb(0 0 0 / 0.6)" print="none"
+        // Elevation: only floating things get a shadow. `raised` for
+        // popovers and floating cards, `overlay` for menus, `window` for
+        // dialogs and tool windows.
+        shadow "raised"  "0 1px 2px rgb(23 32 43 / 0.08), 0 4px 12px rgb(23 32 43 / 0.08)" dark="0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.35)" print="none"
+        shadow "overlay" "0 10px 30px rgb(23 32 43 / 0.14)" dark="0 12px 36px rgb(0 0 0 / 0.5)" print="none"
+        shadow "window"  "0 16px 48px rgb(23 32 43 / 0.18)" dark="0 16px 48px rgb(0 0 0 / 0.55)" print="none"
 
         motion "fast"   "100ms"
         motion "normal" "200ms"
@@ -120,234 +182,22 @@ theme "default" mode="system" {
     part "split.divider:hover" { background-color "$color.accent"; }
     part "split.divider:focus-visible" { background-color "$color.focus-ring"; }
 
-    part "tabs.tab-list" {
-        display "flex"
-        gap "$space.xs"
-        padding "$space.xs" "$space.sm"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "tabs.tab" {
-        padding "$space.xs" "$space.md"
-        border-radius "$radius.sm"
-        color "$color.fg-muted"
-        background-color "transparent"
-    }
-    part "tabs.tab:selected" {
-        color "$color.selection-fg"
-        background-color "$color.selection"
-    }
 
     // ---- Toolbar and status bar ----
 
-    part "toolbar" {
-        display "flex"
-        align-items "center"
-        flex-wrap "wrap"
-        gap "$space.xs"
-        min-height "$size.toolbar"
-        padding 0 "$space.sm"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "toolbar.button" {
-        display "inline-flex"
-        align-items "center"
-        gap "$space.xs"
-        padding "$space.xs" "$space.sm"
-        border "none"
-        border-radius "$radius.sm"
-        white-space "nowrap"
-        color "$color.fg"
-        background-color "transparent"
-    }
-    part "toolbar.button:hover" { background-color "$color.bg-raised"; }
-    part "toolbar.button:focus-visible" {
-        outline "2px solid $color.focus-ring"
-        outline-offset 1
-    }
-    part "toolbar.button:disabled" { opacity "$opacity.disabled"; }
-    part "toolbar.button.icon" {
-        width "$size.icon"
-        height "$size.icon"
-    }
     part "toolbar.spacer" { flex-grow 1; }
-    part "toolbar.separator" {
-        align-self "stretch"
-        width "$size.divider"
-        margin "$space.sm" "$space.xs"
-        background-color "$color.border"
-    }
 
-    part "status-bar" {
-        display "flex"
-        gap "$space.md"
-        padding "$space.xxs" "$space.sm"
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-        border-top "$border.thin"
-        background-color "$color.bg-subtle"
-    }
 
     // ---- Accounts and folders ----
 
-    part "account-switcher" {
-        padding "$space.sm"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "account-switcher.item" {
-        display "flex"
-        align-items "center"
-        gap "$space.sm"
-        width "100%"
-        padding "$space.xs" "$space.sm"
-        border "none"
-        border-radius "$radius.sm"
-        text-align "left"
-        color "$color.fg"
-        background-color "transparent"
-    }
-    part "account-switcher.item:selected" {
-        font-weight "$font-weight.medium"
-        background-color "$color.bg-raised"
-    }
 
-    part "folder-tree" {
-        padding "$space.xs"
-        background-color "$color.bg-subtle"
-        overflow-y "auto"
-    }
-    part "folder-tree.item" {
-        display "flex"
-        align-items "center"
-        gap "$space.sm"
-        padding "$space.xs" "$space.sm"
-        border-radius "$radius.sm"
-        cursor "default"
-    }
-    part "folder-tree.item[role=\"inbox\"]" { font-weight "$font-weight.medium"; }
-    part "folder-tree.item:hover" { background-color "$color.bg-raised"; }
-    part "folder-tree.item:selected" {
-        color "$color.selection-fg"
-        background-color "$color.selection"
-    }
-    part "folder-tree.item:focus-visible" {
-        outline "2px solid $color.focus-ring"
-        outline-offset -2
-    }
-    part "folder-tree.item.icon" {
-        width "$size.icon"
-        height "$size.icon"
-        color "$color.fg-muted"
-    }
-    part "folder-tree.item.name" {
-        flex-grow 1
-        overflow "hidden"
-        text-overflow "ellipsis"
-        white-space "nowrap"
-    }
-    part "folder-tree.item.unread-count" {
-        font-size "$font-size.sm"
-        font-weight "$font-weight.bold"
-        color "$color.unread"
-    }
-    part "folder-tree.item:selected .unread-count" { color "inherit"; }
 
     // ---- Message list ----
 
-    part "message-list" {
-        overflow-y "auto"
-        background-color "$color.bg"
-    }
-    part "message-list.row" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xxs"
-        padding "$space.row" "$space.md"
-        border-bottom "$border.thin"
-        border-left "3px solid transparent"
-        cursor "default"
-    }
-    part "message-list.row:hover" { background-color "$color.bg-subtle"; }
-    part "message-list.row:selected" {
-        color "$color.selection-fg"
-        background-color "$color.selection"
-    }
-    part "message-list.row:focus-visible" {
-        outline "2px solid $color.focus-ring"
-        outline-offset -2
-    }
-    part "message-list.row:unread" { border-left-color "$color.unread"; }
-    part "message-list.row:flagged" { border-left-color "$color.flagged"; }
-    part "message-list.row.line" {
-        display "flex"
-        gap "$space.sm"
-        overflow "hidden"
-        white-space "nowrap"
-        text-overflow "ellipsis"
-    }
-    part "message-list.row:unread .subject" { font-weight "$font-weight.bold"; }
-    part "message-list.row:unread .from" { font-weight "$font-weight.bold"; }
-    part "message-list.row.date" {
-        margin-left "auto"
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "message-list.row.preview" {
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
     // Selected rows: secondary text takes the selection colour for contrast.
-    part "message-list.row:selected .date" { color "inherit"; }
-    part "message-list.row:selected .preview" { color "inherit"; }
-    part "message-list.empty" {
-        padding "$space.xl"
-        text-align "center"
-        color "$color.fg-muted"
-    }
 
     // ---- Message view ----
 
-    part "message-view" {
-        display "flex"
-        flex-direction "column"
-        overflow "hidden"
-        background-color "$color.bg"
-    }
-    part "message-view.header" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xxs"
-        padding "$space.md" "$space.lg"
-        border-bottom "$border.thin"
-    }
-    part "message-view.header.subject" {
-        font-size "$font-size.xl"
-        font-weight "$font-weight.bold"
-    }
-    part "message-view.header.field" {
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "message-view.body" {
-        flex-grow 1
-        border "none"
-        background-color "$color.bg"
-    }
-    part "message-view.attachments" {
-        display "flex"
-        flex-wrap "wrap"
-        gap "$space.sm"
-        padding "$space.sm" "$space.lg"
-        border-top "$border.thin"
-    }
-    part "message-view.attachment" {
-        padding "$space.xs" "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.md"
-        font-size "$font-size.sm"
-    }
     part "message-view.empty" {
         margin "auto"
         color "$color.fg-muted"
@@ -360,38 +210,6 @@ theme "default" mode="system" {
 
     // ---- Search ----
 
-    part "search-bar" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xs"
-        padding "$space.sm"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "search-bar.field" {
-        display "flex"
-        align-items "center"
-        gap "$space.xs"
-        padding 0 "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.md"
-        background-color "$color.bg"
-    }
-    part "search-bar.field:focus-within" { outline "2px solid $color.focus-ring"; }
-    part "search-bar.icon" {
-        width "$size.icon"
-        height "$size.icon"
-        color "$color.fg-muted"
-    }
-    part "search-bar.input" {
-        flex-grow 1
-        min-width 0
-        padding "$space.xs" 0
-        border "none"
-        outline "none"
-        color "$color.fg"
-        background-color "transparent"
-    }
     part "search-bar.clear" {
         display "inline-flex"
         padding "$space.xxs"
@@ -564,19 +382,9 @@ theme "default" mode="system" {
 
     // ---- Windows (composer, settings, account setup, outbox, move) ----
 
-    part "window-layer" {
-        padding "$space.xl"
-        background-color "$color.scrim"
-        z-index 100
-    }
     part "window" {
         width "min(960px, 100%)"
         height "min(760px, 100%)"
-        border "$border.thin"
-        border-radius "$radius.lg"
-        color "$color.fg"
-        background-color "$color.bg"
-        box-shadow "$shadow.overlay"
     }
     part "window[window=\"move\"]" {
         width "min(420px, 100%)"
@@ -584,122 +392,9 @@ theme "default" mode="system" {
     }
     part "window[window=\"account-setup\"]" { width "min(640px, 100%)"; }
     part "window[window=\"outbox\"]" { width "min(720px, 100%)"; }
-    part "window.header" {
-        gap "$space.sm"
-        padding "$space.sm" "$space.lg"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "window.title" {
-        font-size "$font-size.lg"
-        font-weight "$font-weight.bold"
-    }
-    part "window.close" {
-        display "inline-flex"
-        padding "$space.xs"
-        border "none"
-        border-radius "$radius.sm"
-        color "$color.fg"
-        background-color "transparent"
-    }
-    part "window.close:hover" { background-color "$color.bg-raised"; }
-    part "window.close:focus-visible" { outline "2px solid $color.focus-ring"; }
-    part "window.close.icon" {
-        width "$size.icon"
-        height "$size.icon"
-    }
 
     // ---- Forms (account setup, settings, virtual accounts, composer, outbox) ----
 
-    part "form.section" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.sm"
-        margin 0
-        padding "$space.md"
-        border "$border.thin"
-        border-radius "$radius.md"
-    }
-    part "form.section.title" {
-        padding 0 "$space.xs"
-        font-weight "$font-weight.bold"
-    }
-    part "form.field" {
-        display "flex"
-        flex-direction "column"
-        gap "$space.xxs"
-    }
-    part "form.label" {
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "form.input" {
-        padding "$space.xs" "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.sm"
-        color "$color.fg"
-        background-color "$color.bg"
-    }
-    part "form.input:focus-visible" { outline "2px solid $color.focus-ring"; }
-    part "form.select" {
-        padding "$space.xs" "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.sm"
-        color "$color.fg"
-        background-color "$color.bg"
-    }
-    part "form.textarea" {
-        min-height 96
-        padding "$space.xs" "$space.sm"
-        border "$border.thin"
-        border-radius "$radius.sm"
-        font-family "$font.mono"
-        color "$color.fg"
-        background-color "$color.bg"
-    }
-    part "form.hint" {
-        font-size "$font-size.xs"
-        color "$color.fg-muted"
-    }
-    part "form.check" {
-        display "flex"
-        align-items "center"
-        gap "$space.sm"
-    }
-    part "form.button" {
-        display "inline-flex"
-        align-items "center"
-        gap "$space.xs"
-        padding "$space.xs" "$space.md"
-        border "$border.thin"
-        border-radius "$radius.sm"
-        color "$color.fg"
-        background-color "$color.bg-subtle"
-        cursor "default"
-    }
-    part "form.button:hover" { background-color "$color.bg-raised"; }
-    part "form.button:focus-visible" {
-        outline "2px solid $color.focus-ring"
-        outline-offset 1
-    }
-    part "form.button:disabled" { opacity "$opacity.disabled"; }
-    part "form.button[variant=\"primary\"]" {
-        border-color "$color.accent"
-        color "$color.accent-fg"
-        background-color "$color.accent"
-    }
-    part "form.button[variant=\"danger\"]" {
-        border-color "$color.danger"
-        color "$color.danger"
-    }
-    part "form.button:selected" {
-        color "$color.selection-fg"
-        background-color "$color.selection"
-    }
-    part "form.button.icon" {
-        width "$size.icon"
-        height "$size.icon"
-    }
 
     part "account-setup" {
         display "flex"
@@ -936,6 +631,8 @@ theme "default" mode="system" {
         gap "$space.sm"
         padding "$space.md" "$space.lg"
         min-height 0
+        // Scrolls inside its row; the security slot below stays in view.
+        overflow-y "auto"
     }
     part "composer.field" {
         display "grid"
@@ -958,7 +655,7 @@ theme "default" mode="system" {
     part "composer.field.input:focus-visible" { outline "2px solid $color.focus-ring"; }
     part "composer.identity" {
         padding "$space.xs"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         color "$color.fg"
         background-color "$color.bg"
@@ -975,7 +672,7 @@ theme "default" mode="system" {
         flex-grow 1
         min-height 200
         padding "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         font-family "$font.mono"
         line-height "$line-height.normal"
@@ -1109,7 +806,7 @@ theme "default" mode="system" {
     part "composer.html.source" {
         min-height 200
         padding "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         font-family "$font.mono"
         color "$color.fg"
@@ -1123,7 +820,7 @@ theme "default" mode="system" {
     part "composer.link.input" {
         flex-grow 1
         padding "$space.xs" "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         color "$color.fg"
         background-color "$color.bg"
@@ -1283,6 +980,22 @@ theme "default" mode="system" {
         padding "$space.md"
         overflow-y "auto"
     }
+    part "folder-picker.filter" {
+        display "grid"
+        gap "$space.xs"
+        font-size "$font-size.small"
+        font-weight "$font-weight.medium"
+    }
+    part "folder-picker.input" {
+        min-height "$size.control"
+        padding 0 "$space.sm"
+        border "$border.control"
+        border-radius "$radius.sm"
+        font-size "$font-size.body"
+        color "$color.fg"
+        background-color "$color.bg-subtle"
+    }
+    part "folder-picker.input:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset 0; }
     part "folder-picker.button" {
         display "flex"
         align-items "center"
@@ -1444,7 +1157,7 @@ theme "default" mode="system" {
     part "rules.text.source" {
         min-height 240
         padding "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         font-family "$font.mono"
         white-space "pre"
@@ -1860,7 +1573,7 @@ theme "default" mode="system" {
     part "merge-dialog.text" {
         min-height 160
         padding "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         font-family "$font.mono"
         color "$color.fg"
@@ -2071,49 +1784,17 @@ theme "default" mode="system" {
     }
     part "smart-folders.error" { color "$color.danger"; }
 
-    // ---- Icons (SVG path data on a 24x24 grid) ----
-
-    icons {
-        icon "reply"     svg="M10 5 3 12l7 7v-4.5c5 0 8.5 1.5 11 5-1-5-4-10-11-11z"
-        icon "reply-all" svg="M8 5 1 12l7 7v-3l-4-4 4-4z M15 5l-7 7 7 7v-4.5c4 0 7 1.5 8 5-.5-5-3-10-8-11z"
-        icon "forward"   svg="M14 5l7 7-7 7v-4.5c-5 0-8.5 1.5-11 5 1-5 4-10 11-11z"
-        icon "archive"   svg="M3 3h18v5H3z M4 9h16v12H4z M9 12v2h6v-2z"
-        icon "delete"    svg="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"
-        icon "flag"      svg="M5 3h2v18H5z M8 4h11l-3 4 3 4H8z"
-        icon "mark-read" svg="M2 5h20v14H2z M4 7v1l8 5 8-5V7l-8 5z"
-        icon "sync"      svg="M12 4a8 8 0 0 1 7.4 5H17v2h6V5h-2v2.3A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z M12 20a8 8 0 0 1-7.4-5H7v-2H1v6h2v-2.3A10 10 0 0 0 22 12h-2a8 8 0 0 1-8 8z"
-        icon "folder"    svg="M2 5h7l2 2h11v12H2z"
-        icon "inbox"     svg="M3 4h18v16H3z M5 6v7h4l1 2h4l1-2h4V6z"
-        icon "sent"      svg="M2 21 23 12 2 3v7l15 2-15 2z"
-        icon "drafts"    svg="M4 16 15 5l4 4L8 20H4z M16 4l2-2 4 4-2 2z"
-        icon "junk"      svg="M12 2 2 20h20z M11 9h2v5h-2z M11 16h2v2h-2z"
-        icon "trash"     svg="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"
-        icon "compose"   svg="M3 17.3V21h3.7L17.8 9.9l-3.7-3.7z M20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7z"
-        icon "move"      svg="M2 5h7l2 2h11v12H2z M12 10v3H8v2h4v3l4-4z"
-        icon "outbox"    svg="M3 13h5l1 2h6l1-2h5v7H3z M11 3h2v7h3l-4 4-4-4h3z"
-        icon "search"    svg="M10 3a7 7 0 0 1 5.6 11.2l5.6 5.6-1.4 1.4-5.6-5.6A7 7 0 1 1 10 3z M10 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"
-        icon "settings"  svg="M10 2h4l.5 2.6 2 1.2 2.5-.9 2 3.4-2 1.7v2.4l2 1.7-2 3.4-2.5-.9-2 1.2L14 22h-4l-.5-2.6-2-1.2-2.5.9-2-3.4 2-1.7V10.6l-2-1.7 2-3.4 2.5.9 2-1.2z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
-        icon "account-add" svg="M9 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8z M1 20c0-3.3 3.6-6 8-6s8 2.7 8 6z M19 7h2v3h3v2h-3v3h-2v-3h-3v-2h3z"
-        icon "close"     svg="M5.6 4.2 12 10.6l6.4-6.4 1.4 1.4-6.4 6.4 6.4 6.4-1.4 1.4-6.4-6.4-6.4 6.4-1.4-1.4 6.4-6.4-6.4-6.4z"
-        icon "filter"    svg="M3 4h18l-7 9v6l-4 2v-8z"
-        icon "attachment" svg="M16.5 6v11.5a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6H9v9.5a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v12.5a6 6 0 0 0 12 0V6z"
-        icon "snooze"    svg="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M11 7h2v5l4 2.3-1 1.7-5-3z"
-        icon "download"  svg="M11 3h2v9.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6z M4 18h16v2H4z"
-        icon "chevron-right" svg="M9 5l7 7-7 7-1.4-1.4 5.6-5.6-5.6-5.6z"
-        icon "calendar"      svg="M7 2h2v2h6V2h2v2h4v18H3V4h4z M5 9v11h14V9z M7 11h4v4H7z"
-        icon "chevron-left"  svg="M15 5 8 12l7 7 1.4-1.4-5.6-5.6 5.6-5.6z"
-        icon "chevron-down"  svg="M5 9l7 7 7-7-1.4-1.4-5.6 5.6-5.6-5.6z"
-        icon "plus"          svg="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"
-    }
-
     // ---- Reading mail ----
 
+    // The reader body: the UI face for HTML and plain text alike (choose
+    // `$font.mono` for `text-font-family` to read plain text in monospace),
+    // at most about 68 characters per line.
     message {
         font-family "$font.reader"
-        text-font-family "$font.mono"
+        text-font-family "$font.reader"
         font-size "$font-size.md"
-        line-height "$line-height.normal"
-        max-width "80ch"
+        line-height "$line-height.relaxed"
+        max-width "68ch"
         quote-colors "$color.quote-1" "$color.quote-2" "$color.quote-3"
         html-dark-mode "smart"
     }
@@ -2657,54 +2338,6 @@ theme "default" mode="system" {
 
     // ---- Context menus, triage, sync, Sieve, Customize editors (M2c, ADR 0047) ----
 
-    part "context-menu" {
-        min-width 220
-        padding "$space.xs" 0
-        border "$border.thin"
-        border-radius "$radius.md"
-        color "$color.fg"
-        background-color "$color.bg"
-        box-shadow "$shadow.overlay"
-    }
-    part "context-menu.item" {
-        gap "$space.sm"
-        padding "$space.xs" "$space.md"
-        border "none"
-        color "$color.fg"
-        background-color "transparent"
-        cursor "default"
-    }
-    part "context-menu.item:focus" {
-        outline "none"
-        color "$color.selection-fg"
-        background-color "$color.selection"
-    }
-    part "context-menu.item:focus-visible" {
-        outline "2px solid $color.focus-ring"
-        outline-offset -2
-    }
-    part "context-menu.item:disabled" { opacity "$opacity.disabled"; }
-    part "context-menu.item.icon" {
-        flex-shrink 0
-        width "$size.icon"
-        height "$size.icon"
-    }
-    part "context-menu.item.label" { flex-grow 1; }
-    part "context-menu.item.shortcut" {
-        padding-left "$space.lg"
-        font-size "$font-size.sm"
-        color "$color.fg-muted"
-    }
-    part "context-menu.item:focus .shortcut" { color "inherit"; }
-    part "context-menu.item.arrow" {
-        width "$size.icon"
-        height "$size.icon"
-    }
-    part "context-menu.separator" {
-        height "$size.divider"
-        margin "$space.xs" 0
-        background-color "$color.border"
-    }
     part "context-menu.popup" { margin-top -4; }
 
     part "message-list.row:headers-only .preview" { font-style "italic"; }
@@ -2944,7 +2577,7 @@ theme "default" mode="system" {
     part "column-editor.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
     part "key-binding-editor.capture" {
         padding "$space.xs" "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         font-family "$font.mono"
         color "$color.fg"
@@ -3044,7 +2677,7 @@ theme "default" mode="system" {
     }
     part "plugin.input" {
         padding "$space.xs" "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         color "$color.fg"
         background-color "$color.bg"
@@ -3052,21 +2685,21 @@ theme "default" mode="system" {
     part "plugin.textarea" {
         min-height 96
         padding "$space.xs" "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         color "$color.fg"
         background-color "$color.bg"
     }
     part "plugin.select" {
         padding "$space.xs" "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         color "$color.fg"
         background-color "$color.bg"
     }
     part "plugin.date" {
         padding "$space.xs" "$space.sm"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.sm"
         color "$color.fg"
         background-color "$color.bg"
@@ -3498,7 +3131,7 @@ theme "default" mode="system" {
     part "pim.datetime" { position "relative"; display "flex"; flex-direction "column"; gap "$space.xxs"; }
     part "pim.datetime.label" { font-size "$font-size.sm"; }
     part "pim.datetime.controls" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; }
-    part "pim.datetime.input" { display "inline-flex"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg"; color "$color.fg"; }
+    part "pim.datetime.input" { display "inline-flex"; padding "$space.xs" "$space.sm"; border "$border.control"; border-radius "$radius.sm"; background-color "$color.bg"; color "$color.fg"; }
     part "pim.datetime:invalid" { color "$color.danger"; }
     part "pim.datetime.segment" { padding "0" "1px"; border-radius "$radius.sm"; }
     part "pim.datetime.segment:focus" { color "$color.selection-fg"; background-color "$color.selection"; outline "none"; }
@@ -4166,7 +3799,7 @@ theme "default" mode="system" {
     part "palette.input" {
         padding "$space.sm" "$space.md"
         font-size "$font-size.lg"
-        border "$border.thin"
+        border "$border.control"
         border-radius "$radius.md"
         background-color "$color.bg"
         color "$color.fg"
@@ -4262,7 +3895,6 @@ theme "default" mode="system" {
     part "wizard.buttons" { display "flex"; flex-wrap "wrap"; justify-content "flex-end"; gap "$space.sm"; }
     part "path-field" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.sm"; }
     part "form.radio" { display "flex"; align-items "center"; gap "$space.xs"; }
-    part "form.error" { color "$color.danger"; font-size "$font-size.sm"; }
     part "portability.choices" { display "flex"; flex-direction "column"; gap "$space.xs"; }
     part "portability.choice" { display "flex"; align-items "flex-start"; gap "$space.sm"; padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
     part "portability.buttons" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }

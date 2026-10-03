@@ -164,7 +164,7 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
             data-part="composer.attachment"
             data-state={a.content_id !== null ? "inline" : undefined}
           >
-            <Icon name="attachment" part="composer.attachment.icon" />
+            <Icon name="paperclip" part="composer.attachment.icon" />
             <span data-part="composer.attachment.name">{a.filename}</span>
             <span data-part="composer.attachment.size">{formatSize(a.size, locale)}</span>
             {a.content_id !== null && (
@@ -177,7 +177,7 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
               aria-label={t("composer-attachment-remove", { name: a.filename })}
               onClick={() => removeAttachment(ctx, index)}
             >
-              <Icon name="close" part="form.button.icon" />
+              <Icon name="x" part="form.button.icon" />
               <span data-part="form.button.label">{t("composer-attachment-remove-short")}</span>
             </button>
           </li>
@@ -443,7 +443,7 @@ export function Composer({ node }: WidgetProps) {
           data-action="attach"
           onClick={() => fileInput.current?.click()}
         >
-          <Icon name="attachment" part="form.button.icon" />
+          <Icon name="paperclip" part="form.button.icon" />
           <span data-part="form.button.label">{t("composer-attach")}</span>
         </button>
         <input
@@ -595,7 +595,7 @@ export function Composer({ node }: WidgetProps) {
           data-variant="primary"
           disabled={busy}
         >
-          <Icon name="sent" part="form.button.icon" />
+          <Icon name="send" part="form.button.icon" />
           <span data-part="form.button.label">
             {t(later ? "composer-schedule" : "composer-send")}
           </span>

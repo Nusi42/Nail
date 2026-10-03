@@ -1,0 +1,184 @@
+import { render } from "@testing-library/react";
+import type { ResolvedTheme } from "../api/generated";
+import { defaultTheme } from "../api/mockData";
+import { BASE_CSS, COMPACT_VARIANT, compileTheme, resolveTokenRefs } from "./compile";
+import { AVATAR_COLORS, SKIN_CSS, colorSlot, stableHash } from "./skin";
+import { ThemeProvider } from "./ThemeProvider";
+
+/** WCAG relative luminance of `#rrggbb`. */
+function luminance(hex: string): number {
+  const channel = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe("M5a skin (theme/skin.ts)", () => {
+  it("sits between the structure and the theme's part rules", () => {
+    const theme: ResolvedTheme = {
+      ...defaultTheme(),
+      parts: [
+        {
+          selector: "form.button",
+          states: [],
+          conditions: [],
+          ancestors: [],
+          declarations: { color: "red" },
+          source: null,
+        },
+      ],
+    };
+    const css = compileTheme(theme).css;
+    const base = css.indexOf(BASE_CSS);
+    const skin = css.indexOf(SKIN_CSS);
+    const rule = css.indexOf('[data-part="form.button"] {\n  color: red;');
+    expect(base).toBe(0);
+    expect(skin).toBeGreaterThan(base);
+    expect(rule).toBeGreaterThan(skin);
+  });
+
+  it("styles every primitive the plan names", () => {
+    for (const part of [
+      "form.button",
+      "toolbar.button",
+      "form.input",
+      "form.select",
+      "chip",
+      "tag",
+      "badge",
+      "context-menu.item",
+      "context-menu.header",
+      "context-menu.separator",
+      "context-menu.item.shortcut",
+      "tabs.tab",
+      "segmented.option",
+      "card",
+      "switch",
+      "message-list.row.avatar",
+      "message-list.row.unread-dot",
+      "message-list.row.tag-line",
+      "message-view.column",
+      "attachment-card",
+    ]) {
+      expect(SKIN_CSS).toContain(`[data-part="${part}"]`);
+    }
+    for (const variant of ["primary", "danger", "ghost", "icon"]) {
+      expect(SKIN_CSS).toContain(`[data-variant~="${variant}"]`);
+    }
+  });
+
+  it("takes colours only from tokens (literal colours only as token fallbacks)", () => {
+    const withoutFallbacks = SKIN_CSS.replace(/var\(--nail-[a-z0-9-]+, #[0-9a-f]{3,8}\)/gi, "");
+    expect(withoutFallbacks).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(SKIN_CSS).not.toMatch(/url\(|@import/);
+  });
+
+  it("puts a state on every selector of a group, not only the last one", () => {
+    const states = [":hover", ":focus-visible", ":focus-within", ":disabled", ":active"];
+    for (const [selectors = ""] of SKIN_CSS.split("}").map((block) => block.split("{"))) {
+      const items = selectors.split(",").map((item) => item.trim());
+      if (items.length < 2) continue;
+      for (const state of states) {
+        if (items.some((item) => item.includes(state))) {
+          expect(
+            // A bare part next to `part:state` is the `ps(…):state` slip.
+            items.filter((item) => /^\[data-part="[^"]+"\]$/.test(item)),
+            `${state} in ${selectors.trim()}`,
+          ).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("outlines input controls with the theme's control border", () => {
+    // The base theme has no default rules for these since M5a (WP155).
+    const blocks = SKIN_CSS.split("}").map((block) => block.split("{"));
+    for (const part of ["form.input", "form.select", "form.textarea", "search-bar.field"]) {
+      const own = blocks.filter(([selectors = ""]) =>
+        selectors.split(",").some((s) => s.trim() === `[data-part="${part}"]`),
+      );
+      expect(
+        own.some(([, body = ""]) => body.includes("border: var(--nail-border-control,")),
+        part,
+      ).toBe(true);
+    }
+    expect(defaultTheme().parts.some((r) => r.selector === "form.input")).toBe(false);
+  });
+
+  it("keeps the reader text at a readable line length in a centred column", () => {
+    expect(SKIN_CSS).toMatch(/\[data-part="message-view.text"\] \{[^}]*max-width: 68ch/);
+    expect(SKIN_CSS).toMatch(/\[data-part="message-view.column"\] \{[^}]*margin-inline: auto/);
+    // The face and line length of the text come from the theme's `message`
+    // section, after the skin, so a user can still pick monospace.
+    const css = compileTheme(defaultTheme()).css;
+    const reader = css.slice(css.lastIndexOf('[data-part="message-view.text"] {'));
+    expect(css.lastIndexOf('[data-part="message-view.text"] {')).toBeGreaterThan(
+      css.indexOf(SKIN_CSS),
+    );
+    expect(reader).toMatch(/font-family: var\(--nail-font-reader\)/);
+  });
+
+  it("hides the tag line in Compact", () => {
+    expect(SKIN_CSS).toContain(
+      ':root[data-nail-density="compact"] [data-part="message-list.row.tag-line"]',
+    );
+    expect(SKIN_CSS).toContain(
+      '[data-part="app"][data-density="compact"] [data-part="message-list.row.tag-line"]',
+    );
+  });
+
+  it("gives white text enough contrast on every avatar and file-type colour (WCAG AA)", () => {
+    const fallbacks = [
+      ...SKIN_CSS.matchAll(/--nail-color-(?:avatar-\d+|file-[a-z]+), (#[0-9a-f]{6})\)/g),
+    ];
+    expect(fallbacks.length).toBeGreaterThan(AVATAR_COLORS.length);
+    for (const color of [...AVATAR_COLORS, ...fallbacks.map((m) => m[1] as string)]) {
+      expect(contrast(color, "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("hashes addresses to stable palette slots", () => {
+    expect(stableHash("ada@example.org")).toBe(stableHash("ada@example.org"));
+    expect(colorSlot(" Ada@Example.org ")).toBe(colorSlot("ada@example.org"));
+    const slots = new Set(
+      ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"].map((x) => colorSlot(`${x}@x.org`)),
+    );
+    expect(slots.size).toBeGreaterThan(3);
+    for (const slot of slots) expect(slot).toBeLessThan(AVATAR_COLORS.length);
+  });
+});
+
+describe("density in the compiler (ADR 0102)", () => {
+  const compactTheme = (): ResolvedTheme => ({ ...defaultTheme(), density: "compact" });
+
+  it("puts the compact variant under data-nail-density, after the colour modes", () => {
+    const css = compileTheme(defaultTheme()).css;
+    const compact = css.indexOf(':root[data-nail-density="compact"] {');
+    expect(compact).toBeGreaterThan(css.indexOf(':root[data-nail-mode="dark"]'));
+    expect(css).not.toContain(':root[data-nail-mode="compact"]');
+    const block = css.slice(compact, css.indexOf("}", compact));
+    expect(block).toContain("--nail-space-row:");
+    expect(block).not.toContain("color-scheme");
+    expect(COMPACT_VARIANT).toBe("compact");
+  });
+
+  it("resolves token references with the compact values when the theme is compact", () => {
+    const comfortable = defaultTheme();
+    const row = (t: ResolvedTheme) => resolveTokenRefs("var(--nail-space-row)", t, "light");
+    expect(row(compactTheme())).toBe(comfortable.modes.compact?.space?.row);
+    expect(row(comfortable)).toBe(comfortable.tokens.space?.row);
+  });
+
+  it("sets data-nail-density on the document from the theme", () => {
+    const { rerender } = render(<ThemeProvider theme={defaultTheme()}>{null}</ThemeProvider>);
+    expect(document.documentElement.dataset.nailDensity).toBe("comfortable");
+    rerender(<ThemeProvider theme={compactTheme()}>{null}</ThemeProvider>);
+    expect(document.documentElement.dataset.nailDensity).toBe("compact");
+  });
+});

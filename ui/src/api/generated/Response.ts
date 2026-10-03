@@ -311,7 +311,7 @@ draft_id: DraftId, } | { "type": "Draft",
  */
 draft: Draft, } | { "type": "AttachmentData", 
 /**
- * MIME type (from the draft's attachment entry).
+ * MIME type (from the draft's attachment entry or the part).
  */
 mime: string, 
 /**

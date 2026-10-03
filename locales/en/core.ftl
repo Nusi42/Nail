@@ -129,7 +129,7 @@ config-undo-send-needs-seconds = `undo-send-delay` needs a number of seconds
 
 ## theme.kdl
 
-config-theme-unknown-section = unknown theme section `{ $node }` (expected tokens, modes, part, parts, icon, icons, message, sounds or raw-css)
+config-theme-unknown-section = unknown theme section `{ $node }` (expected appearance, tokens, modes, part, parts, icon, icons, message, sounds or raw-css)
 config-mode-unknown = unknown mode `{ $found }` (use system, light, dark or high-contrast)
 config-mode-override-mode-unknown = unknown mode `{ $found }` (expected light, dark or high-contrast)
 config-html-dark-mode-unknown = unknown html-dark-mode `{ $found }` (use off, invert or smart)
@@ -376,3 +376,8 @@ sync-error-folders =
         [one] The folder { $folders } could not be synchronized.
        *[other] { $count } folders could not be synchronized: { $folders }
     }
+
+## Attachments of received mail (M5a WP155)
+
+attachment-too-large = This attachment is too large to download here. Save it in the desktop app instead.
+attachment-path-not-absolute = Choose a full path for the attachment, including the drive or folder.

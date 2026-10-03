@@ -49,3 +49,27 @@ export const TOOLBAR_IDS = [
   "image",
   "source",
 ];
+
+/** The Lucide icon of each toolbar command (M5a). */
+export const FORMAT_ICONS: Readonly<Record<string, string>> = {
+  bold: "bold",
+  italic: "italic",
+  underline: "underline",
+  strike: "strikethrough",
+  heading: "heading",
+  "bullet-list": "list",
+  "ordered-list": "list-ordered",
+  blockquote: "text-quote",
+  "code-block": "code",
+  table: "table",
+  undo: "undo-2",
+  redo: "redo-2",
+  "add-row": "plus",
+  "add-column": "plus",
+  "delete-row": "minus",
+  "delete-column": "minus",
+  "delete-table": "trash",
+  link: "link",
+  image: "image-plus",
+  source: "file-text",
+};
