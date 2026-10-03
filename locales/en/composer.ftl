@@ -110,3 +110,22 @@ composer-action-attach = Attach a file
 
 composer-editor-loading = Loading the editor…
 composer-editor-failed = The editor could not be loaded. Reload Nail and try again.
+
+## Several composers and their confirmations (M5c WP172)
+
+# Titles of the modal confirmations (the composer's own title is its subject).
+window-composer-close = Unsaved changes
+window-composer-discard = Discard message
+# { $subject }: the message's subject, or "New message".
+composer-close-question = “{ $subject }” has changes that are not saved yet. Save them as a draft before closing?
+composer-close-save = Save draft
+composer-close-discard = Close without saving
+composer-confirm-keep = Keep editing
+
+## Pop-out windows (desktop, M5c): why a message stays in the main window
+
+composer-pop-out-plain = this message window cannot open on its own
+composer-pop-out-not-saved = the message could not be saved first
+composer-confirm-ok = OK
+composer-discard-question = Discard “{ $subject }”?
+composer-discard-saved = Discard “{ $subject }”? Its saved draft is deleted too.

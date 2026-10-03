@@ -9,16 +9,19 @@
  * Mount points: the composers call `sendDraftChecked` instead of
  * requesting `SendDraft` → `SendQueued` directly (it resolves with the
  * outbox entry, or `null` when the user keeps editing); the dialog is the
- * feature effect `SendVetoDialog`.
+ * modal confirmation window `plugin-send-veto` (M5c: it blocks the composer
+ * it came from), kept in step with the veto by the feature effect
+ * `SendVetoDialog`; closing the window (× or Escape) keeps editing.
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { errorMessageOf, NailError, type NailClient } from "../../api/client";
 import type { LocalizedMessage, OutboxEntry, Request } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { trapTab } from "../../layout/WindowLayer";
 import { useClient } from "../../state/queries";
+import { useUi, useUiStoreApi } from "../../state/uiStore";
 import type { UiStore } from "../../state/uiStore";
 import { pluginsStoreFor, usePluginsState } from "./store";
+import { SEND_VETO_WINDOW, setPluginWindowTitle } from "./windows";
 
 /**
  * Sends a draft like `SendDraft` → `SendQueued`, but when before-send hooks
@@ -54,8 +57,40 @@ export async function sendDraftChecked(
   }
 }
 
-/** The veto dialog (an effect in the app shell; shown while a veto waits). */
+/**
+ * Keeps the veto and its window in step (an effect in the app shell): a
+ * veto opens `plugin-send-veto`, a settled one closes it, and a window the
+ * user closed (× or Escape) keeps editing.
+ */
 export function SendVetoDialog() {
+  const t = useT();
+  const store = useUiStoreApi();
+  const veto = usePluginsState((s) => s.veto);
+  const showVeto = usePluginsState((s) => s.showVeto);
+  const open = useUi((s) => s.windows.includes(SEND_VETO_WINDOW));
+  const shown = useRef<string | null>(null);
+  useEffect(() => {
+    if (veto !== null && shown.current !== veto.vetoId) {
+      shown.current = veto.vetoId;
+      setPluginWindowTitle(SEND_VETO_WINDOW, t("plugin-veto-title", { count: veto.vetoes.length }));
+      store.getState().openWindow(SEND_VETO_WINDOW);
+    } else if (veto === null && shown.current !== null) {
+      shown.current = null;
+      if (store.getState().windows.includes(SEND_VETO_WINDOW)) {
+        store.getState().closeWindow(SEND_VETO_WINDOW);
+      }
+    } else if (veto !== null && !open) {
+      // Closed by the user: keep editing.
+      shown.current = null;
+      veto.settle(null);
+      showVeto(null);
+    }
+  }, [veto, open, store, showVeto, t]);
+  return null;
+}
+
+/** The content of the veto's window. */
+export function SendVetoWindow() {
   const veto = usePluginsState((s) => s.veto);
   if (!veto) return null;
   return <VetoView key={veto.vetoId} />;
@@ -81,8 +116,6 @@ function VetoView() {
   }, []);
 
   if (!veto) return null;
-  const titleId = `send-veto-${veto.vetoId}-title`;
-  const descId = `send-veto-${veto.vetoId}-desc`;
 
   const close = (entry: OutboxEntry | null) => {
     // Settle first: replacing the veto settles it as "keep editing", which
@@ -114,30 +147,18 @@ function VetoView() {
       if (!busy) close(null);
       return;
     }
-    if (ref.current) trapTab(event, ref.current);
   };
 
   return (
-    <div data-part="plugin-veto.backdrop">
+    <>
       <div
         ref={ref}
         data-part="plugin-veto"
         data-key-context="plugin-veto"
-        data-key-modal=""
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descId}
         aria-busy={busy}
-        tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        <h2 data-part="plugin-veto.title" id={titleId}>
-          {t("plugin-veto-title", { count: veto.vetoes.length })}
-        </h2>
-        <p data-part="plugin-veto.intro" id={descId}>
-          {t("plugin-veto-intro", { count: veto.vetoes.length })}
-        </p>
+        <p data-part="plugin-veto.intro">{t("plugin-veto-intro", { count: veto.vetoes.length })}</p>
         <ul data-part="plugin-veto.list">
           {veto.vetoes.map((v) => (
             <li key={v.plugin_id} data-part="plugin-veto.item" data-plugin={v.plugin_id}>
@@ -184,6 +205,6 @@ function VetoView() {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

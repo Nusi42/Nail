@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
 import {
   accountSectionNamed,
+  composerWindow,
   openSettingsTab,
   readerAction,
   sectionInbox,
@@ -91,7 +92,7 @@ test("a Gmail account syncs, takes a label, archives, sends and picks up server 
   // Sending goes through the Gmail API (no SMTP server).
   await page.locator('[data-part="message-list"]').focus();
   await page.keyboard.press("c");
-  const composer = page.getByRole("dialog", { name: "New message" });
+  const composer = composerWindow(page);
   await expect(composer).toBeVisible();
   await composer.getByRole("textbox", { name: "To" }).fill("grace@example.org");
   await composer.getByRole("textbox", { name: "Subject" }).fill("Sent with the Gmail API");

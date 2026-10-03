@@ -6,6 +6,7 @@ import { queryKeys } from "../state/queries";
 import { createUiStore } from "../state/uiStore";
 import { contextsOf, isFieldCombo } from "./ActionsProvider";
 import { createDispatcher, moveTargetOf, type ActionContext } from "./registry";
+import { DELETE_PERMANENTLY_DIALOG, confirmDeletePermanently } from "../widgets/DeletePermanently";
 
 const INBOX = "acc-personal/Inbox";
 
@@ -79,6 +80,14 @@ describe("mail actions", () => {
     await dispatch("mail.move-to", ["acc-personal/Inbox/Receipts"]);
     await dispatch("mail.delete");
     await dispatch("mail.delete-permanently");
+    // Permanent deletes ask first: nothing is written until confirmed.
+    expect(ctx.store.getState().windows).toEqual([DELETE_PERMANENTLY_DIALOG]);
+    expect(ctx.transport.requests.some((r) => r.type === "DeleteMessages" && r.permanent)).toBe(
+      false,
+    );
+    ctx.store.getState().selectMessage(`${INBOX}#9`);
+    await confirmDeletePermanently(ctx);
+    expect(ctx.store.getState().windows).toEqual([]);
     const writes = ctx.transport.requests.filter((r) => r.type !== "ListMessages");
     expect(writes).toEqual([
       { type: "MoveMessages", message_ids: [`${INBOX}#1`], target: { role: "archive" } },
@@ -118,7 +127,7 @@ describe("mail actions", () => {
     ctx.store.getState().selectMessage(`${INBOX}#2`);
     await dispatch("mail.reply");
     expect(ctx.store.getState().composer?.subject).toMatch(/^Re: /);
-    expect(ctx.store.getState().windows).toEqual(["composer"]);
+    expect(ctx.store.getState().windows).toEqual(["composer:w1"]);
     expect(isEnabled("composer.send")).toBe(true);
     await dispatch("composer.discard");
     expect(ctx.store.getState().composer).toBeNull();

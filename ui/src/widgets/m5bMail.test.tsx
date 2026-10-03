@@ -107,7 +107,9 @@ describe("grouped folder pane (M5b)", () => {
     const env = paneEnv();
     renderNode(PANE, env);
     fireEvent.click(await screen.findByRole("button", { name: "New message" }));
-    await waitFor(() => expect(env.store.getState().windows).toContain("composer"));
+    await waitFor(() =>
+      expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true),
+    );
   });
 
   it("chooses folders across accounts and the unified favorites", async () => {

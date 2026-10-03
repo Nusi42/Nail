@@ -99,6 +99,19 @@ export const dialogs: Feature["dialogs"] = {
   [PALETTE_DIALOG]: PaletteDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [PALETTE_DIALOG]: {
+    size: { width: 640, height: 480 },
+    min_size: { width: 420, height: 300 },
+    pop_out: false,
+  },
+};
+
 /** Handlers for the core's events. */
 export const events: Feature["events"] = [];
 /** Background components. */

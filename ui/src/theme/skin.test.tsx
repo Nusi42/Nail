@@ -7,6 +7,9 @@ import { ThemeProvider } from "./ThemeProvider";
 import { PIM_SKIN_CSS } from "../features/pim/skin";
 import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
 import { SHELL_SKIN_CSS } from "../features/shell/skin";
+import { WINDOWS_SKIN_CSS } from "../features/windows/skin";
+import { COMPOSER_SKIN_CSS } from "../features/composer/skin";
+import { POPOUT_BASE_CSS } from "../features/popout/parts";
 
 /** WCAG relative luminance of `#rrggbb`. */
 function luminance(hex: string): number {
@@ -82,6 +85,9 @@ describe("M5a skin (theme/skin.ts)", () => {
       SHELL_SKIN_CSS,
       SETTINGS_SKIN_CSS,
       PIM_SKIN_CSS,
+      WINDOWS_SKIN_CSS,
+      COMPOSER_SKIN_CSS,
+      POPOUT_BASE_CSS,
     })) {
       let depth = 0;
       for (const char of css) {
@@ -94,9 +100,39 @@ describe("M5a skin (theme/skin.ts)", () => {
   });
 
   it("takes colours only from tokens (literal colours only as token fallbacks)", () => {
-    const withoutFallbacks = SKIN_CSS.replace(/var\(--nail-[a-z0-9-]+, #[0-9a-f]{3,8}\)/gi, "");
-    expect(withoutFallbacks).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-    expect(SKIN_CSS).not.toMatch(/url\(|@import/);
+    for (const css of [SKIN_CSS, WINDOWS_SKIN_CSS, COMPOSER_SKIN_CSS, POPOUT_BASE_CSS]) {
+      const withoutFallbacks = css.replace(/var\(--nail-[a-z0-9-]+, #[0-9a-f]{3,8}\)/gi, "");
+      expect(withoutFallbacks).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+      expect(css).not.toMatch(/url\(|@import/);
+    }
+  });
+
+  it("emits the M5c window manager and composer skins after the shared skin, before the theme", () => {
+    const theme: ResolvedTheme = {
+      ...defaultTheme(),
+      parts: [
+        {
+          selector: "window",
+          states: [],
+          conditions: [],
+          ancestors: [],
+          declarations: { color: "red" },
+          source: null,
+        },
+      ],
+    };
+    const css = compileTheme(theme).css;
+    const skin = css.indexOf(SKIN_CSS);
+    const windows = css.indexOf(WINDOWS_SKIN_CSS);
+    const composer = css.indexOf(COMPOSER_SKIN_CSS);
+    const rule = css.indexOf('[data-part="window"] {\n  color: red;');
+    expect(css.indexOf(POPOUT_BASE_CSS)).toBeGreaterThan(-1);
+    expect(css.indexOf(POPOUT_BASE_CSS)).toBeLessThan(skin);
+    expect(windows).toBeGreaterThan(skin);
+    expect(composer).toBeGreaterThan(windows);
+    expect(rule).toBeGreaterThan(composer);
+    // The modal-frame rules of M1 are gone: every open window is shown.
+    expect(BASE_CSS).not.toContain('[data-part="window"]:not([data-state~="active"])');
   });
 
   it("puts a state on every selector of a group, not only the last one", () => {

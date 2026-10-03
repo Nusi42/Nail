@@ -1,7 +1,9 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { emptyComposer } from "../../state/compose";
-import { createEnv, renderNode, widget, type Env } from "../../test/harness";
+import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import { NodeView } from "../../layout/LayoutRenderer";
+import { WindowInstanceContext } from "../../state/windows";
 import { htmlEditorIn } from "./HtmlEditor";
 import { markdownViewIn } from "./MarkdownEditor";
 import { composerCryptoStore } from "../security";
@@ -10,6 +12,7 @@ import { acceptRichDrafts } from "./mock";
 import { AUTOSAVE_MS, richStoreFor, type RichState } from "./store";
 import { loadHtmlEditor, loadMarkdownEditor } from "./lazyEditors";
 import { openRichDraft } from "./flows";
+import { activeComposer } from "./sessions";
 import { loadInlinePreviews, missingInlineImages } from "./inlineImages";
 
 // The editors are lazy chunks: load them once so they render at once.
@@ -199,60 +202,64 @@ describe("rich composer", () => {
     renderNode(widget("composer"), env);
     const choice = { sign: true, encrypt: true, technology: null, protect_headers: null };
     // A report that leaves bob without a key blocks sending; nothing is sent.
-    composerCryptoStore.setState({
-      choice,
-      preference: "auto",
-      report: {
-        recipients: [
-          {
-            email: "bob@example.org",
-            openpgp: null,
-            smime: null,
-            autocrypt: null,
-            lookup: "not-attempted",
-          },
-        ],
-        openpgp: { own_key: true, all_recipients: false },
-        smime: { own_key: false, all_recipients: false },
-        autocrypt: "disable",
-        suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
-      },
-    });
+    act(() =>
+      composerCryptoStore.setState({
+        choice,
+        preference: "auto",
+        report: {
+          recipients: [
+            {
+              email: "bob@example.org",
+              openpgp: null,
+              smime: null,
+              autocrypt: null,
+              lookup: "not-attempted",
+            },
+          ],
+          openpgp: { own_key: true, all_recipients: false },
+          smime: { own_key: false, all_recipients: false },
+          autocrypt: "disable",
+          suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
+        },
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText(/bob@example\.org/)).toBeInTheDocument();
     expect(env.transport.requests.some((r) => r.type === "SendDraft")).toBe(false);
 
     // Grace has a usable key: the choice goes with the draft and the send.
-    composerCryptoStore.setState({
-      report: {
-        recipients: [
-          {
-            email: "grace@navy.example",
-            openpgp: {
-              key_id: "key-3",
-              fingerprint: "F",
-              state: "usable",
-              trust: "verified",
-              source: "imported",
+    act(() =>
+      composerCryptoStore.setState({
+        report: {
+          recipients: [
+            {
+              email: "grace@navy.example",
+              openpgp: {
+                key_id: "key-3",
+                fingerprint: "F",
+                state: "usable",
+                trust: "verified",
+                source: "imported",
+              },
+              smime: null,
+              autocrypt: null,
+              lookup: "not-attempted",
             },
-            smime: null,
-            autocrypt: null,
-            lookup: "not-attempted",
-          },
-        ],
-        openpgp: { own_key: true, all_recipients: true },
-        smime: { own_key: false, all_recipients: false },
-        autocrypt: "disable",
-        suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
-      },
-    });
+          ],
+          openpgp: { own_key: true, all_recipients: true },
+          smime: { own_key: false, all_recipients: false },
+          autocrypt: "disable",
+          suggested: { sign: false, encrypt: false, technology: null, protect_headers: null },
+        },
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(env.store.getState().composer).toBeNull());
     const saved = env.transport.requests.filter((r) => r.type === "SaveDraft").pop();
     expect(saved).toMatchObject({ draft: { crypto: choice } });
     const sent = env.transport.requests.find((r) => r.type === "SendDraft");
     expect(sent).toMatchObject({ crypto: choice });
-    composerCryptoStore.getState().reset();
+    act(() => composerCryptoStore.getState().reset());
   });
 
   it("lets the reminder be dismissed", async () => {
@@ -444,18 +451,27 @@ describe("inline images of reopened drafts", () => {
       locale: "en",
     };
     await openRichDraft(ctx, draftId);
+    // M5c: the draft opens in a window of its own.
+    const id = activeComposer(env.store.getState().windows) ?? "";
+    expect(id).toBe(`composer:${draftId}`);
+    const own = () => richStoreFor(env.store, id).getState();
     await waitFor(() =>
-      expect(rich(env).inlinePreviews["logo1@nail"]).toBe(`data:image/png;base64,${PNG}`),
+      expect(own().inlinePreviews["logo1@nail"]).toBe(`data:image/png;base64,${PNG}`),
     );
     expect(env.transport.requests).toContainEqual(
       expect.objectContaining({ type: "GetDraftAttachment", draft_id: draftId }),
     );
-    const { container } = renderNode(widget("composer"), env);
+    const { container } = renderWithProviders(
+      <WindowInstanceContext.Provider value={id}>
+        <NodeView node={widget("composer")} path="test" />
+      </WindowInstanceContext.Provider>,
+      env,
+    );
     await waitFor(() =>
       expect(htmlEditorIn(container)?.getHTML()).toContain(`src="data:image/png;base64,${PNG}"`),
     );
     // The stored HTML still references the content id.
-    expect(rich(env).html).toContain('src="cid:logo1@nail"');
+    expect(own().html).toContain('src="cid:logo1@nail"');
   });
 
   it("keeps the alt text when the core does not serve the image", async () => {

@@ -225,3 +225,62 @@ fn mcp_settings_default_and_round_trip() {
         .unwrap();
     assert_eq!(store.mcp_settings().unwrap().port, Some(4799));
 }
+
+#[test]
+fn merges_with_remote_extras_in_one_transaction() {
+    use nail_store::exchange::{ExchangeItemRecord, RemoteExtras};
+    use std::collections::BTreeMap;
+
+    let store = seeded_store();
+    let full = BlobHash::of(FULL);
+    let record = ExchangeItemRecord {
+        change_key: Some("ck-1".to_owned()),
+        conversation_id: Some("conv-1".to_owned()),
+        ..ExchangeItemRecord::default()
+    };
+    let extras = BTreeMap::from([(
+        MessageId::from("m1"),
+        RemoteExtras {
+            remote_id: Some("AAMk-1".to_owned()),
+            exchange: Some(record.clone()),
+            gmail: None,
+        },
+    )]);
+    let report = store
+        .merge_with_remote(
+            &[
+                synced("m1", "2026-09-01T10:00:00Z", 1, &full, 50),
+                synced("m2", "2026-09-02T10:00:00Z", 2, &full, 50),
+            ],
+            BodyState::Synced,
+            &extras,
+        )
+        .unwrap();
+    assert_eq!(report.written, 2);
+    assert_eq!(
+        store.message_remote_id(&"m1".into()).unwrap().as_deref(),
+        Some("AAMk-1")
+    );
+    assert_eq!(store.exchange_item(&"m1".into()).unwrap(), Some(record));
+    // Messages without extras keep theirs.
+    assert_eq!(store.message_remote_id(&"m2".into()).unwrap(), None);
+    assert_eq!(store.exchange_item(&"m2".into()).unwrap(), None);
+
+    // Extras for messages outside the batch are ignored.
+    let stray = BTreeMap::from([(
+        MessageId::from("m3"),
+        RemoteExtras {
+            remote_id: Some("x".to_owned()),
+            ..RemoteExtras::default()
+        },
+    )]);
+    store
+        .merge_with_remote(
+            &[synced("m4", "2026-09-03T10:00:00Z", 4, &full, 50)],
+            BodyState::Synced,
+            &stray,
+        )
+        .unwrap();
+    assert!(store.message_exists(&"m4".into()).unwrap());
+    assert!(!store.message_exists(&"m3".into()).unwrap());
+}

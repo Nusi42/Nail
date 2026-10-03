@@ -15,9 +15,11 @@
 use nail_api::sync::BodyState;
 use nail_api::{AccountId, FolderId, MessageId};
 use rusqlite::{OptionalExtension, params};
+use std::collections::BTreeMap;
 
 use crate::blob::BlobHash;
 use crate::error::{Error, Result};
+use crate::exchange::{RemoteExtras, apply_remote_extras_in};
 use crate::mail::{MergeOutcome, MergeReport, SyncedMessage, upsert_message_in_tx};
 use crate::store::Store;
 
@@ -72,6 +74,20 @@ impl Store {
         messages: &[SyncedMessage],
         state: BodyState,
     ) -> Result<MergeReport> {
+        self.merge_with_remote(messages, state, &BTreeMap::new())
+    }
+
+    /// [`Store::merge_with_body_state`], and in the same transaction the
+    /// API engine's extras per message (server id, Exchange data): a reader
+    /// never sees one of these messages without them. Extras apply to
+    /// skipped messages too (a pending move owns their place, not their
+    /// server id). Extras for ids outside `messages` are ignored.
+    pub fn merge_with_remote(
+        &self,
+        messages: &[SyncedMessage],
+        state: BodyState,
+        extras: &BTreeMap<MessageId, RemoteExtras>,
+    ) -> Result<MergeReport> {
         if state == BodyState::OnDemand {
             return Err(Error::InvalidData(
                 "bodies fetched on demand are attached with attach_body".to_owned(),
@@ -111,8 +127,14 @@ impl Store {
                     }
                     MergeOutcome::Skipped => {
                         report.skipped.push(message.summary.id.clone());
+                        if let Some(extra) = extras.get(&message.summary.id) {
+                            apply_remote_extras_in(tx, &message.summary.id, extra)?;
+                        }
                         continue;
                     }
+                }
+                if let Some(extra) = extras.get(&message.summary.id) {
+                    apply_remote_extras_in(tx, &message.summary.id, extra)?;
                 }
                 if !keep_body {
                     tx.prepare_cached("UPDATE messages SET body_state = ?2 WHERE id = ?1")?

@@ -125,6 +125,23 @@ export const dialogs: Feature["dialogs"] = {
   [REPORT_DIALOG]: ReportDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [IMPORT_DIALOG]: { size: { width: 760, height: 600 }, min_size: { width: 560, height: 440 } },
+  [EXPORT_DIALOG]: { size: { width: 760, height: 600 }, min_size: { width: 560, height: 440 } },
+  [BACKUP_DIALOG]: { size: { width: 640, height: 520 }, min_size: { width: 480, height: 380 } },
+  [RESTORE_DIALOG]: { size: { width: 640, height: 520 }, min_size: { width: 480, height: 380 } },
+  [DIAGNOSTICS_DIALOG]: {
+    size: { width: 640, height: 520 },
+    min_size: { width: 480, height: 380 },
+  },
+  [REPORT_DIALOG]: { size: { width: 720, height: 560 }, min_size: { width: 480, height: 380 } },
+};
+
 /** Keeps jobs current: progress and reports go into the cache. */
 export const handlePortabilityEvent: FeatureEventHandler = (event, { queryClient }) => {
   if ((PORTABILITY_EVENTS as readonly string[]).includes(event.type)) {

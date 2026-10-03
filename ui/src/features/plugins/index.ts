@@ -32,12 +32,13 @@ import type { Feature, FeatureEventHandler } from "../types";
 import { RUN_COMMAND, runCommandHandler } from "./commands";
 import { isForThisUi } from "./context";
 import { INSTALL_DIALOG, InstallDialog } from "./InstallDialog";
-import { PluginDialogs } from "./PluginDialogs";
+import { PluginDialogWindow, PluginDialogs } from "./PluginDialogs";
 import { MANAGER_DIALOG, PluginManager, PluginManagerDialog } from "./PluginManager";
 import { PluginNotifications } from "./PluginNotifications";
 import { PluginPanel } from "./PluginPanel";
 import { appendLogLine, pluginKeys } from "./queries";
-import { SendVetoDialog } from "./SendVeto";
+import { SendVetoDialog, SendVetoWindow } from "./SendVeto";
+import { PLUGIN_DIALOG_KINDS, SEND_VETO_WINDOW, pluginWindowTitle, pluginWindows } from "./windows";
 import { pluginsStoreFor } from "./store";
 import type { PluginInfo, PluginLogEntry, PluginUiNode } from "../../api/generated";
 
@@ -104,7 +105,26 @@ export const actions: Feature["actions"] = {
 export const dialogs: Feature["dialogs"] = {
   [INSTALL_DIALOG]: InstallDialog,
   [MANAGER_DIALOG]: PluginManagerDialog,
+  // M5c: plug-in dialogs and the send veto are windows too (`./windows.ts`).
+  ...Object.fromEntries(PLUGIN_DIALOG_KINDS.map((kind) => [kind, PluginDialogWindow])),
+  [SEND_VETO_WINDOW]: SendVetoWindow,
 };
+
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [INSTALL_DIALOG]: { size: { width: 640, height: 560 }, min_size: { width: 480, height: 400 } },
+  [MANAGER_DIALOG]: { size: { width: 900, height: 640 }, min_size: { width: 600, height: 420 } },
+  ...pluginWindows,
+};
+
+/** Plug-in dialogs and the veto are titled by their own text. */
+export const windowTitles: NonNullable<Feature["windowTitles"]> = Object.fromEntries(
+  [...PLUGIN_DIALOG_KINDS, SEND_VETO_WINDOW].map((kind) => [kind, pluginWindowTitle]),
+);
 
 /** Crashes that are worth telling the user about. */
 const CRASHES = ["error", "cpu-budget", "memory-limit"];

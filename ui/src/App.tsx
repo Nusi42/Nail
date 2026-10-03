@@ -18,6 +18,7 @@ import { I18nProvider, useT } from "./i18n/I18nProvider";
 import { LayoutContext } from "./layout/LayoutContext";
 import { WindowView } from "./layout/LayoutRenderer";
 import { WindowLayer } from "./layout/WindowLayer";
+import { WindowSpecsContext, WindowTitlesContext } from "./layout/windowSpecs";
 import { DialogRegistryContext } from "./layout/dialogRegistry";
 import { WidgetRegistryContext, type WidgetRegistry } from "./layout/widgetRegistry";
 import {
@@ -395,28 +396,32 @@ function Shell({ widgets, windowName }: { widgets: WidgetRegistry; windowName: s
             {(layout) => (
               <LayoutContext.Provider value={layout}>
                 <DialogRegistryContext.Provider value={appRegistry.dialogs}>
-                  <ActionsProvider layout={layout} handlers={appRegistry.actions}>
-                    <WidgetRegistryContext.Provider value={widgets}>
-                      <main
-                        data-part="app"
-                        data-layout={layout.name}
-                        data-theme={config.data.theme.name}
-                        data-density={config.data.theme.density}
-                      >
-                        {popOut !== null ? (
-                          <PopOutHost layout={layout} window={popOut} />
-                        ) : (
-                          <>
-                            <WindowView layout={layout} name={windowName} />
-                            <WindowLayer layout={layout} />
-                          </>
-                        )}
-                        {/* Inside the landmark: context menus open from here. */}
-                        <FeatureEffects />
-                      </main>
-                      <ReauthPrompt />
-                    </WidgetRegistryContext.Provider>
-                  </ActionsProvider>
+                  <WindowSpecsContext.Provider value={appRegistry.windows}>
+                    <WindowTitlesContext.Provider value={appRegistry.windowTitles}>
+                      <ActionsProvider layout={layout} handlers={appRegistry.actions}>
+                        <WidgetRegistryContext.Provider value={widgets}>
+                          <main
+                            data-part="app"
+                            data-layout={layout.name}
+                            data-theme={config.data.theme.name}
+                            data-density={config.data.theme.density}
+                          >
+                            {popOut !== null ? (
+                              <PopOutHost layout={layout} window={popOut} />
+                            ) : (
+                              <>
+                                <WindowView layout={layout} name={windowName} />
+                                <WindowLayer layout={layout} />
+                              </>
+                            )}
+                            {/* Inside the landmark: context menus open from here. */}
+                            <FeatureEffects />
+                          </main>
+                          <ReauthPrompt />
+                        </WidgetRegistryContext.Provider>
+                      </ActionsProvider>
+                    </WindowTitlesContext.Provider>
+                  </WindowSpecsContext.Provider>
                 </DialogRegistryContext.Provider>
               </LayoutContext.Provider>
             )}

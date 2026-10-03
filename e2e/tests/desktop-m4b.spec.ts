@@ -18,7 +18,7 @@ import {
 import { freePort, nailBinary, tempDir } from "../support/nail";
 import { commandManifest, writePluginFolder } from "../support/plugins";
 import { startUpdateServer, updateKey } from "../support/updates";
-import { openSettingsTab } from "../support/views";
+import { composerWindow, openSettingsTab } from "../support/views";
 
 /**
  * The Windows integration of wave M4b (plan WP115, ADR 0092) on the real
@@ -171,7 +171,7 @@ test("the MAPI test harness sends a file and the composer opens with it attached
   // The DLL handed Nail a private copy: the program's file is untouched.
   expect(existsSync(file)).toBe(true);
 
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByRole("textbox", { name: "Subject" })).toHaveValue("Quarterly figures");
   await expect(dialog.getByRole("textbox", { name: "To" })).toHaveValue(/grace@navy\.example/);
@@ -196,7 +196,7 @@ test("the tray's New message opens the composer, and start hidden keeps the wind
   // Tray → New message: the window comes up with an empty composer.
   await shellControl(page, "tray-new-message");
   await expect.poll(() => shellControl(page, "window-visible")).toBe(true);
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByRole("textbox", { name: "To" })).toHaveValue("");
   await expect(dialog.getByRole("textbox", { name: "Subject" })).toHaveValue("");

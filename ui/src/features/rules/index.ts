@@ -48,6 +48,15 @@ export const dialogs: Feature["dialogs"] = {
   [RULES_WINDOW]: RulesDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [RULES_WINDOW]: { size: { width: 900, height: 640 }, min_size: { width: 600, height: 420 } },
+};
+
 /** Handlers for core events. */
 export const events: Feature["events"] = [
   (event, { queryClient }) => onRulesEvent(event, queryClient),

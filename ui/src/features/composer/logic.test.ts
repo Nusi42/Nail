@@ -36,7 +36,12 @@ import {
   MOCK_MAX_ATTACHMENT,
 } from "./mock";
 import { mentionsAttachment, needsReminder, ownText, parseKeywords } from "./reminder";
-import { emptyRich, primeRich, richStoreFor } from "./store";
+import { activeComposer } from "./sessions";
+import { emptyRich, instanceRichStore, primeRich, richStoreFor } from "./store";
+
+/** The rich store of the focused composer window. */
+const activeRich = (ctx: ComposeContext) =>
+  richStoreFor(ctx.store, activeComposer(ctx.store.getState().windows));
 
 const KEYWORDS = "attach, attached, attachment, enclosed";
 
@@ -300,16 +305,19 @@ describe("composer flows", () => {
     firstIdentity(ctx.transport).composer_mode = "markdown";
     await startRichCompose(ctx);
     const ui = ctx.store.getState();
-    expect(ui.windows).toEqual(["composer"]);
+    // M5c: a window of its own (no draft id yet: `w1`).
+    expect(ui.windows).toEqual(["composer:w1"]);
+    expect(ui.composers["composer:w1"]).toMatchObject({ identityId: "ada@example.org" });
+    // The focused composer is mirrored for the single-composer readers.
     expect(ui.composer).toMatchObject({ identityId: "ada@example.org", text: "" });
-    expect(richStoreFor(ctx.store).getState()).toMatchObject({
+    expect(activeRich(ctx).getState()).toMatchObject({
       mode: "markdown",
       markdown: "\n\n-- \nAda",
-      primed: false,
     });
-    // A second call resumes the open message.
+    // A second call opens a second composer; the first stays open.
     await startRichCompose(ctx);
-    expect(ctx.transport.requests.filter((r) => r.type === "NewDraft")).toHaveLength(1);
+    expect(ctx.transport.requests.filter((r) => r.type === "NewDraft")).toHaveLength(2);
+    expect(ctx.store.getState().windows).toEqual(["composer:w1", "composer:w2"]);
   });
 
   it("falls back to the plain-text flows when the core has no composer yet", async () => {
@@ -321,14 +329,16 @@ describe("composer flows", () => {
         : send(request);
     await startRichCompose(ctx);
     expect(ctx.store.getState().composer?.text).toBe("\n\n-- \nAda");
-    expect(richStoreFor(ctx.store).getState().mode).toBe("plain");
+    expect(activeRich(ctx).getState().mode).toBe("plain");
+    // An older flow clearing the mirror closes the focused composer.
     ctx.store.getState().setComposer(null);
+    expect(ctx.store.getState().windows).toEqual([]);
     const id = firstMessage(ctx.transport).id;
     await startRichReply(ctx, id, "reply");
     expect(ctx.store.getState().composer?.context).toEqual({ mode: "reply", message_id: id });
   });
 
-  it("opens the plain composer when the core cannot choose an identity", async () => {
+  it("opens a plain-text composer when the core cannot choose an identity", async () => {
     const ctx = context();
     const send = ctx.transport.send.bind(ctx.transport);
     ctx.transport.send = async (request) =>
@@ -337,8 +347,8 @@ describe("composer flows", () => {
         : send(request);
     await startRichCompose(ctx);
     expect(ctx.store.getState().composer).not.toBeNull();
-    expect(ctx.store.getState().windows).toContain("composer");
-    expect(richStoreFor(ctx.store).getState().mode).toBe("plain");
+    expect(ctx.store.getState().windows).toEqual(["composer:w1"]);
+    expect(activeRich(ctx).getState().mode).toBe("plain");
   });
 
   it("replies in HTML and sends the rich draft", async () => {
@@ -346,14 +356,18 @@ describe("composer flows", () => {
     const id = firstMessage(ctx.transport).id;
     firstIdentity(ctx.transport).composer_mode = "html";
     await startRichReply(ctx, id, "reply-all");
-    const rich = richStoreFor(ctx.store);
+    const window = activeComposer(ctx.store.getState().windows) ?? "";
+    const rich = richStoreFor(ctx.store, window);
     expect(rich.getState().mode).toBe("html");
     expect(rich.getState().html).toContain("<blockquote");
     expect(await sendRich(ctx, null)).toBe(true);
     const saved = ctx.transport.requests.find((r) => r.type === "SaveDraft");
     expect(saved).toMatchObject({ draft: { mode: "html", context: { mode: "reply-all" } } });
     expect(ctx.store.getState().composer).toBeNull();
-    expect(rich.getState().mode).toBe("plain");
+    expect(ctx.store.getState().windows).toEqual([]);
+    expect(ctx.store.getState().composers).toEqual({});
+    // Its rich state went with the window.
+    expect(instanceRichStore(ctx.store, window)).toBeUndefined();
   });
 
   it("switches modes, waiting for confirmation when formatting is lost", async () => {
@@ -475,9 +489,14 @@ describe("composer flows", () => {
       draftId: "draft-7",
       identityPicked: true,
     });
-    const rich = richStoreFor(ctx.store).getState();
+    expect(ctx.store.getState().windows).toEqual(["composer:draft-7"]);
+    const rich = activeRich(ctx).getState();
     expect(rich).toMatchObject({ mode: "markdown", markdown: "# D", autosave: "saved" });
     expect(rich.savedKey).not.toBeNull();
+    // Opening it again focuses the open window.
+    await openRichDraft(ctx, "draft-7");
+    expect(ctx.store.getState().windows).toEqual(["composer:draft-7"]);
+    expect(ctx.transport.requests.filter((r) => r.type === "GetDraft")).toHaveLength(1);
   });
 
   it("swaps the signature when the identity changes", () => {

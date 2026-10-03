@@ -19,13 +19,78 @@
  * Only WP171 edits the files in this directory. The central registry
  * (`../registry.ts`) merges these exports into the app; see `../README.md`.
  */
+import type { ActionInfo } from "../../actions/palette";
+import { windowStatesKey } from "../../state/windowState";
 import type { Feature } from "../types";
+import { runWindowCommand } from "./commands";
+
+export { WINDOWS_SKIN_CSS, WINDOW_PARTS } from "./skin";
+export { runWindowCommand, setWindowCommandHandler, type WindowCommand } from "./commands";
+
+/** Action ids of the window manager. */
+export const WINDOW_CYCLE_ACTION = "window.cycle";
+export const WINDOW_MAIN_ACTION = "window.main";
+export const WINDOW_MAXIMIZE_ACTION = "window.maximize";
+export const WINDOW_RESET_ACTION = "window.reset-positions";
 
 /** Layout widget kinds → components. */
 export const widgets: Feature["widgets"] = {};
 
 /** Action ids → handlers. */
-export const actions: Feature["actions"] = {};
+export const actions: Feature["actions"] = {
+  // Ctrl+F6 (built into the window layer; bindable like any action).
+  [WINDOW_CYCLE_ACTION]: {
+    run: (ctx) => {
+      runWindowCommand(ctx.store, { type: "cycle" });
+    },
+    enabled: (ctx) => ctx.store.getState().windows.length > 0,
+  },
+  // Ctrl+Shift+F6.
+  [WINDOW_MAIN_ACTION]: {
+    run: (ctx) => {
+      runWindowCommand(ctx.store, { type: "main" });
+    },
+    enabled: (ctx) => ctx.store.getState().windows.length > 0,
+  },
+  [WINDOW_MAXIMIZE_ACTION]: {
+    run: (ctx) => {
+      runWindowCommand(ctx.store, { type: "maximize" });
+    },
+    enabled: (ctx) => ctx.store.getState().windows.length > 0,
+  },
+  // Forgets every remembered window position; open windows go back to their default places.
+  [WINDOW_RESET_ACTION]: {
+    run: async (ctx) => {
+      const { states } = await ctx.client.request({ type: "ResetWindowStates" }, "WindowStates");
+      ctx.queryClient.setQueryData(windowStatesKey, states);
+      runWindowCommand(ctx.store, { type: "reset" });
+    },
+  },
+};
+
+/** Command-palette descriptions. */
+export const actionInfo: Readonly<Record<string, ActionInfo>> = {
+  [WINDOW_CYCLE_ACTION]: {
+    title: "window-manager-action-cycle",
+    keywords: "window-manager-action-cycle-keywords",
+    icon: "app-window",
+  },
+  [WINDOW_MAIN_ACTION]: {
+    title: "window-manager-action-main",
+    keywords: "window-manager-action-main-keywords",
+    icon: "app-window",
+  },
+  [WINDOW_MAXIMIZE_ACTION]: {
+    title: "window-manager-action-maximize",
+    keywords: "window-manager-action-maximize-keywords",
+    icon: "maximize-2",
+  },
+  [WINDOW_RESET_ACTION]: {
+    title: "window-manager-action-reset",
+    keywords: "window-manager-action-reset-keywords",
+    icon: "app-window",
+  },
+};
 
 /** Dialogs by name. */
 export const dialogs: Feature["dialogs"] = {};

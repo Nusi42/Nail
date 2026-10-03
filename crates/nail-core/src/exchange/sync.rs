@@ -19,7 +19,7 @@
 //!   (categories, automatic replies, rules, Focused Inbox) through the
 //!   settings / classify calls.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use nail_api::engine::{
@@ -40,6 +40,7 @@ use nail_api::{
 use nail_proto_graph::{FolderPoll, PollTimer};
 use nail_store::exchange::{
     ExchangeFolderRecord, ExchangeItemRecord, ExchangeOp, ExchangeOpOutcome, ExchangeSyncRecord,
+    RemoteExtras,
 };
 use nail_store::{Operation, QueuedOp, SyncedMessage};
 use tokio::sync::watch;
@@ -48,7 +49,7 @@ use super::{RunningEngine, changed, exchange_parts};
 use crate::engine::{Signals, state_for_error, stopped, unix_now};
 use crate::error::{CoreError, Result};
 use crate::ids;
-use crate::ingest::{IncomingMessage, ingest};
+use crate::ingest::{IncomingMessage, ingest_with_remote};
 use crate::replay::{OpExecutor, replay_account};
 use crate::service::{Service, lock};
 
@@ -64,6 +65,12 @@ const STREAM_WAIT_SECS: u32 = 60;
 
 /// Most pages of one folder in one pass (a runaway cursor).
 const MAX_PAGES: u32 = 1_000;
+
+/// How often a pass syncs the folders of a mailbox again because a folder
+/// reported messages removed after they were synced (see
+/// [`sync_mailbox`]). Past this the removed messages stay marked and the
+/// next pass decides.
+const MAX_REMOVAL_ROUNDS: u32 = 3;
 
 /// The store id of an Exchange message (from its first server id).
 pub(crate) fn exchange_message_id(account: &AccountId, remote_id: &str) -> MessageId {
@@ -151,6 +158,9 @@ pub(crate) async fn run(
     };
     let mut backoff = timing.reconnect_min;
     let mut stream_backoff = timing.reconnect_min;
+    // The own folders the streaming subscription was made for (sorted);
+    // `None`: none yet, or it may be gone.
+    let mut subscribed: Option<Vec<String>> = None;
     loop {
         if *stop.borrow() {
             break;
@@ -199,11 +209,28 @@ pub(crate) async fn run(
             if push_ok {
                 // EWS streaming: wait for the server (or the user).
                 let own = own_folder_ids(&service, &account.id).await;
-                let wait = running
-                    .engine
-                    .wait_for_changes(None, &own, STREAM_WAIT_SECS);
+                let mut asked = own.clone();
+                asked.sort();
+                asked.dedup();
+                // A new subscription reports only what changes after it
+                // exists: it is made first (a wait that ends at once), then
+                // every folder is synced once more, so mail that arrived
+                // between a folder's listing and the subscription is not
+                // missed until the next poll (WP175).
+                let fresh = subscribed.as_ref() != Some(&asked);
+                let wait = running.engine.wait_for_changes(
+                    None,
+                    &own,
+                    if fresh { 0 } else { STREAM_WAIT_SECS },
+                );
                 tokio::select! {
                     result = wait => match result {
+                        Ok(Some(_)) if fresh => {
+                            stream_backoff = timing.reconnect_min;
+                            subscribed = Some(asked);
+                            state.folders.wake_all();
+                            break;
+                        }
                         Ok(Some(folders)) if !folders.is_empty() => {
                             stream_backoff = timing.reconnect_min;
                             for remote in folders {
@@ -224,6 +251,7 @@ pub(crate) async fn run(
                             push_ok = false;
                         }
                         Err(err) => {
+                            subscribed = None;
                             // Poll until the next pass, which waits for the
                             // back-off and the server's Retry-After: a
                             // subscription that keeps failing must not turn
@@ -505,34 +533,86 @@ async fn sync_mailbox(
             .track(f.folder_id.as_str(), priority || f.cursor.is_none());
     }
     let due: HashSet<String> = state.folders.due().into_iter().collect();
-    let mut synced: HashSet<FolderId> = HashSet::new();
+    let mut since_removal = SinceRemoval::default();
     for folder in &folders {
         let woken = state.woken.remove(&folder.folder_id);
         if !due.contains(folder.folder_id.as_str()) && !woken {
             continue;
         }
-        synced.insert(folder.folder_id.clone());
-        sync_one(service, account, engine, mailbox, folder, state).await?;
+        let removed = sync_one(service, account, engine, mailbox, folder, state).await?;
+        since_removal.synced(&folder.folder_id, removed);
     }
-    // Messages reported removed may have moved to a folder this pass did
-    // not sync yet: every folder of the mailbox is synced before what is
-    // still marked is deleted (ADR 0078).
+    // Messages reported removed may have moved to another folder (another
+    // client moved them): every folder of the mailbox is synced after the
+    // removal was seen before what is still marked is deleted (ADR 0078).
+    // A folder synced earlier in the same pass does not count: the move
+    // may have happened after its listing (WP175).
     let (id, key) = (account.id.clone(), mailbox.map(str::to_owned));
     let pending = service
         .store()
         .call(move |s| s.exchange_removed(&id, key.as_deref()))
         .await?;
-    if !pending.is_empty() {
-        for folder in folders.iter().filter(|f| !synced.contains(&f.folder_id)) {
-            sync_one(service, account, engine, mailbox, folder, state).await?;
-        }
-        flush_removed(service, &account.id, mailbox).await?;
+    if pending.is_empty() {
+        return Ok(());
     }
+    let mut rounds = 0u32;
+    loop {
+        // Read again: a folder synced in this pass has a newer cursor.
+        let (id, key) = (account.id.clone(), mailbox.map(str::to_owned));
+        let current: Vec<ExchangeFolderRecord> = service
+            .store()
+            .call(move |s| {
+                Ok(s.exchange_folders(&id)?
+                    .into_iter()
+                    .filter(|f| f.mailbox == key)
+                    .collect())
+            })
+            .await?;
+        let stale = since_removal.stale(current);
+        if stale.is_empty() {
+            break;
+        }
+        if rounds == MAX_REMOVAL_ROUNDS {
+            tracing::info!(account = %account.id, "messages keep being removed; deciding in the next pass");
+            return Ok(());
+        }
+        rounds += 1;
+        for folder in &stale {
+            let removed = sync_one(service, account, engine, mailbox, folder, state).await?;
+            since_removal.synced(&folder.folder_id, removed);
+        }
+    }
+    flush_removed(service, &account.id, mailbox).await?;
     Ok(())
 }
 
+/// The folders of a mailbox synced after the last folder that reported
+/// messages removed: only their listings can show where a removed message
+/// went (another client may have moved it there after an earlier listing).
+#[derive(Debug, Default)]
+struct SinceRemoval(HashSet<FolderId>);
+
+impl SinceRemoval {
+    /// `folder` was synced; `removed`: its sync marked messages removed,
+    /// so every folder synced before it has to be synced again.
+    fn synced(&mut self, folder: &FolderId, removed: bool) {
+        if removed {
+            self.0.clear();
+        }
+        self.0.insert(folder.clone());
+    }
+
+    /// The folders (of `all`) to sync before marked messages may be
+    /// deleted.
+    fn stale(&self, all: Vec<ExchangeFolderRecord>) -> Vec<ExchangeFolderRecord> {
+        all.into_iter()
+            .filter(|f| !self.0.contains(&f.folder_id))
+            .collect()
+    }
+}
+
 /// Syncs one mail folder of a mailbox (a folder the server no longer has
-/// is removed).
+/// is removed); `true` when it marked messages removed.
 async fn sync_one(
     service: &Service,
     account: &AccountConfig,
@@ -540,10 +620,10 @@ async fn sync_one(
     mailbox: Option<&str>,
     folder: &ExchangeFolderRecord,
     state: &mut LoopState,
-) -> Result<()> {
+) -> Result<bool> {
     let key = folder.folder_id.as_str().to_owned();
     match sync_folder(service, account, engine.as_ref(), folder).await {
-        Ok(changes) => {
+        Ok(FolderSync { changes, removed }) => {
             state.folders.observe(&key, changes);
             state.poll.observe_changes(changes);
             if folder.cursor.is_some() {
@@ -552,13 +632,13 @@ async fn sync_one(
                     mailbox.is_none() && folder.well_known == Some(ExchangeWellKnownFolder::Inbox),
                 );
             }
-            Ok(())
+            Ok(removed)
         }
         Err(err) if err.code() == ErrorCode::NotFound => {
             tracing::info!(account = %account.id, folder = %folder.remote_id, "folder gone");
             remove_folders(service, std::slice::from_ref(&folder.folder_id)).await?;
             state.folders.untrack(&key);
-            Ok(())
+            Ok(false)
         }
         Err(err) => Err(err),
     }
@@ -994,13 +1074,22 @@ async fn save_folder_cursor(
     Ok(())
 }
 
-/// Syncs one folder's items; `true` when something changed.
+/// What syncing one folder did.
+#[derive(Debug, Clone, Copy)]
+struct FolderSync {
+    /// Something changed.
+    changes: bool,
+    /// Messages were marked removed (deleted, or moved elsewhere).
+    removed: bool,
+}
+
+/// Syncs one folder's items.
 async fn sync_folder(
     service: &Service,
     account: &AccountConfig,
     engine: &dyn ExchangeEngine,
     folder: &ExchangeFolderRecord,
-) -> Result<bool> {
+) -> Result<FolderSync> {
     let mailbox = folder.mailbox.as_deref();
     let mut listing = Listing::of(
         folder.cursor.as_deref(),
@@ -1016,6 +1105,7 @@ async fn sync_folder(
     }
     let mut restarted = false;
     let mut any = false;
+    let mut removed = false;
     let mut pages = 0u32;
     loop {
         pages += 1;
@@ -1053,7 +1143,7 @@ async fn sync_folder(
                     && delta.changed.is_empty()
                     && delta.removed.is_empty());
                 let arrivals = listing.as_ref().is_none_or(Listing::arrivals);
-                apply_delta(service, account, engine, folder, &delta, arrivals).await?;
+                removed |= apply_delta(service, account, engine, folder, &delta, arrivals).await?;
                 let more = delta.more;
                 match &mut listing {
                     None => {
@@ -1086,7 +1176,9 @@ async fn sync_folder(
                             // The last page: what the server no longer
                             // lists is gone (or moved: see `flush_removed`);
                             // local-only messages without a server id stay.
-                            any |= merge_listing(service, &account.id, folder).await?;
+                            let gone = merge_listing(service, &account.id, folder).await?;
+                            any |= gone;
+                            removed |= gone;
                             save_folder_cursor(
                                 service,
                                 &folder.folder_id,
@@ -1110,7 +1202,10 @@ async fn sync_folder(
             folder_ids: vec![folder.folder_id.clone()],
         });
     }
-    Ok(any)
+    Ok(FolderSync {
+        changes: any,
+        removed,
+    })
 }
 
 /// After the last page of a full listing: the folder's messages the
@@ -1195,7 +1290,8 @@ async fn master(service: &Service, account: &AccountId) -> Result<Vec<ExchangeCa
         .collect())
 }
 
-/// Applies one page of item changes.
+/// Applies one page of item changes; `true` when it marked messages
+/// removed.
 async fn apply_delta(
     service: &Service,
     account: &AccountConfig,
@@ -1203,7 +1299,7 @@ async fn apply_delta(
     folder: &ExchangeFolderRecord,
     delta: &SyncDelta,
     arrivals: bool,
-) -> Result<()> {
+) -> Result<bool> {
     let master = master(service, &account.id).await?;
     store_messages(
         service,
@@ -1250,20 +1346,21 @@ async fn apply_delta(
         folder.mailbox.clone(),
         unix_now(),
     );
-    service
+    Ok(service
         .store()
         .call(move |s| {
+            let mut marked = false;
             for remote in &removed {
                 if let Some(m) = s.message_by_remote_id(&id, remote)?
                     && s.get_message(&m)?.summary.folder_id == folder_id
                 {
                     s.mark_exchange_removed(&id, mailbox.as_deref(), &m, now)?;
+                    marked = true;
                 }
             }
-            Ok(())
+            Ok(marked)
         })
-        .await?;
-    Ok(())
+        .await?)
 }
 
 /// The Exchange extras a message keeps (Focused Inbox only in the Inbox).
@@ -1522,13 +1619,20 @@ async fn store_messages(
             let target = local_folder.clone();
             let record = item_record(folder, m.change_key.as_ref(), m.exchange.as_ref());
             let (remote, stored_id) = (m.remote_id.clone(), id.clone());
+            // The message, its server id and its Exchange data in one
+            // transaction: no reader sees it without them (ADR 0120).
             let report = service
                 .store()
                 .call(move |s| {
-                    let report = ingest(s, &blobs, Some(&index), &target, 0, &[incoming])?;
-                    s.set_message_remote_id(&stored_id, Some(&remote))?;
-                    s.set_exchange_item(&stored_id, &record)?;
-                    Ok(report)
+                    let extras = BTreeMap::from([(
+                        stored_id,
+                        RemoteExtras {
+                            remote_id: Some(remote),
+                            exchange: Some(record),
+                            gmail: None,
+                        },
+                    )]);
+                    ingest_with_remote(s, &blobs, Some(&index), &target, &[incoming], &extras)
                 })
                 .await?;
             if report.new.contains(&id)
@@ -2035,6 +2139,42 @@ impl OpExecutor for ExchangeExecutor<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders_listed_before_a_removal_are_synced_again() {
+        let folder = |id: &str| ExchangeFolderRecord::new(id, format!("r-{id}"));
+        let ids = |list: Vec<ExchangeFolderRecord>| -> Vec<String> {
+            list.into_iter().map(|f| f.folder_id.0).collect()
+        };
+        let all = || vec![folder("a"), folder("b"), folder("inbox"), folder("c")];
+        // Nothing removed: every folder synced in the pass counts.
+        let mut since = SinceRemoval::default();
+        for id in ["a", "b", "inbox", "c"] {
+            since.synced(&id.into(), false);
+        }
+        assert!(since.stale(all()).is_empty());
+        // The inbox reports a message gone after `a` and `b` were listed:
+        // the message may have been moved there after their listings.
+        let mut since = SinceRemoval::default();
+        since.synced(&"a".into(), false);
+        since.synced(&"b".into(), false);
+        since.synced(&"inbox".into(), true);
+        since.synced(&"c".into(), false);
+        assert_eq!(ids(since.stale(all())), ["a", "b"]);
+        // A folder not synced in the pass at all is stale too.
+        let mut since = SinceRemoval::default();
+        since.synced(&"inbox".into(), true);
+        assert_eq!(ids(since.stale(all())), ["a", "b", "c"]);
+        // Syncing them again settles it, unless one of them reports a
+        // removal itself: then the others go again.
+        since.synced(&"a".into(), false);
+        since.synced(&"b".into(), true);
+        since.synced(&"c".into(), false);
+        assert_eq!(ids(since.stale(all())), ["a", "inbox"]);
+        since.synced(&"a".into(), false);
+        since.synced(&"inbox".into(), false);
+        assert!(since.stale(all()).is_empty());
+    }
 
     #[test]
     fn ids_are_stable_and_separate() {

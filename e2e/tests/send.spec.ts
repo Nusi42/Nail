@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import {} from "../support/views";
+import { composerWindow } from "../support/views";
 
 /**
  * Sending a plain-text mail through the core's outbox to the mock SMTP
@@ -27,7 +27,7 @@ const received = () => control<Received[]>(server, "smtp-messages");
 
 async function compose(page: Page, subject: string) {
   await page.keyboard.press("c");
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   await expect(dialog).toBeVisible();
   await dialog.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
   await dialog.getByRole("textbox", { name: "Subject" }).fill(subject);
@@ -44,7 +44,7 @@ test("a plain-text mail is sent, once cancelled by undo and once for real", asyn
   // Send, then undo within the delay: nothing reaches the server and the
   // message is back in the composer.
   const { body } = await compose(page, "Review notes");
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   await body.press("Control+Enter");
   await expect(dialog).toBeHidden();
   await expect(status.getByText(/Sending in \d+ seconds?/)).toBeVisible();

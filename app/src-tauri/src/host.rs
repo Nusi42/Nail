@@ -6,6 +6,9 @@
 //! Methods are quick (registry reads, state snapshots); the updater and
 //! the dev endpoint run in tasks on the shell's runtime and report through
 //! the core's notifier.
+//!
+//! M5c (WP173): pop-out windows ([`crate::popout`]) — `open_pop_out` /
+//! `close_pop_out` / `focus_pop_out`, reported as `DesktopChange::PopOut`.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,10 +20,12 @@ use nail_api::desktop::{
 };
 use nail_api::engine::BoxFuture;
 use nail_api::print::PrintJob;
+use nail_api::windows::{PopOutOpen, window_kind};
 use nail_api::{ApiError, ErrorCode, LocalizedMessage, PrintJobId};
 use nail_core::Service;
 
 use crate::dev_endpoint::DevEndpoint;
+use crate::popout::{PopOutManager, PopOutWindows, TauriPopOuts};
 use crate::registry::Registry;
 use crate::updater::Updater;
 
@@ -47,6 +52,8 @@ pub struct ShellHost {
     app: OnceLock<(tauri::AppHandle, Option<PathBuf>)>,
     /// Print views waiting for `PrintViewReady`.
     print_ready: crate::printing::ReadySignals,
+    /// M5c: pop-out windows.
+    pop_outs: Arc<PopOutManager>,
 }
 
 impl std::fmt::Debug for ShellHost {
@@ -85,6 +92,7 @@ impl ShellHost {
             updater: parts.updater,
             exe: parts.exe,
             data_dir: parts.data_dir,
+            pop_outs: PopOutManager::new(parts.runtime.clone()),
             runtime: parts.runtime,
             opener: parts.opener,
             notify: OnceLock::new(),
@@ -100,7 +108,28 @@ impl ShellHost {
     /// The app, once built (`webview_dir` = the WebView2 data folder of
     /// its windows, `None` = the default).
     pub fn bind_app(&self, app: tauri::AppHandle, webview_dir: Option<PathBuf>) {
+        self.bind_pop_out_windows(Arc::new(TauriPopOuts::new(
+            app.clone(),
+            webview_dir.clone(),
+        )));
         let _ = self.app.set((app, webview_dir));
+    }
+
+    /// The OS windows pop-outs open in (the app's, [`Self::bind_app`]; a
+    /// fake in tests).
+    pub fn bind_pop_out_windows(&self, windows: Arc<dyn PopOutWindows>) {
+        self.pop_outs.bind(windows);
+    }
+
+    /// The pop-out windows.
+    pub fn pop_outs(&self) -> &PopOutManager {
+        &self.pop_outs
+    }
+
+    /// The main window closes (to the tray or for good): its pop-outs
+    /// close with it.
+    pub fn main_window_closing(&self) {
+        self.pop_outs.close_all();
     }
 
     /// The main window's handle (the owner of file dialogs).
@@ -240,6 +269,7 @@ impl ShellHost {
 impl DesktopHost for ShellHost {
     fn attach(&self, notify: DesktopNotifier) {
         self.updater.attach(Arc::clone(&notify));
+        self.pop_outs.attach(Arc::clone(&notify));
         let _ = self.notify.set(notify);
     }
 
@@ -343,6 +373,24 @@ impl DesktopHost for ShellHost {
         })?;
         self.awaiting_default_apps.store(true, Ordering::Relaxed);
         Ok(())
+    }
+
+    fn open_pop_out(&self, open: &PopOutOpen) -> Result<(), ApiError> {
+        // Without the UI's title: the window kind's name (`window-<kind>`).
+        let title = open
+            .title
+            .as_deref()
+            .and_then(crate::popout::taskbar_title)
+            .unwrap_or_else(|| self.localize(&format!("window-{}", window_kind(&open.window))));
+        self.pop_outs.open(open, title)
+    }
+
+    fn close_pop_out(&self, window: &str) -> Result<(), ApiError> {
+        self.pop_outs.close(window)
+    }
+
+    fn focus_pop_out(&self, window: &str) -> Result<(), ApiError> {
+        self.pop_outs.focus(window)
     }
 }
 
@@ -596,6 +644,179 @@ mod tests {
                 .exists()
         );
         assert!(f.host.close_to_tray());
+        f.service.shutdown().await;
+    }
+
+    async fn window_states(service: &Service) -> nail_api::windows::WindowStates {
+        match service.handle(Request::GetWindowStates).await {
+            Response::WindowStates { states } => states,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    fn pop_outs(response: Response) -> Vec<nail_api::windows::PopOut> {
+        match response {
+            Response::PopOuts { pop_outs } => pop_outs,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// Waits until the remembered state of `kind` passes `check`.
+    async fn wait_for_state(
+        service: &Service,
+        kind: &str,
+        check: impl Fn(&nail_api::windows::WindowState) -> bool,
+    ) -> nail_api::windows::WindowState {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if let Some(state) = window_states(service).await.get(kind)
+                    && check(state)
+                {
+                    return *state;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the state arrives")
+    }
+
+    fn pop_out_request(window: &str, title: Option<&str>) -> Request {
+        Request::PopOutWindow {
+            window: window.into(),
+            title: title.map(str::to_owned),
+            context: None,
+        }
+    }
+
+    /// The core drives the pop-outs through this host: opened where the
+    /// shell placed them, moves remembered per kind, the OS close button
+    /// reported, reopened at the remembered place with the kind's title,
+    /// returned to the page, and all closed with the main window.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pop_outs_round_trip_through_the_core() {
+        use crate::popout::PopOutWindows;
+        use crate::popout::testing::FakeWindows;
+        use nail_api::windows::{PopOutChange, WindowGeometry, WindowRect};
+
+        let f = fixture(None);
+        let fake = FakeWindows::single_monitor();
+        f.host
+            .bind_pop_out_windows(Arc::clone(&fake) as Arc<dyn PopOutWindows>);
+        let mut events = f.service.subscribe();
+
+        let list = pop_outs(
+            f.service
+                .handle(Request::PopOutWindow {
+                    window: "composer:d1".into(),
+                    title: Some("Lunch on Friday".into()),
+                    context: Some(serde_json::json!({ "draft": "d1" })),
+                })
+                .await,
+        );
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].context, Some(serde_json::json!({ "draft": "d1" })));
+        assert_eq!(fake.labels(), ["popout-composer:d1"]);
+        assert_eq!(fake.title_of("popout-composer:d1"), "Lunch on Friday");
+        // Where it opened is remembered for the kind.
+        let placed = fake.geometry_of("popout-composer:d1");
+        let state = wait_for_state(&f.service, "composer", |s| s.pop_out.is_some()).await;
+        assert_eq!(state.pop_out, Some(placed));
+        assert!(state.popped_out);
+
+        // The user drags it elsewhere.
+        let moved = WindowRect {
+            x: 1000,
+            y: 200,
+            width: 800,
+            height: 700,
+        };
+        fake.user_moves("popout-composer:d1", moved, false);
+        let state = wait_for_state(&f.service, "composer", |s| {
+            s.pop_out.is_some_and(|g| g.rect == moved)
+        })
+        .await;
+        assert_eq!(state.pop_out, Some(WindowGeometry::at(moved)));
+
+        // The OS close button: closed, the kind stays popped out.
+        fake.user_closes("popout-composer:d1");
+        assert!(pop_outs(f.service.handle(Request::ListPopOuts).await).is_empty());
+        assert!(window_states(&f.service).await["composer"].popped_out);
+
+        // Reopened (no title from the UI): the remembered place, the
+        // kind's name.
+        pop_outs(f.service.handle(pop_out_request("composer:d2", None)).await);
+        assert_eq!(
+            fake.geometry_of("popout-composer:d2"),
+            WindowGeometry::at(moved)
+        );
+        assert_eq!(fake.title_of("popout-composer:d2"), "New message");
+        // Focus from the UI.
+        pop_outs(
+            f.service
+                .handle(Request::FocusPopOut {
+                    window: "composer:d2".into(),
+                })
+                .await,
+        );
+
+        // Back into the page.
+        let list = pop_outs(
+            f.service
+                .handle(Request::ReturnPopOut {
+                    window: "composer:d2".into(),
+                })
+                .await,
+        );
+        assert!(list.is_empty());
+        assert!(fake.labels().is_empty());
+        assert!(!window_states(&f.service).await["composer"].popped_out);
+
+        // The main window closes: every pop-out goes with it.
+        for window in ["settings", "rules"] {
+            pop_outs(f.service.handle(pop_out_request(window, None)).await);
+        }
+        assert_eq!(fake.labels(), ["popout-rules", "popout-settings"]);
+        f.host.main_window_closing();
+        assert!(fake.labels().is_empty());
+        assert!(pop_outs(f.service.handle(Request::ListPopOuts).await).is_empty());
+
+        let mut changes = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let Event::PopOutChanged { window, change, .. } = event {
+                changes.push((window, change));
+            }
+        }
+        for expected in [
+            ("composer:d1".to_owned(), PopOutChange::Opened),
+            ("composer:d1".to_owned(), PopOutChange::Moved),
+            ("composer:d1".to_owned(), PopOutChange::Closed),
+            ("composer:d2".to_owned(), PopOutChange::Focused),
+            ("composer:d2".to_owned(), PopOutChange::Returned),
+            ("settings".to_owned(), PopOutChange::Closed),
+            ("rules".to_owned(), PopOutChange::Closed),
+        ] {
+            assert!(changes.contains(&expected), "{expected:?} in {changes:?}");
+        }
+        f.service.shutdown().await;
+    }
+
+    /// Without the app (or before it runs) pop-outs are unavailable.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pop_outs_need_the_app() {
+        let f = fixture(None);
+        let response = f.service.handle(pop_out_request("settings", None)).await;
+        assert!(
+            matches!(
+                response,
+                Response::Error {
+                    code: ErrorCode::Unavailable,
+                    ..
+                }
+            ),
+            "{response:?}"
+        );
+        assert!(pop_outs(f.service.handle(Request::ListPopOuts).await).is_empty());
         f.service.shutdown().await;
     }
 

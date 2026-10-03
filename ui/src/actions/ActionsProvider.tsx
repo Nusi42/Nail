@@ -110,7 +110,13 @@ export function ActionsProvider({
       } else if (focused?.closest("[data-key-modal]")) {
         // Inside a modal window, main-window (global) bindings do not apply.
         contexts = around;
-      } else if (store.getState().windows.length > 0) {
+      } else if (
+        store.getState().windows.length > 0 &&
+        document.querySelector('[data-part="window"][data-owner="main"]') !== null
+      ) {
+        // A modal window (a confirmation, M5c) blocks the main window: only
+        // window bindings apply. Non-modal windows, and confirmations of
+        // other windows, leave the main window's bindings working.
         contexts = ["window"];
       } else {
         const own = around.length > 0 ? around : [store.getState().keyContext];

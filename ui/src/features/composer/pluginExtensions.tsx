@@ -17,7 +17,8 @@ import {
   useComposerEdits,
 } from "../plugins";
 import { saveRich } from "./flows";
-import { richStoreFor, useRich } from "./store";
+import { composerOf, patchComposer } from "./sessions";
+import { richStoreFor, useComposerWindow, useRich } from "./store";
 
 /** What an edit changes: the source text of the draft's mode. */
 export interface EditableBody {
@@ -121,8 +122,8 @@ export function ComposerPlugins({
   mode: ComposerMode;
   textarea: RefObject<HTMLTextAreaElement | null>;
 }) {
-  const composer = useUi((s) => s.composer);
-  const updateComposer = useUi((s) => s.updateComposer);
+  const window = useComposerWindow();
+  const composer = useUi((s) => composerOf(s, window));
   const rich = useRich((s) => s);
   const draftId = composer?.draftId ?? null;
   const body: EditableBody = {
@@ -132,9 +133,10 @@ export function ComposerPlugins({
   };
   const apply = useCallback(
     (pending: { edit: ComposerEdit }) => {
-      const state = ctx.store.getState().composer;
+      const state = composerOf(ctx.store.getState(), window);
       if (!state) return;
-      const current = richStoreFor(ctx.store).getState();
+      const store = richStoreFor(ctx.store, window);
+      const current = store.getState();
       const now: EditableBody = {
         text: state.text,
         html: current.html,
@@ -146,12 +148,14 @@ export function ComposerPlugins({
         selectionOf(current.mode, now, textarea.current),
         pending.edit,
       );
-      if (next.text !== now.text) updateComposer({ text: next.text, error: null });
+      if (next.text !== now.text) {
+        patchComposer(ctx.store, window, { text: next.text, error: null });
+      }
       if (next.html !== now.html || next.markdown !== now.markdown) {
-        richStoreFor(ctx.store).setState({ html: next.html, markdown: next.markdown });
+        store.setState({ html: next.html, markdown: next.markdown });
       }
     },
-    [ctx.store, textarea, updateComposer],
+    [ctx.store, textarea, window],
   );
   useComposerEdits(draftId, apply);
   if (!composer) return null;
@@ -159,12 +163,12 @@ export function ComposerPlugins({
     <>
       <ComposerExtensionBar
         draftId={draftId}
-        ensureDraft={() => saveRich(ctx, { quiet: true })}
+        ensureDraft={() => saveRich(ctx, { quiet: true, window })}
         getSelection={() => selectionOf(mode, body, textarea.current)}
         {...(mode === "markdown"
           ? {
               onInsert: (markdown: string) =>
-                richStoreFor(ctx.store).setState({
+                richStoreFor(ctx.store, window).setState({
                   markdown: `${rich.markdown}${rich.markdown && !rich.markdown.endsWith("\n") ? "\n" : ""}${markdown}`,
                 }),
             }

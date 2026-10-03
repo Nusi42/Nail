@@ -3,7 +3,13 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { control, startNail, tempDir, type NailServer } from "../support/nail";
-import { openSettingsTab, showView, toolbarAction, viewRegion } from "../support/views";
+import {
+  composerWindow,
+  openSettingsTab,
+  showView,
+  toolbarAction,
+  viewRegion,
+} from "../support/views";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -100,7 +106,7 @@ test("a recurring event is changed for this and the following occurrences", asyn
   const calendar = await openCalendar(page);
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title").fill("Book club");
+  await editor.getByLabel("Title", { exact: true }).fill("Book club");
   await editor.getByLabel("Repeats").selectOption("weekly");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
@@ -111,7 +117,7 @@ test("a recurring event is changed for this and the following occurrences", asyn
   await chip(calendar, "Book club").click();
   await expect(editor).toBeVisible();
   await editor.getByRole("radio", { name: "This and following occurrences" }).check();
-  await editor.getByLabel("Title").fill("Book club (new room)");
+  await editor.getByLabel("Title", { exact: true }).fill("Book club (new room)");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
   await expect(chip(calendar, "Book club \\(new room\\)")).toBeVisible();
@@ -133,7 +139,7 @@ test("an event syncs to the CalDAV server and a server-side change appears", asy
 
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title").fill("Dentist");
+  await editor.getByLabel("Title", { exact: true }).fill("Dentist");
   await editor.getByLabel("Calendar", { exact: true }).selectOption({ label: "Personal" });
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
@@ -229,7 +235,7 @@ test("a contact syncs to CardDAV and is suggested in the composer", async ({ pag
   await showView(page, "Mail");
 
   await page.keyboard.press("c");
-  const composer = page.getByRole("dialog", { name: "New message", exact: true });
+  const composer = composerWindow(page);
   await composer.getByRole("textbox", { name: "To" }).pressSequentially("Kath");
   const suggestions = composer.getByRole("listbox", { name: "Suggested addresses" });
   await expect(suggestions.getByRole("option", { name: /katherine@nasa\.example/ })).toBeVisible();

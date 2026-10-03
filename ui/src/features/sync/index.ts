@@ -88,6 +88,18 @@ export const dialogs: Feature["dialogs"] = {
   [SYNC_FOLDER_DIALOG]: SyncFolderDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [SYNC_FOLDER_DIALOG]: {
+    size: { width: 560, height: 480 },
+    min_size: { width: 420, height: 360 },
+  },
+};
+
 /** Policies live in `accounts.kdl`: refetch them when it changes. */
 export const handleSyncEvent: FeatureEventHandler = (event, { queryClient }) => {
   if (event.type === "AccountsChanged") {

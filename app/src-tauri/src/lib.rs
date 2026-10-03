@@ -32,6 +32,12 @@
 //! endpoint ([`dev_endpoint`]). It shows a tray icon ([`tray`]) with close
 //! to tray and start hidden, forwards a second start's arguments to the
 //! running app, and serves the Simple MAPI pipe ([`mapi_server`]).
+//!
+//! M5c (WP173, ADR 0116): windows pop out into their own OS windows
+//! ([`popout`]): a webview window per pop-out (`popout-<id>`) loads the same
+//! UI at `#/window/<id>` and talks to the same core through [`nail_call`];
+//! every core event reaches every webview, so each window keeps itself
+//! current. Closing the main window closes its pop-outs.
 
 pub mod default_apps;
 pub mod dev_endpoint;
@@ -40,6 +46,7 @@ pub mod host;
 pub mod install;
 pub mod launch;
 pub mod mapi_server;
+pub mod popout;
 pub mod portable;
 pub mod printing;
 pub mod registry;
@@ -705,10 +712,15 @@ pub fn run() {
             };
             match event {
                 // Close to tray: Nail keeps syncing; "Quit" in the tray ends it.
-                tauri::WindowEvent::CloseRequested { api, .. } if shell.hides_on_close() => {
-                    api.prevent_close();
-                    let _ = window.hide();
+                // Either way the pop-outs close with the main window.
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    shell.host.main_window_closing();
+                    if shell.hides_on_close() {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
+                tauri::WindowEvent::Destroyed => shell.host.main_window_closing(),
                 tauri::WindowEvent::Focused(true) => shell.host.window_focused(),
                 _ => {}
             }

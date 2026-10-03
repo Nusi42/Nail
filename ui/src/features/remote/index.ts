@@ -30,6 +30,7 @@ import { RemoteDevicesWidget } from "./RemoteDevices";
 import { RemoteSettingsWidget } from "./RemoteSettings";
 import { RemoteUsersWidget } from "./RemoteUsers";
 import { remoteStore } from "./state";
+import { REAUTH_WINDOW, ReauthWindow } from "./ReauthWindow";
 
 /** Layout widget kinds → components. */
 export const widgets: Feature["widgets"] = {
@@ -95,6 +96,23 @@ export const actions: Feature["actions"] = {
 /** Named dialogs (opened with `window.open "<name>"`). */
 export const dialogs: Feature["dialogs"] = {
   [PAIR_DIALOG]: PairDeviceDialog,
+  [REAUTH_WINDOW]: ReauthWindow,
+};
+
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [PAIR_DIALOG]: { size: { width: 520, height: 600 }, min_size: { width: 420, height: 480 } },
+  // "Confirm it’s you": a modal confirmation (M5c).
+  [REAUTH_WINDOW]: {
+    confirmation: true,
+    resizable: true,
+    size: { width: 440, height: 360 },
+    min_size: { width: 360, height: 300 },
+  },
 };
 
 /**
@@ -150,6 +168,7 @@ export { MockAuthServer } from "./mockAuth";
 export { browserPasskeys, type PasskeyApi } from "./passkeys";
 export { RemoteContentBar, remoteContentView } from "./RemoteContent";
 export { remoteStore, useRemoteState } from "./state";
+export { ReauthPrompt, REAUTH_WINDOW, setReauthMethods } from "./ReauthWindow";
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

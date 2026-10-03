@@ -13,7 +13,11 @@ export const prefixes: readonly string[] = [
 ];
 
 /** Literals with those prefixes that are not message ids. */
-export const notMessages: readonly string[] = [];
+export const notMessages: readonly string[] = [
+  // Part names (features/windows/skin.ts).
+  "window-scrim",
+  "window-snap-preview",
+];
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {

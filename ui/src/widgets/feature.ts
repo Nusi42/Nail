@@ -18,6 +18,7 @@ import type { Feature } from "../features/types";
 import { toggleCollapsedSection } from "./folderPaneState";
 import { ListHeader } from "./ListHeader";
 import { isListFilter } from "./listFilter";
+import { DELETE_PERMANENTLY_DIALOG, DeletePermanentlyDialog } from "./DeletePermanently";
 
 export { ListHeader };
 
@@ -71,7 +72,14 @@ export const actionInfo: Readonly<Record<string, ActionInfo>> = {
 };
 
 /** Dialog names → components. */
-export const dialogs: Feature["dialogs"] = {};
+export const dialogs: Feature["dialogs"] = {
+  [DELETE_PERMANENTLY_DIALOG]: DeletePermanentlyDialog,
+};
+
+/** "Delete permanently?" is a confirmation: modal (M5c, ADR 0116). */
+export const windows: NonNullable<Feature["windows"]> = {
+  [DELETE_PERMANENTLY_DIALOG]: { confirmation: true },
+};
 /** Handlers for core events. */
 export const events: Feature["events"] = [];
 /** Background components. */

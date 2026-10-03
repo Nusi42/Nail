@@ -200,6 +200,18 @@ where
     }
 }
 
+/// Whether the account finished a sync pass: messages show up while the
+/// first pass still lists them (their Exchange data a moment later), so
+/// their count alone does not say the pass is done (WP175).
+async fn online(service: &Service, account: &str) -> bool {
+    match service.handle(Request::ListAccountStatuses).await {
+        Response::AccountStatuses { statuses } => statuses
+            .iter()
+            .any(|s| s.account_id.as_str() == account && s.state == AccountState::Online),
+        _ => false,
+    }
+}
+
 fn subject_of<'a>(list: &'a [MessageSummary], subject: &str) -> &'a MessageSummary {
     list.iter()
         .find(|m| m.subject == subject)
@@ -210,8 +222,8 @@ fn subject_of<'a>(list: &'a [MessageSummary], subject: &str) -> &'a MessageSumma
 async fn a_graph_account_syncs_mail_with_focused_inbox_and_categories() {
     let env = setup(false, "").await;
     let service = &env.service;
-    until("the Graph inbox", || async {
-        inbox(service, GRAPH).await.len() == 2
+    until("the first Graph sync", || async {
+        online(service, GRAPH).await && inbox(service, GRAPH).await.len() == 2
     })
     .await;
     let list = inbox(service, GRAPH).await;
@@ -551,14 +563,22 @@ async fn shared_mailboxes_sending_and_free_busy() {
         },
     )
     .await;
+    // The mailbox is `Synced` once all of its folders are (its messages
+    // show up while that still runs).
     until("the shared mailbox", || async {
-        match folder_at(service, GRAPH, "@support@contoso.example/Inbox").await {
-            Some(f) => messages_in(service, &f)
-                .await
-                .iter()
-                .any(|m| m.subject == "Ticket 4711: login fails"),
-            None => false,
-        }
+        let synced = matches!(
+            service.handle(Request::ListExchangeMailboxes { account_id: account() }).await,
+            Response::ExchangeMailboxes { mailboxes, .. }
+                if mailboxes.first().is_some_and(|m| m.state == ExchangeMailboxState::Synced)
+        );
+        synced
+            && match folder_at(service, GRAPH, "@support@contoso.example/Inbox").await {
+                Some(f) => messages_in(service, &f)
+                    .await
+                    .iter()
+                    .any(|m| m.subject == "Ticket 4711: login fails"),
+                None => false,
+            }
     })
     .await;
     let Response::ExchangeMailboxes { mailboxes, .. } = request(
@@ -865,18 +885,56 @@ async fn an_ews_account_syncs_streams_and_tests() {
     );
 }
 
+/// WP175: a streaming subscription reports only what changes after it
+/// exists. Mail delivered between a folder's listing and the subscription
+/// was missed until the next poll; now the subscription is made first and
+/// the folders are synced once more before the engine waits on it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_new_streaming_subscription_is_followed_by_a_sync() {
+    let env = setup(true, "").await;
+    let ews = env.ews.as_ref().unwrap();
+    let order = || {
+        let ops = ews.operations();
+        let subscribe = ops.iter().position(|o| o == "Subscribe");
+        let synced = subscribe.and_then(|at| {
+            ops[at..]
+                .iter()
+                .position(|o| o == "SyncFolderItems")
+                .map(|p| at + p)
+        });
+        let streaming = synced.and_then(|at| {
+            ops[at..]
+                .iter()
+                .position(|o| o == "GetStreamingEvents")
+                .map(|p| at + p)
+        });
+        (ops, subscribe, synced, streaming)
+    };
+    until("a sync after the subscription, then streaming", || async {
+        order().3.is_some()
+    })
+    .await;
+    let (ops, subscribe, ..) = order();
+    // Before the subscription: the first pass listed the folders.
+    assert!(
+        ops[..subscribe.unwrap()]
+            .iter()
+            .any(|o| o == "SyncFolderItems"),
+        "{ops:?}"
+    );
+    // One subscription: the extra pass does not subscribe again.
+    assert_eq!(
+        ops.iter().filter(|o| *o == "Subscribe").count(),
+        1,
+        "{ops:?}"
+    );
+    assert_eq!(ews.subscriptions().len(), 1);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn engines_report_online() {
     let env = setup(false, "").await;
-    until("online", || async {
-        match env.service.handle(Request::ListAccountStatuses).await {
-            Response::AccountStatuses { statuses } => statuses
-                .iter()
-                .any(|s| s.account_id.as_str() == GRAPH && s.state == AccountState::Online),
-            _ => false,
-        }
-    })
-    .await;
+    until("online", || online(&env.service, GRAPH)).await;
 }
 
 fn receipts_rule() -> nail_api::rules::Rule {

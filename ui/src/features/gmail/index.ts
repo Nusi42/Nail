@@ -110,6 +110,23 @@ export const dialogs: Feature["dialogs"] = {
   [APPLY_LABELS_DIALOG]: ApplyLabelsDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [LABEL_EDITOR_DIALOG]: {
+    size: { width: 480, height: 460 },
+    min_size: { width: 360, height: 320 },
+  },
+  [LABEL_DELETE_DIALOG]: { confirmation: true },
+  [APPLY_LABELS_DIALOG]: {
+    size: { width: 480, height: 520 },
+    min_size: { width: 360, height: 360 },
+  },
+};
+
 /** Labels (or messages, whose counts they show) changed: refetch. */
 export const handleGmailEvent: FeatureEventHandler = (event, { queryClient }) => {
   if (event.type === "GmailLabelsChanged") {

@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { runFromPalette } from "../support/views";
+import { composerWindow, runFromPalette } from "../support/views";
 
 /**
  * The rich composer (ADR 0023) against the `demo-multi` mock servers: HTML
@@ -50,7 +50,7 @@ async function openApp(page: Page) {
 
 async function newMessage(page: Page, subject: string): Promise<Locator> {
   await page.keyboard.press("c");
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   await expect(dialog).toBeVisible();
   await dialog.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
   await dialog.getByRole("textbox", { name: "Subject" }).fill(subject);
@@ -67,10 +67,13 @@ async function send(page: Page, dialog: Locator) {
 
 /** Closes an open composer window (the accounts change may not have applied yet). */
 async function closeComposer(page: Page) {
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   if (await dialog.isVisible()) {
     await dialog.getByRole("button", { name: "Discard" }).click();
-    await expect(dialog).toBeHidden();
+    // A message with a saved draft or changes asks first (M5c).
+    const confirm = page.locator('[data-part="window"][data-window^="composer-discard"]');
+    if (await confirm.isVisible()) await confirm.getByRole("button", { name: "Discard" }).click();
+    await expect(page.locator('[data-part="window"][data-window^="composer"]')).toHaveCount(0);
   }
 }
 
@@ -150,10 +153,10 @@ test("replies quote the original in HTML and in Markdown", async ({ page }) => {
     await closeComposer(page);
     await original.click();
     await page.keyboard.press("r");
-    const dialog = page.getByRole("dialog", { name: "New message" });
+    const dialog = composerWindow(page);
     await expect(dialog.getByRole("radio", { name: "HTML" })).toBeChecked({ timeout: 1000 });
   }).toPass({ timeout: 15_000 });
-  let dialog = page.getByRole("dialog", { name: "New message" });
+  let dialog = composerWindow(page);
   await expect(dialog.getByRole("textbox", { name: "Subject" })).toHaveValue(/^Re: /);
   const editor = dialog.locator('[data-part="composer.html.content"]');
   await expect(editor.locator("blockquote")).toHaveCount(1);
@@ -172,7 +175,7 @@ test("replies quote the original in HTML and in Markdown", async ({ page }) => {
     await closeComposer(page);
     await original.click();
     await page.keyboard.press("r");
-    dialog = page.getByRole("dialog", { name: "New message" });
+    dialog = composerWindow(page);
     await expect(dialog.getByRole("radio", { name: "Markdown" })).toBeChecked({ timeout: 1000 });
   }).toPass({ timeout: 15_000 });
   const source = dialog.locator('[data-part="composer.markdown.content"]');
@@ -215,7 +218,7 @@ test("drafts are autosaved to the server and continued after a reload", async ({
   const drafts = page.getByRole("region", { name: "Drafts" });
   const item = drafts.locator('[data-part="outbox.item"]').filter({ hasText: "Plans for Friday" });
   await item.getByRole("button", { name: "Continue writing" }).click();
-  const reopened = page.getByRole("dialog", { name: "New message" });
+  const reopened = composerWindow(page);
   await expect(reopened.getByRole("textbox", { name: "Subject" })).toHaveValue("Plans for Friday");
   await expect(reopened.getByRole("textbox", { name: "Message" })).toHaveValue(
     "Half-written thoughts",

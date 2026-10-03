@@ -222,6 +222,31 @@ export const dialogs: Feature["dialogs"] = {
   [REMOVE_CALENDAR_DIALOG]: RemoveCalendarDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [EVENT_DIALOG]: { size: { width: 720, height: 680 }, min_size: { width: 520, height: 480 } },
+  [SCOPE_DIALOG]: { confirmation: true, size: { width: 480, height: 320 } },
+  [CONTACT_DIALOG]: { size: { width: 640, height: 640 }, min_size: { width: 480, height: 420 } },
+  [GROUPS_DIALOG]: { size: { width: 560, height: 520 }, min_size: { width: 420, height: 360 } },
+  [MERGE_DIALOG]: { size: { width: 720, height: 560 }, min_size: { width: 520, height: 400 } },
+  [TASK_DIALOG]: { size: { width: 600, height: 560 }, min_size: { width: 440, height: 400 } },
+  [IMPORT_DIALOG]: { size: { width: 640, height: 520 }, min_size: { width: 480, height: 360 } },
+  [SOURCES_DIALOG]: { size: { width: 720, height: 560 }, min_size: { width: 520, height: 400 } },
+  [CALENDAR_SETTINGS_DIALOG]: {
+    size: { width: 520, height: 520 },
+    min_size: { width: 400, height: 380 },
+  },
+  [NEW_CALENDAR_DIALOG]: {
+    size: { width: 520, height: 460 },
+    min_size: { width: 400, height: 340 },
+  },
+  [REMOVE_CALENDAR_DIALOG]: { confirmation: true },
+};
+
 /** PIM data changed: refetch what shows it; reminders and failed writes become toasts. */
 export const handlePimEvent: FeatureEventHandler = (event, { queryClient, store }) => {
   if (!(PIM_EVENTS as readonly string[]).includes(event.type)) return;

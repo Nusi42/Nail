@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
 import {
   accountSectionNamed,
+  composerWindow,
   openSettingsTab,
   readerAction,
   runFromPalette,
@@ -245,7 +246,7 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
   // Sending goes through Graph.
   await page.locator('[data-part="message-list"]').focus();
   await page.keyboard.press("c");
-  const composer = page.getByRole("dialog", { name: "New message" });
+  const composer = composerWindow(page);
   await composer.getByRole("textbox", { name: "To" }).fill("bob@contoso.example");
   await composer.getByRole("textbox", { name: "Subject" }).fill("Sent through Microsoft Graph");
   await composer.getByRole("textbox", { name: "Message" }).fill("Hello Bob");
@@ -350,7 +351,7 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
   const calendar = viewRegion(page, "Calendar");
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title").fill("Design review");
+  await editor.getByLabel("Title", { exact: true }).fill("Design review");
   await editor.getByLabel("Calendar", { exact: true }).selectOption({ label: "Calendar" });
   await editor.getByRole("button", { name: "Find a room…" }).click();
   const room = editor.getByRole("button", { name: "Add room Conf Room Baker" });
@@ -423,7 +424,7 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
   // Sending goes through EWS (SendAndSaveCopy).
   await page.locator('[data-part="message-list"]').focus();
   await page.keyboard.press("c");
-  const composer = page.getByRole("dialog", { name: "New message" });
+  const composer = composerWindow(page);
   await composer.getByRole("textbox", { name: "To" }).fill("bob@corp.example");
   await composer.getByRole("textbox", { name: "Subject" }).fill("Sent through EWS");
   await composer.getByRole("textbox", { name: "Message" }).fill("Hello Bob");

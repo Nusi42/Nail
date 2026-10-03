@@ -71,8 +71,8 @@ describe("plug-in parts", () => {
     expect(pluginPartSelector("plugin.follow-up.button")).toBe(
       '[data-part="plugin.button"][data-plugin="follow-up"]',
     );
-    expect(pluginPartSelector("plugin.follow-up.dialog.title")).toBe(
-      '[data-part="plugin.dialog.title"][data-plugin="follow-up"]',
+    expect(pluginPartSelector("plugin.follow-up.dialog.body")).toBe(
+      '[data-part="plugin.dialog.body"][data-plugin="follow-up"]',
     );
     expect(pluginPartSelector("plugin.button")).toBeNull();
     expect(pluginPartSelector("plugin.follow-up.nope")).toBeNull();

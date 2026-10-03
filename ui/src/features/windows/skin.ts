@@ -1,0 +1,118 @@
+/**
+ * The look and structure of the window manager (M5c WP171, ADR 0116), on
+ * the token schema only (`var(--nail-…)`), like `../../theme/skin.ts`. The
+ * compiler emits it after the shared skin and before the theme's part
+ * rules, so any `theme.kdl` still overrides it. Where a window is and how
+ * big it is comes from its geometry rule (`[data-geom]`), never from here.
+ *
+ * Parts:
+ * - `window-layer` (`data-modal` while a modal window is open): fills the
+ *   page and lets the pointer through to the main window around the windows
+ * - `window-scrim`: over the main window while a modal window blocks it
+ *   (below every window: the other windows stay usable)
+ * - `window` (`data-state` = `active` / `maximized` / `snapped`,
+ *   `data-snap` = `left` / `right`, `data-modal`, `data-owner` (what a
+ *   modal window blocks: `main` or a window id), `data-blocked` (its
+ *   confirmation is open: dimmed, not usable), `data-mode` = `move` /
+ *   `size` (Alt+F7 / Alt+F8), `data-dragging` = `move` / `resize`)
+ * - `window.header` (the title bar: drag to move, double-click to
+ *   maximize, arrow keys when focused), `window.title`, `window.maximize`
+ *   (+ `.icon`), `window.close` (styled by the shared skin), `window.hint`
+ *   and `window.status` (for assistive technology only)
+ * - `window.handle` (`data-edge` = `n` `e` `s` `w` `ne` `se` `sw` `nw`)
+ * - `window-snap-preview` (`data-snap` = `left` / `right`): the half a
+ *   dragged window will fill when dropped
+ */
+
+/** `[data-part="…"]` for one part. */
+const p = (part: string) => `[data-part="${part}"]`;
+
+/** Token shorthands (fallbacks only where the schema may lack the token). */
+const T = {
+  fg: "var(--nail-color-fg)",
+  muted: "var(--nail-color-fg-muted)",
+  raised: "var(--nail-color-bg-raised)",
+  border: "var(--nail-color-border)",
+  accent: "var(--nail-color-accent)",
+  focus: "var(--nail-color-focus-ring)",
+  scrim: "var(--nail-color-scrim)",
+  xs: "var(--nail-space-xs)",
+  sm: "var(--nail-space-sm)",
+  icon: "var(--nail-size-icon)",
+  control: "var(--nail-size-control)",
+  rSm: "var(--nail-radius-sm)",
+  rLg: "var(--nail-radius-lg)",
+} as const;
+
+/** The grab width of an edge handle and the size of a corner handle. */
+const EDGE = "6px";
+const CORNER = "14px";
+
+const VISUALLY_HIDDEN =
+  "position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;";
+
+const LAYER = `${p("window-layer")} {
+  position: fixed; inset: 0; z-index: 100; display: block;
+  padding: 0; background: none; pointer-events: none;
+}
+${p("window-scrim")} { position: absolute; inset: 0; pointer-events: auto; background-color: ${T.scrim}; }`;
+
+const FRAME = `${p("window-layer")} > ${p("window")} {
+  position: absolute; display: flex; flex-direction: column; box-sizing: border-box;
+  overflow: hidden; pointer-events: auto;
+}
+${p("window-layer")} > ${p("window")}:not([data-state~="active"]) { display: flex; }
+${p("window-layer")} > ${p("window")}[data-state~="active"] { border-color: ${T.accent}; }
+${p("window-layer")} > ${p("window")}[data-state~="maximized"],
+${p("window-layer")} > ${p("window")}[data-state~="snapped"] { border-radius: 0; }
+${p("window-layer")} > ${p("window")}[data-blocked]::after {
+  content: ""; position: absolute; inset: 0; z-index: 5; background-color: ${T.scrim};
+}
+${p("window-layer")} > ${p("window")}[data-dragging] { user-select: none; }
+${p("window-layer")} > ${p("window")}[data-dragging] ${p("window.body")} { pointer-events: none; }
+${p("window-layer")} > ${p("window")}[data-dragging="move"] ${p("window.header")} { cursor: grabbing; }`;
+
+const TITLE_BAR = `${p("window-layer")} ${p("window.header")} {
+  position: relative; z-index: 2; user-select: none; touch-action: none; cursor: default;
+}
+${p("window-layer")} ${p("window.header")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${p("window")}[data-mode] ${p("window.header")} { outline: 2px dashed ${T.accent}; outline-offset: -2px; }
+${p("window.title")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("window.hint")}, ${p("window.status")} { ${VISUALLY_HIDDEN} }
+${p("window.maximize")} {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: ${T.control}; height: ${T.control}; padding: 0;
+  border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent;
+}
+${p("window.maximize")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("window.maximize")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: 2px; }
+${p("window.maximize.icon")} { width: ${T.icon}; height: ${T.icon}; }`;
+
+const edge = (name: string, rules: string) =>
+  `${p("window.handle")}[data-edge="${name}"] { ${rules} }`;
+
+const HANDLES = `${p("window.handle")} { position: absolute; z-index: 3; touch-action: none; }
+${edge("n", `top: 0; left: ${CORNER}; right: ${CORNER}; height: ${EDGE}; cursor: ns-resize;`)}
+${edge("s", `bottom: 0; left: ${CORNER}; right: ${CORNER}; height: ${EDGE}; cursor: ns-resize;`)}
+${edge("e", `right: 0; top: ${CORNER}; bottom: ${CORNER}; width: ${EDGE}; cursor: ew-resize;`)}
+${edge("w", `left: 0; top: ${CORNER}; bottom: ${CORNER}; width: ${EDGE}; cursor: ew-resize;`)}
+${edge("ne", `top: 0; right: 0; width: ${CORNER}; height: ${CORNER}; cursor: nesw-resize;`)}
+${edge("sw", `bottom: 0; left: 0; width: ${CORNER}; height: ${CORNER}; cursor: nesw-resize;`)}
+${edge("nw", `top: 0; left: 0; width: ${CORNER}; height: ${CORNER}; cursor: nwse-resize;`)}
+${edge("se", `bottom: 0; right: 0; width: ${CORNER}; height: ${CORNER}; cursor: nwse-resize;`)}`;
+
+const SNAP = `${p("window-snap-preview")} {
+  position: absolute; top: ${T.sm}; bottom: ${T.sm}; width: calc(50% - 1.5 * ${T.sm});
+  z-index: 10000; pointer-events: none; box-sizing: border-box;
+  border: 2px dashed ${T.accent}; border-radius: ${T.rLg};
+  background-color: color-mix(in srgb, ${T.accent} 12%, transparent);
+}
+${p("window-snap-preview")}[data-snap="left"] { left: ${T.sm}; }
+${p("window-snap-preview")}[data-snap="right"] { right: ${T.sm}; }`;
+
+export const WINDOWS_SKIN_CSS = [LAYER, FRAME, TITLE_BAR, HANDLES, SNAP].join("\n");
+
+/** Every part this skin styles (the theme reference lists them). */
+export const WINDOW_PARTS: readonly string[] = [
+  ...new Set([...WINDOWS_SKIN_CSS.matchAll(/\[data-part="([^"]+)"\]/g)].map((m) => m[1] ?? "")),
+];

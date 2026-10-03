@@ -139,6 +139,31 @@ export const dialogs: Feature["dialogs"] = {
   [PIN_DIALOG]: PinPromptDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [AUTOCRYPT_IMPORT_DIALOG]: {
+    size: { width: 560, height: 480 },
+    min_size: { width: 420, height: 360 },
+  },
+  [RECOVERY_CREATE_DIALOG]: {
+    size: { width: 640, height: 560 },
+    min_size: { width: 480, height: 420 },
+  },
+  [RECOVERY_VERIFY_DIALOG]: {
+    size: { width: 560, height: 420 },
+    min_size: { width: 420, height: 320 },
+  },
+  [RECOVERY_RESTORE_DIALOG]: {
+    size: { width: 640, height: 560 },
+    min_size: { width: 480, height: 420 },
+  },
+  [PIN_DIALOG]: { confirmation: true, size: { width: 440, height: 320 } },
+};
+
 /** Message queries of the reader (`queryKeys.message` in `state/queries.ts`). */
 const MESSAGES = ["message"] as const;
 

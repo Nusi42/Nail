@@ -17,6 +17,7 @@ import { crashPlugin } from "./mockHost";
 import { PluginDialogs } from "./PluginDialogs";
 import { PluginNotifications } from "./PluginNotifications";
 import { installFollowUp, must, tick, wireEvents } from "./testUtil";
+import { WindowLayer } from "../../layout/WindowLayer";
 
 async function settle(env: Env): Promise<void> {
   await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
@@ -96,7 +97,13 @@ describe("plug-in UI accessibility", () => {
     const user = userEvent.setup();
     const env = createEnv();
     const unsubscribe = wireEvents(env);
-    const view = renderWithProviders(<PluginDialogs />, env);
+    const view = renderWithProviders(
+      <>
+        <PluginDialogs />
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
+    );
     act(() =>
       env.transport.emit({
         type: "PluginDialogOpened",
@@ -117,7 +124,10 @@ describe("plug-in UI accessibility", () => {
     );
     await settle(env);
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.getByRole("dialog")).toHaveAttribute("data-state", "invalid");
+    expect(screen.getByRole("dialog").querySelector('[data-part="plugin.dialog"]')).toHaveAttribute(
+      "data-state",
+      "invalid",
+    );
     expect(await violations(view.container)).toEqual([]);
     unsubscribe();
   });
@@ -129,6 +139,7 @@ describe("plug-in UI accessibility", () => {
     const view = renderWithProviders(
       <>
         <PluginDialogs />
+        <WindowLayer layout={env.transport.data.layout} />
         <PluginNotifications />
       </>,
       env,

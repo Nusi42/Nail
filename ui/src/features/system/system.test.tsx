@@ -28,6 +28,7 @@ import {
 import { AboutNail } from "./AboutNail";
 import { FirstRun, FirstRunGate } from "./FirstRun";
 import { ProgramDraftNotice } from "./ProgramDraft";
+import { activeComposer } from "../composer/sessions";
 
 afterEach(() => {
   // Unmount before resetting module-level stores.
@@ -475,11 +476,11 @@ describe("mail from other programs (Simple MAPI)", () => {
     expect(composer?.to).toContain("ada@example.org");
     expect(composer?.text.startsWith("See attached.")).toBe(true);
     expect(
-      richStoreFor(env.store)
+      richStoreFor(env.store, activeComposer(env.store.getState().windows))
         .getState()
         .attachments.map((a) => a.filename),
     ).toEqual(["Q3.xlsx"]);
-    expect(env.store.getState().windows).toContain("composer");
+    expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
     const notice = await screen.findByRole("note", { name: "Message from another program" });
     expect(notice).toHaveTextContent("EXCEL.EXE prepared this message. Check it, then press Send.");
     expect(sent(env, "SendDraft")).toHaveLength(0);

@@ -214,7 +214,7 @@ test("a counter-proposal is accepted by the organizer and the update goes out", 
   const calendar = await openCalendar(page);
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title").fill("Design review");
+  await editor.getByLabel("Title", { exact: true }).fill("Design review");
   await editor.getByLabel("Address").fill("grace@example.org");
   await editor.getByRole("button", { name: "Add", exact: true }).click();
   await editor.getByRole("button", { name: "Save" }).click();
@@ -284,7 +284,7 @@ test("free/busy shows the busy blocks of another account on the CalDAV server", 
   const calendar = await openCalendar(page);
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
-  await editor.getByLabel("Title").fill("Workshop planning");
+  await editor.getByLabel("Title", { exact: true }).fill("Workshop planning");
   await editor.getByLabel("Address").fill("bob@example.org");
   await editor.getByRole("button", { name: "Add", exact: true }).click();
   const availability = editor.locator('[data-part="freebusy"]');

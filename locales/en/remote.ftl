@@ -82,6 +82,7 @@ remote-passkey-added = The passkey “{ $name }” is ready. Use it the next tim
 ## Re-authentication
 
 remote-reauth-title = Confirm it’s you
+window-remote-reauth = Confirm it’s you
 remote-reauth-intro = This change needs a fresh sign-in as { $user }.
 remote-reauth-passkey-intro = Confirm with your passkey.
 remote-reauth-confirm = Confirm

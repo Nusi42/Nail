@@ -58,6 +58,15 @@ export const dialogs: Feature["dialogs"] = {
   [CENTER_DIALOG]: ConfirmationCenterDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [CENTER_DIALOG]: { size: { width: 900, height: 640 }, min_size: { width: 560, height: 400 } },
+};
+
 /** Confirmations or policies changed: refetch them; notices for new requests. */
 export const handleAgentsEvent: FeatureEventHandler = (event, { queryClient, store }) => {
   switch (event.type) {

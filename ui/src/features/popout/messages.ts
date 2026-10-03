@@ -9,7 +9,7 @@
 export const prefixes: readonly string[] = ["popout-", "pop-out-"];
 
 /** Literals with those prefixes that are not message ids. */
-export const notMessages: readonly string[] = [];
+export const notMessages: readonly string[] = ["popout-probe"];
 
 /** Message ids built at runtime. */
 export function runtimeIds(): string[] {

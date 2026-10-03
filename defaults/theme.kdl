@@ -377,18 +377,8 @@ theme "default" mode="system" {
         cursor "pointer"
     }
 
-    // ---- Windows (composer, settings, account setup, outbox, move) ----
-
-    part "window" {
-        width "min(960px, 100%)"
-        height "min(760px, 100%)"
-    }
-    part "window[window=\"move\"]" {
-        width "min(420px, 100%)"
-        height "min(560px, 100%)"
-    }
-    part "window[window=\"account-setup\"]" { width "min(640px, 100%)"; }
-    part "window[window=\"outbox\"]" { width "min(720px, 100%)"; }
+    // Window sizes come from the window spec (layout `size=` / `min-size=`,
+    // the features' window registrations; M5c ADR 0116), not from here.
 
     // ---- Forms (account setup, settings, virtual accounts, composer, outbox) ----
 
@@ -1019,7 +1009,6 @@ theme "default" mode="system" {
 
     // ---- Filter rules (ADR 0024) ----
 
-    part "window[window=\"rules\"]" { width "min(1100px, 100%)"; }
     part "rules" {
         display "grid"
         grid-template-columns "minmax(200px, 280px) minmax(0, 1fr)"
@@ -1547,7 +1536,6 @@ theme "default" mode="system" {
     }
     part "inspector.node.kind" { font-family "$font.mono"; }
     part "inspector.none" { color "$color.fg-muted"; }
-    part "window[window=\"config-merge\"]" { width "min(1100px, 100%)"; }
     part "merge-dialog" {
         display "flex"
         flex-direction "column"
@@ -2295,26 +2283,6 @@ theme "default" mode="system" {
     part "remote-alerts.toast[kind=\"new-device\"]" { border-left "3px solid $color.warning"; }
     part "remote-alerts.title" { font-weight "$font-weight.bold"; }
     part "remote-alerts.actions" { display "flex"; flex-wrap "wrap"; gap "$space.sm"; }
-    part "remote-reauth.overlay" {
-        position "fixed"
-        top 0
-        right 0
-        bottom 0
-        left 0
-        z-index 1002
-        display "flex"
-        align-items "center"
-        justify-content "center"
-        background-color "$color.scrim"
-    }
-    part "remote-reauth.overlay remote-reauth" {
-        max-width 420
-        border "$border.thin"
-        border-radius "$radius.md"
-        background-color "$color.bg"
-        box-shadow "$shadow.overlay"
-    }
-
     // ---- Opening links and files (ADR 0041) ----
 
     part "launch-notice" {
@@ -2613,43 +2581,15 @@ theme "default" mode="system" {
     // Every plug-in element has a generic part (`plugin.button`) and the
     // attribute `plugin="<id>"`; `plugin.<id>.<part>` styles one plug-in.
 
-    part "plugin.dialog.backdrop" {
-        padding "$space.xl"
-        background-color "$color.scrim"
-    }
-    part "plugin.dialog" {
-        width "min(560px, 100%)"
-        border "$border.thin"
-        border-radius "$radius.lg"
-        color "$color.fg"
-        background-color "$color.bg"
-        box-shadow "$shadow.overlay"
-    }
-    part "plugin.dialog[size=\"small\"]" { width "min(400px, 100%)"; }
-    part "plugin.dialog[size=\"large\"]" { width "min(900px, 100%)"; }
+    // Plug-in dialogs are windows of the window manager (M5c): the frame,
+    // title bar and size come from the window, not from these parts.
     part "plugin.dialog.header" {
         gap "$space.sm"
-        padding "$space.sm" "$space.lg"
-        border-bottom "$border.thin"
-        background-color "$color.bg-subtle"
-    }
-    part "plugin.dialog.title" {
-        font-size "$font-size.lg"
-        font-weight "$font-weight.bold"
+        padding-bottom "$space.sm"
     }
     part "plugin.dialog.plugin" {
         color "$color.fg-muted"
         font-size "$font-size.sm"
-    }
-    part "plugin.dialog.close" {
-        padding "$space.xs"
-        border "none"
-        color "$color.fg"
-        background-color "transparent"
-    }
-    part "plugin.dialog.close.icon" {
-        width "$size.icon"
-        height "$size.icon"
     }
     part "plugin.dialog.body" {
         gap "$space.md"
@@ -3518,24 +3458,7 @@ theme "default" mode="system" {
     part "plugin-block" { margin 0; padding "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; }
     part "plugin-block.caption" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "plugin-block.source" { font-family "$font.mono"; font-size "$font-size.sm"; white-space "pre-wrap"; }
-    part "plugin-veto.backdrop" { position "fixed"; inset 0; z-index 400; background-color "$color.scrim"; }
-    part "plugin-veto" {
-        position "fixed"
-        z-index 401
-        inset 0
-        width "min(520px, calc(100% - 32px))"
-        height "fit-content"
-        margin "auto"
-        display "flex"
-        flex-direction "column"
-        gap "$space.md"
-        padding "$space.lg"
-        border "$border.thin"
-        border-radius "$radius.lg"
-        background-color "$color.bg"
-        box-shadow "$shadow.overlay"
-    }
-    part "plugin-veto.title" { margin 0; font-size "$font-size.lg"; }
+    part "plugin-veto" { display "flex"; flex-direction "column"; gap "$space.md"; }
     part "plugin-veto.intro" { margin 0; color "$color.fg-muted"; }
     part "plugin-veto.list" { display "flex"; flex-direction "column"; gap "$space.sm"; margin 0; padding 0; }
     part "plugin-veto.plugin" { font-weight "$font-weight.bold"; }

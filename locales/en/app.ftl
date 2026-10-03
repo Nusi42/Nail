@@ -150,11 +150,23 @@ folder-picker-no-selection = Select a message first.
 ## Secondary windows ("window-" + the layout window name)
 
 window-close = Close
+window-mail = Mail
 window-composer = New message
 window-outbox = Outbox
 window-move = Move to folder
 window-account-setup = Add account
 window-settings = Settings
+window-mail-delete-permanently = Delete permanently?
+
+## "Delete permanently?" (a modal confirmation, M5c)
+
+mail-delete-permanently-question = { $count ->
+    [one] Delete this message permanently?
+   *[other] Delete { $count } messages permanently?
+}
+mail-delete-permanently-note = This cannot be undone.
+mail-delete-permanently-confirm = Delete permanently
+mail-delete-permanently-cancel = Cancel
 
 ## Message view
 

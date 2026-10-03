@@ -2,16 +2,29 @@
  * The rich part of the message being written: mode, HTML / Markdown
  * source, attachments and composer UI state. The envelope (identity,
  * recipients, subject, plain text, context, draft id) stays in the UI
- * store's `composer`, so the plain-text flows keep working unchanged.
+ * store: `composers[<window id>]` for a composer window `composer:<key>`
+ * (M5c, several composers), `composer` for the plain `composer` window.
  *
- * There is one feature store per UI store (tests create many), found with
- * `richStoreFor(uiStore)`. A new composer session resets it unless a flow
- * primed it first (`primeRich`), e.g. with the draft `NewDraft` returned.
+ * - **Instance composers** (`composer:<key>`, ADR 0116 / WP172): one rich
+ *   store per window, `richStoreFor(uiStore, windowId)`; created when the
+ *   flow opens the window (`./sessions.ts`), dropped when it closes.
+ * - **The plain composer** (`composer`, the M1–M5b single composer, still
+ *   used by a layout's `window.open "composer"` and by tests): one store per
+ *   UI store, `richStoreFor(uiStore)`. A new session resets it unless a
+ *   flow primed it first (`primeRich`).
+ *
+ * Components inside a composer find their window through
+ * `ComposerWindowContext` (`useComposerWindow`).
  */
+import { createContext, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { ComposerMode, DraftAttachment, SignatureChoice } from "../../api/generated";
 import { useUiStoreApi, type UiStore } from "../../state/uiStore";
+import { parseWindowId } from "../../state/windows";
+
+/** The window kind of composers (`composer`, `composer:<key>`). */
+export const COMPOSER_KIND = "composer";
 
 /** Idle time after the last edit before the draft is saved. */
 export const AUTOSAVE_MS = 1500;
@@ -83,9 +96,67 @@ export function emptyRich(): RichState {
 export type RichStore = StoreApi<RichState>;
 
 const stores = new WeakMap<UiStore, RichStore>();
+const instanceStores = new WeakMap<UiStore, Map<string, RichStore>>();
+/** Inline image previews of closed composers (an undone send reopens them). */
+const previewCaches = new WeakMap<UiStore, Record<string, string>>();
 
-/** The feature store belonging to a UI store (created on first use). */
-export function richStoreFor(ui: UiStore): RichStore {
+/** Whether `window` is a composer instance id (`composer:<key>`). */
+export function isComposerInstance(window: string | null | undefined): window is string {
+  if (!window) return false;
+  const parts = parseWindowId(window);
+  return parts !== null && parts.kind === COMPOSER_KIND && parts.instance !== null;
+}
+
+/** Inline previews remembered from composers closed in this UI store. */
+export function cachedPreviews(ui: UiStore): Record<string, string> {
+  return previewCaches.get(ui) ?? {};
+}
+
+function rememberPreviews(ui: UiStore, previews: Record<string, string>): void {
+  if (Object.keys(previews).length === 0) return;
+  previewCaches.set(ui, { ...cachedPreviews(ui), ...previews });
+}
+
+/** The rich store of an open instance composer, `undefined` when there is none. */
+export function instanceRichStore(ui: UiStore, window: string): RichStore | undefined {
+  return instanceStores.get(ui)?.get(window);
+}
+
+/** Forgets an instance composer's rich store (its window closed). */
+export function dropRichStore(ui: UiStore, window: string): void {
+  const map = instanceStores.get(ui);
+  const store = map?.get(window);
+  if (!map || !store) return;
+  rememberPreviews(ui, store.getState().inlinePreviews);
+  map.delete(window);
+}
+
+/**
+ * The feature store of a composer: of the window `window` when it is an
+ * instance id (created on first use, starting with the remembered inline
+ * previews), else of the plain composer of the UI store.
+ */
+export function richStoreFor(ui: UiStore, window: string | null = null): RichStore {
+  if (isComposerInstance(window)) {
+    let map = instanceStores.get(ui);
+    if (!map) {
+      map = new Map();
+      instanceStores.set(ui, map);
+    }
+    let store = map.get(window);
+    if (!store) {
+      store = createStore<RichState>()(() => ({
+        ...emptyRich(),
+        inlinePreviews: cachedPreviews(ui),
+      }));
+      map.set(window, store);
+    }
+    return store;
+  }
+  return plainRichStore(ui);
+}
+
+function plainRichStore(ui: UiStore): RichStore {
   const existing = stores.get(ui);
   if (existing) return existing;
   const rich = createStore<RichState>()(() => emptyRich());
@@ -108,6 +179,14 @@ export function richStoreFor(ui: UiStore): RichStore {
   return rich;
 }
 
+/**
+ * The plain composer's rich state (for moving its message into an instance
+ * window), with the "primed" flag cleared.
+ */
+export function plainRichSnapshot(ui: UiStore): RichState {
+  return { ...plainRichStore(ui).getState(), primed: false };
+}
+
 /** Sets the rich state for the composer about to be opened. */
 export function primeRich(ui: UiStore, patch: Partial<RichState>): void {
   const rich = richStoreFor(ui);
@@ -120,12 +199,23 @@ export function primeRich(ui: UiStore, patch: Partial<RichState>): void {
   });
 }
 
-/** The feature store of the surrounding UI store. */
-export function useRichStoreApi(): RichStore {
-  return richStoreFor(useUiStoreApi());
+/**
+ * The composer window a component is rendered for: `composer:<key>` for an
+ * instance composer, `composer` for the plain one (the default).
+ */
+export const ComposerWindowContext = createContext<string>(COMPOSER_KIND);
+
+/** The composer window of the calling component (see `ComposerWindowContext`). */
+export function useComposerWindow(): string {
+  return useContext(ComposerWindowContext);
 }
 
-/** Selects from the feature store of the surrounding UI store. */
+/** The feature store of the surrounding composer. */
+export function useRichStoreApi(): RichStore {
+  return richStoreFor(useUiStoreApi(), useComposerWindow());
+}
+
+/** Selects from the feature store of the surrounding composer. */
 export function useRich<T>(selector: (state: RichState) => T): T {
   return useStore(useRichStoreApi(), selector);
 }

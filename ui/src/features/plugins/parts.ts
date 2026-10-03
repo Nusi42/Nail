@@ -60,12 +60,8 @@ export const PLUGIN_PARTS = [
   "plugin.progress.label",
   "plugin.image",
   "plugin.dialog",
-  "plugin.dialog.backdrop",
   "plugin.dialog.header",
-  "plugin.dialog.title",
   "plugin.dialog.plugin",
-  "plugin.dialog.close",
-  "plugin.dialog.close.icon",
   "plugin.dialog.body",
   "plugin.dialog.error",
   "plugin.dialog.buttons",
@@ -117,14 +113,11 @@ export function pluginPartSelector(part: string): string | null {
 /**
  * Structural CSS of the plug-in UI for the theme compiler's base rules
  * (`BASE_CSS` in `src/theme/compile.ts`; themes may override any of it):
- * where dialogs, the backdrop and notifications sit, stack directions, and
+ * where notifications sit (dialogs are windows of the window manager, M5c), stack directions, and
  * lists without bullets. Colours, spacing and fonts come from `theme.kdl`.
  */
-export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog.backdrop"] { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 200; }
-[data-part="plugin.dialog"] { display: flex; flex-direction: column; max-width: 100%; max-height: 100%; min-height: 0; overflow: hidden; }
-[data-part="plugin.dialog"]:not([data-modal]) { position: fixed; right: 16px; bottom: 16px; max-height: calc(100% - 32px); z-index: 150; }
+export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog"] { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 [data-part="plugin.dialog.header"] { display: flex; align-items: center; flex: 0 0 auto; }
-[data-part="plugin.dialog.title"] { flex: 1 1 auto; margin: 0; font: inherit; }
 [data-part="plugin.dialog.body"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; }
 [data-part="plugin.dialog.buttons"] { display: flex; justify-content: flex-end; flex-wrap: wrap; }
 [data-part="plugin.stack"] { display: flex; flex-direction: column; min-width: 0; }
@@ -136,8 +129,7 @@ export const PLUGIN_BASE_CSS = `[data-part="plugin.dialog.backdrop"] { position:
 [data-part="plugin.notification"] { display: flex; align-items: flex-start; }
 [data-part="plugin.notification.content"] { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 [data-part="plugin-panel"] { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
-[data-part="plugin-veto.backdrop"] { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 250; }
-[data-part="plugin-veto"] { display: flex; flex-direction: column; max-width: min(560px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; }
+[data-part="plugin-veto"] { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
 [data-part="plugin-veto.buttons"], [data-part="plugin-banner.buttons"], [data-part="plugin-composer"], [data-part="plugin-preview.header"] { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 [data-part="plugin-veto.reason"], [data-part="plugin-banner.text"], [data-part="plugin-block.source"] { white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-part="plugin-banner"] { display: flex; flex-wrap: wrap; align-items: center; }

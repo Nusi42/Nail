@@ -105,6 +105,16 @@ export const dialogs: Feature["dialogs"] = {
   [FIRST_RUN_DIALOG]: FirstRunDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [ABOUT_DIALOG]: { size: { width: 520, height: 440 }, min_size: { width: 400, height: 320 } },
+  [FIRST_RUN_DIALOG]: { size: { width: 760, height: 600 }, min_size: { width: 560, height: 440 } },
+};
+
 /** Keeps the queries fresh: the update status arrives with its event. */
 export const handleSystemEvent: FeatureEventHandler = (event, { queryClient }) => {
   switch (event.type) {

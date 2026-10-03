@@ -93,7 +93,7 @@ describe("theme compiler", () => {
 
   it("styles plug-in parts: base rules, defaults and one plug-in's parts", () => {
     // Structural base rules of the plug-in UI and the default theme's styles.
-    expect(css).toContain('[data-part="plugin.dialog.backdrop"] { position: fixed;');
+    expect(css).toContain('[data-part="plugin.dialog"] { display: flex;');
     expect(css).toContain('[data-part="plugin.button"][data-variant~="primary"] {');
     // `plugin.<id>.<part>` is one plug-in's generic part.
     expect(

@@ -657,28 +657,7 @@ impl Store {
 
     /// Stores a message's Exchange extras (the message must exist).
     pub fn set_exchange_item(&self, id: &MessageId, record: &ExchangeItemRecord) -> Result<()> {
-        self.with_conn(|conn| {
-            let inserted = conn.execute(
-                "INSERT INTO exchange_items (message_id, account_id, mailbox, change_key,
-                     conversation_id, inference)
-                 SELECT id, account_id, ?2, ?3, ?4, ?5 FROM messages WHERE id = ?1
-                 ON CONFLICT (message_id) DO UPDATE SET
-                     mailbox = excluded.mailbox, change_key = excluded.change_key,
-                     conversation_id = excluded.conversation_id,
-                     inference = excluded.inference",
-                params![
-                    id.as_str(),
-                    mailbox_key(record.mailbox.as_deref()),
-                    record.change_key,
-                    record.conversation_id,
-                    record.inference.map(InferenceClassification::as_str),
-                ],
-            )?;
-            if inserted == 0 {
-                return Err(Error::not_found("message", id));
-            }
-            Ok(())
-        })
+        self.with_conn(|conn| set_exchange_item_in(conn, id, record))
     }
 
     /// A message's Exchange extras as stored.
@@ -1772,6 +1751,67 @@ pub(crate) fn collection_info_from_json(text: Option<String>) -> Option<Exchange
             .and_then(ExchangeCollectionRole::parse),
         todo: value["todo"].as_i64() == Some(1),
     })
+}
+
+/// [`Store::set_exchange_item`] on an open connection / transaction.
+pub(crate) fn set_exchange_item_in(
+    conn: &Connection,
+    id: &MessageId,
+    record: &ExchangeItemRecord,
+) -> Result<()> {
+    let inserted = conn
+        .prepare_cached(
+            "INSERT INTO exchange_items (message_id, account_id, mailbox, change_key,
+                 conversation_id, inference)
+             SELECT id, account_id, ?2, ?3, ?4, ?5 FROM messages WHERE id = ?1
+             ON CONFLICT (message_id) DO UPDATE SET
+                 mailbox = excluded.mailbox, change_key = excluded.change_key,
+                 conversation_id = excluded.conversation_id,
+                 inference = excluded.inference",
+        )?
+        .execute(params![
+            id.as_str(),
+            mailbox_key(record.mailbox.as_deref()),
+            record.change_key,
+            record.conversation_id,
+            record.inference.map(InferenceClassification::as_str),
+        ])?;
+    if inserted == 0 {
+        return Err(Error::not_found("message", id));
+    }
+    Ok(())
+}
+
+/// What an API engine (Gmail, Exchange) stores with a synced message in
+/// the same transaction as the message itself
+/// ([`Store::merge_with_remote`]), so no reader ever sees the message
+/// without its server id or Exchange extras (M5c, ADR 0120).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RemoteExtras {
+    /// The message's id on its API server (`None` = leave it).
+    pub remote_id: Option<String>,
+    /// The Exchange extras (`None` = leave them).
+    pub exchange: Option<ExchangeItemRecord>,
+    /// The Gmail data (`None` = leave it; sets the server id too).
+    pub gmail: Option<nail_api::gmail::GmailMessageInfo>,
+}
+
+/// Applies `extras` to the stored message `id` inside a transaction.
+pub(crate) fn apply_remote_extras_in(
+    conn: &Connection,
+    id: &MessageId,
+    extras: &RemoteExtras,
+) -> Result<()> {
+    if let Some(remote) = &extras.remote_id {
+        crate::gmail::set_message_remote_id_in(conn, id, Some(remote))?;
+    }
+    if let Some(record) = &extras.exchange {
+        set_exchange_item_in(conn, id, record)?;
+    }
+    if let Some(info) = &extras.gmail {
+        crate::gmail::set_gmail_message_in(conn, id, info)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

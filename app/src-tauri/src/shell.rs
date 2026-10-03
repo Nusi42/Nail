@@ -188,13 +188,17 @@ pub enum TestControl {
     Tray(TrayAction),
     /// Answers whether the main window is visible.
     WindowVisible,
+    /// Lists the pop-out OS windows (M5c): `[{label, title, visible}]`.
+    PopOuts,
 }
 
 impl TestControl {
-    /// `"window-visible"` or a tray menu item id (`"tray-new-message"`, …).
+    /// `"window-visible"`, `"pop-outs"` or a tray menu item id
+    /// (`"tray-new-message"`, …).
     pub fn parse(op: &str) -> Option<Self> {
         match op {
             "window-visible" => Some(Self::WindowVisible),
+            "pop-outs" => Some(Self::PopOuts),
             other => TrayAction::from_id(other).map(Self::Tray),
         }
     }
@@ -215,6 +219,22 @@ pub fn test_control<R: Runtime>(app: &AppHandle<R>, op: &str) -> Result<serde_js
                 .is_visible()
                 .map(serde_json::Value::Bool)
                 .map_err(|e| e.to_string())
+        }
+        TestControl::PopOuts => {
+            let mut windows: Vec<serde_json::Value> = app
+                .webview_windows()
+                .into_iter()
+                .filter(|(label, _)| crate::popout::is_pop_out_label(label))
+                .map(|(label, window)| {
+                    serde_json::json!({
+                        "label": label,
+                        "title": window.title().unwrap_or_default(),
+                        "visible": window.is_visible().unwrap_or(false),
+                    })
+                })
+                .collect();
+            windows.sort_by(|a, b| a["label"].as_str().cmp(&b["label"].as_str()));
+            Ok(serde_json::Value::Array(windows))
         }
     }
 }
@@ -375,6 +395,7 @@ mod tests {
             TestControl::parse("window-visible"),
             Some(TestControl::WindowVisible)
         );
+        assert_eq!(TestControl::parse("pop-outs"), Some(TestControl::PopOuts));
         assert_eq!(TestControl::parse("tray-format-disk"), None);
     }
 

@@ -3,7 +3,14 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { control, repoRoot, startNail, type NailServer } from "../support/nail";
-import { openSettingsTab, sectionInbox, showView, viewRegion } from "../support/views";
+import {
+  composerWindow,
+  discardComposer,
+  openSettingsTab,
+  sectionInbox,
+  showView,
+  viewRegion,
+} from "../support/views";
 
 /**
  * End-to-end encryption and data protection (M2a, ADR 0034) against the
@@ -59,7 +66,7 @@ async function receivedMatching(pattern: RegExp): Promise<string> {
 /** Opens the composer and fills in a message. */
 async function compose(page: Page, to: string, subject: string, text: string): Promise<Locator> {
   await page.keyboard.press("c");
-  const dialog = page.getByRole("dialog", { name: "New message" });
+  const dialog = composerWindow(page);
   await expect(dialog).toBeVisible();
   await dialog.getByRole("textbox", { name: "To" }).fill(to);
   await dialog.getByRole("textbox", { name: "Subject" }).fill(subject);
@@ -192,7 +199,7 @@ test("Autocrypt turns on encryption after one received message", async ({ page }
   const recipient = dialog.locator('[data-part="security-compose.recipient"]');
   await expect(recipient).toHaveAttribute("data-state", "missing");
   await expect(dialog.getByRole("checkbox", { name: "Encrypt" })).not.toBeChecked();
-  await dialog.getByRole("button", { name: "Discard" }).click();
+  await discardComposer(page, dialog);
   await expect(dialog).toBeHidden();
 
   // Alice writes once, with her key in the Autocrypt header.
@@ -213,7 +220,7 @@ test("Autocrypt turns on encryption after one received message", async ({ page }
           .getAttribute("data-state", { timeout: 3_000 })
           .catch(() => null);
         if (state !== "encrypt") {
-          await dialog.getByRole("button", { name: "Discard" }).click();
+          await discardComposer(page, dialog);
           await expect(dialog).toBeHidden();
         }
         return state;

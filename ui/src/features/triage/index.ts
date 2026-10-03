@@ -91,6 +91,16 @@ export const dialogs: Feature["dialogs"] = {
   [SNOOZED_WINDOW]: SnoozedDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [SNOOZE_DIALOG]: { size: { width: 440, height: 480 }, min_size: { width: 360, height: 380 } },
+  [SNOOZED_WINDOW]: { size: { width: 720, height: 520 }, min_size: { width: 420, height: 300 } },
+};
+
 /** Keeps junk status, snoozed list and notification settings current. */
 export const handleTriageEvent: FeatureEventHandler = (event, { queryClient }) => {
   switch (event.type) {

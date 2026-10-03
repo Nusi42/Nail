@@ -33,7 +33,7 @@ describe("launch requests", () => {
     expect(composer?.to).toContain("ada@example.org");
     expect(composer?.cc).toContain("bob@example.org");
     expect(composer?.subject).toBe("Hello there");
-    expect(env.store.getState().windows).toContain("composer");
+    expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
     // Each request is handed out once.
     expect(env.transport.data.launches).toEqual([]);
   });
@@ -65,7 +65,7 @@ describe("launch requests", () => {
     renderWithProviders(<LaunchRequests />, env);
     await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Quarterly report"));
     expect(env.store.getState().composer?.to).toContain("ada@example.org");
-    expect(env.store.getState().windows).toContain("composer");
+    expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
     // The program is noted for the composer's notice (WP114 / WP115).
     expect(systemStoreFor(env.store).getState().programDrafts).toEqual({
       [saved.draft_id]: "EXCEL.EXE",

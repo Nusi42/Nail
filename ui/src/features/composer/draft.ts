@@ -1,7 +1,7 @@
 /**
  * The composer ↔ `Draft` mapping for all three modes.
  */
-import type { Draft } from "../../api/generated";
+import type { Draft, SendCrypto } from "../../api/generated";
 import { formatAddressList, parseAddressList } from "../../state/addresses";
 import { emptyComposer } from "../../state/compose";
 import type { ComposerState } from "../../state/uiStore";
@@ -29,14 +29,26 @@ export function toStoredHtml(html: string, previews: Readonly<Record<string, str
   return out;
 }
 
+/**
+ * The sign / encrypt choice of a composer: `undefined` = the focused
+ * composer's (the security toggles' store), `null` = none (follow the
+ * identity defaults), else the choice kept for a composer in the
+ * background (`./sessions.ts`, `cryptoFor`).
+ */
+export type CryptoChoice = SendCrypto | null | undefined;
+
 /** Builds the draft of the composer; `invalid` lists unparsable recipients. */
-export function richDraftOf(c: ComposerState, r: RichState): { draft: Draft; invalid: string[] } {
+export function richDraftOf(
+  c: ComposerState,
+  r: RichState,
+  choice: CryptoChoice = undefined,
+): { draft: Draft; invalid: string[] } {
   const to = parseAddressList(c.to);
   const cc = parseAddressList(c.cc);
   const bcc = parseAddressList(c.bcc);
   // The sign / encrypt toggles (M2a): only an explicit choice is saved; an
   // untouched composer follows the identity defaults and Autocrypt.
-  const crypto = composerCrypto();
+  const crypto = choice === undefined ? composerCrypto() : (choice ?? undefined);
   return {
     draft: {
       id: c.draftId,
@@ -60,8 +72,8 @@ export function richDraftOf(c: ComposerState, r: RichState): { draft: Draft; inv
 }
 
 /** A stable key of what would be saved (autosave compares keys). */
-export function draftKey(c: ComposerState, r: RichState): string {
-  const { draft } = richDraftOf(c, r);
+export function draftKey(c: ComposerState, r: RichState, choice: CryptoChoice = undefined): string {
+  const { draft } = richDraftOf(c, r, choice);
   return JSON.stringify({ ...draft, id: null, to: c.to, cc: c.cc, bcc: c.bcc });
 }
 

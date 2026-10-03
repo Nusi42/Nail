@@ -116,13 +116,15 @@ export interface UiState {
    */
   windows: string[];
   /**
-   * The composer in the window `composer` (the single-instance composer of
-   * M1–M5b). Further composers (M5c, one per draft) live in `composers`.
+   * The focused composer (M5c, ADR 0118). While `composer:<key>` windows
+   * are open it mirrors the topmost one (`features/composer/sessions.ts`):
+   * a write goes to that composer and `null` closes it. Without instance
+   * windows it is the plain `composer` window's own state.
    */
   composer: ComposerState | null;
   /**
-   * Composers of the windows `composer:<instance>` by window id (M5c, ADR
-   * 0116; WP172 moves the composer onto these).
+   * Composers of the windows `composer:<instance>` by window id (M5c, ADRs
+   * 0116 and 0118; every new message opens one).
    */
   composers: Record<string, ComposerState>;
   search: SearchState | null;

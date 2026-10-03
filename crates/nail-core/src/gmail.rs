@@ -23,7 +23,7 @@
 //! * **Sending** goes through the engine as the account's
 //!   `OutgoingTransport` (`crate::outbox`); Gmail files sent mail itself.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use nail_api::engine::{
@@ -43,9 +43,10 @@ use tokio::sync::watch;
 use crate::engine::{Signals, state_for_error, stopped, unix_now};
 use crate::error::{CoreError, Result};
 use crate::ids;
-use crate::ingest::{IncomingMessage, ingest};
+use crate::ingest::{IncomingMessage, ingest_with_remote};
 use crate::replay::{OpExecutor, replay_account};
 use crate::service::Service;
+use nail_store::exchange::RemoteExtras;
 
 /// Messages fetched (raw) per store transaction during a listing.
 const INGEST_CHUNK: usize = 25;
@@ -780,12 +781,17 @@ async fn store_messages(
             let report = service
                 .store()
                 .call(move |s| {
-                    let report = ingest(s, &blobs, Some(&index), &target, 0, &[incoming])?;
-                    s.set_message_remote_id(&stored_id, Some(&remote))?;
-                    if let Some(info) = &info {
-                        s.set_gmail_message(&stored_id, info)?;
-                    }
-                    Ok(report)
+                    // The message and its Gmail data in one transaction:
+                    // no reader sees it without them (ADR 0120).
+                    let extras = BTreeMap::from([(
+                        stored_id,
+                        RemoteExtras {
+                            remote_id: Some(remote),
+                            exchange: None,
+                            gmail: info,
+                        },
+                    )]);
+                    ingest_with_remote(s, &blobs, Some(&index), &target, &[incoming], &extras)
                 })
                 .await?;
             // Only mail arriving in the inbox or a user folder counts (like

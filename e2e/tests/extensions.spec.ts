@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
 import { examplePackage, packFiles } from "../support/plugins";
-import { openSettingsTab, showView } from "../support/views";
+import { composerWindow, openSettingsTab, showView } from "../support/views";
 
 /**
  * Wave M4a plug-in extension points wired into the core (plan WP105, ADR
@@ -79,7 +79,7 @@ test("the before-send example vetoes a mail without its attachment and Send anyw
   await install(page, examplePackage("attachment-check"), /^Attachment check 1\.0\.0$/);
 
   await page.keyboard.press("c");
-  const composer = page.getByRole("dialog", { name: "New message" });
+  const composer = composerWindow(page);
   await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
   await composer.getByRole("textbox", { name: "Subject" }).fill("Quarterly report");
   await composer
@@ -88,8 +88,11 @@ test("the before-send example vetoes a mail without its attachment and Send anyw
   await composer.getByRole("button", { name: "Send", exact: true }).click();
 
   // The veto names the plug-in and its reason; nothing was sent.
-  const veto = page.getByRole("alertdialog", { name: "A plug-in stopped this message" });
+  const veto = page.getByRole("dialog", { name: "A plug-in stopped this message" });
   await expect(veto).toBeVisible();
+  // M5c: a modal confirmation of the composer it came from (only that
+  // composer is blocked).
+  await expect(veto).toHaveAttribute("data-owner", /^composer:/);
   await expect(veto).toContainText("Plug-in “Attachment check”:");
   await expect(veto).toContainText("You mention “see the file”, but nothing is attached.");
   const axe = await new AxeBuilder({ page }).include('[data-part="plugin-veto"]').analyze();
@@ -328,7 +331,7 @@ test("a composer action inserts text into the open draft, attributed to its plug
   await install(page, file, /^Greeter 1\.0\.0$/);
 
   await page.keyboard.press("c");
-  const composer = page.getByRole("dialog", { name: "New message" });
+  const composer = composerWindow(page);
   await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
   await composer.getByRole("textbox", { name: "Subject" }).fill("Greetings");
   await composer.getByRole("button", { name: "Plug-in actions" }).click();

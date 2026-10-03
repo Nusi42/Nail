@@ -6,7 +6,8 @@
  *
  * `ComposerSecurity` is controlled (`choice` / `onChoice`), so any composer
  * can mount it. The layout widget `security-composer` binds it to the
- * app's composer (`uiStore.composer`) and `composerCryptoStore`.
+ * composer of its own window (M5c, `composerOf`) and `composerCryptoStore`
+ * (the focused composer's choice; the composer swaps it on focus changes).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
@@ -35,6 +36,7 @@ import {
   sendBlock,
 } from "./model";
 import { securityKeys, useRecipientKeys, useSecuritySettings } from "./queries";
+import { composerOf, useComposerWindowOf } from "../composer/windowOf";
 
 function RecipientRow({
   status,
@@ -266,7 +268,9 @@ export function composerRecipients(fields: { to: string; cc: string; bcc: string
 /** Layout widget `security-composer`: the toggles for the open composer. */
 export function ComposerSecurityWidget({ node }: WidgetProps) {
   const label = useLabel();
-  const composer = useUi((s) => s.composer);
+  // The composer of this widget's own window (M5c: several composers).
+  const window = useComposerWindowOf();
+  const composer = useUi((s) => composerOf(s, window));
   const choice = useComposerCrypto((s) => s.choice);
   const identityId = composer?.identityId ?? null;
   const identity = (useIdentities(null).data ?? []).find((i) => i.id === identityId) ?? null;

@@ -22,7 +22,7 @@ use nail_api::gmail::{
     GmailLabelSettings, GmailLabelSync, GmailMessageInfo, GmailMessageListVisibility,
 };
 use nail_api::{AccountId, FolderId, GmailLabelId, MessageId, OpId, ThreadId};
-use rusqlite::{OptionalExtension, Row, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Row, Transaction, params};
 
 use crate::error::{Error, Result};
 use crate::store::Store;
@@ -263,10 +263,7 @@ fn retag_in_tx(
 }
 
 /// A message's Gmail data on a connection (summaries attach it).
-pub(crate) fn gmail_info_in(
-    conn: &rusqlite::Connection,
-    id: &MessageId,
-) -> Result<Option<GmailMessageInfo>> {
+pub(crate) fn gmail_info_in(conn: &Connection, id: &MessageId) -> Result<Option<GmailMessageInfo>> {
     let row: Option<(Option<String>, String, String, Option<String>)> = conn
         .prepare_cached(
             "SELECT m.remote_id, g.gmail_thread_id, g.label_ids, g.category
@@ -296,16 +293,7 @@ impl Store {
 
     /// Sets (or clears) a message's id on its API server.
     pub fn set_message_remote_id(&self, id: &MessageId, remote_id: Option<&str>) -> Result<()> {
-        self.with_conn(|conn| {
-            let changed = conn.execute(
-                "UPDATE messages SET remote_id = ?2 WHERE id = ?1",
-                params![id.as_str(), remote_id],
-            )?;
-            if changed == 0 {
-                return Err(Error::not_found("message", id));
-            }
-            Ok(())
-        })
+        self.with_conn(|conn| set_message_remote_id_in(conn, id, remote_id))
     }
 
     /// Sets (or clears) a message's server thread id — Gmail `threadId`,
@@ -547,37 +535,7 @@ impl Store {
 
     /// Stores a message's Gmail data (thread, labels, category).
     pub fn set_gmail_message(&self, id: &MessageId, info: &GmailMessageInfo) -> Result<()> {
-        self.with_tx(|tx| {
-            let account: String = tx
-                .query_row(
-                    "SELECT account_id FROM messages WHERE id = ?1",
-                    [id.as_str()],
-                    |r| r.get(0),
-                )
-                .optional()?
-                .ok_or_else(|| Error::not_found("message", id))?;
-            tx.execute(
-                "INSERT INTO gmail_messages (message_id, account_id, gmail_thread_id, label_ids,
-                     category)
-                 VALUES (?1, ?2, ?3, ?4, ?5)
-                 ON CONFLICT (message_id) DO UPDATE SET
-                     account_id = excluded.account_id,
-                     gmail_thread_id = excluded.gmail_thread_id,
-                     label_ids = excluded.label_ids, category = excluded.category",
-                params![
-                    id.as_str(),
-                    account,
-                    info.thread_id,
-                    serde_json::to_string(&info.label_ids)?,
-                    info.category.as_ref().map(enum_str),
-                ],
-            )?;
-            tx.execute(
-                "UPDATE messages SET remote_id = ?2 WHERE id = ?1",
-                params![id.as_str(), info.gmail_id],
-            )?;
-            Ok(())
-        })
+        self.with_tx(|tx| set_gmail_message_in(tx, id, info))
     }
 
     /// A message's Gmail data.
@@ -767,6 +725,58 @@ impl Store {
             Ok(())
         })
     }
+}
+
+/// [`Store::set_message_remote_id`] on an open connection / transaction.
+pub(crate) fn set_message_remote_id_in(
+    conn: &Connection,
+    id: &MessageId,
+    remote_id: Option<&str>,
+) -> Result<()> {
+    let changed = conn
+        .prepare_cached("UPDATE messages SET remote_id = ?2 WHERE id = ?1")?
+        .execute(params![id.as_str(), remote_id])?;
+    if changed == 0 {
+        return Err(Error::not_found("message", id));
+    }
+    Ok(())
+}
+
+/// [`Store::set_gmail_message`] inside an open transaction.
+pub(crate) fn set_gmail_message_in(
+    conn: &Connection,
+    id: &MessageId,
+    info: &GmailMessageInfo,
+) -> Result<()> {
+    let account: String = conn
+        .query_row(
+            "SELECT account_id FROM messages WHERE id = ?1",
+            [id.as_str()],
+            |r| r.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| Error::not_found("message", id))?;
+    conn.execute(
+        "INSERT INTO gmail_messages (message_id, account_id, gmail_thread_id, label_ids,
+             category)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT (message_id) DO UPDATE SET
+             account_id = excluded.account_id,
+             gmail_thread_id = excluded.gmail_thread_id,
+             label_ids = excluded.label_ids, category = excluded.category",
+        params![
+            id.as_str(),
+            account,
+            info.thread_id,
+            serde_json::to_string(&info.label_ids)?,
+            info.category.as_ref().map(enum_str),
+        ],
+    )?;
+    conn.execute(
+        "UPDATE messages SET remote_id = ?2 WHERE id = ?1",
+        params![id.as_str(), info.gmail_id],
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

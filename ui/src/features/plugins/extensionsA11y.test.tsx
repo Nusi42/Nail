@@ -23,6 +23,7 @@ import { installDemoExtensions } from "./extensionsSeed";
 import { PluginManagerDialog } from "./PluginManager";
 import { pluginsStoreFor } from "./store";
 import { tick } from "./testUtil";
+import { WindowLayer } from "../../layout/WindowLayer";
 
 async function settle(env: Env): Promise<void> {
   await waitFor(() => expect(env.queryClient.isFetching()).toBe(0));
@@ -74,6 +75,7 @@ describe("axe: plug-in extensions", () => {
         />
         <PluginMarkdownBlock info="snippets.ticket" body="id: 1" />
         <SendVetoDialog />
+        <WindowLayer layout={env.transport.data.layout} />
       </>,
       env,
     );
@@ -97,7 +99,9 @@ describe("axe: plug-in extensions", () => {
           settle: () => undefined,
         }),
     );
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", { name: "2 plug-ins stopped this message" }),
+    ).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   });
 

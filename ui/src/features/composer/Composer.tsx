@@ -6,6 +6,7 @@
  * warning and draft autosave.
  */
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -25,14 +26,16 @@ import { parseAddressList } from "../../state/addresses";
 import type { ComposeContext } from "../../state/compose";
 import { useComposeContext } from "../../state/hooks";
 import { useChosenIdentity, useIdentities } from "../../state/queries";
-import { useUi, type ComposerState } from "../../state/uiStore";
+import { useStore } from "zustand";
+import { useUi, useUiStoreApi, type ComposerState, type UiState } from "../../state/uiStore";
 import { Icon } from "../../widgets/Icon";
+import { composerCryptoStore } from "../security";
 import { AddressField } from "./AddressField";
 import { bodyOf, draftKey } from "./draft";
 import {
   cancelSwitch,
   confirmSwitch,
-  discardRich,
+  requestDiscard,
   removeAttachment,
   saveRich,
   sendRich,
@@ -44,8 +47,19 @@ import { LazyHtmlEditor, LazyMarkdownEditor, prefetchEditors } from "./lazyEdito
 import { ComposerPlugins, PluginBlocks } from "./pluginExtensions";
 import { ProgramDraftNotice } from "../system/ProgramDraft";
 import { Preview } from "./Preview";
+import { useComposerWindowOf } from "./windowOf";
+import { useComposerPopOut } from "./popOut";
 import { needsReminder, parseKeywords } from "./reminder";
-import { AUTOSAVE_MS, richStoreFor, useRich, useRichStoreApi, type RichState } from "./store";
+import { composerOf, composerSessions, cryptoFor, patchComposer } from "./sessions";
+import {
+  AUTOSAVE_MS,
+  ComposerWindowContext,
+  richStoreFor,
+  useComposerWindow,
+  useRich,
+  useRichStoreApi,
+  type RichState,
+} from "./store";
 
 /** The editing modes, in switcher order. */
 export const MODES: readonly ComposerMode[] = ["plain", "html", "markdown"];
@@ -63,22 +77,50 @@ export function localToIso(value: string): string | null {
 }
 
 /** Saves the draft a moment after the last change (see `AUTOSAVE_MS`). */
-function useAutosave(ctx: ComposeContext, composer: ComposerState | null, rich: RichState): void {
-  const key = composer ? draftKey(composer, rich) : null;
+function useAutosave(
+  ctx: ComposeContext,
+  window: string,
+  composer: ComposerState | null,
+  rich: RichState,
+): void {
+  // The focused composer's sign / encrypt choice is part of its draft.
+  useStore(composerCryptoStore, (s) => s.choice);
+  const key = composer ? draftKey(composer, rich, cryptoFor(ctx.store, window)) : null;
   const busy = composer?.busy ?? null;
   const savedKey = rich.savedKey;
   useEffect(() => {
     if (key === null) return;
-    const store = richStoreFor(ctx.store);
+    const store = richStoreFor(ctx.store, window);
     if (savedKey === null) {
       // What the composer opened with is the baseline, not a change.
       store.setState({ savedKey: key });
       return;
     }
     if (key === savedKey || busy !== null) return;
-    const timer = setTimeout(() => void saveRich(ctx, { quiet: true }), AUTOSAVE_MS);
+    const timer = setTimeout(() => void saveRich(ctx, { quiet: true, window }), AUTOSAVE_MS);
     return () => clearTimeout(timer);
-  }, [ctx, key, savedKey, busy]);
+  }, [ctx, window, key, savedKey, busy]);
+}
+
+export { useComposerWindowOf };
+
+/**
+ * The title of a composer window (`windowTitles.composer`): the subject of
+ * its message, `null` while it has none (the title is then "New message").
+ */
+export function composerSubjectTitle(
+  state: Pick<UiState, "composer" | "composers">,
+  id: string,
+): string | null {
+  const subject = composerOf(state, id)?.subject.trim() ?? "";
+  return subject === "" ? null : subject;
+}
+
+/** `composerSubjectTitle` as text, with "New message" for no subject. */
+export function ComposerWindowTitle({ id }: { id: string }) {
+  const t = useT();
+  const title = useUi((s) => composerSubjectTitle(s, id));
+  return <>{title ?? t("window-composer")}</>;
 }
 
 function formatSize(bytes: number, locale: string): string {
@@ -127,6 +169,7 @@ function TextField({
 
 function ModeSwitcher({ ctx, mode }: { ctx: ComposeContext; mode: ComposerMode }) {
   const t = useT();
+  const window = useComposerWindow();
   const switching = useRich((s) => s.switching);
   return (
     <div data-part="composer.modes" role="radiogroup" aria-label={t("composer-mode-label")}>
@@ -140,7 +183,7 @@ function ModeSwitcher({ ctx, mode }: { ctx: ComposeContext; mode: ComposerMode }
           data-state={m === mode ? "selected" : undefined}
           aria-checked={m === mode}
           disabled={switching}
-          onClick={() => void switchMode(ctx, m)}
+          onClick={() => void switchMode(ctx, m, window)}
         >
           {t(`composer-mode-${m}`)}
         </button>
@@ -152,6 +195,7 @@ function ModeSwitcher({ ctx, mode }: { ctx: ComposeContext; mode: ComposerMode }
 function Attachments({ ctx }: { ctx: ComposeContext }) {
   const t = useT();
   const locale = useLocale();
+  const window = useComposerWindow();
   const attachments = useRich((s) => s.attachments);
   const uploads = useRich((s) => s.uploads);
   if (attachments.length === 0 && uploads === 0) return null;
@@ -175,7 +219,7 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
               data-part="form.button"
               data-action="remove-attachment"
               aria-label={t("composer-attachment-remove", { name: a.filename })}
-              onClick={() => removeAttachment(ctx, index)}
+              onClick={() => removeAttachment(ctx, index, window)}
             >
               <Icon name="x" part="form.button.icon" />
               <span data-part="form.button.label">{t("composer-attachment-remove-short")}</span>
@@ -192,15 +236,33 @@ function Attachments({ ctx }: { ctx: ComposeContext }) {
   );
 }
 
-/** The composer (see the module comment). */
-export function Composer({ node }: WidgetProps) {
+/**
+ * The composer (see the module comment). In a `composer:<key>` window it
+ * edits that window's message (M5c); elsewhere the plain composer's.
+ */
+export function Composer(props: WidgetProps) {
+  const window = useComposerWindowOf();
+  const store = useUiStoreApi();
+  // The focused-composer mirror and the close guard (`./sessions.ts`).
+  useEffect(() => void composerSessions(store), [store]);
+  return (
+    <ComposerWindowContext.Provider value={window}>
+      <ComposerForm {...props} window={window} />
+    </ComposerWindowContext.Provider>
+  );
+}
+
+function ComposerForm({ node, window }: WidgetProps & { window: string }) {
   const t = useT();
   const label = useLabel();
   const ctx = useComposeContext();
   const ids = useId();
   const layout = useLayoutConfig();
-  const composer = useUi((s) => s.composer);
-  const updateComposer = useUi((s) => s.updateComposer);
+  const composer = useUi((s) => composerOf(s, window));
+  const updateComposer = useCallback(
+    (patch: Partial<ComposerState>) => patchComposer(ctx.store, window, patch),
+    [ctx.store, window],
+  );
   const accountId = useUi((s) => s.activeAccountId);
   const richApi = useRichStoreApi();
   const rich = useRich((s) => s);
@@ -213,7 +275,7 @@ export function Composer({ node }: WidgetProps) {
   const allowLater = optionBool(node, "send-later", true);
   const keywords = useMemo(() => parseKeywords(t("composer-attachment-keywords")), [t]);
 
-  useAutosave(ctx, composer, rich);
+  useAutosave(ctx, window, composer, rich);
 
   // The rich editors live in their own chunks: start loading them now.
   useEffect(() => prefetchEditors(), []);
@@ -248,9 +310,11 @@ export function Composer({ node }: WidgetProps) {
       const from = identityList?.find((i) => i.id === currentIdentity);
       const to = identityList?.find((i) => i.id === chosen.data);
       updateComposer({ identityId: chosen.data });
-      swapSignature(ctx, from, to);
+      swapSignature(ctx, from, to, window);
     }
-  }, [picked, chosen.data, currentIdentity, updateComposer, identityList, ctx]);
+  }, [picked, chosen.data, currentIdentity, updateComposer, identityList, ctx, window]);
+  // A pop-out page opens the draft it was popped out with (M5c).
+  useComposerPopOut(ctx, window, composer !== null, composer?.subject ?? null);
 
   if (!composer) {
     return (
@@ -273,9 +337,12 @@ export function Composer({ node }: WidgetProps) {
     );
   const bodyLabel = t("composer-field-body");
 
+  const send = (force = false) =>
+    void sendRich(ctx, later ? localToIso(sendAt) : null, { window, force });
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void sendRich(ctx, later ? localToIso(sendAt) : null);
+    send();
   };
 
   // The layout's composer keys (send, save) run the rich flows here, before
@@ -289,15 +356,15 @@ export function Composer({ node }: WidgetProps) {
     if (result.kind !== "match") return;
     if (result.match.action === "composer.send") {
       event.preventDefault();
-      void sendRich(ctx, later ? localToIso(sendAt) : null);
+      send();
     } else if (result.match.action === "composer.save") {
       event.preventDefault();
-      void saveRich(ctx);
+      void saveRich(ctx, { window });
     }
   };
 
   const addFiles = (files: File[]) => {
-    if (files.length > 0) void uploadFiles(ctx, files, false);
+    if (files.length > 0) void uploadFiles(ctx, files, false, window);
   };
 
   const onDrop = (event: DragEvent<HTMLFormElement>) => {
@@ -313,6 +380,7 @@ export function Composer({ node }: WidgetProps) {
       ctx,
       list.find((i) => i.id === composer.identityId),
       list.find((i) => i.id === id),
+      window,
     );
     updateComposer({ identityId: id, identityPicked: true, error: null });
   };
@@ -474,7 +542,7 @@ export function Composer({ node }: WidgetProps) {
             data-part="form.button"
             data-action="confirm-switch"
             data-variant="primary"
-            onClick={() => confirmSwitch(ctx)}
+            onClick={() => confirmSwitch(ctx, window)}
           >
             {t("composer-lossy-confirm")}
           </button>
@@ -482,7 +550,7 @@ export function Composer({ node }: WidgetProps) {
             type="button"
             data-part="form.button"
             data-action="cancel-switch"
-            onClick={() => cancelSwitch(ctx)}
+            onClick={() => cancelSwitch(ctx, window)}
           >
             {t("composer-lossy-cancel")}
           </button>
@@ -509,7 +577,7 @@ export function Composer({ node }: WidgetProps) {
           label={bodyLabel}
           previews={rich.inlinePreviews}
           onChange={(html) => richApi.setState({ html })}
-          onInsertImages={(files) => uploadFiles(ctx, files, true)}
+          onInsertImages={(files) => uploadFiles(ctx, files, true, window)}
           source={rich.htmlSource}
           onToggleSource={() => richApi.setState({ htmlSource: !rich.htmlSource })}
         />
@@ -550,7 +618,7 @@ export function Composer({ node }: WidgetProps) {
               data-action="send-anyway"
               onClick={() => {
                 richApi.setState({ reminder: "dismissed" });
-                void sendRich(ctx, later ? localToIso(sendAt) : null, { force: true });
+                send(true);
               }}
             >
               {t("composer-reminder-send-anyway")}
@@ -619,7 +687,7 @@ export function Composer({ node }: WidgetProps) {
           data-part="form.button"
           data-action="save"
           disabled={busy}
-          onClick={() => void saveRich(ctx)}
+          onClick={() => void saveRich(ctx, { window })}
         >
           {t("composer-save")}
         </button>
@@ -633,7 +701,7 @@ export function Composer({ node }: WidgetProps) {
           data-part="form.button"
           data-action="discard"
           disabled={busy}
-          onClick={() => void discardRich(ctx)}
+          onClick={() => void requestDiscard(ctx, window)}
         >
           {t("composer-discard")}
         </button>

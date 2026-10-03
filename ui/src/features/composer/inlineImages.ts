@@ -53,9 +53,10 @@ function isImage(mime: string): boolean {
 export async function loadInlinePreviews(
   ctx: { client: NailClient; store: UiStore },
   draft: Pick<Draft, "id" | "html" | "attachments">,
+  window: string | null = null,
 ): Promise<number> {
   if (draft.id === null || draft.html === null) return 0;
-  const rich = richStoreFor(ctx.store);
+  const rich = richStoreFor(ctx.store, window);
   const missing = missingInlineImages(draft, rich.getState().inlinePreviews);
   let loaded = 0;
   for (const attachment of missing) {

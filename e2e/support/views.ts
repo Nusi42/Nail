@@ -64,6 +64,41 @@ export async function runFromPalette(page: Page, query: string, option: string |
   await expect(palette).toBeHidden();
 }
 
+/**
+ * The newest composer window (M5c: every message has its own window
+ * `composer:<key>`, titled by its subject once it has one; windows keep
+ * their opening order in the page).
+ */
+export const composerWindow = (scope: Page | Locator) =>
+  scope.locator('[data-part="window"][data-window^="composer:"]').last();
+
+/** All composer windows, in the order they opened. */
+export const composerWindows = (scope: Page | Locator) =>
+  scope.locator('[data-part="window"][data-window^="composer:"]');
+
+/**
+ * Discards a composer: its Discard button, then — when the message has a
+ * saved draft or changes (M5c) — "Discard" in the modal confirmation.
+ */
+export async function discardComposer(page: Page, composer: Locator): Promise<void> {
+  const window = await composer.getAttribute("data-window");
+  await composer.getByRole("button", { name: "Discard" }).click();
+  const key = window?.split(":")[1];
+  const confirm = page.locator(
+    `[data-part="window"][data-window="composer-discard${key ? `:${key}` : ""}"]`,
+  );
+  const gone = page.locator(`[data-part="window"][data-window="${window}"]`);
+  await expect(confirm.or(gone))
+    .toHaveCount(1)
+    .catch(() => undefined);
+  await expect(async () => {
+    if (await confirm.isVisible()) {
+      await confirm.getByRole("button", { name: "Discard" }).click({ timeout: 1000 });
+    }
+    await expect(gone).toHaveCount(0, { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
+}
+
 /** The New message button on top of the folder pane. */
 export const newMessageButton = (page: Page) => page.locator('[data-part="folder-tree.compose"]');
 

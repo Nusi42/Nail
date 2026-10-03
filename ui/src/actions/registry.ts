@@ -20,6 +20,7 @@ import {
   startRichReply,
 } from "../features/composer/flows";
 import { deleteMessages, findSummary, moveMessages, setFlags } from "../state/mailOps";
+import { askDeletePermanently } from "../widgets/DeletePermanently";
 import type { UiStore } from "../state/uiStore";
 
 export interface ActionContext {
@@ -117,7 +118,8 @@ export const builtinActions: Record<string, ActionHandler> = {
     enabled: hasSelection,
   },
   "mail.delete-permanently": {
-    run: (ctx) => deleteMessages(ctx, selected(ctx), true),
+    // Asks first (a modal confirmation, M5c).
+    run: (ctx) => askDeletePermanently(ctx, selected(ctx)),
     enabled: hasSelection,
   },
   "mail.toggle-read": {

@@ -73,8 +73,8 @@ describe("window store (M5c)", () => {
     });
     expect(await screen.findByText("about-nail:w1|about-nail|w1")).toBeInTheDocument();
     expect(screen.getByText("about-nail|about-nail|-")).toBeInTheDocument();
-    // Both are open; the lower one is hidden from assistive technology
-    // while the modal frame of the contract stage covers it.
+    // Both are open and shown (non-modal windows; only a modal window makes
+    // the ones behind it inert), in the order they opened.
     const frames = [...container.querySelectorAll('[data-part="window"]')];
     expect(frames.map((d) => d.getAttribute("data-window"))).toEqual([
       "about-nail:w1",

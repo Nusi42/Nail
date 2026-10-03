@@ -204,6 +204,33 @@ export const dialogs: Feature["dialogs"] = {
   [APPLY_CATEGORIES_DIALOG]: ApplyCategoriesDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [MAILBOX_EDITOR_DIALOG]: {
+    size: { width: 560, height: 520 },
+    min_size: { width: 420, height: 360 },
+  },
+  [MAILBOX_REMOVE_DIALOG]: { confirmation: true },
+  [CATEGORY_EDITOR_DIALOG]: {
+    size: { width: 480, height: 420 },
+    min_size: { width: 360, height: 300 },
+  },
+  [CATEGORY_DELETE_DIALOG]: { confirmation: true },
+  [AUTOMATIC_REPLIES_DIALOG]: {
+    size: { width: 720, height: 640 },
+    min_size: { width: 520, height: 480 },
+  },
+  [CLASSIFY_DIALOG]: { size: { width: 520, height: 480 }, min_size: { width: 380, height: 320 } },
+  [APPLY_CATEGORIES_DIALOG]: {
+    size: { width: 480, height: 520 },
+    min_size: { width: 360, height: 360 },
+  },
+};
+
 /** Exchange state changed: refetch the named areas of the account (or everything on mail changes). */
 export const handleExchangeEvent: FeatureEventHandler = (event, { queryClient }) => {
   if (event.type === "ExchangeChanged") {

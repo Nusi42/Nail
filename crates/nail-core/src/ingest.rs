@@ -12,11 +12,13 @@
 //!
 //! [`ingest`] does both for callers with a single message or batch.
 
+use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 
 use nail_api::{Address, Flags, Folder, FolderRole, MessageId};
 use nail_mime::{ParsedMessage, SummaryIds};
 use nail_search::{IndexDocument, SearchIndex};
+use nail_store::exchange::RemoteExtras;
 use nail_store::{
     BlobHash, BlobStore, MessageFilter, MessageMeta, RemovalMark, Store, StoredMessage,
     SyncedMessage,
@@ -218,6 +220,24 @@ pub(crate) fn ingest(
     ingest_prepared(store, blobs, index, folder, uid_validity, &batch)
 }
 
+/// [`ingest`] with the API engine's extras per message (server id,
+/// Exchange data) written in the same transaction as the messages
+/// ([`Store::merge_with_remote`]). Blocking.
+pub(crate) fn ingest_with_remote(
+    store: &Store,
+    blobs: &BlobStore,
+    index: Option<&SearchIndex>,
+    folder: &Folder,
+    messages: &[IncomingMessage],
+    extras: &BTreeMap<MessageId, RemoteExtras>,
+) -> nail_store::Result<IngestReport> {
+    if messages.is_empty() {
+        return Ok(IngestReport::default());
+    }
+    let batch = prepare(blobs, messages.to_vec())?;
+    merge_prepared(store, blobs, index, folder, 0, &batch, extras)
+}
+
 /// Merges a [`prepare`]d batch into `folder` (see [`ingest`]). Blocking.
 pub(crate) fn ingest_prepared(
     store: &Store,
@@ -226,6 +246,26 @@ pub(crate) fn ingest_prepared(
     folder: &Folder,
     uid_validity: u32,
     batch: &PreparedBatch,
+) -> nail_store::Result<IngestReport> {
+    merge_prepared(
+        store,
+        blobs,
+        index,
+        folder,
+        uid_validity,
+        batch,
+        &BTreeMap::new(),
+    )
+}
+
+fn merge_prepared(
+    store: &Store,
+    blobs: &BlobStore,
+    index: Option<&SearchIndex>,
+    folder: &Folder,
+    uid_validity: u32,
+    batch: &PreparedBatch,
+    extras: &BTreeMap<MessageId, RemoteExtras>,
 ) -> nail_store::Result<IngestReport> {
     let mut report = IngestReport::default();
     if batch.messages.is_empty() {
@@ -315,7 +355,7 @@ pub(crate) fn ingest_prepared(
         if group.is_empty() {
             continue;
         }
-        let part = store.merge_with_body_state(&group, state)?;
+        let part = store.merge_with_remote(&group, state, extras)?;
         merged.written += part.written;
         merged.kept_local.extend(part.kept_local);
         merged.skipped.extend(part.skipped);

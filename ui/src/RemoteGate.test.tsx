@@ -1,12 +1,13 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AuthRequest, AuthResponse, AuthStatus, Request, Response } from "./api/generated";
 import { ReauthTransport, reauthStore } from "./api/reauth";
 import { configureRemoteAuth, remoteStore } from "./features/remote";
 import { AuthTransportError } from "./features/remote/authClient";
-import { I18nProvider } from "./i18n/I18nProvider";
 import { ReauthPrompt, checkRemoteGate } from "./RemoteGate";
+import { WindowLayer } from "./layout/WindowLayer";
+import { createEnv, renderWithProviders } from "./test/harness";
 import { MockTransport } from "./api/mock";
 
 const session = {
@@ -117,10 +118,14 @@ describe("re-authentication", () => {
       ),
     );
     remoteStore.getState().setSession(session);
-    render(
-      <I18nProvider locale="en">
+    // M5c: the prompt is the modal window `remote-reauth`.
+    const env = createEnv();
+    renderWithProviders(
+      <>
         <ReauthPrompt />
-      </I18nProvider>,
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
     );
     expect(screen.queryByRole("dialog")).toBeNull();
     let resumed: boolean | null = null;
@@ -132,7 +137,8 @@ describe("re-authentication", () => {
           resumed = ok;
         });
     });
-    await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", { name: "Confirm it’s you" });
+    expect(dialog).toHaveAttribute("data-window", "remote-reauth");
     const user = userEvent.setup();
     await user.type(await screen.findByLabelText("Password"), "a long enough password");
     await user.keyboard("{Enter}");

@@ -15,6 +15,7 @@ import { I18nProvider } from "../i18n/I18nProvider";
 import type { Catalogs } from "../i18n/localizer";
 import { LayoutContext } from "../layout/LayoutContext";
 import { DialogRegistryContext } from "../layout/dialogRegistry";
+import { WindowSpecsContext, WindowTitlesContext } from "../layout/windowSpecs";
 import { WidgetRegistryContext, type WidgetNode } from "../layout/widgetRegistry";
 import { usePluginLayout } from "../features/plugins";
 import { appRegistry } from "../features/registry";
@@ -81,11 +82,15 @@ export function Providers({
                 {(withPlugins) => (
                   <LayoutContext.Provider value={withPlugins}>
                     <DialogRegistryContext.Provider value={appRegistry.dialogs}>
-                      <ActionsProvider layout={withPlugins} handlers={appRegistry.actions}>
-                        <WidgetRegistryContext.Provider value={appRegistry.widgets}>
-                          {children}
-                        </WidgetRegistryContext.Provider>
-                      </ActionsProvider>
+                      <WindowSpecsContext.Provider value={appRegistry.windows}>
+                        <WindowTitlesContext.Provider value={appRegistry.windowTitles}>
+                          <ActionsProvider layout={withPlugins} handlers={appRegistry.actions}>
+                            <WidgetRegistryContext.Provider value={appRegistry.widgets}>
+                              {children}
+                            </WidgetRegistryContext.Provider>
+                          </ActionsProvider>
+                        </WindowTitlesContext.Provider>
+                      </WindowSpecsContext.Provider>
                     </DialogRegistryContext.Provider>
                   </LayoutContext.Provider>
                 )}

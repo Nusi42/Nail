@@ -27,6 +27,9 @@ export const notMessages: readonly string[] = [
   "plugin-manager",
   "plugin-install",
   "plugin-dialog",
+  // M5c window kinds of plug-in dialogs and the send veto.
+  "plugin-modal",
+  "plugin-send-veto",
   "plugin-permissions",
   "plugin-placements",
   "plugin-logs",

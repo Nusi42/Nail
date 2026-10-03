@@ -11,6 +11,7 @@ import type { Event as NailEvent } from "../api/generated";
 import type { DialogRegistry } from "../layout/dialogRegistry";
 import type { SettingsWidgetInfo } from "../layout/settingsIndex";
 import type { WidgetRegistry } from "../layout/widgetRegistry";
+import type { WindowTitleRegistry } from "../layout/windowSpecs";
 import type { UiStore } from "../state/uiStore";
 import type { WindowRegistry } from "../state/windows";
 
@@ -59,6 +60,11 @@ export interface Feature {
    * Optional.
    */
   windows?: WindowRegistry;
+  /**
+   * Window titles by kind from the UI state (M5c): a composer window shows
+   * its subject. `null` = the kind's `window-<kind>` text. Optional.
+   */
+  windowTitles?: WindowTitleRegistry;
   /** Handlers for the events the core pushes. */
   events: readonly FeatureEventHandler[];
   /**

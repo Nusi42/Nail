@@ -12,6 +12,7 @@ import { builtinWidgets } from "../widgets";
 import * as mailWidgets from "../widgets/feature";
 import type { SettingsWidgetInfo } from "../layout/settingsIndex";
 import type { WindowRegistration, WindowRegistry } from "../state/windows";
+import type { WindowTitleFn, WindowTitleRegistry } from "../layout/windowSpecs";
 import * as agents from "./agents";
 import * as appearance from "./appearance";
 import * as composer from "./composer";
@@ -85,6 +86,8 @@ export interface AppRegistry {
   dialogs: DialogRegistry;
   /** The window model of the features' windows by kind (M5c). */
   windows: WindowRegistry;
+  /** Window titles by kind from the UI state (M5c). */
+  windowTitles: WindowTitleRegistry;
   events: Feature["events"];
   effects: Feature["effects"];
 }
@@ -121,6 +124,7 @@ export function mergeFeatures(
   const actionInfo: Record<string, ActionInfo> = {};
   const settings: Record<string, SettingsWidgetInfo> = {};
   const windowSpecs: Record<string, WindowRegistration> = {};
+  const windowTitles: Record<string, WindowTitleFn> = {};
   mergeInto(widgets, builtins.widgets, "widget", "the built-ins", owners);
   mergeInto(actions, builtins.actions, "action", "the built-ins", owners);
   const events: Feature["events"][number][] = [];
@@ -133,6 +137,7 @@ export function mergeFeatures(
     mergeInto(actionInfo, feature.actionInfo ?? {}, "action info", owner, owners);
     mergeInto(settings, feature.settings ?? {}, "settings info", owner, owners);
     mergeInto(windowSpecs, feature.windows ?? {}, "window", owner, owners);
+    mergeInto(windowTitles, feature.windowTitles ?? {}, "window title", owner, owners);
     events.push(...feature.events);
     effects.push(...feature.effects);
   }
@@ -143,6 +148,7 @@ export function mergeFeatures(
     settings,
     dialogs,
     windows: windowSpecs,
+    windowTitles,
     events,
     effects,
   };

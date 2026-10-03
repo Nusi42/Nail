@@ -133,9 +133,25 @@ where
     }
 }
 
+/// The account's status.
+async fn state(service: &Service) -> AccountState {
+    match service.handle(Request::ListAccountStatuses).await {
+        Response::AccountStatuses { statuses } => statuses
+            .into_iter()
+            .find(|s| s.account_id.as_str() == ACCOUNT)
+            .map_or(AccountState::Connecting, |s| s.state),
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// Waits for the end of the first sync pass. Messages show up while the
+/// pass still runs (they are stored as they are listed), so their count
+/// alone does not say the pass is done: the engine reports `Online` only
+/// after the whole pass (labels, every folder) succeeded (WP175).
 async fn synced(env: &Env) {
     until("the first Gmail sync", || async {
-        messages(&env.service, FolderRole::Inbox).await.len() >= 4
+        state(&env.service).await == AccountState::Online
+            && messages(&env.service, FolderRole::Inbox).await.len() >= 4
     })
     .await;
 }

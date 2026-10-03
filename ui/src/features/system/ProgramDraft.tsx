@@ -14,6 +14,7 @@ import type { ComposeContext } from "../../state/compose";
 import { useUi } from "../../state/uiStore";
 import { openRichDraft } from "../composer";
 import { systemStoreFor, useSystemState } from "./store";
+import { composerOf, useComposerWindowOf } from "../composer/windowOf";
 
 /** A notice for the app's launch notice area: message id and arguments. */
 export interface ProgramDraftMessage {
@@ -48,7 +49,9 @@ export async function openProgramDraft(
  */
 export function ProgramDraftNotice({ draftId }: { draftId?: DraftId | null }) {
   const t = useT();
-  const open = useUi((s) => s.composer?.draftId ?? null);
+  // The composer of this notice's own window (M5c: several composers).
+  const window = useComposerWindowOf();
+  const open = useUi((s) => composerOf(s, window)?.draftId ?? null);
   const id = draftId === undefined ? open : draftId;
   const drafts = useSystemState((s) => s.programDrafts);
   const forget = useSystemState((s) => s.forgetProgramDraft);

@@ -161,6 +161,17 @@ plugin-settings-saved = Settings saved.
 
 ## Plug-in dialogs
 
+## Window titles of plug-in dialogs (M5c: windows of the window manager;
+## the dialog's own title is shown when it has one)
+
+window-plugin-dialog-small = Plug-in dialog
+window-plugin-dialog-medium = Plug-in dialog
+window-plugin-dialog-large = Plug-in dialog
+window-plugin-modal-small = Plug-in dialog
+window-plugin-modal-medium = Plug-in dialog
+window-plugin-modal-large = Plug-in dialog
+window-plugin-send-veto = Message not sent
+
 plugin-dialog-from = from { $plugin }
 plugin-dialog-close = Close
 plugin-dialog-invalid =

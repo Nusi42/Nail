@@ -146,6 +146,8 @@ a window is dragged off an edge).
 
 ### Several composers
 
+*Superseded in part by ADR 0118 (WP172): `UiState.composer` is now the
+focused composer, mirroring the topmost `composer:<key>` window.*
 `UiState.composer` stays the composer of the window `composer`; further
 composers live in `UiState.composers` by window id
 (`setComposerOf` / `updateComposerOf`). WP172 moves the composer onto

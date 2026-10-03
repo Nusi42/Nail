@@ -93,6 +93,9 @@ const FEATURE_DIALOGS = [
   "backup-wizard",
   "restore-wizard",
   "diagnostics-bundle",
+  // M5c: modal confirmations of the mail view and the composer.
+  "mail-delete-permanently",
+  "composer-discard",
 ] as const;
 
 /** A layout node as `GetConfig` returns it (only what the sweep reads). */
@@ -132,11 +135,16 @@ class Sweep {
     expect.soft(await violations(this.page), `${this.mode}: ${what}`).toEqual([]);
   }
 
-  /** A dialog window, or a view's window in the view host (M5b). */
+  /**
+   * A dialog window (also an instance `<name>:<key>`, M5c), or a view's
+   * window in the view host (M5b).
+   */
   window(name: string): Locator {
-    return this.page.locator(
-      `[data-part="window"][data-window="${name}"], [data-part="view-host.view"][data-window="${name}"]`,
-    );
+    return this.page
+      .locator(
+        `[data-part="window"][data-window="${name}"], [data-part="window"][data-window^="${name}:"], [data-part="view-host.view"][data-window="${name}"]`,
+      )
+      .last();
   }
 
   /** Waits for window `name`, scans it and records it. */
@@ -206,6 +214,10 @@ for (const mode of MODES) {
         "Welcome to Nail",
       );
       await sweep.scan("reader");
+      // M5c: "Delete permanently?" is a modal confirmation (cancelled here).
+      await page.keyboard.press("Shift+Delete");
+      await sweep.scanWindow("mail-delete-permanently");
+      await sweep.close("mail-delete-permanently");
 
       // The composer in each mode (with its security panel).
       await newMessageButton(page).click();
@@ -217,8 +229,11 @@ for (const mode of MODES) {
       await composer.getByRole("radio", { name: "Markdown" }).click();
       await expect(composer.locator('[data-part="composer.markdown.content"]')).toBeVisible();
       await sweep.scan("composer (Markdown)");
+      // M5c: discarding a message with changes asks in a modal confirmation.
       await composer.getByRole("button", { name: "Discard" }).click();
-      await expect(composer).toBeHidden();
+      await sweep.scanWindow("composer-discard");
+      await sweep.window("composer-discard").getByRole("button", { name: "Discard" }).click();
+      await expect(page.locator('[data-part="window"][data-window^="composer"]')).toHaveCount(0);
 
       // Windows without a button of their own (M5b: the command palette).
       await runFromPalette(page, "outbox", "Outbox");

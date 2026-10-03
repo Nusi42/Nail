@@ -1,7 +1,8 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { emptyComposer } from "../state/compose";
-import { createEnv, renderNode, widget } from "../test/harness";
+import { createEnv, renderNode, renderWithProviders, widget } from "../test/harness";
+import { DiscardConfirmDialog } from "../features/composer/ConfirmDialogs";
 import { identityLabel, localToIso } from "./Composer";
 import { canTakeBack } from "./Outbox";
 
@@ -90,6 +91,16 @@ describe("composer", () => {
     const id = env.store.getState().composer?.draftId ?? "";
     expect(env.transport.data.drafts.get(id)?.subject).toBe("Keep me");
     await user.click(screen.getByRole("button", { name: "Discard" }));
+    // A saved draft asks first (M5c: a modal confirmation window).
+    expect(env.store.getState().windows).toEqual(["composer", "composer-discard"]);
+    const confirm = renderWithProviders(
+      <DiscardConfirmDialog
+        name="composer-discard"
+        close={() => env.store.getState().closeWindow("composer-discard")}
+      />,
+      env,
+    );
+    await user.click(within(confirm.container).getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(env.transport.data.drafts.has(id)).toBe(false));
     expect(env.store.getState().composer).toBeNull();
   });
@@ -193,7 +204,7 @@ describe("outbox", () => {
     expect(within(item).getByText("Waiting")).toBeInTheDocument();
     await user.click(within(item).getByRole("button", { name: "Edit" }));
     await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Later"));
-    expect(env.store.getState().windows).toContain("composer");
+    expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
     expect(await screen.findByText("Nothing is waiting to be sent.")).toBeInTheDocument();
     // It is a saved draft again.
     await waitFor(() =>
@@ -241,7 +252,7 @@ describe("outbox", () => {
     const unfinished = within(drafts).getByText("Unfinished").closest("li") as HTMLElement;
     await user.click(within(unfinished).getByRole("button", { name: "Continue writing" }));
     await waitFor(() => expect(env.store.getState().composer?.subject).toBe("Unfinished"));
-    expect(env.store.getState().windows).toContain("composer");
+    expect(env.store.getState().windows.some((w) => w.startsWith("composer:"))).toBe(true);
   });
 
   it("sends a waiting message at once", async () => {

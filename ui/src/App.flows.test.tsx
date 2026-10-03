@@ -104,7 +104,7 @@ describe("M1a flows", () => {
       () => screen.queryByRole("dialog", { name: "New message" }),
       "'dialog', { name: 'New message' }",
     );
-    expect(dialog).toHaveAttribute("data-window", "composer");
+    expect(dialog.getAttribute("data-window")).toMatch(/^composer:/);
     await eventually(() =>
       expect(within(dialog).getByRole("combobox", { name: "From" })).toHaveFocus(),
     );
@@ -125,19 +125,21 @@ describe("M1a flows", () => {
       within(status).getByText(/^Sending in (one second|([2-9]|10) seconds)$/),
     ).toBeInTheDocument();
     await user.click(within(status).getByRole("button", { name: "Undo" }));
+    // The composer's title bar shows its subject (M5c).
     const reopened = await settleUntil(
-      () => screen.queryByRole("dialog", { name: "New message" }),
-      "'dialog', { name: 'New message' }",
+      () => screen.queryByRole("dialog", { name: "Lunch" }),
+      "'dialog', { name: 'Lunch' }",
     );
     expect(within(reopened).getByRole("textbox", { name: "Subject" })).toHaveValue("Lunch");
     expect(env.transport.data.outbox).toEqual([]);
 
-    // Escape closes the window; the message stays for later.
+    // Escape closes the window; the saved message stays as a draft (M5c).
     fireEvent.keyDown(within(reopened).getByRole("textbox", { name: "Subject" }), {
       key: "Escape",
     });
     await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(env.store.getState().composer?.subject).toBe("Lunch");
+    expect(env.store.getState().composer).toBeNull();
+    expect([...env.transport.data.drafts.values()].map((d) => d.subject)).toEqual(["Lunch"]);
   });
 
   it("reports the send result from SendStatus events", async () => {

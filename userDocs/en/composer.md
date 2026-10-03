@@ -20,9 +20,41 @@
   (see below). New messages start in the identity's format (`composer=` in
   the [accounts reference](accounts-reference.md#identities)).
 
-`Esc` or the × button closes the composer without losing the message: **New
-message** continues it. **Save draft** (`Ctrl+S`) keeps it as a draft;
-**Discard** throws it away.
+**Save draft** (`Ctrl+S`) keeps the message as a draft; **Discard** throws
+it away. A message that has a saved draft or changes asks first ("Discard
+…? Its saved draft is deleted too."); an untouched new message goes at once.
+
+## Several messages at once
+
+The composer is a window of its own: you can keep reading, switch views or
+look something up in another message while it stays open. Move it by its
+title bar and resize it from any edge or corner; Nail remembers where you
+left it.
+
+- Every new message, reply, forward or reopened draft opens in **its own
+  window**, a little below and to the right of the previous one, so several
+  messages can be written side by side. The title bar shows the message's
+  subject ("New message" until it has one).
+- Opening a draft that is already open (from **Outbox → Drafts**, or after
+  **Undo**) brings its window to the front instead of opening it twice.
+- The toolbar, menu and command-palette actions for the composer (Send,
+  Save draft, Format, Attach, …), the Sign / Encrypt choice and plug-ins
+  work on the composer you are using — the one in front.
+- `Esc` or the × button closes a composer. When everything is saved (Nail
+  saves a moment after you stop typing) it just closes; the message stays
+  under **Drafts**. If it still has changes that are not saved, Nail asks:
+  **Save draft** (then close), **Close without saving** (the last saved
+  version stays) or **Keep editing**.
+- When the window is narrow, the composer rearranges itself: field labels
+  move above the fields, the Markdown preview moves below the text and the
+  buttons wrap. **Send**, **Save draft** and **Discard** always stay at the
+  bottom of the window, also when the message is longer than the window.
+
+Only questions that need an answer before anything else can happen —
+closing with unsaved changes, discarding a draft, the plug-in veto's **Send
+anyway**, deleting something for good — block the rest of Nail until you
+answer them. Settings, rules, the plug-in manager and the other tool
+windows never do.
 
 ## Plain text, HTML and Markdown
 

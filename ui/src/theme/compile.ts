@@ -29,6 +29,9 @@ import { SKIN_CSS } from "./skin";
 import { SHELL_SKIN_CSS } from "../features/shell/skin";
 import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
 import { PIM_SKIN_CSS } from "../features/pim/skin";
+import { WINDOWS_SKIN_CSS } from "../features/windows/skin";
+import { COMPOSER_SKIN_CSS } from "../features/composer/skin";
+import { POPOUT_BASE_CSS } from "../features/popout/parts";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
   AncestorSelector,
@@ -183,9 +186,7 @@ html, body { margin: 0; height: 100%; }
 [data-part="folder-tree.list"], [data-part="account-switcher"] { list-style: none; margin: 0; }
 [data-part="folder-tree.list"] { padding: 0; }
 [data-part="message-view.header.field"] { display: flex; gap: 0.5em; }
-[data-part="window-layer"] { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
 [data-part="window"] { display: flex; flex-direction: column; max-width: 100%; max-height: 100%; min-height: 0; overflow: hidden; }
-[data-part="window"]:not([data-state~="active"]) { display: none; }
 [data-part="window.header"] { display: flex; align-items: center; flex: 0 0 auto; }
 [data-part="window.title"] { flex: 1 1 auto; margin: 0; font: inherit; }
 [data-part="window.body"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -251,7 +252,8 @@ ${AGENTS_BASE_CSS}
 ${SYSTEM_BASE_CSS}
 ${PORTABILITY_BASE_CSS}
 ${PALETTE_BASE_CSS}
-${PRINT_BASE_CSS}`;
+${PRINT_BASE_CSS}
+${POPOUT_BASE_CSS}`;
 
 function readerRules(message: MessageDisplay): string {
   const decls: Record<string, string> = {
@@ -316,11 +318,18 @@ export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   const warnings: string[] = [];
   // The M5a look of the primitives (./skin.ts) sits between the structure
   // and the theme, so every theme rule still wins over it; the M5b
-  // packages' skins (shell, settings page, calendar view; ADR 0109) follow it.
+  // packages' skins (shell, settings page, calendar view; ADR 0109) and the
+  // M5c window manager / composer skins (ADRs 0117, 0118) follow it.
   const sections: string[] = [
     BASE_CSS,
     SKIN_CSS,
-    ...[SHELL_SKIN_CSS, SETTINGS_SKIN_CSS, PIM_SKIN_CSS].filter((css) => css !== ""),
+    ...[
+      SHELL_SKIN_CSS,
+      SETTINGS_SKIN_CSS,
+      PIM_SKIN_CSS,
+      WINDOWS_SKIN_CSS,
+      COMPOSER_SKIN_CSS,
+    ].filter((css) => css !== ""),
     ...tokenRules(theme, warnings),
   ];
   try {

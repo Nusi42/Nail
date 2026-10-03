@@ -119,6 +119,17 @@ export const dialogs: Feature["dialogs"] = {
   [FIND_TIME_DIALOG]: FindTimeDialog,
 };
 
+/**
+ * The window model of this feature's windows (M5c, ADR 0116): tool windows
+ * are non-modal with their default and minimum sizes; only confirmations
+ * (`confirmation: true`) are modal. The layout's `window` properties win.
+ */
+export const windows: NonNullable<Feature["windows"]> = {
+  [CANCEL_DIALOG]: { confirmation: true, size: { width: 520, height: 460 }, resizable: true },
+  [SETTINGS_DIALOG]: { size: { width: 640, height: 560 }, min_size: { width: 480, height: 400 } },
+  [FIND_TIME_DIALOG]: { size: { width: 900, height: 640 }, min_size: { width: 640, height: 480 } },
+};
+
 /** Invitations or calendars changed: refetch what shows them. */
 export const handleSchedulingEvent: FeatureEventHandler = (event, { queryClient }) => {
   if ((SCHEDULING_EVENTS as readonly string[]).includes(event.type)) {

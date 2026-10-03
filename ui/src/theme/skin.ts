@@ -326,11 +326,14 @@ const CARDS_WINDOWS = `${ps("card", "form.section")} {
 ${p("card.title")}, ${p("form.section.title")} { margin: 0; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("card.row")} { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: ${T.lg}; padding: ${T.md} 0; }
 ${p("card.row")} + ${p("card.row")} { border-top: 1px solid ${T.border}; }
-${p("window-layer")} { padding: ${T.xl}; background-color: ${T.scrim}; }
 ${p("window")} { border: 1px solid ${T.border}; border-radius: ${T.rLg}; color: ${T.fg}; background-color: ${T.bg}; box-shadow: ${T.windowShadow}; }
 ${p("window.header")} { gap: ${T.sm}; min-height: calc(${T.control} + 3 * ${T.xs}); padding: 0 ${T.sm} 0 ${T.pane}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
 ${p("window.title")} { font-size: ${T.heading}; font-weight: ${T.semibold}; }
 ${p("window.body")} { padding: ${T.pane}; }
+${p("mail-confirm")} { display: grid; gap: ${T.md}; align-content: start; }
+${p("mail-confirm.question")}, ${p("mail-confirm.note")} { margin: 0; overflow-wrap: anywhere; }
+${p("mail-confirm.note")} { color: ${T.muted}; }
+${p("mail-confirm.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
 ${p("wizard.buttons")}, ${p("pim.editor.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }`;
 
 const MESSAGE_LIST = `${p("message-list")} { background-color: ${T.bg}; }

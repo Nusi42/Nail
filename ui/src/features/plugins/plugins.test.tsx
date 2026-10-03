@@ -31,6 +31,7 @@ import {
   wireEvents,
 } from "./testUtil";
 import { PluginTree } from "./tree/PluginTree";
+import { WindowLayer } from "../../layout/WindowLayer";
 
 function sent<T extends Request["type"]>(env: Env, type: T): Extract<Request, { type: T }>[] {
   return env.transport.requests.filter((r): r is Extract<Request, { type: T }> => r.type === type);
@@ -287,14 +288,16 @@ describe("plug-in commands, dialogs and notifications", () => {
     env.store.getState().selectMessage(first.id);
     const plugin = await installFollowUp(env);
     const unsubscribe = wireEvents(env);
+    const layout = pluginLayout(env, [plugin]);
     const view = renderWithProviders(
       <>
         {renderToolbar()}
         <PluginDialogs />
+        <WindowLayer layout={layout} />
         <PluginNotifications />
       </>,
       env,
-      { layout: pluginLayout(env, [plugin]) },
+      { layout },
     );
     return { env, first, view, unsubscribe };
   }
@@ -316,8 +319,10 @@ describe("plug-in commands, dialogs and notifications", () => {
       client_id: clientIdOf(env.client),
     });
     const dialog = await screen.findByRole("dialog", { name: "Follow up" });
+    // A window of the window manager (M5c): a modal confirmation that blocks
+    // the main window it was opened from.
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog.closest('[data-part="plugin.dialog.backdrop"]')).not.toBeNull();
+    expect(dialog).toHaveAttribute("data-owner", "main");
     expect(within(dialog).getByText("from Follow-up")).toBeInTheDocument();
     expect(within(dialog).getByText(new RegExp(first.subject))).toBeInTheDocument();
     const due = within(dialog).getByLabelText("Due");
@@ -327,7 +332,10 @@ describe("plug-in commands, dialogs and notifications", () => {
     fireEvent.change(due, { target: { value: "" } });
     await user.click(within(dialog).getByRole("button", { name: "Save reminder" }));
     expect(sent(env, "RespondPluginDialog")).toHaveLength(0);
-    expect(dialog).toHaveAttribute("data-state", "invalid");
+    expect(dialog.querySelector('[data-part="plugin.dialog"]')).toHaveAttribute(
+      "data-state",
+      "invalid",
+    );
     expect(within(dialog).getByText("Please correct the marked field.")).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(due));
     expect(due).toHaveAccessibleDescription("This field is required.");
@@ -382,7 +390,13 @@ describe("plug-in commands, dialogs and notifications", () => {
   it("shows only this UI's dialogs; non-modal ones do not block", async () => {
     const env = createEnv();
     const unsubscribe = wireEvents(env);
-    renderWithProviders(<PluginDialogs />, env);
+    renderWithProviders(
+      <>
+        <PluginDialogs />
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
+    );
     openDialog(env, {
       dialog_id: "other",
       client_id: "someone-else",
@@ -395,9 +409,9 @@ describe("plug-in commands, dialogs and notifications", () => {
       spec: { title: "Floating", body: [{ type: "text", value: "Hi" }], modal: false },
     });
     const dialog = screen.getByRole("dialog", { name: "Floating" });
-    expect(dialog).toHaveAttribute("aria-modal", "false");
-    expect(dialog).not.toHaveAttribute("data-key-modal");
-    expect(dialog.closest('[data-part="plugin.dialog.backdrop"]')).toBeNull();
+    expect(dialog).not.toHaveAttribute("aria-modal");
+    expect(dialog).not.toHaveAttribute("data-modal");
+    expect(dialog).toHaveAttribute("data-window", "plugin-dialog-medium:float");
     act(() =>
       env.transport.emit({
         type: "PluginDialogClosed",
@@ -413,7 +427,13 @@ describe("plug-in commands, dialogs and notifications", () => {
     const user = userEvent.setup();
     const env = createEnv();
     const unsubscribe = wireEvents(env);
-    renderWithProviders(<PluginDialogs />, env);
+    renderWithProviders(
+      <>
+        <PluginDialogs />
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
+    );
     const spec = {
       title: "Search",
       body: [

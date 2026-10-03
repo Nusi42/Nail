@@ -5,25 +5,27 @@
  * button and the values of the dialog's inputs. Escape and the close
  * button dismiss it (`button: null`).
  *
- * - Modal dialogs (the default) block the rest of the UI: a backdrop, Tab
- *   stays inside the topmost one, main-window key bindings do not apply.
- * - Non-modal dialogs float over the UI without blocking it.
+ * - Every dialog is a window of the window manager (M5c, `./windows.ts`):
+ *   modal dialogs (the default) are confirmations that block the flow they
+ *   came from; non-modal ones float like any tool window. The window's
+ *   title is the dialog's; closing the window (× or Escape) dismisses it.
  * - A primary button (also Enter in a field) needs every `required` value
  *   and valid formats; invalid fields are marked, described and focused.
  * - `button` nodes inside the dialog send `PluginUiAction` with the
  *   current values; the plug-in may answer with an updated dialog (same id).
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import type { DialogProps } from "../../layout/dialogRegistry";
+import { useUi, useUiStoreApi } from "../../state/uiStore";
 import { errorMessageOf, NailError } from "../../api/client";
 import type { JsonValue, LocalizedMessage, PluginDialog } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { trapTab } from "../../layout/WindowLayer";
 import { useClient } from "../../state/queries";
-import { Icon } from "../../widgets/Icon";
 import { clientIdOf } from "./context";
 import { partAttrs } from "./parts";
 import { usePlugins } from "./queries";
 import { usePluginsState } from "./store";
+import { pluginDialogWindow, isPluginDialogWindow, setPluginWindowTitle } from "./windows";
 import { PluginTree } from "./tree/PluginTree";
 import { mergeValues, validate, type FieldIssue, type Values } from "./tree/values";
 
@@ -36,7 +38,7 @@ export function usePluginName(pluginId: string): string {
   return plugins.data?.find((p) => p.id === pluginId)?.manifest.name ?? pluginId;
 }
 
-function DialogView({ dialog, top }: { dialog: PluginDialog; top: boolean }) {
+function DialogView({ dialog }: { dialog: PluginDialog }) {
   const t = useT();
   const client = useClient();
   const closeDialog = usePluginsState((s) => s.closeDialog);
@@ -50,7 +52,6 @@ function DialogView({ dialog, top }: { dialog: PluginDialog; top: boolean }) {
   const [problem, setProblem] = useState<LocalizedMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastBody, setLastBody] = useState(spec.body);
-  const titleId = `plugin-dialog-${dialog.dialog_id}-title`;
 
   // An updated dialog (same id) keeps what the user entered.
   if (lastBody !== spec.body) {
@@ -138,7 +139,6 @@ function DialogView({ dialog, top }: { dialog: PluginDialog; top: boolean }) {
       if (!busy) void respond(null);
       return;
     }
-    if (modal && top && ref.current) trapTab(event, ref.current);
   };
 
   const buttons = spec.buttons ?? [];
@@ -152,33 +152,15 @@ function DialogView({ dialog, top }: { dialog: PluginDialog; top: boolean }) {
       data-dialog={dialog.dialog_id}
       data-size={spec.size ?? "medium"}
       data-modal={modal ? "" : undefined}
-      data-state={invalidCount > 0 ? "invalid" : top ? "active" : undefined}
+      data-state={invalidCount > 0 ? "invalid" : undefined}
       data-key-context="plugin-dialog"
-      data-key-modal={modal ? "" : undefined}
-      role="dialog"
-      aria-modal={modal && top}
-      aria-labelledby={titleId}
       aria-busy={busy}
-      tabIndex={-1}
       onKeyDown={onKeyDown}
     >
       <div {...partAttrs("plugin.dialog.header", plugin)}>
-        <h2 {...partAttrs("plugin.dialog.title", plugin)} id={titleId}>
-          {spec.title}
-        </h2>
         <span {...partAttrs("plugin.dialog.plugin", plugin)}>
           {t("plugin-dialog-from", { plugin: pluginName })}
         </span>
-        <button
-          type="button"
-          {...partAttrs("plugin.dialog.close", plugin)}
-          aria-label={t("plugin-dialog-close")}
-          title={t("plugin-dialog-close")}
-          disabled={busy}
-          onClick={() => void respond(null)}
-        >
-          <Icon name="x" part="plugin.dialog.close.icon" />
-        </button>
       </div>
       <form
         {...partAttrs("plugin.dialog.body", plugin)}
@@ -233,23 +215,68 @@ function DialogView({ dialog, top }: { dialog: PluginDialog; top: boolean }) {
       </form>
     </div>
   );
-  return modal ? <div {...partAttrs("plugin.dialog.backdrop", plugin)}>{frame}</div> : frame;
+  return frame;
 }
 
-/** Shows the plug-in dialogs of this UI (an effect in the app shell). */
+/** The content of a plug-in dialog's window (`plugin-dialog-*` / `plugin-modal-*`). */
+export function PluginDialogWindow({ name }: DialogProps) {
+  const dialog = usePluginsState((s) => s.dialogs.find((d) => pluginDialogWindow(d) === name));
+  return dialog ? <DialogView key={dialog.dialog_id} dialog={dialog} /> : null;
+}
+
+/**
+ * Keeps the plug-in dialogs of this UI and their windows in step (an
+ * effect in the app shell): a new dialog opens its window (titled by the
+ * dialog), a dialog the core or the plug-in closed closes it, and a window
+ * the user closed (× or Escape) dismisses its dialog (`button: null`).
+ */
 export function PluginDialogs() {
+  const client = useClient();
+  const store = useUiStoreApi();
   const dialogs = usePluginsState((s) => s.dialogs);
-  if (dialogs.length === 0) return null;
-  const topModal = [...dialogs].reverse().find((d) => d.spec.modal !== false);
-  return (
-    <>
-      {dialogs.map((dialog) => (
-        <DialogView
-          key={dialog.dialog_id}
-          dialog={dialog}
-          top={dialog.spec.modal === false || dialog === topModal}
-        />
-      ))}
-    </>
-  );
+  const closeDialog = usePluginsState((s) => s.closeDialog);
+  const windows = useUi((s) => s.windows);
+  const opened = useRef(new Set<string>());
+
+  // Dialogs → windows.
+  useEffect(() => {
+    const wanted = new Set(dialogs.map(pluginDialogWindow));
+    for (const dialog of dialogs) {
+      const id = pluginDialogWindow(dialog);
+      setPluginWindowTitle(id, dialog.spec.title);
+      if (!opened.current.has(id)) {
+        opened.current.add(id);
+        store.getState().openWindow(id);
+      }
+    }
+    for (const id of [...opened.current]) {
+      if (wanted.has(id)) continue;
+      opened.current.delete(id);
+      setPluginWindowTitle(id, null);
+      if (store.getState().windows.includes(id)) store.getState().closeWindow(id);
+    }
+  }, [dialogs, store]);
+
+  // A window the user closed: dismiss its dialog.
+  useEffect(() => {
+    for (const dialog of dialogs) {
+      const id = pluginDialogWindow(dialog);
+      // The store's current windows: this render's may predate the opening.
+      const open = store.getState().windows.includes(id);
+      if (!opened.current.has(id) || open || !isPluginDialogWindow(id)) continue;
+      opened.current.delete(id);
+      setPluginWindowTitle(id, null);
+      closeDialog(dialog.dialog_id);
+      void client
+        .call({
+          type: "RespondPluginDialog",
+          dialog_id: dialog.dialog_id,
+          button: null,
+          values: {},
+        })
+        .catch(() => undefined);
+    }
+  }, [windows, dialogs, client, closeDialog, store]);
+
+  return null;
 }

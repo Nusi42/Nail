@@ -30,6 +30,7 @@ import { PluginManagerDialog } from "./PluginManager";
 import { PluginNotifications } from "./PluginNotifications";
 import { pluginsStoreFor } from "./store";
 import { tick, wireEvents } from "./testUtil";
+import { WindowLayer } from "../../layout/WindowLayer";
 
 function setup(): Env {
   const env = createEnv();
@@ -359,13 +360,19 @@ describe("before-send veto", () => {
     const env = setup();
     const id = await vetoedDraft(env);
     const user = userEvent.setup();
-    renderWithProviders(<SendVetoDialog />, env);
+    renderWithProviders(
+      <>
+        <SendVetoDialog />
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
+    );
     let result: Promise<OutboxEntry | null> | undefined;
     await act(async () => {
       result = send(env, id);
       await tick();
     });
-    const dialog = screen.getByRole("alertdialog", { name: "A plug-in stopped this message" });
+    const dialog = screen.getByRole("dialog", { name: "A plug-in stopped this message" });
     expect(within(dialog).getByText("Plug-in “Attachment check”:")).toBeInTheDocument();
     expect(
       within(dialog).getByText("The message mentions an attachment, but nothing is attached."),
@@ -374,7 +381,7 @@ describe("before-send veto", () => {
     expect(keep).toHaveFocus();
     await user.keyboard("{Escape}");
     expect(await result).toBeNull();
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(env.transport.data.outbox).toHaveLength(0);
   });
 
@@ -382,7 +389,13 @@ describe("before-send veto", () => {
     const env = setup();
     const id = await vetoedDraft(env);
     const user = userEvent.setup();
-    renderWithProviders(<SendVetoDialog />, env);
+    renderWithProviders(
+      <>
+        <SendVetoDialog />
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
+    );
     let result: Promise<OutboxEntry | null> | undefined;
     await act(async () => {
       result = send(env, id);
@@ -392,14 +405,20 @@ describe("before-send veto", () => {
     const entry = await result;
     expect(entry).not.toBeNull();
     expect(entry?.subject).toBe("Figures");
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("explains an expired veto and offers only Keep editing", async () => {
     const env = setup();
     const id = await vetoedDraft(env);
     const user = userEvent.setup();
-    renderWithProviders(<SendVetoDialog />, env);
+    renderWithProviders(
+      <>
+        <SendVetoDialog />
+        <WindowLayer layout={env.transport.data.layout} />
+      </>,
+      env,
+    );
     let result: Promise<OutboxEntry | null> | undefined;
     await act(async () => {
       result = send(env, id);

@@ -39,6 +39,11 @@ and offered a Windows sign-in to every host of the domain.
   mailbox is synced in the same pass, then what is still marked is
   deleted (`flush_removed`). A removal of a message that is already in
   another folder is ignored.
+- *Amended by ADR 0120 (M5c WP175):* marks are deleted only once every
+  folder synced *before* the last removal was seen has been synced again
+  (`SinceRemoval`, at most 3 rounds, else the marks wait for the next
+  pass); a new EWS streaming subscription is followed by one sync pass
+  before the first wait.
 - Graph asks for immutable ids on every request (`Prefer:
   IdType="ImmutableId"`, merged into the `Prefer` header, also in
   `$batch` parts): a moved message keeps its id and is moved locally by

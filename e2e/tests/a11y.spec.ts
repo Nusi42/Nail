@@ -3,6 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
 import { rpcOk } from "../support/remote";
 import {
+  composerWindow,
+  discardComposer,
   newMessageButton,
   openSettings,
   readerAction,
@@ -91,7 +93,7 @@ test.describe("windows and dialogs of demo-multi", () => {
 
     // The rich composer, in each mode.
     await newMessageButton(page).click();
-    const composer = page.getByRole("dialog", { name: "New message" });
+    const composer = composerWindow(page);
     await expect(composer).toBeVisible();
     expect(await violations(page)).toEqual([]);
     await composer.getByRole("radio", { name: "HTML" }).click();
@@ -100,7 +102,7 @@ test.describe("windows and dialogs of demo-multi", () => {
     await composer.getByRole("radio", { name: "Markdown" }).click();
     await expect(composer.locator('[data-part="composer.markdown.content"]')).toBeVisible();
     expect(await violations(page)).toEqual([]);
-    await composer.getByRole("button", { name: "Discard" }).click();
+    await discardComposer(page, composer);
     await expect(composer).toBeHidden();
 
     // Outbox, filter rules, account setup.

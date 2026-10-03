@@ -73,9 +73,9 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
     .getByRole("checkbox", { name: "I have written down, printed or saved the key" })
     .check();
   await create.getByRole("button", { name: "Next" }).click();
-  await expect(create.getByLabel("Recovery key")).toBeVisible();
+  await expect(create.getByLabel("Recovery key", { exact: true })).toBeVisible();
   await expectAccessible(page, createWindow);
-  await create.getByLabel("Recovery key").fill(key);
+  await create.getByLabel("Recovery key", { exact: true }).fill(key);
   await create.getByRole("button", { name: "Check", exact: true }).click();
   await expect(create.getByText("Your recovery key works. Keep it safe.")).toBeVisible();
   await expectAccessible(page, createWindow);
@@ -101,7 +101,7 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   const restore = page.getByRole("dialog", { name: "Open your data with the recovery key" });
   await expect(restore).toBeVisible({ timeout: 30_000 });
   await expectAccessible(page, '[data-part="window"]');
-  await restore.getByLabel("Recovery key").fill(key);
+  await restore.getByLabel("Recovery key", { exact: true }).fill(key);
   await restore.getByRole("button", { name: "Open with recovery key" }).click();
   await expect(restore.getByText(/Restart Nail to open your data/)).toBeVisible();
   expect((await vaultState(server)).localized?.id).toBe("vault-restart-needed");
