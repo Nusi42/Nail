@@ -329,7 +329,6 @@ fn contract_message_ids_exist_in_english() {
             .iter()
             .filter_map(|(id, _)| builtin_theme_label(id)),
     );
-    wanted.push("m5a-not-ready".to_owned());
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [

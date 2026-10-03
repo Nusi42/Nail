@@ -237,7 +237,17 @@ async fn config_file_changes_reach_the_socket() {
         "theme \"t\" extends=\"default\" {\n    tokens {\n        color \"accent\" \"#123456\"\n    }\n}\n",
     )
     .unwrap();
-    match receive(&mut socket).await {
+    // An accent override changes the appearance first (M5a, ADR 0102).
+    let mut message = receive(&mut socket).await;
+    if matches!(
+        message,
+        ServerMessage::Event {
+            event: Event::ThemeChanged { .. }
+        }
+    ) {
+        message = receive(&mut socket).await;
+    }
+    match message {
         ServerMessage::Event {
             event: Event::ConfigChanged { theme, .. },
         } => assert!(format!("{theme:?}").contains("#123456")),

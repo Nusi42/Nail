@@ -5,7 +5,11 @@ displayed — comes from one file, `theme.kdl`, in your Nail configuration
 folder. The layout (which panes exist and where) lives in
 [`layout.kdl`](layout-reference.md).
 
-This page covers what works in the current version (M0).
+Most people never need to edit it: **Settings → Appearance** picks one of
+the five built-in themes, Follow Windows, the density, the text size, the
+corner radius and the accent colour, and writes them into this file for you
+(see [Appearance](appearance.md)). This page is the reference for writing
+the file, or your own theme files, by hand.
 
 ## The short version
 
@@ -35,6 +39,7 @@ The file contains one `theme` node:
 
 ```kdl
 theme "<name>" extends="default" mode="system" {
+    appearance follow-system=#true light="frost" dark="graphite" density="comfortable"
     tokens { … }
     modes { … }
     part "<selector>" { … }
@@ -48,8 +53,26 @@ theme "<name>" extends="default" mode="system" {
 | Property | Meaning |
 | --- | --- |
 | `"<name>"` | The theme's name (required). |
-| `extends="default"` | Start from the default theme and change only what the file says. Without it, the file must define everything itself (at least the complete `message` section). |
-| `mode` | `system` (follow Windows, the default), `light`, `dark` or `high-contrast`. |
+| `extends` | What the file starts from: `"default"` (the base theme in `defaults/theme.kdl`), a built-in theme id (`frost`, `sage`, `graphite`, `nocturne`, `high-contrast`) or one of your themes in `themes/` (see [Appearance](appearance.md#your-own-themes)). In your `theme.kdl` it is the theme used while Follow Windows is off. Without `extends`, the file must define everything itself (at least the complete `message` section) and is used as it is. |
+| `mode` | `system` (follow Windows, the default), `light`, `dark` or `high-contrast`. In `theme.kdl`, leave it out: the chosen theme sets it. |
+
+`appearance` (only in your `theme.kdl`; every property optional) holds what
+Settings → Appearance chooses: `follow-system` (`#true` / `#false`), the
+Follow Windows pair `light` and `dark` (theme ids) and `density`
+(`comfortable` or `compact`). Without it, Nail follows Windows with Frost and
+Graphite. Three tokens of the file are the Appearance page's overrides and
+apply on top of every theme: `font-size "body"` (11–20), `radius "md"`
+(0–20) and `color "accent"` (`#rgb` / `#rrggbb`, one value for every mode).
+
+```kdl
+theme "My settings" extends="sage" {
+    appearance follow-system=#false density="compact"
+    tokens {
+        color "accent" "#2f7d3a"
+        font-size "body" 15
+    }
+}
+```
 
 The file format is [KDL](https://kdl.dev) version 2: `// comments`,
 `"strings"`, numbers, `#true` / `#false`, and `;` to put several nodes on one
@@ -83,8 +106,11 @@ tokens {
 - Numbers without a unit are pixels for `font-size`, `space`, `size` and
   `radius` tokens (`space "row" 6` is `6px`).
 - Write `$$` for a literal dollar sign.
-- Redefining a default token replaces it completely, including its dark and
-  high-contrast values. To change only one mode, use `modes`:
+- `compact=` sets the value used with the Compact density
+  (`space "row" 12 compact=8`). The base theme gives Compact values for row
+  and pane padding, body and title text, control and avatar sizes.
+- Redefining a default token replaces it completely, including its dark,
+  high-contrast and compact values. To change only one mode, use `modes`:
 
 ```kdl
 modes {
@@ -98,16 +124,16 @@ Token categories:
 
 | Category | Used for | Default names |
 | --- | --- | --- |
-| `color` | Colours | `bg`, `bg-subtle`, `bg-raised`, `fg`, `fg-muted`, `border`, `accent`, `accent-fg`, `selection`, `selection-fg`, `unread`, `flagged`, `danger`, `focus-ring`, `quote-1` … `quote-3` |
-| `font` | Font families | `ui`, `reader`, `mono` |
-| `font-size` | Type scale | `xs`, `sm`, `md`, `lg`, `xl` |
-| `font-weight` | Weights | `regular`, `medium`, `bold` |
-| `line-height` | Line heights | `tight`, `normal` |
-| `space` | Spacing scale | `xxs`, `xs`, `sm`, `md`, `lg`, `xl`, `row` |
-| `size` | Fixed sizes | `icon`, `touch-target`, `toolbar`, `divider` |
-| `radius` | Corner radii | `sm`, `md`, `lg` |
-| `border` | Border shorthands | `thin` |
-| `shadow` | Shadows | `raised`, `overlay` |
+| `color` | Colours | surfaces `bg`, `bg-subtle`, `bg-raised`, `canvas` (the window behind the panes), `rail`; text `fg`, `fg-muted`, `fg-subtle` (tertiary); lines `border` (dividers), `border-strong` (input outlines); `accent`, `accent-fg`, `accent-soft` (pressed chips, primary icon buttons), `selection`, `selection-fg`, `unread`, `flagged`, `focus-ring`, `danger`, `warning`, `success`, `quote-1` … `quote-3`, `scrim`; `avatar-fg`, `avatar-1` … `avatar-8`, `file-pdf`, `file-image`, `file-document`, `file-spreadsheet`, `file-archive`, `file-calendar`, `file-other` (avatars and file-type badges) |
+| `font` | Font families | `ui` (Segoe UI Variable), `display`, `reader`, `mono` |
+| `font-size` | Type scale | `label` 11.5, `small` 12.5, `body` 14 (Compact 13), `heading` 16, `title` 20 (Compact 18); the other steps are calculated from `body`, so changing it scales them all. `xs`, `sm`, `md`, `lg`, `xl` are kept as aliases of `label`, `small`, `body`, `heading`, `title` |
+| `font-weight` | Weights | `regular`, `medium`, `semibold`, `bold` |
+| `line-height` | Line heights | `tight` 1.25, `normal` 1.45, `relaxed` 1.65 (the reader) |
+| `space` | Spacing on a 4 px grid | `xxs` 2, `xs` 4, `sm` 8, `md` 12, `lg` 16, `xl` 24, `xxl` 32; `pane` 16 (pane padding; Compact 12), `gap` 8, `section` 24, `row` 12 (list rows; Compact 8) |
+| `size` | Fixed sizes | `icon` 16, `control` 32 (button and input height; Compact 28), `avatar` 34 (Compact 28), `touch-target`, `toolbar`, `divider` |
+| `radius` | Corner radii | `md` 10 (buttons, cards), `sm` and `lg` calculated from `md` (inputs and menu items; windows), `pill` 999 |
+| `border` | Border shorthands | `thin`, `control` (input outlines, `border-strong`) |
+| `shadow` | Shadows | `raised` (floating cards), `overlay` (menus), `window` (dialogs) |
 | `motion` | Durations and easings | `fast`, `normal`, `ease` |
 | `opacity` | Opacity levels | `disabled`, `muted` |
 | `z-index` | Stacking order | — |
@@ -226,9 +252,14 @@ icon "dot" svg="M0 0h2v2H0z" view-box="0 0 2 2"
 
 `svg` is SVG path data (the `d` attribute of a `<path>`), drawn in a
 `0 0 24 24` box unless `view-box` says otherwise. Several icons can be
-grouped in `icons { … }`. Default icon names: `reply`, `reply-all`,
-`forward`, `archive`, `delete`, `flag`, `mark-read`, `sync`, `folder`,
-`inbox`, `sent`, `drafts`, `junk`, `trash`.
+grouped in `icons { … }`.
+
+Nail draws its icons from the [Lucide](https://lucide.dev) set (names such
+as `reply`, `archive`, `trash`, `square-pen`, `refresh-cw`); toolbars and
+menus in `layout.kdl` name them. An `icon` in your theme with the same name
+replaces the Lucide icon everywhere, and a new name adds an icon you can use
+in `layout.kdl`. Older Nail icon names (`compose`, `delete`, `sync`, …) still
+work and show the matching Lucide icon.
 
 ## Message display
 
@@ -278,11 +309,13 @@ version when part structure changes.
 
 ## High contrast and reduced motion
 
-The default theme has `high-contrast=` values for its colours, used when
-Windows runs a contrast theme (with `mode="system"`) or when the theme sets
-`mode="high-contrast"`. Nail ships an example theme with stronger contrast,
-bigger text and thicker focus rings: `defaults/themes/high-contrast.kdl`
-(see [Accessibility](accessibility.md#high-contrast)).
+High contrast is a built-in theme: pick it in Settings → Appearance, or let
+Follow Windows switch to it while Windows uses a contrast theme. It has 7:1
+contrast for everything, bigger text, 2 px borders and thick focus rings
+(`defaults/themes/high-contrast.kdl`; see
+[Accessibility](accessibility.md#high-contrast)). The base theme also has
+`high-contrast=` values for its colours, used by your own themes with
+`mode="high-contrast"`.
 
 When Windows asks for fewer animations, Nail stops all transitions and
 animations, whatever the theme says. Set the `motion` tokens to `0ms` to

@@ -162,6 +162,8 @@ layout "default" {
     window "settings" {
         tabs id="settings-tabs" {
             account-settings id="account-settings" label="@settings.tab.accounts"
+            // Themes, Follow Windows, density, text size, corner radius and accent (M5a).
+            appearance-settings id="appearance" label="@settings.tab.appearance"
             virtual-account-editor id="virtual-accounts" label="@settings.tab.virtual-accounts"
             mcp-clients id="mcp-clients" label="@mcp.settings.tab"
             // Changes by AI agents and plug-ins that wait for you, and the history.

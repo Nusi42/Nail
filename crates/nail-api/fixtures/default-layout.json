@@ -935,6 +935,15 @@
             },
             {
               "type": "widget",
+              "id": "appearance",
+              "label": "@settings.tab.appearance",
+              "kind": "appearance-settings",
+              "options": {},
+              "rows": [],
+              "source": null
+            },
+            {
+              "type": "widget",
               "id": "virtual-accounts",
               "label": "@settings.tab.virtual-accounts",
               "kind": "virtual-account-editor",

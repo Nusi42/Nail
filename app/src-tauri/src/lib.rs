@@ -1022,6 +1022,13 @@ mod tests {
         .unwrap();
         task.abort();
         let seen = seen.lock().unwrap();
+        // The theme list and selection first (M5a), then the configuration.
+        assert!(
+            matches!(seen[0], Event::ThemeChanged { .. }),
+            "{:?}",
+            seen[0]
+        );
+        let seen: Vec<Event> = seen[1..].to_vec();
         assert!(
             matches!(seen[0], Event::ConfigChanged { .. }),
             "{:?}",

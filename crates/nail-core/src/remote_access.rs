@@ -161,7 +161,14 @@ impl Service {
             | Request::GetPrintJob { .. }
             | Request::PrintViewReady { .. }
             // M5a: the theme list and selection (no mail data).
-            | Request::ListThemes => Ok(()),
+            | Request::ListThemes
+            // The browser's colour scheme: applied only when the core has no
+            // OS source of its own (no mail data).
+            | Request::ReportSystemAppearance { .. } => Ok(()),
+            // M5a WP155: the attachment's message must be readable.
+            Request::GetMessageAttachment { message_id, .. } => {
+                self.check_readable(access, message_id).await
+            }
 
             // M4c print jobs: the target must be readable by the session.
             Request::CreatePrintJob { target, .. } => match target {
@@ -279,6 +286,7 @@ impl Service {
             | Request::PreviewDiagnostics { .. }
             | Request::CreateDiagnosticsBundle { .. }
             | Request::PickPath { .. }
+            | Request::SaveAttachment { .. }
             | Request::SyncSieve { .. }
             | Request::UpdateNotificationSettings { .. }
             | Request::SetFolderSyncPolicy { .. }

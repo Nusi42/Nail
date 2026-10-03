@@ -69,33 +69,35 @@ focus; errors are announced at once.
 
 ## High contrast
 
-When Windows uses a contrast theme, Nail follows it by itself: the default
-theme has high-contrast colours for every part. To pin high contrast (or to
-get even stronger contrast, bigger text and thicker focus rings), use the
-example theme that comes with Nail, `defaults/themes/high-contrast.kdl`:
+High contrast is one of Nail's built-in themes. With **Follow Windows** on
+(Settings → Appearance; on by default), Nail switches to it by itself while
+Windows uses a contrast theme (Settings → Accessibility → Contrast themes)
+and back when you turn the contrast theme off. To use it all the time, click
+**High contrast** in the theme gallery of Settings → Appearance.
 
-1. Copy the file into your configuration folder and name it `theme.kdl`
-   (or, if you already have a `theme.kdl`, open Settings → Customize →
-   **Apply a theme or layout…** and pick the file to merge it into yours).
-2. Nail picks it up at once.
+It has pure black and white with yellow and cyan accents, and every text
+and outline reaches at least 7:1 contrast (WCAG AAA). Text is bigger (16 px
+body text, which the whole type scale follows), every control has a 2 px
+border, focus rings are thick and drawn outside the item, a selected item is
+a solid highlight, and there are no animations. Nail checks the contrast of
+every theme automatically.
 
-The example extends the default theme, so it stays small. It sets:
+Your own changes still apply on top: the text size, corner radius and
+accent colour on the Appearance page, and your part rules in `theme.kdl`.
+For example, an even thicker focus ring on toolbar buttons:
 
 ```kdl
-theme "High contrast" extends="default" mode="high-contrast" {
-    tokens {
-        color "bg"         "#000000"
-        color "fg"         "#ffffff"
-        color "focus-ring" "#00ffff"
-        border "thin" "2px solid $color.border"
-        motion "fast" "0ms"
-    }
+theme "My settings" extends="high-contrast" {
     part "toolbar.button:focus-visible" {
-        outline "3px solid $color.focus-ring"
+        outline "4px solid $color.focus-ring"
         outline-offset 2
     }
 }
 ```
+
+The theme file itself is `defaults/themes/high-contrast.kdl`; to build a
+variant, copy it into the `themes` folder of your configuration folder
+under a new name (see [Appearance](appearance.md#your-own-themes)).
 
 See the [theme reference](theme-reference.md) for everything a theme can
 change. `?mode=high-contrast` in the browser's address (remote access) turns
@@ -106,4 +108,4 @@ high contrast on for that page only.
 When Windows is set to show fewer animations (Settings → Accessibility →
 Visual effects → Animation effects off), Nail turns its transitions and
 animations off too. A theme can also set the `motion` tokens to `0ms`, as
-the high-contrast example does.
+the High contrast theme does.

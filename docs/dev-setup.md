@@ -326,6 +326,41 @@ How it works:
 | `e2e/tests/agents.spec.ts` | `--seed demo-multi` (M4a): an MCP client created and granted in the settings writes a draft without confirmation; its send waits until approved in the confirmation center ("always allow" then lets the next send run at once; axe on the center); a denied Trash and a permanent delete (always asks, no always-allow) change nothing; the `summarize_thread` prompt; a rate limit saved in the settings trips and is audited as denied |
 | `e2e/tests/extensions.spec.ts` | `--seed demo-multi` (M4a): the before-send example vetoes ("Keep editing", "Send anyway"; axe on the veto dialog); an arrival hook tags new mail (keyword on the IMAP server) and an open hook's banner button reaches the plug-in; the CSV preview renders a table; an hourly job runs after `clock-advance` and "Run now"; a runaway arrival hook is stopped while mail keeps arriving; a composer action inserts text attributed to its plug-in |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
+| `e2e/tests/m5a.spec.ts` | `--seed demo-multi` (M5a): the five themes picked in Settings → Appearance and written to `theme.kdl` (Follow Windows off), the accent override and "Use theme defaults", Compact density across themes (tag line hidden, smaller rows, `data-nail-density`), Follow Windows driven by `system-appearance` (Graphite, High contrast, another pair), a user theme added to `themes/` while running and a broken one listed, an attachment card's Save downloading the file |
+
+### Visual regression (M5a, ADR 0106)
+
+Screenshots of six screens (main window with a message, composer, Settings,
+calendar week, a context menu, the Move dialog) for every built-in theme
+(Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
+Compact), compared with reviewed baselines. Its own Playwright config
+(`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.
+
+```
+npm run build -w ui && cargo build -p nail-cli   # prerequisites (or NAIL_BIN=<nail.exe>)
+npm run visual             # compare with e2e/visual/baselines/<platform>/, then build the review page
+npm run visual:update      # also write baselines of new / changed screens
+npm run visual:review      # rebuild the review page from the last run
+npm run visual:selftest    # end-to-end self-test of the harness with temporary baselines
+```
+
+- The review page is `<build dir>/visual/review/index.html`
+  (`%LOCALAPPDATA%\nail-build\visual\review\index.html` locally): baseline,
+  actual and difference side by side, filterable by status, skipped variants
+  with their reasons. Open the file; nothing is served.
+- Baselines are per platform because fonts differ; `win32` is the
+  reference. Accepting a change = `npm run visual:update`, review every
+  "new" / "changed" screen on the page, commit `e2e/visual/baselines/`.
+- Each worker runs its own `nail serve --seed demo-multi` on a free port;
+  every screen starts from a fresh page with a fixed clock, UTC, en-US,
+  reduced motion, 1280 × 800.
+- Variables: `NAIL_VISUAL_THEMES`, `NAIL_VISUAL_DENSITIES`,
+  `NAIL_VISUAL_SCREENS` (comma-separated filters), `NAIL_VISUAL_WORKERS`
+  (default 2), `NAIL_VISUAL_MAX_DIFF_RATIO` (default 0.002 of the pixels),
+  `NAIL_VISUAL_THRESHOLD` (default 0.15 per pixel), `NAIL_VISUAL_BASELINES`,
+  `NAIL_VISUAL_RESULTS`. Details: `e2e/visual/README.md`.
+- CI job `visual` (non-blocking for now) uploads the review page as the
+  artifact `visual-review`.
 
 ### Generated files and snapshots
 
@@ -484,6 +519,7 @@ from tests or by hand (`curl -X POST http://127.0.0.1:4780/api/test/smtp-message
 | `clock` | – | `{now}`: the core's triage clock (snooze, quiet hours, notifications, reminders), Unix seconds |
 | `clock-set` | `at` | Sets that clock to `at` (Unix seconds); it keeps running |
 | `clock-advance` | `seconds` | Moves that clock forward (or back, negative) |
+| `system-appearance` | `scheme` (`light` / `dark`), `high_contrast?` | The OS light / dark and contrast state Follow Windows sees (M5a; seeded runs start light, whatever the machine does) |
 
 For UI work with hot module reloading, run `npm run dev`. It prints the
 dev server's URL (`http://127.0.0.1:5791/` when that port is free). Add

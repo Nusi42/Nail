@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "lint": "tsc --noEmit -p . && tsc --noEmit -p perf && prettier --check .",
+    "lint": "tsc --noEmit -p . && tsc --noEmit -p perf && tsc --noEmit -p visual && prettier --check .",
     "install-browsers": "playwright install chromium"
   },
   "devDependencies": {

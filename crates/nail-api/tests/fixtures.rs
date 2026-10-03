@@ -170,13 +170,14 @@ fn theme_parts_are_well_formed() {
             );
         }
     }
-    // The part rules the default UI relies on.
+    // The part rules the default UI relies on (list rows, folders, the
+    // reader and toolbars are styled by the UI skin since M5a).
     for part in [
         "app",
-        "message-list.row",
-        "folder-tree.item",
-        "message-view.body",
-        "toolbar.button",
+        "split.divider",
+        "window",
+        "composer",
+        "thread-view.item",
     ] {
         assert!(
             theme.parts.iter().any(|r| r.selector == part),

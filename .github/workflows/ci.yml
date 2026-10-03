@@ -424,6 +424,58 @@ jobs:
   # Licences (no GPL / LGPL / AGPL), advisories (RustSec; the rsa 0.9
   # exception is recorded in deny.toml), banned crates (OpenSSL, aws-lc),
   # sources.
+  # Visual regression (M5a, ADR 0106): built-in themes x densities against
+  # e2e/visual/baselines/win32, plus the harness self-test. Non-blocking until a
+  # CI run confirms the runner renders like the reference machine (fonts:
+  # Segoe UI Variable); then delete continue-on-error.
+  visual:
+    name: Visual regression (themes x densities)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx -w e2e playwright install --with-deps chromium
+
+      - name: Build UI
+        run: npm run build -w ui
+
+      - name: Build nail-cli
+        run: cargo build -p nail-cli
+
+      - name: Harness self-test
+        run: npm run visual:selftest
+
+      - name: Visual regression
+        run: npm run visual
+
+      - name: Upload review page
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-review
+          path: |
+            .nail-build/visual/review/
+            .nail-build/visual-selftest/review/
+          retention-days: 14
+
   deny:
     name: cargo-deny
     runs-on: ubuntu-latest

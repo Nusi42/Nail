@@ -162,6 +162,15 @@ pub fn demo_options(mut options: crate::ServiceOptions) -> crate::ServiceOptions
     }
     // Subscriptions to the mock HTTP server (plain http on loopback).
     options.loopback_feeds = true;
+    // Follow Windows sees a light OS, whatever the machine does, so seeded
+    // runs and tests look the same everywhere (M5a; demo-multi flips it with
+    // the `system-appearance` control).
+    if options.system_appearance.is_none() {
+        options.system_appearance =
+            Some(Arc::new(nail_api::appearance::ManualSystemAppearance::new(
+                Some(nail_api::appearance::SystemAppearance::LIGHT),
+            )));
+    }
     options
 }
 
@@ -464,6 +473,9 @@ pub struct DemoMulti {
     /// The clock snooze, quiet hours and notifications see; moved by the
     /// `clock-set` / `clock-advance` controls (M2c).
     pub clock: Arc<crate::AdjustableClock>,
+    /// The OS light / dark state Follow Windows sees; set by the
+    /// `system-appearance` control (M5a).
+    pub system_appearance: Arc<nail_api::appearance::ManualSystemAppearance>,
     /// The in-memory keychain with the accounts' passwords (used when the
     /// options passed to [`DemoMulti::service_options`] bring no store).
     pub secrets: Arc<MemorySecretStore>,
@@ -769,6 +781,9 @@ pub async fn start_demo_multi() -> Result<DemoMulti> {
         ews,
         autodiscover,
         clock: Arc::new(crate::AdjustableClock::new()),
+        system_appearance: Arc::new(nail_api::appearance::ManualSystemAppearance::new(Some(
+            nail_api::appearance::SystemAppearance::LIGHT,
+        ))),
         secrets,
         discoverer: Arc::new(discoverer),
         pop3_counter: AtomicU32::new(0),
@@ -970,6 +985,8 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
         options.timing = crate::EngineTiming::fast();
         options.open_browser = false;
         options.clock = Some(Arc::clone(&self.clock) as Arc<dyn nail_triage::Clock>);
+        options.system_appearance = Some(Arc::clone(&self.system_appearance)
+            as Arc<dyn nail_api::appearance::SystemAppearanceSource>);
         options.exchange = self.exchange_hooks();
         demo_options(options)
     }
@@ -1132,6 +1149,8 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
     /// * `clock` → `{now}`; `clock-set {at}` (Unix seconds);
     ///   `clock-advance {seconds}`: the clock of snooze, quiet hours and
     ///   notifications (M2c)
+    /// * `system-appearance {scheme: "light"|"dark", high_contrast?}` →
+    ///   `{scheme, high_contrast}`: the OS state Follow Windows sees (M5a)
     ///
     /// `account` defaults to the IMAP account `work` (`new` is the
     /// discoverable one), `mailbox` to `INBOX`.
@@ -1348,6 +1367,23 @@ account "{MULTI_EWS_ID}" email="{MULTI_EWS_EMAIL}" name="Corp" enabled=#false {{
                 }))
             }
             "clock" => Ok(json!({ "now": nail_triage::Clock::unix(&*self.clock) })),
+            "system-appearance" => {
+                use nail_api::appearance::{ColorScheme, SystemAppearance};
+                let scheme = match text("scheme") {
+                    Some("light") => ColorScheme::Light,
+                    Some("dark") => ColorScheme::Dark,
+                    _ => return Err("scheme must be light or dark".to_owned()),
+                };
+                let high_contrast = args
+                    .get("high_contrast")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                self.system_appearance.set(SystemAppearance {
+                    scheme,
+                    high_contrast,
+                });
+                Ok(json!({ "scheme": text("scheme"), "high_contrast": high_contrast }))
+            }
             "clock-set" => {
                 let at = args
                     .get("at")

@@ -38,8 +38,12 @@ test("the inspector shows the part path, theme rules and layout node", async ({ 
   await expect(panel.getByText("message-list #list")).toBeVisible();
   await expect(panel.getByText(/window “main”, breakpoint 0, path 2\/1/)).toBeVisible();
   await expect(panel.getByText(/defaults\/layout\.kdl:\d+:\d+/)).toBeVisible();
-  await expect(panel.getByText(/defaults\/theme\.kdl:\d+:\d+/).first()).toBeVisible();
   await expect(page.locator('[data-part="inspector.highlight"]')).toBeVisible();
+  // List rows are styled by the UI skin since M5a; the pane divider still
+  // has rules in the default theme.
+  await page.locator('[data-part="split.divider"]').first().hover();
+  await expect(panel.getByText(/defaults\/theme\.kdl:\d+:\d+/).first()).toBeVisible();
+  await row.locator('[data-part="message-list.row.subject"]').hover();
 
   // A click pins the element; Esc leaves the inspector.
   await row.click();

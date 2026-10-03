@@ -208,7 +208,8 @@ pub use plugins::{PluginGrant, PluginInfo, PluginManifest, PluginPermission, Plu
 pub use portability::{ImportSource, JobReport, JobStatus};
 pub use print::{PrintJob, PrintTarget};
 pub use protocol::{
-    Event, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse, ServerMessage,
+    Event, MAX_ATTACHMENT_DOWNLOAD, PROTOCOL_VERSION, Request, Response, RpcRequest, RpcResponse,
+    ServerMessage,
 };
 pub use remote::{
     RemoteAuditEntry, RemoteDevice, RemoteGrant, RemoteSession, RemoteUiSettings, RemoteUiStatus,

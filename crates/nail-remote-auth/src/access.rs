@@ -163,6 +163,8 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::ListThemes => ("ListThemes", Session),
         Request::SetTheme { .. } => ("SetTheme", Admin),
         Request::SetThemePreferences { .. } => ("SetThemePreferences", Admin),
+        // The browser's colour scheme (applied only without an OS source).
+        Request::ReportSystemAppearance { .. } => ("ReportSystemAppearance", Session),
         Request::PreviewConfigMerge { .. } => ("PreviewConfigMerge", Admin),
         Request::ResolveConfigMerge { .. } => ("ResolveConfigMerge", Admin),
         Request::ApplyConfigMerge { .. } => ("ApplyConfigMerge", Admin),
@@ -477,6 +479,9 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::PreviewDiagnostics { .. } => ("PreviewDiagnostics", DesktopOnly),
         Request::CreateDiagnosticsBundle { .. } => ("CreateDiagnosticsBundle", DesktopOnly),
         Request::PickPath { .. } => ("PickPath", DesktopOnly),
+        // M5a WP155: attachment downloads (web) and saves (desktop).
+        Request::GetMessageAttachment { .. } => ("GetMessageAttachment", Scope(S::Attachments)),
+        Request::SaveAttachment { .. } => ("SaveAttachment", DesktopOnly),
         Request::GetRecentActions => ("GetRecentActions", Session),
         Request::RecordActionUsed { .. } => ("RecordActionUsed", Session),
         Request::ClearRecentActions => ("ClearRecentActions", Session),

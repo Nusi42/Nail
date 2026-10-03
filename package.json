@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w ui",
-    "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs",
+    "test": "node scripts/check-socket-binds.mjs && npm run test -w ui && npm run test -w packages --if-present && node --test e2e/perf/run-perf.test.mjs && node --test e2e/visual/scripts.test.mjs \"e2e/visual/lib/*.test.ts\" \"scripts/visual-review/*.test.mjs\"",
     "check:sockets": "node scripts/check-socket-binds.mjs",
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write .",
@@ -25,7 +25,11 @@
     "build:desktop": "node e2e/scripts/build-desktop.mjs",
     "gen:api": "cross-env NAIL_UPDATE_BINDINGS=1 cargo test -p nail-api --test bindings",
     "tauri": "node scripts/tauri.mjs",
-    "e2e:only": "npm run test -w e2e"
+    "e2e:only": "npm run test -w e2e",
+    "visual": "node e2e/visual/run-visual.mjs",
+    "visual:update": "node e2e/visual/run-visual.mjs --update",
+    "visual:review": "node scripts/visual-review/generate.mjs",
+    "visual:selftest": "node e2e/visual/selftest.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.0",

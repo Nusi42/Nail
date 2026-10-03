@@ -312,6 +312,10 @@ pub(crate) struct Inner {
     /// The desktop shell's side of the M4b requests (ADR 0087).
     pub(crate) desktop: Option<Arc<dyn nail_api::DesktopHost>>,
     watcher: Mutex<Option<ConfigWatcher>>,
+    /// Follow Windows: the subscription to the OS light / dark state (M5a;
+    /// `None` without a source). While it is set, the UI's
+    /// `ReportSystemAppearance` is ignored.
+    pub(crate) appearance_watch: Mutex<Option<crate::appearance::SystemAppearanceWatch>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -390,6 +394,11 @@ impl Service {
         let search = vault.open_index(&index_dir)?;
         let config = ConfigManager::load(&options.config_dir);
         let service = Self::build(store, blobs, config, search, vault, secrets, &options)?;
+        // Follow Windows (M5a): the given source, else the platform's (the
+        // registry on Windows); applies the OS state before anyone asks.
+        let watch =
+            crate::appearance::watch_system_appearance(&service, options.system_appearance.clone());
+        *lock(&service.inner.appearance_watch) = watch;
         if options.watch_config {
             service.watch_config()?;
         }
@@ -505,6 +514,7 @@ impl Service {
                 ),
                 desktop: options.desktop.clone(),
                 watcher: Mutex::new(None),
+                appearance_watch: Mutex::new(None),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
             }),
@@ -669,6 +679,10 @@ impl Service {
     pub async fn resync_events(&self) -> Vec<Event> {
         let config = &self.inner.config;
         let mut events = vec![
+            // The theme list and selection (M5a), before the resolved theme.
+            Event::ThemeChanged {
+                appearance: Box::new(config.appearance()),
+            },
             nail_config::ConfigUpdate::Changed {
                 theme: config.theme(),
                 layout: config.layout(),
@@ -1370,8 +1384,13 @@ impl Service {
             // M5a (ADR 0102): themes, selection, Follow Windows (WP152).
             request @ (Request::ListThemes
             | Request::SetTheme { .. }
-            | Request::SetThemePreferences { .. }) => {
+            | Request::SetThemePreferences { .. }
+            | Request::ReportSystemAppearance { .. }) => {
                 crate::appearance::handle(self, request).await?
+            }
+            // M5a WP155: attachments of received mail.
+            request @ (Request::GetMessageAttachment { .. } | Request::SaveAttachment { .. }) => {
+                crate::attachments::handle(self, request).await?
             }
         })
     }

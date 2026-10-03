@@ -108,7 +108,7 @@ async fn get_config_returns_defaults_and_locale() {
             layout,
             locale,
         } => {
-            assert_eq!(*theme, nail_config::default_theme());
+            assert_eq!(*theme, nail_config::default_selected_theme());
             assert_eq!(*layout, nail_config::default_layout());
             assert_eq!(locale.as_deref(), Some("de"));
         }
@@ -354,7 +354,7 @@ async fn invalid_config_at_start_falls_back_and_is_reported() {
     let Response::Config { theme, .. } = service.handle(Request::GetConfig).await else {
         panic!("expected config");
     };
-    assert_eq!(*theme, nail_config::default_theme());
+    assert_eq!(*theme, nail_config::default_selected_theme());
 }
 
 #[tokio::test]
@@ -368,7 +368,12 @@ async fn config_changes_are_broadcast() {
         "theme \"Test\" extends=\"default\" {\n    tokens {\n        color \"accent\" \"#ff0066\"\n    }\n}\n",
     )
     .unwrap();
-    match next_event(&mut events).await {
+    // `color "accent"` is an appearance override: ThemeChanged comes first.
+    let mut event = next_event(&mut events).await;
+    if matches!(event, Event::ThemeChanged { .. }) {
+        event = next_event(&mut events).await;
+    }
+    match event {
         Event::ConfigChanged { theme, .. } => {
             let dump = format!("{theme:?}");
             assert!(dump.contains("#ff0066"), "{dump}");

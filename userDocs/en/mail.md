@@ -15,6 +15,24 @@ To list whole conversations instead of single messages, set
 `threads="collapsed"` on the `message-list` in your
 [`layout.kdl`](layout-reference.md#widgets).
 
+## The message list and the reader
+
+Each row shows the sender's initials in a coloured circle, a dot for unread
+mail and, in the Comfortable density, a tag line: the account (when you have
+several), attachments, the flag and up to three
+labels. The Compact density leaves the tag line out (Settings → Appearance,
+see [Appearance](appearance.md#density)).
+
+The reader keeps the header, the attachments and the text in one centred
+column at a comfortable reading width; plain-text mail uses the normal UI
+font and keeps its line breaks.
+
+Attachments are cards with the file type, name and size. **Save** asks
+where to save the file in the desktop app (the Save dialog asks before
+replacing a file); in a browser the file is downloaded. **Preview** appears
+when a plug-in can show that type, and the **…** button has the plug-ins'
+attachment actions.
+
 ## Flag, archive, move, delete
 
 The toolbar above the message, the message's right-click menu (or

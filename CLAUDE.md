@@ -117,8 +117,12 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        show-installation, desktop-settings show-dev-endpoint, default-apps show-mapi;
                        ADRs 0087, 0092); M4c: identity `send-as=` / `sender=`, widgets/portability.rs + security
                        future widgets security-recovery-key / security-smartcards (ADR 0094);
-                       M5a: themes.rs (embedded defaults/themes/*.kdl: BUILTIN_THEME_FILES, resolve_builtin_theme,
-                       builtin_theme_infos), css::MODES + `compact`; tests/theme_contrast.rs (WP151) (ADR 0102)
+                       M5a: themes.rs (embedded defaults/themes/*.kdl + `ThemeCatalog` over <config>/themes/*.kdl,
+                       extends chains, ThemeProblem), appearance_edit.rs (comment-preserving writes of the
+                       `appearance` node / override tokens), ConfigManager appearance / set_theme /
+                       set_theme_preferences / set_system_appearance / reload_themes, ConfigUpdate::ThemeChanged
+                       (before Changed), css::MODES + `compact`; tests/theme_contrast.rs (WCAG per theme, the
+                       pair table every default part rule must stay within), tests/appearance.rs (ADRs 0102–0104)
 crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -382,8 +386,11 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        post-M4c (ADR 0101): pipeline.rs (overlapping fetch → prepare → store, used by sync.rs
                        store_batches; MailChangedThrottle), ingest::prepare (blob writes + MIME parsing on worker
                        threads) / ingest_prepared, Service::subscribe_plugin_reloads;
-                       M5a (ADR 0102): appearance.rs (ListThemes / SetTheme / SetThemePreferences, Follow Windows via
-                       ServiceOptions::system_appearance; WP152), Windows deps windows-registry / windows-sys
+                       M5a (ADRs 0102, 0104, 0107): appearance.rs (ListThemes / SetTheme / SetThemePreferences /
+                       ReportSystemAppearance; Follow Windows: Service::open keeps a SystemAppearanceWatch on
+                       ServiceOptions::system_appearance, else the Windows registry watcher; reports apply only
+                       without a watch), attachments.rs (GetMessageAttachment / SaveAttachment); demo_options
+                       installs a light ManualSystemAppearance, demo-multi control `system-appearance`
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -482,8 +489,12 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        actions/palette.ts (ActionInfo, buildPalette) + Feature.actionInfo;
                        WP105 mounts: composer/pluginExtensions.tsx, reader in
                        widgets/MessageView.tsx (ADR 0084);
-                       M5a (ADR 0102): appearance/ (themes, Follow Windows, density, overrides; mock.ts mirrors
-                       nail_api::appearance), lucide-react icons;
+                       M5a (ADRs 0102, 0105, 0107): appearance/ (appearance-settings widget, SystemAppearanceReporter,
+                       mock.ts mirrors nail_api::appearance and resolves defaults/themes/*.kdl via Vite ?raw),
+                       theme/skin.ts (token-only default look of the primitives, between BASE_CSS and the theme's
+                       part rules — the base theme has no rules for those parts), widgets/lucideIcons.ts + Icon.tsx
+                       (theme icon → Lucide → nothing), widgets/primitives.tsx (Switch, Segmented, Tag, Avatar),
+                       widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -519,8 +530,10 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        keychain file loses the data key), tests/desktop-m4c.spec.ts (Save as PDF); perf/ (M4c WP123, ADR 0097: budgets.json,
                        list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
                        = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>));
-                       visual/ (M5a WP154: visual regression, 5 themes × 2 densities; review page in
-                       scripts/visual-review/)
+                       tests/m5a.spec.ts (themes, density, Follow Windows via `system-appearance`, user themes,
+                       attachment download); visual/ (M5a, ADR 0106: visual regression, built-in themes ×
+                       densities × 6 screens; own Playwright config; baselines in visual/baselines/<platform>
+                       (win32 = reference); review page from scripts/visual-review/)
 defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names); themes/ = the built-in
                        themes frost, sage (light), graphite, nocturne (dark), high-contrast (M5a, ADR 0102)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
@@ -555,10 +568,10 @@ cargo test                                 # default members = all crates except
 cargo test --workspace                     # incl. the Tauri shell (after npm run build)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
-npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`
+npm test                                   # socket-bind check (ADR 0057), Vitest (ui) incl. the lint-rule self-test, packages/* `test`, perf + visual script tests
 cd ui && npx vitest run --silent=false --reporter=default   # Vitest with console output even when piped (expect no `stderr |` block)
 npm run check:sockets                      # only the socket-bind check (scripts/lib/socket-binds.mjs: rules + allowlist)
-npm run lint                               # ESLint + tsc + Prettier (ui), tsc + Prettier (e2e)
+npm run lint                               # ESLint + tsc + Prettier (ui), tsc (e2e, perf, visual) + Prettier (e2e)
 npm run e2e                                # builds ui + nail-cli + desktop app, then Playwright (docs/dev-setup.md)
 npm run e2e:only                           # Playwright against what is already built
 npm run build:desktop                      # nail-app (custom-protocol + test-overrides) + DLL / harness for the desktop smoke tests, own target dir
@@ -574,6 +587,9 @@ cargo run -p nail-bench --release -- --corpus small   # performance benchmark ag
 nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
 node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
 npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
+npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 6 screens vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
+npm run visual:update                      # also write baselines of new / changed screens; then review <build dir>/visual/review/index.html and commit
+npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)
 powershell -File scripts/installer-smoke.ps1   # install to a temp dir, start, [update,] uninstall
 powershell -File scripts/msi-smoke.ps1         # elevated (CI): silent MSI install with properties, start, upgrade, uninstall
@@ -833,10 +849,18 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   token variant `compact=` → `modes["compact"]` under `:root[data-nail-density="compact"]` + `app[density=…]`
   part condition; token schema `token_schema()` checked by nail-config `tests/defaults.rs`; icons = Lucide names
   (`nail_api::icons`, legacy names mapped); `ListThemes` / `SetTheme` / `SetThemePreferences` → `Themes`,
-  `ThemeChanged`; `SystemAppearanceSource` in `ServiceOptions::system_appearance`). The core answers
-  `unsupported` (`m5a-not-ready`) until WP152. Slots: WP151 `defaults/themes/` + `defaults/theme.kdl` +
+  `ThemeChanged`; `SystemAppearanceSource` in `ServiceOptions::system_appearance`). The core answered
+  `unsupported` until the integration (served since WP155, below). Slots: WP151 `defaults/themes/` + `defaults/theme.kdl` +
   `nail-config/tests/theme_contrast.rs`; WP152 rest of `nail-config` + `nail-core/src/appearance.rs`; WP153 `ui/` +
   `locales/`; WP154 `e2e/visual/` + `scripts/visual-review/`.
+- M5a integration (ADR 0107; packages ADRs 0103 themes + contrast test, 0104 selection / user themes / Follow
+  Windows, 0105 UI skin / Lucide / mail panes / appearance page, 0106 visual regression): no theme.kdl = Follow
+  Windows with Frost / Graphite (`nail_config::default_selected_theme()`); an accent override sends `ThemeChanged`
+  before `ConfigChanged`. Seeded runs see a light OS (`demo_options`); never rely on the machine's mode in tests.
+  `defaults/theme.kdl` has no rules for the parts `ui/src/theme/skin.ts` styles and no `icons` (Lucide) — a new
+  default part rule's colours must be in the pair table of `tests/theme_contrast.rs`; input-like parts use
+  `border "$border.control"`. `ReportSystemAppearance` is ignored while the core watches the OS.
+  `GetMessageAttachment` (base64, ≤ 64 MiB) / `SaveAttachment` (desktop only, absolute path).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

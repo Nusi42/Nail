@@ -7,13 +7,14 @@ Guides and references for people using Nail.
 | [Release notes](release-notes.md) | What is new in Nail 1.0, what changed for existing data, known limits |
 | [Getting started](getting-started.md) | Starting Nail (desktop or browser), the demo mailbox, finding your way around, privacy when reading mail, where settings and mail are kept |
 | [Accounts](accounts.md) | Adding an account, signing in, account and identity settings, the unified inbox, virtual accounts, connection states |
-| [Reading and organizing mail](mail.md) | Conversations, flags, archive, move, delete, keyboard shortcuts, snooze, junk mail and the junk filter, messages downloaded on demand, the offline queue |
+| [Reading and organizing mail](mail.md) | Conversations, list rows and the reader, saving attachments, flags, archive, move, delete, keyboard shortcuts, snooze, junk mail and the junk filter, messages downloaded on demand, the offline queue |
 | [Calendar, contacts and tasks](calendar-contacts-tasks.md) | Calendar views and the event editor (repeating events: this / this and following / all), reminders, contacts, groups and merging duplicates, tasks with subtasks, subscriptions, CalDAV / CardDAV servers and conflicts, importing `.ics` / `.vcf`, events and tasks from email, what Nail keeps of calendar files |
 | [Invitations, scheduling and Gmail labels](invitations-and-gmail-labels.md) | The invitation card (answering, proposing a new time, the spoofing warning, the mail Nail sends, calendar servers that schedule themselves), organizing meetings, finding a time with free/busy, Gmail accounts, labels and categories |
 | [Microsoft Exchange and Microsoft 365](exchange.md) | Adding an Exchange Online or Exchange Server account (Autodiscover, signing in), shared mailboxes and delegate access, categories, Focused Inbox, automatic replies, rules on the server, booking a room, Microsoft To Do |
 | [Searching](search.md) | The search bar and the search language: fields, AND / OR / NOT, quotes, error messages |
 | [Writing mail](composer.md) | The composer: plain text, HTML and Markdown, attachments and the reminder, replies and signatures, drafts saved to the server, undo send, send later, the outbox |
 | [Markdown mail](markdown-mail.md) | What Markdown can do, what recipients get, the mail stylesheet and code colours per identity |
+| [Appearance](appearance.md) | The five themes (Frost, Sage, Graphite, Nocturne, High contrast), Follow Windows and its light / dark pair, Comfortable / Compact density, text size, corner radius and accent colour, your own themes in `themes/` |
 | [Accessibility](accessibility.md) | Keyboard use, context menus (Shift+F10), shortcut / toolbar / column editors, screen readers, the high-contrast theme, reduced motion |
 | [Filter rules](rules.md) | Rules that sort, tag and answer mail: when they run, conditions, actions, testing, undoing a run, `rules.kdl` |
 | [Server-side rules and vacation replies](server-side-rules.md) | Rules that run on your mail server (Sieve / ManageSieve), which rules can run there and why others stay in Nail, the vacation reply, what Nail changes on the server |
@@ -37,7 +38,7 @@ Guides and references for people using Nail.
 | [Installing Nail on Windows](installing.md) | The downloads (x64 / ARM64, offline, MSI, portable), installer options, Default apps, silent install, updates, uninstall and your data, the portable version |
 | [The desktop app on Windows](desktop-app.md) | The welcome screen, updates and About Nail, tray and starting with Windows, default apps, mail from other programs ("Send to → Mail recipient"; never sent without you) |
 | [Deploying Nail](deploying-nail.md) | For IT: which package, silent per-user and per-machine (MSI) installs and their options, update channels and policies, "Send to > Mail recipient", winget |
-| [Theme reference](theme-reference.md) | `theme.kdl`: colours, fonts, spacing, parts and states, icons, message display |
+| [Theme reference](theme-reference.md) | `theme.kdl`: the selection (`extends`, `appearance`), colours, fonts, the type scale and 4 px spacing grid, density, parts and states, icons (Lucide), message display |
 | [Layout reference](layout-reference.md) | `layout.kdl`: windows, panes, widgets, actions, keyboard shortcuts, toolbars, menus |
 | [Row templates, parts and keyboard](templates-and-parts.md) | Message list row templates and pipes, every styleable part and state, keyboard navigation |
 | [Accounts reference](accounts-reference.md) | `accounts.kdl`: accounts, servers and sign-in, identities (formats, signatures, mail style), what to synchronize, virtual accounts, OAuth2 providers, undo send |

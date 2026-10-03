@@ -114,7 +114,7 @@ use crate::print::{PdfFile, PrintJob, PrintOptions, PrintTarget};
 use crate::recovery::RecoveryKeyStatus;
 use crate::security::CryptoTechnology;
 // M5a (ADR 0102).
-use crate::appearance::{Appearance, ThemePreferences};
+use crate::appearance::{Appearance, SystemAppearance, ThemePreferences};
 use crate::smartcard::{
     PinPrompt, PinPromptCloseReason, SmartcardKeyRef, SmartcardSettings, SmartcardToken,
 };
@@ -2745,7 +2745,52 @@ pub enum Request {
         /// The new preferences (all of them).
         preferences: ThemePreferences,
     },
+    /// The OS light / dark and contrast state as the browser or WebView
+    /// sees it (`prefers-color-scheme`, `prefers-contrast` /
+    /// `forced-colors`), sent by the UI while Follow Windows is on (M5a
+    /// WP155). The core applies it only when it has no OS source of its own
+    /// (the desktop app and `nail serve` on Windows read the registry; a
+    /// report is then ignored). Answered with [`Response::Themes`]; sends
+    /// [`Event::ThemeChanged`] (+ [`Event::ConfigChanged`]) when applied.
+    ReportSystemAppearance {
+        /// What the page sees.
+        system: SystemAppearance,
+    },
+
+    // --- Attachments (M5a WP155) ---
+    /// The decoded content of attachment `index` of a message (the web UI
+    /// offers it as a download). Answered with
+    /// [`Response::AttachmentData`]; `not_found` for an unknown message or
+    /// index, `too_large` above [`MAX_ATTACHMENT_DOWNLOAD`].
+    GetMessageAttachment {
+        /// The message.
+        message_id: MessageId,
+        /// The attachment's index ([`crate::AttachmentInfo::index`]).
+        index: u32,
+    },
+    /// Save attachment `index` of a message to a file (desktop only: the UI
+    /// asks for the path with [`Request::PickPath`] first). Answered with
+    /// [`Response::Done`]; `not_found` for an unknown message or index; an
+    /// existing file is `conflict` (`portability-error-target-exists`)
+    /// unless `overwrite`.
+    SaveAttachment {
+        /// The message.
+        message_id: MessageId,
+        /// The attachment's index.
+        index: u32,
+        /// The file to write.
+        path: String,
+        /// Replace an existing file (atomically). Only set when the user
+        /// confirmed replacing it in the Save dialog.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        overwrite: bool,
+    },
 }
+
+/// The largest attachment [`Request::GetMessageAttachment`] returns
+/// (64 MiB; larger ones are saved on the desktop).
+pub const MAX_ATTACHMENT_DOWNLOAD: usize = 64 * 1024 * 1024;
 
 fn default_true() -> bool {
     true
@@ -2923,9 +2968,10 @@ pub enum Response {
         /// The draft.
         draft: Box<Draft>,
     },
-    /// Answer to [`Request::GetDraftAttachment`].
+    /// Answer to [`Request::GetDraftAttachment`] and
+    /// [`Request::GetMessageAttachment`].
     AttachmentData {
-        /// MIME type (from the draft's attachment entry).
+        /// MIME type (from the draft's attachment entry or the part).
         mime: String,
         /// The content, base64 (standard alphabet, padded).
         data: String,
@@ -3809,8 +3855,9 @@ pub enum Response {
         /// The chosen path; `null` = cancelled.
         path: Option<String>,
     },
-    /// Answer to [`Request::ListThemes`], [`Request::SetTheme`] and
-    /// [`Request::SetThemePreferences`] (M5a).
+    /// Answer to [`Request::ListThemes`], [`Request::SetTheme`],
+    /// [`Request::SetThemePreferences`] and
+    /// [`Request::ReportSystemAppearance`] (M5a).
     Themes {
         /// Themes, selection, active theme, OS state.
         appearance: Box<Appearance>,
