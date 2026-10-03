@@ -140,7 +140,7 @@ pub(crate) struct ActionSchema {
 #[derive(JsonSchema)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub(crate) enum ToolbarItemSchema {
-    /// `item "<action> <args>…" label=… icon=…`.
+    /// `item "<action> <args>…" label=… icon=… rank=… display=…`.
     Item {
         /// Action id and arguments.
         action: String,
@@ -148,11 +148,141 @@ pub(crate) enum ToolbarItemSchema {
         label: Option<String>,
         /// Icon override.
         icon: Option<String>,
+        /// Overflow rank (M5b): 1 stays longest; unranked items move into
+        /// "More" first.
+        rank: Option<u32>,
+        /// `icon`, `label` or `icon-label` (M5b).
+        display: Option<ItemDisplaySchema>,
+    },
+    /// `more label=… icon=… { <menu items> }` (M5b): the "More" menu.
+    More {
+        /// Label override.
+        label: Option<String>,
+        /// Icon override.
+        icon: Option<String>,
+        /// The menu's own entries.
+        items: Vec<MenuItemSchema>,
     },
     /// `spacer`: pushes the following items to the end.
     Spacer,
     /// `separator`.
     Separator,
+}
+
+/// How a toolbar button shows its action (M5b).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum ItemDisplaySchema {
+    /// Only the icon.
+    Icon,
+    /// Only the label.
+    Label,
+    /// Icon and label.
+    IconLabel,
+}
+
+/// The properties of a `toolbar "<name>"` node (M5b).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) struct ToolbarSettingsSchema {
+    /// Hide actions that cannot run now instead of showing them disabled.
+    hide_disabled: Option<bool>,
+    /// `more` (default: items that do not fit move into "More") or `wrap`.
+    overflow: Option<ToolbarOverflowSchema>,
+}
+
+/// Toolbar overflow (M5b).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum ToolbarOverflowSchema {
+    /// Into the "More" menu, by rank.
+    More,
+    /// Onto further lines.
+    Wrap,
+}
+
+/// Where a rail badge counts from (M5b).
+#[derive(JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum BadgeSchema {
+    /// Unread mail in the inboxes.
+    Unread,
+    /// Confirmations waiting.
+    Confirmations,
+}
+
+/// `views default="<id>" { view "<id>" … }` (M5b).
+#[derive(JsonSchema)]
+pub(crate) struct ViewsSchema {
+    /// The view shown at start.
+    default: Option<String>,
+    /// The views by id.
+    views: std::collections::BTreeMap<String, ViewSchema>,
+}
+
+/// `view "<id>" label=… icon=… window=… badge=…`.
+#[derive(JsonSchema)]
+pub(crate) struct ViewSchema {
+    /// Label: literal text or `@message.id`.
+    label: Option<String>,
+    /// Lucide icon name.
+    icon: Option<String>,
+    /// The window the view shows.
+    window: String,
+    /// Badge on the rail button.
+    badge: Option<BadgeSchema>,
+}
+
+/// A rail entry (M5b).
+#[derive(JsonSchema)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub(crate) enum RailItemSchema {
+    /// `view "<id>"`.
+    View {
+        /// The view.
+        view: String,
+    },
+    /// `item "<action> <args>…" label=… icon=… badge=…`.
+    Item {
+        /// Action id and arguments.
+        action: String,
+        /// Label override.
+        label: Option<String>,
+        /// Icon override.
+        icon: Option<String>,
+        /// Badge.
+        badge: Option<BadgeSchema>,
+    },
+    /// `spacer`.
+    Spacer,
+    /// `separator`.
+    Separator,
+}
+
+/// `group "<id>" label=… { section … }` of the settings page (M5b).
+#[derive(JsonSchema)]
+pub(crate) struct SettingsGroupSchema {
+    /// Group id.
+    id: String,
+    /// Label: literal text or `@message.id`.
+    label: Option<String>,
+    /// The group's sections.
+    sections: Vec<SettingsSectionSchema>,
+}
+
+/// `section "<id>" label=… icon=… keywords=… { <nodes> }` (M5b).
+#[derive(JsonSchema)]
+pub(crate) struct SettingsSectionSchema {
+    /// Section id.
+    id: String,
+    /// Label: literal text or `@message.id`.
+    label: Option<String>,
+    /// Lucide icon name.
+    icon: Option<String>,
+    /// Extra search words: literal text or `@message.id`.
+    keywords: Option<String>,
+    /// The section's nodes.
+    children: Vec<NodeSchema>,
 }
 
 /// A menu entry.
@@ -176,5 +306,10 @@ pub(crate) enum MenuItemSchema {
         label: String,
         /// Entries.
         items: Vec<MenuItemSchema>,
+    },
+    /// `header "<label>"` (M5b): a group heading.
+    Header {
+        /// Label.
+        label: String,
     },
 }

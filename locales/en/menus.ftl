@@ -17,6 +17,7 @@ context-menu-label-message-view-attachment = Attachment actions
 context-menu-label-folder-tree-folder = Folder actions
 context-menu-label-folder-tree-account = Account actions
 context-menu-label-composer = Composer actions
+context-menu-label-calendar-list-calendar = Calendar actions
 
 ## Key names in shortcuts (menus, key binding editor)
 

@@ -9,6 +9,8 @@ import { builtinActions, type ActionHandler } from "../actions/registry";
 import type { DialogRegistry } from "../layout/dialogRegistry";
 import type { WidgetRegistry } from "../layout/widgetRegistry";
 import { builtinWidgets } from "../widgets";
+import * as mailWidgets from "../widgets/feature";
+import type { SettingsWidgetInfo } from "../layout/settingsIndex";
 import * as agents from "./agents";
 import * as appearance from "./appearance";
 import * as composer from "./composer";
@@ -27,6 +29,8 @@ import * as remote from "./remote";
 import * as rules from "./rules";
 import * as scheduling from "./scheduling";
 import * as security from "./security";
+import * as settings from "./settings";
+import * as shell from "./shell";
 import * as sieve from "./sieve";
 import * as sync from "./sync";
 import * as system from "./system";
@@ -57,6 +61,11 @@ export const features: Readonly<Record<string, Feature>> = {
   palette,
   print,
   appearance,
+  // M5b (ADR 0109): the shell (WP161), the settings page (WP163) and the
+  // mail widgets' own registrations (WP162, `../widgets/feature.ts`).
+  shell,
+  settings,
+  mailWidgets,
 };
 
 /** The merged registries. */
@@ -65,6 +74,8 @@ export interface AppRegistry {
   actions: Readonly<Record<string, ActionHandler>>;
   /** Command-palette descriptions of the features' actions (M4c). */
   actionInfo: Readonly<Record<string, ActionInfo>>;
+  /** Settings labels per widget kind, for the settings search (M5b). */
+  settings: Readonly<Record<string, SettingsWidgetInfo>>;
   dialogs: DialogRegistry;
   events: Feature["events"];
   effects: Feature["effects"];
@@ -100,6 +111,7 @@ export function mergeFeatures(
   const actions: Record<string, ActionHandler> = {};
   const dialogs: Record<string, DialogRegistry[string]> = {};
   const actionInfo: Record<string, ActionInfo> = {};
+  const settings: Record<string, SettingsWidgetInfo> = {};
   mergeInto(widgets, builtins.widgets, "widget", "the built-ins", owners);
   mergeInto(actions, builtins.actions, "action", "the built-ins", owners);
   const events: Feature["events"][number][] = [];
@@ -110,10 +122,11 @@ export function mergeFeatures(
     mergeInto(actions, feature.actions, "action", owner, owners);
     mergeInto(dialogs, feature.dialogs, "dialog", owner, owners);
     mergeInto(actionInfo, feature.actionInfo ?? {}, "action info", owner, owners);
+    mergeInto(settings, feature.settings ?? {}, "settings info", owner, owners);
     events.push(...feature.events);
     effects.push(...feature.effects);
   }
-  return { widgets, actions, actionInfo, dialogs, events, effects };
+  return { widgets, actions, actionInfo, settings, dialogs, events, effects };
 }
 
 /** Everything the app registers. */

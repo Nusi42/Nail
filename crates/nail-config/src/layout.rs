@@ -5,9 +5,11 @@ use std::collections::HashSet;
 
 use indexmap::IndexMap;
 use kdl::{KdlEntry, KdlNode};
+use nail_api::views::{NAV_RAIL_WIDGET, SETTINGS_PAGE_WIDGET, VIEW_HOST_WIDGET};
 use nail_api::{
-    ActionDef, Breakpoint, KeyBinding, LayoutNode, LocalizedMessage, MenuItem, Orientation,
-    ResolvedLayout, SourceLocation, ToolbarItem,
+    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, LocalizedMessage,
+    MenuItem, Orientation, RailItem, ResolvedLayout, SettingsGroup, SettingsSection,
+    SourceLocation, ToolbarItem, ToolbarOverflow, ToolbarSettings, ViewDef,
 };
 use schemars::JsonSchema;
 use serde_json::{Map, Value};
@@ -19,18 +21,31 @@ use crate::kdl_util::{
     to_json,
 };
 use crate::l10n::msg;
-use crate::schema::{ActionSchema, BreakpointSchema, MenuItemSchema, ToolbarItemSchema};
+use crate::schema::{
+    ActionSchema, BreakpointSchema, MenuItemSchema, RailItemSchema, SettingsGroupSchema,
+    ToolbarItemSchema, ToolbarSettingsSchema, ViewsSchema,
+};
 use crate::theme::{read_extends, single_root};
 use crate::widgets::{self, OptionType};
 
 /// Containers from the design that M0 does not support yet.
 const FUTURE_CONTAINERS: &[&str] = &["grid", "dock", "scroll", "overlay"];
 
+/// The `views` section (M5b): `views default="mail" { view "<id>" … }`.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ViewsSection {
+    /// `default=`: the view shown at start.
+    pub default: Option<String>,
+    /// The views by id, in file order.
+    pub views: IndexMap<String, ViewDef>,
+}
+
 /// A `layout.kdl` file as written (possibly sparse).
 ///
 /// KDL mapping: the file holds one node `layout "<name>" extends=… { … }`
 /// whose children are `window`, `breakpoint`, `action(s)`, `keys`,
-/// `toolbar(s)` and `menu(s)` nodes.
+/// `toolbar(s)`, `menu(s)` and (M5b) `views`, `rail` and `settings-page`
+/// nodes.
 #[derive(Debug, Clone, PartialEq, JsonSchema)]
 pub struct LayoutFile {
     /// Layout name (`layout "<name>"`).
@@ -62,6 +77,26 @@ pub struct LayoutFile {
     #[schemars(with = "IndexMap<String, Vec<MenuItemSchema>>")]
     #[serde(default)]
     pub menus: IndexMap<String, Vec<MenuItem>>,
+    /// The properties of each `toolbar` node (M5b: `hide-disabled=`,
+    /// `overflow=`); replaced together with the toolbar.
+    #[schemars(with = "IndexMap<String, ToolbarSettingsSchema>")]
+    #[serde(default, rename = "toolbar-settings")]
+    pub toolbar_settings: IndexMap<String, ToolbarSettings>,
+    /// `views default="<id>" { view "<id>" label=… icon=… window=… badge=… }`
+    /// (M5b); replaces the base's views as a whole.
+    #[schemars(with = "Option<ViewsSchema>")]
+    #[serde(default)]
+    pub views: Option<ViewsSection>,
+    /// `rail { view "<id>"; item "<action>" badge=…; spacer; separator }`
+    /// (M5b); replaces the base's rail.
+    #[schemars(with = "Option<Vec<RailItemSchema>>")]
+    #[serde(default)]
+    pub rail: Option<Vec<RailItem>>,
+    /// `settings-page { group "<id>" label=… { section "<id>" label=… icon=…
+    /// keywords=… { <nodes> } } }` (M5b); replaces the base's page.
+    #[schemars(with = "Option<Vec<SettingsGroupSchema>>")]
+    #[serde(default, rename = "settings-page")]
+    pub settings_page: Option<Vec<SettingsGroup>>,
 }
 
 /// A `bind` or `unbind` entry.
@@ -120,8 +155,22 @@ impl LayoutFile {
             }
         }
         self.keys.extend(overlay.keys);
+        for name in overlay.toolbars.keys() {
+            // A replaced toolbar takes its settings from the overlay too.
+            self.toolbar_settings.shift_remove(name);
+        }
         self.toolbars.extend(overlay.toolbars);
+        self.toolbar_settings.extend(overlay.toolbar_settings);
         self.menus.extend(overlay.menus);
+        if overlay.views.is_some() {
+            self.views = overlay.views;
+        }
+        if overlay.rail.is_some() {
+            self.rail = overlay.rail;
+        }
+        if overlay.settings_page.is_some() {
+            self.settings_page = overlay.settings_page;
+        }
         self
     }
 }
@@ -149,6 +198,10 @@ impl LayoutReader<'_, '_> {
             keys: Vec::new(),
             toolbars: IndexMap::new(),
             menus: IndexMap::new(),
+            toolbar_settings: IndexMap::new(),
+            views: None,
+            rail: None,
+            settings_page: None,
         };
         for child in children(node) {
             e.ok(self.section(&mut file, child));
@@ -192,6 +245,9 @@ impl LayoutReader<'_, '_> {
                         .and_then(|()| self.menu(file, menu)));
                 }
             }
+            "views" => self.views(file, child)?,
+            "rail" => self.rail(file, child)?,
+            "settings-page" => self.settings_page(file, child)?,
             other => {
                 return Err(src.node_err(
                     child,
@@ -754,7 +810,7 @@ impl LayoutReader<'_, '_> {
 
     fn toolbar(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
         let src = self.src;
-        check_props(src, node, &[])?;
+        check_props(src, node, &["hide-disabled", "overflow"])?;
         check_max_args(src, node, 1)?;
         let (name, name_entry) = arg_str(src, node, 0)?;
         if !is_kebab(name) {
@@ -763,27 +819,137 @@ impl LayoutReader<'_, '_> {
                 msg("config-toolbar-name-invalid").arg("name", name),
             ));
         }
+        let settings = ToolbarSettings {
+            hide_disabled: self.bool_prop(node, "hide-disabled")?.unwrap_or(false),
+            overflow: match prop_str(src, node, "overflow")? {
+                None => ToolbarOverflow::default(),
+                Some((value, entry)) => ToolbarOverflow::parse(value).ok_or_else(|| {
+                    src.entry_err(
+                        entry,
+                        msg("config-option-one-of")
+                            .arg("key", "overflow")
+                            .arg("choices", "more, wrap")
+                            .arg("found", describe(entry.value())),
+                    )
+                })?,
+            },
+        };
         let mut items = Vec::new();
+        let mut more_seen = false;
         for item in children(node) {
+            if k::name(item) == "more" {
+                if more_seen {
+                    self.errors.push(
+                        src.node_err(item, msg("config-toolbar-more-twice").arg("name", name)),
+                    );
+                    continue;
+                }
+                more_seen = true;
+            }
             items.extend(self.errors.ok(self.toolbar_item(item)));
         }
         file.toolbars.insert(name.to_owned(), items);
+        file.toolbar_settings.insert(name.to_owned(), settings);
         Ok(())
+    }
+
+    /// An optional boolean property.
+    fn bool_prop(&self, node: &KdlNode, key: &str) -> Result<Option<bool>, ConfigError> {
+        let Some(entry) = node.entry(key) else {
+            return Ok(None);
+        };
+        entry.value().as_bool().map(Some).ok_or_else(|| {
+            self.src.entry_err(
+                entry,
+                msg("config-expected-bool")
+                    .arg("what", key)
+                    .arg("found", describe(entry.value())),
+            )
+        })
+    }
+
+    /// An optional Lucide icon name property (kebab-case).
+    fn icon_prop(&self, node: &KdlNode, key: &str) -> Result<Option<String>, ConfigError> {
+        let src = self.src;
+        match prop_str(src, node, key)? {
+            None => Ok(None),
+            Some((icon, entry)) => {
+                if is_kebab(icon) {
+                    Ok(Some(icon.to_owned()))
+                } else {
+                    Err(src.entry_err(entry, msg("config-icon-name-invalid").arg("name", icon)))
+                }
+            }
+        }
+    }
+
+    /// An optional label property (`@message.id` checked).
+    fn label_prop(&self, node: &KdlNode, key: &str) -> Result<Option<String>, ConfigError> {
+        match prop_str(self.src, node, key)? {
+            None => Ok(None),
+            Some((label, entry)) => Ok(Some(self.label(label, entry)?)),
+        }
+    }
+
+    /// An optional `badge=` property.
+    fn badge_prop(&self, node: &KdlNode) -> Result<Option<BadgeSource>, ConfigError> {
+        let src = self.src;
+        match prop_str(src, node, "badge")? {
+            None => Ok(None),
+            Some((value, entry)) => BadgeSource::parse(value).map(Some).ok_or_else(|| {
+                src.entry_err(
+                    entry,
+                    msg("config-option-one-of")
+                        .arg("key", "badge")
+                        .arg("choices", "unread, confirmations")
+                        .arg("found", describe(entry.value())),
+                )
+            }),
+        }
     }
 
     fn toolbar_item(&self, item: &KdlNode) -> Result<ToolbarItem, ConfigError> {
         let src = self.src;
         match k::name(item) {
             "item" => {
-                check_props(src, item, &["label", "icon"])?;
+                check_props(src, item, &["label", "icon", "rank", "display"])?;
                 check_no_children(src, item)?;
                 let (action, args) = self.action_ref(item, 0)?;
                 let (label, icon) = self.item_overrides(item)?;
+                let rank = prop_u32(src, item, "rank")?;
+                if rank == Some(0)
+                    && let Some(entry) = item.entry("rank")
+                {
+                    return Err(src.entry_err(entry, msg("config-toolbar-rank-zero")));
+                }
+                let display = match prop_str(src, item, "display")? {
+                    None => None,
+                    Some((value, entry)) => Some(ItemDisplay::parse(value).ok_or_else(|| {
+                        src.entry_err(
+                            entry,
+                            msg("config-option-one-of")
+                                .arg("key", "display")
+                                .arg("choices", "icon, label, icon-label")
+                                .arg("found", describe(entry.value())),
+                        )
+                    })?),
+                };
                 Ok(ToolbarItem::Action {
                     action,
                     args,
                     label,
                     icon,
+                    rank,
+                    display,
+                })
+            }
+            "more" => {
+                check_props(src, item, &["label", "icon"])?;
+                check_max_args(src, item, 0)?;
+                Ok(ToolbarItem::More {
+                    label: self.label_prop(item, "label")?,
+                    icon: self.icon_prop(item, "icon")?,
+                    items: self.menu_items(item)?,
                 })
             }
             "spacer" | "separator" => {
@@ -810,6 +976,245 @@ impl LayoutReader<'_, '_> {
         };
         let icon = prop_str(src, item, "icon")?.map(|(icon, _)| icon.to_owned());
         Ok((label, icon))
+    }
+
+    /// Refuses a second `views` / `rail` / `settings-page` section.
+    fn once(&self, node: &KdlNode, seen: bool) -> Result<(), ConfigError> {
+        if seen {
+            return Err(self.src.node_err(
+                node,
+                msg("config-layout-section-twice").arg("node", k::name(node)),
+            ));
+        }
+        Ok(())
+    }
+
+    /// `views default="<id>" { view "<id>" label=… icon=… window=… badge=… }`.
+    fn views(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        self.once(node, file.views.is_some())?;
+        check_props(src, node, &["default"])?;
+        check_max_args(src, node, 0)?;
+        let default = match prop_str(src, node, "default")? {
+            None => None,
+            Some((id, entry)) => {
+                if !is_kebab(id) {
+                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
+                }
+                Some(id.to_owned())
+            }
+        };
+        let mut section = ViewsSection {
+            default,
+            views: IndexMap::new(),
+        };
+        for view in children(node) {
+            if let Some((id, def)) = self.errors.ok(self
+                .expect(view, "view", "views")
+                .and_then(|()| self.view(view)))
+            {
+                if section.views.contains_key(&id) {
+                    self.errors.push(
+                        src.node_err(view, msg("config-view-duplicate").arg("view", id.as_str())),
+                    );
+                    continue;
+                }
+                section.views.insert(id, def);
+            }
+        }
+        file.views = Some(section);
+        Ok(())
+    }
+
+    fn view(&self, node: &KdlNode) -> Result<(String, ViewDef), ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["label", "icon", "window", "badge"])?;
+        check_max_args(src, node, 1)?;
+        check_no_children(src, node)?;
+        let (id, entry) = arg_str(src, node, 0)?;
+        if !is_kebab(id) {
+            return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
+        }
+        let window = match prop_str(src, node, "window")? {
+            None => {
+                return Err(src.node_err(
+                    node,
+                    msg("config-option-required")
+                        .arg("node", "view")
+                        .arg("option", "window"),
+                ));
+            }
+            Some((window, entry)) => {
+                if !is_kebab(window) {
+                    return Err(
+                        src.entry_err(entry, msg("config-window-name-invalid").arg("name", window))
+                    );
+                }
+                window.to_owned()
+            }
+        };
+        Ok((
+            id.to_owned(),
+            ViewDef {
+                label: self.label_prop(node, "label")?,
+                icon: self.icon_prop(node, "icon")?,
+                window,
+                badge: self.badge_prop(node)?,
+            },
+        ))
+    }
+
+    /// `rail { view "<id>"; item "<action> <args>…" label=… icon=… badge=…;
+    /// spacer; separator }`.
+    fn rail(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        self.once(node, file.rail.is_some())?;
+        self.block(node)?;
+        let mut items = Vec::new();
+        for item in children(node) {
+            items.extend(self.errors.ok(self.rail_item(item)));
+        }
+        file.rail = Some(items);
+        Ok(())
+    }
+
+    fn rail_item(&self, item: &KdlNode) -> Result<RailItem, ConfigError> {
+        let src = self.src;
+        match k::name(item) {
+            "view" => {
+                check_props(src, item, &[])?;
+                check_max_args(src, item, 1)?;
+                check_no_children(src, item)?;
+                let (view, entry) = arg_str(src, item, 0)?;
+                if !is_kebab(view) {
+                    return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", view)));
+                }
+                Ok(RailItem::View {
+                    view: view.to_owned(),
+                })
+            }
+            "item" => {
+                check_props(src, item, &["label", "icon", "badge"])?;
+                check_no_children(src, item)?;
+                let (action, args) = self.action_ref(item, 0)?;
+                let (label, icon) = self.item_overrides(item)?;
+                Ok(RailItem::Action {
+                    action,
+                    args,
+                    label,
+                    icon,
+                    badge: self.badge_prop(item)?,
+                })
+            }
+            "spacer" | "separator" => {
+                self.block(item)?;
+                check_no_children(src, item)?;
+                Ok(if k::name(item) == "spacer" {
+                    RailItem::Spacer
+                } else {
+                    RailItem::Separator
+                })
+            }
+            other => Err(src.node_err(item, msg("config-rail-unexpected").arg("node", other))),
+        }
+    }
+
+    /// `settings-page { group "<id>" label=… { section "<id>" label=… icon=…
+    /// keywords=… { <nodes> } } }`. Group, section and node ids are unique
+    /// on the whole page.
+    fn settings_page(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
+        let src = self.src;
+        self.once(node, file.settings_page.is_some())?;
+        self.block(node)?;
+        let mut ids: HashSet<String> = HashSet::new();
+        let mut node_ids: HashSet<String> = HashSet::new();
+        let mut groups = Vec::new();
+        for group in children(node) {
+            let read = self
+                .expect(group, "group", "settings-page")
+                .and_then(|()| self.settings_group(group, &mut ids, &mut node_ids));
+            groups.extend(self.errors.ok(read));
+        }
+        if children(node).is_empty() {
+            return Err(src.node_err(node, msg("config-needs-child").arg("node", "settings-page")));
+        }
+        file.settings_page = Some(groups);
+        Ok(())
+    }
+
+    fn page_id(&self, node: &KdlNode, ids: &mut HashSet<String>) -> Result<String, ConfigError> {
+        let src = self.src;
+        let (id, entry) = arg_str(src, node, 0)?;
+        if !is_kebab(id) {
+            return Err(src.entry_err(entry, msg("config-id-invalid").arg("id", id)));
+        }
+        if !ids.insert(id.to_owned()) {
+            return Err(src.entry_err(entry, msg("config-id-duplicate").arg("id", id)));
+        }
+        Ok(id.to_owned())
+    }
+
+    fn settings_group(
+        &self,
+        node: &KdlNode,
+        ids: &mut HashSet<String>,
+        node_ids: &mut HashSet<String>,
+    ) -> Result<SettingsGroup, ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["label"])?;
+        check_max_args(src, node, 1)?;
+        let id = self.page_id(node, ids)?;
+        let label = self.label_prop(node, "label")?;
+        let mut sections = Vec::new();
+        for section in children(node) {
+            let read = self
+                .expect(section, "section", "group")
+                .and_then(|()| self.settings_section(section, ids, node_ids));
+            sections.extend(self.errors.ok(read));
+        }
+        if children(node).is_empty() {
+            return Err(src.node_err(node, msg("config-needs-child").arg("node", "group")));
+        }
+        Ok(SettingsGroup {
+            id,
+            label,
+            sections,
+        })
+    }
+
+    fn settings_section(
+        &self,
+        node: &KdlNode,
+        ids: &mut HashSet<String>,
+        node_ids: &mut HashSet<String>,
+    ) -> Result<SettingsSection, ConfigError> {
+        let src = self.src;
+        check_props(src, node, &["label", "icon", "keywords"])?;
+        check_max_args(src, node, 1)?;
+        let id = self.page_id(node, ids)?;
+        let label = self.label_prop(node, "label")?;
+        let icon = self.icon_prop(node, "icon")?;
+        let keywords = self.label_prop(node, "keywords")?;
+        let mut nodes = self.children(node)?;
+        for child in children(node) {
+            self.check_unique_ids(child, node_ids)?;
+        }
+        let root = if nodes.len() == 1 {
+            nodes.remove(0)
+        } else {
+            LayoutNode::Stack {
+                id: None,
+                label: None,
+                sizes: vec!["auto".to_owned(); nodes.len()],
+                children: nodes,
+            }
+        };
+        Ok(SettingsSection {
+            id,
+            label,
+            icon,
+            keywords,
+            root,
+        })
     }
 
     fn menu(&self, file: &mut LayoutFile, node: &KdlNode) -> Result<(), ConfigError> {
@@ -861,6 +1266,15 @@ impl LayoutReader<'_, '_> {
                         items: self.menu_items(item)?,
                     }
                 }
+                "header" => {
+                    check_props(src, item, &[])?;
+                    check_max_args(src, item, 1)?;
+                    check_no_children(src, item)?;
+                    let (label, entry) = arg_str(src, item, 0)?;
+                    MenuItem::Header {
+                        label: self.label(label, entry)?,
+                    }
+                }
                 other => {
                     return Err(
                         src.node_err(item, msg("config-menu-unexpected").arg("node", other))
@@ -884,6 +1298,14 @@ fn check_option(
         OptionType::UInt => value.as_integer().is_some_and(|i| i >= 0),
         OptionType::Str => value.is_string(),
         OptionType::OneOf(choices) => value.as_string().is_some_and(|s| choices.contains(&s)),
+        OptionType::Words(choices) => value.as_string().is_some_and(|s| {
+            let words: Vec<&str> = s.split_whitespace().collect();
+            words.iter().all(|w| choices.contains(w))
+                && words
+                    .iter()
+                    .enumerate()
+                    .all(|(i, w)| !words[..i].contains(w))
+        }),
     };
     if ok {
         return Ok(());
@@ -896,6 +1318,9 @@ fn check_option(
             OptionType::Str => msg("config-option-string"),
             OptionType::OneOf(choices) => {
                 msg("config-option-one-of").arg("choices", choices.join(", "))
+            }
+            OptionType::Words(choices) => {
+                msg("config-option-words").arg("choices", choices.join(", "))
             }
         }
         .arg("key", key)
@@ -1069,6 +1494,13 @@ impl LayoutFile {
                 check_toolbar_refs(&bp.root, &self.toolbars, &mut errors);
             }
         }
+        let settings_page = self.settings_page.clone().unwrap_or_default();
+        for section in settings_page.iter().flat_map(|g| g.sections.iter()) {
+            check_toolbar_refs(&section.root, &self.toolbars, &mut errors);
+        }
+        let views = self.views.clone().unwrap_or_default();
+        let rail = self.rail.clone().unwrap_or_default();
+        self.check_shell(&views, &rail, &settings_page, &mut errors);
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -1076,29 +1508,46 @@ impl LayoutFile {
         // Every used action gets an entry in `actions`.
         let mut actions = self.actions.clone();
         let mut used: Vec<&str> = keys.iter().map(|k| k.action.as_str()).collect();
-        for items in self.toolbars.values() {
-            used.extend(items.iter().filter_map(|i| match i {
-                ToolbarItem::Action { action, .. } => Some(action.as_str()),
-                _ => None,
-            }));
-        }
         fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
             for item in items {
                 match item {
                     MenuItem::Action { action, .. } => out.push(action),
                     MenuItem::Submenu { items, .. } => menu_actions(items, out),
-                    MenuItem::Separator => {}
+                    MenuItem::Separator | MenuItem::Header { .. } => {}
+                }
+            }
+        }
+        for items in self.toolbars.values() {
+            for item in items {
+                match item {
+                    ToolbarItem::Action { action, .. } => used.push(action),
+                    ToolbarItem::More { items, .. } => menu_actions(items, &mut used),
+                    ToolbarItem::Spacer | ToolbarItem::Separator => {}
                 }
             }
         }
         for items in self.menus.values() {
             menu_actions(items, &mut used);
         }
+        for item in &rail {
+            if let RailItem::Action { action, .. } = item {
+                used.push(action);
+            }
+        }
         for action in used {
             if !actions.contains_key(action) {
                 actions.insert(action.to_owned(), ActionDef::default());
             }
         }
+
+        let toolbar_settings = self
+            .toolbars
+            .keys()
+            .map(|name| {
+                let settings = self.toolbar_settings.get(name).copied().unwrap_or_default();
+                (name.clone(), settings)
+            })
+            .collect();
 
         Ok(ResolvedLayout {
             name: self.name.value.clone(),
@@ -1107,8 +1556,107 @@ impl LayoutFile {
             keys,
             toolbars: self.toolbars.clone(),
             menus: self.menus.clone(),
+            toolbar_settings,
+            default_view: views.default.clone(),
+            views: views.views,
+            rail,
+            settings: settings_page,
         })
     }
+
+    /// M5b checks: a view shows an existing window that does not itself
+    /// host views; the default view and the rail's views exist; a
+    /// `view-host` needs views, a `nav-rail` rail entries, a
+    /// `settings-page` widget the page's sections.
+    fn check_shell(
+        &self,
+        views: &ViewsSection,
+        rail: &[RailItem],
+        settings_page: &[SettingsGroup],
+        errors: &mut Vec<ConfigError>,
+    ) {
+        let loc = &self.name.loc;
+        for (id, view) in &views.views {
+            let Some(breakpoints) = self.windows.get(&view.window) else {
+                errors.push(ConfigError::invalid(
+                    loc,
+                    msg("config-view-window-unknown")
+                        .arg("view", id.as_str())
+                        .arg("window", view.window.as_str()),
+                ));
+                continue;
+            };
+            if breakpoints
+                .iter()
+                .any(|bp| uses_widget(&bp.root, VIEW_HOST_WIDGET))
+            {
+                errors.push(ConfigError::invalid(
+                    loc,
+                    msg("config-view-hosts-views")
+                        .arg("view", id.as_str())
+                        .arg("window", view.window.as_str()),
+                ));
+            }
+        }
+        if let Some(default) = &views.default
+            && !views.views.contains_key(default)
+        {
+            errors.push(ConfigError::invalid(
+                loc,
+                msg("config-view-default-unknown").arg("view", default.as_str()),
+            ));
+        }
+        for item in rail {
+            if let RailItem::View { view } = item
+                && !views.views.contains_key(view)
+            {
+                errors.push(ConfigError::invalid(
+                    loc,
+                    msg("config-rail-view-unknown").arg("view", view.as_str()),
+                ));
+            }
+        }
+        let needs = [
+            (VIEW_HOST_WIDGET, views.views.is_empty(), "views"),
+            (NAV_RAIL_WIDGET, rail.is_empty(), "rail"),
+            (
+                SETTINGS_PAGE_WIDGET,
+                settings_page.is_empty(),
+                "settings-page",
+            ),
+        ];
+        for (widget, missing, section) in needs {
+            if !missing {
+                continue;
+            }
+            let used = self
+                .windows
+                .values()
+                .flatten()
+                .any(|bp| uses_widget(&bp.root, widget));
+            if used {
+                errors.push(ConfigError::invalid(
+                    loc,
+                    msg("config-widget-needs-section")
+                        .arg("widget", widget)
+                        .arg("section", section),
+                ));
+            }
+        }
+    }
+}
+
+/// Whether the tree uses a widget of `kind`.
+fn uses_widget(node: &LayoutNode, kind: &str) -> bool {
+    let mut found = false;
+    node.walk(&mut |n| {
+        if let LayoutNode::Widget { kind: k, .. } = n
+            && k == kind
+        {
+            found = true;
+        }
+    });
+    found
 }
 
 fn check_toolbar_refs(

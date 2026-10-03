@@ -76,6 +76,7 @@ mod strings;
 mod sync;
 mod sync_policy;
 mod triage;
+mod ui_state;
 mod vault;
 mod virtuals;
 mod watch;

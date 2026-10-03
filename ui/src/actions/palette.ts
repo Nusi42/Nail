@@ -26,6 +26,12 @@ export interface ActionInfo {
   availability?: readonly ActionAvailability[];
   /** Not listed (actions that only make sense with arguments, internals). */
   hidden?: boolean;
+  /**
+   * Lucide icon name (M5b, ADR 0109) for an action the default layout's
+   * `actions` section does not describe: every registered action has an
+   * icon in one of the two (`features/registry.test.tsx`).
+   */
+  icon?: string;
 }
 
 /** Where an entry comes from. */

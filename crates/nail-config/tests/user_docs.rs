@@ -59,6 +59,9 @@ fn layout_reference_examples_are_valid() {
         "keys",
         "toolbar",
         "menu",
+        "views",
+        "rail",
+        "settings-page",
     ];
     for block in blocks {
         let first = block.split_whitespace().next().unwrap_or_default();

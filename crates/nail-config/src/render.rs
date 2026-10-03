@@ -9,7 +9,10 @@
 
 use std::fmt::Write as _;
 
-use nail_api::{ActionDef, Breakpoint, LayoutNode, MenuItem, Orientation, ToolbarItem};
+use nail_api::{
+    ActionDef, Breakpoint, LayoutNode, MenuItem, Orientation, ToolbarItem, ToolbarOverflow,
+    ToolbarSettings,
+};
 use serde_json::Value;
 
 use crate::accounts::write::quote;
@@ -275,16 +278,37 @@ pub(crate) fn toolbar_item(item: &ToolbarItem, depth: usize, style: &Style) -> O
             args,
             label,
             icon,
-        } => item_line(action, args, label.as_deref(), icon.as_deref())?.end(depth, style),
+            rank,
+            display,
+        } => {
+            let mut line = item_line(action, args, label.as_deref(), icon.as_deref())?;
+            if let Some(rank) = rank {
+                line = line.prop("rank", &rank.to_string());
+            }
+            line.str_prop("display", display.map(|d| d.as_str()))
+                .end(depth, style)
+        }
+        ToolbarItem::More { label, icon, items } => {
+            let line = Line::new("more")
+                .str_prop("label", label.as_deref())
+                .str_prop("icon", icon.as_deref());
+            if items.is_empty() {
+                line.end(depth, style)
+            } else {
+                line.block(depth, style, &menu_items(items, depth + 1, style)?)
+            }
+        }
         ToolbarItem::Spacer => Line::new("spacer").end(depth, style),
         ToolbarItem::Separator => Line::new("separator").end(depth, style),
     })
 }
 
-/// `toolbar "<name>" { … }`.
+/// `toolbar "<name>" hide-disabled=… overflow=… { … }` (properties only
+/// when they differ from the defaults).
 pub(crate) fn toolbar(
     name: &str,
     items: &[ToolbarItem],
+    settings: &ToolbarSettings,
     depth: usize,
     style: &Style,
 ) -> Option<String> {
@@ -292,7 +316,13 @@ pub(crate) fn toolbar(
     for item in items {
         out.push_str(&toolbar_item(item, depth + 1, style)?);
     }
-    let line = Line::new("toolbar").str_arg(name);
+    let mut line = Line::new("toolbar").str_arg(name);
+    if settings.hide_disabled {
+        line = line.prop("hide-disabled", "#true");
+    }
+    if settings.overflow != ToolbarOverflow::default() {
+        line = line.str_prop("overflow", Some(settings.overflow.as_str()));
+    }
     Some(if items.is_empty() {
         format!("{}{} {{}}{}", style.pad(depth), line.0, style.nl)
     } else {
@@ -316,6 +346,7 @@ fn menu_items(items: &[MenuItem], depth: usize, style: &Style) -> Option<String>
                 style,
                 &menu_items(items, depth + 1, style)?,
             ),
+            MenuItem::Header { label } => Line::new("header").str_arg(label).end(depth, style),
         });
     }
     Some(out)
@@ -437,14 +468,54 @@ mod tests {
                 args: vec![],
                 label: Some("@x".into()),
                 icon: None,
+                rank: None,
+                display: None,
             },
             ToolbarItem::Spacer,
         ];
+        let plain = ToolbarSettings::default();
         assert_eq!(
-            toolbar("reader", &items, 0, &style).unwrap(),
+            toolbar("reader", &items, &plain, 0, &style).unwrap(),
             "toolbar \"reader\" {\n    item \"mail.reply\" label=\"@x\"\n    spacer\n}\n"
         );
-        assert_eq!(toolbar("x", &[], 0, &style).unwrap(), "toolbar \"x\" {}\n");
+        assert_eq!(
+            toolbar("x", &[], &plain, 0, &style).unwrap(),
+            "toolbar \"x\" {}\n"
+        );
+        // M5b: settings, rank / display and the More menu with a header.
+        let items = vec![
+            ToolbarItem::Action {
+                action: "mail.archive".into(),
+                args: vec![],
+                label: None,
+                icon: None,
+                rank: Some(4),
+                display: Some(nail_api::ItemDisplay::Icon),
+            },
+            ToolbarItem::More {
+                label: None,
+                icon: Some("ellipsis".into()),
+                items: vec![
+                    MenuItem::Header {
+                        label: "@toolbar.group.message".into(),
+                    },
+                    MenuItem::Action {
+                        action: "mail.toggle-read".into(),
+                        args: vec![],
+                        label: None,
+                        icon: None,
+                    },
+                ],
+            },
+        ];
+        let settings = ToolbarSettings {
+            hide_disabled: true,
+            overflow: ToolbarOverflow::Wrap,
+        };
+        assert_eq!(
+            toolbar("reader", &items, &settings, 0, &style).unwrap(),
+            "toolbar \"reader\" hide-disabled=#true overflow=\"wrap\" {\n    item \"mail.archive\" rank=4 display=\"icon\"\n    more icon=\"ellipsis\" {\n        header \"@toolbar.group.message\"\n        item \"mail.toggle-read\"\n    }\n}\n"
+        );
         let def = ActionDef {
             label: Some("@a".into()),
             icon: None,

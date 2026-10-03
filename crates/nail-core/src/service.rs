@@ -316,6 +316,11 @@ pub(crate) struct Inner {
     /// `None` without a source). While it is set, the UI's
     /// `ReportSystemAppearance` is ignored.
     pub(crate) appearance_watch: Mutex<Option<crate::appearance::SystemAppearanceWatch>>,
+    /// M5b (ADR 0109): the light / dark state each remote session's browser
+    /// reported, by session id; such a session follows it instead of the
+    /// host OS ([`crate::appearance::SESSION_APPEARANCE_LIMIT`] at most).
+    pub(crate) session_appearance:
+        Mutex<std::collections::HashMap<String, nail_api::appearance::SystemAppearance>>,
     accounts_watcher: Mutex<Option<crate::watch::AccountsWatcher>>,
     background: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -515,6 +520,7 @@ impl Service {
                 desktop: options.desktop.clone(),
                 watcher: Mutex::new(None),
                 appearance_watch: Mutex::new(None),
+                session_appearance: Mutex::new(std::collections::HashMap::new()),
                 accounts_watcher: Mutex::new(None),
                 background: Mutex::new(Vec::new()),
             }),
@@ -1391,6 +1397,10 @@ impl Service {
             // M5a WP155: attachments of received mail.
             request @ (Request::GetMessageAttachment { .. } | Request::SaveAttachment { .. }) => {
                 crate::attachments::handle(self, request).await?
+            }
+            // M5b (ADR 0109): UI state kept across restarts.
+            request @ (Request::GetUiState | Request::SetUiState { .. }) => {
+                crate::ui_state::handle(self, request).await?
             }
         })
     }

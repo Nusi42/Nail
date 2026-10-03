@@ -89,6 +89,9 @@ export function Toolbar({ node }: WidgetProps) {
             return <span key={index} data-part="toolbar.spacer" />;
           case "separator":
             return <span key={index} data-part="toolbar.separator" role="separator" />;
+          case "more":
+            // The "More" menu (M5b, ADR 0109) is rendered by WP162.
+            return null;
         }
       })}
     </div>

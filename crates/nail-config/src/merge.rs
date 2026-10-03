@@ -372,7 +372,8 @@ fn layout_items(file: &LayoutFile, keys: &[KeyBinding]) -> Items {
         }
     }
     for (name, toolbar) in &file.toolbars {
-        if let Some(text) = render::toolbar(name, toolbar, 0, &style) {
+        let settings = file.toolbar_settings.get(name).copied().unwrap_or_default();
+        if let Some(text) = render::toolbar(name, toolbar, &settings, 0, &style) {
             items.insert(Item::Toolbar(name.clone()), text);
         }
     }
@@ -863,13 +864,15 @@ fn panel_label(panel: &str) -> String {
 }
 
 fn toolbar_actions(items: &[ToolbarItem]) -> Vec<String> {
-    items
-        .iter()
-        .filter_map(|i| match i {
-            ToolbarItem::Action { action, .. } => Some(action.clone()),
-            _ => None,
-        })
-        .collect()
+    let mut out = Vec::new();
+    for item in items {
+        match item {
+            ToolbarItem::Action { action, .. } => out.push(action.clone()),
+            ToolbarItem::More { items, .. } => out.extend(menu_actions(items)),
+            ToolbarItem::Spacer | ToolbarItem::Separator => {}
+        }
+    }
+    out
 }
 
 fn menu_actions(items: &[MenuItem]) -> Vec<String> {
@@ -878,7 +881,7 @@ fn menu_actions(items: &[MenuItem]) -> Vec<String> {
         match item {
             MenuItem::Action { action, .. } => out.push(action.clone()),
             MenuItem::Submenu { items, .. } => out.extend(menu_actions(items)),
-            MenuItem::Separator => {}
+            MenuItem::Separator | MenuItem::Header { .. } => {}
         }
     }
     out
@@ -1200,10 +1203,14 @@ fn apply_layout_item(
             };
             let render_at = |depth: usize| {
                 if is_toolbar {
-                    theirs
-                        .toolbars
-                        .get(name)
-                        .and_then(|items| render::toolbar(name, items, depth, &style))
+                    theirs.toolbars.get(name).and_then(|items| {
+                        let settings = theirs
+                            .toolbar_settings
+                            .get(name)
+                            .copied()
+                            .unwrap_or_default();
+                        render::toolbar(name, items, &settings, depth, &style)
+                    })
                 } else {
                     theirs
                         .menus

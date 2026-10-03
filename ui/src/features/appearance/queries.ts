@@ -3,15 +3,33 @@
  * `SetTheme`, `SetThemePreferences`; every answer is the whole
  * `Appearance`, which also arrives as `ThemeChanged`).
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Appearance, ThemePreferences } from "../../api/generated";
-import { useClient } from "../../state/queries";
+import { queryKeys, useClient } from "../../state/queries";
 
 /** Query keys of this feature. */
 export const appearanceKeys = {
   all: ["appearance"] as const,
   themes: ["appearance", "themes"] as const,
 };
+
+/**
+ * Stores a new `Appearance` (a `ThemeChanged` event or a request's answer)
+ * and fetches the resolved theme again when the active theme, the density
+ * or the overrides changed — the core also sends `ConfigChanged` then, but a
+ * remote session that follows its own browser (M5b) gets its new theme only
+ * from `GetConfig`.
+ */
+export function applyAppearance(queryClient: QueryClient, appearance: Appearance): void {
+  const before = queryClient.getQueryData<Appearance>(appearanceKeys.themes);
+  queryClient.setQueryData(appearanceKeys.themes, appearance);
+  const switched =
+    before === undefined ||
+    before.active !== appearance.active ||
+    before.settings.density !== appearance.settings.density ||
+    JSON.stringify(before.settings.overrides) !== JSON.stringify(appearance.settings.overrides);
+  if (switched) void queryClient.invalidateQueries({ queryKey: queryKeys.config });
+}
 
 /** The themes, the selection, the active theme and the OS state. */
 export function useAppearance() {

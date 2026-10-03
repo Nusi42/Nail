@@ -38,7 +38,7 @@ export interface ContextMenuProps {
   onClose(restoreFocus: boolean): void;
 }
 
-type Navigable = Exclude<ResolvedMenuEntry, { type: "separator" }>;
+type Navigable = Exclude<ResolvedMenuEntry, { type: "separator" } | { type: "header" }>;
 
 function entryLabel(entry: Navigable, label: (l: string) => string): string {
   if (entry.type === "submenu") return label(entry.label);
@@ -67,7 +67,10 @@ function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack
 
   const navigable = items
     .map((entry, index) => ({ entry, index }))
-    .filter((e): e is { entry: Navigable; index: number } => e.entry.type !== "separator");
+    .filter(
+      (e): e is { entry: Navigable; index: number } =>
+        e.entry.type !== "separator" && e.entry.type !== "header",
+    );
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -165,6 +168,14 @@ function MenuList({ items, label: name, level, autoFocus, onRun, onClose, onBack
       {items.map((entry, index): ReactNode => {
         if (entry.type === "separator") {
           return <div key={index} data-part="context-menu.separator" role="separator" />;
+        }
+        if (entry.type === "header") {
+          // M5b: a group heading (not focusable).
+          return (
+            <div key={index} data-part="context-menu.header" role="presentation">
+              {label(entry.label)}
+            </div>
+          );
         }
         const text = entryLabel(entry, label);
         if (entry.type === "submenu") {

@@ -283,6 +283,38 @@ impl ConfigManager {
         self.state().system
     }
 
+    /// The appearance and the resolved theme a client would get if the OS
+    /// state were `system` (M5b, ADR 0109: a remote browser session follows
+    /// its own light / dark mode instead of the host's). Nothing changes
+    /// for anyone else; `Appearance::system` is `system`. When the user's
+    /// `theme.kdl` does not resolve on that theme, the current theme stays.
+    pub fn appearance_for(
+        &self,
+        system: Option<SystemAppearance>,
+    ) -> (Appearance, Arc<ResolvedTheme>) {
+        let state = self.state();
+        let active = nail_api::appearance::active_theme(
+            &state.appearance.settings,
+            system,
+            &state.appearance.themes,
+        );
+        let current = || {
+            let mut appearance = state.appearance.clone();
+            appearance.system = system;
+            (appearance, state.theme.clone())
+        };
+        if active == state.appearance.active {
+            return current();
+        }
+        match resolve_selected(&state.catalog, state.user_theme.as_ref(), system) {
+            Ok(selected) => (
+                appearance_of(&state.catalog, &selected, system),
+                Arc::new(selected.theme),
+            ),
+            Err(_) => current(),
+        }
+    }
+
     /// The first error of each file as it is on disk now (empty when both
     /// are valid). [`Self::file_errors`] has all errors of a file; user
     /// themes are in [`Self::theme_file_errors`].

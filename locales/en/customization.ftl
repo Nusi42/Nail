@@ -172,6 +172,7 @@ customize-toolbar-intro = Change the order and contents of a toolbar. Nail write
 customize-toolbar-choose = Toolbar
 customize-toolbar-items = Items of the toolbar { $toolbar }
 customize-toolbar-separator = Separator
+customize-toolbar-more = More menu
 customize-toolbar-spacer = Flexible space
 customize-toolbar-add = Add to the toolbar
 customize-toolbar-action = Action

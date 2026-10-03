@@ -103,6 +103,34 @@ impl Service {
                 }
             }
             Request::Search { query } => self.remote_search(&access, query).await?,
+            // M5b (ADR 0109): a remote session follows its own browser's
+            // light / dark mode; the host's selection stays as it is.
+            Request::ReportSystemAppearance { system } => {
+                let session = ctx.session.id.to_string();
+                self.remember_session_appearance(&session, system);
+                Response::Themes {
+                    appearance: Box::new(self.session_appearance(&session).0),
+                }
+            }
+            request @ (Request::ListThemes
+            | Request::SetTheme { .. }
+            | Request::SetThemePreferences { .. }) => match self.handle(request).await {
+                Response::Themes { .. } => Response::Themes {
+                    appearance: Box::new(self.session_appearance(&ctx.session.id.to_string()).0),
+                },
+                other => other,
+            },
+            Request::GetConfig => match self.handle(Request::GetConfig).await {
+                Response::Config { layout, locale, .. } => {
+                    let (_, theme) = self.session_appearance(&ctx.session.id.to_string());
+                    Response::Config {
+                        theme: Box::new((*theme).clone()),
+                        layout,
+                        locale,
+                    }
+                }
+                other => other,
+            },
             // Collected addresses are not per account: a narrowed grant
             // would learn other accounts' correspondents.
             Request::SuggestAddresses { .. } if !full(&access) => Response::AddressSuggestions {
@@ -164,7 +192,10 @@ impl Service {
             | Request::ListThemes
             // The browser's colour scheme: applied only when the core has no
             // OS source of its own (no mail data).
-            | Request::ReportSystemAppearance { .. } => Ok(()),
+            | Request::ReportSystemAppearance { .. }
+            // M5b: remembered UI state (no mail data).
+            | Request::GetUiState
+            | Request::SetUiState { .. } => Ok(()),
             // M5a WP155: the attachment's message must be readable.
             Request::GetMessageAttachment { message_id, .. } => {
                 self.check_readable(access, message_id).await
@@ -1238,6 +1269,20 @@ impl Service {
     /// only for admin sessions; mail and account events only for granted
     /// accounts and folders; desktop-only events never.
     pub async fn remote_event(&self, ctx: &RemoteSessionCtx, event: Event) -> Option<Event> {
+        // M5b: theme events as the session sees them (its own light / dark).
+        let event = match event {
+            Event::ThemeChanged { .. } => Event::ThemeChanged {
+                appearance: Box::new(self.session_appearance(&ctx.session.id.to_string()).0),
+            },
+            Event::ConfigChanged { layout, .. } => {
+                let (_, theme) = self.session_appearance(&ctx.session.id.to_string());
+                Event::ConfigChanged {
+                    theme: Box::new((*theme).clone()),
+                    layout,
+                }
+            }
+            other => other,
+        };
         let admin = ctx.grant().admin;
         let access = self.remote_access(ctx);
         let allowed = match &event {
@@ -1251,6 +1296,7 @@ impl Service {
             | Event::SecuritySettingsChanged
             | Event::RemoteContentPolicyChanged
             | Event::VaultProgress { .. }
+            | Event::UiStateChanged { .. }
             | Event::RulesChanged => true,
             Event::MailChanged { folder_ids } => {
                 let mut kept = Vec::with_capacity(folder_ids.len());

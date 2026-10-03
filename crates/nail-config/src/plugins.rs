@@ -93,12 +93,7 @@ pub fn placement_layout(
                         ToolbarItem::Action { action, .. } => Some(action.as_str()),
                         _ => None,
                     },
-                    |action| ToolbarItem::Action {
-                        action,
-                        args: Vec::new(),
-                        label: None,
-                        icon: None,
-                    },
+                    ToolbarItem::action,
                 );
             }
             (None, Some(menu), Some(command)) => {

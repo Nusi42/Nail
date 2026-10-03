@@ -30,8 +30,45 @@ function layout(menu: MenuItem[]): ResolvedLayout {
     ],
     toolbars: {},
     menus: { [contextMenuName("message-list.row")]: menu },
+    toolbar_settings: {},
+    views: {},
+    default_view: null,
+    rail: [],
+    settings: [],
   };
 }
+
+const header = (label: string): MenuItem => ({ type: "header", label });
+
+// Mirrors `nail_api::menus::tests::headers_are_kept_only_above_entries`.
+describe("menu headings (M5b)", () => {
+  it("keeps headings only above entries", () => {
+    const l = layout([
+      header("@a"),
+      { type: "separator" },
+      header("@b"),
+      item("mail.reply"),
+      { type: "separator" },
+      header("@c"),
+      header("@d"),
+      item("mail.archive"),
+      header("@e"),
+    ]);
+    const menu = resolveMenu(l, "context:message-list.row", "list");
+    expect(
+      menu?.items.map((e) =>
+        e.type === "action" ? e.action : e.type === "separator" ? "-" : e.label,
+      ),
+    ).toEqual(["@b", "mail.reply", "-", "@d", "mail.archive"]);
+    expect(
+      resolveMenu(
+        layout([header("@a"), { type: "separator" }, header("@b")]),
+        "context:message-list.row",
+        "list",
+      ),
+    ).toBeNull();
+  });
+});
 
 // Mirrors `nail_api::menus` tests.
 describe("context menus", () => {

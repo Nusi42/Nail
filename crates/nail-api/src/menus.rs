@@ -69,6 +69,11 @@ pub const CONTEXT_MENU_PARTS: &[ContextMenuPart] = &[
         part: "composer",
         key_context: "composer",
     },
+    // M5b (ADR 0109): the "…" menu of a calendar in the calendar list.
+    ContextMenuPart {
+        part: "calendar-list.calendar",
+        key_context: "calendar",
+    },
 ];
 
 /// The key context of a part's context menu (`"global"` for parts not in
@@ -108,6 +113,12 @@ pub enum ResolvedMenuEntry {
         label: String,
         /// Entries.
         items: Vec<ResolvedMenuEntry>,
+    },
+    /// A group heading (M5b), kept only when an action or submenu follows
+    /// it before the next heading or separator.
+    Header {
+        /// Label (literal or `@message.id`).
+        label: String,
     },
 }
 
@@ -160,6 +171,7 @@ fn resolve_items(
                 });
             }
             MenuItem::Separator => {
+                drop_orphan_header(&mut out);
                 if out
                     .last()
                     .is_some_and(|e| !matches!(e, ResolvedMenuEntry::Separator))
@@ -176,12 +188,37 @@ fn resolve_items(
                     });
                 }
             }
+            MenuItem::Header { label } => {
+                drop_orphan_header(&mut out);
+                out.push(ResolvedMenuEntry::Header {
+                    label: label.clone(),
+                });
+            }
         }
     }
+    drop_orphan_header(&mut out);
     if matches!(out.last(), Some(ResolvedMenuEntry::Separator)) {
         out.pop();
     }
+    // A menu of headings and separators only has nothing to run.
+    if !out.iter().any(|e| {
+        matches!(
+            e,
+            ResolvedMenuEntry::Action { .. } | ResolvedMenuEntry::Submenu { .. }
+        )
+    }) {
+        out.clear();
+    }
     out
+}
+
+/// Removes a heading that nothing follows: called before a separator or
+/// another heading is added, and at the end, so a heading is always the
+/// last entry when it is an orphan.
+fn drop_orphan_header(out: &mut Vec<ResolvedMenuEntry>) {
+    if matches!(out.last(), Some(ResolvedMenuEntry::Header { .. })) {
+        out.pop();
+    }
 }
 
 /// The key bound to `action` + `args`: the last binding in `key_context`,
@@ -263,7 +300,48 @@ mod tests {
             ],
             toolbars: IndexMap::new(),
             menus,
+            toolbar_settings: IndexMap::new(),
+            views: IndexMap::new(),
+            default_view: None,
+            rail: vec![],
+            settings: vec![],
         }
+    }
+
+    fn header(label: &str) -> MenuItem {
+        MenuItem::Header {
+            label: label.into(),
+        }
+    }
+
+    #[test]
+    fn headers_are_kept_only_above_entries() {
+        let l = layout(vec![
+            header("@a"),
+            MenuItem::Separator,
+            header("@b"),
+            item("mail.reply"),
+            MenuItem::Separator,
+            header("@c"),
+            header("@d"),
+            item("mail.archive"),
+            header("@e"),
+        ]);
+        let menu = resolve_menu(&l, "context:message-list.row", "list").unwrap();
+        let kinds: Vec<String> = menu
+            .items
+            .iter()
+            .map(|e| match e {
+                ResolvedMenuEntry::Header { label } => label.clone(),
+                ResolvedMenuEntry::Action { action, .. } => action.clone(),
+                ResolvedMenuEntry::Separator => "-".into(),
+                ResolvedMenuEntry::Submenu { label, .. } => label.clone(),
+            })
+            .collect();
+        assert_eq!(kinds, ["@b", "mail.reply", "-", "@d", "mail.archive"]);
+        // Headings alone make no menu.
+        let l = layout(vec![header("@a"), MenuItem::Separator, header("@b")]);
+        assert_eq!(resolve_menu(&l, "context:message-list.row", "list"), None);
     }
 
     #[test]

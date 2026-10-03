@@ -126,6 +126,8 @@ const PREFIXES = [
 /** Literals with those prefixes that are not message ids (part names). */
 const NOT_MESSAGES = new Set([
   "status-bar",
+  // M5b widget kind (`nail_api::views::SETTINGS_PAGE_WIDGET`).
+  "settings-page",
   "window-layer",
   "virtual-accounts",
   "virtual-account-editor",

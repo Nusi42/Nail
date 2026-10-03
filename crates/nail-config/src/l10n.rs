@@ -116,6 +116,10 @@ pub const EN_FILES: &[(&str, &str)] = &[
         "core-vault.ftl",
         include_str!("../../../locales/en/core-vault.ftl"),
     ),
+    (
+        "core-shell.ftl",
+        include_str!("../../../locales/en/core-shell.ftl"),
+    ),
     ("core.ftl", include_str!("../../../locales/en/core.ftl")),
     (
         "customization.ftl",
@@ -153,6 +157,11 @@ pub const EN_FILES: &[(&str, &str)] = &[
         "security.ftl",
         include_str!("../../../locales/en/security.ftl"),
     ),
+    (
+        "settings.ftl",
+        include_str!("../../../locales/en/settings.ftl"),
+    ),
+    ("shell.ftl", include_str!("../../../locales/en/shell.ftl")),
     ("sieve.ftl", include_str!("../../../locales/en/sieve.ftl")),
     ("sync.ftl", include_str!("../../../locales/en/sync.ftl")),
     ("system.ftl", include_str!("../../../locales/en/system.ftl")),
@@ -251,6 +260,10 @@ pub const DE_FILES: &[(&str, &str)] = &[
         "core-vault.ftl",
         include_str!("../../../locales/de/core-vault.ftl"),
     ),
+    (
+        "core-shell.ftl",
+        include_str!("../../../locales/de/core-shell.ftl"),
+    ),
     ("core.ftl", include_str!("../../../locales/de/core.ftl")),
     (
         "customization.ftl",
@@ -288,6 +301,11 @@ pub const DE_FILES: &[(&str, &str)] = &[
         "security.ftl",
         include_str!("../../../locales/de/security.ftl"),
     ),
+    (
+        "settings.ftl",
+        include_str!("../../../locales/de/settings.ftl"),
+    ),
+    ("shell.ftl", include_str!("../../../locales/de/shell.ftl")),
     ("sieve.ftl", include_str!("../../../locales/de/sieve.ftl")),
     ("sync.ftl", include_str!("../../../locales/de/sync.ftl")),
     ("system.ftl", include_str!("../../../locales/de/system.ftl")),

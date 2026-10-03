@@ -10,16 +10,23 @@
 import type {
   ActionDef,
   AncestorSelector,
+  BadgeSource,
   Breakpoint,
+  ItemDisplay,
   KeyBinding,
   LayoutNode,
   MenuItem,
   PartCondition,
   PartRule,
+  RailItem,
   ResolvedLayout,
   ResolvedTheme,
+  SettingsGroup,
+  SettingsSection,
   SourceLocation,
   ToolbarItem,
+  ToolbarSettings,
+  ViewDef,
 } from "./generated";
 
 type Loose = Record<string, unknown>;
@@ -181,10 +188,47 @@ export function normalizeNode(raw: unknown): LayoutNode {
   }
 }
 
+const ITEM_DISPLAYS: readonly ItemDisplay[] = ["icon", "label", "icon-label"];
+const BADGES: readonly BadgeSource[] = ["unread", "confirmations"];
+
 function toolbarItem(value: unknown): ToolbarItem {
   const i = obj(value);
   if (i.type === "spacer" || i.type === "separator") {
     return { type: i.type };
+  }
+  if (i.type === "more") {
+    return {
+      type: "more",
+      label: strOrNull(i.label),
+      icon: strOrNull(i.icon),
+      items: arr(i.items).map(menuItem),
+    };
+  }
+  const item: ToolbarItem = {
+    type: "action",
+    action: str(i.action, ""),
+    args: jsonArray(i.args),
+    label: strOrNull(i.label),
+    icon: strOrNull(i.icon),
+  };
+  // M5b: `rank` / `display` stay absent unless set (like the core's JSON).
+  const rank = numOrNull(i.rank);
+  if (rank !== null) item.rank = rank;
+  if (ITEM_DISPLAYS.includes(i.display as ItemDisplay)) item.display = i.display as ItemDisplay;
+  return item;
+}
+
+function badge(value: unknown): BadgeSource | null {
+  return BADGES.includes(value as BadgeSource) ? (value as BadgeSource) : null;
+}
+
+function railItem(value: unknown): RailItem {
+  const i = obj(value);
+  if (i.type === "spacer" || i.type === "separator") {
+    return { type: i.type };
+  }
+  if (i.type === "view") {
+    return { type: "view", view: str(i.view, "") };
   }
   return {
     type: "action",
@@ -192,6 +236,25 @@ function toolbarItem(value: unknown): ToolbarItem {
     args: jsonArray(i.args),
     label: strOrNull(i.label),
     icon: strOrNull(i.icon),
+    badge: badge(i.badge),
+  };
+}
+
+function settingsGroup(value: unknown): SettingsGroup {
+  const g = obj(value);
+  return {
+    id: str(g.id, ""),
+    label: strOrNull(g.label),
+    sections: arr(g.sections).map((v): SettingsSection => {
+      const s = obj(v);
+      return {
+        id: str(s.id, ""),
+        label: strOrNull(s.label),
+        icon: strOrNull(s.icon),
+        keywords: strOrNull(s.keywords),
+        root: normalizeNode(s.root),
+      };
+    }),
   };
 }
 
@@ -199,6 +262,9 @@ function menuItem(value: unknown): MenuItem {
   const i = obj(value);
   if (i.type === "separator") {
     return { type: "separator" };
+  }
+  if (i.type === "header") {
+    return { type: "header", label: str(i.label, "") };
   }
   if (i.type === "submenu") {
     return { type: "submenu", label: str(i.label, ""), items: arr(i.items).map(menuItem) };
@@ -215,7 +281,7 @@ function menuItem(value: unknown): MenuItem {
 /** Completes a resolved layout. */
 export function normalizeLayout(raw: unknown): ResolvedLayout {
   const l = obj(raw);
-  return {
+  const layout: ResolvedLayout = {
     name: str(l.name, "default"),
     windows: mapValues(l.windows, (bps) =>
       arr(bps).map((bp): Breakpoint => {
@@ -247,5 +313,34 @@ export function normalizeLayout(raw: unknown): ResolvedLayout {
     }),
     toolbars: mapValues(l.toolbars, (items) => arr(items).map(toolbarItem)),
     menus: mapValues(l.menus, (items) => arr(items).map(menuItem)),
+    // M5b (ADR 0109): every toolbar gets its settings (defaults when absent).
+    toolbar_settings: mapValues(l.toolbars, () => ({ ...DEFAULT_TOOLBAR_SETTINGS })),
+    views: mapValues(l.views, (v): ViewDef => {
+      const d = obj(v);
+      return {
+        label: strOrNull(d.label),
+        icon: strOrNull(d.icon),
+        window: str(d.window, ""),
+        badge: badge(d.badge),
+      };
+    }),
+    default_view: strOrNull(l.default_view),
+    rail: arr(l.rail).map(railItem),
+    settings: arr(l.settings).map(settingsGroup),
   };
+  for (const [name, raw] of Object.entries(obj(l.toolbar_settings))) {
+    if (!Object.hasOwn(layout.toolbar_settings, name)) continue;
+    const s = obj(raw);
+    layout.toolbar_settings[name] = {
+      hide_disabled: s.hide_disabled === true,
+      overflow: s.overflow === "wrap" ? "wrap" : "more",
+    };
+  }
+  return layout;
 }
+
+/** `ToolbarSettings::default()`. */
+export const DEFAULT_TOOLBAR_SETTINGS: Readonly<ToolbarSettings> = {
+  hide_disabled: false,
+  overflow: "more",
+};

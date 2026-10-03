@@ -22,6 +22,25 @@
 //! Each window has an ordered list of [`Breakpoint`]s. The renderer uses the
 //! first breakpoint whose (inclusive) width range contains the current window
 //! width; a breakpoint without bounds always matches.
+//!
+//! # Views, the rail and the settings page (M5b, ADR 0109)
+//!
+//! [`ResolvedLayout::views`] names the top-level views (Mail, Calendar,
+//! Contacts, Tasks, Settings): each shows one window tree
+//! ([`ViewDef::window`]) inside the `view-host` widget, and
+//! [`ResolvedLayout::rail`] arranges them (plus action buttons such as the
+//! confirmations) on the `nav-rail` widget. Without a `view-host` in the
+//! layout, switching to a view opens its window instead.
+//! [`ResolvedLayout::settings`] is the grouped settings page the
+//! `settings-page` widget renders: groups → sections → a node tree each.
+//!
+//! # Toolbar overflow (M5b)
+//!
+//! Toolbar action items carry an optional `rank` and `display`
+//! ([`ToolbarItem::Action`]); a toolbar may hold one [`ToolbarItem::More`]
+//! menu, and [`ResolvedLayout::toolbar_settings`] says per toolbar whether
+//! actions that cannot run are hidden and whether items that do not fit
+//! move into "More" (in [`crate::views::overflow_order`]).
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -243,6 +262,37 @@ fn default_context() -> String {
     "global".to_owned()
 }
 
+/// How a toolbar button shows its action (M5b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum ItemDisplay {
+    /// Only the icon (the label is the tooltip and accessible name).
+    Icon,
+    /// Only the label.
+    Label,
+    /// Icon and label.
+    IconLabel,
+}
+
+impl ItemDisplay {
+    /// Every variant.
+    pub const ALL: &'static [ItemDisplay] = &[Self::Icon, Self::Label, Self::IconLabel];
+
+    /// The wire / KDL name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Icon => "icon",
+            Self::Label => "label",
+            Self::IconLabel => "icon-label",
+        }
+    }
+
+    /// The variant with this name.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|d| d.as_str() == text)
+    }
+}
+
 /// An entry of a toolbar.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -261,6 +311,33 @@ pub enum ToolbarItem {
         /// `null` = the action's icon.
         #[serde(default)]
         icon: Option<String>,
+        /// Overflow rank (M5b): when the bar is too narrow, items move into
+        /// "More" highest rank first (`rank=1` stays longest); unranked
+        /// items go before every ranked one, from the end of the bar
+        /// ([`crate::views::overflow_order`]). Absent = unranked.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        rank: Option<u32>,
+        /// Icon, label or both (M5b). Absent = the renderer's default (icon
+        /// and label).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        display: Option<ItemDisplay>,
+    },
+    /// The "More" menu button (M5b): its own entries, followed by the
+    /// items that do not fit the bar. A toolbar has at most one; an
+    /// overflowing toolbar ([`ToolbarOverflow::More`]) without one gets one
+    /// at the end.
+    More {
+        /// Label override, `null` = `@toolbar.more` ("More").
+        #[serde(default)]
+        label: Option<String>,
+        /// Icon override, `null` = `ellipsis`.
+        #[serde(default)]
+        icon: Option<String>,
+        /// The menu's own entries (headers, actions, separators, submenus).
+        #[serde(default)]
+        items: Vec<MenuItem>,
     },
     /// Flexible space pushing the following items to the end.
     Spacer,
@@ -268,8 +345,63 @@ pub enum ToolbarItem {
     Separator,
 }
 
+impl ToolbarItem {
+    /// A plain action item (no overrides, rank or display).
+    pub fn action(action: impl Into<String>) -> Self {
+        Self::Action {
+            action: action.into(),
+            args: Vec::new(),
+            label: None,
+            icon: None,
+            rank: None,
+            display: None,
+        }
+    }
+}
+
+/// What a toolbar does when its items do not fit (M5b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolbarOverflow {
+    /// Items that do not fit move into the "More" menu, by rank.
+    #[default]
+    More,
+    /// Items wrap onto further lines (the pre-M5b behaviour).
+    Wrap,
+}
+
+impl ToolbarOverflow {
+    /// Every variant.
+    pub const ALL: &'static [ToolbarOverflow] = &[Self::More, Self::Wrap];
+
+    /// The wire / KDL name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::More => "more",
+            Self::Wrap => "wrap",
+        }
+    }
+
+    /// The variant with this name.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|o| o.as_str() == text)
+    }
+}
+
+/// Per-toolbar settings (M5b): `toolbar "<name>" hide-disabled=#true
+/// overflow="more"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+pub struct ToolbarSettings {
+    /// Actions that cannot run now are hidden (not shown disabled), in the
+    /// "More" menu too.
+    pub hide_disabled: bool,
+    /// Overflow behaviour.
+    pub overflow: ToolbarOverflow,
+}
+
 /// An entry of a menu.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum MenuItem {
     /// An item invoking an action.
@@ -296,6 +428,123 @@ pub enum MenuItem {
         /// Submenu entries.
         items: Vec<MenuItem>,
     },
+    /// A group heading (M5b; not selectable), e.g. "Message" or "Turn into"
+    /// in the reader's "More" menu.
+    Header {
+        /// Heading label (literal or `@message.id`).
+        label: String,
+    },
+}
+
+/// Where a badge on the rail takes its number from (M5b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum BadgeSource {
+    /// Unread messages in the inboxes of every account (the unified inbox).
+    Unread,
+    /// Changes by agents / plug-ins waiting for a confirmation.
+    Confirmations,
+}
+
+impl BadgeSource {
+    /// Every variant.
+    pub const ALL: &'static [BadgeSource] = &[Self::Unread, Self::Confirmations];
+
+    /// The wire / KDL name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unread => "unread",
+            Self::Confirmations => "confirmations",
+        }
+    }
+
+    /// The variant with this name.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|b| b.as_str() == text)
+    }
+}
+
+/// A top-level view (M5b): `views { view "calendar" label=… icon=…
+/// window="calendar" badge=… }`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ViewDef {
+    /// Label (literal or `@message.id`), `null` = `@view.<id>`.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Lucide icon name, `null` = none.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// The window (`window "<name>"`) whose tree the view shows.
+    pub window: String,
+    /// Badge on the view's rail button, `null` = none.
+    #[serde(default)]
+    pub badge: Option<BadgeSource>,
+}
+
+/// An entry of the navigation rail (M5b): `rail { view "mail"; spacer;
+/// item "agents.open-center" badge="confirmations"; view "settings" }`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum RailItem {
+    /// A button switching to a view ([`ResolvedLayout::views`]).
+    View {
+        /// The view id.
+        view: String,
+    },
+    /// A button invoking an action.
+    Action {
+        /// Action id.
+        action: String,
+        /// Action arguments.
+        #[serde(default)]
+        args: Vec<Value>,
+        /// Label override, `null` = the action's label.
+        #[serde(default)]
+        label: Option<String>,
+        /// Icon override, `null` = the action's icon.
+        #[serde(default)]
+        icon: Option<String>,
+        /// Badge, `null` = none.
+        #[serde(default)]
+        badge: Option<BadgeSource>,
+    },
+    /// Flexible space pushing the following items to the bottom.
+    Spacer,
+    /// A visual separator.
+    Separator,
+}
+
+/// One section of the settings page (M5b): a navigation entry and the node
+/// tree shown when it is selected.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SettingsSection {
+    /// Stable id (kebab-case, unique on the page), e.g. `"accounts"`.
+    pub id: String,
+    /// Label (literal or `@message.id`), `null` = `@settings.section.<id>`.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Lucide icon name, `null` = none.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Extra search words (literal or `@message.id`), `null` = none.
+    #[serde(default)]
+    pub keywords: Option<String>,
+    /// The content: the section's node, or a `stack` (every child `auto`)
+    /// of its nodes when it has several.
+    pub root: LayoutNode,
+}
+
+/// A group of the settings page (M5b): General, Look & feel, Security,
+/// Extensions in the default layout.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SettingsGroup {
+    /// Stable id (kebab-case, unique on the page), e.g. `"look-and-feel"`.
+    pub id: String,
+    /// Label (literal or `@message.id`), `null` = `@settings.group.<id>`.
+    #[serde(default)]
+    pub label: Option<String>,
+    /// The group's sections, in navigation order.
+    pub sections: Vec<SettingsSection>,
 }
 
 /// A fully resolved layout.
@@ -320,6 +569,42 @@ pub struct ResolvedLayout {
     /// for the context menu of a part (e.g. `"context:message-list.row"`).
     #[serde(default)]
     pub menus: IndexMap<String, Vec<MenuItem>>,
+    /// Settings of every toolbar in [`Self::toolbars`] (M5b; defaults for
+    /// toolbars that set nothing).
+    #[serde(default)]
+    pub toolbar_settings: IndexMap<String, ToolbarSettings>,
+    /// The top-level views by id, in definition order (M5b).
+    #[serde(default)]
+    pub views: IndexMap<String, ViewDef>,
+    /// The view shown at start (`views default="mail"`), `null` = the first
+    /// view.
+    #[serde(default)]
+    pub default_view: Option<String>,
+    /// The navigation rail's entries (M5b), top to bottom.
+    #[serde(default)]
+    pub rail: Vec<RailItem>,
+    /// The settings page (M5b): groups of sections.
+    #[serde(default)]
+    pub settings: Vec<SettingsGroup>,
+}
+
+impl ResolvedLayout {
+    /// The view shown at start: [`Self::default_view`], else the first
+    /// view; `None` without views.
+    pub fn start_view(&self) -> Option<&str> {
+        self.default_view
+            .as_deref()
+            .filter(|id| self.views.contains_key(*id))
+            .or_else(|| self.views.keys().next().map(String::as_str))
+    }
+
+    /// The settings section with this id.
+    pub fn settings_section(&self, id: &str) -> Option<&SettingsSection> {
+        self.settings
+            .iter()
+            .flat_map(|g| g.sections.iter())
+            .find(|s| s.id == id)
+    }
 }
 
 #[cfg(test)]
@@ -397,6 +682,80 @@ mod tests {
             serde_json::from_value(json!({"key": "j", "action": "mail.next"})).unwrap();
         assert_eq!(key.context, "global");
         assert!(key.args.is_empty());
+    }
+
+    #[test]
+    fn m5b_items_serialize_compactly_and_parse_with_defaults() {
+        // rank / display are left out when absent, so pre-M5b JSON and the
+        // UI's hand-written items stay valid.
+        assert_eq!(
+            serde_json::to_value(ToolbarItem::action("mail.reply")).unwrap(),
+            json!({"type": "action", "action": "mail.reply", "args": [], "label": null, "icon": null})
+        );
+        let items: Vec<ToolbarItem> = serde_json::from_value(json!([
+            {"type": "action", "action": "mail.archive", "rank": 4, "display": "icon"},
+            {"type": "more", "items": [
+                {"type": "header", "label": "@toolbar.group.message"},
+                {"type": "action", "action": "mail.toggle-read"}
+            ]}
+        ]))
+        .unwrap();
+        assert!(matches!(
+            &items[0],
+            ToolbarItem::Action {
+                rank: Some(4),
+                display: Some(ItemDisplay::Icon),
+                ..
+            }
+        ));
+        let ToolbarItem::More { label, icon, items } = &items[1] else {
+            panic!("expected more");
+        };
+        assert!(label.is_none() && icon.is_none());
+        assert!(
+            matches!(&items[0], MenuItem::Header { label } if label == "@toolbar.group.message")
+        );
+        let settings: ToolbarSettings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(settings, ToolbarSettings::default());
+        assert_eq!(settings.overflow, ToolbarOverflow::More);
+        for d in ItemDisplay::ALL {
+            assert_eq!(ItemDisplay::parse(d.as_str()), Some(*d));
+            assert_eq!(serde_json::to_value(d).unwrap(), json!(d.as_str()));
+        }
+        for b in BadgeSource::ALL {
+            assert_eq!(BadgeSource::parse(b.as_str()), Some(*b));
+            assert_eq!(serde_json::to_value(b).unwrap(), json!(b.as_str()));
+        }
+        for o in ToolbarOverflow::ALL {
+            assert_eq!(ToolbarOverflow::parse(o.as_str()), Some(*o));
+            assert_eq!(serde_json::to_value(o).unwrap(), json!(o.as_str()));
+        }
+    }
+
+    #[test]
+    fn start_view_and_settings_sections() {
+        let mut layout: ResolvedLayout = serde_json::from_value(json!({
+            "name": "x",
+            "windows": {},
+            "views": {
+                "mail": {"window": "mail", "badge": "unread"},
+                "tasks": {"window": "tasks"}
+            },
+            "rail": [{"type": "view", "view": "mail"}, {"type": "spacer"}],
+            "settings": [{"id": "general", "sections": [
+                {"id": "accounts", "root": {"type": "widget", "kind": "account-settings"}}
+            ]}]
+        }))
+        .unwrap();
+        assert_eq!(layout.start_view(), Some("mail"));
+        layout.default_view = Some("tasks".into());
+        assert_eq!(layout.start_view(), Some("tasks"));
+        layout.default_view = Some("nope".into());
+        assert_eq!(layout.start_view(), Some("mail"));
+        assert_eq!(layout.views["mail"].badge, Some(BadgeSource::Unread));
+        assert!(layout.settings_section("accounts").is_some());
+        assert!(layout.settings_section("nope").is_none());
+        assert!(layout.toolbar_settings.is_empty());
     }
 
     #[test]

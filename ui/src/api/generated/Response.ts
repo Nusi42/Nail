@@ -1156,7 +1156,11 @@ path: string | null, } | { "type": "Themes",
 /**
  * Themes, selection, active theme, OS state.
  */
-appearance: Appearance, } | { "type": "Error", 
+appearance: Appearance, } | { "type": "UiState", 
+/**
+ * The UI state.
+ */
+state: { [key in string]: JsonValue }, } | { "type": "Error", 
 /**
  * Machine-readable error class.
  */

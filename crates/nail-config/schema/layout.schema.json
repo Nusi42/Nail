@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Nail layout.kdl",
-  "description": "A `layout.kdl` file as written (possibly sparse).\n\nKDL mapping: the file holds one node `layout \"<name>\" extends=… { … }`\nwhose children are `window`, `breakpoint`, `action(s)`, `keys`,\n`toolbar(s)` and `menu(s)` nodes.",
+  "description": "A `layout.kdl` file as written (possibly sparse).\n\nKDL mapping: the file holds one node `layout \"<name>\" extends=… { … }`\nwhose children are `window`, `breakpoint`, `action(s)`, `keys`,\n`toolbar(s)`, `menu(s)` and (M5b) `views`, `rail` and `settings-page`\nnodes.",
   "type": "object",
   "properties": {
     "actions": {
@@ -41,6 +41,36 @@
       "description": "Layout name (`layout \"<name>\"`).",
       "type": "string"
     },
+    "rail": {
+      "description": "`rail { view \"<id>\"; item \"<action>\" badge=…; spacer; separator }`\n(M5b); replaces the base's rail.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "default": null,
+      "items": {
+        "$ref": "#/$defs/RailItemSchema"
+      }
+    },
+    "settings-page": {
+      "description": "`settings-page { group \"<id>\" label=… { section \"<id>\" label=… icon=…\nkeywords=… { <nodes> } } }` (M5b); replaces the base's page.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "default": null,
+      "items": {
+        "$ref": "#/$defs/SettingsGroupSchema"
+      }
+    },
+    "toolbar-settings": {
+      "description": "The properties of each `toolbar` node (M5b: `hide-disabled=`,\n`overflow=`); replaced together with the toolbar.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ToolbarSettingsSchema"
+      },
+      "default": {}
+    },
     "toolbars": {
       "description": "`toolbar \"<name>\" { item \"<action>\"; spacer; separator }`; replaces a\nbase toolbar of the same name.",
       "type": "object",
@@ -51,6 +81,17 @@
         }
       },
       "default": {}
+    },
+    "views": {
+      "description": "`views default=\"<id>\" { view \"<id>\" label=… icon=… window=… badge=… }`\n(M5b); replaces the base's views as a whole.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ViewsSchema"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "windows": {
       "description": "Window trees: `window \"<name>\" { <node> }`, optionally inside\n`breakpoint min-width=… max-width=… { … }`. A window defined in a\nsparse file replaces all breakpoints of that window in the base.",
@@ -101,6 +142,21 @@
         }
       }
     },
+    "BadgeSchema": {
+      "description": "Where a rail badge counts from (M5b).",
+      "oneOf": [
+        {
+          "description": "Unread mail in the inboxes.",
+          "type": "string",
+          "const": "unread"
+        },
+        {
+          "description": "Confirmations waiting.",
+          "type": "string",
+          "const": "confirmations"
+        }
+      ]
+    },
     "BreakpointSchema": {
       "description": "One window tree for a range of window widths\n(`breakpoint min-width=… max-width=… { window \"<name>\" { … } }`).",
       "type": "object",
@@ -130,6 +186,26 @@
       },
       "required": [
         "root"
+      ]
+    },
+    "ItemDisplaySchema": {
+      "description": "How a toolbar button shows its action (M5b).",
+      "oneOf": [
+        {
+          "description": "Only the icon.",
+          "type": "string",
+          "const": "icon"
+        },
+        {
+          "description": "Only the label.",
+          "type": "string",
+          "const": "label"
+        },
+        {
+          "description": "Icon and label.",
+          "type": "string",
+          "const": "icon-label"
+        }
       ]
     },
     "KeyDef": {
@@ -235,6 +311,24 @@
             "type",
             "label",
             "items"
+          ]
+        },
+        {
+          "description": "`header \"<label>\"` (M5b): a group heading.",
+          "type": "object",
+          "properties": {
+            "label": {
+              "description": "Label.",
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "header"
+            }
+          },
+          "required": [
+            "type",
+            "label"
           ]
         }
       ]
@@ -472,16 +566,45 @@
         }
       ]
     },
-    "ToolbarItemSchema": {
-      "description": "A toolbar entry.",
+    "RailItemSchema": {
+      "description": "A rail entry (M5b).",
       "oneOf": [
         {
-          "description": "`item \"<action> <args>…\" label=… icon=…`.",
+          "description": "`view \"<id>\"`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "view"
+            },
+            "view": {
+              "description": "The view.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "view"
+          ]
+        },
+        {
+          "description": "`item \"<action> <args>…\" label=… icon=… badge=…`.",
           "type": "object",
           "properties": {
             "action": {
               "description": "Action id and arguments.",
               "type": "string"
+            },
+            "badge": {
+              "description": "Badge.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BadgeSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "icon": {
               "description": "Icon override.",
@@ -505,6 +628,194 @@
           "required": [
             "type",
             "action"
+          ]
+        },
+        {
+          "description": "`spacer`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "spacer"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "`separator`.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "separator"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "SettingsGroupSchema": {
+      "description": "`group \"<id>\" label=… { section … }` of the settings page (M5b).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Group id.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Label: literal text or `@message.id`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sections": {
+          "description": "The group's sections.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SettingsSectionSchema"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "sections"
+      ]
+    },
+    "SettingsSectionSchema": {
+      "description": "`section \"<id>\" label=… icon=… keywords=… { <nodes> }` (M5b).",
+      "type": "object",
+      "properties": {
+        "children": {
+          "description": "The section's nodes.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NodeSchema"
+          }
+        },
+        "icon": {
+          "description": "Lucide icon name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Section id.",
+          "type": "string"
+        },
+        "keywords": {
+          "description": "Extra search words: literal text or `@message.id`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Label: literal text or `@message.id`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "children"
+      ]
+    },
+    "ToolbarItemSchema": {
+      "description": "A toolbar entry.",
+      "oneOf": [
+        {
+          "description": "`item \"<action> <args>…\" label=… icon=… rank=… display=…`.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "description": "Action id and arguments.",
+              "type": "string"
+            },
+            "display": {
+              "description": "`icon`, `label` or `icon-label` (M5b).",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ItemDisplaySchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "icon": {
+              "description": "Icon override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "label": {
+              "description": "Label override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rank": {
+              "description": "Overflow rank (M5b): 1 stays longest; unranked items move into\n\"More\" first.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "item"
+            }
+          },
+          "required": [
+            "type",
+            "action"
+          ]
+        },
+        {
+          "description": "`more label=… icon=… { <menu items> }` (M5b): the \"More\" menu.",
+          "type": "object",
+          "properties": {
+            "icon": {
+              "description": "Icon override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "items": {
+              "description": "The menu's own entries.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MenuItemSchema"
+              }
+            },
+            "label": {
+              "description": "Label override.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "more"
+            }
+          },
+          "required": [
+            "type",
+            "items"
           ]
         },
         {
@@ -533,6 +844,106 @@
             "type"
           ]
         }
+      ]
+    },
+    "ToolbarOverflowSchema": {
+      "description": "Toolbar overflow (M5b).",
+      "oneOf": [
+        {
+          "description": "Into the \"More\" menu, by rank.",
+          "type": "string",
+          "const": "more"
+        },
+        {
+          "description": "Onto further lines.",
+          "type": "string",
+          "const": "wrap"
+        }
+      ]
+    },
+    "ToolbarSettingsSchema": {
+      "description": "The properties of a `toolbar \"<name>\"` node (M5b).",
+      "type": "object",
+      "properties": {
+        "hide-disabled": {
+          "description": "Hide actions that cannot run now instead of showing them disabled.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "overflow": {
+          "description": "`more` (default: items that do not fit move into \"More\") or `wrap`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolbarOverflowSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ViewSchema": {
+      "description": "`view \"<id>\" label=… icon=… window=… badge=…`.",
+      "type": "object",
+      "properties": {
+        "badge": {
+          "description": "Badge on the rail button.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BadgeSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "icon": {
+          "description": "Lucide icon name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Label: literal text or `@message.id`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "window": {
+          "description": "The window the view shows.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "window"
+      ]
+    },
+    "ViewsSchema": {
+      "description": "`views default=\"<id>\" { view \"<id>\" … }` (M5b).",
+      "type": "object",
+      "properties": {
+        "default": {
+          "description": "The view shown at start.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "views": {
+          "description": "The views by id.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ViewSchema"
+          }
+        }
+      },
+      "required": [
+        "views"
       ]
     }
   }

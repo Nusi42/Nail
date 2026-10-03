@@ -128,6 +128,11 @@ describe("plug-in commands", () => {
     keys: [],
     toolbars: {},
     menus: {},
+    toolbar_settings: {},
+    views: {},
+    default_view: null,
+    rail: [],
+    settings: [],
   });
 
   it("adds an action definition per command, keeping the user's label", () => {
@@ -418,6 +423,11 @@ describe("placement text", () => {
       ],
     },
     menus: {},
+    toolbar_settings: {},
+    views: {},
+    default_view: null,
+    rail: [],
+    settings: [],
   });
 
   it("inserts after / before an anchor or at the end, once", () => {

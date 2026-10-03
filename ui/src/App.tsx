@@ -29,6 +29,7 @@ import {
   useFolders,
   type AppConfig,
 } from "./state/queries";
+import { applyUiStateChange } from "./state/uiState";
 import { UiStoreContext, createUiStore, useUi, useUiStoreApi, type UiStore } from "./state/uiStore";
 import { BootTheme } from "./theme/BootTheme";
 import { ThemeProvider } from "./theme/ThemeProvider";
@@ -217,6 +218,9 @@ function useCoreEvents(): void {
             locale: old?.locale ?? null,
           }));
           ui().setConfigError(null);
+          break;
+        case "UiStateChanged":
+          applyUiStateChange(queryClient, event.key, event.value);
           break;
         case "ConfigError":
           ui().setConfigError({

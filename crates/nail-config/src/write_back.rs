@@ -10,7 +10,10 @@
 //! binding that the defaults define writes an `unbind`.
 
 use kdl::{KdlDocument, KdlNode, KdlValue};
-use nail_api::{ApiError, ErrorCode, LayoutNodeRef, LayoutPatch, LocalizedMessage, ToolbarItem};
+use nail_api::{
+    ApiError, ErrorCode, LayoutNodeRef, LayoutPatch, LocalizedMessage, ToolbarItem,
+    ToolbarOverflow, ToolbarSettings,
+};
 use serde_json::Value;
 
 use crate::error::ConfigError;
@@ -399,7 +402,7 @@ impl LayoutEditor {
         let style = self.style.clone();
         let sites = Self::named_sites(self.body(), "toolbar", name);
         let Some(&(block, index)) = sites.last() else {
-            let text = render::toolbar(name, items, 1, &style)
+            let text = render::toolbar(name, items, &ToolbarSettings::default(), 1, &style)
                 .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             append_rendered(self.body(), 1, &text, &style);
             return Ok(());
@@ -416,7 +419,9 @@ impl LayoutEditor {
             .and_then(|c| c.nodes().first())
             .is_some_and(|first| first.format().is_some_and(|f| f.leading.contains('\n')));
         if !multiline {
-            let text = render::toolbar(name, items, depth, &style)
+            // The node is rendered anew: keep its M5b properties.
+            let settings = toolbar_settings_of(node);
+            let text = render::toolbar(name, items, &settings, depth, &style)
                 .ok_or_else(|| invalid(msg("config-edit-plain-values")))?;
             replace_rendered(parent, index, &text);
             return Ok(());
@@ -684,6 +689,23 @@ impl LayoutEditor {
                 append_rendered(self.body(), 1, &text, &style);
             }
         }
+    }
+}
+
+/// The `hide-disabled=` / `overflow=` properties of a `toolbar` node as
+/// written (anything unreadable counts as the default; the file was valid
+/// when it was read).
+fn toolbar_settings_of(node: &KdlNode) -> ToolbarSettings {
+    ToolbarSettings {
+        hide_disabled: node
+            .entry("hide-disabled")
+            .and_then(|e| e.value().as_bool())
+            .unwrap_or(false),
+        overflow: node
+            .entry("overflow")
+            .and_then(|e| e.value().as_string())
+            .and_then(ToolbarOverflow::parse)
+            .unwrap_or_default(),
     }
 }
 

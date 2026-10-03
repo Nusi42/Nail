@@ -7,10 +7,11 @@
  * cannot read the OS itself (a remote browser). The core decides; this only
  * reports. A core without the request is asked once.
  */
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { SystemAppearance } from "../../api/generated";
 import { useClient } from "../../state/queries";
-import { useAppearance } from "./queries";
+import { applyAppearance, useAppearance } from "./queries";
 
 /** Error codes of a core that does not have `ReportSystemAppearance`. */
 const UNSUPPORTED = new Set(["unsupported", "invalid_request"]);
@@ -58,6 +59,7 @@ export function useBrowserAppearance(): SystemAppearance {
  */
 export function SystemAppearanceReporter() {
   const client = useClient();
+  const queryClient = useQueryClient();
   const appearance = useAppearance();
   const { scheme, high_contrast: highContrast } = useBrowserAppearance();
   const unsupported = useRef(false);
@@ -78,6 +80,12 @@ export function SystemAppearanceReporter() {
     client
       .call({ type: "ReportSystemAppearance", system })
       .then((response) => {
+        // M5b: a remote session follows its own browser; its new theme
+        // comes with the answer (the host's `ThemeChanged` is not its own).
+        if (response.type === "Themes") {
+          applyAppearance(queryClient, response.appearance);
+          return;
+        }
         // A core older than M5a does not know the request: ask only once.
         if (response.type === "Error" && UNSUPPORTED.has(response.code)) {
           unsupported.current = true;
@@ -88,6 +96,6 @@ export function SystemAppearanceReporter() {
       .catch((error: unknown) => {
         console.warn("nail: cannot report the system appearance", error);
       });
-  }, [client, loaded, available, follow, coreKnows, scheme, highContrast]);
+  }, [client, queryClient, loaded, available, follow, coreKnows, scheme, highContrast]);
   return null;
 }

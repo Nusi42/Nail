@@ -2215,4 +2215,12 @@ path: string,
  * Replace an existing file (atomically). Only set when the user
  * confirmed replacing it in the Save dialog.
  */
-overwrite?: boolean, };
+overwrite?: boolean, } | { "type": "GetUiState" } | { "type": "SetUiState", 
+/**
+ * A dotted kebab-case key, e.g. `folder-pane.collapsed`.
+ */
+key: string, 
+/**
+ * The new value, `null` = remove the key.
+ */
+value: JsonValue | null, };

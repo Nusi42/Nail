@@ -165,6 +165,10 @@ pub fn required_access(request: &Request) -> RequestAccess {
         Request::SetThemePreferences { .. } => ("SetThemePreferences", Admin),
         // The browser's colour scheme (applied only without an OS source).
         Request::ReportSystemAppearance { .. } => ("ReportSystemAppearance", Session),
+        // M5b: remembered UI state (collapsed sections, last view); no mail
+        // data, shared with the desktop.
+        Request::GetUiState => ("GetUiState", Session),
+        Request::SetUiState { .. } => ("SetUiState", Session),
         Request::PreviewConfigMerge { .. } => ("PreviewConfigMerge", Admin),
         Request::ResolveConfigMerge { .. } => ("ResolveConfigMerge", Admin),
         Request::ApplyConfigMerge { .. } => ("ApplyConfigMerge", Admin),

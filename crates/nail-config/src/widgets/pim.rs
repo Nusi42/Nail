@@ -40,6 +40,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
             ("work-start", UInt),
             ("work-end", UInt),
             ("header", Bool),
+            // M5b: the view switch in the header.
+            ("view-switch", OneOf(&["segmented", "menu"])),
         ],
         &[],
         false,
@@ -80,7 +82,17 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // A contact's card.
     widget("contact-card", &[], &[], false),
     // Calendars and task lists by source (show / hide, colour, new).
-    widget("calendar-list", &[], &[], false),
+    // M5b: per-calendar actions in a "…" menu (default) or as buttons;
+    // headers per source (account / subscriptions).
+    widget(
+        "calendar-list",
+        &[
+            ("actions", OneOf(&["menu", "buttons"])),
+            ("show-sources", Bool),
+        ],
+        &[],
+        false,
+    ),
 ];
 
 #[cfg(test)]

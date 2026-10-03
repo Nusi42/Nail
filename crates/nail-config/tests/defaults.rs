@@ -49,6 +49,13 @@ fn strip_layout_sources(mut layout: ResolvedLayout) -> ResolvedLayout {
     for bp in layout.windows.values_mut().flatten() {
         strip_node_sources(&mut bp.root);
     }
+    for section in layout
+        .settings
+        .iter_mut()
+        .flat_map(|g| g.sections.iter_mut())
+    {
+        strip_node_sources(&mut section.root);
+    }
     layout
 }
 

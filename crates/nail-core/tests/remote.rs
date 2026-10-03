@@ -1916,3 +1916,98 @@ async fn remote_agent_requests_follow_grants() {
         Some(changed)
     );
 }
+
+/// M5b (ADR 0109): a remote browser session follows its own light / dark
+/// mode instead of the host OS; the host and other sessions keep theirs.
+#[tokio::test]
+async fn remote_sessions_follow_their_own_browser_appearance() {
+    use nail_api::appearance::{Appearance, SystemAppearance};
+    use nail_api::{Event, ResolvedTheme};
+
+    fn themes(response: Response) -> Appearance {
+        match response {
+            Response::Themes { appearance } => *appearance,
+            other => panic!("{other:?}"),
+        }
+    }
+    fn theme(response: Response) -> ResolvedTheme {
+        match response {
+            Response::Config { theme, .. } => *theme,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    let f = setup();
+    let service = &f.service;
+    let dark = remote_session(&f, "dark", RemoteAccessPreset::ReadOnly.grant()).await;
+    let other = remote_session(&f, "other", RemoteAccessPreset::ReadOnly.grant()).await;
+
+    // Seeded runs see a light host OS: Follow Windows shows Frost.
+    let host = themes(request(&f, Request::ListThemes).await);
+    assert_eq!(host.active, "frost");
+    assert_eq!(host.system, Some(SystemAppearance::LIGHT));
+    let host_theme = theme(request(&f, Request::GetConfig).await);
+
+    // A session that has not reported sees the host's theme, but no OS
+    // state of its own (so its UI reports at start).
+    let before = themes(service.handle_remote(&dark, Request::ListThemes).await);
+    assert_eq!(before.active, "frost");
+    assert_eq!(before.system, None);
+
+    let reported = themes(
+        service
+            .handle_remote(
+                &dark,
+                Request::ReportSystemAppearance {
+                    system: SystemAppearance::DARK,
+                },
+            )
+            .await,
+    );
+    assert_eq!(reported.active, "graphite");
+    assert_eq!(reported.system, Some(SystemAppearance::DARK));
+    let dark_theme = theme(service.handle_remote(&dark, Request::GetConfig).await);
+    assert_ne!(dark_theme, host_theme);
+
+    // The host and the other session are unchanged.
+    assert_eq!(themes(request(&f, Request::ListThemes).await), host);
+    assert_eq!(theme(request(&f, Request::GetConfig).await), host_theme);
+    let theirs = themes(service.handle_remote(&other, Request::ListThemes).await);
+    assert_eq!(theirs.active, "frost");
+    assert_eq!(
+        theme(service.handle_remote(&other, Request::GetConfig).await),
+        host_theme
+    );
+
+    // Theme events are rewritten for the session that sees them.
+    let changed = Event::ThemeChanged {
+        appearance: Box::new(host.clone()),
+    };
+    match service.remote_event(&dark, changed.clone()).await {
+        Some(Event::ThemeChanged { appearance }) => assert_eq!(appearance.active, "graphite"),
+        other => panic!("{other:?}"),
+    }
+    match service.remote_event(&other, changed).await {
+        Some(Event::ThemeChanged { appearance }) => assert_eq!(appearance.active, "frost"),
+        other => panic!("{other:?}"),
+    }
+    let layout = nail_config::default_layout();
+    let config_changed = Event::ConfigChanged {
+        theme: Box::new(host_theme.clone()),
+        layout: Box::new(layout.clone()),
+    };
+    match service.remote_event(&dark, config_changed).await {
+        Some(Event::ConfigChanged { theme, layout: l }) => {
+            assert_eq!(*theme, dark_theme);
+            assert_eq!(*l, layout);
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // UI-state changes reach every session.
+    let ui = Event::UiStateChanged {
+        key: "shell.view".into(),
+        value: Some(serde_json::json!("calendar")),
+    };
+    assert_eq!(service.remote_event(&other, ui.clone()).await, Some(ui));
+}

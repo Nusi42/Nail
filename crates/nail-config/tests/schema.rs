@@ -73,7 +73,17 @@ fn layout_schema_snapshot() {
     assert_eq!(
         properties(&schema),
         [
-            "actions", "extends", "keys", "menus", "name", "toolbars", "windows"
+            "actions",
+            "extends",
+            "keys",
+            "menus",
+            "name",
+            "rail",
+            "settings-page",
+            "toolbar-settings",
+            "toolbars",
+            "views",
+            "windows"
         ]
     );
     let text = serde_json::to_string(&schema).unwrap();
@@ -83,6 +93,9 @@ fn layout_schema_snapshot() {
         "\"tabs\"",
         "\"widget\"",
         "\"submenu\"",
+        "\"header\"",
+        "\"more\"",
+        "\"rank\"",
     ] {
         assert!(text.contains(needle), "layout schema lacks {needle}");
     }

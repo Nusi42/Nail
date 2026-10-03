@@ -13,10 +13,9 @@
  * see `../README.md`. Texts: `locales/{en,de}/appearance.ftl` (contract
  * ids in `core-appearance.ftl`).
  */
-import { queryKeys } from "../../state/queries";
 import type { Feature } from "../types";
 import { AppearanceSettings } from "./AppearanceSettings";
-import { appearanceKeys } from "./queries";
+import { applyAppearance } from "./queries";
 import { SystemAppearanceReporter } from "./SystemAppearance";
 
 export {
@@ -34,6 +33,7 @@ export { AppearanceSettings } from "./AppearanceSettings";
 export { SystemAppearanceReporter, useBrowserAppearance } from "./SystemAppearance";
 export {
   appearanceKeys,
+  applyAppearance,
   preferencesOf,
   useAppearance,
   useSetTheme,
@@ -57,17 +57,7 @@ export const dialogs: Feature["dialogs"] = {};
  */
 export const events: Feature["events"] = [
   (event, ctx) => {
-    if (event.type === "ThemeChanged") {
-      const before = ctx.queryClient.getQueryData<typeof event.appearance>(appearanceKeys.themes);
-      ctx.queryClient.setQueryData(appearanceKeys.themes, event.appearance);
-      const switched =
-        before === undefined ||
-        before.active !== event.appearance.active ||
-        before.settings.density !== event.appearance.settings.density ||
-        JSON.stringify(before.settings.overrides) !==
-          JSON.stringify(event.appearance.settings.overrides);
-      if (switched) void ctx.queryClient.invalidateQueries({ queryKey: queryKeys.config });
-    }
+    if (event.type === "ThemeChanged") applyAppearance(ctx.queryClient, event.appearance);
   },
 ];
 /** Background components: Follow Windows from the browser / WebView. */

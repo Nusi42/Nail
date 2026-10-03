@@ -9,6 +9,7 @@ import type { ActionHandler } from "../actions/registry";
 import type { NailClient } from "../api/client";
 import type { Event as NailEvent } from "../api/generated";
 import type { DialogRegistry } from "../layout/dialogRegistry";
+import type { SettingsWidgetInfo } from "../layout/settingsIndex";
 import type { WidgetRegistry } from "../layout/widgetRegistry";
 import type { UiStore } from "../state/uiStore";
 
@@ -34,6 +35,12 @@ export interface Feature {
    * without one are described by the palette feature or not listed.
    */
   actionInfo?: Readonly<Record<string, ActionInfo>>;
+  /**
+   * The settings page's search index (M5b, ADR 0109): per settings widget
+   * kind this feature registers, the Fluent ids of every setting label it
+   * shows (`../layout/settingsIndex.ts`). Optional.
+   */
+  settings?: Readonly<Record<string, SettingsWidgetInfo>>;
   /**
    * Dialogs opened with `window.open "<name>"` when the layout has no
    * `window "<name>"`: small, fixed-purpose windows (confirmations,

@@ -51,6 +51,8 @@ function menuItemText(item: MenuItem, indent: string): string {
       return `${indent}item ${quote(item.action)}${argsText(item.args)}`;
     case "separator":
       return `${indent}separator`;
+    case "header":
+      return `${indent}header ${quote(item.label)}`;
     case "submenu":
       return [
         `${indent}submenu ${quote(item.label)} {`,

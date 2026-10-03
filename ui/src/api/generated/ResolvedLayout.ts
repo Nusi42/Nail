@@ -3,7 +3,11 @@ import type { ActionDef } from "./ActionDef";
 import type { Breakpoint } from "./Breakpoint";
 import type { KeyBinding } from "./KeyBinding";
 import type { MenuItem } from "./MenuItem";
+import type { RailItem } from "./RailItem";
+import type { SettingsGroup } from "./SettingsGroup";
 import type { ToolbarItem } from "./ToolbarItem";
+import type { ToolbarSettings } from "./ToolbarSettings";
+import type { ViewDef } from "./ViewDef";
 
 /**
  * A fully resolved layout.
@@ -35,4 +39,26 @@ toolbars: { [key in string]: Array<ToolbarItem> },
  * Menus by name: `"app"` for the application menu, `"context:<part>"`
  * for the context menu of a part (e.g. `"context:message-list.row"`).
  */
-menus: { [key in string]: Array<MenuItem> }, };
+menus: { [key in string]: Array<MenuItem> }, 
+/**
+ * Settings of every toolbar in [`Self::toolbars`] (M5b; defaults for
+ * toolbars that set nothing).
+ */
+toolbar_settings: { [key in string]: ToolbarSettings }, 
+/**
+ * The top-level views by id, in definition order (M5b).
+ */
+views: { [key in string]: ViewDef }, 
+/**
+ * The view shown at start (`views default="mail"`), `null` = the first
+ * view.
+ */
+default_view: string | null, 
+/**
+ * The navigation rail's entries (M5b), top to bottom.
+ */
+rail: Array<RailItem>, 
+/**
+ * The settings page (M5b): groups of sections.
+ */
+settings: Array<SettingsGroup>, };

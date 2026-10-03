@@ -14,7 +14,9 @@
 //! M4a (the confirmation center; WP104, ADR 0079), [`system`] those of M4b
 //! (updates, desktop settings, default apps; WP114, ADR 0087),
 //! [`portability`] those of M4c (import / export, backup, diagnostics;
-//! WP124, ADR 0094; recovery key and smartcards are in [`security`]). The
+//! WP124, ADR 0094; recovery key and smartcards are in [`security`]),
+//! [`shell`] those of M5b (navigation rail, view host, settings page, list
+//! header; ADR 0109). The
 //! React widget registry (`ui/src/features/*/index.ts`) must register a
 //! component for every kind listed here.
 
@@ -32,6 +34,7 @@ mod remote;
 mod rules;
 mod scheduling;
 mod security;
+mod shell;
 mod sieve;
 mod sync;
 mod system;
@@ -48,6 +51,9 @@ pub(crate) enum OptionType {
     Str,
     /// One of the listed strings.
     OneOf(&'static [&'static str]),
+    /// Space-separated words, each one of the listed strings, none twice
+    /// (M5b: `sections="favorites accounts"`, `chips="all unread"`).
+    Words(&'static [&'static str]),
 }
 
 /// A widget kind known to the layout.
@@ -109,6 +115,7 @@ const TABLES: &[&[WidgetSpec]] = &[
     agents::WIDGETS,
     system::WIDGETS,
     portability::WIDGETS,
+    shell::WIDGETS,
 ];
 
 fn all() -> impl Iterator<Item = &'static WidgetSpec> {

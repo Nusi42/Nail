@@ -2786,6 +2786,22 @@ pub enum Request {
         #[ts(as = "Option<bool>", optional)]
         overwrite: bool,
     },
+
+    // --- UI state (M5b, ADR 0109) ---
+    /// Everything in `<config-dir>/ui-state.json` ([`crate::ui_state`]).
+    /// Answered with [`Response::UiState`].
+    GetUiState,
+    /// Set (or, with `value` `null`, remove) one UI-state key; the file is
+    /// rewritten atomically. Answered with [`Response::UiState`];
+    /// `invalid_request` with a `ui-state-issue-*` id for an invalid key, a
+    /// value above `MAX_UI_STATE_VALUE_BYTES` or too many keys. Sends
+    /// [`Event::UiStateChanged`] when the value changed.
+    SetUiState {
+        /// A dotted kebab-case key, e.g. `folder-pane.collapsed`.
+        key: String,
+        /// The new value, `null` = remove the key.
+        value: Option<Value>,
+    },
 }
 
 /// The largest attachment [`Request::GetMessageAttachment`] returns
@@ -3862,6 +3878,12 @@ pub enum Response {
         /// Themes, selection, active theme, OS state.
         appearance: Box<Appearance>,
     },
+    /// Answer to [`Request::GetUiState`] and [`Request::SetUiState`] (M5b):
+    /// every key with its value.
+    UiState {
+        /// The UI state.
+        state: BTreeMap<String, Value>,
+    },
     /// The request failed. May answer any request.
     Error {
         /// Machine-readable error class.
@@ -4328,6 +4350,15 @@ pub enum Event {
     ThemeChanged {
         /// The new state.
         appearance: Box<Appearance>,
+    },
+    // --- UI state (M5b, ADR 0109) ---
+    /// A UI-state key changed ([`Request::SetUiState`], from any window or
+    /// session).
+    UiStateChanged {
+        /// The key.
+        key: String,
+        /// The new value, `null` = removed.
+        value: Option<Value>,
     },
 }
 

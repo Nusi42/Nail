@@ -94,6 +94,14 @@ crates/nail-api        shared types + Request/Response/Event protocol (ts-rs →
                        active_theme rule, Density, token schema token_schema(), SystemAppearanceSource +
                        ManualSystemAppearance), icons.rs (Lucide BUNDLED_ICONS, LEGACY_ICON_NAMES, lucide_name;
                        fixtures/icons.json); ResolvedTheme.density, token variant `compact`
+                       M5b (ADR 0109): config/layout.rs views (ViewDef: a view shows a layout window), default_view,
+                       rail (RailItem, BadgeSource unread / confirmations), settings (SettingsGroup / SettingsSection
+                       with a node tree), toolbar overflow (ToolbarItem::Action rank / display, ToolbarItem::More,
+                       toolbar_settings hide_disabled / overflow), MenuItem::Header (+ ResolvedMenuEntry::Header);
+                       views.rs (view ids, widget kinds nav-rail / view-host / settings-page / list-header, view /
+                       settings / list / folder actions, ListFilter, FavoriteFolder, FolderPaneSectionKind,
+                       folder_pane_sections, account_color_slot, overflow_order, step_view, UI-state keys); ui_state.rs
+                       (`ui-state.json` keys / limits, UiStateIssue); GetUiState / SetUiState → UiState, UiStateChanged
 crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, schema, watcher,
                        format-preserving accounts.kdl writer (AccountsDocument); widget kinds per
                        feature in src/widgets/; rules.kdl in src/rules.rs (WP22);
@@ -122,7 +130,15 @@ crates/nail-config     theme.kdl / layout.kdl / accounts.kdl parsing, defaults, 
                        `appearance` node / override tokens), ConfigManager appearance / set_theme /
                        set_theme_preferences / set_system_appearance / reload_themes, ConfigUpdate::ThemeChanged
                        (before Changed), css::MODES + `compact`; tests/theme_contrast.rs (WCAG per theme, the
-                       pair table every default part rule must stay within), tests/appearance.rs (ADRs 0102–0104)
+                       pair table every default part rule must stay within), tests/appearance.rs (ADRs 0102–0104);
+                       M5b (ADR 0109): layout.rs `views` / `rail` / `settings-page` sections (replace the base as a
+                       whole; checks: view window exists without a view-host, default / rail views exist, shell widgets
+                       need their section), toolbar `hide-disabled=` / `overflow=`, item `rank=` / `display=`, `more {}`,
+                       menu `header`; widgets/shell.rs (nav-rail, view-host, settings-page, list-header),
+                       OptionType::Words (folder-tree sections / favorites, list-header chips); ui_state.rs
+                       (ConfigManager::ui_state / set_ui_state, atomic `ui-state.json`); ConfigManager::appearance_for
+                       (appearance + theme for another OS state, per remote session); render / write-back keep the M5b
+                       toolbar properties
 crates/nail-store      SQLite metadata (v15), blob store, per-account operation queue with sync-side
                        merge, threading (JWZ), drafts/outbox + attachments, search filters (ADR 0015);
                        v4: collected addresses, rule runs (undo), MCP clients/grants/audit, saved searches;
@@ -390,7 +406,11 @@ crates/nail-core       Service: routes requests; owns store, search index, accou
                        ReportSystemAppearance; Follow Windows: Service::open keeps a SystemAppearanceWatch on
                        ServiceOptions::system_appearance, else the Windows registry watcher; reports apply only
                        without a watch), attachments.rs (GetMessageAttachment / SaveAttachment); demo_options
-                       installs a light ManualSystemAppearance, demo-multi control `system-appearance`
+                       installs a light ManualSystemAppearance, demo-multi control `system-appearance`;
+                       M5b (ADR 0109): ui_state.rs (GetUiState / SetUiState, UiStateChanged); per-session Follow Windows
+                       (remote sessions: ReportSystemAppearance kept per session in Inner.session_appearance,
+                       Service::session_appearance; GetConfig / theme answers / ThemeChanged / ConfigChanged computed
+                       per session in remote_access.rs)
 crates/nail-mapi       Simple MAPI provider (M4b WP111): cdylib nail_mapi.dll (shipped as mapi\<arch>\NailMapi.dll)
                        + rlib + bin nail-mapi-harness (send / documents / exports / registry; without arguments a
                        fake Nail.exe on NAIL_MAPI_PIPE); windows/exports.rs (13 Simple MAPI exports, signatures
@@ -495,6 +515,15 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        part rules — the base theme has no rules for those parts), widgets/lucideIcons.ts + Icon.tsx
                        (theme icon → Lucide → nothing), widgets/primitives.tsx (Switch, Segmented, Tag, Avatar),
                        widgets/AttachmentCard.tsx + attachmentSave.ts (PickPath → SaveAttachment, else download);
+                       M5b (ADR 0109): features/shell/ (WP161: nav-rail, view-host, view.show / next / previous with
+                       the open-the-window fallback), features/settings/ (WP163: settings-page, settings.section),
+                       widgets/feature.ts (WP162's registrations, merged like a slot: list-header, list / folder actions),
+                       per-package skins shell/settings/pim `skin.ts` after theme/skin.ts; layout/views.ts,
+                       layout/overflow.ts (overflowOrder, fitToolbar, shownToolbarItems), layout/settingsIndex.ts
+                       (Feature.settings → search index), widgets/folderPane.ts (sections, account colour slots),
+                       state/uiState.ts (useUiState / useSetUiState; App.tsx applies UiStateChanged), api/uiStateMock.ts,
+                       UiState.activeView / listFilter, ActionInfo.icon (every registered action has an icon),
+                       menu headers (`context-menu.header`), appearance applyAppearance (reporter applies its answer);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -531,7 +560,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
                        = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>));
                        tests/m5a.spec.ts (themes, density, Follow Windows via `system-appearance`, user themes,
-                       attachment download); visual/ (M5a, ADR 0106: visual regression, built-in themes ×
+                       attachment download); tests/m5b-contract.spec.ts (view shortcuts open the views' windows, palette);
+                       visual/ (M5a, ADR 0106: visual regression, built-in themes ×
                        densities × 9 screens; own Playwright config; baselines in visual/baselines/<platform>
                        (win32 = reference); review page from scripts/visual-review/)
 defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names); themes/ = the built-in
@@ -547,7 +577,9 @@ locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust
                        M4c: core-portability.ftl (WP121 + contract ids), core-vault.ftl (WP122 + contract ids),
                        portability.ftl / palette.ftl / print.ftl (WP124; palette / print contract ids);
                        M5a: core-appearance.ftl (contract ids: theme names / kinds / sources, densities, issues),
-                       appearance.ftl (WP153); every file is embedded in nail-config l10n.rs
+                       appearance.ftl (WP153); M5b: core-shell.ftl (contract ids: views, view actions, toolbar More /
+                       group headings, settings groups / default sections, list filters, favorites, folder sections,
+                       UI-state issues), shell.ftl (WP161), settings.ftl (WP163); every file is embedded in nail-config l10n.rs
 scripts/               build-installer.mjs (NSIS + MSI, --arch / --offline-webview / --update-base, NailMapi.dll),
                        sbom.mjs, installer-smoke.ps1, msi-smoke.ps1, update-manifest.mjs, update-server.mjs
                        (loopback), update-check.mjs, updater-key.mjs, winget-manifest.mjs, release-version.mjs,
@@ -861,6 +893,17 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   default part rule's colours must be in the pair table of `tests/theme_contrast.rs`; input-like parts use
   `border "$border.control"`. `ReportSystemAppearance` is ignored while the core watches the OS.
   `GetMessageAttachment` (base64, ≤ 64 MiB) / `SaveAttachment` (desktop only, absolute path).
+- M5b contract: ADR 0109 (views = layout windows shown in `view-host`, `nav-rail` from `rail`, badges;
+  `view.show "<view>"` + aliases `view.mail` … (`ctrl+1` … `ctrl+4`, `g m`), opening the view's window while the main
+  window has no `view-host`; toolbar overflow (`rank`, `display`, `more {}`, `hide-disabled`, `overflow`), menu
+  `header`; folder-pane sections (Favorites, accounts with avatar-palette colour slots, smart folders only when present,
+  collapsed in UI state); `list-header` + ListFilter; the settings page (`settings-page` section, groups General /
+  Look & feel / Security / Extensions, already holding every settings tab's widget; search index from
+  `Feature.settings`); every registered action has an icon (layout `actions` or `ActionInfo.icon`); UI state in
+  `<config-dir>/ui-state.json` (GetUiState / SetUiState / UiStateChanged, served); remote sessions follow their own
+  browser's light / dark mode (served)). The default layout has the views / rail / page sections but unchanged windows
+  until WP165. Slots: WP161 `features/shell/` + shell.ftl, WP162 `widgets/` + `theme/skin.ts` + app.ftl, WP163
+  `features/settings/` + the `settings` export of every feature but pim + settings.ftl, WP164 `features/pim/` + pim.ftl.
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

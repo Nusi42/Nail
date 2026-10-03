@@ -24,13 +24,16 @@ import type { Feature } from "./types";
 import { createEnv, setWindowWidth, stubElementSizes } from "../test/harness";
 import type { DialogProps } from "../layout/dialogRegistry";
 import { shippedCatalogs } from "../i18n/catalogs";
+import defaultLayoutJson from "../../../crates/nail-api/fixtures/default-layout.json";
+import { normalizeLayout } from "../api/normalize";
+import { LUCIDE_ICONS } from "../widgets/lucideIcons";
 
 const TEST_DIALOG_TITLE = "window-test-dialog = Test dialog";
 
 const empty: Feature = { widgets: {}, actions: {}, dialogs: {}, events: [], effects: [] };
 
 describe("feature registry", () => {
-  it("has the M1b, M2a, M2b, M2c, M2d, M3a, M3b, M3c, M4a, M4b, M4c and M5a slots and contains every built-in", () => {
+  it("has the M1b … M5a and M5b slots and contains every built-in", () => {
     expect(Object.keys(features)).toEqual([
       "composer",
       "rules",
@@ -54,6 +57,9 @@ describe("feature registry", () => {
       "palette",
       "print",
       "appearance",
+      "shell",
+      "settings",
+      "mailWidgets",
     ]);
     for (const kind of Object.keys(builtinWidgets)) {
       expect(appRegistry.widgets[kind]).toBe(builtinWidgets[kind]);
@@ -79,6 +85,25 @@ describe("feature registry", () => {
     expect(Object.keys(merged.dialogs)).toEqual(["confirm"]);
     expect(merged.events).toHaveLength(1);
     expect(merged.actionInfo).toEqual({});
+    expect(merged.settings).toEqual({});
+
+    // M5b: settings labels per widget kind merge and refuse duplicates.
+    const labels = { labels: ["junk-settings-enabled"] };
+    expect(
+      mergeFeatures(
+        { widgets: {}, actions: {} },
+        { a: { ...empty, settings: { "junk-settings": labels } } },
+      ).settings,
+    ).toEqual({ "junk-settings": labels });
+    expect(() =>
+      mergeFeatures(
+        { widgets: {}, actions: {} },
+        {
+          a: { ...empty, settings: { x: labels } },
+          b: { ...empty, settings: { x: labels } },
+        },
+      ),
+    ).toThrow(/settings info "x"/);
 
     // M4c: palette descriptions merge like actions and refuse duplicates.
     const info = { title: "rules-run-title" };
@@ -132,6 +157,21 @@ describe("feature registry", () => {
     const all: string[] = lists.flat();
     expect(new Set(all).size).toBe(all.length);
     expect(isComposerRequest({ type: "ListRules" } as Request)).toBe(false);
+  });
+});
+
+describe("action icons (M5b)", () => {
+  it("gives every registered action a bundled Lucide icon", () => {
+    const layout = normalizeLayout(defaultLayoutJson);
+    const missing = Object.keys(appRegistry.actions).filter((id) => {
+      const icon = layout.actions[id]?.icon ?? appRegistry.actionInfo[id]?.icon ?? null;
+      return icon === null || !Object.hasOwn(LUCIDE_ICONS, icon);
+    });
+    expect(missing).toEqual([]);
+    // Icons named by feature descriptions are bundled too.
+    for (const [id, info] of Object.entries(appRegistry.actionInfo)) {
+      if (info.icon !== undefined) expect(Object.hasOwn(LUCIDE_ICONS, info.icon), id).toBe(true);
+    }
   });
 });
 

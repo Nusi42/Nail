@@ -14,6 +14,7 @@ import type {
   DraftId,
   ErrorCode,
   FolderId,
+  ListFilter,
   LocalizedMessage,
   IdentityId,
   MessageId,
@@ -126,6 +127,13 @@ export interface UiState {
   sendProgress: Record<string, SendProgressState>;
   /** Results of OAuth sign-ins by flow id (`null` = success). */
   oauthResults: Record<string, ErrorCode | null>;
+  /**
+   * The view shown in the `view-host` (M5b, ADR 0109; a key of the layout's
+   * `views`), `null` = the layout's start view.
+   */
+  activeView: string | null;
+  /** The message list's filter chip (M5b; `list.filter`). */
+  listFilter: ListFilter;
 
   selectAccount(id: AccountId): void;
   selectFolder(id: FolderId | null): void;
@@ -156,6 +164,10 @@ export interface UiState {
   setLastSend(entry: OutboxEntry | null): void;
   setSendProgress(outboxId: string, progress: SendProgressState | null): void;
   setOAuthResult(flowId: string, error: ErrorCode | null): void;
+  /** Shows a view (M5b; `view.show`). */
+  setActiveView(view: string | null): void;
+  /** Sets the message list's filter chip (M5b). */
+  setListFilter(filter: ListFilter): void;
 }
 
 /** Upload progress of a message being sent (`SendProgress`). */
@@ -200,6 +212,8 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
     lastSend: null,
     sendProgress: {},
     oauthResults: {},
+    activeView: null,
+    listFilter: "all",
 
     selectAccount: (id) =>
       set((s) =>
@@ -294,6 +308,8 @@ export function createUiStore(initial: Partial<UiState> = {}): UiStore {
       }),
     setOAuthResult: (flowId, error) =>
       set((s) => ({ oauthResults: { ...s.oauthResults, [flowId]: error } })),
+    setActiveView: (activeView) => set((s) => (s.activeView === activeView ? s : { activeView })),
+    setListFilter: (listFilter) => set((s) => (s.listFilter === listFilter ? s : { listFilter })),
     ...initial,
   }));
 }

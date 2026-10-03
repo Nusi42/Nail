@@ -26,6 +26,9 @@ import { PORTABILITY_BASE_CSS } from "../features/portability/parts";
 import { PALETTE_BASE_CSS } from "../features/palette/parts";
 import { PRINT_BASE_CSS } from "../features/print/parts";
 import { SKIN_CSS } from "./skin";
+import { SHELL_SKIN_CSS } from "../features/shell/skin";
+import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
+import { PIM_SKIN_CSS } from "../features/pim/skin";
 import { PLUGIN_BASE_CSS, pluginPartSelector } from "../features/plugins/parts";
 import type {
   AncestorSelector,
@@ -312,8 +315,14 @@ export interface CompiledTheme {
 export function compileTheme(theme: ResolvedTheme): CompiledTheme {
   const warnings: string[] = [];
   // The M5a look of the primitives (./skin.ts) sits between the structure
-  // and the theme, so every theme rule still wins over it.
-  const sections: string[] = [BASE_CSS, SKIN_CSS, ...tokenRules(theme, warnings)];
+  // and the theme, so every theme rule still wins over it; the M5b
+  // packages' skins (shell, settings page, calendar view; ADR 0109) follow it.
+  const sections: string[] = [
+    BASE_CSS,
+    SKIN_CSS,
+    ...[SHELL_SKIN_CSS, SETTINGS_SKIN_CSS, PIM_SKIN_CSS].filter((css) => css !== ""),
+    ...tokenRules(theme, warnings),
+  ];
   try {
     sections.push(readerRules(theme.message));
   } catch (error) {

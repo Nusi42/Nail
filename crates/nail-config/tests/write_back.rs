@@ -186,6 +186,8 @@ fn toolbar_order_keeps_item_comments() {
         args: vec![],
         label: None,
         icon: None,
+        rank: None,
+        display: None,
     };
     let out = apply(
         Some(COMMENTED),
@@ -218,6 +220,8 @@ fn a_toolbar_from_the_defaults_is_added() {
                 args: vec![],
                 label: Some("@mail.action.compose".into()),
                 icon: Some("compose".into()),
+                rank: None,
+                display: None,
             }],
         }],
     );

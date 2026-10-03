@@ -3,6 +3,19 @@
 
 use super::{OptionType, WidgetSpec, widget};
 
+/// The `folder-tree sections=` words (`nail_api::views::FolderPaneSectionKind`).
+pub(crate) const FOLDER_SECTIONS: &[&str] = &["favorites", "accounts", "smart-folders"];
+/// The `folder-tree favorites=` words (`nail_api::views::FavoriteFolder`).
+pub(crate) const FAVORITE_FOLDERS: &[&str] = &[
+    "all-inboxes",
+    "unread",
+    "flagged",
+    "snoozed",
+    "drafts",
+    "sent",
+    "outbox",
+];
+
 /// Built-in widgets. Implemented widgets have typed options; future ones
 /// accept any options until they exist.
 pub(crate) const WIDGETS: &[WidgetSpec] = &[
@@ -17,6 +30,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
         &[
             ("show-unread", OptionType::Bool),
             ("show-account-badges", OptionType::Bool),
+            // M5b (ADR 0109): grouped sections (default all three, in
+            // this order), the unified folders under Favorites, collapsible
+            // sections and account colours.
+            ("sections", OptionType::Words(FOLDER_SECTIONS)),
+            ("favorites", OptionType::Words(FAVORITE_FOLDERS)),
+            ("collapsible", OptionType::Bool),
+            ("account-colors", OptionType::Bool),
         ],
         &[],
         false,
@@ -88,3 +108,56 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     widget("text", &[("text", OptionType::Str)], &[], false),
     widget("spacer", &[], &[], false),
 ];
+
+#[cfg(test)]
+mod m5b_tests {
+    use nail_api::views::{FavoriteFolder, FolderPaneSectionKind};
+
+    #[test]
+    fn folder_pane_words_match_the_contract() {
+        let sections: Vec<&str> = FolderPaneSectionKind::ALL
+            .iter()
+            .map(|k| k.as_str())
+            .collect();
+        assert_eq!(sections, super::FOLDER_SECTIONS);
+        let favorites: Vec<&str> = FavoriteFolder::ALL.iter().map(|f| f.as_str()).collect();
+        assert_eq!(favorites, super::FAVORITE_FOLDERS);
+    }
+
+    #[test]
+    fn folder_tree_options_are_checked() {
+        let layout = |widget: &str| {
+            format!(
+                "layout \"x\" extends=\"default\" {{
+    window \"w\" {{
+        {widget}
+    }}
+}}
+"
+            )
+        };
+        crate::parse_layout(
+            &layout("folder-tree sections=\"accounts favorites\" favorites=\"all-inboxes drafts\" collapsible=#false account-colors=#true"),
+            "layout.kdl",
+        )
+        .unwrap();
+        for bad in [
+            "folder-tree sections=\"accounts accounts\"",
+            "folder-tree sections=\"labels\"",
+            "folder-tree favorites=\"starred\"",
+            "list-header chips=\"all spam\"",
+            "calendar view-switch=\"tabs\"",
+            "calendar-list actions=\"links\"",
+        ] {
+            assert!(
+                crate::parse_layout(&layout(bad), "layout.kdl").is_err(),
+                "{bad}"
+            );
+        }
+        crate::parse_layout(
+            &layout("list-header chips=\"all unread\" search=#true hint=#true title=#true counts=#false"),
+            "layout.kdl",
+        )
+        .unwrap();
+    }
+}

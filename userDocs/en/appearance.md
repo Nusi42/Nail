@@ -33,9 +33,12 @@ the pair under the switch; the defaults are Frost and Graphite.
   themselves and switch at once when you change it.
 - When Windows uses a contrast theme (Settings → Accessibility → Contrast
   themes), Nail switches to **High contrast**.
-- A browser connected to a Nail that cannot read the Windows setting (for
-  example remote access to a Nail running elsewhere) tells Nail its own
-  light / dark mode instead.
+- A browser connected through remote access follows its **own** light /
+  dark mode (the phone's or the other computer's setting), not the mode of
+  the computer Nail runs on; the desktop and other browsers keep theirs.
+  Your theme choices (the pair, density, accent) are the same everywhere.
+- A browser connected to a Nail that cannot read the Windows setting tells
+  Nail its own light / dark mode instead.
 
 Turning Follow Windows off keeps your pair, so turning it on again later
 brings it back.

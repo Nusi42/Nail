@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 
 use nail_api::config::layout::label_message_id;
 use nail_api::config::theme::css_var_name;
-use nail_api::{ErrorCode, LayoutNode, MenuItem, ResolvedLayout, ResolvedTheme, ToolbarItem};
+use nail_api::{
+    ErrorCode, LayoutNode, MenuItem, RailItem, ResolvedLayout, ResolvedTheme, ToolbarItem,
+};
 use pretty_assertions::assert_eq;
 
 fn repo_root() -> PathBuf {
@@ -281,24 +283,31 @@ fn layout_references_resolve() {
     }
 
     let mut used_actions: Vec<&str> = layout.keys.iter().map(|k| k.action.as_str()).collect();
-    for items in layout.toolbars.values() {
-        for item in items {
-            if let ToolbarItem::Action { action, .. } = item {
-                used_actions.push(action);
-            }
-        }
-    }
     fn menu_actions<'a>(items: &'a [MenuItem], out: &mut Vec<&'a str>) {
         for item in items {
             match item {
                 MenuItem::Action { action, .. } => out.push(action),
                 MenuItem::Submenu { items, .. } => menu_actions(items, out),
-                MenuItem::Separator => {}
+                MenuItem::Separator | MenuItem::Header { .. } => {}
+            }
+        }
+    }
+    for items in layout.toolbars.values() {
+        for item in items {
+            match item {
+                ToolbarItem::Action { action, .. } => used_actions.push(action),
+                ToolbarItem::More { items, .. } => menu_actions(items, &mut used_actions),
+                ToolbarItem::Spacer | ToolbarItem::Separator => {}
             }
         }
     }
     for items in layout.menus.values() {
         menu_actions(items, &mut used_actions);
+    }
+    for item in &layout.rail {
+        if let RailItem::Action { action, .. } = item {
+            used_actions.push(action);
+        }
     }
     for action in used_actions {
         assert!(
@@ -314,6 +323,45 @@ fn layout_references_resolve() {
                 nail_api::icons::BUNDLED_ICONS.contains(&icon.as_str()),
                 "action {id} uses {icon}, which is not a bundled Lucide icon"
             );
+        }
+    }
+
+    // M5b: views show existing windows, with bundled icons; the rail names
+    // known views; every toolbar has its settings.
+    for (id, view) in &layout.views {
+        assert!(
+            layout.windows.contains_key(&view.window),
+            "view {id} shows the unknown window {}",
+            view.window
+        );
+        let icon = view
+            .icon
+            .as_deref()
+            .expect("every default view has an icon");
+        assert!(
+            nail_api::icons::BUNDLED_ICONS.contains(&icon),
+            "view {id}: {icon}"
+        );
+    }
+    for item in &layout.rail {
+        if let RailItem::View { view } = item {
+            assert!(
+                layout.views.contains_key(view),
+                "rail names unknown view {view}"
+            );
+        }
+    }
+    for name in layout.toolbars.keys() {
+        assert!(layout.toolbar_settings.contains_key(name), "toolbar {name}");
+    }
+    for group in &layout.settings {
+        for section in &group.sections {
+            if let Some(icon) = &section.icon {
+                assert!(
+                    nail_api::icons::BUNDLED_ICONS.contains(&icon.as_str()),
+                    "{icon}"
+                );
+            }
         }
     }
 

@@ -1867,6 +1867,94 @@
       "icon": "bot",
       "alias_of": null,
       "args": []
+    },
+    "palette.clear-recent": {
+      "label": null,
+      "icon": "rotate-ccw",
+      "alias_of": null,
+      "args": []
+    },
+    "plugins.run-command": {
+      "label": null,
+      "icon": "puzzle",
+      "alias_of": null,
+      "args": []
+    },
+    "security.recovery-key.check": {
+      "label": null,
+      "icon": "key-round",
+      "alias_of": null,
+      "args": []
+    },
+    "security.recovery-key.create": {
+      "label": null,
+      "icon": "key-round",
+      "alias_of": null,
+      "args": []
+    },
+    "security.recovery-key.restore": {
+      "label": null,
+      "icon": "archive-restore",
+      "alias_of": null,
+      "args": []
+    },
+    "view.show": {
+      "label": "@view.action.show",
+      "icon": "panels-top-left",
+      "alias_of": null,
+      "args": []
+    },
+    "view.next": {
+      "label": "@view.action.next",
+      "icon": "chevron-down",
+      "alias_of": null,
+      "args": []
+    },
+    "view.previous": {
+      "label": "@view.action.previous",
+      "icon": "chevron-up",
+      "alias_of": null,
+      "args": []
+    },
+    "view.mail": {
+      "label": "@view.mail",
+      "icon": "mail",
+      "alias_of": "view.show",
+      "args": [
+        "mail"
+      ]
+    },
+    "view.calendar": {
+      "label": "@view.calendar",
+      "icon": "calendar",
+      "alias_of": "view.show",
+      "args": [
+        "calendar"
+      ]
+    },
+    "view.contacts": {
+      "label": "@view.contacts",
+      "icon": "users",
+      "alias_of": "view.show",
+      "args": [
+        "contacts"
+      ]
+    },
+    "view.tasks": {
+      "label": "@view.tasks",
+      "icon": "square-check-big",
+      "alias_of": "view.show",
+      "args": [
+        "tasks"
+      ]
+    },
+    "view.settings": {
+      "label": "@view.settings",
+      "icon": "settings",
+      "alias_of": "view.show",
+      "args": [
+        "settings"
+      ]
     }
   },
   "keys": [
@@ -2164,6 +2252,36 @@
       "context": "global",
       "key": "g a",
       "action": "agents.open-center",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+1",
+      "action": "view.mail",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+2",
+      "action": "view.calendar",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+3",
+      "action": "view.contacts",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "ctrl+4",
+      "action": "view.tasks",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g m",
+      "action": "view.mail",
       "args": []
     },
     {
@@ -2838,5 +2956,627 @@
         "icon": null
       }
     ]
-  }
+  },
+  "toolbar_settings": {
+    "main": {
+      "hide_disabled": false,
+      "overflow": "more"
+    },
+    "reader": {
+      "hide_disabled": false,
+      "overflow": "more"
+    },
+    "calendar": {
+      "hide_disabled": false,
+      "overflow": "more"
+    },
+    "customize": {
+      "hide_disabled": false,
+      "overflow": "more"
+    }
+  },
+  "views": {
+    "mail": {
+      "label": "@view.mail",
+      "icon": "mail",
+      "window": "main",
+      "badge": "unread"
+    },
+    "calendar": {
+      "label": "@view.calendar",
+      "icon": "calendar",
+      "window": "calendar",
+      "badge": null
+    },
+    "contacts": {
+      "label": "@view.contacts",
+      "icon": "users",
+      "window": "contacts",
+      "badge": null
+    },
+    "tasks": {
+      "label": "@view.tasks",
+      "icon": "square-check-big",
+      "window": "tasks",
+      "badge": null
+    },
+    "settings": {
+      "label": "@view.settings",
+      "icon": "settings",
+      "window": "settings",
+      "badge": null
+    }
+  },
+  "default_view": "mail",
+  "rail": [
+    {
+      "type": "view",
+      "view": "mail"
+    },
+    {
+      "type": "view",
+      "view": "calendar"
+    },
+    {
+      "type": "view",
+      "view": "contacts"
+    },
+    {
+      "type": "view",
+      "view": "tasks"
+    },
+    {
+      "type": "spacer"
+    },
+    {
+      "type": "action",
+      "action": "agents.open-center",
+      "args": [],
+      "label": null,
+      "icon": "shield-check",
+      "badge": "confirmations"
+    },
+    {
+      "type": "view",
+      "view": "settings"
+    }
+  ],
+  "settings": [
+    {
+      "id": "general",
+      "label": "@settings.group.general",
+      "sections": [
+        {
+          "id": "accounts",
+          "label": "@settings.section.accounts",
+          "icon": "user-round",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-account-settings",
+                "label": null,
+                "kind": "account-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-virtual-accounts",
+                "label": null,
+                "kind": "virtual-account-editor",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "mail",
+          "label": "@settings.section.mail",
+          "icon": "mail",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-sync-policies",
+                "label": null,
+                "kind": "sync-folder-policies",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-junk-settings",
+                "label": null,
+                "kind": "junk-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "server-rules",
+          "label": "@settings.section.server-rules",
+          "icon": "funnel",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-sieve-status",
+                "label": null,
+                "kind": "sieve-status",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-exchange-rules",
+                "label": null,
+                "kind": "exchange-rules",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-vacation",
+                "label": null,
+                "kind": "vacation-editor",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "notifications",
+          "label": "@settings.section.notifications",
+          "icon": "bell",
+          "keywords": null,
+          "root": {
+            "type": "widget",
+            "id": "page-notification-settings",
+            "label": null,
+            "kind": "notification-settings",
+            "options": {},
+            "rows": [],
+            "source": null
+          }
+        },
+        {
+          "id": "data",
+          "label": "@settings.section.data",
+          "icon": "hard-drive-download",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-import-export",
+                "label": null,
+                "kind": "import-export",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-backup-restore",
+                "label": null,
+                "kind": "backup-restore",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-diagnostics",
+                "label": null,
+                "kind": "diagnostics",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "desktop",
+          "label": "@settings.section.desktop",
+          "icon": "monitor",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-update-settings",
+                "label": null,
+                "kind": "update-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-desktop-settings",
+                "label": null,
+                "kind": "desktop-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-default-apps",
+                "label": null,
+                "kind": "default-apps",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "look-and-feel",
+      "label": "@settings.group.look-and-feel",
+      "sections": [
+        {
+          "id": "appearance",
+          "label": "@settings.section.appearance",
+          "icon": "palette",
+          "keywords": null,
+          "root": {
+            "type": "widget",
+            "id": "page-appearance",
+            "label": null,
+            "kind": "appearance-settings",
+            "options": {},
+            "rows": [],
+            "source": null
+          }
+        },
+        {
+          "id": "layout",
+          "label": "@settings.section.layout",
+          "icon": "layout-panel-left",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-customize-toolbar",
+                "label": "@toolbar.customize",
+                "kind": "toolbar",
+                "options": {
+                  "toolbar": "customize"
+                },
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-config-errors",
+                "label": null,
+                "kind": "config-errors",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-toolbar-editor",
+                "label": null,
+                "kind": "toolbar-editor",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-column-editor",
+                "label": null,
+                "kind": "column-editor",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "keyboard",
+          "label": "@settings.section.keyboard",
+          "icon": "keyboard",
+          "keywords": null,
+          "root": {
+            "type": "widget",
+            "id": "page-key-binding-editor",
+            "label": null,
+            "kind": "key-binding-editor",
+            "options": {},
+            "rows": [],
+            "source": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "security",
+      "label": "@settings.group.security",
+      "sections": [
+        {
+          "id": "keys",
+          "label": "@settings.section.keys",
+          "icon": "key-round",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-security-keys",
+                "label": null,
+                "kind": "security-keys",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-security-identities",
+                "label": null,
+                "kind": "security-identities",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-security-autocrypt",
+                "label": null,
+                "kind": "security-autocrypt",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-security-smartcards",
+                "label": null,
+                "kind": "security-smartcards",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "privacy",
+          "label": "@settings.section.privacy",
+          "icon": "shield",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-security-settings",
+                "label": null,
+                "kind": "security-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-security-recovery-key",
+                "label": null,
+                "kind": "security-recovery-key",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-remote-content-allows",
+                "label": null,
+                "kind": "remote-content-allows",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "remote",
+          "label": "@settings.section.remote",
+          "icon": "globe",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto",
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-remote-settings",
+                "label": null,
+                "kind": "remote-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-remote-users",
+                "label": null,
+                "kind": "remote-users",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-remote-devices",
+                "label": null,
+                "kind": "remote-devices",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-remote-audit",
+                "label": null,
+                "kind": "remote-audit",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "extensions",
+      "label": "@settings.group.extensions",
+      "sections": [
+        {
+          "id": "agents",
+          "label": "@settings.section.agents",
+          "icon": "bot",
+          "keywords": null,
+          "root": {
+            "type": "stack",
+            "id": null,
+            "label": null,
+            "sizes": [
+              "auto",
+              "auto"
+            ],
+            "children": [
+              {
+                "type": "widget",
+                "id": "page-mcp-clients",
+                "label": null,
+                "kind": "mcp-clients",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-confirmation-center",
+                "label": null,
+                "kind": "confirmation-center",
+                "options": {},
+                "rows": [],
+                "source": null
+              }
+            ]
+          }
+        },
+        {
+          "id": "plugins",
+          "label": "@settings.section.plugins",
+          "icon": "puzzle",
+          "keywords": null,
+          "root": {
+            "type": "widget",
+            "id": "page-plugin-manager",
+            "label": null,
+            "kind": "plugin-manager",
+            "options": {},
+            "rows": [],
+            "source": null
+          }
+        }
+      ]
+    }
+  ]
 }

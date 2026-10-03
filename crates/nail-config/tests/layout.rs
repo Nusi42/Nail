@@ -231,6 +231,8 @@ layout "All" {
             args: vec![],
             label: Some("Answer".into()),
             icon: Some("reply".into()),
+            rank: None,
+            display: None,
         }
     );
     let MenuItem::Submenu { label, items } = &l.menus["app"][0] else {
@@ -467,14 +469,251 @@ fn action_key_toolbar_and_menu_errors() {
     check(
         "toolbar \"reader\" { button \"mail.reply\"; }",
         22,
-        "use item, spacer or separator",
+        "use item, more, spacer or separator",
     );
     check("toolbar \"Reader\" { }", 11, "invalid toolbar name");
     check("menu \"context\" { }", 8, "invalid menu name");
     check(
         "menu \"app\" { spacer; }",
         16,
-        "use item, separator or submenu",
+        "use item, header, separator or submenu",
     );
     check("menu \"app\" { item \"Reply\"; }", 21, "invalid action id");
+}
+
+// ---------------------------------------------------------------------------
+// M5b (ADR 0109): views, the rail, toolbar overflow, the settings page.
+
+const SHELL: &str = r#"
+layout "Shell" extends="default" {
+    window "main" {
+        split "horizontal" id="shell" sizes="auto 1fr" resizable=#false {
+            nav-rail id="rail" show-labels=#true
+            view-host id="views"
+        }
+    }
+    window "mail" {
+        stack id="mail" {
+            list-header id="list-header" chips="all unread"
+            message-list id="list"
+        }
+    }
+    views default="calendar" {
+        view "mail" label="@view.mail" icon="mail" window="mail" badge="unread"
+        view "calendar" icon="calendar" window="calendar"
+    }
+    rail {
+        view "mail"
+        view "calendar"
+        spacer
+        item "agents.open-center" icon="shield-check" badge="confirmations"
+        separator
+    }
+    toolbar "reader" hide-disabled=#true overflow="more" {
+        item "mail.reply" rank=1 display="icon-label"
+        item "mail.archive" rank=4 display="icon"
+        more icon="ellipsis" {
+            header "@toolbar.group.message"
+            item "mail.toggle-read"
+            separator
+            header "@toolbar.group.turn-into"
+            item "tasks.from-message"
+        }
+    }
+    settings-page {
+        group "general" label="@settings.group.general" {
+            section "accounts" label="@settings.section.accounts" icon="user-round" keywords="imap smtp" {
+                account-settings id="a"
+                virtual-account-editor id="b"
+            }
+        }
+        group "look" {
+            section "appearance" {
+                appearance-settings id="c"
+            }
+        }
+    }
+}
+"#;
+
+#[test]
+fn views_rail_overflow_and_settings_page_resolve() {
+    use nail_api::{BadgeSource, ItemDisplay, RailItem, ToolbarOverflow};
+    let l = layout(SHELL);
+    assert_eq!(l.views.keys().collect::<Vec<_>>(), ["mail", "calendar"]);
+    assert_eq!(l.default_view.as_deref(), Some("calendar"));
+    assert_eq!(l.start_view(), Some("calendar"));
+    assert_eq!(l.views["mail"].badge, Some(BadgeSource::Unread));
+    assert_eq!(l.views["calendar"].label, None);
+    assert_eq!(l.rail.len(), 5);
+    assert!(matches!(
+        &l.rail[3],
+        RailItem::Action { action, badge: Some(BadgeSource::Confirmations), icon: Some(icon), .. }
+            if action == "agents.open-center" && icon == "shield-check"
+    ));
+    // The rail's action gets an `actions` entry like toolbar items do.
+    assert!(l.actions.contains_key("agents.open-center"));
+
+    let reader = &l.toolbars["reader"];
+    assert!(matches!(
+        &reader[0],
+        ToolbarItem::Action {
+            rank: Some(1),
+            display: Some(ItemDisplay::IconLabel),
+            ..
+        }
+    ));
+    let ToolbarItem::More { icon, items, .. } = &reader[2] else {
+        panic!("expected more");
+    };
+    assert_eq!(icon.as_deref(), Some("ellipsis"));
+    assert!(matches!(&items[0], MenuItem::Header { .. }));
+    assert!(l.actions.contains_key("tasks.from-message"));
+    let settings = l.toolbar_settings["reader"];
+    assert!(settings.hide_disabled);
+    assert_eq!(settings.overflow, ToolbarOverflow::More);
+    // Toolbars from the base get default settings.
+    assert!(!l.toolbar_settings["main"].hide_disabled);
+
+    assert_eq!(l.settings.len(), 2);
+    let accounts = l.settings_section("accounts").unwrap();
+    assert_eq!(accounts.icon.as_deref(), Some("user-round"));
+    assert_eq!(accounts.keywords.as_deref(), Some("imap smtp"));
+    // Several nodes become a stack of auto rows.
+    let LayoutNode::Stack {
+        sizes, children, ..
+    } = &accounts.root
+    else {
+        panic!("expected a stack");
+    };
+    assert_eq!(sizes, &["auto", "auto"]);
+    assert_eq!(children.len(), 2);
+    assert!(matches!(
+        &l.settings_section("appearance").unwrap().root,
+        LayoutNode::Widget { kind, .. } if kind == "appearance-settings"
+    ));
+}
+
+#[test]
+fn shell_sections_replace_the_base_and_old_files_inherit_them() {
+    // A pre-M5b user file inherits the default views, rail and page.
+    let old = layout(
+        "layout \"mine\" extends=\"default\" {\n  toolbar \"main\" {\n    item \"mail.compose\"\n  }\n}\n",
+    );
+    let default = nail_config::default_layout();
+    assert_eq!(old.views, default.views);
+    assert_eq!(old.rail, default.rail);
+    assert_eq!(old.settings, default.settings);
+    // A replaced toolbar takes its settings from the file.
+    assert_eq!(old.toolbar_settings["main"], Default::default());
+    // Sections in the file replace the base's as a whole.
+    let l = layout(
+        "layout \"mine\" extends=\"default\" {\n  views {\n    view \"tasks\" window=\"tasks\"\n  }\n  rail {\n    view \"tasks\"\n  }\n}\n",
+    );
+    assert_eq!(l.views.keys().collect::<Vec<_>>(), ["tasks"]);
+    assert_eq!(l.rail.len(), 1);
+    assert_eq!(l.settings, default.settings);
+}
+
+#[test]
+fn shell_errors() {
+    let base = "layout \"x\" extends=\"default\" {\n  ";
+    for (body, needle) in [
+        (
+            "views {\n    view \"Mail\" window=\"main\"\n  }",
+            "invalid id",
+        ),
+        ("views {\n    view \"a\"\n  }", "`window`"),
+        (
+            "views {\n    view \"a\" window=\"main\"\n    view \"a\" window=\"main\"\n  }",
+            "defined twice",
+        ),
+        (
+            "views {\n    view \"a\" window=\"main\" badge=\"mail\"\n  }",
+            "unread, confirmations",
+        ),
+        (
+            "views {\n    view \"a\" window=\"nowhere\"\n  }",
+            "which the layout does not define",
+        ),
+        (
+            "views default=\"b\" {\n    view \"a\" window=\"main\"\n  }",
+            "default view \"b\"",
+        ),
+        ("rail {\n    view \"ghost\"\n  }", "names view \"ghost\""),
+        (
+            "rail {\n    button \"x\"\n  }",
+            "unexpected `button` in rail",
+        ),
+        (
+            "toolbar \"t\" {\n    item \"a.b\" rank=0\n  }",
+            "`rank` starts at 1",
+        ),
+        (
+            "toolbar \"t\" {\n    item \"a.b\" display=\"big\"\n  }",
+            "icon, label, icon-label",
+        ),
+        ("toolbar \"t\" overflow=\"scroll\" {\n  }", "more, wrap"),
+        (
+            "toolbar \"t\" hide-disabled=\"yes\" {\n  }",
+            "hide-disabled",
+        ),
+        (
+            "toolbar \"t\" {\n    more\n    more\n  }",
+            "more than one `more`",
+        ),
+        (
+            "views {\n    view \"a\" window=\"main\"\n  }\n  views {\n    view \"b\" window=\"main\"\n  }",
+            "more than one `views` section",
+        ),
+        ("settings-page {\n  }", "settings-page"),
+        (
+            "settings-page {\n    group \"g\" {\n      section \"s\" {\n        text id=\"t\"\n      }\n      section \"s\" {\n        text id=\"u\"\n      }\n    }\n  }",
+            "`s`",
+        ),
+        (
+            "settings-page {\n    group \"g\" {\n      section \"s\" {\n        text id=\"t\"\n      }\n      section \"r\" {\n        text id=\"t\"\n      }\n    }\n  }",
+            "`t`",
+        ),
+        ("settings-page {\n    page \"g\"\n  }", "group"),
+        (
+            "window \"main\" {\n    view-host\n  }\n  views {\n    view \"m\" window=\"main\"\n  }",
+            "contains a view-host itself",
+        ),
+    ] {
+        let err = error(&format!("{base}{body}\n}}"));
+        assert!(err.message.contains(needle), "{body}: {err}");
+    }
+}
+
+#[test]
+fn shell_widgets_need_their_sections() {
+    let text = "layout \"x\" {\n  window \"main\" {\n    stack {\n      nav-rail\n      view-host\n      settings-page\n    }\n  }\n}\n";
+    let errors = nail_config::parse_layout_all(text, "layout.kdl").unwrap_err();
+    let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
+    for widget in ["view-host", "nav-rail", "settings-page"] {
+        assert!(
+            messages
+                .iter()
+                .any(|m| m.contains(&format!("the {widget} widget needs"))),
+            "{messages:?}"
+        );
+    }
+}
+
+#[test]
+fn the_default_settings_page_keeps_every_settings_tab() {
+    // Nothing of the settings window may be lost on the settings page.
+    let l = nail_config::default_layout();
+    let mut page = Vec::new();
+    for section in l.settings.iter().flat_map(|g| g.sections.iter()) {
+        page.extend(widgets(&section.root).into_iter().map(|(kind, _)| kind));
+    }
+    for bp in &l.windows["settings"] {
+        for (kind, _) in widgets(&bp.root) {
+            assert!(page.contains(&kind), "{kind} is not on the settings page");
+        }
+    }
+    let groups: Vec<&str> = l.settings.iter().map(|g| g.id.as_str()).collect();
+    assert_eq!(groups, nail_api::views::SETTINGS_GROUPS);
 }

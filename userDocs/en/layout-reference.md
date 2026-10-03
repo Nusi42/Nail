@@ -151,7 +151,11 @@ A widget is a node named after its kind. Its properties are its options.
 | Widget | Options |
 | --- | --- |
 | `account-switcher` | `show-status` (`#true`/`#false`): a dot per account showing its connection state |
-| `folder-tree` | `show-unread` (`#true`/`#false`), `show-account-badges` (`#true`/`#false`) |
+| `folder-tree` | `show-unread` (`#true`/`#false`), `show-account-badges` (`#true`/`#false`), `sections` (any of `favorites accounts smart-folders`, in the order shown; default all three), `favorites` (the unified folders under Favorites: any of `all-inboxes unread flagged snoozed drafts sent outbox`; default `all-inboxes flagged snoozed drafts`), `collapsible` (`#true`/`#false`: sections fold away; Nail remembers which), `account-colors` (`#true`/`#false`: a colour dot per account) |
+| `list-header` | above the message list: `search` and `hint` (the search field with its Ctrl+K hint), `title` and `counts` (the folder's name with its counts), `chips` (filter chips: any of `all unread flagged attachments`) — each `#true`/`#false` except `chips` |
+| `nav-rail` | the navigation rail (see [Views and the navigation rail](#views-and-the-navigation-rail)): `show-labels` (`#true`/`#false`: labels under the icons), `show-logo` (`#true`/`#false`) |
+| `view-host` | — (shows the active view; see [Views and the navigation rail](#views-and-the-navigation-rail)) |
+| `settings-page` | `search` (`#true`/`#false`): the settings page of the `settings-page` section (see [The settings page](#the-settings-page)) |
 | `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`, `collapsed`: one row per conversation, `expanded`: one row per message), `follow-search` (`#true`/`#false`: show search results while a search is active), `columns` (column order, written back by Nail); `row` templates |
 | `message-view` | `headers` (e.g. `"from to cc date"`), `mark-read` (`#true`/`#false`: mark a message read when it is shown); `row` templates |
 | `thread-view` | `expand` (`latest`, `unread`, `all`, `none`: which messages of the conversation start opened), `hide-single` (`#true`/`#false`: hide for messages without replies) |
@@ -348,6 +352,47 @@ toolbar "reader" {
 widget shows a toolbar by name. Defining a toolbar with an existing name
 replaces it.
 
+### Ranked items and the "More" menu
+
+When a toolbar is too narrow for its items, they move into a **More** menu
+at its end instead of wrapping onto a second line:
+
+```kdl
+toolbar "reader" hide-disabled=#true {
+    item "mail.reply" rank=1 display="icon-label"
+    item "mail.reply-all" rank=2 display="icon-label"
+    item "mail.forward" rank=3 display="icon-label"
+    separator
+    item "mail.archive" rank=4 display="icon"
+    item "mail.delete" rank=4 display="icon"
+    spacer
+    more {
+        header "@toolbar.group.message"
+        item "mail.toggle-read"
+        item "junk.mark"
+        separator
+        header "@toolbar.group.turn-into"
+        item "calendar.event-from-message"
+        item "tasks.from-message"
+    }
+}
+```
+
+- `rank=` decides what moves first: items without a rank go first (from the
+  end of the bar), then the highest rank; `rank=1` stays longest.
+- `display=` shows the `icon`, the `label` or both (`icon-label`, the
+  default). Icon-only buttons keep their label as tooltip and for screen
+  readers.
+- `more { … }` is the **More** menu with its own entries (`item`,
+  `separator`, `submenu`, and `header "<label>"` for a group heading); items
+  that do not fit are added below them. A toolbar has at most one `more`;
+  without one, Nail adds it when something does not fit. The menu shows the
+  key bound to each action.
+- `hide-disabled=#true` hides actions that cannot run right now (for
+  example Gmail labels on a non-Gmail message) instead of showing them
+  dimmed — in the **More** menu too.
+- `overflow="wrap"` keeps the old behaviour: items wrap onto further lines.
+
 ## Menus
 
 ```kdl
@@ -361,8 +406,9 @@ menu "context:message-list.row" {
 ```
 
 `"app"` is the application menu; `"context:<part>"` is the right-click menu
-of a part. Defining a menu with an existing name replaces it. Parts with a
-context menu:
+of a part. Defining a menu with an existing name replaces it. `header
+"<label>"` adds a group heading; a heading without an entry below it is
+left out. Parts with a context menu:
 
 | Part | Where | Shortcuts shown from context |
 | --- | --- | --- |
@@ -372,6 +418,7 @@ context menu:
 | `message-view.attachment` | An attachment of the shown message | `reader` |
 | `folder-tree.folder` | A folder (the folder is not opened; its actions use it) | global |
 | `composer` | The composer outside its text fields | `composer` |
+| `calendar-list.calendar` | A calendar in the calendar list (its "…" button) | `calendar` |
 
 Text fields keep the usual Cut / Copy / Paste menu. Each entry shows the
 action's label and icon (or the item's `label` / `icon`) and the key bound
@@ -379,6 +426,95 @@ to it. Separators at the start, at the end or twice in a row are dropped,
 and so are empty submenus. The menu opens on a right-click and, from the
 keyboard, with the action `menu.context` (Shift+F10 and the menu key by
 default); see [Accessibility](accessibility.md#context-menus) for its keys.
+
+## Views and the navigation rail
+
+Mail, Calendar, Contacts, Tasks and Settings are **views**. Each view shows
+one of the layout's windows; the `view-host` widget shows the active one,
+and the `nav-rail` widget switches between them:
+
+```kdl
+layout "With a rail" extends="default" {
+    window "main" {
+        split "horizontal" id="shell" sizes="auto 1fr" resizable=#false {
+            nav-rail id="rail"
+            view-host id="views"
+        }
+    }
+    window "mail" {
+        split "horizontal" id="panes" sizes="240px 1fr 1.4fr" {
+            folder-tree id="folders" sections="favorites accounts smart-folders"
+            stack id="list-pane" sizes="auto 1fr" {
+                list-header id="list-header" chips="all unread flagged attachments"
+                message-list id="list"
+            }
+            message-view id="message"
+        }
+    }
+    views default="mail" {
+        view "mail"     label="@view.mail" icon="mail" window="mail" badge="unread"
+        view "calendar" label="@view.calendar" icon="calendar" window="calendar"
+        view "contacts" label="@view.contacts" icon="users" window="contacts"
+        view "tasks"    label="@view.tasks" icon="square-check-big" window="tasks"
+        view "settings" label="@view.settings" icon="settings" window="settings"
+    }
+}
+```
+
+```kdl
+rail {
+    view "mail"
+    view "calendar"
+    view "contacts"
+    view "tasks"
+    spacer
+    item "agents.open-center" icon="shield-check" badge="confirmations"
+    view "settings"
+}
+```
+
+- `view "<id>"` needs `window=` (a window of the layout that does not itself
+  contain a `view-host`); `label`, `icon` (a Lucide name) and `badge` are
+  optional. `default=` names the view shown at start (else the first one).
+- `badge="unread"` counts unread mail in the inboxes, `badge="confirmations"`
+  the changes by agents or plug-ins waiting for your approval.
+- The rail lists views and actions (`item`, with optional `label`, `icon`,
+  `badge`), `spacer` (the rest goes to the bottom) and `separator`.
+- The action `view.show "<view>"` switches views; the default layout binds
+  `ctrl+1` … `ctrl+4` (and `g m`) through the aliases `view.mail`,
+  `view.calendar`, `view.contacts`, `view.tasks` and `view.settings`;
+  `view.next` / `view.previous` step through the rail. Without a
+  `view-host` in the main window, switching to a view opens its window
+  instead.
+- A `views`, `rail` or `settings-page` section in your file replaces the
+  default's as a whole; files without them keep the defaults.
+
+## The settings page
+
+The `settings-page` section groups the settings widgets into sections; the
+`settings-page` widget shows them with a navigation and a search over every
+setting's label:
+
+```kdl
+settings-page {
+    group "general" label="@settings.group.general" {
+        section "accounts" label="@settings.section.accounts" icon="user-round" {
+            account-settings
+            virtual-account-editor
+        }
+    }
+    group "look-and-feel" label="@settings.group.look-and-feel" {
+        section "appearance" label="@settings.section.appearance" icon="palette" keywords="theme dark" {
+            appearance-settings
+        }
+    }
+}
+```
+
+Group and section ids are unique on the page, and so are the `id`s of the
+widgets in it. A section with several widgets shows them top to bottom;
+`keywords=` adds search words. The default layout has the groups General,
+Look & feel, Security and Extensions.
 
 ## Error messages
 

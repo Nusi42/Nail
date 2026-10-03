@@ -70,6 +70,7 @@ mod schema;
 mod selector;
 mod theme;
 pub mod themes;
+mod ui_state;
 mod widgets;
 mod write_back;
 
@@ -86,6 +87,7 @@ pub use appearance_edit::{apply_theme_preferences, apply_theme_selection};
 pub use backup::{BACKUP_DIR, KEEP as BACKUPS_KEPT};
 pub use error::{ConfigError, ConfigErrorKind, issues, issues_event};
 pub use kdl_util::Located;
+pub use layout::ViewsSection;
 pub use layout::{KeyDef, LayoutFile};
 pub use manager::{ConfigKind, ConfigManager, ConfigUpdate, ConfigWatcher, DEFAULT_DEBOUNCE};
 pub use merge::{MergeOutcome, preview_merge, preview_merge_with, resolve_merge};
@@ -100,6 +102,7 @@ pub use themes::{
     BUILTIN_THEME_FILES, BuiltinTheme, Selected, ThemeCatalog, UserThemeText, appearance_settings,
     builtin_theme, builtin_theme_infos, resolve_builtin_theme, resolve_selected, theme_overrides,
 };
+pub use ui_state::{UiStateError, read_ui_state};
 pub use write_back::{EditError, apply_layout_patches};
 
 /// File name of the user's theme in the config directory.

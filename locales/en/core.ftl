@@ -188,6 +188,7 @@ config-option-bool = option `{ $key }` must be #true or #false, found { $found }
 config-option-count = option `{ $key }` must be a non-negative whole number, found { $found }
 config-option-string = option `{ $key }` must be a string, found { $found }
 config-option-one-of = option `{ $key }` must be one of { $choices }, found { $found }
+config-option-words = option `{ $key }` must list words from { $choices } (each once), found { $found }
 config-widget-row-only = unexpected `{ $node }` inside `{ $widget }`; widgets only contain `row` templates
 config-widget-no-rows = `{ $widget }` does not take row templates
 config-template-nested = nested `{"{"}` in template `{ $template }`
@@ -203,10 +204,10 @@ config-key-empty = the key must not be empty
 config-key-invalid = invalid key `{ $key }`: join chord keys with `+`, e.g. "ctrl+shift+m"
 config-keys-unexpected = unexpected `{ $node }` in `keys` (use bind or unbind)
 config-toolbar-name-invalid = invalid toolbar name `{ $name }`
-config-toolbar-unexpected = unexpected `{ $node }` in toolbar (use item, spacer or separator)
+config-toolbar-unexpected = unexpected `{ $node }` in toolbar (use item, more, spacer or separator)
 config-toolbar-unknown = unknown toolbar `{ $name }` (define it with `toolbar "{ $name }" {"{"} … {"}"}`)
 config-menu-name-invalid = invalid menu name `{ $name }`: use "app" or "context:<part>"
-config-menu-unexpected = unexpected `{ $node }` in menu (use item, separator or submenu)
+config-menu-unexpected = unexpected `{ $node }` in menu (use item, header, separator or submenu)
 
 ## Layout edits from the UI (write-back)
 
@@ -381,3 +382,16 @@ sync-error-folders =
 
 attachment-too-large = This attachment is too large to download here. Save it in the desktop app instead.
 attachment-path-not-absolute = Choose a full path for the attachment, including the drive or folder.
+
+## Views, the rail, toolbar overflow and the settings page (M5b, ADR 0109)
+
+config-toolbar-more-twice = toolbar "{ $name }" has more than one `more` menu
+config-toolbar-rank-zero = `rank` starts at 1 (1 stays in the toolbar longest)
+config-layout-section-twice = the layout has more than one `{ $node }` section
+config-view-duplicate = view "{ $view }" is defined twice
+config-rail-unexpected = unexpected `{ $node }` in rail (use view, item, spacer or separator)
+config-view-window-unknown = view "{ $view }" shows window "{ $window }", which the layout does not define
+config-view-hosts-views = view "{ $view }" shows window "{ $window }", which contains a view-host itself
+config-view-default-unknown = the default view "{ $view }" is not one of the views
+config-rail-view-unknown = the rail names view "{ $view }", which is not one of the views
+config-widget-needs-section = the { $widget } widget needs a `{ $section }` section in the layout

@@ -89,6 +89,12 @@
 //!   dark pair), density, the font-size / radius / accent overrides kept in
 //!   the user's `theme.kdl`, the OS appearance source and the shared token
 //!   schema; [`icons`] — Lucide icon names and the pre-M5 name mapping.
+//! * M5b (ADR 0109): [`views`] — top-level views behind a navigation rail,
+//!   badges, the folder pane's sections, list filter chips, toolbar
+//!   overflow and the settings page (the layout model is in
+//!   [`config::layout`]); [`ui_state`] — small UI state kept across restarts
+//!   (`ui-state.json`); remote sessions follow their own browser's light /
+//!   dark mode ([`appearance`]).
 //! * [`config`]: the resolved theme and layout models.
 //! * [`protocol`]: [`Request`], [`Response`], [`Event`] and the wire envelopes.
 //! * [`error`]: [`ApiError`] and [`ErrorCode`].
@@ -147,6 +153,8 @@ pub mod sieve;
 pub mod smartcard;
 pub mod sync;
 pub mod triage;
+pub mod ui_state;
+pub mod views;
 
 use std::path::{Path, PathBuf};
 
@@ -164,8 +172,9 @@ pub use compose::{
 };
 pub use config::SourceLocation;
 pub use config::layout::{
-    ActionDef, Breakpoint, KeyBinding, LayoutNode, MenuItem, Orientation, ResolvedLayout,
-    ToolbarItem,
+    ActionDef, BadgeSource, Breakpoint, ItemDisplay, KeyBinding, LayoutNode, MenuItem, Orientation,
+    RailItem, ResolvedLayout, SettingsGroup, SettingsSection, ToolbarItem, ToolbarOverflow,
+    ToolbarSettings, ViewDef,
 };
 pub use config::theme::{
     AncestorSelector, HtmlDarkMode, Icon, MessageDisplay, PartCondition, PartRule, RawCss,
@@ -390,6 +399,11 @@ pub fn export_typescript(out_dir: &Path) -> Result<Vec<String>, ts_rs::ExportErr
     appearance::ThemeOverridesIssue::export_all(&cfg)?;
     appearance::ThemeProblem::export_all(&cfg)?;
     appearance::ColorScheme::export_all(&cfg)?;
+    // M5b (ADR 0109): shell types the UI names directly.
+    views::ListFilter::export_all(&cfg)?;
+    views::FavoriteFolder::export_all(&cfg)?;
+    views::FolderPaneSectionKind::export_all(&cfg)?;
+    ui_state::UiStateIssue::export_all(&cfg)?;
 
     write_index(out_dir)
 }

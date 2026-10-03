@@ -29,4 +29,8 @@ label: string,
 /**
  * Submenu entries.
  */
-items: Array<MenuItem>, };
+items: Array<MenuItem>, } | { "type": "header", 
+/**
+ * Heading label (literal or `@message.id`).
+ */
+label: string, };

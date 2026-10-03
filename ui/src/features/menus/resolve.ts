@@ -8,7 +8,9 @@
  * - shortcut: the last key binding of the same action and arguments in the
  *   part's key context, else the last `global` one;
  * - separators are normalized (no leading, trailing or doubled ones) and
- *   empty submenus are dropped; a menu without any action is `null`.
+ *   empty submenus are dropped; a menu without any action is `null`;
+ * - headings (M5b) are kept only when an action or submenu follows them
+ *   before the next heading or separator.
  */
 import type {
   JsonValue,
@@ -30,6 +32,8 @@ export const CONTEXT_MENU_PARTS: Readonly<Record<string, string>> = {
   "folder-tree.folder": "global",
   "folder-tree.account": "global",
   composer: "composer",
+  // M5b: the "…" menu of a calendar in the calendar list.
+  "calendar-list.calendar": "calendar",
 };
 
 /** `context:<part>`. */
@@ -61,6 +65,11 @@ export function shortcut(
   return find(keyContext) ?? find("global");
 }
 
+/** Removes a trailing heading nothing follows (`drop_orphan_header`). */
+function dropOrphanHeader(out: ResolvedMenuEntry[]): void {
+  if (out[out.length - 1]?.type === "header") out.pop();
+}
+
 function resolveItems(
   layout: ResolvedLayout,
   items: readonly MenuItem[],
@@ -79,14 +88,21 @@ function resolveItems(
         shortcut: shortcut(layout, item.action, item.args, keyContext),
       });
     } else if (item.type === "separator") {
+      dropOrphanHeader(out);
       const last = out[out.length - 1];
       if (last !== undefined && last.type !== "separator") out.push({ type: "separator" });
+    } else if (item.type === "header") {
+      dropOrphanHeader(out);
+      out.push({ type: "header", label: item.label });
     } else {
       const children = resolveItems(layout, item.items, keyContext);
       if (children.length > 0) out.push({ type: "submenu", label: item.label, items: children });
     }
   }
+  dropOrphanHeader(out);
   if (out[out.length - 1]?.type === "separator") out.pop();
+  // Headings and separators alone have nothing to run.
+  if (!out.some((e) => e.type === "action" || e.type === "submenu")) return [];
   return out;
 }
 

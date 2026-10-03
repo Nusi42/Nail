@@ -34,4 +34,8 @@ label: string,
 /**
  * Entries.
  */
-items: Array<ResolvedMenuEntry>, };
+items: Array<ResolvedMenuEntry>, } | { "type": "header", 
+/**
+ * Label (literal or `@message.id`).
+ */
+label: string, };

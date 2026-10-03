@@ -323,6 +323,121 @@ layout "default" {
         action "backup.restore"   label="@portability.action.restore" icon="hard-drive-upload"
         action "diagnostics.open" label="@portability.action.diagnostics" icon="stethoscope"
         action "agents.open-center" label="@agents.action.open-center" icon="bot"
+        // Actions without an entry above get their label from the app; every
+        // registered action still has an icon (M5b).
+        action "palette.clear-recent" icon="rotate-ccw"
+        action "plugins.run-command" icon="puzzle"
+        action "security.recovery-key.check" icon="key-round"
+        action "security.recovery-key.create" icon="key-round"
+        action "security.recovery-key.restore" icon="archive-restore"
+        // Views behind the navigation rail (M5b): `view.show "<view>"`, and
+        // one alias per view for the shortcuts and the command palette.
+        action "view.show"        label="@view.action.show" icon="panels-top-left"
+        action "view.next"        label="@view.action.next" icon="chevron-down"
+        action "view.previous"    label="@view.action.previous" icon="chevron-up"
+        action "view.mail"        label="@view.mail" icon="mail" alias-of="view.show" "mail"
+        action "view.calendar"    label="@view.calendar" icon="calendar" alias-of="view.show" "calendar"
+        action "view.contacts"    label="@view.contacts" icon="users" alias-of="view.show" "contacts"
+        action "view.tasks"       label="@view.tasks" icon="square-check-big" alias-of="view.show" "tasks"
+        action "view.settings"    label="@view.settings" icon="settings" alias-of="view.show" "settings"
+    }
+
+    // The top-level views (M5b). Each shows a window; a `view-host` in the
+    // main window shows the active one, and without one a view opens as its
+    // window. Mail shows the main window until the rail is in the default.
+    views default="mail" {
+        view "mail"     label="@view.mail" icon="mail" window="main" badge="unread"
+        view "calendar" label="@view.calendar" icon="calendar" window="calendar"
+        view "contacts" label="@view.contacts" icon="users" window="contacts"
+        view "tasks"    label="@view.tasks" icon="square-check-big" window="tasks"
+        view "settings" label="@view.settings" icon="settings" window="settings"
+    }
+
+    // The navigation rail (the `nav-rail` widget), top to bottom.
+    rail {
+        view "mail"
+        view "calendar"
+        view "contacts"
+        view "tasks"
+        spacer
+        // Changes by AI agents or plug-ins waiting for your approval.
+        item "agents.open-center" icon="shield-check" badge="confirmations"
+        view "settings"
+    }
+
+    // The settings page (the `settings-page` widget): groups of sections,
+    // each with the settings widgets it shows (M5b).
+    settings-page {
+        group "general" label="@settings.group.general" {
+            section "accounts" label="@settings.section.accounts" icon="user-round" {
+                account-settings id="page-account-settings"
+                virtual-account-editor id="page-virtual-accounts"
+            }
+            section "mail" label="@settings.section.mail" icon="mail" {
+                sync-folder-policies id="page-sync-policies"
+                junk-settings id="page-junk-settings"
+            }
+            section "server-rules" label="@settings.section.server-rules" icon="funnel" {
+                sieve-status id="page-sieve-status"
+                exchange-rules id="page-exchange-rules"
+                vacation-editor id="page-vacation"
+            }
+            section "notifications" label="@settings.section.notifications" icon="bell" {
+                notification-settings id="page-notification-settings"
+            }
+            section "data" label="@settings.section.data" icon="hard-drive-download" {
+                import-export id="page-import-export"
+                backup-restore id="page-backup-restore"
+                diagnostics id="page-diagnostics"
+            }
+            section "desktop" label="@settings.section.desktop" icon="monitor" {
+                update-settings id="page-update-settings"
+                desktop-settings id="page-desktop-settings"
+                default-apps id="page-default-apps"
+            }
+        }
+        group "look-and-feel" label="@settings.group.look-and-feel" {
+            section "appearance" label="@settings.section.appearance" icon="palette" {
+                appearance-settings id="page-appearance"
+            }
+            section "layout" label="@settings.section.layout" icon="layout-panel-left" {
+                toolbar id="page-customize-toolbar" label="@toolbar.customize" toolbar="customize"
+                config-errors id="page-config-errors"
+                toolbar-editor id="page-toolbar-editor"
+                column-editor id="page-column-editor"
+            }
+            section "keyboard" label="@settings.section.keyboard" icon="keyboard" {
+                key-binding-editor id="page-key-binding-editor"
+            }
+        }
+        group "security" label="@settings.group.security" {
+            section "keys" label="@settings.section.keys" icon="key-round" {
+                security-keys id="page-security-keys"
+                security-identities id="page-security-identities"
+                security-autocrypt id="page-security-autocrypt"
+                security-smartcards id="page-security-smartcards"
+            }
+            section "privacy" label="@settings.section.privacy" icon="shield" {
+                security-settings id="page-security-settings"
+                security-recovery-key id="page-security-recovery-key"
+                remote-content-allows id="page-remote-content-allows"
+            }
+            section "remote" label="@settings.section.remote" icon="globe" {
+                remote-settings id="page-remote-settings"
+                remote-users id="page-remote-users"
+                remote-devices id="page-remote-devices"
+                remote-audit id="page-remote-audit"
+            }
+        }
+        group "extensions" label="@settings.group.extensions" {
+            section "agents" label="@settings.section.agents" icon="bot" {
+                mcp-clients id="page-mcp-clients"
+                confirmation-center id="page-confirmation-center"
+            }
+            section "plugins" label="@settings.section.plugins" icon="puzzle" {
+                plugin-manager id="page-plugin-manager"
+            }
+        }
     }
 
     keys context="list" {
@@ -392,6 +507,12 @@ layout "default" {
         bind "g p" "pim.contacts.open"
         bind "g t" "pim.tasks.open"
         bind "g a" "agents.open-center"
+        // Views (M5b).
+        bind "ctrl+1" "view.mail"
+        bind "ctrl+2" "view.calendar"
+        bind "ctrl+3" "view.contacts"
+        bind "ctrl+4" "view.tasks"
+        bind "g m" "view.mail"
         bind "ctrl+," "settings.open"
         bind "ctrl+shift+i" "inspector.toggle"
         bind "f1" "system.about"

@@ -26,6 +26,14 @@
 //! guard; `ReportSystemAppearance` reaches [`report_system_appearance`] only
 //! while there is no such watch (a core without an OS source), otherwise
 //! the report is ignored and the current appearance is answered.
+//!
+//! Remote sessions (M5b, ADR 0109) follow their own browser: their
+//! `ReportSystemAppearance` is kept per session
+//! ([`Service::remember_session_appearance`]) and never changes the host;
+//! `GetConfig`, `ListThemes` / `SetTheme` / `SetThemePreferences` answers
+//! and the `ThemeChanged` / `ConfigChanged` events a session gets are
+//! computed for its state ([`Service::session_appearance`],
+//! `remote_access.rs`).
 
 use std::sync::Arc;
 
@@ -110,6 +118,40 @@ pub fn report_system_appearance(service: &Service, system: Option<SystemAppearan
     let config = service.config();
     send_all(&service.inner.events, &config.set_system_appearance(system));
     config.appearance()
+}
+
+/// Remote sessions whose reported light / dark state is kept (M5b); when a
+/// new session would exceed it, the remembered states are dropped (those
+/// sessions fall back to the host's state until they report again).
+pub const SESSION_APPEARANCE_LIMIT: usize = 1024;
+
+impl Service {
+    /// Remembers what a remote session's browser reported (M5b, ADR 0109).
+    pub(crate) fn remember_session_appearance(&self, session: &str, system: SystemAppearance) {
+        let mut sessions = crate::service::lock(&self.inner.session_appearance);
+        if !sessions.contains_key(session) && sessions.len() >= SESSION_APPEARANCE_LIMIT {
+            sessions.clear();
+        }
+        sessions.insert(session.to_owned(), system);
+    }
+
+    /// The appearance and resolved theme as a remote session sees them: the
+    /// active theme follows the session's own reported light / dark state
+    /// (else the host's), `Appearance::system` is the session's report
+    /// (`None` until it reported, so its UI reports at start).
+    pub(crate) fn session_appearance(
+        &self,
+        session: &str,
+    ) -> (Appearance, Arc<nail_api::ResolvedTheme>) {
+        let own = crate::service::lock(&self.inner.session_appearance)
+            .get(session)
+            .copied();
+        let config = self.config();
+        let effective = own.or_else(|| config.system_appearance());
+        let (mut appearance, theme) = config.appearance_for(effective);
+        appearance.system = own;
+        (appearance, theme)
+    }
 }
 
 /// The platform's source of the OS light / dark state: the registry

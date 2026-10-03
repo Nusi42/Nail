@@ -32,6 +32,10 @@ use nail_api::plugins::{
 use nail_api::scheduling::{FreeBusyIssue, ItipIssue};
 use nail_api::sieve::{ManageSieveIssue, VacationIssue};
 use nail_api::triage::{JunkIssue, NotificationIssue};
+use nail_api::ui_state::UiStateIssue;
+use nail_api::views::{
+    BUILTIN_VIEWS, FavoriteFolder, FolderPaneSectionKind, ListFilter, SETTINGS_GROUPS,
+};
 // M4c (ADR 0094).
 use nail_api::backup::{BackupIssue, BackupItem, RestoreEffect};
 use nail_api::diagnostics::{DiagnosticsIssue, DiagnosticsItem, Redaction};
@@ -329,6 +333,20 @@ fn contract_message_ids_exist_in_english() {
             .iter()
             .filter_map(|(id, _)| builtin_theme_label(id)),
     );
+    // M5b (ADR 0109): the shell's contract ids (core-shell.ftl).
+    labels!(
+        ListFilter,
+        FavoriteFolder,
+        FolderPaneSectionKind,
+        UiStateIssue
+    );
+    wanted.extend(BUILTIN_VIEWS.iter().map(|v| format!("view-{v}")));
+    wanted.extend(
+        SETTINGS_GROUPS
+            .iter()
+            .map(|g| format!("settings-group-{g}")),
+    );
+    wanted.extend(["toolbar-more", "nav-rail-label", "account-color-slot"].map(str::to_owned));
     // Built by the core (`TestNotification`, the notification policy).
     wanted.extend(
         [
@@ -380,6 +398,9 @@ fn german_catalogs_are_the_same_files() {
         "print.ftl",
         "core-appearance.ftl",
         "appearance.ftl",
+        "core-shell.ftl",
+        "shell.ftl",
+        "settings.ftl",
     ] {
         assert!(files("en").contains(file), "{file}");
     }

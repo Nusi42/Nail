@@ -45,6 +45,7 @@ import type { RuleRun } from "./RuleRun";
 import type { SessionEndReason } from "./SessionEndReason";
 import type { UpdateStatus } from "./UpdateStatus";
 import type { VaultStatus } from "./VaultStatus";
+import type { JsonValue } from "./serde_json/JsonValue";
 
 /**
  * A notification pushed by the core, not tied to a request.
@@ -383,4 +384,12 @@ total_bytes: number, } | { "type": "ThemeChanged",
 /**
  * The new state.
  */
-appearance: Appearance, };
+appearance: Appearance, } | { "type": "UiStateChanged", 
+/**
+ * The key.
+ */
+key: string, 
+/**
+ * The new value, `null` = removed.
+ */
+value: JsonValue | null, };

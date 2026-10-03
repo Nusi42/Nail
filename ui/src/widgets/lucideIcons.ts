@@ -9,6 +9,12 @@
  * lucide-react is ISC licensed.
  */
 import type { LucideIcon } from "lucide-react";
+import { Database } from "lucide-react";
+import { UsersRound } from "lucide-react";
+import { Server } from "lucide-react";
+import { ListTodo } from "lucide-react";
+import { Shield } from "lucide-react";
+import { UserRound } from "lucide-react";
 import {
   AlarmClock,
   AppWindow,
@@ -184,6 +190,7 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   command: Command,
   contact: Contact,
   copy: Copy,
+  database: Database,
   download: Download,
   ellipsis: Ellipsis,
   "ellipsis-vertical": EllipsisVertical,
@@ -228,6 +235,7 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   "list-filter": ListFilter,
   "list-ordered": ListOrdered,
   "list-plus": ListPlus,
+  "list-todo": ListTodo,
   lock: Lock,
   "lock-open": LockOpen,
   "log-out": LogOut,
@@ -265,7 +273,9 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   search: Search,
   send: Send,
   "send-horizontal": SendHorizontal,
+  server: Server,
   settings: Settings,
+  shield: Shield,
   "shield-alert": ShieldAlert,
   "shield-check": ShieldCheck,
   "sliders-horizontal": SlidersHorizontal,
@@ -290,7 +300,9 @@ export const LUCIDE_ICONS: Readonly<Record<string, LucideIcon>> = {
   upload: Upload,
   user: User,
   "user-plus": UserPlus,
+  "user-round": UserRound,
   users: Users,
+  "users-round": UsersRound,
   x: X,
 };
 
