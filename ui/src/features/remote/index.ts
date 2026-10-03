@@ -150,3 +150,59 @@ export { MockAuthServer } from "./mockAuth";
 export { browserPasskeys, type PasskeyApi } from "./passkeys";
 export { RemoteContentBar, remoteContentView } from "./RemoteContent";
 export { remoteStore, useRemoteState } from "./state";
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "remote-settings": {
+    labels: [
+      "remote-settings-tab",
+      "remote-settings-title",
+      "remote-settings-enabled",
+      "remote-status-title",
+      "remote-settings-network",
+      "remote-settings-bind",
+      "remote-settings-port",
+      "remote-settings-host-name",
+      "remote-settings-networks",
+      "remote-settings-sessions",
+      "remote-settings-idle",
+      "remote-settings-max-hours",
+      "remote-settings-reauth",
+      "remote-settings-audit-retention",
+      "remote-internet-title",
+      "remote-internet-mode",
+      "remote-fingerprint-label",
+    ],
+    keywords: "settings-keywords-remote-settings",
+  },
+  "remote-users": {
+    labels: [
+      "remote-settings-tab-users",
+      "remote-users-title",
+      "remote-user-create",
+      "remote-passkeys-title",
+      "remote-password-title",
+      "remote-totp-title",
+    ],
+    keywords: "settings-keywords-remote-users",
+  },
+  "remote-devices": {
+    labels: [
+      "remote-settings-tab-devices",
+      "remote-devices-title",
+      "remote-pair-open-dialog",
+      "remote-pairing-title",
+      "remote-sessions-title",
+    ],
+  },
+  "remote-audit": {
+    labels: ["remote-settings-tab-audit", "remote-audit-title"],
+  },
+  "remote-content-allows": {
+    labels: ["remote-settings-tab-privacy", "remote-allows-title"],
+    keywords: "settings-keywords-remote-content-allows",
+  },
+};

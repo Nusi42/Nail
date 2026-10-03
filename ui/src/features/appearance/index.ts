@@ -62,3 +62,27 @@ export const events: Feature["events"] = [
 ];
 /** Background components: Follow Windows from the browser / WebView. */
 export const effects: Feature["effects"] = [SystemAppearanceReporter];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "appearance-settings": {
+    labels: [
+      "settings-tab-appearance",
+      "appearance-title",
+      "appearance-themes-title",
+      "appearance-gallery-label",
+      "appearance-follow-system",
+      "appearance-light-theme",
+      "appearance-dark-theme",
+      "appearance-density-title",
+      "density-comfortable",
+      "density-compact",
+      "appearance-overrides-title",
+      "appearance-accent",
+    ],
+    keywords: "settings-keywords-appearance-settings",
+  },
+};

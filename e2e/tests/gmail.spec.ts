@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
+import { readerAction } from "../support/views";
 
 /**
  * Wave M3b (ADR 0070): a Gmail API account of `nail serve --seed demo-multi`
@@ -70,10 +71,7 @@ test("a Gmail account syncs, takes a label, archives, sends and picks up server 
 
   // A label on a message: a tag here, a label change on Gmail.
   await rows(page).filter({ hasText: "Lunch on Friday?" }).click();
-  await page
-    .getByRole("toolbar", { name: "Message actions" })
-    .getByRole("button", { name: "Labels…" })
-    .click();
+  await readerAction(page, "Labels…");
   const apply = page.getByRole("dialog", { name: "Labels of this message" });
   await apply.getByRole("checkbox", { name: "Receipts" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();
@@ -82,10 +80,7 @@ test("a Gmail account syncs, takes a label, archives, sends and picks up server 
 
   // Archive: the INBOX label goes on Gmail.
   await rows(page).filter({ hasText: "Autumn sale" }).click();
-  await page
-    .getByRole("toolbar", { name: "Message actions" })
-    .getByRole("button", { name: "Archive" })
-    .click();
+  await readerAction(page, "Archive");
   await expect(rows(page)).toHaveCount(3);
   await expect
     .poll(async () => (await labelsOf("Autumn sale")).includes("INBOX"), { timeout: 20_000 })

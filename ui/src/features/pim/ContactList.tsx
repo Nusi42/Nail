@@ -8,6 +8,7 @@
  * Enter edits it, Delete deletes the selection.
  * Options: `address-books` (ids), `page-size` (default 200).
  */
+import { colorSlot } from "../../theme/skin";
 import {
   useEffect,
   useId,
@@ -322,7 +323,11 @@ export function ContactList({ node }: WidgetProps) {
                   ctx.store.getState().openWindow(CONTACT_DIALOG);
                 }}
               >
-                <span data-part="contact-list.avatar" aria-hidden="true">
+                <span
+                  data-part="contact-list.avatar"
+                  data-color={colorSlot(c.email || c.display_name || c.id)}
+                  aria-hidden="true"
+                >
                   {initialsOf(c.display_name || c.email || "")}
                 </span>
                 <span data-part="contact-list.name">

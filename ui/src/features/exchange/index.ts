@@ -223,3 +223,20 @@ export const handleExchangeEvent: FeatureEventHandler = (event, { queryClient })
 export const events: Feature["events"] = [handleExchangeEvent];
 /** Background components. */
 export const effects: Feature["effects"] = [];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  [RULES_WIDGET]: {
+    labels: [
+      "exchange-settings-tab-rules",
+      "exchange-rules-label",
+      "exchange-rules-placements",
+      "exchange-rules-server-title",
+      "exchange-rules-server-switch",
+    ],
+    keywords: "settings-keywords-exchange-rules",
+  },
+};

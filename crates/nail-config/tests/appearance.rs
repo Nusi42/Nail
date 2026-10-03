@@ -896,8 +896,8 @@ fn reloading_the_themes_directory() {
             if appearance.active == "ocean"),
         "{updates:?}"
     );
-    // Editing the active theme re-resolves it (only the resolved theme
-    // changed).
+    // Editing the active theme re-resolves it; the list changes too, since
+    // its gallery preview shows the theme's own colours (M5b).
     write(
         dir.path(),
         "themes/ocean.kdl",
@@ -905,7 +905,9 @@ fn reloading_the_themes_directory() {
     );
     let updates = manager.reload_themes();
     assert!(
-        matches!(updates.as_slice(), [ConfigUpdate::Changed { .. }]),
+        matches!(updates.as_slice(), [ConfigUpdate::ThemeChanged { appearance }, ConfigUpdate::Changed { .. }]
+            if appearance.themes.iter().any(|t| t.id == "ocean"
+                && t.preview.as_ref().and_then(|p| p.get("accent")).map(String::as_str) == Some("#0088cc"))),
         "{updates:?}"
     );
     assert_eq!(token(&manager.theme(), "color", "accent"), Some("#0088cc"));

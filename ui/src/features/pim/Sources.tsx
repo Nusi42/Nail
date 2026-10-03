@@ -1,9 +1,7 @@
 /**
- * Where calendars, contacts and tasks come from:
+ * Where calendars, contacts and tasks come from (the calendars themselves:
+ * `CalendarList.tsx`):
  *
- * - the `calendar-list` widget: calendars and task lists by source, each
- *   with its colour and a switch to show or hide it in the views; rename,
- *   recolour, add a local calendar or task list.
  * - the `pim-sources` dialog: the sources (this computer, ICS / webcal
  *   subscriptions, CalDAV and CardDAV servers) with their state; sync now,
  *   remove, and add a subscription or server (tested first). A DAV source
@@ -12,8 +10,6 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { errorMessageId } from "../../api/client";
 import type {
-  Calendar,
-  CalendarComponent,
   LocalizedMessage,
   PimSource,
   PimSourceConfig,
@@ -23,11 +19,10 @@ import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { useAccounts } from "../../state/queries";
-import { Problem, Swatch, geomId, problemOf, useChangeContext } from "./common";
+import { Problem, problemOf, useChangeContext } from "./common";
 import { formatInstant } from "./fmt";
-import { IMPORT_DIALOG, SOURCES_DIALOG } from "./names";
 import { usePim, usePimStore } from "./store";
-import { pimWrite, useCalendars, usePimSources } from "./queries";
+import { pimWrite, usePimSources } from "./queries";
 import { localZone } from "./time";
 
 export const SOURCE_KINDS = ["ics", "caldav", "carddav"] as const;
@@ -47,255 +42,28 @@ export function sourceIdFor(name: string, taken: readonly string[]): string {
   return id;
 }
 
-function sourceName(t: (id: string) => string, source: PimSource | undefined, id: string): string {
+export function sourceName(
+  t: (id: string) => string,
+  source: PimSource | undefined,
+  id: string,
+): string {
   if (!source) return id;
   return source.kind === "local" ? t("pim-source-local") : source.name || source.id;
 }
 
 // ---------------------------------------------------------------------------
-// Calendar list widget
-
-export function CalendarList() {
-  const t = useT();
-  const ctx = useChangeContext();
-  const calendars = useCalendars();
-  const sources = usePimSources();
-  const [problem, setProblem] = useState<LocalizedMessage | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
-  const ids = { name: useId(), kind: useId() };
-  const [newName, setNewName] = useState("");
-  const [newKind, setNewKind] = useState<CalendarComponent>("event");
-
-  const save = async (calendar: Calendar, settings: Calendar["settings"]) => {
-    setProblem(null);
-    try {
-      await pimWrite(
-        ctx,
-        { type: "UpdateCalendar", calendar_id: calendar.id, settings },
-        "CalendarSaved",
-      );
-    } catch (error) {
-      setProblem(problemOf(error));
-    }
-  };
-
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!newName.trim()) {
-      setProblem({ id: "pim-issue-missing-name" });
-      return;
-    }
-    setProblem(null);
-    try {
-      await pimWrite(
-        ctx,
-        {
-          type: "CreateCalendar",
-          source_id: "local",
-          settings: {
-            name: newName.trim(),
-            description: null,
-            color: null,
-            visible: true,
-            reminders: true,
-            default_alarms: [],
-            order: (calendars.data ?? []).length,
-          },
-          components: [newKind],
-        },
-        "CalendarSaved",
-      );
-      setNewName("");
-    } catch (error) {
-      setProblem(problemOf(error));
-    }
-  };
-
-  const bySource = new Map<string, Calendar[]>();
-  for (const calendar of calendars.data ?? []) {
-    bySource.set(calendar.source_id, [...(bySource.get(calendar.source_id) ?? []), calendar]);
-  }
-
-  return (
-    <section data-part="calendar-list" aria-label={t("pim-calendars-label")}>
-      {[...bySource.entries()].map(([sourceId, list]) => {
-        const label = sourceName(
-          t,
-          sources.data?.find((s) => s.id === sourceId),
-          sourceId,
-        );
-        return (
-          <section key={sourceId} data-part="calendar-list.source" aria-label={label}>
-            <h3 data-part="calendar-list.source.name">{label}</h3>
-            <ul data-part="calendar-list.items">
-              {list.map((calendar) => (
-                <li
-                  key={calendar.id}
-                  data-part="calendar-list.item"
-                  data-calendar={calendar.id}
-                  data-state={
-                    [
-                      calendar.settings.visible ? null : "hidden",
-                      calendar.read_only ? "read-only" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" ") || undefined
-                  }
-                >
-                  <label data-part="form.check">
-                    <input
-                      type="checkbox"
-                      checked={calendar.settings.visible}
-                      onChange={(e) =>
-                        void save(calendar, { ...calendar.settings, visible: e.target.checked })
-                      }
-                    />
-                    <Swatch geom={geomId("swatch", calendar.id)} color={calendar.settings.color} />
-                    <span data-part="calendar-list.name">{calendar.settings.name}</span>
-                    {calendar.components.includes("task") &&
-                      !calendar.components.includes("event") && (
-                        <span data-part="calendar-list.kind">{t("pim-calendar-kind-tasks")}</span>
-                      )}
-                  </label>
-                  <button
-                    type="button"
-                    data-part="form.button"
-                    aria-expanded={editing === calendar.id}
-                    aria-label={t("pim-calendar-settings-of", { name: calendar.settings.name })}
-                    onClick={() => setEditing((e) => (e === calendar.id ? null : calendar.id))}
-                  >
-                    {t("pim-calendar-settings")}
-                  </button>
-                  {editing === calendar.id && (
-                    <CalendarSettingsForm
-                      calendar={calendar}
-                      onSave={(s) => void save(calendar, s)}
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-      <form data-part="calendar-list.new" onSubmit={(e) => void create(e)}>
-        <h3 data-part="form.section.title">{t("pim-calendar-new")}</h3>
-        <div data-part="form.field" data-field="name">
-          <label data-part="form.label" htmlFor={ids.name}>
-            {t("pim-calendar-name")}
-          </label>
-          <input
-            id={ids.name}
-            data-part="form.input"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
-        </div>
-        <div data-part="form.field" data-field="kind">
-          <label data-part="form.label" htmlFor={ids.kind}>
-            {t("pim-calendar-holds")}
-          </label>
-          <select
-            id={ids.kind}
-            data-part="form.select"
-            value={newKind}
-            onChange={(e) => setNewKind(e.target.value as CalendarComponent)}
-          >
-            <option value="event">{t("pim-calendar-holds-event")}</option>
-            <option value="task">{t("pim-calendar-holds-task")}</option>
-          </select>
-        </div>
-        <button type="submit" data-part="form.button">
-          {t("pim-calendar-create")}
-        </button>
-      </form>
-      <Problem message={problem} />
-      <div data-part="calendar-list.actions">
-        <button
-          type="button"
-          data-part="form.button"
-          onClick={() => ctx.store.getState().openWindow(SOURCES_DIALOG)}
-        >
-          {t("pim-sources-open")}
-        </button>
-        <button
-          type="button"
-          data-part="form.button"
-          onClick={() => ctx.store.getState().openWindow(IMPORT_DIALOG)}
-        >
-          {t("pim-import-open")}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function CalendarSettingsForm({
-  calendar,
-  onSave,
-}: {
-  calendar: Calendar;
-  onSave(settings: Calendar["settings"]): void;
-}) {
-  const t = useT();
-  const ids = { name: useId(), color: useId(), reminders: useId() };
-  const [name, setName] = useState(calendar.settings.name);
-  const [color, setColor] = useState(calendar.settings.color ?? "");
-  const [reminders, setReminders] = useState(calendar.settings.reminders);
-  return (
-    <form
-      data-part="calendar-list.settings"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave({ ...calendar.settings, name: name.trim(), color: color.trim() || null, reminders });
-      }}
-    >
-      <fieldset data-part="pim.editor.main" disabled={calendar.read_only}>
-        <div data-part="form.field" data-field="name">
-          <label data-part="form.label" htmlFor={ids.name}>
-            {t("pim-calendar-name")}
-          </label>
-          <input
-            id={ids.name}
-            data-part="form.input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <div data-part="form.field" data-field="color">
-          <label data-part="form.label" htmlFor={ids.color}>
-            {t("pim-calendar-color")}
-          </label>
-          <input
-            id={ids.color}
-            data-part="form.input"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-          />
-        </div>
-        <label data-part="form.check" data-field="reminders">
-          <input
-            id={ids.reminders}
-            type="checkbox"
-            checked={reminders}
-            onChange={(e) => setReminders(e.target.checked)}
-          />
-          <span>{t("pim-calendar-reminders")}</span>
-        </label>
-      </fieldset>
-      {!calendar.read_only && (
-        <button type="submit" data-part="form.button" data-variant="primary">
-          {t("pim-save")}
-        </button>
-      )}
-    </form>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Sources dialog
 
+/** The `pim-sources` dialog. */
 export function SourcesDialog({ close }: DialogProps) {
+  return <SourcesPanel close={close} />;
+}
+
+/**
+ * The sources with their state and the form to add one: the dialog's body,
+ * and (without `close`) part of the settings page's calendar section.
+ */
+export function SourcesPanel({ close }: { close?: () => void }) {
   const t = useT();
   const format = useDateFormat();
   const ctx = useChangeContext();
@@ -378,9 +146,11 @@ export function SourcesDialog({ close }: DialogProps) {
         >
           {t("pim-sources-sync-all")}
         </button>
-        <button type="button" data-part="form.button" onClick={close}>
-          {t("pim-close")}
-        </button>
+        {close && (
+          <button type="button" data-part="form.button" onClick={close}>
+            {t("pim-close")}
+          </button>
+        )}
       </div>
     </div>
   );

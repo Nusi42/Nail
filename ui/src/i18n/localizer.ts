@@ -48,13 +48,38 @@ export function negotiateLocale(
   return best ?? FALLBACK_LOCALE;
 }
 
-/** Creates a localizer over `catalogs` for the requested locales. */
+/** Whether a locale's catalogs define at least one message or term. */
+function hasMessages(sources: readonly string[] | undefined): boolean {
+  return (sources ?? []).some((source) => new FluentResource(source).body.length > 0);
+}
+
+/**
+ * The locales the browser's languages are negotiated against: English, every
+ * locale whose catalogs hold at least one message (an empty `locales/de`
+ * folder must not make dates German while every text is English), and the
+ * explicit override's locale, which is honoured even when its catalogs are
+ * still empty.
+ */
+export function availableLocales(catalogs: Catalogs, override?: string | null): string[] {
+  return Object.keys(catalogs).filter(
+    (locale) =>
+      locale === FALLBACK_LOCALE ||
+      hasMessages(catalogs[locale]) ||
+      (override != null && negotiateLocale([override], [locale]) === locale),
+  );
+}
+
+/**
+ * Creates a localizer over `catalogs` for the requested locales. `override`
+ * is the explicit choice (settings / `?lang=`), see `availableLocales`.
+ */
 export function createLocalizer(
   catalogs: Catalogs,
   requested: readonly string[],
   warnMissing = false,
+  override: string | null = null,
 ): Localizer {
-  const locale = negotiateLocale(requested, Object.keys(catalogs));
+  const locale = negotiateLocale(requested, availableLocales(catalogs, override));
   const chain: FluentBundle[] = [];
   if (locale !== FALLBACK_LOCALE) {
     chain.push(buildBundle(locale, catalogs[locale] ?? []));

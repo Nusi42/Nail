@@ -19,7 +19,7 @@ import type {
 } from "../../api/generated";
 import type { MockCore } from "../../api/mockMail";
 import { defaultTheme } from "../../api/mockData";
-import { resolveMockTheme } from "./themes";
+import { BUILTIN_THEME_FILES, resolveMockTheme } from "./themes";
 
 /** The requests this feature answers. */
 export const APPEARANCE_REQUESTS = [
@@ -63,8 +63,23 @@ export function builtinThemes(): ThemeInfo[] {
     source: "builtin",
     extends: "default",
     file: `defaults/themes/${id}.kdl`,
+    preview: previewOf(id),
   }));
 }
+
+/** `ThemeInfo.preview` of a built-in: its own colours of `PREVIEW_TOKENS`. */
+function previewOf(id: string): Record<string, string> {
+  const colors = BUILTIN_THEME_FILES.get(id)?.tokens.color ?? {};
+  return Object.fromEntries(
+    PREVIEW_TOKENS.flatMap((token) => {
+      const value = colors[token];
+      return value === undefined ? [] : [[token, value] as const];
+    }),
+  );
+}
+
+/** `nail_api::appearance::PREVIEW_TOKENS`. */
+export const PREVIEW_TOKENS = ["bg-subtle", "bg", "accent", "fg"] as const;
 
 /** `AppearanceSettings::default()`: Follow Windows with Frost / Graphite. */
 export function defaultSettings(): AppearanceSettings {

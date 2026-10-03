@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import { readerAction } from "../support/views";
 
 /**
  * Wave M2c (ADR 0048) against the `demo-multi` mock servers: server-side
@@ -134,10 +135,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   await page.getByRole("menu").getByRole("menuitem", { name: "Not junk" }).click();
   // …and "Mark as junk" for the spam (reader toolbar).
   await rows(page).filter({ hasText: "You are a lottery winner" }).click();
-  await page
-    .getByRole("toolbar", { name: "Message actions" })
-    .getByRole("button", { name: "Mark as junk" })
-    .click();
+  await readerAction(page, "Mark as junk");
   await expect(rows(page).filter({ hasText: "You are a lottery winner" })).toHaveCount(0);
   await expect
     .poll(async () => (await serverMessages(server, "Junk")).map((m) => m.subject), {
@@ -159,10 +157,7 @@ test("a snoozed message hides and returns at the wake time", async ({ page }) =>
   await open(page);
   const row = rows(page).filter({ hasText: "Welcome to Nail" });
   await row.click();
-  await page
-    .getByRole("toolbar", { name: "Message actions" })
-    .getByRole("button", { name: "Snooze…" })
-    .click();
+  await readerAction(page, "Snooze…");
   const picker = page.getByRole("dialog", { name: "Snooze" });
   await picker.getByRole("button", { name: /^Tomorrow/ }).click();
   await expect(picker).toBeHidden();

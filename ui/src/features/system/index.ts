@@ -124,3 +124,45 @@ export const handleSystemEvent: FeatureEventHandler = (event, { queryClient }) =
 export const events: Feature["events"] = [handleSystemEvent];
 /** Background components: offers the first-run screen once. */
 export const effects: Feature["effects"] = [FirstRunGate];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  [UPDATE_SETTINGS_WIDGET]: {
+    labels: [
+      "system-settings-tab-updates",
+      "system-updates-title",
+      "system-update-options",
+      "system-update-channel",
+      "system-update-auto-check",
+      "system-update-auto-download",
+    ],
+    keywords: "settings-keywords-update-settings",
+  },
+  [DESKTOP_SETTINGS_WIDGET]: {
+    labels: [
+      "system-settings-tab-desktop",
+      "system-desktop-title",
+      "system-desktop-tray",
+      "system-desktop-close-to-tray",
+      "system-desktop-startup",
+      "system-desktop-start-with-windows",
+      "system-desktop-start-hidden",
+      "system-desktop-developer",
+      "system-desktop-dev-endpoint",
+    ],
+    keywords: "settings-keywords-desktop-settings",
+  },
+  [DEFAULT_APPS_WIDGET]: {
+    labels: [
+      "system-settings-tab-default-apps",
+      "system-default-apps-title",
+      "system-default-apps-list",
+      "system-default-apps-mapi",
+      "system-default-apps-choose",
+    ],
+    keywords: "settings-keywords-default-apps",
+  },
+};

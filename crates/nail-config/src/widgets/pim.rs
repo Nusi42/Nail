@@ -93,6 +93,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
         &[],
         false,
     ),
+    // M5b: the settings page's "Calendar & contacts" section (WP164).
+    widget("pim-settings", &[], &[], false),
 ];
 
 #[cfg(test)]
@@ -118,6 +120,7 @@ mod tests {
             task-list sort=\"due\" show-completed=#false
             contact-list page-size=50
             contact-card
+            pim-settings
         }
     }
 }

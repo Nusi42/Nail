@@ -33,7 +33,7 @@ export function I18nProvider({
   children,
 }: I18nProviderProps) {
   const localizer = useMemo(
-    () => createLocalizer(catalogs, requestedLocales(locale), import.meta.env.DEV),
+    () => createLocalizer(catalogs, requestedLocales(locale), import.meta.env.DEV, locale),
     [catalogs, locale],
   );
   useEffect(() => {

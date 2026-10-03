@@ -24,15 +24,16 @@ import {
   VISIBILITIES,
 } from "./constants";
 import { LIST_FIELDS, SINGLE_FIELDS } from "./merge";
-import { DIALOGS } from "./names";
+import { CALENDAR_COLORS } from "./colors";
+import { DIALOGS, PIM_SETTINGS_WIDGET } from "./names";
 import { SIMPLE_FREQUENCIES } from "./recurrence";
 import { VIEW_KINDS } from "./time";
 
 /** Prefixes of message ids written literally in this feature's sources. */
 export const prefixes: readonly string[] = ["pim-"];
 
-/** Literals with those prefixes that are not message ids (dialog names). */
-export const notMessages: readonly string[] = [...DIALOGS];
+/** Literals with those prefixes that are not message ids (dialog and widget names). */
+export const notMessages: readonly string[] = [...DIALOGS, PIM_SETTINGS_WIDGET];
 
 /** Validation issues the core reports (`PimIssue::message_id`). */
 export const PIM_ISSUES: readonly PimIssue[] = [
@@ -106,5 +107,6 @@ export function runtimeIds(): string[] {
     ...[...SINGLE_FIELDS, ...LIST_FIELDS, "addresses"].map((f) => `pim-merge-field-${f}`),
     ...PRIORITY_KEYS.map((p) => `pim-priority-${p}`),
     ...TASK_STATUSES.map((s) => `pim-task-status-${s}`),
+    ...CALENDAR_COLORS.map((c) => `pim-color-${c.id}`),
   ];
 }

@@ -183,15 +183,11 @@ theme "default" mode="system" {
     part "split.divider:hover" { background-color "$color.accent"; }
     part "split.divider:focus-visible" { background-color "$color.focus-ring"; }
 
-
     // ---- Toolbar and status bar ----
 
     part "toolbar.spacer" { flex-grow 1; }
 
-
     // ---- Accounts and folders ----
-
-
 
     // ---- Message list ----
 
@@ -395,7 +391,6 @@ theme "default" mode="system" {
     part "window[window=\"outbox\"]" { width "min(720px, 100%)"; }
 
     // ---- Forms (account setup, settings, virtual accounts, composer, outbox) ----
-
 
     part "account-setup" {
         display "flex"
@@ -669,13 +664,15 @@ theme "default" mode="system" {
         font-size "$font-size.sm"
         color "$color.fg-muted"
     }
+    // The message text is set in the UI face like the reader (M5b);
+    // monospace stays for source code (HTML source, rules, KDL).
     part "composer.body" {
         flex-grow 1
         min-height 200
         padding "$space.sm"
         border "$border.control"
         border-radius "$radius.sm"
-        font-family "$font.mono"
+        font-family "$font.reader"
         line-height "$line-height.normal"
         color "$color.fg"
         background-color "$color.bg"
@@ -844,12 +841,12 @@ theme "default" mode="system" {
         min-height 200
         border "$border.thin"
         border-radius "$radius.sm"
-        font-family "$font.mono"
+        font-family "$font.reader"
         overflow "auto"
     }
     part "composer.markdown.content" {
         padding "$space.sm"
-        font-family "$font.mono"
+        font-family "$font.reader"
         line-height "$line-height.normal"
     }
     part "composer.preview" {
@@ -1907,10 +1904,12 @@ theme "default" mode="system" {
         background-color "$color.bg-subtle"
     }
     part "security-compose" { display "flex"; flex-direction "column"; gap "$space.xs"; }
+    // Sign, Encrypt and the Technology select on one line, centred (M5b;
+    // the select's label sits beside it, see the shared skin).
     part "security-compose.toggles" {
         display "flex"
         flex-wrap "wrap"
-        align-items "flex-end"
+        align-items "center"
         gap "$space.sm"
     }
     part "security-compose.recipients" {
@@ -2968,25 +2967,6 @@ theme "default" mode="system" {
         color "$color.fg"
         background-color "$color.bg"
     }
-    part "calendar.header" {
-        display "flex"
-        flex-wrap "wrap"
-        align-items "center"
-        gap "$space.sm"
-        padding "$space.sm" "$space.md"
-        border-bottom "$border.thin"
-    }
-    part "calendar.nav" { display "flex"; gap "$space.xs"; }
-    part "calendar.nav.previous" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
-    part "calendar.nav.next" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
-    part "calendar.nav.today" { padding "$space.xs" "$space.md"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg-subtle"; color "$color.fg"; }
-    part "calendar.nav.icon" { display "none"; }
-    part "calendar.title" { flex "1"; margin 0; font-size "$font-size.lg"; font-weight "$font-weight.medium"; }
-    part "calendar.views" { display "flex"; gap "$space.xxs"; }
-    part "calendar.views.button" { padding "$space.xs" "$space.sm"; border "$border.thin"; border-radius "$radius.sm"; background-color "$color.bg"; color "$color.fg"; }
-    part "calendar.views.button:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
-    part "calendar.new" { display "inline-flex"; align-items "center"; gap "$space.xs"; padding "$space.xs" "$space.md"; border-radius "$radius.sm"; border "1px solid $color.accent"; color "$color.accent-fg"; background-color "$color.accent"; }
-    part "calendar.new.icon" { width "$size.icon"; height "$size.icon"; }
 
     // Time grid (day, multi-day, week, work week)
     part "calendar.time-grid" { display "grid"; grid-template-rows "auto auto minmax(0, 1fr)"; min-height 0; }
@@ -2994,9 +2974,6 @@ theme "default" mode="system" {
     part "calendar.head[zones=\"2\"]" { grid-template-columns "112px minmax(0, 1fr)"; }
     part "calendar.corner" { display "flex"; align-items "end"; justify-content "space-around"; font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "calendar.head.days" { display "grid"; }
-    part "calendar.day-head" { display "flex"; flex-direction "column"; align-items "center"; padding "$space.xs"; border 0; background-color "transparent"; color "$color.fg"; }
-    part "calendar.day-head:today" { color "$color.accent"; font-weight "$font-weight.bold"; }
-    part "calendar.day-head.date" { font-size "$font-size.lg"; }
     part "calendar.all-day" { display "grid"; grid-template-columns "56px minmax(0, 1fr)"; border-bottom "$border.thin"; }
     part "calendar.all-day[zones=\"2\"]" { grid-template-columns "112px minmax(0, 1fr)"; }
     part "calendar.all-day.label" { font-size "$font-size.xs"; color "$color.fg-muted"; padding "$space.xs"; }
@@ -3008,7 +2985,6 @@ theme "default" mode="system" {
     part "calendar.body" { display "grid"; grid-template-columns "56px minmax(0, 1fr)"; }
     part "calendar.body[zones=\"2\"]" { grid-template-columns "56px 56px minmax(0, 1fr)"; }
     part "calendar.gutter" { display "flex"; flex-direction "column"; }
-    part "calendar.hour" { display "block"; height 48; padding-right "$space.xs"; font-size "$font-size.xs"; color "$color.fg-muted"; text-align "right"; }
     part "calendar.canvas" { position "relative"; }
     part "calendar.slots" { display "grid"; }
     part "calendar.slot-row" { display "contents"; }
@@ -3018,68 +2994,13 @@ theme "default" mode="system" {
     part "calendar.columns" { position "absolute"; top 0; right 0; bottom 0; left 0; display "grid"; pointer-events "none"; }
     part "calendar.column" { position "relative"; margin 0; padding 0; }
     part "calendar.column.item" { display "contents"; }
-    part "calendar.event" {
-        position "absolute"
-        box-sizing "border-box"
-        display "flex"
-        flex-direction "column"
-        overflow "hidden"
-        padding "$space.xxs" "$space.xs"
-        border 0
-        border-left "4px solid $color.accent"
-        border-radius "$radius.sm"
-        pointer-events "auto"
-        text-align "left"
-        font-size "$font-size.sm"
-        color "$color.fg"
-        background-color "$color.bg-raised"
-        cursor "grab"
-    }
-    part "calendar.event:focus-visible" { outline "2px solid $color.focus-ring"; z-index 2; }
-    part "calendar.event:selected" { box-shadow "$shadow.overlay"; z-index 1; }
-    part "calendar.event:tentative" { opacity 0.8; }
-    part "calendar.event:dragging" { opacity 0.4; }
-    part "calendar.event.time" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "calendar.event.title" { font-weight "$font-weight.medium"; }
-    part "calendar.event.location" { font-size "$font-size.xs"; }
-    part "calendar.event.badge" { display "none"; }
     part "calendar.event.resize" { position "absolute"; left 0; right 0; bottom 0; height 6; cursor "ns-resize"; }
     part "calendar.ghost" { position "absolute"; box-sizing "border-box"; border "2px dashed $color.accent"; border-radius "$radius.sm"; pointer-events "none"; }
-    part "calendar.now" { position "absolute"; height 2; background-color "$color.danger"; pointer-events "none"; }
     part "calendar.zone" { padding "$space.xxs"; }
-
-    // Chips: all-day row, month, agenda
-    part "calendar.chip" {
-        display "flex"
-        gap "$space.xs"
-        min-width 0
-        overflow "hidden"
-        margin "1px"
-        padding "0" "$space.xs"
-        border 0
-        border-left "4px solid $color.accent"
-        border-radius "$radius.sm"
-        text-align "left"
-        white-space "nowrap"
-        font-size "$font-size.sm"
-        color "$color.fg"
-        background-color "$color.bg-raised"
-    }
-    part "calendar.chip:focus-visible" { outline "2px solid $color.focus-ring"; }
-    part "calendar.chip:dragging" { opacity 0.4; }
-    part "calendar.chip.time" { color "$color.fg-muted"; }
-    part "calendar.chip.location" { display "none"; }
-    part "calendar.chip.badge" { display "none"; }
 
     // Month
     part "calendar.month" { width "100%"; border-collapse "collapse"; }
     part "calendar.month.weekday" { padding "$space.xs"; font-size "$font-size.xs"; color "$color.fg-muted"; font-weight "$font-weight.regular"; }
-    part "calendar.month.day" { height 96; padding "$space.xxs"; vertical-align "top"; border "$border.thin"; }
-    part "calendar.month.day:outside" { color "$color.fg-muted"; background-color "$color.bg-subtle"; }
-    part "calendar.month.day:today" { box-shadow "inset 0 0 0 2px $color.accent"; }
-    part "calendar.month.day:drop-target" { background-color "$color.selection"; }
-    part "calendar.month.day:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
-    part "calendar.month.date" { display "block"; font-size "$font-size.sm"; }
     part "calendar.month.events" { display "flex"; flex-direction "column"; margin 0; padding 0; }
     part "calendar.month.more" { border 0; padding 0; color "$color.accent"; background-color "transparent"; font-size "$font-size.xs"; }
 
@@ -3095,14 +3016,10 @@ theme "default" mode="system" {
     part "calendar.agenda" { overflow-y "auto"; padding "$space.sm" "$space.md"; }
     part "calendar.agenda.date" { margin "$space.md" 0 "$space.xs"; font-size "$font-size.md"; }
     part "calendar.agenda.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
-    part "calendar.agenda.event" { display "flex"; gap "$space.sm"; width "100%"; padding "$space.xs"; border 0; border-left "4px solid $color.accent"; text-align "left"; color "$color.fg"; background-color "$color.bg-subtle"; }
-    part "calendar.agenda.event.badge" { color "$color.fg-muted"; font-size "$font-size.xs"; }
     part "agenda" { display "flex"; flex-direction "column"; gap "$space.xs"; padding "$space.sm"; }
     part "agenda.title" { margin 0; font-size "$font-size.md"; }
     part "agenda.list.date" { margin "$space.xs" 0; font-size "$font-size.sm"; color "$color.fg-muted"; }
     part "agenda.list.list" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
-    part "agenda.list.event" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; width "100%"; padding "$space.xxs" "$space.xs"; border 0; border-left "3px solid $color.accent"; text-align "left"; color "$color.fg"; background-color "$color.bg-subtle"; }
-    part "agenda.list.event.badge" { display "none"; }
     part "agenda.list.empty" { margin 0; color "$color.fg-muted"; }
 
     // Free time
@@ -3111,22 +3028,6 @@ theme "default" mode="system" {
     part "calendar.free-time.busy" { position "absolute"; top 0; bottom 0; background-color "$color.bg-raised"; }
     part "calendar.free-time.slot" { position "absolute"; top 2; bottom 2; overflow "hidden"; border "1px solid $color.success"; border-radius "$radius.sm"; font-size "$font-size.xs"; color "$color.fg"; background-color "$color.bg"; white-space "nowrap"; }
     part "calendar.free-time.date" { margin 0; font-size "$font-size.sm"; }
-
-    // Mini-month and the date picker's month
-    part "mini-month" { padding "$space.sm"; }
-    part "mini-month.header" { display "flex"; align-items "center"; gap "$space.xs"; }
-    part "mini-month.title" { flex "1"; margin 0; font-size "$font-size.sm"; text-align "center"; }
-    part "mini-month.previous" { border 0; background-color "transparent"; color "$color.fg"; }
-    part "mini-month.next" { border 0; background-color "transparent"; color "$color.fg"; }
-    part "mini-month.icon" { display "none"; }
-    part "mini-month.grid" { width "100%"; border-collapse "collapse"; font-size "$font-size.xs"; }
-    part "mini-month.grid.weekday" { font-weight "$font-weight.regular"; color "$color.fg-muted"; }
-    part "mini-month.grid.day" { padding "$space.xxs"; text-align "center"; cursor "pointer"; border-radius "$radius.sm"; }
-    part "mini-month.grid.day:outside" { color "$color.fg-muted"; }
-    part "mini-month.grid.day:busy" { font-weight "$font-weight.bold"; }
-    part "mini-month.grid.day:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
-    part "mini-month.grid.day:today" { color "$color.accent"; text-decoration "underline"; }
-    part "mini-month.grid.day:focus-visible" { outline "2px solid $color.focus-ring"; }
 
     // Date / time picker
     part "pim.datetime" { position "relative"; display "flex"; flex-direction "column"; gap "$space.xxs"; }
@@ -3200,13 +3101,8 @@ theme "default" mode="system" {
     part "pim.toast.location" { margin 0; font-size "$font-size.sm"; }
     part "pim.toast.actions" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; margin-top "$space.xs"; }
 
-    // Calendar list
-    part "calendar-list" { display "flex"; flex-direction "column"; gap "$space.sm"; padding "$space.sm"; }
-    part "calendar-list.source.name" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; text-transform "uppercase"; }
+    // Calendar list (rows, squares and menus: ui/src/features/pim/skin.ts)
     part "calendar-list.items" { margin 0; padding 0; }
-    part "calendar-list.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; }
-    part "calendar-list.item:hidden" { color "$color.fg-muted"; }
-    part "calendar-list.kind" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "calendar-list.actions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
 
     // Contacts
@@ -3214,29 +3110,12 @@ theme "default" mode="system" {
     part "contact-list.toolbar" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
     part "contact-list.actions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
     part "contact-list.count" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "contact-list.items" { flex "1"; overflow-y "auto"; margin 0; padding 0; }
-    part "contact-list.item" { display "grid"; grid-template-columns "32px minmax(0, 1fr) auto"; column-gap "$space.sm"; align-items "center"; padding "$space.xs" "$space.sm"; cursor "pointer"; }
-    part "contact-list.item:selected" { color "$color.selection-fg"; background-color "$color.selection"; }
-    part "contact-list.item:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
-    part "contact-list.avatar" { grid-row "span 2"; display "flex"; align-items "center"; justify-content "center"; width 32; height 32; border-radius "50%"; font-size "$font-size.xs"; color "$color.accent-fg"; background-color "$color.accent"; }
-    part "contact-list.email" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "contact-list.organization" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "contact-list.book" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "contact-list.linked" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "contact-list.item:selected contact-list.email" { color "inherit"; }
-    part "contact-list.item:selected contact-list.organization" { color "inherit"; }
-    part "contact-list.item:selected contact-list.book" { color "inherit"; }
-    part "contact-list.item:selected contact-list.linked" { color "inherit"; }
     part "contact-card" { display "flex"; flex-direction "column"; gap "$space.md"; padding "$space.md"; overflow-y "auto"; }
-    part "contact-card.header" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.md"; }
     part "contact-card.photo" { width 72; height 72; border-radius "50%"; }
-    part "contact-card.avatar" { display "flex"; align-items "center"; justify-content "center"; width 72; height 72; border-radius "50%"; font-size "$font-size.xl"; color "$color.accent-fg"; background-color "$color.accent"; }
     part "contact-card.names" { flex "1"; }
-    part "contact-card.name" { margin 0; font-size "$font-size.xl"; }
     part "contact-card.organization" { margin 0; color "$color.fg-muted"; }
     part "contact-card.book" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "contact-card.actions" { display "flex"; gap "$space.xs"; }
-    part "contact-card.heading" { margin 0 0 "$space.xs"; font-size "$font-size.sm"; color "$color.fg-muted"; }
     part "contact-card.values" { display "flex"; flex-direction "column"; gap "$space.xxs"; margin 0; padding 0; }
     part "contact-card.value" { display "flex"; gap "$space.sm"; }
     part "contact-card.kind" { min-width 64; font-size "$font-size.xs"; color "$color.fg-muted"; }
@@ -3250,22 +3129,6 @@ theme "default" mode="system" {
     part "task-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.sm"; }
     part "task-list.toolbar" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
     part "task-list.add" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.xs"; }
-    part "task-list.items" { flex "1"; overflow-y "auto"; margin 0; padding 0; }
-    part "task-list.item" { display "flex"; flex-wrap "wrap"; align-items "center"; gap "$space.xs"; padding "$space.xxs" "$space.xs"; }
-    part "task-list.item[level=\"2\"]" { padding-left 28; }
-    part "task-list.item[level=\"3\"]" { padding-left 48; }
-    part "task-list.item:current" { background-color "$color.bg-subtle"; }
-    part "task-list.item:focus-visible" { outline "2px solid $color.focus-ring"; outline-offset -2; }
-    part "task-list.item:done" { color "$color.fg-muted"; text-decoration "line-through"; }
-    part "task-list.title" { flex "1"; border 0; padding 0; text-align "left"; color "inherit"; background-color "transparent"; }
-    part "task-list.toggle" { border 0; padding 0; color "inherit"; background-color "transparent"; }
-    part "task-list.toggle.icon" { width "$size.icon"; height "$size.icon"; }
-    part "task-list.due" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "task-list.due:overdue" { color "$color.danger"; }
-    part "task-list.priority" { font-size "$font-size.xs"; }
-    part "task-list.priority[priority=\"high\"]" { color "$color.danger"; font-weight "$font-weight.bold"; }
-    part "task-list.subtasks" { font-size "$font-size.xs"; color "$color.fg-muted"; }
-    part "task-list.badge" { font-size "$font-size.xs"; color "$color.fg-muted"; }
     part "task-list.empty" { color "$color.fg-muted"; }
 
     // ---- Invitations and scheduling (M3b WP84) ----

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
+import { readerAction } from "../support/views";
 
 /**
  * Every axe violation, whatever its impact: the scan must pass completely.
@@ -121,10 +122,7 @@ test.describe("windows and dialogs of demo-multi", () => {
       .locator('[data-part="message-list.row"]')
       .filter({ hasText: "Welcome to Nail" })
       .click();
-    await page
-      .getByRole("toolbar", { name: "Message actions" })
-      .getByRole("button", { name: "Snooze…" })
-      .click();
+    await readerAction(page, "Snooze…");
     await expect(page.getByRole("dialog", { name: "Snooze" })).toBeVisible();
     expect(await violations(page), "snooze").toEqual([]);
     await page

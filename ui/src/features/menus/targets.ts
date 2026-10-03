@@ -13,6 +13,7 @@ export const DOM_PARTS: Readonly<Record<string, string>> = {
   "message-view.attachment": "message-view.attachment",
   "message-view": "message-view",
   "folder-tree.item": "folder-tree.folder",
+  "folder-tree.account": "folder-tree.account",
   composer: "composer",
 };
 

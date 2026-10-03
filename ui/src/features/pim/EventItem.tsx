@@ -7,6 +7,11 @@
  * minutes, Left / Right by a day; day grids: by a day / a week); Alt + Shift
  * + Up / Down make it shorter / longer. The pointer drags it (and its
  * bottom edge resizes it in time grids) through `onDragStart`.
+ *
+ * M5b (WP164): the same readable card everywhere — title first, then the
+ * time and the location (`event-card.title` / `.time` / `.location`), on a
+ * light tint of the calendar colour with a bar in the colour (`colors.ts`);
+ * the card's text is always the theme's `fg`.
  */
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Calendar, EventInstance } from "../../api/generated";
@@ -176,11 +181,11 @@ export function EventItem({
         onDragStart && !instance.read_only ? (event) => onDragStart(event, "move") : undefined
       }
     >
-      <span data-part={`${part}.time`}>{time}</span>
-      <span data-part={`${part}.title`}>{title}</span>
-      {instance.location && <span data-part={`${part}.location`}>{instance.location}</span>}
+      <span data-part="event-card.title">{title}</span>
+      <span data-part="event-card.time">{time}</span>
+      {instance.location && <span data-part="event-card.location">{instance.location}</span>}
       {instance.recurring && (
-        <span data-part={`${part}.badge`} data-badge="recurring">
+        <span data-part="event-card.badge" data-badge="recurring">
           {t("pim-badge-recurring")}
         </span>
       )}

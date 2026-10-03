@@ -1590,7 +1590,7 @@
         "padding": "var(--nail-space-sm)",
         "border": "var(--nail-border-control)",
         "border-radius": "var(--nail-radius-sm)",
-        "font-family": "var(--nail-font-mono)",
+        "font-family": "var(--nail-font-reader)",
         "line-height": "var(--nail-line-height-normal)",
         "color": "var(--nail-color-fg)",
         "background-color": "var(--nail-color-bg)"
@@ -2052,7 +2052,7 @@
         "min-height": "200px",
         "border": "var(--nail-border-thin)",
         "border-radius": "var(--nail-radius-sm)",
-        "font-family": "var(--nail-font-mono)",
+        "font-family": "var(--nail-font-reader)",
         "overflow": "auto"
       },
       "source": null
@@ -2064,7 +2064,7 @@
       "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-sm)",
-        "font-family": "var(--nail-font-mono)",
+        "font-family": "var(--nail-font-reader)",
         "line-height": "var(--nail-line-height-normal)"
       },
       "source": null
@@ -5059,7 +5059,7 @@
       "declarations": {
         "display": "flex",
         "flex-wrap": "wrap",
-        "align-items": "flex-end",
+        "align-items": "center",
         "gap": "var(--nail-space-sm)"
       },
       "source": null
@@ -9117,163 +9117,6 @@
       "source": null
     },
     {
-      "selector": "calendar.header",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-wrap": "wrap",
-        "align-items": "center",
-        "gap": "var(--nail-space-sm)",
-        "padding": "var(--nail-space-sm) var(--nail-space-md)",
-        "border-bottom": "var(--nail-border-thin)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.nav",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.nav.previous",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
-        "border": "var(--nail-border-thin)",
-        "border-radius": "var(--nail-radius-sm)",
-        "background-color": "var(--nail-color-bg-subtle)",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.nav.next",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
-        "border": "var(--nail-border-thin)",
-        "border-radius": "var(--nail-radius-sm)",
-        "background-color": "var(--nail-color-bg-subtle)",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.nav.today",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xs) var(--nail-space-md)",
-        "border": "var(--nail-border-thin)",
-        "border-radius": "var(--nail-radius-sm)",
-        "background-color": "var(--nail-color-bg-subtle)",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.nav.icon",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "none"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.title",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "flex": "1",
-        "margin": "0",
-        "font-size": "var(--nail-font-size-lg)",
-        "font-weight": "var(--nail-font-weight-medium)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.views",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-xxs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.views.button",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
-        "border": "var(--nail-border-thin)",
-        "border-radius": "var(--nail-radius-sm)",
-        "background-color": "var(--nail-color-bg)",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.views.button",
-      "states": [
-        "selected"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-selection-fg)",
-        "background-color": "var(--nail-color-selection)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.new",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "inline-flex",
-        "align-items": "center",
-        "gap": "var(--nail-space-xs)",
-        "padding": "var(--nail-space-xs) var(--nail-space-md)",
-        "border-radius": "var(--nail-radius-sm)",
-        "border": "1px solid var(--nail-color-accent)",
-        "color": "var(--nail-color-accent-fg)",
-        "background-color": "var(--nail-color-accent)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.new.icon",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "width": "var(--nail-size-icon)",
-        "height": "var(--nail-size-icon)"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.time-grid",
       "states": [],
       "conditions": [],
@@ -9333,45 +9176,6 @@
       "ancestors": [],
       "declarations": {
         "display": "grid"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.day-head",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "align-items": "center",
-        "padding": "var(--nail-space-xs)",
-        "border": "0",
-        "background-color": "transparent",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.day-head",
-      "states": [
-        "today"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-accent)",
-        "font-weight": "var(--nail-font-weight-bold)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.day-head.date",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-lg)"
       },
       "source": null
     },
@@ -9506,21 +9310,6 @@
       "source": null
     },
     {
-      "selector": "calendar.hour",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "block",
-        "height": "48px",
-        "padding-right": "var(--nail-space-xs)",
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)",
-        "text-align": "right"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.canvas",
       "states": [],
       "conditions": [],
@@ -9626,121 +9415,6 @@
       "source": null
     },
     {
-      "selector": "calendar.event",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "position": "absolute",
-        "box-sizing": "border-box",
-        "display": "flex",
-        "flex-direction": "column",
-        "overflow": "hidden",
-        "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
-        "border": "0",
-        "border-left": "4px solid var(--nail-color-accent)",
-        "border-radius": "var(--nail-radius-sm)",
-        "pointer-events": "auto",
-        "text-align": "left",
-        "font-size": "var(--nail-font-size-sm)",
-        "color": "var(--nail-color-fg)",
-        "background-color": "var(--nail-color-bg-raised)",
-        "cursor": "grab"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event",
-      "states": [
-        "focus-visible"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "outline": "2px solid var(--nail-color-focus-ring)",
-        "z-index": "2"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event",
-      "states": [
-        "selected"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "box-shadow": "var(--nail-shadow-overlay)",
-        "z-index": "1"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event",
-      "states": [
-        "tentative"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "opacity": "0.8"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event",
-      "states": [
-        "dragging"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "opacity": "0.4"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event.time",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event.title",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-weight": "var(--nail-font-weight-medium)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event.location",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.event.badge",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "none"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.event.resize",
       "states": [],
       "conditions": [],
@@ -9770,102 +9444,12 @@
       "source": null
     },
     {
-      "selector": "calendar.now",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "position": "absolute",
-        "height": "2px",
-        "background-color": "var(--nail-color-danger)",
-        "pointer-events": "none"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.zone",
       "states": [],
       "conditions": [],
       "ancestors": [],
       "declarations": {
         "padding": "var(--nail-space-xxs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.chip",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-xs)",
-        "min-width": "0",
-        "overflow": "hidden",
-        "margin": "1px",
-        "padding": "0 var(--nail-space-xs)",
-        "border": "0",
-        "border-left": "4px solid var(--nail-color-accent)",
-        "border-radius": "var(--nail-radius-sm)",
-        "text-align": "left",
-        "white-space": "nowrap",
-        "font-size": "var(--nail-font-size-sm)",
-        "color": "var(--nail-color-fg)",
-        "background-color": "var(--nail-color-bg-raised)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.chip",
-      "states": [
-        "focus-visible"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "outline": "2px solid var(--nail-color-focus-ring)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.chip",
-      "states": [
-        "dragging"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "opacity": "0.4"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.chip.time",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.chip.location",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "none"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.chip.badge",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "none"
       },
       "source": null
     },
@@ -9890,80 +9474,6 @@
         "font-size": "var(--nail-font-size-xs)",
         "color": "var(--nail-color-fg-muted)",
         "font-weight": "var(--nail-font-weight-regular)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.day",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "height": "96px",
-        "padding": "var(--nail-space-xxs)",
-        "vertical-align": "top",
-        "border": "var(--nail-border-thin)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.day",
-      "states": [
-        "outside"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)",
-        "background-color": "var(--nail-color-bg-subtle)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.day",
-      "states": [
-        "today"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "box-shadow": "inset 0 0 0 2px var(--nail-color-accent)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.day",
-      "states": [
-        "drop-target"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "background-color": "var(--nail-color-selection)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.day",
-      "states": [
-        "focus-visible"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "outline": "2px solid var(--nail-color-focus-ring)",
-        "outline-offset": "-2px"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.date",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "block",
-        "font-size": "var(--nail-font-size-sm)"
       },
       "source": null
     },
@@ -10106,35 +9616,6 @@
       "source": null
     },
     {
-      "selector": "calendar.agenda.event",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "gap": "var(--nail-space-sm)",
-        "width": "100%",
-        "padding": "var(--nail-space-xs)",
-        "border": "0",
-        "border-left": "4px solid var(--nail-color-accent)",
-        "text-align": "left",
-        "color": "var(--nail-color-fg)",
-        "background-color": "var(--nail-color-bg-subtle)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.agenda.event.badge",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)",
-        "font-size": "var(--nail-font-size-xs)"
-      },
-      "source": null
-    },
-    {
       "selector": "agenda",
       "states": [],
       "conditions": [],
@@ -10181,35 +9662,6 @@
         "gap": "var(--nail-space-xxs)",
         "margin": "0",
         "padding": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "agenda.list.event",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-wrap": "wrap",
-        "gap": "var(--nail-space-xs)",
-        "width": "100%",
-        "padding": "var(--nail-space-xxs) var(--nail-space-xs)",
-        "border": "0",
-        "border-left": "3px solid var(--nail-color-accent)",
-        "text-align": "left",
-        "color": "var(--nail-color-fg)",
-        "background-color": "var(--nail-color-bg-subtle)"
-      },
-      "source": null
-    },
-    {
-      "selector": "agenda.list.event.badge",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "none"
       },
       "source": null
     },
@@ -10292,173 +9744,6 @@
       "declarations": {
         "margin": "0",
         "font-size": "var(--nail-font-size-sm)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-sm)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.header",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "align-items": "center",
-        "gap": "var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.title",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "flex": "1",
-        "margin": "0",
-        "font-size": "var(--nail-font-size-sm)",
-        "text-align": "center"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.previous",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "border": "0",
-        "background-color": "transparent",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.next",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "border": "0",
-        "background-color": "transparent",
-        "color": "var(--nail-color-fg)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.icon",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "none"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "width": "100%",
-        "border-collapse": "collapse",
-        "font-size": "var(--nail-font-size-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.weekday",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-weight": "var(--nail-font-weight-regular)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.day",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xxs)",
-        "text-align": "center",
-        "cursor": "pointer",
-        "border-radius": "var(--nail-radius-sm)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.day",
-      "states": [
-        "outside"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.day",
-      "states": [
-        "busy"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-weight": "var(--nail-font-weight-bold)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.day",
-      "states": [
-        "selected"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-selection-fg)",
-        "background-color": "var(--nail-color-selection)"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.day",
-      "states": [
-        "today"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-accent)",
-        "text-decoration": "underline"
-      },
-      "source": null
-    },
-    {
-      "selector": "mini-month.grid.day",
-      "states": [
-        "focus-visible"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "outline": "2px solid var(--nail-color-focus-ring)"
       },
       "source": null
     },
@@ -11327,32 +10612,6 @@
       "source": null
     },
     {
-      "selector": "calendar-list",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "gap": "var(--nail-space-sm)",
-        "padding": "var(--nail-space-sm)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar-list.source.name",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0",
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)",
-        "text-transform": "uppercase"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar-list.items",
       "states": [],
       "conditions": [],
@@ -11360,42 +10619,6 @@
       "declarations": {
         "margin": "0",
         "padding": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar-list.item",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-wrap": "wrap",
-        "align-items": "center",
-        "gap": "var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar-list.item",
-      "states": [
-        "hidden"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar-list.kind",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
       },
       "source": null
     },
@@ -11463,195 +10686,6 @@
       "source": null
     },
     {
-      "selector": "contact-list.items",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "flex": "1",
-        "overflow-y": "auto",
-        "margin": "0",
-        "padding": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.item",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "grid",
-        "grid-template-columns": "32px minmax(0, 1fr) auto",
-        "column-gap": "var(--nail-space-sm)",
-        "align-items": "center",
-        "padding": "var(--nail-space-xs) var(--nail-space-sm)",
-        "cursor": "pointer"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.item",
-      "states": [
-        "selected"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-selection-fg)",
-        "background-color": "var(--nail-color-selection)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.item",
-      "states": [
-        "focus-visible"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "outline": "2px solid var(--nail-color-focus-ring)",
-        "outline-offset": "-2px"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.avatar",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "grid-row": "span 2",
-        "display": "flex",
-        "align-items": "center",
-        "justify-content": "center",
-        "width": "32px",
-        "height": "32px",
-        "border-radius": "50%",
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-accent-fg)",
-        "background-color": "var(--nail-color-accent)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.email",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.organization",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.book",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.linked",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.email",
-      "states": [],
-      "conditions": [],
-      "ancestors": [
-        {
-          "selector": "contact-list.item",
-          "states": [
-            "selected"
-          ],
-          "conditions": []
-        }
-      ],
-      "declarations": {
-        "color": "inherit"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.organization",
-      "states": [],
-      "conditions": [],
-      "ancestors": [
-        {
-          "selector": "contact-list.item",
-          "states": [
-            "selected"
-          ],
-          "conditions": []
-        }
-      ],
-      "declarations": {
-        "color": "inherit"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.book",
-      "states": [],
-      "conditions": [],
-      "ancestors": [
-        {
-          "selector": "contact-list.item",
-          "states": [
-            "selected"
-          ],
-          "conditions": []
-        }
-      ],
-      "declarations": {
-        "color": "inherit"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-list.linked",
-      "states": [],
-      "conditions": [],
-      "ancestors": [
-        {
-          "selector": "contact-list.item",
-          "states": [
-            "selected"
-          ],
-          "conditions": []
-        }
-      ],
-      "declarations": {
-        "color": "inherit"
-      },
-      "source": null
-    },
-    {
       "selector": "contact-card",
       "states": [],
       "conditions": [],
@@ -11662,19 +10696,6 @@
         "gap": "var(--nail-space-md)",
         "padding": "var(--nail-space-md)",
         "overflow-y": "auto"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-card.header",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-wrap": "wrap",
-        "align-items": "center",
-        "gap": "var(--nail-space-md)"
       },
       "source": null
     },
@@ -11691,41 +10712,12 @@
       "source": null
     },
     {
-      "selector": "contact-card.avatar",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "align-items": "center",
-        "justify-content": "center",
-        "width": "72px",
-        "height": "72px",
-        "border-radius": "50%",
-        "font-size": "var(--nail-font-size-xl)",
-        "color": "var(--nail-color-accent-fg)",
-        "background-color": "var(--nail-color-accent)"
-      },
-      "source": null
-    },
-    {
       "selector": "contact-card.names",
       "states": [],
       "conditions": [],
       "ancestors": [],
       "declarations": {
         "flex": "1"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-card.name",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0",
-        "font-size": "var(--nail-font-size-xl)"
       },
       "source": null
     },
@@ -11760,18 +10752,6 @@
       "declarations": {
         "display": "flex",
         "gap": "var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "contact-card.heading",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "margin": "0 0 var(--nail-space-xs)",
-        "font-size": "var(--nail-font-size-sm)",
-        "color": "var(--nail-color-fg-muted)"
       },
       "source": null
     },
@@ -11904,211 +10884,6 @@
         "flex-wrap": "wrap",
         "align-items": "end",
         "gap": "var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.items",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "flex": "1",
-        "overflow-y": "auto",
-        "margin": "0",
-        "padding": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.item",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-wrap": "wrap",
-        "align-items": "center",
-        "gap": "var(--nail-space-xs)",
-        "padding": "var(--nail-space-xxs) var(--nail-space-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.item",
-      "states": [],
-      "conditions": [
-        {
-          "key": "level",
-          "value": "2"
-        }
-      ],
-      "ancestors": [],
-      "declarations": {
-        "padding-left": "28px"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.item",
-      "states": [],
-      "conditions": [
-        {
-          "key": "level",
-          "value": "3"
-        }
-      ],
-      "ancestors": [],
-      "declarations": {
-        "padding-left": "48px"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.item",
-      "states": [
-        "current"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "background-color": "var(--nail-color-bg-subtle)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.item",
-      "states": [
-        "focus-visible"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "outline": "2px solid var(--nail-color-focus-ring)",
-        "outline-offset": "-2px"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.item",
-      "states": [
-        "done"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-fg-muted)",
-        "text-decoration": "line-through"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.title",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "flex": "1",
-        "border": "0",
-        "padding": "0",
-        "text-align": "left",
-        "color": "inherit",
-        "background-color": "transparent"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.toggle",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "border": "0",
-        "padding": "0",
-        "color": "inherit",
-        "background-color": "transparent"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.toggle.icon",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "width": "var(--nail-size-icon)",
-        "height": "var(--nail-size-icon)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.due",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.due",
-      "states": [
-        "overdue"
-      ],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-danger)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.priority",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.priority",
-      "states": [],
-      "conditions": [
-        {
-          "key": "priority",
-          "value": "high"
-        }
-      ],
-      "ancestors": [],
-      "declarations": {
-        "color": "var(--nail-color-danger)",
-        "font-weight": "var(--nail-font-weight-bold)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.subtasks",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.badge",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)"
       },
       "source": null
     },

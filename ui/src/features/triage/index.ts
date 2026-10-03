@@ -86,3 +86,44 @@ export const handleTriageEvent: FeatureEventHandler = (event, { queryClient }) =
 export const events: Feature["events"] = [handleTriageEvent];
 /** Background components. */
 export const effects: Feature["effects"] = [WebNotifications];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "junk-settings": {
+    labels: [
+      "junk-settings-tab",
+      "junk-settings-label",
+      "junk-settings-classifier",
+      "junk-settings-enabled",
+      "junk-settings-honor-server",
+      "junk-settings-move",
+      "junk-settings-threshold",
+      "junk-settings-min-training",
+      "junk-status-label",
+      "junk-reset",
+    ],
+    keywords: "settings-keywords-junk-settings",
+  },
+  "notification-settings": {
+    labels: [
+      "notification-settings-tab",
+      "notification-settings-label",
+      "notification-general-title",
+      "notification-enabled",
+      "notification-show-preview",
+      "notification-sound",
+      "notification-folders",
+      "notification-quiet-title",
+      "notification-quiet-enabled",
+      "notification-quiet-start",
+      "notification-quiet-end",
+      "notification-overrides-title",
+      "notification-browser-allow",
+      "notification-test",
+    ],
+    keywords: "settings-keywords-notification-settings",
+  },
+};

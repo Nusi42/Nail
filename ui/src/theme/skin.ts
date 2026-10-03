@@ -28,6 +28,14 @@
  * the tag line hidden in Compact), the reader column (`message-view.column`)
  * and attachment cards (`attachment-card.*`).
  *
+ * M5b (WP162, ADR 0111): toolbars that never wrap (`data-overflow=
+ * "more"`) with icon-only / label-only buttons, the rank-1 button as the
+ * primary one and the "More" button (`toolbar.more`); the grouped folder
+ * pane (`folder-tree.compose`, `.section*`, `.favorite`, `.smart-folder`,
+ * account dots); the list header (`list-header.*`, filter chips); the focus
+ * ring on the active list row; a reader that scrolls as a whole with the
+ * HTML body at least half a window high.
+ *
  * Everything sits on the 4 px grid (`space.*`); panes share `space.pane`.
  */
 
@@ -135,7 +143,7 @@ export function colorSlot(key: string): number {
 
 const avatarColors = AVATAR_COLORS.map(
   (color, i) =>
-    `[data-color="${i}"]${p("message-list.row.avatar")}, [data-color="${i}"]${p("tag.dot")}, [data-color="${i}"]${p("avatar")} { background-color: var(--nail-color-avatar-${i + 1}, ${color}); }`,
+    `[data-color="${i}"]${p("message-list.row.avatar")}, [data-color="${i}"]${p("tag.dot")}, [data-color="${i}"]${p("avatar")}, [data-color="${i}"]${p("folder-tree.section.dot")} { background-color: var(--nail-color-avatar-${i + 1}, ${color}); }`,
 ).join("\n");
 
 const focusRing = `outline: 2px solid ${T.focus}; outline-offset: 2px;`;
@@ -167,17 +175,25 @@ ${p("form.button")}[data-state~="selected"], ${p("form.button")}[aria-pressed="t
   color: ${T.accent}; background-color: ${T.accentSoft}; border-color: transparent; font-weight: ${T.semibold};
 }
 ${p("form.button.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
-${p("toolbar")} { display: flex; align-items: center; flex-wrap: wrap; gap: ${T.xs}; min-height: calc(${T.control} + 2 * ${T.sm}); padding: ${T.sm} ${T.pane}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
-${p("toolbar.button")} {
-  display: inline-flex; align-items: center; gap: ${T.sm};
+${p("toolbar")} { display: flex; align-items: center; flex-wrap: wrap; gap: ${T.xs}; min-width: 0; min-height: calc(${T.control} + 2 * ${T.sm}); padding: ${T.sm} ${T.pane}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
+${p("toolbar")}[data-overflow="more"] { flex-wrap: nowrap; overflow: hidden; }
+${ps("toolbar.button", "toolbar.more")} {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: ${T.sm};
   min-height: ${T.control}; padding: 0 ${T.md}; border: none; border-radius: ${T.rSm};
   font-size: ${T.body}; color: ${T.fg}; background-color: transparent; white-space: nowrap;
 }
-${p("toolbar.button")}:hover { background-color: ${T.raised}; }
-${p("toolbar.button")}:focus-visible { ${focusRing} }
-${p("toolbar.button")}:disabled { opacity: ${T.disabled}; }
-${p("toolbar.button.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
-${p("toolbar.separator")} { align-self: center; width: 1px; height: calc(${T.control} - 2 * ${T.xs}); margin: 0 ${T.xs}; background-color: ${T.border}; }
+${pss(":hover", "toolbar.button", "toolbar.more")} { background-color: ${T.raised}; }
+${pss(":focus-visible", "toolbar.button", "toolbar.more")} { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${pss(":disabled", "toolbar.button", "toolbar.more")} { opacity: ${T.disabled}; }
+${p("toolbar.button")}[data-display="icon"] { width: ${T.control}; padding: 0; }
+${p("toolbar.button")}[data-rank="1"] { color: ${T.accent}; background-color: ${T.accentSoft}; font-weight: ${T.semibold}; }
+${p("toolbar.button")}[data-rank="1"]:hover { background-color: ${T.accentSoft}; box-shadow: inset 0 0 0 1px ${T.accent}; }
+${p("toolbar.button")}[data-rank="1"] ${p("toolbar.button.icon")} { color: ${T.accent}; }
+${p("toolbar.more")}[data-state~="expanded"] { background-color: ${T.raised}; }
+${ps("toolbar.button.icon", "toolbar.more.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
+${p("toolbar.separator")} { align-self: center; flex: 0 0 auto; width: 1px; height: calc(${T.control} - 2 * ${T.xs}); margin: 0 ${T.xs}; background-color: ${T.border}; }
+${p("toolbar.separator")}[data-wrap-edge="start"] { display: none; }
+${p("toolbar.separator")}[data-wrap-edge="end"] { visibility: hidden; }
 ${p("window.close")} { display: inline-flex; align-items: center; justify-content: center; width: ${T.control}; height: ${T.control}; padding: 0; border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent; }
 ${p("window.close")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
 ${p("window.close")}:focus-visible { ${focusRing} }
@@ -203,7 +219,11 @@ ${p("form.checkbox")} { width: ${T.icon}; height: ${T.icon}; margin: 0; accent-c
 ${p("search-bar.field")} { display: flex; align-items: center; gap: ${T.sm}; min-height: calc(${T.control} + ${T.xs}); padding: 0 ${T.md}; border: ${T.controlBorder}; border-radius: ${T.rMd}; color: ${T.muted}; background-color: ${T.subtle}; }
 ${p("search-bar.field")}:focus-within { outline: 2px solid ${T.focus}; outline-offset: 0; border-color: ${T.accent}; }
 ${p("search-bar.input")} { flex: 1 1 auto; min-width: 0; border: none; outline: none; font-size: ${T.body}; color: ${T.fg}; background: transparent; }
-${p("search-bar.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }`;
+${p("search-bar.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
+${p("search-bar.shortcut")} {
+  flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rSm};
+  font-family: ${T.fontMono}; font-size: ${T.label}; line-height: calc(${T.label} + ${T.xs}); color: ${T.muted}; background-color: ${T.bg};
+}`;
 
 const SWITCH = `${p("switch")} {
   position: relative; display: inline-flex; align-items: center; flex: 0 0 auto;
@@ -319,6 +339,8 @@ ${p("message-list.row")}:hover { background-color: ${T.subtle}; }
 ${p("message-list.row")}[data-state~="selected"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
 ${p("message-list.row")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("message-list")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${p("message-list")}:focus-visible:has(${p("message-list.row")}[aria-selected="true"]) { outline: none; }
+${p("message-list")}:focus-visible ${p("message-list.row")}[aria-selected="true"] { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("message-list.row.unread-dot")} {
   position: absolute; inset-inline-start: calc((${T.pane} - ${T.xs} - ${T.xxs} - 1px) / 2); inset-block-start: calc(${T.row} + ${T.md} + 1px);
   width: calc(${T.xs} + ${T.xxs} + 1px); height: calc(${T.xs} + ${T.xxs} + 1px); border-radius: 50%; background-color: var(--nail-skin-unread-dot);
@@ -348,13 +370,13 @@ const READER_SLOTS = [
   "sync-message-body",
 ] as const;
 
-const READER = `${p("message-view")} { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; background-color: ${T.bg}; }
+const READER = `${p("message-view")} { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable both-edges; background-color: ${T.bg}; }
 ${ps(...READER_SLOTS)} {
   box-sizing: border-box; width: min(68ch, 100% - 2 * ${T.xxl}); margin-inline: auto; margin-block-start: ${T.sm};
   font-family: ${T.fontUi};
 }
 ${p("message-view.column")} {
-  display: flex; flex-direction: column; flex: 1 1 auto; gap: ${T.lg}; min-height: 0;
+  display: flex; flex-direction: column; flex: 1 0 auto; gap: ${T.lg}; min-height: 0;
   width: 100%; max-width: calc(68ch + 2 * ${T.xxl}); margin-inline: auto; padding: ${T.xl} ${T.xxl} 0;
   font-family: ${T.fontUi};
 }
@@ -362,8 +384,8 @@ ${p("message-view.header")} { display: grid; gap: ${T.xs}; padding: 0; border: n
 ${p("message-view.header.subject")} { margin: 0 0 ${T.xs}; font-family: ${T.fontDisplay}; font-size: ${T.title}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
 ${p("message-view.header.field")} { font-size: ${T.small}; color: ${T.muted}; }
 ${p("message-view.header.label")} { min-width: calc(4 * ${T.lg}); }
-${p("message-view.text")} { max-width: 68ch; margin: 0; padding-bottom: ${T.xl}; color: ${T.fg}; }
-${p("message-view.body")} { flex: 1 1 auto; min-height: 0; border: none; background-color: ${T.bg}; }
+${p("message-view.text")} { max-width: 68ch; margin: 0; padding-bottom: ${T.xl}; overflow: visible; color: ${T.fg}; }
+${p("message-view.body")} { flex: 1 1 auto; min-height: max(calc(16 * ${T.lg}), 50vh); border: none; background-color: ${T.bg}; }
 ${p("message-view.attachments")} { display: flex; flex-wrap: wrap; gap: ${T.sm}; margin: 0; padding: 0; list-style: none; }
 ${p("attachment-card")} {
   display: grid; grid-template-columns: calc(${T.control} + ${T.xs}) minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
@@ -383,8 +405,12 @@ ${p("attachment-card.type")}[data-kind="calendar"] { background-color: var(--nai
 ${p("attachment-card.text")} { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: ${T.sm}; min-width: 0; }
 ${p("attachment-card.name")} { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; font-weight: ${T.semibold}; }
 ${p("attachment-card.size")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
-${p("attachment-card.status")} { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: ${T.small}; color: ${T.muted}; }
-${p("attachment-card")}[data-state~="failed"] ${p("attachment-card.status")} { color: ${T.danger}; }
+${p("attachment-card.status")} { grid-column: 2; display: flex; align-items: center; gap: ${T.xxs}; min-width: 0; overflow: hidden; white-space: nowrap; font-size: ${T.small}; color: ${T.muted}; }
+${p("attachment-card.status")}[data-state~="empty"] { display: none; }
+${p("attachment-card.status.icon")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
+${p("attachment-card.status.text")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+${p("attachment-card")}[data-state~="saved"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="downloaded"] ${p("attachment-card.status")} { color: ${T.success}; }
+${p("attachment-card")}[data-state~="failed"] ${p("attachment-card.status")}, ${p("attachment-card")}[data-state~="unsupported"] ${p("attachment-card.status")} { color: ${T.danger}; }
 ${p("attachment-card.actions")} { display: flex; align-items: center; gap: ${T.xxs}; }`;
 
 /** Folder pane, account switcher and status bar on the same grid. */
@@ -409,8 +435,52 @@ ${p("folder-tree.item")}[data-state~="selected"] ${p("folder-tree.item.icon")} {
 ${p("folder-tree.item.name")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 ${p("folder-tree.item.unread-count")} { font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; }
 ${p("folder-tree.item")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
+${p("folder-tree")}[data-mode="sections"] { display: flex; flex-direction: column; gap: ${T.md}; padding: ${T.md} ${T.sm}; }
+${p("folder-tree.compose")} {
+  display: inline-flex; align-items: center; justify-content: center; gap: ${T.sm}; flex: 0 0 auto;
+  min-height: calc(${T.control} + ${T.sm}); margin: 0 ${T.xs}; padding: 0 ${T.md};
+  border: none; border-radius: ${T.rMd}; font-size: ${T.body}; font-weight: ${T.semibold};
+  color: ${T.accentFg}; background-color: ${T.accent};
+}
+${p("folder-tree.compose")}:hover { background-color: color-mix(in srgb, ${T.accent} 88%, ${T.fg}); }
+${p("folder-tree.compose")}:focus-visible { ${focusRing} }
+${p("folder-tree.compose")}:disabled { opacity: ${T.disabled}; }
+${p("folder-tree.compose.icon")} { flex: 0 0 auto; width: ${T.icon}; height: ${T.icon}; }
+${p("folder-tree")}[data-mode="sections"] > ${p("folder-tree.list")} { display: grid; gap: ${T.lg}; align-content: start; }
+${p("folder-tree.section")} { display: grid; gap: ${T.xxs}; outline: none; }
+${p("folder-tree.group")} { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+${ps("folder-tree.section.header", "folder-tree.account")} {
+  display: flex; align-items: center; gap: ${T.sm}; min-width: 0; min-height: calc(${T.control} - ${T.sm}); padding: 0 ${T.sm};
+  border-radius: ${T.rSm}; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.04em; text-transform: uppercase;
+  color: ${T.muted}; user-select: none;
+}
+${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.account")} { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.section.header")}:hover, ${p("folder-tree.section")}[aria-expanded] > ${p("folder-tree.account")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("folder-tree.section.chevron")} { flex: 0 0 auto; width: calc(${T.icon} - ${T.xs}); height: calc(${T.icon} - ${T.xs}); }
+${p("folder-tree.section.dot")} { flex: 0 0 auto; width: ${T.sm}; height: ${T.sm}; border-radius: 50%; }
+${p("folder-tree.section.title")} { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("folder-tree.section.unread-count")} { margin-inline-start: auto; font-size: ${T.small}; font-weight: ${T.semibold}; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; color: ${T.accent}; }
+${ps("folder-tree.favorite", "folder-tree.smart-folder")} {
+  display: grid; grid-template-columns: ${T.icon} minmax(0, 1fr) auto; align-items: center; column-gap: ${T.md};
+  min-height: ${T.control}; padding: 0 ${T.sm}; border-radius: ${T.rSm}; font-size: ${T.body}; color: ${T.fg};
+}
+${pss(":hover", "folder-tree.favorite", "folder-tree.smart-folder")} { background-color: ${T.raised}; }
+${pss(":focus-visible", "folder-tree.favorite", "folder-tree.smart-folder")} { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${p("folder-tree.favorite")}[data-state~="selected"], ${p("folder-tree.smart-folder")}[data-state~="selected"] { color: ${T.selectionFg}; background-color: ${T.selection}; font-weight: ${T.semibold}; }
+${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon")}, ${p("folder-tree.smart-folder")}[data-state~="selected"] ${p("folder-tree.item.icon")} { color: ${T.accent}; }
+${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")} { color: ${T.accent}; font-weight: ${T.semibold}; }
 ${p("status-bar")} { display: flex; align-items: center; gap: ${T.md}; min-height: calc(${T.control} - ${T.xs}); padding: 0 ${T.pane}; font-size: ${T.small}; color: ${T.muted}; border-top: 1px solid ${T.border}; background-color: ${T.subtle}; }
 ${p("search-bar")} { padding: ${T.md} ${T.pane} ${T.sm}; }`;
+
+/** The message list header (M5b): search, title with counts, filter chips. */
+const LIST_HEADER = `${p("list-header")} { display: grid; gap: ${T.md}; padding: ${T.md} ${T.pane} ${T.sm}; border-bottom: 1px solid ${T.border}; background-color: ${T.bg}; }
+${p("list-header")} ${p("search-bar")} { padding: 0; }
+${p("list-header.heading")} { display: flex; align-items: baseline; gap: ${T.sm}; min-width: 0; }
+${p("list-header.title")} { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
+${p("list-header.counts")} { flex: 0 0 auto; font-size: ${T.small}; font-variant-numeric: tabular-nums; color: ${T.muted}; white-space: nowrap; }
+${p("list-header.chips")} { display: flex; flex-wrap: wrap; gap: ${T.xs}; }
+${p("list-header.chips")} ${p("chip")} { min-height: calc(${T.control} - ${T.sm}); cursor: default; }
+${p("list-header.chips")} ${p("chip")}:hover { color: ${T.fg}; }`;
 
 /** Settings → Appearance. */
 const APPEARANCE = `${p("appearance")} { display: grid; gap: ${T.section}; align-content: start; max-width: calc(48 * ${T.lg}); padding: ${T.pane}; overflow: auto; }
@@ -434,6 +504,27 @@ ${p("appearance.accent-picker")} { width: calc(${T.control} + ${T.md}); height: 
 ${p("appearance.actions")} { display: flex; justify-content: flex-end; gap: ${T.sm}; }
 ${p("form.error")} { margin: 0; font-size: ${T.small}; color: ${T.danger}; }`;
 
+/**
+ * High contrast (any theme in `high-contrast` mode) for the M5b parts, like
+ * the built-in theme does for the M5a ones: everything inside a selected
+ * item uses `selection-fg`, hover is the soft accent, focus rings are 3px,
+ * buttons get the thin (2px) border.
+ */
+const HC = ':root[data-nail-mode="high-contrast"]';
+const HIGH_CONTRAST = `${HC} ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.icon")}, ${HC} ${p("folder-tree.favorite")}[data-state~="selected"] ${p("folder-tree.item.unread-count")}, ${HC} ${p("folder-tree.smart-folder")}[data-state~="selected"] ${p("folder-tree.item.icon")} { color: inherit; }
+${HC} ${p("folder-tree.favorite")}:hover, ${HC} ${p("folder-tree.smart-folder")}:hover, ${HC} ${p("toolbar.more")}:hover { background-color: ${T.accentSoft}; }
+${HC} ${p("folder-tree.favorite")}[data-state~="selected"]:hover, ${HC} ${p("folder-tree.smart-folder")}[data-state~="selected"]:hover { background-color: ${T.selection}; }
+${HC} ${p("folder-tree.favorite")}:focus-visible, ${HC} ${p("folder-tree.smart-folder")}:focus-visible, ${HC} ${p("toolbar.more")}:focus-visible, ${HC} ${p("folder-tree.compose")}:focus-visible, ${HC} ${p("list-header.chips")} ${p("chip")}:focus-visible { outline: 3px solid ${T.focus}; }
+${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.section.header")}, ${HC} ${p("folder-tree.section")}:focus-visible > ${p("folder-tree.account")} { outline: 3px solid ${T.focus}; }
+${HC} ${p("toolbar.more")} { border: var(--nail-border-thin, 2px solid ${T.border}); }
+${HC} ${p("message-list")}:focus-visible ${p("message-list.row")}[aria-selected="true"] { outline: 3px solid ${T.focus}; }
+${HC} ${p("segmented.option")}[aria-checked="true"], ${HC} ${p("segmented.option")}[aria-pressed="true"] {
+  color: ${T.accentFg}; background-color: ${T.accent}; box-shadow: none; outline: 2px solid ${T.fg}; outline-offset: -2px;
+}
+@media (forced-colors: active) {
+  ${p("segmented.option")}[aria-checked="true"], ${p("segmented.option")}[aria-pressed="true"] { forced-color-adjust: none; color: HighlightText; background-color: Highlight; outline: 2px solid CanvasText; outline-offset: -2px; }
+}`;
+
 /** Tokens used above that are not in the schema yet (derived defaults). */
 const DERIVED = `:root { --nail-skin-unread-dot: var(--nail-color-unread, var(--nail-color-accent)); }`;
 
@@ -452,7 +543,9 @@ export const SKIN_CSS = [
   CARDS_WINDOWS,
   PANES,
   APPEARANCE,
+  LIST_HEADER,
   MESSAGE_LIST,
   READER,
   PALETTES,
+  HIGH_CONTRAST,
 ].join("\n");

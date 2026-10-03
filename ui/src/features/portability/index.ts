@@ -137,3 +137,37 @@ export const handlePortabilityEvent: FeatureEventHandler = (event, { queryClient
 export const events: Feature["events"] = [handlePortabilityEvent];
 /** Background components. */
 export const effects: Feature["effects"] = [];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  [IMPORT_EXPORT_WIDGET]: {
+    labels: [
+      "portability-settings-tab-import-export",
+      "portability-import-export-title",
+      "portability-open-import",
+      "portability-open-export",
+      "portability-jobs-import-export",
+    ],
+    keywords: "settings-keywords-import-export",
+  },
+  [BACKUP_RESTORE_WIDGET]: {
+    labels: [
+      "portability-settings-tab-backup",
+      "portability-backup-restore-title",
+      "portability-open-backup",
+      "portability-open-restore",
+      "portability-jobs-backup",
+    ],
+  },
+  [DIAGNOSTICS_WIDGET]: {
+    labels: [
+      "portability-settings-tab-diagnostics",
+      "portability-diagnostics-title",
+      "portability-diagnostics-open",
+    ],
+    keywords: "settings-keywords-diagnostics",
+  },
+};

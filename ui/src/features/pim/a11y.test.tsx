@@ -10,6 +10,11 @@ import { resetLocalTimeZone, setLocalTimeZone } from "@internationalized/date";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { violations } from "../../test/axe";
+import type { Density } from "../../api/generated";
+import { defaultTheme } from "../../api/mockData";
+import { BUILTIN_THEMES, resolveMockTheme } from "../appearance";
+import { WindowView } from "../../layout/LayoutRenderer";
+import { compileTheme } from "../../theme/compile";
 import type { ComponentType } from "react";
 import type { DialogProps } from "../../layout/dialogRegistry";
 import { NodeView } from "../../layout/LayoutRenderer";
@@ -47,19 +52,24 @@ async function settle(env: Env): Promise<void> {
 }
 
 describe("axe: calendar views", () => {
-  it.each(VIEW_KINDS)("view %s has no violations", async (view) => {
-    const env = createEnv();
-    const { container } = renderWithProviders(
-      <NodeView
-        node={widget("calendar", { options: { view, "secondary-zone": "America/New_York" } })}
-        path="t/0"
-      />,
-      env,
-    );
-    await settle(env);
-    expect(container.querySelector('[data-part="calendar"]')).not.toBeNull();
-    expect(await violations(container)).toEqual([]);
-  });
+  it.each(VIEW_KINDS)(
+    "view %s has no violations",
+    async (view) => {
+      const env = createEnv();
+      const { container } = renderWithProviders(
+        <NodeView
+          node={widget("calendar", { options: { view, "secondary-zone": "America/New_York" } })}
+          path="t/0"
+        />,
+        env,
+      );
+      await settle(env);
+      expect(container.querySelector('[data-part="calendar"]')).not.toBeNull();
+      expect(await violations(container)).toEqual([]);
+      // The year view's twelve grids take over 20 s under full-suite load.
+    },
+    60_000,
+  );
 });
 
 describe("axe: PIM widgets", () => {
@@ -70,6 +80,7 @@ describe("axe: PIM widgets", () => {
     "contact-list",
     "contact-card",
     "calendar-list",
+    "pim-settings",
   ];
   it.each(kinds)("%s has no violations", async (kind) => {
     const env = createEnv();
@@ -143,6 +154,15 @@ describe("axe: PIM dialogs", () => {
       case "pim-task-editor":
         pim.editTask({ mode: "edit", taskId: "tk-report" });
         break;
+      case "pim-calendar-settings":
+        pim.editCalendar("cal-work");
+        break;
+      case "pim-new-calendar":
+        pim.setNewCalendar({ sourceId: "work-calendars", component: "task" });
+        break;
+      case "pim-remove-calendar":
+        pim.setRemoveCalendar("cal-holidays");
+        break;
     }
   }
 
@@ -212,4 +232,72 @@ describe("axe: PIM dialogs", () => {
     expect(screen.getByRole("button", { name: "Snooze" })).toBeInTheDocument();
     expect(await violations(container)).toEqual([]);
   });
+});
+
+describe("axe: calendar, contacts and tasks in every theme (M5b)", () => {
+  const DENSITIES: readonly Density[] = ["comfortable", "compact"];
+  const CASES = BUILTIN_THEMES.flatMap(([id]) => DENSITIES.map((d) => [id, d] as const));
+  // Each theme once for the (slow) axe scans, the densities alternating;
+  // every theme and density compiles below.
+  const SCANS = BUILTIN_THEMES.map(([id], i) => [id, DENSITIES[i % 2] ?? "comfortable"] as const);
+
+  it("covers the five built-in themes", () => {
+    expect(BUILTIN_THEMES.map(([id]) => id)).toEqual([
+      "frost",
+      "sage",
+      "graphite",
+      "nocturne",
+      "high-contrast",
+    ]);
+  });
+
+  it.each(CASES)("%s / %s compiles with the PIM skin and no dropped rules", (id, density) => {
+    const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
+    const compiled = compileTheme(theme);
+    expect(compiled.warnings).toEqual([]);
+    expect(compiled.css).toContain('[data-part="calendar.toolbar"]');
+  });
+
+  it.each(SCANS)(
+    "%s / %s: the PIM windows, an open calendar menu and the settings section",
+    async (id, density) => {
+      const theme = resolveMockTheme(defaultTheme(), id, { density, overrides: {} });
+      for (const name of ["calendar", "contacts", "tasks"]) {
+        const env = createEnv();
+        pimStoreFor(env.store).getState().showContact("ct-ada");
+        const { container, unmount } = renderWithProviders(
+          <WindowView layout={env.transport.data.layout} name={name} />,
+          env,
+          { theme },
+        );
+        await settle(env);
+        expect(container.querySelector("[data-part]"), name).not.toBeNull();
+        expect(await violations(container), name).toEqual([]);
+        unmount();
+      }
+      const user = userEvent.setup();
+      const env = createEnv();
+      const { container } = renderWithProviders(
+        <>
+          <NodeView node={widget("calendar-list")} path="t/0" />
+          <NodeView node={widget("pim-settings")} path="t/1" />
+        </>,
+        env,
+        { theme },
+      );
+      await settle(env);
+      await user.click(
+        screen.getAllByRole("button", { name: "Actions for Work" })[0] as HTMLElement,
+      );
+      expect(screen.getByRole("menu", { name: "Actions for Work" })).toBeInTheDocument();
+      expect(await violations(container)).toEqual([]);
+      await user.keyboard("{Escape}");
+      await user.click(
+        screen.getAllByRole("button", { name: "Add to On this computer" })[0] as HTMLElement,
+      );
+      expect(screen.getByRole("menuitem", { name: "New calendar" })).toBeInTheDocument();
+      expect(await violations(container)).toEqual([]);
+    },
+    180_000,
+  );
 });

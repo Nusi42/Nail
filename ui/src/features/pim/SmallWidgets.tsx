@@ -52,26 +52,28 @@ export function MiniMonth({ node }: WidgetProps) {
       <div data-part="mini-month.header">
         <button
           type="button"
-          data-part="mini-month.previous"
+          data-part="form.button"
+          data-variant="icon ghost"
+          data-field="mini-month-previous"
           aria-label={t("pim-month-previous")}
           title={t("pim-month-previous")}
           onClick={() => setFocused((f) => f.add({ months: -1 }))}
         >
-          <Icon name="chevron-left" part="mini-month.icon" />
-          <span data-part="pim.nav.text">{t("pim-nav-previous-short")}</span>
+          <Icon name="chevron-left" part="form.button.icon" />
         </button>
         <h2 data-part="mini-month.title" aria-live="polite">
           {monthName}
         </h2>
         <button
           type="button"
-          data-part="mini-month.next"
+          data-part="form.button"
+          data-variant="icon ghost"
+          data-field="mini-month-next"
           aria-label={t("pim-month-next")}
           title={t("pim-month-next")}
           onClick={() => setFocused((f) => f.add({ months: 1 }))}
         >
-          <Icon name="chevron-right" part="mini-month.icon" />
-          <span data-part="pim.nav.text">{t("pim-nav-next-short")}</span>
+          <Icon name="chevron-right" part="form.button.icon" />
         </button>
       </div>
       <MonthGrid

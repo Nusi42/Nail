@@ -66,3 +66,38 @@ export const events: Feature["events"] = [handleCustomizationEvent];
 
 /** Background components mounted once in the app shell. */
 export const effects: Feature["effects"] = [Inspector, SplitWriteBack];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "config-errors": { labels: ["config-error-list-label"] },
+  "toolbar-editor": {
+    labels: [
+      "customize-toolbar-tab",
+      "customize-toolbar-label",
+      "customize-toolbar-choose",
+      "customize-toolbar-add",
+      "customize-toolbar-reset",
+    ],
+  },
+  "key-binding-editor": {
+    labels: [
+      "customize-keys-tab",
+      "customize-keys-label",
+      "customize-keys-table",
+      "customize-keys-add",
+      "customize-keys-context",
+    ],
+    keywords: "settings-keywords-key-binding-editor",
+  },
+  "column-editor": {
+    labels: [
+      "customize-columns-tab",
+      "customize-columns-label",
+      "customize-columns-items",
+      "customize-columns-add",
+    ],
+  },
+};

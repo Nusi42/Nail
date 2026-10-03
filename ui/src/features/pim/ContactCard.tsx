@@ -7,6 +7,7 @@
  * upcoming meetings with this person (design: "A contact view shows recent
  * mail and upcoming meetings with that person").
  */
+import { colorSlot } from "../../theme/skin";
 import type { CalendarDate } from "@internationalized/date";
 import { useState } from "react";
 import type {
@@ -184,7 +185,11 @@ function ContactDetails({ contact }: { contact: Contact }) {
             alt={t("pim-contact-photo-of", { name })}
           />
         ) : (
-          <span data-part="contact-card.avatar" aria-hidden="true">
+          <span
+            data-part="contact-card.avatar"
+            data-color={colorSlot(primaryEmail || name)}
+            aria-hidden="true"
+          >
             {initialsOf(name)}
           </span>
         )}

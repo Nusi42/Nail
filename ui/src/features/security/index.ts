@@ -165,3 +165,79 @@ export {
   simulatePinRequest,
   type VaultMockState,
 } from "./vaultMock";
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "security-keys": {
+    labels: [
+      "security-settings-tab-keys",
+      "security-keys-label",
+      "security-keys-list",
+      "security-keys-tools",
+      "security-keys-own-only",
+    ],
+    keywords: "settings-keywords-security-keys",
+  },
+  "security-identities": {
+    labels: [
+      "security-settings-tab-identities",
+      "security-identities-label",
+      "security-identity-sign",
+      "security-identity-encrypt",
+      "security-identity-autocrypt",
+      "security-identity-prefer-encrypt",
+      "security-identity-protect-headers",
+      "security-identity-openpgp-key",
+      "security-identity-smime-cert",
+      "security-identity-technology",
+    ],
+    keywords: "settings-keywords-security-keys",
+  },
+  "security-settings": {
+    labels: [
+      "security-settings-tab-protection",
+      "security-settings-label",
+      "security-vault-title",
+      "security-vault-turn-on",
+      "security-index-title",
+      "security-lookup-title",
+      "security-lookup-policy",
+    ],
+    keywords: "settings-keywords-security-settings",
+  },
+  "security-autocrypt": {
+    labels: [
+      "security-settings-tab-autocrypt",
+      "security-autocrypt-label",
+      "security-autocrypt-send-title",
+      "security-autocrypt-import-title",
+    ],
+  },
+  [RECOVERY_WIDGET]: {
+    labels: [
+      "security-settings-tab-recovery-key",
+      "security-recovery-key-label",
+      "security-recovery-title",
+      "security-recovery-create",
+      "security-recovery-check",
+      "security-recovery-replace",
+      "security-recovery-remove",
+    ],
+  },
+  [SMARTCARDS_WIDGET]: {
+    labels: [
+      "security-settings-tab-smartcards",
+      "security-smartcard-title",
+      "security-smartcard-modules",
+      "security-smartcard-add-module",
+      "security-smartcard-cards",
+      "security-smartcard-pin-cache",
+      "security-smartcard-use-openpgp",
+      "security-smartcard-use-smime",
+    ],
+    keywords: "settings-keywords-security-smartcards",
+  },
+};

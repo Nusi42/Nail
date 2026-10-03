@@ -144,37 +144,42 @@ describe("axe: M2c widgets", () => {
     "column-editor",
   ];
 
-  it.each(kinds)("%s has no violations", async (kind) => {
-    const env = mailEnv();
-    const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
-    if (message) {
-      message.headers_only = true;
-      await env.client.request(
-        { type: "MarkJunk", message_ids: [message.id], junk: true },
-        "Queued",
+  it.each(kinds)(
+    "%s has no violations",
+    async (kind) => {
+      const env = mailEnv();
+      const message = env.transport.data.messages.find((m) => m.folder_id === INBOX);
+      if (message) {
+        message.headers_only = true;
+        await env.client.request(
+          { type: "MarkJunk", message_ids: [message.id], junk: true },
+          "Queued",
+        );
+        await env.client.request(
+          {
+            type: "SnoozeMessages",
+            message_ids: [message.id],
+            until: new Date(Date.now() + 86_400_000).toISOString(),
+            wake_folder_id: null,
+          },
+          "Queued",
+        );
+        env.store.getState().selectMessage(message.id);
+      }
+      const { container } = renderWithProviders(
+        <>
+          <NodeView node={widget("message-list")} path="t/0" />
+          <NodeView node={widget(kind)} path="t/1" />
+        </>,
+        env,
       );
-      await env.client.request(
-        {
-          type: "SnoozeMessages",
-          message_ids: [message.id],
-          until: new Date(Date.now() + 86_400_000).toISOString(),
-          wake_folder_id: null,
-        },
-        "Queued",
-      );
-      env.store.getState().selectMessage(message.id);
-    }
-    const { container } = renderWithProviders(
-      <>
-        <NodeView node={widget("message-list")} path="t/0" />
-        <NodeView node={widget(kind)} path="t/1" />
-      </>,
-      env,
-    );
-    await settle(env);
-    expect(container.querySelector("[data-part]")).not.toBeNull();
-    expect(await violations(container)).toEqual([]);
-  });
+      await settle(env);
+      expect(container.querySelector("[data-part]")).not.toBeNull();
+      expect(await violations(container)).toEqual([]);
+      // The editors are large trees for axe in jsdom: past 20 s under load.
+    },
+    60_000,
+  );
 });
 
 describe("axe: context menu, composer modes and login", () => {

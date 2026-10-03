@@ -10,11 +10,16 @@
  * agenda, free-time), `calendars` (ids; default all visible), `time-zone`,
  * `secondary-zone`, `hour-start`, `hour-end`, `scroll-to`, `max-events`
  * (month), `duration` (free-time minutes), `work-start` / `work-end` (the
- * free-time timeline's hours), `header`.
+ * free-time timeline's hours), `header`, `view-switch` (`segmented`, the
+ * default, or `menu`).
+ *
+ * M5b (WP164): the header is one toolbar line that never wraps — Today,
+ * previous / next, the range shown (cut with an ellipsis when the pane is
+ * narrow), the segmented view switch and "New event".
  * Keys: the widget is the `calendar` key context.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import type { ViewKind } from "./time";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
@@ -100,6 +105,71 @@ function clampHour(value: number, fallback: number): number {
   return Number.isFinite(value) ? Math.min(24, Math.max(0, Math.trunc(value))) : fallback;
 }
 
+/**
+ * The view switch: a segmented row of toggle buttons (one pressed), or with
+ * `view-switch="menu"` a drop-down for narrow panes.
+ */
+function ViewSwitch({
+  views,
+  view,
+  menu,
+  onChange,
+}: {
+  views: readonly ViewKind[];
+  view: ViewKind;
+  menu: boolean;
+  onChange(view: ViewKind): void;
+}) {
+  const t = useT();
+  const id = useId();
+  if (menu) {
+    return (
+      <div data-part="calendar.view-menu">
+        <label data-part="form.label" htmlFor={id}>
+          {t("pim-views-label")}
+        </label>
+        <select
+          id={id}
+          data-part="form.select"
+          data-field="calendar-view"
+          value={view}
+          onChange={(e) => {
+            if (isViewKind(e.target.value)) onChange(e.target.value);
+          }}
+        >
+          {views.map((kind) => (
+            <option key={kind} value={kind}>
+              {t(`pim-view-${kind}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+  return (
+    <div
+      data-part="segmented"
+      data-field="calendar-view"
+      role="group"
+      aria-label={t("pim-views-label")}
+    >
+      {views.map((kind) => (
+        <button
+          key={kind}
+          type="button"
+          data-part="segmented.option"
+          data-value={kind}
+          data-view={kind}
+          aria-pressed={kind === view}
+          onClick={() => onChange(kind)}
+        >
+          {t(`pim-view-${kind}`)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function CalendarWidget({ node, nodeKey }: WidgetProps) {
   const t = useT();
   const format = useDateFormat();
@@ -115,6 +185,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
   const views = optionList(node, "views", VIEW_KINDS).filter(isViewKind);
   const calendarIds = optionList(node, "calendars", []);
   const header = optionBool(node, "header", true);
+  const switchStyle = optionString(node, "view-switch", "segmented");
   const hourStart = clampHour(optionNumber(node, "hour-start", 0), 0);
   const hourEnd = Math.max(hourStart + 1, clampHour(optionNumber(node, "hour-end", 24), 24));
   const anchor = useAnchor(tz);
@@ -206,21 +277,12 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
       aria-busy={instances.isFetching}
     >
       {header && (
-        <div data-part="calendar.header">
+        <div data-part="calendar.toolbar">
           <div data-part="calendar.nav" role="group" aria-label={t("pim-nav-label")}>
             <button
               type="button"
-              data-part="calendar.nav.previous"
-              aria-label={t("pim-nav-previous")}
-              title={t("pim-nav-previous")}
-              onClick={() => goTo(stepAnchor(view, anchor, -1, options))}
-            >
-              <Icon name="chevron-left" part="calendar.nav.icon" />
-              <span data-part="pim.nav.text">{t("pim-nav-previous-short")}</span>
-            </button>
-            <button
-              type="button"
-              data-part="calendar.nav.today"
+              data-part="form.button"
+              data-field="calendar-today"
               aria-current={anchor.compare(today) === 0 ? "date" : undefined}
               onClick={() => pim.getState().setAnchor(null)}
             >
@@ -228,42 +290,47 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
             </button>
             <button
               type="button"
-              data-part="calendar.nav.next"
+              data-part="form.button"
+              data-variant="icon ghost"
+              data-field="calendar-previous"
+              aria-label={t("pim-nav-previous")}
+              title={t("pim-nav-previous")}
+              onClick={() => goTo(stepAnchor(view, anchor, -1, options))}
+            >
+              <Icon name="chevron-left" part="form.button.icon" />
+            </button>
+            <button
+              type="button"
+              data-part="form.button"
+              data-variant="icon ghost"
+              data-field="calendar-next"
               aria-label={t("pim-nav-next")}
               title={t("pim-nav-next")}
               onClick={() => goTo(stepAnchor(view, anchor, 1, options))}
             >
-              <Icon name="chevron-right" part="calendar.nav.icon" />
-              <span data-part="pim.nav.text">{t("pim-nav-next-short")}</span>
+              <Icon name="chevron-right" part="form.button.icon" />
             </button>
           </div>
-          <h2 data-part="calendar.title" aria-live="polite">
+          <h2 data-part="calendar.title" aria-live="polite" title={title}>
             {title}
           </h2>
           {views.length > 1 && (
-            <div data-part="calendar.views" role="group" aria-label={t("pim-views-label")}>
-              {views.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  data-part="calendar.views.button"
-                  data-view={kind}
-                  data-state={kind === view ? "selected" : undefined}
-                  aria-pressed={kind === view}
-                  onClick={() => pim.getState().setView(kind)}
-                >
-                  {t(`pim-view-${kind}`)}
-                </button>
-              ))}
-            </div>
+            <ViewSwitch
+              views={views}
+              view={view}
+              menu={switchStyle === "menu"}
+              onChange={(kind) => pim.getState().setView(kind)}
+            />
           )}
           <button
             type="button"
-            data-part="calendar.new"
+            data-part="form.button"
+            data-variant="primary"
+            data-field="calendar-new-event"
             onClick={() => openNewEvent(ctx, anchor, { hour: 9, minute: 0 }, tz)}
           >
-            <Icon name="plus" part="calendar.new.icon" />
-            <span data-part="calendar.new.label">{t("pim-new-event")}</span>
+            <Icon name="plus" part="form.button.icon" />
+            <span data-part="form.button.label">{t("pim-new-event")}</span>
           </button>
         </div>
       )}

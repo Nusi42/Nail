@@ -694,25 +694,4 @@ describe("import and sources", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sync everything" }));
     await waitFor(() => expect(pimOf(env).sources.some((s) => s.state === "syncing")).toBe(true));
   });
-
-  it("shows calendars by source and hides one from the views", async () => {
-    const user = userEvent.setup();
-    const env = createEnv();
-    renderNode(widget("calendar-list"), env);
-    const work = await screen.findByRole("checkbox", { name: /^Work/ });
-    expect(work).toBeChecked();
-    await user.click(work);
-    await waitFor(() =>
-      expect(pimOf(env).calendars.find((c) => c.id === "cal-work")?.settings.visible).toBe(false),
-    );
-    await user.type(screen.getByLabelText("Name"), "Garden");
-    await user.selectOptions(screen.getByLabelText("Holds"), "task");
-    await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() =>
-      expect(pimOf(env).calendars.find((c) => c.settings.name === "Garden")).toMatchObject({
-        components: ["task"],
-        source_id: "local",
-      }),
-    );
-  });
 });

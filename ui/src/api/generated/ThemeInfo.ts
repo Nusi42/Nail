@@ -42,4 +42,10 @@ file: string,
  * Why it cannot be used, when it cannot (it is listed anyway so the
  * user sees it); `SetTheme` refuses it with `invalid_request`.
  */
-problem?: LocalizedMessage, };
+problem?: LocalizedMessage, 
+/**
+ * The theme's own resolved colours for the gallery preview (M5b): the
+ * base values of [`PREVIEW_TOKENS`] after its `extends` chain, without
+ * mode variants. `None` when the theme cannot be used.
+ */
+preview?: { [key in string]: string }, };

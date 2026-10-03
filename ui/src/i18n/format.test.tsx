@@ -117,6 +117,30 @@ describe("date formatting", () => {
     expect(shown.relative).toBe("2 days ago");
   });
 
+  it("stays English in a German browser while the German catalogs are empty", () => {
+    // M5b: the shipped `locales/de` files exist but hold no message yet.
+    browserLanguages(["de-DE", "de"]);
+    render(
+      <I18nProvider locale={null} catalogs={{ en: ["hello = Hello"], de: ["# empty", ""] }}>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("locale").textContent).toBe("en");
+    expect(screen.getByTestId("absolute").textContent).toBe(formatDateTime(WHEN, "en"));
+    expect(screen.getByTestId("relative").textContent).toBe("2 days ago");
+  });
+
+  it("honours an explicit German choice even while its catalogs are empty", () => {
+    browserLanguages(["en-US"]);
+    render(
+      <I18nProvider locale="de" catalogs={{ en: ["hello = Hello"], de: [""] }}>
+        <Probe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("locale").textContent).toBe("de");
+    expect(screen.getByTestId("relative").textContent).toBe("vorgestern");
+  });
+
   it("follows the negotiated catalog language, not the browser's region", () => {
     browserLanguages(["de-CH"]);
     const shown = probe(null);

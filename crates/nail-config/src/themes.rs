@@ -128,6 +128,20 @@ pub fn kind_of_mode(mode: ThemeMode) -> ThemeKind {
     }
 }
 
+/// A resolved theme's preview colours ([`ThemeInfo::preview`]): the base
+/// values of [`appearance::PREVIEW_TOKENS`] that are plain colours (a value
+/// still naming another token is left out).
+fn preview_colors(theme: &ResolvedTheme) -> indexmap::IndexMap<String, String> {
+    appearance::PREVIEW_TOKENS
+        .iter()
+        .filter_map(|name| {
+            let value = theme.tokens.get("color", name)?;
+            (!value.contains("var(") && !value.starts_with('$'))
+                .then(|| ((*name).to_owned(), value.to_owned()))
+        })
+        .collect()
+}
+
 /// The gallery entries of the built-in themes.
 pub fn builtin_theme_infos() -> Vec<ThemeInfo> {
     ThemeCatalog::builtin().themes()
@@ -212,6 +226,7 @@ impl ThemeCatalog {
                     extends: file.extends.clone(),
                     file: t.file.to_owned(),
                     problem: None,
+                    preview: None,
                 },
                 file: Some(file.clone()),
                 merged: None,
@@ -261,6 +276,7 @@ impl ThemeCatalog {
                     extends: file.as_ref().and_then(|f| f.extends.clone()),
                     file: file_name,
                     problem: None,
+                    preview: None,
                 },
                 file,
                 merged: None,
@@ -285,6 +301,7 @@ impl ThemeCatalog {
             let mut problem: Option<(ThemeProblem, Option<String>)> = None;
             let mut errors = Vec::new();
             let mut merged = None;
+            let mut preview = None;
             if entry.file.is_none() {
                 let detail = entry.errors.first().map(ToString::to_string);
                 problem = Some((ThemeProblem::Invalid, detail));
@@ -320,7 +337,10 @@ impl ThemeCatalog {
                         errors.push(err);
                     }
                     Ok(file) => match file.resolve_all() {
-                        Ok(_) => merged = Some(file),
+                        Ok(resolved) => {
+                            preview = Some(preview_colors(&resolved));
+                            merged = Some(file);
+                        }
                         Err(resolve_errors) => {
                             let detail = resolve_errors.first().map(ToString::to_string);
                             problem = Some((ThemeProblem::Invalid, detail));
@@ -339,6 +359,7 @@ impl ThemeCatalog {
                 entry.info.kind = kind_of_mode(file.mode.map_or(ThemeMode::System, Into::into));
             }
             entry.merged = merged;
+            entry.info.preview = preview;
             entry.errors.extend(errors);
             sort_errors(&mut entry.errors);
             entry.info.problem = problem.map(|(p, detail)| {
@@ -627,6 +648,39 @@ mod tests {
         }
         assert!(resolve_builtin_theme("nope").is_none());
         assert!(builtin_merged("nope").is_none());
+    }
+
+    #[test]
+    fn previews_carry_each_themes_own_colours() {
+        let catalog = ThemeCatalog::with_user_themes(vec![
+            user(
+                "ocean",
+                "theme \"Ocean\" extends=\"sage\" {
+    tokens {
+        color \"accent\" \"#0077aa\"
+    }
+}
+",
+            ),
+            user("broken", "theme \"Broken\" extends=\"nope\""),
+        ]);
+        let sage = catalog.get("sage").unwrap().preview.clone().unwrap();
+        assert_eq!(
+            sage.keys().map(String::as_str).collect::<Vec<_>>(),
+            appearance::PREVIEW_TOKENS
+        );
+        assert_eq!(sage["bg"], "#fbfcfa");
+        let ocean = catalog.get("ocean").unwrap().preview.clone().unwrap();
+        // Its own accent, the rest from Sage.
+        assert_eq!(ocean["accent"], "#0077aa");
+        assert_eq!(ocean["bg"], sage["bg"]);
+        assert!(catalog.get("broken").unwrap().preview.is_none());
+        for info in builtin_theme_infos() {
+            assert_eq!(
+                info.preview.unwrap().len(),
+                appearance::PREVIEW_TOKENS.len()
+            );
+        }
     }
 
     #[test]

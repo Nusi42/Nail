@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
+import { toolbarAction } from "../support/views";
 
 /**
  * M2c carry-over (WP65): axe on every window, every settings tab and every
@@ -264,7 +265,7 @@ for (const mode of MODES) {
         ["Find a time", "scheduling-find-time"],
         ["Invitation settings", "scheduling-settings"],
       ] as const) {
-        await calendarActions.getByRole("button", { name: button, exact: true }).click();
+        await toolbarAction(page, calendarActions, button);
         await sweep.scanWindow(name);
         await sweep.close(name);
       }
@@ -290,14 +291,14 @@ for (const mode of MODES) {
       // Dialogs of the selected message.
       await rows.filter({ hasText: "Welcome to Nail" }).click();
       const actions = page.getByRole("toolbar", { name: "Message actions" });
-      await actions.getByRole("button", { name: "Snooze…" }).click();
+      await toolbarAction(page, actions, "Snooze…");
       await sweep.scanWindow("snooze");
       await sweep.close("snooze");
-      await actions.getByRole("button", { name: "Import Autocrypt setup message" }).click();
+      await toolbarAction(page, actions, "Import Autocrypt setup message");
       await sweep.scanWindow("security-autocrypt-import");
       await sweep.close("security-autocrypt-import");
       // M4c: printing the selected message.
-      await actions.getByRole("button", { name: "Print the message…" }).click();
+      await toolbarAction(page, actions, "Print the message…");
       await sweep.scanWindow("print");
       await sweep.close("print");
 
@@ -405,7 +406,7 @@ for (const mode of MODES) {
       const invitationReader = page.locator('[data-part="message-view.header.subject"]');
       await expect(invitationReader).toContainText("Lunch on Friday?");
       await sweep.scan("reader (Gmail message with labels)");
-      await actions.getByRole("button", { name: "Labels…" }).click();
+      await toolbarAction(page, actions, "Labels…");
       await sweep.scanWindow("gmail-apply-labels");
       await sweep.close("gmail-apply-labels");
 

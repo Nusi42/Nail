@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
+import { readerAction } from "../support/views";
 
 /**
  * Wave M3c (ADR 0077) against `nail serve --seed demo-multi`: Exchange
@@ -23,7 +24,6 @@ test.afterEach(async () => {
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 const accountItems = (page: Page) => page.locator('[data-part="account-switcher.item"]');
 const mainToolbar = (page: Page) => page.getByRole("toolbar", { name: "Main toolbar" });
-const readerToolbar = (page: Page) => page.getByRole("toolbar", { name: "Message actions" });
 
 interface GraphMessage {
   id: string;
@@ -195,7 +195,7 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
 
   // Flag: replayed to Graph.
   await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
-  await readerToolbar(page).getByRole("button", { name: "Flag" }).click();
+  await readerAction(page, "Flag");
   await expect
     .poll(async () => (await graphMessage("Fabrikam newsletter, October"))?.flag)
     .toBe("flagged");
@@ -228,7 +228,7 @@ test("Exchange mail syncs, takes flags, moves, categories as tags and sends", as
     .toContain("Urgent");
   // Tags are categories on the message.
   await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
-  await readerToolbar(page).getByRole("button", { name: "Categories…" }).click();
+  await readerAction(page, "Categories…");
   const apply = page.getByRole("dialog", { name: "Categories of this message" });
   await apply.getByRole("checkbox", { name: "Urgent" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();
@@ -307,7 +307,7 @@ test("a Nail rule is placed as an Exchange inbox rule", async ({ page }) => {
   await page.goto(server.url);
   await enableContoso(page);
   await rows(page).filter({ hasText: "Fabrikam newsletter" }).click();
-  await readerToolbar(page).getByRole("button", { name: "Create rule from message" }).click();
+  await readerAction(page, "Create rule from message");
   const rules = page.getByRole("dialog", { name: "Filter rules" });
   const editor = rules.getByRole("form", { name: "Rule" });
   await expect(editor.locator('[data-part="rules.condition"]').first()).toBeVisible();
@@ -401,7 +401,7 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
 
   // A category of the server's master list, set as a tag.
   await rows(page).filter({ hasText: "Password expires in 7 days" }).click();
-  await readerToolbar(page).getByRole("button", { name: "Categories…" }).click();
+  await readerAction(page, "Categories…");
   const apply = page.getByRole("dialog", { name: "Categories of this message" });
   await apply.getByRole("checkbox", { name: "Work" }).check();
   await apply.getByRole("button", { name: "Apply" }).click();

@@ -49,3 +49,24 @@ export const events: Feature["events"] = [handleMcpEvent];
 
 /** Background components mounted once in the app shell. */
 export const effects: Feature["effects"] = [UiContextReporter];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "mcp-clients": {
+    labels: [
+      "mcp-settings-tab",
+      "mcp-clients-label",
+      "mcp-client-create",
+      "mcp-grant-scopes",
+      "mcp-grant-write-scopes",
+      "mcp-grant-accounts",
+      "mcp-grant-folders",
+      "mcp-rate-title",
+      "agents-policy-title",
+    ],
+    keywords: "settings-keywords-mcp-clients",
+  },
+};

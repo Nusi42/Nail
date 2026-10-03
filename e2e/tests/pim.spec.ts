@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { control, startNail, tempDir, type NailServer } from "../support/nail";
+import { toolbarAction } from "../support/views";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -88,10 +89,11 @@ const davObjects = (collection: string) =>
 
 /** Syncs every source from the calendar window's toolbar. */
 async function syncNow(page: Page) {
-  await page
-    .getByRole("toolbar", { name: "Calendar actions" })
-    .getByRole("button", { name: "Sync calendars and contacts" })
-    .click();
+  await toolbarAction(
+    page,
+    page.getByRole("toolbar", { name: "Calendar actions" }),
+    "Sync calendars and contacts",
+  );
 }
 
 test("a recurring event is changed for this and the following occurrences", async ({ page }) => {
@@ -169,10 +171,11 @@ test("an ICS subscription shows its events read-only", async ({ page }) => {
 
   // A new subscription from the sources dialog.
   const feeds = await control<{ town: string }>(server, "feeds");
-  await page
-    .getByRole("toolbar", { name: "Calendar actions" })
-    .getByRole("button", { name: "Calendars and address books" })
-    .click();
+  await toolbarAction(
+    page,
+    page.getByRole("toolbar", { name: "Calendar actions" }),
+    "Calendars and address books",
+  );
   const sources = page.getByRole("dialog", { name: "Calendars and address books", exact: true });
   await sources.getByLabel("Name").fill("Town events");
   await sources.getByLabel("Address of the calendar feed").fill(feeds.town);

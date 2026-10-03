@@ -277,3 +277,91 @@ describe("calendar widget", () => {
     expect(document.querySelector('[data-part="mini-month.title"]')?.textContent).not.toBe(month);
   });
 });
+
+describe("calendar toolbar and event cards (M5b)", () => {
+  it("puts Today, previous / next, the range, the view switch and New event on one line", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    renderNode(
+      widget("calendar", {
+        options: { view: "week", views: "day week month year agenda free-time" },
+      }),
+      env,
+    );
+    await settle(env);
+    const toolbar = document.querySelector('[data-part="calendar.toolbar"]') as HTMLElement;
+    const order = [...toolbar.children]
+      .flatMap((el) =>
+        el.getAttribute("data-part") === "calendar.nav" ? [el, ...el.children] : [el],
+      )
+      .map(
+        (el) =>
+          el.getAttribute("data-field") ?? el.getAttribute("data-part") ?? el.tagName.toLowerCase(),
+      );
+    expect(order).toEqual([
+      "calendar.nav",
+      "calendar-today",
+      "calendar-previous",
+      "calendar-next",
+      "calendar.title",
+      "calendar-view",
+      "calendar-new-event",
+    ]);
+    // The range is one heading; its full text is the tooltip when it is cut.
+    const title = within(toolbar).getByRole("heading", { level: 2 });
+    expect(title).toHaveAttribute("title", title.textContent);
+    // The segmented switch: toggle buttons, exactly one pressed.
+    const views = within(toolbar).getByRole("group", { name: "View" });
+    expect(views).toHaveAttribute("data-part", "segmented");
+    expect(
+      within(views)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Day", "Week", "Month", "Year", "Agenda", "Free time"]);
+    expect(within(views).getAllByRole("button", { pressed: true })).toHaveLength(1);
+    await user.click(within(views).getByRole("button", { name: "Free time" }));
+    expect(document.querySelector('[data-part="calendar"]')).toHaveAttribute(
+      "data-view",
+      "free-time",
+    );
+    expect(within(views).getByRole("button", { name: "Free time" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // Icon buttons carry their names.
+    expect(within(toolbar).getByRole("button", { name: "Previous" })).toHaveAttribute(
+      "data-variant",
+      "icon ghost",
+    );
+    expect(within(toolbar).getByRole("button", { name: "New event" })).toHaveAttribute(
+      "data-variant",
+      "primary",
+    );
+  });
+
+  it("switches views from a drop-down with view-switch=menu", async () => {
+    const user = userEvent.setup();
+    const env = createEnv();
+    renderNode(widget("calendar", { options: { view: "week", "view-switch": "menu" } }), env);
+    await settle(env);
+    expect(screen.queryByRole("group", { name: "View" })).toBeNull();
+    await user.selectOptions(screen.getByLabelText("View"), "month");
+    expect(document.querySelector('[data-part="calendar"]')).toHaveAttribute("data-view", "month");
+    expect(pimStoreFor(env.store).getState().view).toBe("month");
+  });
+
+  it("shows events as cards: title, time, location, tinted in the calendar colour", async () => {
+    const env = createEnv();
+    renderNode(widget("calendar", { options: { view: "week" } }), env);
+    const lunch = await screen.findByRole("button", { name: /Lunch with Grace/ });
+    const parts = [...lunch.children].map((c) => c.getAttribute("data-part"));
+    expect(parts.slice(0, 2)).toEqual(["event-card.title", "event-card.time"]);
+    expect(lunch.querySelector('[data-part="event-card.title"]')).toHaveTextContent(
+      "Lunch with Grace",
+    );
+    // Personal is #3b82f6: a bar in the colour and a light tint of it.
+    const css = geometryText();
+    expect(css).toMatch(/border-left-color: rgb\(59, 130, 246\)/);
+    expect(css).toMatch(/color-mix\(in srgb, #3b82f6 16%, var\(--nail-color-bg\)\)/);
+  });
+});

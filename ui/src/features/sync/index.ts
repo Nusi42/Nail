@@ -99,3 +99,21 @@ export const handleSyncEvent: FeatureEventHandler = (event, { queryClient }) => 
 export const events: Feature["events"] = [handleSyncEvent];
 /** Background components. */
 export const effects: Feature["effects"] = [];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "sync-folder-policies": {
+    labels: [
+      "sync-settings-tab",
+      "sync-policies-label",
+      "sync-enabled-label",
+      "sync-idle-label",
+      "sync-bodies-label",
+      "sync-days",
+    ],
+    keywords: "settings-keywords-sync-folder-policies",
+  },
+};

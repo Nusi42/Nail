@@ -79,3 +79,19 @@ export const handleAgentsEvent: FeatureEventHandler = (event, { queryClient, sto
 export const events: Feature["events"] = [handleAgentsEvent];
 /** Background components: the "something waits" notices. */
 export const effects: Feature["effects"] = [ConfirmationNotices];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  [CENTER_WIDGET]: {
+    labels: [
+      "agents-center-tab",
+      "agents-center-title",
+      "agents-center-pending-label",
+      "agents-center-history-label",
+    ],
+    keywords: "settings-keywords-confirmation-center",
+  },
+};

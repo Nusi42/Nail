@@ -7,6 +7,7 @@
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type {
+  CalendarComponent,
   CalendarId,
   ContactFields,
   ContactId,
@@ -55,6 +56,12 @@ export type TaskEditorTarget =
   | { mode: "new"; listId: CalendarId | null; parentId: TaskId | null; fields: TaskFields | null }
   | { mode: "edit"; taskId: TaskId };
 
+/** What the new-calendar dialog creates: a calendar or task list in a source. */
+export interface NewCalendarTarget {
+  sourceId: string;
+  component: CalendarComponent;
+}
+
 /** A toast: a fired reminder, or a PIM write the server refused. */
 export type PimToast =
   | { kind: "reminder"; id: string; reminder: Reminder }
@@ -85,6 +92,12 @@ export interface PimState {
   importPath: string | null;
   /** A `webcal:` link to subscribe to (a launch argument), taken by the sources dialog. */
   subscribeUrl: string | null;
+  /** The calendar the calendar-settings dialog edits (M5b). */
+  calendarSettingsId: CalendarId | null;
+  /** What the new-calendar dialog creates (M5b). */
+  newCalendar: NewCalendarTarget | null;
+  /** The calendar the remove dialog asks about (M5b). */
+  removeCalendarId: CalendarId | null;
 
   setAnchor(anchor: string | null): void;
   setView(view: ViewKind | null): void;
@@ -102,6 +115,9 @@ export interface PimState {
   dismissToast(id: string): void;
   setImportPath(path: string | null): void;
   setSubscribeUrl(url: string | null): void;
+  editCalendar(id: CalendarId | null): void;
+  setNewCalendar(target: NewCalendarTarget | null): void;
+  setRemoveCalendar(id: CalendarId | null): void;
 }
 
 const stores = new WeakMap<UiStore, StoreApi<PimState>>();
@@ -125,6 +141,9 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     toasts: [],
     importPath: null,
     subscribeUrl: null,
+    calendarSettingsId: null,
+    newCalendar: null,
+    removeCalendarId: null,
     setAnchor: (anchor) => set({ anchor }),
     setView: (view) => set({ view }),
     setShown: (shown) => set({ shown }),
@@ -142,6 +161,9 @@ export function pimStoreFor(ui: UiStore): StoreApi<PimState> {
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
     setImportPath: (importPath) => set({ importPath }),
     setSubscribeUrl: (subscribeUrl) => set({ subscribeUrl }),
+    editCalendar: (calendarSettingsId) => set({ calendarSettingsId }),
+    setNewCalendar: (newCalendar) => set({ newCalendar }),
+    setRemoveCalendar: (removeCalendarId) => set({ removeCalendarId }),
   }));
   stores.set(ui, store);
   return store;

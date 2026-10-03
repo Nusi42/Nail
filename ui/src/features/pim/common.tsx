@@ -15,6 +15,7 @@ import { useClient } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import { useGeometry } from "../../theme/ThemeProvider";
 import type { ChangeContext } from "./changes";
+import { eventCardDeclarations, swatchDeclarations } from "./colors";
 import { usePimStore } from "./store";
 import { isKnownZone, localZone } from "./time";
 
@@ -83,15 +84,26 @@ export function colorOf(
   return own ?? calendars?.find((c) => c.id === calendarId)?.settings.color ?? null;
 }
 
-/** Declarations for an element showing a data colour (theme decides how it looks). */
+/**
+ * Declarations for an event card showing a data colour: a bar in the colour
+ * and a light tint of it (`colors.ts`); the theme decides everything else.
+ */
 export function colorDeclarations(color: string | null): Record<string, string> {
-  return color ? { "border-left-color": color } : {};
+  return eventCardDeclarations(color);
 }
 
 /** A calendar's colour swatch (`pim.swatch`, coloured through a geometry rule). */
-export function Swatch({ geom, color }: { geom: string; color: string | null }) {
-  useGeometry(geom, color ? { "background-color": color } : {});
-  return <span data-part="pim.swatch" data-geom={geom} aria-hidden="true" />;
+export function Swatch({
+  geom,
+  color,
+  part = "pim.swatch",
+}: {
+  geom: string;
+  color: string | null;
+  part?: string;
+}) {
+  useGeometry(geom, swatchDeclarations(color));
+  return <span data-part={part} data-geom={geom} aria-hidden="true" />;
 }
 
 /** A stable geometry id from parts. */

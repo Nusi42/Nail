@@ -71,10 +71,9 @@ describe("message list rows (M5a)", () => {
     );
     expect(kinds).toEqual(["account", "attachments", "flagged", "label"]);
     const account = within(line).getByText("Personal").closest('[data-part="tag"]');
-    expect(account?.querySelector('[data-part="tag.dot"]')).toHaveAttribute(
-      "data-color",
-      String(colorSlot("acc-personal")),
-    );
+    // M5b: the account colour follows the account order, like the folder
+    // pane's sections (Personal is the first account: slot 1, data-color 0).
+    expect(account?.querySelector('[data-part="tag.dot"]')).toHaveAttribute("data-color", "0");
     expect(within(line).getByText("Attachment")).toBeInTheDocument();
     expect(within(line).getByText("Flagged")).toBeInTheDocument();
     expect(within(line).getByText("work")).toBeInTheDocument();

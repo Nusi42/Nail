@@ -7,7 +7,7 @@ import { App } from "../../App";
 import type { Request, ThemeInfo } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { createEnv, renderNode, settleQueries, stubElementSizes, widget } from "../../test/harness";
-import { setMockSystemAppearance } from "./mock";
+import { builtinThemes, setMockSystemAppearance } from "./mock";
 import { BUILTIN_THEME_FILES, parseThemeFile, previewColors, resolveMockTheme } from "./themes";
 import { overridesOf } from "./AppearanceSettings";
 
@@ -100,6 +100,25 @@ describe("theme files for the mock core", () => {
         expect.arrayContaining(["bg-subtle", "bg", "accent", "fg"]),
       );
     }
+  });
+
+  it("previews a user theme with its own colours when the core sends them", () => {
+    const sage = BUILTIN_THEME_FILES.get("sage")?.tokens.color ?? {};
+    const ocean: ThemeInfo = {
+      id: "ocean",
+      name: "Ocean",
+      kind: "light",
+      source: "user",
+      extends: "sage",
+      file: "themes/ocean.kdl",
+      preview: { accent: "#0077aa" },
+    };
+    const colors = previewColors(ocean, [ocean]);
+    expect(colors.accent).toBe("#0077aa");
+    expect(colors.bg).toBe(sage.bg);
+    // The mock core sends every built-in's own preview colours.
+    const frost = builtinThemes().find((t) => t.id === "frost");
+    expect(frost?.preview?.accent).toBe(BUILTIN_THEME_FILES.get("frost")?.tokens.color?.accent);
   });
 
   it("parses token values, variants, references and comments", () => {

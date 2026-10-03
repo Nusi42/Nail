@@ -17,6 +17,9 @@ window-pim-merge-contacts = Merge contacts
 window-pim-task-editor = Task
 window-pim-import = Import calendar or contacts
 window-pim-sources = Calendars and address books
+window-pim-calendar-settings = Calendar settings
+window-pim-new-calendar = New calendar or task list
+window-pim-remove-calendar = Remove calendar
 
 ## Common
 
@@ -346,15 +349,10 @@ pim-snooze-tomorrow = Tomorrow morning
 
 pim-calendars-label = Calendars
 pim-calendar-kind-tasks = Tasks
-pim-calendar-settings = Settings
 pim-calendar-settings-of = Settings of { $name }
 pim-calendar-name = Name
 pim-calendar-color = Colour (for example #3b82f6)
 pim-calendar-reminders = Show reminders
-pim-calendar-new = New calendar or task list on this computer
-pim-calendar-holds = Holds
-pim-calendar-holds-event = Events
-pim-calendar-holds-task = Tasks
 pim-calendar-create = Create
 pim-sources-open = Calendars and address books…
 pim-import-open = Import…
@@ -670,3 +668,51 @@ pim-action-merge-contacts = Merge contacts
 pim-action-import = Import calendar or contacts
 pim-action-sources = Calendars and address books
 pim-action-sync = Sync calendars and contacts
+
+## Calendar view, calendar list and settings section (M5b, WP164)
+
+# The calendar list's group of all ICS / webcal subscriptions.
+pim-calendar-group-subscriptions = Subscriptions
+# The "+" menu of a group in the calendar list.
+pim-calendar-add-to = Add to { $group }
+pim-calendar-new-calendar = New calendar
+pim-calendar-new-task-list = New task list
+pim-calendar-new-subscription = New subscription…
+pim-calendar-new-calendar-in = A new calendar in { $source }
+pim-calendar-new-task-list-in = A new task list in { $source }
+# The "…" menu of a calendar in the calendar list.
+pim-calendar-actions-of = Actions for { $name }
+pim-calendar-settings-open = Settings…
+pim-calendar-hide = Hide in the calendar
+pim-calendar-show = Show in the calendar
+pim-calendar-color-label = Colour
+pim-calendar-color-other = Other colour (for example #3b82f6)
+pim-calendar-color-invalid = Enter a colour such as #3b82f6, or choose one above.
+pim-calendar-remove-menu = Remove…
+pim-calendar-unsubscribe-menu = Unsubscribe…
+pim-calendar-remove = Remove
+pim-calendar-unsubscribe = Unsubscribe
+pim-calendar-remove-of = Remove { $name }
+pim-calendar-remove-question = Remove the calendar “{ $name }” with all its events? This cannot be undone.
+pim-calendar-remove-task-list-question = Remove the task list “{ $name }” with all its tasks? This cannot be undone.
+pim-calendar-unsubscribe-question = Unsubscribe from “{ $name }”? Its events disappear from Nail; you can subscribe again at any time.
+pim-calendar-cannot-remove = This calendar cannot be removed here.
+pim-calendar-gone = This calendar no longer exists.
+pim-calendar-read-only-hint = This calendar is read-only: name, colour and reminders change only on this computer.
+# Colours offered for calendars and task lists.
+pim-color-blue = Blue
+pim-color-cyan = Cyan
+pim-color-green = Green
+pim-color-amber = Amber
+pim-color-orange = Orange
+pim-color-red = Red
+pim-color-pink = Pink
+pim-color-purple = Purple
+pim-color-slate = Slate
+# The settings page's "Calendar & contacts" section (layout label "@pim.settings.section").
+pim-settings-section = Calendar & contacts
+pim-settings-calendars = Calendars and task lists
+pim-settings-sources = Subscriptions and servers
+pim-settings-import = Import
+pim-settings-import-hint = Add events, tasks and contacts from .ics and .vcf files.
+pim-settings-keywords = calendar contacts tasks address book subscription webcal ics vcf caldav carddav colour reminders import

@@ -20,7 +20,9 @@ import {
   type Segment,
 } from "../template/template";
 import { useGeometry } from "../theme/ThemeProvider";
-import { colorSlot } from "../theme/skin";
+import { ALL_ACCOUNTS } from "./AccountSwitcher";
+import { accountColorSlot } from "./folderPane";
+import { filteredScope } from "./listFilter";
 import { Avatar, Tag } from "./primitives";
 
 /**
@@ -212,6 +214,30 @@ function threadRow(thread: ThreadSummary): Row {
   };
 }
 
+/** An account's name and colour on the tag line. */
+export interface AccountTag {
+  name: string;
+  /** Palette slot, 0-based (`data-color`): the folder pane's account colour. */
+  slot: number;
+}
+
+/**
+ * Account names and colours by id: the colour follows the account order
+ * like the folder pane's sections (`account_color_slot`), so a row's dot
+ * matches its account's section.
+ */
+export function accountTags(
+  accounts: readonly { id: string; name: string; email: string }[],
+): Map<string, AccountTag> {
+  const out = new Map<string, AccountTag>();
+  accounts
+    .filter((a) => a.id !== ALL_ACCOUNTS)
+    .forEach((a, index) => {
+      out.set(a.id, { name: a.name || a.email || a.id, slot: accountColorSlot(index) - 1 });
+    });
+  return out;
+}
+
 /** Labels shown on the tag line at most (the rest stay in the reader). */
 const MAX_LABELS = 3;
 
@@ -220,17 +246,18 @@ const MAX_LABELS = 3;
  * set up), attachments, invitation, warning, flag and labels. Nothing when
  * there is nothing to say.
  */
-function TagLine({ tags, accounts }: { tags: RowTags; accounts: ReadonlyMap<string, string> }) {
+function TagLine({ tags, accounts }: { tags: RowTags; accounts: ReadonlyMap<string, AccountTag> }) {
   const t = useT();
   const items: ReactNode[] = [];
   if (accounts.size > 1) {
     for (const id of tags.accountIds) {
+      const account = accounts.get(id);
       items.push(
         <Tag
           key={`account-${id}`}
           kind="account"
-          dot={colorSlot(id)}
-          text={accounts.get(id) ?? id}
+          {...(account ? { dot: account.slot } : {})}
+          text={account?.name ?? id}
         />,
       );
     }
@@ -295,30 +322,37 @@ function TagLine({ tags, accounts }: { tags: RowTags; accounts: ReadonlyMap<stri
  * folder's messages.
  */
 function useRows(node: WidgetNode, pageSize: number) {
+  const accountId = useUi((s) => s.activeAccountId);
   const folderId = useUi((s) => s.activeFolderId);
   const search = useUi((s) => s.search);
+  const listFilter = useUi((s) => s.listFilter);
   const followSearch = optionBool(node, "follow-search", true);
   const activeSearch = followSearch && search !== null ? search : null;
+  // A filter chip (M5b) is a search: its term within the folder, or added
+  // to the user's search.
+  const filterSearch = filteredScope(listFilter, activeSearch, accountId, folderId);
+  const searching = filterSearch ?? activeSearch;
   const threadMode = optionString(node, "threads", "off") === "collapsed";
-  const threads = useThreads(folderId, pageSize, threadMode && activeSearch === null);
-  const threadRows = threadMode && activeSearch === null && !isUnsupported(threads.error);
-  const messages = useMessages(activeSearch === null && !threadRows ? folderId : null, pageSize);
-  const hits = useSearch(activeSearch, pageSize);
-  const query = activeSearch ? hits : threadRows ? threads : messages;
+  const threads = useThreads(folderId, pageSize, threadMode && searching === null);
+  const threadRows = threadMode && searching === null && !isUnsupported(threads.error);
+  const messages = useMessages(searching === null && !threadRows ? folderId : null, pageSize);
+  const hits = useSearch(searching, pageSize);
+  const query = searching ? hits : threadRows ? threads : messages;
 
   const rows = useMemo((): Row[] => {
-    if (activeSearch) {
+    if (searching) {
       return (hits.data?.pages ?? []).flatMap((p) => p.hits.map((h) => messageRow(h.message)));
     }
     if (threadRows) {
       return (threads.data?.pages ?? []).flatMap((p) => p.threads.map(threadRow));
     }
     return (messages.data?.pages ?? []).flatMap((p) => p.messages.map(messageRow));
-  }, [activeSearch, threadRows, hits.data, threads.data, messages.data]);
+  }, [searching, threadRows, hits.data, threads.data, messages.data]);
 
   const searchError = hits.data?.pages.find((p) => p.error !== null)?.error ?? null;
-  const total = activeSearch ? (hits.data?.pages[0]?.total ?? 0) : null;
-  return { rows, query, activeSearch, searchError, total };
+  const total = searching ? (hits.data?.pages[0]?.total ?? 0) : null;
+  const filtered = filterSearch !== null;
+  return { rows, query, activeSearch, searchError, total, filtered, listFilter };
 }
 
 function SegmentView({ segment }: { segment: Segment }) {
@@ -361,7 +395,10 @@ export function MessageList({ node }: WidgetProps) {
   const setMessageOrder = useUi((s) => s.setMessageOrder);
   const setSearch = useUi((s) => s.setSearch);
   const pageSize = Math.max(1, Math.min(1000, optionNumber(node, "page-size", 100)));
-  const { rows, query, activeSearch, searchError, total } = useRows(node, pageSize);
+  const { rows, query, activeSearch, searchError, total, filtered, listFilter } = useRows(
+    node,
+    pageSize,
+  );
   const templates = useMemo(() => compileRows(node.rows), [node.rows]);
   const columnKey = columnsOf(node).join(" ");
   const columns = useMemo(
@@ -376,21 +413,19 @@ export function MessageList({ node }: WidgetProps) {
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const accountList = useAccounts().data;
-  const accountNames = useMemo(
-    () => new Map((accountList ?? []).map((a) => [a.id, a.name || a.email])),
-    [accountList],
-  );
+  const accountNames = useMemo(() => accountTags(accountList ?? []), [accountList]);
 
   useEffect(() => {
     setMessageOrder(rows.map((r) => r.messageId));
   }, [rows, setMessageOrder]);
 
-  // Report a query the core rejected to the search bar.
+  // Report a query the core rejected to the search bar (its positions refer
+  // to the typed text only without a filter term).
   useEffect(() => {
-    if (activeSearch && searchError && activeSearch.error !== searchError) {
+    if (activeSearch && !filtered && searchError && activeSearch.error !== searchError) {
       setSearch({ ...activeSearch, error: searchError });
     }
-  }, [activeSearch, searchError, setSearch]);
+  }, [activeSearch, filtered, searchError, setSearch]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns non-memoizable functions by design.
   const virtualizer = useVirtualizer({
@@ -442,7 +477,15 @@ export function MessageList({ node }: WidgetProps) {
   let status: ReactNode = null;
   if (activeSearch && searchError) {
     status = <div data-part="message-list.empty">{t("message-list-search-invalid")}</div>;
-  } else if (!activeSearch && (folderId === null || (query.isSuccess && rows.length === 0))) {
+  } else if (!activeSearch && folderId === null) {
+    status = <div data-part="message-list.empty">{t("message-list-empty")}</div>;
+  } else if (!activeSearch && filtered && query.isSuccess && rows.length === 0) {
+    status = (
+      <div data-part="message-list.empty" data-filter={listFilter}>
+        {t("message-list-filter-empty")}
+      </div>
+    );
+  } else if (!activeSearch && query.isSuccess && rows.length === 0) {
     status = <div data-part="message-list.empty">{t("message-list-empty")}</div>;
   } else if (activeSearch && query.isSuccess && rows.length === 0) {
     status = <div data-part="message-list.empty">{t("message-list-search-empty")}</div>;
@@ -459,6 +502,7 @@ export function MessageList({ node }: WidgetProps) {
       data-key-context="list"
       data-node-id={node.id ?? undefined}
       data-state={activeSearch ? "search" : undefined}
+      data-filter={filtered ? listFilter : undefined}
       role="listbox"
       tabIndex={0}
       aria-label={node.label ? label(node.label) : t("message-list-label")}

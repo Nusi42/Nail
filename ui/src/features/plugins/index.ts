@@ -181,3 +181,25 @@ export const handlePluginsEvent: FeatureEventHandler = (event, { client, queryCl
 export const events: Feature["events"] = [handlePluginsEvent];
 /** Background components: plug-in dialogs, notifications and the send veto of this UI. */
 export const effects: Feature["effects"] = [PluginDialogs, PluginNotifications, SendVetoDialog];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "plugin-manager": {
+    labels: [
+      "plugin-manager-tab",
+      "plugin-manager-label",
+      "plugin-manager-install",
+      "plugin-manager-load-dev",
+      "plugin-manager-show-permissions",
+      "plugin-manager-show-settings",
+      "plugin-manager-show-confirmations",
+      "plugin-manager-show-activity",
+      "plugin-manager-show-log",
+      "plugin-manager-show-layout",
+    ],
+    keywords: "settings-keywords-plugin-manager",
+  },
+};

@@ -256,3 +256,42 @@ opened-files-folder = Opened files
 launch-notice-label = Opening links and files
 launch-open-failed = The file could not be opened: { $reason }
 launch-dismiss = Dismiss
+
+## Mail view (M5b WP162): toolbars, folder pane, list header
+
+# Tooltip of a toolbar button with its key binding, e.g. "Archive (E)".
+# $label (string) — the action; $shortcut (string) — the key, as shown in menus
+toolbar-button-tooltip = { $label } ({ $shortcut })
+# $count (number) — drafts in every account (Favorites → Drafts)
+folder-tree-drafts = { $count ->
+    [one] One draft
+   *[other] { $count } drafts
+}
+# The heading of an account's section in the folder pane.
+# $name (string) — the account's name; $email (string) — its address
+folder-tree-account-title = { $name } · { $email }
+# Accessible name of the area above the message list.
+list-header-label = Message list
+# The list's title while it shows search results.
+list-header-title-search = Search results
+# $count (number) — unread messages in the folder the list shows
+list-header-unread = { $count ->
+    [0] Nothing unread
+   *[other] { $count } unread
+}
+# $count (number) — accounts a unified folder covers ("All inboxes")
+list-header-accounts = { $count ->
+    [one] One account
+   *[other] { $count } accounts
+}
+# $unread (string) — list-header-unread; $accounts (string) — list-header-accounts
+list-header-counts = { $unread } · { $accounts }
+# Accessible name of the filter chips (All, Unread, Flagged, Attachments).
+list-header-filters = Filter messages
+message-list-filter-empty = No messages match this filter.
+# An attachment card while the attachment is being saved.
+attachment-card-saving = Saving…
+# Command-palette titles (actions with an argument, used through aliases).
+list-action-filter = Filter the message list
+list-action-filter-keywords = unread flagged attachments chips
+folders-action-toggle-section = Collapse or expand a folder section

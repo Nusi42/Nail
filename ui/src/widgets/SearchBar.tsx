@@ -95,6 +95,24 @@ function ErrorView({ id, text, error }: { id: string; text: string; error: Searc
   );
 }
 
+/** What a search form shows and where it searches. */
+export interface SearchFormProps {
+  /** `data-node-id` of the layout node. */
+  nodeId?: string | undefined;
+  /** Accessible name of the form (localized). */
+  label: string;
+  /** Where a search runs: the active account, folder, or everywhere. */
+  scope: string;
+  showHints: boolean;
+  liveCheck: boolean;
+  /** The key binding that focuses the field, shown in it (M5b list header). */
+  shortcut?: string | null;
+  /** The same binding for `aria-keyshortcuts` (single chords only). */
+  keyShortcuts?: string | undefined;
+  /** Placeholder text (localized); default: an example query. */
+  placeholder?: string | undefined;
+}
+
 /**
  * Search input with query-language hints and live error positions. Submitting
  * shows the results in the message list (`search` in the UI state).
@@ -102,6 +120,29 @@ function ErrorView({ id, text, error }: { id: string; text: string; error: Searc
 export function SearchBar({ node }: WidgetProps) {
   const t = useT();
   const label = useLabel();
+  return (
+    <SearchForm
+      nodeId={node.id ?? undefined}
+      label={node.label ? label(node.label) : t("search-bar-label")}
+      scope={optionString(node, "scope", "account")}
+      showHints={optionBool(node, "hints", true)}
+      liveCheck={optionBool(node, "live-check", true)}
+    />
+  );
+}
+
+/** The search form of `search-bar` and of the list header (`list-header`). */
+export function SearchForm({
+  nodeId,
+  label: formLabel,
+  scope,
+  showHints,
+  liveCheck,
+  shortcut = null,
+  keyShortcuts,
+  placeholder,
+}: SearchFormProps) {
+  const t = useT();
   const ids = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const text = useUi((s) => s.searchInput);
@@ -112,9 +153,6 @@ export function SearchBar({ node }: WidgetProps) {
   const folderId = useUi((s) => s.activeFolderId);
   const focusRequest = useUi((s) => s.focusRequest);
   const [focused, setFocused] = useState(false);
-  const showHints = optionBool(node, "hints", true);
-  const liveCheck = optionBool(node, "live-check", true);
-  const scope = optionString(node, "scope", "account");
 
   const debounced = useDebounced(text, CHECK_DELAY_MS);
   const check = useCheckQuery(liveCheck ? debounced : "");
@@ -156,11 +194,11 @@ export function SearchBar({ node }: WidgetProps) {
   return (
     <form
       data-part="search-bar"
-      data-node-id={node.id ?? undefined}
+      data-node-id={nodeId}
       data-key-context="search"
       data-state={search ? "active" : undefined}
       role="search"
-      aria-label={node.label ? label(node.label) : t("search-bar-label")}
+      aria-label={formLabel}
       onSubmit={submit}
     >
       <div data-part="search-bar.field">
@@ -171,17 +209,23 @@ export function SearchBar({ node }: WidgetProps) {
           data-state={error ? "invalid" : undefined}
           type="search"
           value={text}
-          placeholder={t("search-bar-placeholder")}
+          placeholder={placeholder ?? t("search-bar-placeholder")}
           aria-label={t("search-bar-input")}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
           aria-controls={hints.length > 0 ? hintsId : undefined}
+          aria-keyshortcuts={keyShortcuts}
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => setText(event.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />
+        {shortcut !== null && text === "" && !search && (
+          <kbd data-part="search-bar.shortcut" aria-hidden="true">
+            {shortcut}
+          </kbd>
+        )}
         {(text !== "" || search) && (
           <button
             type="button"

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import { readerAction } from "../support/views";
 
 /**
  * Filter rules (ADR 0024) against the `demo-multi` mock servers: an arrival
@@ -142,10 +143,7 @@ test("a rule is created from a message", async ({ page }) => {
     .locator('[data-part="message-list.row"]')
     .filter({ hasText: "[nail-users] Release notes for M1" });
   await row.click();
-  await page
-    .getByRole("toolbar", { name: "Message actions" })
-    .getByRole("button", { name: "Create rule from message" })
-    .click();
+  await readerAction(page, "Create rule from message");
   const window = page.getByRole("dialog", { name: "Filter rules" });
   const editor = window.getByRole("form", { name: "Rule" });
   await expect(editor.locator('[data-part="rules.condition"]').first()).toBeVisible();

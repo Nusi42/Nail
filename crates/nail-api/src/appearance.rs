@@ -239,7 +239,16 @@ pub struct ThemeInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub problem: Option<LocalizedMessage>,
+    /// The theme's own resolved colours for the gallery preview (M5b): the
+    /// base values of [`PREVIEW_TOKENS`] after its `extends` chain, without
+    /// mode variants. `None` when the theme cannot be used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub preview: Option<indexmap::IndexMap<String, String>>,
 }
+
+/// The colour tokens a theme card previews ([`ThemeInfo::preview`]).
+pub const PREVIEW_TOKENS: &[&str] = &["bg-subtle", "bg", "accent", "fg"];
 
 impl ThemeInfo {
     /// Whether the theme can be applied.
@@ -660,6 +669,7 @@ mod tests {
             extends: Some(BASE_THEME_ID.into()),
             file: format!("themes/{id}.kdl"),
             problem: (!usable).then(|| LocalizedMessage::new(ThemeProblem::Invalid.message_id())),
+            preview: None,
         }
     }
 

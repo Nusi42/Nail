@@ -83,6 +83,28 @@ export function fileType(filename: string | null, mime: string): { label: string
   return { label: key.slice(0, 4).toUpperCase(), kind };
 }
 
+/** What saving an attachment has come to. */
+export type SaveState = "idle" | "saving" | Exclude<SaveOutcome, "cancelled"> | "failed";
+
+/**
+ * The status line of a card: its Fluent id and icon, `null` while idle.
+ * "Saving…" shows at once, the outcome replaces it.
+ */
+export function saveStatus(state: SaveState): { id: string; icon: string } | null {
+  switch (state) {
+    case "idle":
+      return null;
+    case "saving":
+      return { id: "attachment-card-saving", icon: "download" };
+    case "saved":
+    case "downloaded":
+      return { id: `message-view-attachment-save-${state}`, icon: "check" };
+    case "unsupported":
+    case "failed":
+      return { id: `message-view-attachment-save-${state}`, icon: "circle-alert" };
+  }
+}
+
 export interface AttachmentCardProps {
   messageId: MessageId;
   attachment: AttachmentInfo;
@@ -103,11 +125,10 @@ export function AttachmentCard({
   const locale = useLocale();
   const client = useClient();
   const canPreview = useHasAttachmentPreview(attachment, accountId) && !attachment.inline;
-  const [save, setSave] = useState<
-    "idle" | "saving" | Exclude<SaveOutcome, "cancelled"> | "failed"
-  >("idle");
+  const [save, setSave] = useState<SaveState>("idle");
   const name = attachment.filename ?? t("message-view-attachment-unnamed");
   const type = fileType(attachment.filename, attachment.mime);
+  const status = saveStatus(save);
   const onSave = () => {
     setSave("saving");
     saveAttachment(client, messageId, attachment, name)
@@ -125,7 +146,7 @@ export function AttachmentCard({
       data-part="attachment-card"
       data-mime={attachment.mime}
       data-inline={attachment.inline ? "" : undefined}
-      data-state={save === "idle" || save === "saving" ? undefined : save}
+      data-state={save === "idle" ? undefined : save}
     >
       <span data-part="attachment-card.type" data-kind={type.kind} aria-hidden="true">
         {type.label}
@@ -135,19 +156,24 @@ export function AttachmentCard({
           {name}
         </span>
         <span data-part="attachment-card.size">{formatSize(attachment.size, locale)}</span>
-        {/* Next to the size, so the card keeps its height (M5a review). */}
-        {(save === "saved" ||
-          save === "downloaded" ||
-          save === "unsupported" ||
-          save === "failed") && (
-          <span
-            data-part="attachment-card.status"
-            role="status"
-            title={t(`message-view-attachment-save-${save}`)}
-          >
-            {t(`message-view-attachment-save-${save}`)}
-          </span>
-        )}
+        {/*
+          Next to the size, so the card keeps its height (M5a review). The
+          live region is always there (empty while idle), so screen readers
+          announce "Saving…" and the outcome when they appear.
+        */}
+        <span
+          data-part="attachment-card.status"
+          data-state={status === null ? "empty" : save}
+          role="status"
+          title={status === null ? undefined : t(status.id)}
+        >
+          {status !== null && (
+            <>
+              <Icon name={status.icon} part="attachment-card.status.icon" />
+              <span data-part="attachment-card.status.text">{t(status.id)}</span>
+            </>
+          )}
+        </span>
       </span>
       <span data-part="attachment-card.actions">
         <AttachmentWarningMark warnings={warnings} index={attachment.index} />

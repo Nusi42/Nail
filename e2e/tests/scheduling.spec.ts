@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
+import { toolbarAction } from "../support/views";
 
 /**
  * Wave M3b (ADR 0070) against `nail serve --seed demo-multi`: iMIP
@@ -325,10 +326,11 @@ test("invitations go to the CalDAV calendar chosen in the settings and updates c
   await openApp(page);
   // Settings: new invitations go to the CalDAV calendar "Personal".
   const calendar = await openCalendar(page);
-  await page
-    .getByRole("toolbar", { name: "Calendar actions" })
-    .getByRole("button", { name: "Invitation settings", exact: true })
-    .click();
+  await toolbarAction(
+    page,
+    page.getByRole("toolbar", { name: "Calendar actions" }),
+    "Invitation settings",
+  );
   const settings = page.getByRole("dialog", { name: "Invitation settings" });
   await settings.getByLabel("Calendar for new invitations").selectOption({ label: "Personal" });
   await settings.getByRole("button", { name: "Save", exact: true }).click();

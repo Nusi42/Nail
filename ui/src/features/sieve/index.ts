@@ -37,3 +37,42 @@ export const handleSieveEvent: FeatureEventHandler = (event, { queryClient }) =>
 export const events: Feature["events"] = [handleSieveEvent];
 /** Background components. */
 export const effects: Feature["effects"] = [];
+
+/**
+ * Settings labels per widget kind, for the settings search (M5b WP163, ADR
+ * 0109): Fluent ids of the setting labels each widget shows.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "sieve-status": {
+    labels: [
+      "sieve-settings-tab",
+      "sieve-status-label",
+      "sieve-connection-title",
+      "sieve-enabled",
+      "sieve-host",
+      "sieve-port",
+      "sieve-script-name",
+      "sieve-rules-title",
+      "sieve-script-label",
+      "sieve-other-scripts",
+      "sieve-vacation-state",
+    ],
+    keywords: "settings-keywords-sieve-status",
+  },
+  "vacation-editor": {
+    labels: [
+      "vacation-settings-tab",
+      "vacation-label",
+      "vacation-enabled",
+      "vacation-start",
+      "vacation-end",
+      "vacation-subject",
+      "vacation-body",
+      "vacation-from",
+      "vacation-addresses",
+      "vacation-days",
+      "vacation-skip-lists",
+    ],
+    keywords: "settings-keywords-vacation-editor",
+  },
+};

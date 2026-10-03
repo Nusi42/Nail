@@ -127,9 +127,26 @@ const PREVIEW_FALLBACK: Readonly<Record<ThemeKind, string>> = {
  * The colour tokens a gallery card previews `theme` with: a built-in's own
  * palette; for a user theme the palette of the built-in it extends
  * (following `extends` through other user themes), else of the built-in of
- * its kind — never an empty strip.
+ * its kind — never an empty strip. The theme's own resolved colours from the
+ * core (`ThemeInfo.preview`, M5b) win over that palette, so a user theme with
+ * its own accent shows that accent.
  */
 export function previewColors(
+  theme: ThemeInfo,
+  themes: readonly ThemeInfo[],
+): Readonly<Record<string, string>> {
+  const base = basePreviewColors(theme, themes);
+  const own = theme.preview;
+  if (!own) return base;
+  const merged: Record<string, string> = { ...base };
+  for (const [token, value] of Object.entries(own)) {
+    if (value !== undefined) merged[token] = value;
+  }
+  return merged;
+}
+
+/** The colours of the nearest built-in in `theme`'s chain (see `previewColors`). */
+function basePreviewColors(
   theme: ThemeInfo,
   themes: readonly ThemeInfo[],
 ): Readonly<Record<string, string>> {

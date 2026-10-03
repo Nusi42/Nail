@@ -7,7 +7,13 @@
  * editor, groups, merge dialog), the task list and editor, reminder toasts
  * (snooze / dismiss), calendars and sources, and `.ics` / `.vcf` import.
  *
- * Only WP74 edits the files in this directory (plus
+ * M5b (WP164, ADR 0109): the calendar view's one-line toolbar with the
+ * segmented view switch, the calendar list with colour squares and "…" /
+ * "+" menus (dialogs instead of inline forms), readable event cards, the
+ * look of the calendar, contact and task views (`skin.ts`), and the
+ * settings page's "Calendar & contacts" section (`pim-settings`).
+ *
+ * Only the PIM package edits the files in this directory (plus
  * `crates/nail-config/src/widgets/pim.rs` and `locales/{en,de}/pim.ftl`).
  * The central registry (`../registry.ts`) merges these exports into the
  * app; see `../README.md`.
@@ -22,11 +28,15 @@ import { ContactList } from "./ContactList";
 import { ImportDialog } from "./ImportDialog";
 import { ContactEditorDialog, EventEditorDialog, TaskEditorDialog } from "./lazyDialogs";
 import {
+  CALENDAR_SETTINGS_DIALOG,
   CONTACT_DIALOG,
   EVENT_DIALOG,
   GROUPS_DIALOG,
   IMPORT_DIALOG,
   MERGE_DIALOG,
+  NEW_CALENDAR_DIALOG,
+  PIM_SETTINGS_WIDGET,
+  REMOVE_CALENDAR_DIALOG,
   SCOPE_DIALOG,
   SOURCES_DIALOG,
   TASK_DIALOG,
@@ -36,7 +46,10 @@ import { pimKeys } from "./queries";
 import { PimToasts } from "./Reminders";
 import { ScopeDialog } from "./ScopeDialog";
 import { Agenda, MiniMonth } from "./SmallWidgets";
-import { CalendarList, SourcesDialog } from "./Sources";
+import { CalendarList } from "./CalendarList";
+import { CalendarSettingsDialog, NewCalendarDialog, RemoveCalendarDialog } from "./CalendarDialogs";
+import { CALENDAR_LIST_INFO, PIM_SETTINGS_INFO, PimSettings } from "./PimSettings";
+import { SourcesDialog } from "./Sources";
 import { pimStoreFor } from "./store";
 import { TaskList } from "./TaskList";
 import {
@@ -85,6 +98,17 @@ export const widgets: Feature["widgets"] = {
   "contact-list": ContactList,
   "contact-card": ContactCard,
   "calendar-list": CalendarList,
+  // M5b (WP164): the settings page's "Calendar & contacts" section.
+  [PIM_SETTINGS_WIDGET]: PimSettings,
+};
+
+/**
+ * The settings page's search index (M5b, ADR 0109): the setting labels of
+ * the PIM widgets a `settings-page` section can hold.
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  [PIM_SETTINGS_WIDGET]: PIM_SETTINGS_INFO,
+  "calendar-list": CALENDAR_LIST_INFO,
 };
 
 function pimOf(ctx: ActionContext) {
@@ -193,6 +217,9 @@ export const dialogs: Feature["dialogs"] = {
   [TASK_DIALOG]: TaskEditorDialog,
   [IMPORT_DIALOG]: ImportDialog,
   [SOURCES_DIALOG]: SourcesDialog,
+  [CALENDAR_SETTINGS_DIALOG]: CalendarSettingsDialog,
+  [NEW_CALENDAR_DIALOG]: NewCalendarDialog,
+  [REMOVE_CALENDAR_DIALOG]: RemoveCalendarDialog,
 };
 
 /** PIM data changed: refetch what shows it; reminders and failed writes become toasts. */

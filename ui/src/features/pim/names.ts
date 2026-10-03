@@ -20,6 +20,13 @@ export const IMPORT_DIALOG = "pim-import";
 /** Calendar subscriptions and CalDAV / CardDAV servers. */
 export const SOURCES_DIALOG = "pim-sources";
 
+/** A calendar's settings: name, colour, reminders (M5b, from its "…" menu). */
+export const CALENDAR_SETTINGS_DIALOG = "pim-calendar-settings";
+/** A new calendar or task list in a source (M5b, from a group's "+" menu). */
+export const NEW_CALENDAR_DIALOG = "pim-new-calendar";
+/** Removing a calendar or unsubscribing (M5b). */
+export const REMOVE_CALENDAR_DIALOG = "pim-remove-calendar";
+
 /** Every dialog (for the catalog: `window-<name>`). */
 export const DIALOGS = [
   EVENT_DIALOG,
@@ -30,4 +37,10 @@ export const DIALOGS = [
   TASK_DIALOG,
   IMPORT_DIALOG,
   SOURCES_DIALOG,
+  CALENDAR_SETTINGS_DIALOG,
+  NEW_CALENDAR_DIALOG,
+  REMOVE_CALENDAR_DIALOG,
 ] as const;
+
+/** The settings page's "Calendar & contacts" section widget (M5b). */
+export const PIM_SETTINGS_WIDGET = "pim-settings";

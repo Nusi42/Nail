@@ -37,6 +37,9 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
             ("favorites", OptionType::Words(FAVORITE_FOLDERS)),
             ("collapsible", OptionType::Bool),
             ("account-colors", OptionType::Bool),
+            // M5b (WP162): the New message button on top of the grouped
+            // pane (default #true).
+            ("compose", OptionType::Bool),
         ],
         &[],
         false,
@@ -137,7 +140,7 @@ mod m5b_tests {
             )
         };
         crate::parse_layout(
-            &layout("folder-tree sections=\"accounts favorites\" favorites=\"all-inboxes drafts\" collapsible=#false account-colors=#true"),
+            &layout("folder-tree sections=\"accounts favorites\" favorites=\"all-inboxes drafts\" collapsible=#false account-colors=#true compose=#false"),
             "layout.kdl",
         )
         .unwrap();

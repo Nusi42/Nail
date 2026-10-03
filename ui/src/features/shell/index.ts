@@ -13,10 +13,10 @@
  * `shell.view` (`../../state/uiState.ts`). Texts: `locales/{en,de}/shell.ftl`
  * (contract ids in `core-shell.ftl`).
  *
- * The contract stage ships working fallbacks so the actions run with any
- * layout: `view.show` opens the view's window when the main window has no
- * `view-host` (the default layout until WP165), and the two widgets render
- * nothing yet.
+ * `view.show` opens the view's window when the main window has no
+ * `view-host` (the default layout until WP165), so the actions run with any
+ * layout. With a host, the rail (`NavRail.tsx`) and the host (`ViewHost.tsx`)
+ * do the rest: badges, remembered view, focus, keyboard contexts.
  */
 import type { ActionInfo } from "../../actions/palette";
 import type { ActionHandler } from "../../actions/registry";
@@ -32,7 +32,8 @@ import {
 } from "../../layout/views";
 import type { ActionContext } from "../../actions/registry";
 import type { Feature } from "../types";
-import { NavRail, ViewHost } from "./widgets";
+import { NavRail } from "./NavRail";
+import { ViewHost } from "./ViewHost";
 
 /** Shows a view: in the `view-host`, else by opening its window. */
 export function showView(ctx: ActionContext, view: string): void {
@@ -40,7 +41,11 @@ export function showView(ctx: ActionContext, view: string): void {
   if (def === null) return;
   const store = ctx.store.getState();
   store.setActiveView(view);
-  if (hostsViews(ctx.layout)) return;
+  if (hostsViews(ctx.layout)) {
+    // Shown in the host now: a copy open as a window over it closes.
+    if (store.windows.includes(def.window)) store.closeWindow(def.window);
+    return;
+  }
   if (def.window === "main") {
     // The main window is the view: close what covers it.
     for (const window of [...store.windows].reverse()) store.closeWindow(window);

@@ -68,8 +68,12 @@ describe("shipped catalogs", () => {
     expect(createLocalizer(shippedCatalogs, ["en"]).t("app-name")).toBe("Nail");
   });
 
+  it("a German browser stays English while the shipped German catalog is empty", () => {
+    expect(createLocalizer(shippedCatalogs, ["de"]).locale).toBe("en");
+  });
+
   it("falls back from the (empty) German catalog to English", () => {
-    const l = createLocalizer(shippedCatalogs, ["de"]);
+    const l = createLocalizer(shippedCatalogs, ["de"], false, "de");
     expect(l.locale).toBe("de");
     expect(l.t("message-list-empty")).toBe("No messages in this folder.");
   });
