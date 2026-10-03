@@ -135,7 +135,7 @@
                   "options": {
                     "account-colors": true,
                     "collapsible": true,
-                    "favorites": "all-inboxes flagged snoozed drafts",
+                    "favorites": "all-inboxes flagged snoozed drafts outbox",
                     "sections": "favorites accounts smart-folders",
                     "show-unread": true
                   },
@@ -362,7 +362,7 @@
                   "options": {
                     "account-colors": true,
                     "collapsible": true,
-                    "favorites": "all-inboxes flagged snoozed drafts",
+                    "favorites": "all-inboxes flagged snoozed drafts outbox",
                     "sections": "favorites accounts smart-folders",
                     "show-unread": true
                   },
@@ -613,7 +613,6 @@
                   "label": "@pim.pane.calendars",
                   "sizes": [
                     "auto",
-                    "auto",
                     "1fr"
                   ],
                   "children": [
@@ -632,17 +631,6 @@
                       "label": null,
                       "kind": "calendar-list",
                       "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "calendar-tasks",
-                      "label": null,
-                      "kind": "task-list",
-                      "options": {
-                        "sort": "due"
-                      },
                       "rows": [],
                       "source": null
                     }
@@ -690,7 +678,9 @@
               "id": "contacts-list",
               "label": "@pim.pane.contacts",
               "kind": "contact-list",
-              "options": {},
+              "options": {
+                "header": true
+              },
               "rows": [],
               "source": null
             },
@@ -716,7 +706,9 @@
           "id": "tasks",
           "label": null,
           "kind": "task-list",
-          "options": {},
+          "options": {
+            "header": true
+          },
           "rows": [],
           "source": null
         }
@@ -2192,23 +2184,7 @@
         "args": [],
         "label": null,
         "icon": null,
-        "rank": 1
-      },
-      {
-        "type": "action",
-        "action": "tasks.new",
-        "args": [],
-        "label": null,
-        "icon": null,
         "rank": 2
-      },
-      {
-        "type": "action",
-        "action": "contacts.new",
-        "args": [],
-        "label": null,
-        "icon": null,
-        "rank": 3
       },
       {
         "type": "spacer"
@@ -2219,7 +2195,7 @@
         "args": [],
         "label": null,
         "icon": null,
-        "rank": 4,
+        "rank": 3,
         "display": "icon"
       },
       {
@@ -2227,6 +2203,23 @@
         "label": null,
         "icon": null,
         "items": [
+          {
+            "type": "action",
+            "action": "tasks.new",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "contacts.new",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "separator"
+          },
           {
             "type": "action",
             "action": "print.event",
@@ -2811,6 +2804,14 @@
     },
     {
       "type": "action",
+      "action": "palette.open",
+      "args": [],
+      "label": null,
+      "icon": "command",
+      "badge": null
+    },
+    {
+      "type": "action",
       "action": "agents.open-center",
       "args": [],
       "label": null,
@@ -2873,6 +2874,7 @@
             "label": null,
             "sizes": [
               "auto",
+              "auto",
               "auto"
             ],
             "children": [
@@ -2890,6 +2892,15 @@
                 "id": "page-junk-settings",
                 "label": null,
                 "kind": "junk-settings",
+                "options": {},
+                "rows": [],
+                "source": null
+              },
+              {
+                "type": "widget",
+                "id": "page-rules",
+                "label": null,
+                "kind": "rule-manager",
                 "options": {},
                 "rows": [],
                 "source": null

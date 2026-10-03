@@ -132,7 +132,7 @@ ${hc(...CARD_PARTS)} {
   border-left-width: 6px; border-left-style: solid;
 }`;
 
-const GRIDS = `${p("calendar.day-head")} { gap: 0; padding: ${T.xs}; border: 0; line-height: ${T.tight}; font-size: ${T.label}; color: ${T.muted}; background-color: transparent; }
+const GRIDS = `${p("calendar.day-head")} { display: flex; flex-direction: column; align-items: center; gap: 0; padding: ${T.xs}; border: 0; line-height: ${T.tight}; font-size: ${T.label}; color: ${T.muted}; background-color: transparent; }
 ${p("calendar.day-head.date")} { font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; color: ${T.fg}; }
 ${p("calendar.day-head")}[aria-current="date"] ${p("calendar.day-head.date")} { color: ${T.accent}; }
 ${p("calendar.hour")} { font-size: ${T.label}; color: ${T.muted}; font-variant-numeric: tabular-nums; }
@@ -140,7 +140,36 @@ ${p("calendar.month.day")}[aria-current="date"] ${p("calendar.month.date")} {
   display: inline-grid; place-items: center; min-width: 1.75em; border-radius: ${T.pill};
   font-weight: ${T.semibold}; color: ${T.accentFg}; background-color: ${T.accent};
 }
-${p("calendar.now")} { background-color: ${T.danger}; }`;
+${p("calendar.now")} { height: 2px; background-color: ${T.danger}; }
+${p("calendar.month")} { height: 100%; }
+${p("calendar.month.weekday")} {
+  height: calc(${T.label} * 2); padding: ${T.xs}; border-bottom: 1px solid ${T.line};
+  font-size: ${T.label}; font-weight: ${T.semibold}; color: ${T.muted}; text-align: center;
+}
+${p("calendar.month.day")} {
+  height: 6em; padding: ${T.xxs}; border: 1px solid ${T.border}; overflow: hidden;
+  background-color: ${T.bg};
+}
+${p("calendar.month.day")}[data-state~="outside"] { color: ${T.muted}; background-color: ${T.subtle}; }
+${p("calendar.month.day")}[data-state~="today"] { box-shadow: inset 0 0 0 2px ${T.accent}; }
+${p("calendar.month.day")}[data-state~="drop-target"] { color: ${T.selectionFg}; background-color: ${T.selection}; }
+${p("calendar.month.day")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
+${p("calendar.month.date")} { display: block; margin-bottom: ${T.xxs}; padding: 0 ${T.xxs}; font-size: ${T.small}; font-variant-numeric: tabular-nums; }
+${p("calendar.month.events")} { display: grid; gap: 1px; min-width: 0; }
+${p("calendar.month.events")} > * { ${oneLine} }
+${p("calendar.month.item")} > ${p("calendar.chip")} { width: 100%; max-width: 100%; }
+${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.time")} { flex: 0 3 auto; }
+${p("calendar.month.item")} > ${p("calendar.chip")} > ${p("event-card.title")} { flex: 0 1 auto; }
+${p("calendar.month.more")} {
+  padding: 0 ${T.xs}; border: none; border-radius: ${T.rSm}; font-size: ${T.label};
+  color: ${T.muted}; background-color: transparent;
+}
+${p("calendar.month.more")}:hover { color: ${T.fg}; background-color: ${T.raised}; }
+${p("calendar.month.more")}:focus-visible { ${focusRing} }
+${p("calendar.year.month.title")} {
+  caption-side: top; padding: 0 ${T.xxs} ${T.xs}; text-align: start;
+  font-family: ${T.fontDisplay}; font-size: ${T.body}; font-weight: ${T.semibold}; color: ${T.fg};
+}`;
 
 const MINI_MONTH = `${p("mini-month")} { padding: ${T.sm}; }
 ${p("mini-month.header")} { display: flex; align-items: center; gap: ${T.xxs}; margin-bottom: ${T.xs}; }
@@ -221,6 +250,7 @@ const CONTACTS = `${ps("contact-list.avatar", "contact-card.avatar")} {
   color: var(--nail-color-avatar-fg, #ffffff); user-select: none;
 }
 ${p("contact-list.avatar")} { width: ${T.avatar}; height: ${T.avatar}; font-size: calc(${T.avatar} * 0.37); }
+${p("contact-card.avatar")} { width: 72px; height: 72px; flex: 0 0 auto; font-size: 28px; }
 ${avatars}
 ${p("contact-list.items")} { display: flex; flex-direction: column; gap: 1px; }
 ${p("contact-list.item")} {
@@ -239,6 +269,17 @@ ${p("contact-card.name")} { margin: 0; font-family: ${T.fontDisplay}; font-weigh
 ${p("contact-card.heading")} { margin: 0 0 ${T.xs}; font-size: ${T.label}; font-weight: ${T.semibold}; letter-spacing: 0.05em; text-transform: uppercase; color: ${T.muted}; }
 ${p("contact-card.section")} { display: grid; gap: ${T.xs}; }`;
 
+const VIEW_HEADER = `${p("pim.view-header")} {
+  display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm} ${T.md};
+  padding-bottom: ${T.sm}; border-bottom: 1px solid ${T.border};
+}
+${p("pim.view-header.title")} {
+  flex: 1 1 auto; margin: 0; ${oneLine}
+  font-family: ${T.fontDisplay}; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight};
+}
+${p("pim.view-header")} > [data-field="search"] { flex: 1 1 100%; order: 3; display: grid; gap: ${T.xxs}; }
+${p("pim.view-header.actions")} { display: flex; flex: 0 0 auto; align-items: center; gap: ${T.xs}; }`;
+
 const TASKS = `${p("task-list.items")} { display: flex; flex-direction: column; gap: 1px; }
 ${p("task-list.item")} {
   display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm};
@@ -255,7 +296,15 @@ ${ps("task-list.due", "task-list.priority", "task-list.subtasks", "task-list.bad
 ${p("task-list.due")}[data-state~="overdue"] { color: ${T.danger}; font-weight: ${T.semibold}; }
 ${p("task-list.priority")}[data-priority="high"] { color: ${T.danger}; }
 ${p("task-list.toggle")} { display: inline-grid; place-items: center; padding: 0; border: none; border-radius: ${T.rSm}; color: ${T.muted}; background-color: transparent; }
-${p("task-list.toggle.icon")} { width: ${T.icon}; height: ${T.icon}; }`;
+${p("task-list.toggle.icon")} { width: ${T.icon}; height: ${T.icon}; }
+${p("task-list.item")}[data-level="2"] { padding-left: calc(${T.sm} + 28px); }
+${p("task-list.item")}[data-level="3"] { padding-left: calc(${T.sm} + 56px); }
+${p("task-list.item")}[data-level="4"] { padding-left: calc(${T.sm} + 84px); }
+${p("task-list.item")}[data-state~="current"] { background-color: ${T.subtle}; box-shadow: inset 3px 0 0 ${T.accent}; }
+${p("task-list.item")}[data-state~="done"] ${p("task-list.title")} { color: ${T.muted}; text-decoration: line-through; }
+${p("task-list.add")} { display: flex; flex-wrap: wrap; align-items: center; gap: ${T.sm}; padding: ${T.xs} 0; }
+${p("task-list.add")} > ${p("form.label")} { flex: 1 0 100%; margin: 0; }
+${p("task-list.add")} > ${p("form.input")} { flex: 1 1 12em; min-width: 0; }`;
 
 /** The PIM skin (empty sections are dropped). */
 export const PIM_SKIN_CSS = [
@@ -265,6 +314,7 @@ export const PIM_SKIN_CSS = [
   MINI_MONTH,
   CALENDAR_LIST,
   DIALOGS,
+  VIEW_HEADER,
   CONTACTS,
   TASKS,
 ].join("\n");

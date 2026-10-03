@@ -6,18 +6,26 @@
 
 - **Favorites** — the same folders of all accounts together: **All
   inboxes**, **Flagged** and **Unread** (searches across every account),
-  **Snoozed**, **Drafts**, **Sent** and the **Outbox** (which favorites you
-  see is the `favorites` option of the `folder-tree`, see the
-  [layout reference](layout-reference.md#widgets)).
+  **Snoozed**, **Drafts**, **Sent** and the **Outbox** (shown only while
+  messages wait there; which favorites you see is the `favorites` option of
+  the `folder-tree`, see the [layout reference](layout-reference.md#widgets)).
 - **One section per account**, in your account order, with the account's
   colour (the same colour marks its messages in the list) and its folders.
-  A folded account still shows its inbox's unread count.
+  The special folders come first, named in your language — Inbox, Drafts,
+  Sent, Archive, Junk, Trash — whatever the server calls them ("INBOX",
+  "[Gmail]/Spam"; the server's name is the tooltip); your other folders
+  follow. An account that is not online shows its state (for example
+  **Offline**, **Disabled**) as a tag beside its name. A folded account
+  still shows its inbox's unread count.
 - **Smart folders** — your saved searches, only once you saved one.
 
 Click a section's heading (or press Enter / ← / → on it) to fold or unfold
 it; Nail remembers what you folded across restarts. The arrow keys move
 through the whole pane. Right-click an account's heading for its actions
-(check for mail, automatic replies, account settings).
+(check for mail, automatic replies, account settings). Right-click menus
+show only what applies to the message or folder: **Not junk**, for
+example, appears in the Junk folder and for mail Nail's junk filter
+flagged.
 
 ## The list header
 

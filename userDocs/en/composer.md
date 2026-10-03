@@ -80,7 +80,8 @@ Drafts folder on the server, so you can continue it in another mail program;
 each save replaces the earlier copy there, and sending or discarding the
 message removes it.
 
-Drafts survive closing Nail: open **Outbox**; under **Drafts** each saved
+Drafts survive closing Nail: open **Outbox** (`g` then `o`, or the command
+palette); under **Drafts** each saved
 message has **Continue writing** and **Discard**.
 
 ## Sending, undo send and send later
@@ -110,7 +111,7 @@ Replying marks the original message as answered.
 
 ## The outbox
 
-**Outbox** (in the command palette, as a favorite of the folder pane if you add it, or `g` then `o`) lists messages waiting to be
+**Outbox** (a favorite of the folder pane while messages wait there, with their number; also in the command palette, **Ctrl+K**, or `g` then `o`) lists messages waiting to be
 sent: scheduled ones, ones in their undo-send delay, and ones that failed.
 **Edit** takes a message back into the composer; **Send now** sends it at
 once, for example after a failure has been fixed. Below them, **Drafts**

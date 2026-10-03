@@ -138,7 +138,7 @@ test.describe("windows and dialogs of demo-multi", () => {
       .getByRole("button", { name: "Cancel" })
       .click();
     await page
-      .getByRole("treeitem", { name: /^INBOX/ })
+      .getByRole("treeitem", { name: /^Inbox/ })
       .first()
       .click({ button: "right" });
     await expect(page.getByRole("menu")).toBeVisible();

@@ -35,7 +35,10 @@ const PLAIN_LISTS = [
 const sel = (parts: readonly string[]) => parts.map((p) => `[data-part="${p}"]`).join(", ");
 
 export const PIM_BASE_CSS = `${sel(PLAIN_LISTS)} { list-style: none; margin: 0; padding: 0; }
-[data-part="calendar"] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; }
+[data-part="calendar"] { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+[data-part="calendar"] > * { flex: 0 0 auto; }
+[data-part="calendar"] > :last-child:not([data-part="calendar.toolbar"]) { flex: 1 1 0; min-height: 0; min-width: 0; }
+[data-part="calendar.year"], [data-part="calendar.agenda"], [data-part="calendar.free-time"], [data-part="calendar.month.frame"] { overflow-y: auto; }
 [data-part="calendar.time-grid"] { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; }
 [data-part="calendar.head"], [data-part="calendar.all-day"], [data-part="calendar.body"] { display: grid; grid-template-columns: 56px minmax(0, 1fr); }
 [data-part="calendar.head"][data-zones="2"], [data-part="calendar.all-day"][data-zones="2"] { grid-template-columns: 112px minmax(0, 1fr); }

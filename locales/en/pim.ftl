@@ -416,6 +416,8 @@ pim-contacts-all-books = All address books
 pim-contacts-group = Group
 pim-contacts-all-groups = All contacts
 pim-contacts-actions = Contact actions
+# The "More" menu button of the Contacts view's header (M5b).
+pim-view-more = More
 pim-contacts-list = Contacts
 pim-contacts-count =
     { $count ->

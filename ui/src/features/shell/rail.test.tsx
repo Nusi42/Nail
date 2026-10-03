@@ -23,7 +23,18 @@ describe("nav-rail", () => {
     const buttons = within(rail()).getAllByRole("button");
     expect(
       buttons.map((b) => b.getAttribute("data-view") ?? b.getAttribute("data-action")),
-    ).toEqual(["mail", "calendar", "contacts", "tasks", "agents.open-center", "settings"]);
+    ).toEqual([
+      "mail",
+      "calendar",
+      "contacts",
+      "tasks",
+      "palette.open",
+      "agents.open-center",
+      "settings",
+    ]);
+    // The command palette has a visible entry point, its key in the tooltip
+    // (M5b review).
+    expect(item(/^Command palette/)).toHaveAttribute("title", "Command palette (Ctrl+K)");
     // The start view is current.
     expect(item(/^Mail/)).toHaveAttribute("aria-current", "page");
     expect(item(/^Calendar/)).not.toHaveAttribute("aria-current");

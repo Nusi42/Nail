@@ -365,3 +365,125 @@ describe("calendar toolbar and event cards (M5b)", () => {
     expect(css).toMatch(/color-mix\(in srgb, #3b82f6 16%, var\(--nail-color-bg\)\)/);
   });
 });
+
+describe("calendar views after the M5b review", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows free time per working day within the working hours, without weekends", async () => {
+    const env = createEnv();
+    renderNode(
+      widget("calendar", {
+        options: { view: "free-time", "work-start": 8, "work-end": 18, duration: 30 },
+      }),
+      env,
+      { locale: "en" },
+    );
+    await settle(env);
+    const days = [...document.querySelectorAll('[data-part="calendar.free-time.day"]')];
+    expect(days).toHaveLength(5);
+    for (const day of days) {
+      expect(day.getAttribute("aria-label")).not.toMatch(/Saturday|Sunday/);
+    }
+    // Every slot lies inside 8:00–18:00: never a midnight-to-midnight stretch.
+    const slots = screen.getAllByRole("button", { name: /^Free on/ });
+    expect(slots.length).toBeGreaterThanOrEqual(5);
+    for (const slot of slots) {
+      expect(slot.textContent).not.toMatch(/12:00\s?AM/);
+    }
+  });
+
+  it("gives the year's months a visible name", async () => {
+    const env = createEnv();
+    renderNode(widget("calendar", { options: { view: "year" } }), env, { locale: "en" });
+    await settle(env);
+    const titles = [...document.querySelectorAll('[data-part="calendar.year.month.title"]')];
+    expect(titles.map((t) => t.textContent)).toEqual([
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ]);
+  });
+
+  it("puts the month grid into a frame that gives the weeks the view's height", async () => {
+    const env = createEnv();
+    renderNode(widget("calendar", { options: { view: "month" } }), env);
+    await settle(env);
+    const grid = screen.getByRole("grid");
+    expect(grid.parentElement).toHaveAttribute("data-part", "calendar.month.frame");
+  });
+
+  it("offers the view menu when the segmented switch does not fit, and returns", async () => {
+    const callbacks = new Set<() => void>();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly cb: () => void) {}
+        observe() {
+          callbacks.add(this.cb);
+        }
+        disconnect() {
+          callbacks.delete(this.cb);
+        }
+        unobserve() {}
+      },
+    );
+    const size = { bar: 700 };
+    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+    const scroll = Object.getOwnPropertyDescriptor(Element.prototype, "scrollWidth");
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        const part = this.getAttribute("data-part");
+        if (part === "calendar.toolbar") return size.bar;
+        if (part === "segmented") return Math.min(380, Math.max(0, size.bar - 580));
+        return 100;
+      },
+    });
+    Object.defineProperty(Element.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: Element) {
+        const part = this.getAttribute("data-part");
+        if (part === "segmented") return 380;
+        if (part === "calendar.toolbar") return size.bar;
+        return 100;
+      },
+    });
+    try {
+      const env = createEnv();
+      renderNode(
+        widget("calendar", { options: { view: "week", views: "day week month agenda" } }),
+        env,
+      );
+      await settle(env);
+      // 700 px: the switch would need 380 but gets 120 → the menu.
+      const menu = screen.getByRole("combobox", { name: "View" });
+      expect(menu).toHaveValue("week");
+      expect(screen.queryByRole("group", { name: "View" })).toBeNull();
+      expect(document.querySelector('[data-part="calendar.toolbar"]')).toHaveAttribute(
+        "data-switch",
+        "menu",
+      );
+      // Still too narrow: stays.
+      size.bar = 900;
+      act(() => callbacks.forEach((cb) => cb()));
+      expect(screen.getByRole("combobox", { name: "View" })).toBeInTheDocument();
+      // As wide as the segmented row needed: back.
+      size.bar = 1000;
+      act(() => callbacks.forEach((cb) => cb()));
+      const group = screen.getByRole("group", { name: "View" });
+      expect(within(group).getAllByRole("button")).toHaveLength(4);
+    } finally {
+      if (client) Object.defineProperty(HTMLElement.prototype, "clientWidth", client);
+      if (scroll) Object.defineProperty(Element.prototype, "scrollWidth", scroll);
+    }
+  });
+});

@@ -38,6 +38,8 @@ export interface MonthGridProps {
   autoFocus?: boolean;
   /** Use compact (narrow) weekday headers. */
   narrow?: boolean;
+  /** Show the month's name above the grid (`<part>.title`; the year view). */
+  caption?: string;
 }
 
 export function MonthGrid({
@@ -52,6 +54,7 @@ export function MonthGrid({
   onSelect,
   autoFocus = false,
   narrow = false,
+  caption,
 }: MonthGridProps) {
   const locale = useLocale();
   const format = useDateFormat();
@@ -113,6 +116,11 @@ export function MonthGrid({
 
   return (
     <table ref={tableRef} role="grid" data-part={part} aria-label={name} onKeyDown={onKeyDown}>
+      {caption !== undefined && (
+        <caption data-part={`${part}.title`} aria-hidden="true">
+          {caption}
+        </caption>
+      )}
       <thead data-part={`${part}.head`}>
         <tr data-part={`${part}.weekdays`}>
           {firstWeek.map((day) => (

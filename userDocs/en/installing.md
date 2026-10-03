@@ -61,7 +61,7 @@ Nail registers itself as a program that can open:
 Windows does not let programs make themselves the default. To use Nail for
 these, open **Settings > Apps > Default apps**, pick **Nail**, and choose
 the link and file types you want it to handle — or use *Choose in Default
-apps* in Nail's **Settings > Default apps**, which opens that page and
+apps* in Nail's **Settings → Desktop app**, which opens that page and
 shows what Nail handles now ([details](desktop-app.md#default-apps)). You
 can also right-click a file and use **Open with > Nail**.
 
@@ -105,7 +105,7 @@ The setup program's Nail updates itself: it checks when it starts and once
 a day, downloads a new version in the background and installs it when you
 restart Nail (or when you quit it). Every update is checked against Nail's
 update signature first. You choose the channel (stable or beta) in
-**Settings > Updates**; see [Updates and About Nail](desktop-app.md#updates-and-about-nail).
+**Settings → Desktop app**; see [Updates and About Nail](desktop-app.md#updates-and-about-nail).
 Installations from the MSI are updated by your IT department; the portable
 version is updated by replacing the folder.
 

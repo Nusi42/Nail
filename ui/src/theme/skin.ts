@@ -273,7 +273,9 @@ ${p("badge")} {
 }
 ${p("badge")}[data-tone="danger"] { color: ${T.bg}; background-color: ${T.danger}; }`;
 
-const MENUS = `${p("context-menu")} { min-width: calc(16 * ${T.lg}); }
+const MENUS = `${p("context-menu")} {
+  width: max-content; min-width: calc(16 * ${T.lg}); max-width: min(30em, calc(100vw - 2 * ${T.sm}));
+}
 ${p("context-menu.list")} {
   display: grid; padding: ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.rMd};
   color: ${T.fg}; background-color: ${T.bg}; box-shadow: ${T.overlay};
@@ -287,7 +289,10 @@ ${p("context-menu.item")}:hover, ${p("context-menu.item")}:focus { outline: none
 ${p("context-menu.item")}:focus-visible { outline: 2px solid ${T.focus}; outline-offset: -2px; }
 ${p("context-menu.item")}[data-state~="disabled"] { opacity: ${T.disabled}; }
 ${p("context-menu.item.icon")} { grid-column: 1; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
-${p("context-menu.item.label")} { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+${p("context-menu.item.label")} {
+  grid-column: 2; padding-block: ${T.xxs}; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
 ${p("context-menu.item.shortcut")} { grid-column: 3; font-family: ${T.fontMono}; font-size: ${T.label}; color: ${T.muted}; }
 ${p("context-menu.item.arrow")} { grid-column: 4; width: ${T.icon}; height: ${T.icon}; color: ${T.muted}; }
 ${p("context-menu.separator")} { height: 1px; margin: ${T.xs} ${T.xs}; background-color: ${T.border}; }
@@ -540,7 +545,13 @@ ${p("layout-offer.title")} { margin: 0; font-size: ${T.heading}; font-weight: ${
 ${p("layout-offer.text")} { margin: 0; font-size: ${T.body}; line-height: ${T.normal}; color: ${T.muted}; }
 ${p("layout-offer.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
 ${p("security-compose.toggles")} > ${p("form.field")} { display: inline-flex; align-items: center; gap: ${T.sm}; }
-${p("folder-tree.section.status")} { margin-inline-start: ${T.xs}; font-weight: ${T.regular}; text-transform: none; letter-spacing: 0; color: ${T.muted}; }
+${p("folder-tree.section.status")} {
+  flex: 0 0 auto; padding: 0 ${T.xs}; border: 1px solid ${T.border}; border-radius: ${T.pill};
+  font-size: ${T.small}; font-weight: ${T.regular}; line-height: 1.4; text-transform: none; letter-spacing: 0;
+  white-space: nowrap; color: ${T.muted};
+}
+${p("folder-tree.section.status")} { margin-inline-start: auto; }
+${p("folder-tree.section.status")} + ${p("folder-tree.section.unread-count")} { margin-inline-start: ${T.xs}; }
 ${p("folder-tree.section.status")}[data-state="auth-error"] { color: ${T.danger}; }`;
 
 /** Tokens used above that are not in the schema yet (derived defaults). */

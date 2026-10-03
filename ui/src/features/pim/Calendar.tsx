@@ -15,11 +15,12 @@
  *
  * M5b (WP164): the header is one toolbar line that never wraps — Today,
  * previous / next, the range shown (cut with an ellipsis when the pane is
- * narrow), the segmented view switch and "New event".
+ * narrow), the segmented view switch and "New event". When the segmented
+ * switch does not fit, the view menu replaces it (`switchFit.ts`).
  * Keys: the widget is the `calendar` key context.
  */
 import type { CalendarDate } from "@internationalized/date";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { ViewKind } from "./time";
 import { useDateFormat } from "../../i18n/format";
 import { useT } from "../../i18n/I18nProvider";
@@ -39,6 +40,7 @@ import { dayDate, formatDay } from "./fmt";
 import { openNewEvent } from "./newEvent";
 import { useCalendars, useInstances } from "./queries";
 import { usePim, usePimStore } from "./store";
+import { useNarrowViewSwitch } from "./switchFit";
 import { TimeGrid } from "./TimeGrid";
 import {
   DEFAULT_VIEW_OPTIONS,
@@ -199,6 +201,13 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
   const calendars = useCalendars();
   const today = todayIn(tz, useNow());
   const title = rangeTitle(view, range, anchor, format, t);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  // Narrow panes get the view menu instead of a clipped segmented switch.
+  const narrowSwitch = useNarrowViewSwitch(
+    toolbarRef,
+    header && switchStyle !== "menu" && views.length > 1,
+    `${view} ${title}`,
+  );
 
   useEffect(() => {
     pim.getState().setShown({ view, days: options.days });
@@ -277,7 +286,11 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
       aria-busy={instances.isFetching}
     >
       {header && (
-        <div data-part="calendar.toolbar">
+        <div
+          ref={toolbarRef}
+          data-part="calendar.toolbar"
+          data-switch={switchStyle === "menu" || narrowSwitch ? "menu" : "segmented"}
+        >
           <div data-part="calendar.nav" role="group" aria-label={t("pim-nav-label")}>
             <button
               type="button"
@@ -318,7 +331,7 @@ export function CalendarWidget({ node, nodeKey }: WidgetProps) {
             <ViewSwitch
               views={views}
               view={view}
-              menu={switchStyle === "menu"}
+              menu={switchStyle === "menu" || narrowSwitch}
               onChange={(kind) => pim.getState().setView(kind)}
             />
           )}

@@ -1,8 +1,9 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Request } from "../../api/generated";
+import type { MessageBody, Request } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import { createEnv, renderNode, renderWithProviders, widget, type Env } from "../../test/harness";
+import { queryKeys } from "../../state/queries";
 import { AUTOCRYPT_IMPORT_DIALOG, AutocryptImportDialog } from "./Autocrypt";
 import { actions, dialogs } from "./index";
 
@@ -109,11 +110,30 @@ describe("autocrypt import dialog and action", () => {
     };
   }
 
-  it("opens the dialog only with a selected message", () => {
+  it("opens the dialog only for a selected Autocrypt Setup Message", () => {
     const env = createEnv();
     const action = actions["security.autocrypt.import"];
     expect(action?.enabled?.(ctx(env), [])).toBe(false);
-    act(() => env.store.getState().selectMessage(firstMessage(env)));
+    const id = firstMessage(env);
+    act(() => env.store.getState().selectMessage(id));
+    // Not loaded yet, then an ordinary message: hidden (M5b review).
+    expect(action?.enabled?.(ctx(env), [])).toBe(false);
+    const body = (attachments: MessageBody["attachments"], text = "Hello") =>
+      ({ id, text, attachments }) as unknown as MessageBody;
+    env.queryClient.setQueryData(queryKeys.message(id), body([]));
+    expect(action?.enabled?.(ctx(env), [])).toBe(false);
+    env.queryClient.setQueryData(
+      queryKeys.message(id),
+      body([{ mime: "application/autocrypt-setup" } as MessageBody["attachments"][number]]),
+    );
+    expect(action?.enabled?.(ctx(env), [])).toBe(true);
+    env.queryClient.setQueryData(
+      queryKeys.message(id),
+      body(
+        [],
+        "-----BEGIN PGP MESSAGE-----" + String.fromCharCode(10) + "Passphrase-Format: numeric9x4",
+      ),
+    );
     expect(action?.enabled?.(ctx(env), [])).toBe(true);
     void action?.run(ctx(env), []);
     expect(env.store.getState().windows).toContain(AUTOCRYPT_IMPORT_DIALOG);

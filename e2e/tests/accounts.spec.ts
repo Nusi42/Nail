@@ -147,7 +147,7 @@ test("a virtual account merges folders and dedupes a mailing-list message", asyn
   const everything = accountSectionNamed(page, "Everything");
   await expect(everything).toHaveAttribute("data-account-kind", "virtual");
   const folders = everything.locator('[data-part="folder-tree.item"]');
-  await expect(folders.filter({ hasText: "INBOX" }).first()).toHaveAttribute("data-role", "inbox");
+  await expect(folders.filter({ hasText: "Inbox" }).first()).toHaveAttribute("data-role", "inbox");
   await folders.and(page.locator('[data-role="inbox"]')).first().click();
   // Both inboxes merged; the list message both accounts got is one row.
   await expect(rows(page)).toHaveCount(17);

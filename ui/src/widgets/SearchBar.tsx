@@ -200,6 +200,13 @@ export function SearchForm({
       role="search"
       aria-label={formLabel}
       onSubmit={submit}
+      // Hints hide only when focus leaves the whole form, so Tab reaches them
+      // (M5b review: hiding on the input's blur dropped focus to <body>).
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (!(next instanceof Node) || !event.currentTarget.contains(next)) setFocused(false);
+      }}
     >
       <div data-part="search-bar.field">
         <Icon name="search" part="search-bar.icon" />
@@ -218,8 +225,6 @@ export function SearchForm({
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => setText(event.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
         />
         {shortcut !== null && text === "" && !search && (
           <kbd data-part="search-bar.shortcut" aria-hidden="true">

@@ -143,21 +143,147 @@ test("the reader bar moves actions into More when narrow and runs them from ther
   await expect(bar.getByRole("button", { name: "Snooze…" })).toBeVisible();
 });
 
-test("filter chips narrow the list to unread or flagged mail", async ({ page }) => {
+test("filter chips narrow the list to unread, flagged or mail with attachments", async ({
+  page,
+}) => {
   await open(page);
   const chips = page.getByRole("group", { name: "Filter messages" });
   const all = await rows(page).count();
-  await chips.getByRole("button", { name: "Unread" }).click();
-  await expect(chips.getByRole("button", { name: "Unread" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect.poll(() => rows(page).count()).toBeLessThan(all);
-  for (const row of await rows(page).all()) {
-    await expect(row).toHaveAttribute("data-state", /unread/);
+  for (const [chip, state] of [
+    ["Unread", /unread/],
+    ["Flagged", /flagged/],
+    ["Attachments", /has-attachments/],
+  ] as const) {
+    await chips.getByRole("button", { name: chip, exact: true }).click();
+    await expect(chips.getByRole("button", { name: chip, exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect.poll(() => rows(page).count()).toBeLessThan(all);
+    await expect.poll(() => rows(page).count()).toBeGreaterThan(0);
+    for (const row of await rows(page).all()) {
+      await expect(row).toHaveAttribute("data-state", state);
+    }
+    await chips.getByRole("button", { name: "All", exact: true }).click();
+    await expect.poll(() => rows(page).count()).toBe(all);
   }
-  await chips.getByRole("button", { name: "All" }).click();
-  await expect.poll(() => rows(page).count()).toBe(all);
+});
+
+test("menus hide what does not apply; overflowed bar actions lead More", async ({ page }) => {
+  await open(page, "demo-multi");
+  const welcome = rows(page).filter({ hasText: "Welcome to Nail" }).first();
+  await welcome.click();
+  // Right-click on an ordinary IMAP message: no greyed-out entries.
+  await welcome.click({ button: "right" });
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[aria-disabled="true"]')).toHaveCount(0);
+  for (const name of ["Not junk", "Labels…", "Categories…", "Download full message"]) {
+    await expect(menu.getByRole("menuitem", { name })).toHaveCount(0);
+  }
+  await expect(menu.getByRole("menuitem", { name: "Mark as junk" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // More: no Autocrypt import for ordinary mail; Print shows its key.
+  const bar = readerToolbar(page);
+  await bar.getByRole("button", { name: "More" }).click();
+  await expect(menu.getByRole("menuitem", { name: /Autocrypt/ })).toHaveCount(0);
+  await expect(
+    menu
+      .getByRole("menuitem", { name: /^Print the message/ })
+      .locator('[data-part="context-menu.item.shortcut"]'),
+  ).toHaveText("Ctrl+P");
+  await page.keyboard.press("Escape");
+
+  // Narrow: what left the bar comes first in More, before a separator.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(bar.getByRole("button", { name: "Snooze…" })).toHaveCount(0);
+  await bar.getByRole("button", { name: "More" }).click();
+  const labels = await menu.locator('[data-part="context-menu.item.label"]').allTextContents();
+  expect(labels.indexOf("Snooze…")).toBeGreaterThanOrEqual(0);
+  expect(labels.indexOf("Snooze…")).toBeLessThan(labels.indexOf("Mark as read/unread"));
+  // Labels are not cut: the menu is as wide as its longest entry.
+  for (const label of await menu.locator('[data-part="context-menu.item.label"]').all()) {
+    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+});
+
+test("the command palette and the filter rules have visible entry points", async ({ page }) => {
+  await open(page);
+  const palette = rail(page).getByRole("button", { name: /^Command palette/ });
+  await expect(palette).toHaveAttribute("title", "Command palette (Ctrl+K)");
+  await palette.click();
+  await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const settings = await openSettings(page, "Mail & junk");
+  await expect(settings.locator('[data-part="rule-manager"]').first()).toBeVisible();
+});
+
+test("the calendar at 1024 px: every view reachable, month and free time drawn", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await open(page, "demo-multi");
+  const calendar = await showView(page, "Calendar");
+  const toolbar = calendar.locator('[data-part="calendar.toolbar"]');
+  // The segmented switch does not fit: the view menu replaces it.
+  await expect(toolbar).toHaveAttribute("data-switch", "menu");
+  const views = calendar.getByRole("combobox", { name: "View", exact: true });
+  await expect(views).toBeVisible();
+  const title = calendar.locator('[data-part="calendar.title"]');
+  expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await expect(calendar.getByRole("button", { name: "New event" })).toBeVisible();
+  expect(await views.locator("option").allTextContents()).toEqual([
+    "Day",
+    "Week",
+    "Month",
+    "Year",
+    "Agenda",
+    "Free time",
+  ]);
+
+  // Month: the weeks share the view's height; cells have lines.
+  await views.selectOption("month");
+  const grid = calendar.getByRole("grid");
+  const frame = calendar.locator('[data-part="calendar.month.frame"]');
+  const gridBox = await grid.boundingBox();
+  const frameBox = await frame.boundingBox();
+  expect(Math.abs((gridBox?.height ?? 0) - (frameBox?.height ?? 1))).toBeLessThan(3);
+  const cell = grid.locator('[data-part="calendar.month.day"]').first();
+  expect(await cell.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("1px");
+
+  // Free time: working days only, inside the working hours.
+  await views.selectOption("free-time");
+  const days = calendar.locator('[data-part="calendar.free-time.day"]');
+  await expect(days).toHaveCount(5);
+  const dayLabels = await days.evaluateAll((els) =>
+    els.map((el) => el.getAttribute("aria-label") ?? ""),
+  );
+  for (const label of dayLabels) expect(label).not.toMatch(/Saturday|Sunday/);
+  const slots = await calendar.locator('[data-part="calendar.free-time.slot"]').allTextContents();
+  for (const text of slots) expect(text).not.toMatch(/12:00\sAM\s–\s12:00\sAM/);
+
+  // Wide again: the segmented switch is back.
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expect(calendar.getByRole("group", { name: "View", exact: true })).toBeVisible();
+});
+
+test("Contacts and Tasks have a header with the title and one primary button", async ({ page }) => {
+  await open(page, "demo-multi");
+  const contacts = await showView(page, "Contacts");
+  await expect(contacts.getByRole("heading", { name: "Contacts", exact: true })).toBeVisible();
+  await expect(contacts.getByRole("button", { name: "New contact" })).toHaveAttribute(
+    "data-variant",
+    "primary",
+  );
+  await expect(contacts.getByRole("button", { name: /^Delete/ })).toHaveCount(0);
+  const tasks = await showView(page, "Tasks");
+  await expect(tasks.getByRole("heading", { name: "Tasks", exact: true })).toBeVisible();
+  await expect(tasks.getByRole("button", { name: "New task" })).toHaveAttribute(
+    "data-variant",
+    "primary",
+  );
 });
 
 test("settings search opens the setting; the section is remembered", async ({ page }) => {

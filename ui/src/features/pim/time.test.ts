@@ -1,8 +1,12 @@
 import { CalendarDate, fromAbsolute } from "@internationalized/date";
 import type { EventInstance, PimTime } from "../../api/generated";
 import {
+  DEFAULT_VIEW_OPTIONS,
   busyDays,
   dateString,
+  freeStretchesOfDay,
+  workingDaysFrom,
+  workingDaysOf,
   instancesOfDay,
   isAllDayLike,
   makePimTime,
@@ -227,5 +231,50 @@ describe("placing events", () => {
     expect(instancesOfDay([trip], day.add({ days: 1 }), BERLIN)).toHaveLength(1);
     expect([...busyDays([trip], BERLIN)]).toEqual(["2026-10-02", "2026-10-03"]);
     expect(dateString(day)).toBe("2026-10-01");
+  });
+});
+
+describe("free time (M5b review)", () => {
+  it("starts at the anchor's first working day and skips weekends", () => {
+    // Saturday 3 October 2026, en-US: Monday 5 – Friday 9.
+    const saturday = new CalendarDate(2026, 10, 3);
+    expect(viewRange("free-time", saturday, "en-US", { ...DEFAULT_VIEW_OPTIONS, days: 5 })).toEqual(
+      {
+        start: new CalendarDate(2026, 10, 5),
+        count: 5,
+      },
+    );
+    // Wednesday: Wed, Thu, Fri, (Sat, Sun), Mon, Tue.
+    const range = workingDaysFrom(new CalendarDate(2026, 10, 7), "en-US", 5);
+    expect(range).toEqual({ start: new CalendarDate(2026, 10, 7), count: 7 });
+    expect(workingDaysOf(range, "en-US").map(dateString)).toEqual([
+      "2026-10-07",
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-12",
+      "2026-10-13",
+    ]);
+    // The weekend is the locale's: Friday and Saturday in Israel.
+    expect(workingDaysFrom(new CalendarDate(2026, 10, 2), "he-IL", 1).start).toEqual(
+      new CalendarDate(2026, 10, 4),
+    );
+  });
+
+  it("cuts a free stretch spanning several days to each day's working hours", () => {
+    // One free stretch from Monday noon to Thursday 10:00 (UTC), as
+    // FindFreeTime returns it for a calendar free for days.
+    const slots = [{ start: "2026-10-05T12:00:00Z", end: "2026-10-08T10:00:00Z" }];
+    const day = (d: number) =>
+      freeStretchesOfDay(slots, new CalendarDate(2026, 10, d), "UTC", 8, 18, 30);
+    expect(day(5)).toEqual([{ start: "2026-10-05T12:00:00Z", end: "2026-10-05T18:00:00Z" }]);
+    expect(day(6)).toEqual([{ start: "2026-10-06T08:00:00Z", end: "2026-10-06T18:00:00Z" }]);
+    expect(day(7)).toEqual([{ start: "2026-10-07T08:00:00Z", end: "2026-10-07T18:00:00Z" }]);
+    expect(day(8)).toEqual([{ start: "2026-10-08T08:00:00Z", end: "2026-10-08T10:00:00Z" }]);
+    expect(day(9)).toEqual([]);
+    // Working hours in the view's zone; pieces shorter than the duration go.
+    expect(
+      freeStretchesOfDay(slots, new CalendarDate(2026, 10, 8), "Europe/Berlin", 8, 18, 30),
+    ).toEqual([{ start: "2026-10-08T06:00:00Z", end: "2026-10-08T10:00:00Z" }]);
+    expect(freeStretchesOfDay(slots, new CalendarDate(2026, 10, 8), "UTC", 9, 18, 90)).toEqual([]);
   });
 });

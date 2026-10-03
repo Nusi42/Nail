@@ -2959,9 +2959,9 @@ theme "default" mode="system" {
     part "pim.problem" { margin 0; color "$color.danger"; }
 
     // ---- Calendar widget ----
+    // Structure (a column: toolbar, then the view filling the rest) comes
+    // from ui/src/features/pim/parts.ts.
     part "calendar" {
-        display "grid"
-        grid-template-rows "auto auto minmax(0, 1fr)"
         min-height 0
         height "100%"
         color "$color.fg"
@@ -2998,14 +2998,10 @@ theme "default" mode="system" {
     part "calendar.ghost" { position "absolute"; box-sizing "border-box"; border "2px dashed $color.accent"; border-radius "$radius.sm"; pointer-events "none"; }
     part "calendar.zone" { padding "$space.xxs"; }
 
-    // Month
-    part "calendar.month" { width "100%"; border-collapse "collapse"; }
-    part "calendar.month.weekday" { padding "$space.xs"; font-size "$font-size.xs"; color "$color.fg-muted"; font-weight "$font-weight.regular"; }
-    part "calendar.month.events" { display "flex"; flex-direction "column"; margin 0; padding 0; }
-    part "calendar.month.more" { border 0; padding 0; color "$color.accent"; background-color "transparent"; font-size "$font-size.xs"; }
+    // Month: cells, weekdays, chips and "+ n more" in ui/src/features/pim/skin.ts.
 
     // Year
-    part "calendar.year" { display "grid"; grid-template-columns "repeat(auto-fill, minmax(200px, 1fr))"; gap "$space.lg"; padding "$space.md"; overflow-y "auto"; }
+    part "calendar.year" { display "grid"; grid-template-columns "repeat(auto-fill, minmax(200px, 1fr))"; align-content "start"; align-items "start"; gap "$space.lg"; padding "$space.md"; overflow-y "auto"; }
     part "calendar.year.month" { border-collapse "collapse"; font-size "$font-size.xs"; }
     part "calendar.year.month.day" { padding "$space.xxs"; text-align "center"; cursor "pointer"; }
     part "calendar.year.month.day:outside" { color "$color.fg-muted"; }
@@ -3106,7 +3102,7 @@ theme "default" mode="system" {
     part "calendar-list.actions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
 
     // Contacts
-    part "contact-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.sm"; }
+    part "contact-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.md" "$space.pane"; }
     part "contact-list.toolbar" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
     part "contact-list.actions" { display "flex"; flex-wrap "wrap"; gap "$space.xs"; }
     part "contact-list.count" { margin 0; font-size "$font-size.xs"; color "$color.fg-muted"; }
@@ -3126,9 +3122,8 @@ theme "default" mode="system" {
     part "contact-card.empty" { color "$color.fg-muted"; }
 
     // Tasks
-    part "task-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.sm"; }
+    part "task-list" { display "flex"; flex-direction "column"; gap "$space.sm"; min-height 0; padding "$space.md" "$space.pane"; }
     part "task-list.toolbar" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.sm"; }
-    part "task-list.add" { display "flex"; flex-wrap "wrap"; align-items "end"; gap "$space.xs"; }
     part "task-list.empty" { color "$color.fg-muted"; }
 
     // ---- Invitations and scheduling (M3b WP84) ----

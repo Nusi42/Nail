@@ -9,6 +9,8 @@ import type { ResolvedTheme } from "../../api/generated";
 import { defaultTheme } from "../../api/mockData";
 import { compileTheme } from "../../theme/compile";
 import { AVATAR_COLORS, SKIN_CSS } from "../../theme/skin";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { PIM_SKIN_CSS, PIM_SKIN_PARTS } from "./skin";
 
 /** The top-level rules of a stylesheet text (brace depth 0 → 0). */
@@ -163,5 +165,66 @@ describe("PIM skin", () => {
     ]) {
       expect(PIM_SKIN_PARTS).toContain(part);
     }
+  });
+
+  describe("M5b review: the M3a rules that left defaults/theme.kdl", () => {
+    it("stacks the weekday above the date in the week's day heads", () => {
+      const rule = ruleOf('[data-part="calendar.day-head"]');
+      expect(rule).toMatch(/display: flex;/);
+      expect(rule).toMatch(/flex-direction: column;/);
+      expect(rule).toMatch(/align-items: center;/);
+    });
+
+    it("gives the current-time line a height", () => {
+      expect(ruleOf('[data-part="calendar.now"]')).toMatch(/height: 2px;/);
+    });
+
+    it("draws the month grid: cell lines, height, outside days, today, drop target, focus", () => {
+      expect(ruleOf('[data-part="calendar.month"]')).toMatch(/height: 100%;/);
+      const day = ruleOf('[data-part="calendar.month.day"]');
+      expect(day).toMatch(/border: 1px solid var\(--nail-color-border\);/);
+      expect(day).toMatch(/height: /);
+      expect(day).toMatch(/overflow: hidden;/);
+      for (const state of ["outside", "today", "drop-target"]) {
+        expect(PIM_SKIN_CSS).toContain(`[data-part="calendar.month.day"][data-state~="${state}"]`);
+      }
+      expect(ruleOf('[data-part="calendar.month.day"]:focus-visible')).toMatch(
+        /outline: 2px solid var\(--nail-color-focus-ring\);/,
+      );
+      expect(ruleOf('[data-part="calendar.month.date"]')).toMatch(/display: block;/);
+      // Chips are cut at the cell's edge instead of running into the next day.
+      expect(ruleOf('[data-part="calendar.month.events"] > *')).toMatch(/text-overflow: ellipsis;/);
+      expect(ruleOf('[data-part="calendar.month.item"] > [data-part="calendar.chip"]')).toMatch(
+        /max-width: 100%;/,
+      );
+    });
+
+    it("indents subtasks, strikes done tasks, marks the current one", () => {
+      expect(ruleOf('[data-part="task-list.item"][data-level="2"]')).toMatch(/padding-left/);
+      expect(ruleOf('[data-part="task-list.item"][data-level="3"]')).toMatch(/padding-left/);
+      expect(
+        ruleOf('[data-part="task-list.item"][data-state~="done"] [data-part="task-list.title"]'),
+      ).toMatch(/text-decoration: line-through;/);
+      expect(ruleOf('[data-part="task-list.item"][data-state~="current"]')).toMatch(
+        /background-color/,
+      );
+    });
+
+    it("sizes the contact card's avatar", () => {
+      const rule = ruleOf('[data-part="contact-card.avatar"]');
+      expect(rule).toMatch(/width: 72px;/);
+      expect(rule).toMatch(/height: 72px;/);
+    });
+
+    it("leaves no rule in defaults/theme.kdl that would override a part it styles", () => {
+      const theme = readFileSync(resolve(process.cwd(), "../defaults/theme.kdl"), "utf8");
+      const themed = new Set(
+        [...theme.matchAll(/^\s*part "([a-z0-9.-]+)/gm)].map((m) => m[1] ?? ""),
+      );
+      // `calendar` itself: its structure (a column) comes from parts.ts.
+      const clash = PIM_SKIN_PARTS.filter((part) => themed.has(part));
+      expect(clash).toEqual([]);
+      expect(theme).not.toMatch(/part "calendar" \{[^}]*display/);
+    });
   });
 });

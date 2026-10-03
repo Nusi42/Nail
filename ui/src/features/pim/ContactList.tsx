@@ -6,7 +6,11 @@
  * Keyboard: Up / Down / Home / End move (and show) the contact, Shift +
  * arrows extend the selection, Space toggles a contact in the selection,
  * Enter edits it, Delete deletes the selection.
- * Options: `address-books` (ids), `page-size` (default 200).
+ * Options: `address-books` (ids), `page-size` (default 200), `header`
+ * (M5b review: the Contacts view's header — the title, the search, "New
+ * contact" as the primary button and a "More" menu with Groups, Find
+ * duplicates and Delete; without it the actions are buttons). Delete shows
+ * only while there is something to delete.
  */
 import { colorSlot } from "../../theme/skin";
 import {
@@ -20,10 +24,16 @@ import {
 } from "react";
 import type { ContactSummary } from "../../api/generated";
 import { useT } from "../../i18n/I18nProvider";
-import { optionList, optionNumber, type WidgetProps } from "../../layout/widgetRegistry";
+import {
+  optionBool,
+  optionList,
+  optionNumber,
+  type WidgetProps,
+} from "../../layout/widgetRegistry";
 import { Icon } from "../../widgets/Icon";
 import { Problem, problemOf, useChangeContext } from "./common";
 import { CONTACT_DIALOG, GROUPS_DIALOG, MERGE_DIALOG } from "./names";
+import { PimMenu, type PimMenuEntry } from "./PimMenu";
 import {
   pimWrite,
   useAddressBooks,
@@ -48,6 +58,7 @@ export function ContactList({ node }: WidgetProps) {
   const ids = { search: useId(), book: useId(), group: useId(), list: useId() };
   const fixedBooks = optionList(node, "address-books", []);
   const pageSize = Math.max(20, Math.trunc(optionNumber(node, "page-size", 200)));
+  const header = optionBool(node, "header", false);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [book, setBook] = useState<string>("");
@@ -170,25 +181,100 @@ export function ContactList({ node }: WidgetProps) {
     }
   };
 
+  const canDelete = selection.length > 0 || !!current;
+  const newContact = () => {
+    pim.getState().editContact({ mode: "new", addressBookId: book || null, fields: null });
+    ctx.store.getState().openWindow(CONTACT_DIALOG);
+  };
+  const openGroups = () => ctx.store.getState().openWindow(GROUPS_DIALOG);
+  const openMerge = () => {
+    pim.getState().setMergeIds(selection.length >= 2 ? selection : []);
+    ctx.store.getState().openWindow(MERGE_DIALOG);
+  };
+  const mergeLabel =
+    selection.length >= 2
+      ? t("pim-merge-selected", { count: selection.length })
+      : t("pim-merge-find");
+  const moreEntries: PimMenuEntry[] = [
+    {
+      type: "item",
+      id: "groups",
+      label: t("pim-groups-open"),
+      icon: "users",
+      onSelect: openGroups,
+    },
+    { type: "item", id: "merge", label: mergeLabel, icon: "git-merge", onSelect: openMerge },
+    ...(canDelete
+      ? ([
+          { type: "separator", id: "sep" },
+          {
+            type: "item",
+            id: "delete",
+            label: t("pim-contacts-delete", { count: Math.max(1, selection.length) }),
+            icon: "trash",
+            danger: true,
+            onSelect: () => void removeSelection(),
+          },
+        ] satisfies PimMenuEntry[])
+      : []),
+  ];
+
   return (
     <section
       data-part="contact-list"
       data-key-context="contacts"
       aria-label={t("pim-contacts-label")}
     >
-      <div data-part="contact-list.toolbar">
-        <div data-part="form.field" data-field="search">
-          <label data-part="form.label" htmlFor={ids.search}>
-            {t("pim-contacts-search")}
-          </label>
-          <input
-            id={ids.search}
-            data-part="form.input"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+      {header ? (
+        <div data-part="pim.view-header">
+          <h2 data-part="pim.view-header.title">{t("pim-contacts-label")}</h2>
+          <div data-part="form.field" data-field="search">
+            <label data-part="form.label" htmlFor={ids.search}>
+              {t("pim-contacts-search")}
+            </label>
+            <input
+              id={ids.search}
+              data-part="form.input"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div data-part="pim.view-header.actions">
+            <button
+              type="button"
+              data-part="form.button"
+              data-variant="primary"
+              data-action="new-contact"
+              onClick={newContact}
+            >
+              <Icon name="plus" part="form.button.icon" />
+              {t("pim-contact-new")}
+            </button>
+            <PimMenu
+              label={t("pim-view-more")}
+              icon="ellipsis"
+              field="contacts-more"
+              entries={moreEntries}
+            />
+          </div>
         </div>
+      ) : null}
+      <div data-part="contact-list.toolbar">
+        {!header && (
+          <div data-part="form.field" data-field="search">
+            <label data-part="form.label" htmlFor={ids.search}>
+              {t("pim-contacts-search")}
+            </label>
+            <input
+              id={ids.search}
+              data-part="form.input"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        )}
         {fixedBooks.length !== 1 && (
           <div data-part="form.field" data-field="address-book">
             <label data-part="form.label" htmlFor={ids.book}>
@@ -232,53 +318,36 @@ export function ContactList({ node }: WidgetProps) {
             ))}
           </select>
         </div>
-        <div data-part="contact-list.actions" role="group" aria-label={t("pim-contacts-actions")}>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="new-contact"
-            onClick={() => {
-              pim
-                .getState()
-                .editContact({ mode: "new", addressBookId: book || null, fields: null });
-              ctx.store.getState().openWindow(CONTACT_DIALOG);
-            }}
-          >
-            <Icon name="plus" part="form.button.icon" />
-            {t("pim-contact-new")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="groups"
-            onClick={() => ctx.store.getState().openWindow(GROUPS_DIALOG)}
-          >
-            {t("pim-groups-open")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-action="merge"
-            onClick={() => {
-              pim.getState().setMergeIds(selection.length >= 2 ? selection : []);
-              ctx.store.getState().openWindow(MERGE_DIALOG);
-            }}
-          >
-            {selection.length >= 2
-              ? t("pim-merge-selected", { count: selection.length })
-              : t("pim-merge-find")}
-          </button>
-          <button
-            type="button"
-            data-part="form.button"
-            data-variant="danger"
-            data-action="delete"
-            disabled={selection.length === 0 && !current}
-            onClick={() => void removeSelection()}
-          >
-            {t("pim-contacts-delete", { count: Math.max(1, selection.length) })}
-          </button>
-        </div>
+        {!header && (
+          <div data-part="contact-list.actions" role="group" aria-label={t("pim-contacts-actions")}>
+            <button
+              type="button"
+              data-part="form.button"
+              data-action="new-contact"
+              onClick={newContact}
+            >
+              <Icon name="plus" part="form.button.icon" />
+              {t("pim-contact-new")}
+            </button>
+            <button type="button" data-part="form.button" data-action="groups" onClick={openGroups}>
+              {t("pim-groups-open")}
+            </button>
+            <button type="button" data-part="form.button" data-action="merge" onClick={openMerge}>
+              {mergeLabel}
+            </button>
+            {canDelete && (
+              <button
+                type="button"
+                data-part="form.button"
+                data-variant="danger"
+                data-action="delete"
+                onClick={() => void removeSelection()}
+              >
+                {t("pim-contacts-delete", { count: Math.max(1, selection.length) })}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <Problem message={problem} />
       {(listed.isError || searched.isError) && (

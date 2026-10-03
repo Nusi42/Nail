@@ -8,11 +8,12 @@ layout "Mine" extends="default" {
                 max-sizes="480px none none" \
                 collapsible="true false true" {
                 stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
-                    // New message, Favorites, one section per account (with its
-                    // colour), smart folders once you saved a search.
+                    // New message, Favorites (the Outbox only while mail waits
+                    // there), one section per account (with its colour), smart
+                    // folders once you saved a search.
                     folder-tree id="folders" show-unread=#true \
                         sections="favorites accounts smart-folders" \
-                        favorites="all-inboxes flagged snoozed drafts" \
+                        favorites="all-inboxes flagged snoozed drafts outbox" \
                         collapsible=#true account-colors=#true
                     // Gmail accounts: labels as views (nothing for other accounts).
                     label-list id="gmail-labels"
@@ -61,7 +62,7 @@ layout "Mine" extends="default" {
                 stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
                     folder-tree id="folders" show-unread=#true \
                         sections="favorites accounts smart-folders" \
-                        favorites="all-inboxes flagged snoozed drafts" \
+                        favorites="all-inboxes flagged snoozed drafts outbox" \
                         collapsible=#true account-colors=#true
                     label-list id="gmail-labels"
                     exchange-mailboxes id="exchange-mailboxes"

@@ -73,9 +73,21 @@ export function tooltipMessage(
 const MORE_MENU = "toolbar:more";
 
 /**
- * The "More" menu's entries: the `more` item's own entries, then — after a
- * separator — the actions that did not fit into the bar, in bar order
- * (ADR 0109: "overflowing items are appended"). Resolved like a context
+ * The key context of a toolbar's shortcuts when the bar sits outside the
+ * widget that owns the context (the reader's bar is a sibling of the
+ * message view): the bar's own name.
+ */
+export const TOOLBAR_KEY_CONTEXTS: Readonly<Record<string, string>> = {
+  reader: "reader",
+  calendar: "calendar",
+};
+
+/**
+ * The "More" menu's entries: the actions that did not fit into the bar
+ * first, by rank (unranked ones after them, in bar order), then — after a
+ * separator — the `more` item's own entries (M5b review: overflowed bar
+ * actions such as Archive and Delete must not end up at the bottom of a
+ * long menu; ADR 0109 appended them). Resolved like a context
  * menu (labels, icons, shortcuts, headings kept only above actions,
  * separators normalized); empty when nothing would run.
  */
@@ -87,8 +99,14 @@ export function moreMenuEntries(
 ): ResolvedMenuEntry[] {
   const own = items.find((item) => item.type === "more");
   const moved: MenuItem[] = [];
-  for (const index of overflow) {
-    const item = items[index];
+  const ranked = overflow
+    .map((index, order) => ({ index, order, item: items[index] }))
+    .sort((a, b) => {
+      const ra = a.item?.type === "action" ? (a.item.rank ?? Infinity) : Infinity;
+      const rb = b.item?.type === "action" ? (b.item.rank ?? Infinity) : Infinity;
+      return ra - rb || a.order - b.order;
+    });
+  for (const { item } of ranked) {
     if (item?.type !== "action") continue;
     moved.push({
       type: "action",
@@ -99,8 +117,9 @@ export function moreMenuEntries(
     });
   }
   const entries: MenuItem[] = [
+    ...moved,
+    ...(moved.length > 0 ? [{ type: "separator" } as const] : []),
     ...(own?.type === "more" ? own.items : []),
-    ...(moved.length > 0 ? [{ type: "separator" } as const, ...moved] : []),
   ];
   const resolved = resolveMenu(
     { ...layout, menus: { [MORE_MENU]: entries } },

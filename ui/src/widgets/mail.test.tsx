@@ -31,6 +31,21 @@ describe("search-bar", () => {
     expect(input).toHaveFocus();
   });
 
+  it("keeps the hints while Tab moves into them, hides them when focus leaves (M5b review)", async () => {
+    const user = userEvent.setup();
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    renderNode(widget("search-bar"), env);
+    const input = screen.getByRole("searchbox", { name: "Search mail" });
+    await user.click(input);
+    await user.tab();
+    const hints = screen.getByRole("list", { name: "Search fields" });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(hints.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toHaveAttribute("data-part", "search-bar.hint.button");
+    act(() => (document.activeElement as HTMLElement).blur());
+    expect(screen.queryByRole("list", { name: "Search fields" })).toBeNull();
+  });
+
   it("shows where a query is wrong while typing", async () => {
     const user = userEvent.setup();
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });

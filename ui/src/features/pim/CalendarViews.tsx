@@ -23,6 +23,7 @@ import {
   busyDays,
   dateString,
   daysOf,
+  freeStretchesOfDay,
   instantIn,
   instancesOfDay,
   instantMs,
@@ -32,6 +33,7 @@ import {
   todayIn,
   toZoned,
   weeksOf,
+  workingDaysOf,
   type ViewRange,
 } from "./time";
 import { useLocale } from "../../i18n/I18nProvider";
@@ -120,114 +122,118 @@ export function MonthView({
   };
 
   const firstWeek = weeks[0] ?? [];
+  // The frame takes the view's height so the weeks share it (`height: 100%`
+  // on the table needs a parent with a definite height).
   return (
-    <table
-      ref={gridRef}
-      role="grid"
-      data-part="calendar.month"
-      aria-label={format.dateTime(dayDate(anchor), {
-        month: "long",
-        year: "numeric",
-        timeZone: "UTC",
-      })}
-      onKeyDown={onKeyDown}
-      onPointerMove={drag.move}
-      onPointerUp={drag.end}
-      onPointerCancel={drag.cancel}
-    >
-      <thead data-part="calendar.month.head">
-        <tr data-part="calendar.month.weekdays">
-          {firstWeek.map((day) => (
-            <th
-              key={dateString(day)}
-              scope="col"
-              data-part="calendar.month.weekday"
-              abbr={format.dateTime(dayDate(day), { weekday: "long", timeZone: "UTC" })}
-            >
-              {format.dateTime(dayDate(day), { weekday: "short", timeZone: "UTC" })}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody data-part="calendar.month.body">
-        {weeks.map((week) => (
-          <tr key={dateString(week[0] ?? anchor)} data-part="calendar.month.week">
-            {week.map((day) => {
-              const key = dateString(day);
-              const dayInstances = instancesOfDay(instances, day, tz);
-              const shown = dayInstances.slice(0, maxPerDay);
-              const more = dayInstances.length - shown.length;
-              const states = [
-                day.month !== anchor.month ? "outside" : null,
-                day.compare(today) === 0 ? "today" : null,
-                drag.over === key ? "drop-target" : null,
-              ].filter(Boolean);
-              return (
-                <td
-                  key={key}
-                  role="gridcell"
-                  data-part="calendar.month.day"
-                  data-day={key}
-                  data-state={states.join(" ") || undefined}
-                  aria-current={day.compare(today) === 0 ? "date" : undefined}
-                  aria-label={t("pim-month-day-label", {
-                    day: formatDay(format, day, { dateStyle: "full" }),
-                    count: dayInstances.length,
-                  })}
-                  tabIndex={day.compare(focused) === 0 ? 0 : -1}
-                  onDoubleClick={(event) => {
-                    if (event.target === event.currentTarget) openNewEvent(ctx, day, null, tz);
-                  }}
-                >
-                  <span data-part="calendar.month.date" aria-hidden="true">
-                    {format.dateTime(dayDate(day), { day: "numeric", timeZone: "UTC" })}
-                  </span>
-                  <ul data-part="calendar.month.events">
-                    {shown.map((instance) => (
-                      <li
-                        key={`${instance.event_id}-${instance.start_utc}`}
-                        data-part="calendar.month.item"
-                      >
-                        <EventItem
-                          instance={instance}
-                          tz={tz}
-                          calendars={calendars}
-                          geom={geomId(nodeKey, "m", key, instance.event_id, instance.start_utc)}
-                          part="calendar.chip"
-                          keys="days"
-                          states={[
-                            isAllDayLike(instance) ? "spanning" : null,
-                            drag.dragging?.event_id === instance.event_id &&
-                            drag.dragging.start_utc === instance.start_utc
-                              ? "dragging"
-                              : null,
-                          ].filter((x): x is string => x !== null)}
-                          onDragStart={(event) => drag.start(event, instance, key)}
-                          suppressClick={drag.suppressClick}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                  {more > 0 && (
-                    <button
-                      type="button"
-                      data-part="calendar.month.more"
-                      onClick={() => onDay(day)}
-                      aria-label={t("pim-more-events-label", {
-                        count: more,
-                        day: formatDay(format, day, { dateStyle: "full" }),
-                      })}
-                    >
-                      {t("pim-more-events", { count: more })}
-                    </button>
-                  )}
-                </td>
-              );
-            })}
+    <div data-part="calendar.month.frame">
+      <table
+        ref={gridRef}
+        role="grid"
+        data-part="calendar.month"
+        aria-label={format.dateTime(dayDate(anchor), {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        })}
+        onKeyDown={onKeyDown}
+        onPointerMove={drag.move}
+        onPointerUp={drag.end}
+        onPointerCancel={drag.cancel}
+      >
+        <thead data-part="calendar.month.head">
+          <tr data-part="calendar.month.weekdays">
+            {firstWeek.map((day) => (
+              <th
+                key={dateString(day)}
+                scope="col"
+                data-part="calendar.month.weekday"
+                abbr={format.dateTime(dayDate(day), { weekday: "long", timeZone: "UTC" })}
+              >
+                {format.dateTime(dayDate(day), { weekday: "short", timeZone: "UTC" })}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody data-part="calendar.month.body">
+          {weeks.map((week) => (
+            <tr key={dateString(week[0] ?? anchor)} data-part="calendar.month.week">
+              {week.map((day) => {
+                const key = dateString(day);
+                const dayInstances = instancesOfDay(instances, day, tz);
+                const shown = dayInstances.slice(0, maxPerDay);
+                const more = dayInstances.length - shown.length;
+                const states = [
+                  day.month !== anchor.month ? "outside" : null,
+                  day.compare(today) === 0 ? "today" : null,
+                  drag.over === key ? "drop-target" : null,
+                ].filter(Boolean);
+                return (
+                  <td
+                    key={key}
+                    role="gridcell"
+                    data-part="calendar.month.day"
+                    data-day={key}
+                    data-state={states.join(" ") || undefined}
+                    aria-current={day.compare(today) === 0 ? "date" : undefined}
+                    aria-label={t("pim-month-day-label", {
+                      day: formatDay(format, day, { dateStyle: "full" }),
+                      count: dayInstances.length,
+                    })}
+                    tabIndex={day.compare(focused) === 0 ? 0 : -1}
+                    onDoubleClick={(event) => {
+                      if (event.target === event.currentTarget) openNewEvent(ctx, day, null, tz);
+                    }}
+                  >
+                    <span data-part="calendar.month.date" aria-hidden="true">
+                      {format.dateTime(dayDate(day), { day: "numeric", timeZone: "UTC" })}
+                    </span>
+                    <ul data-part="calendar.month.events">
+                      {shown.map((instance) => (
+                        <li
+                          key={`${instance.event_id}-${instance.start_utc}`}
+                          data-part="calendar.month.item"
+                        >
+                          <EventItem
+                            instance={instance}
+                            tz={tz}
+                            calendars={calendars}
+                            geom={geomId(nodeKey, "m", key, instance.event_id, instance.start_utc)}
+                            part="calendar.chip"
+                            keys="days"
+                            states={[
+                              isAllDayLike(instance) ? "spanning" : null,
+                              drag.dragging?.event_id === instance.event_id &&
+                              drag.dragging.start_utc === instance.start_utc
+                                ? "dragging"
+                                : null,
+                            ].filter((x): x is string => x !== null)}
+                            onDragStart={(event) => drag.start(event, instance, key)}
+                            suppressClick={drag.suppressClick}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                    {more > 0 && (
+                      <button
+                        type="button"
+                        data-part="calendar.month.more"
+                        onClick={() => onDay(day)}
+                        aria-label={t("pim-more-events-label", {
+                          count: more,
+                          day: formatDay(format, day, { dateStyle: "full" }),
+                        })}
+                      >
+                        {t("pim-more-events", { count: more })}
+                      </button>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -240,6 +246,7 @@ export function YearView({
   tz,
   onDay,
 }: Pick<DayViewProps, "anchor" | "instances" | "tz" | "onDay">) {
+  const format = useDateFormat();
   const today = todayIn(tz, useNow());
   const [focused, setFocused] = useFollowingDay(anchor);
   const busy = busyDays(instances, tz);
@@ -256,6 +263,7 @@ export function YearView({
           today={today}
           busy={busy}
           narrow
+          caption={format.dateTime(dayDate(month), { month: "long", timeZone: "UTC" })}
           onFocusDay={setFocused}
           onSelect={onDay}
         />
@@ -385,6 +393,7 @@ export function FreeTimeView({
 }) {
   const t = useT();
   const format = useDateFormat();
+  const locale = useLocale();
   const ctx = useChangeContext();
   const instants = rangeInstants(range, tz);
   const free = useFreeTime(instants, minutes, tz);
@@ -393,11 +402,16 @@ export function FreeTimeView({
   return (
     <div data-part="calendar.free-time" aria-busy={free.isPending}>
       <p data-part="calendar.free-time.intro">{t("pim-free-time-intro", { minutes })}</p>
-      {daysOf(range).map((day) => {
+      {workingDaysOf(range, locale).map((day) => {
         const dayStart = toZoned(day, tz).add({ hours: dayStartHour }).toDate().getTime();
         const position = (ms: number) => (ms - dayStart) / (spanMinutes * 60_000);
-        const slots = (free.data ?? []).filter(
-          (s) => dateString(instantIn(s.start, tz)) === dateString(day),
+        const slots = freeStretchesOfDay(
+          free.data ?? [],
+          day,
+          tz,
+          dayStartHour,
+          dayEndHour,
+          minutes,
         );
         const busy = instances.filter(
           (i) =>

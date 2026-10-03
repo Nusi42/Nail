@@ -162,7 +162,8 @@ async function settle(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
-  await page.mouse.move(VIEWPORT.width - 2, VIEWPORT.height - 2);
+  const size = page.viewportSize() ?? VIEWPORT;
+  await page.mouse.move(size.width - 2, size.height - 2);
 }
 
 export interface Shot {
@@ -173,6 +174,8 @@ export interface Shot {
 
 /** Opens `screen` on a freshly loaded main window and captures it once it settled. */
 export async function openAndShoot(page: Page, server: NailServer, screen: Screen): Promise<Shot> {
+  // Most screens use the harness's window; a few check a narrower one.
+  await page.setViewportSize(screen.viewport ?? VIEWPORT);
   await preparePage(page, screen.time);
   // The app reopens the last view (M5b UI state): every screen starts on
   // Mail. Leave the previous screen first, or its view host saves its view

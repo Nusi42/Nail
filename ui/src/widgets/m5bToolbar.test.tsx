@@ -172,8 +172,7 @@ describe("reader action bar (M5b)", () => {
     ).toEqual([
       "Mark as read/unread",
       "Mark as junk",
-      // Enabled for any selected message (checked when it runs).
-      "Import Autocrypt setup message",
+      // No "Import Autocrypt setup message": only for setup messages (M5b review).
       "Print the message…",
       "Create event from email",
       "Create task from email",
@@ -185,6 +184,10 @@ describe("reader action bar (M5b)", () => {
     const toggle = items[0] as HTMLElement;
     expect(toggle.querySelector('[data-part="context-menu.item.shortcut"]')).toHaveTextContent("U");
     expect(toggle.querySelector('[data-part="context-menu.item.icon"]')).not.toBeNull();
+    // The reader's key context names Print's Ctrl+P like the right-click menu.
+    expect(
+      (items[2] as HTMLElement).querySelector('[data-part="context-menu.item.shortcut"]'),
+    ).toHaveTextContent("Ctrl+P");
     fireEvent.click(toggle);
     await waitFor(() =>
       expect(env.transport.requests.some((r) => r.type === "UpdateFlags")).toBe(true),
@@ -253,8 +256,11 @@ describe("reader action bar (M5b)", () => {
       const labels = within(menu)
         .getAllByRole("menuitem")
         .map((i) => i.querySelector('[data-part="context-menu.item.label"]')?.textContent);
-      // Appended after the own entries, in bar order.
-      expect(labels.slice(-4)).toEqual(["Delete", "Move to…", "Flag", "Snooze…"]);
+      // At the top, in rank order, before a separator and the own entries
+      // (M5b review: not buried at the bottom of a long menu).
+      expect(labels.slice(0, 4)).toEqual(["Delete", "Move to…", "Flag", "Snooze…"]);
+      const children = [...menu.children];
+      expect(children[4]).toHaveAttribute("data-part", "context-menu.separator");
       fireEvent.keyDown(within(menu).getAllByRole("menuitem")[0] as Element, { key: "Escape" });
 
       // Narrower: the labelled actions go too, separators never dangle.

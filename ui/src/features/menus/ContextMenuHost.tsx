@@ -1,7 +1,8 @@
 /**
  * Mounted once in the app shell: opens the layout's context menu for the
  * part under a right-click (and for keyboard `contextmenu` events), renders
- * the open menu and runs its actions with the menu's target as context.
+ * the open menu without the actions that do not apply to its target (M5b)
+ * and runs its actions with the menu's target as context.
  *
  * Shift+F10 and the menu key are ordinary key bindings of the action
  * `menu.context` (default layout), so they can be rebound.
@@ -13,13 +14,14 @@ import { useT } from "../../i18n/I18nProvider";
 import { useLayoutConfig } from "../../layout/LayoutContext";
 import { useUiStoreApi } from "../../state/uiStore";
 import { ContextMenu } from "./ContextMenu";
+import { withoutDisabled } from "./resolve";
 import { menuStoreFor, openContextMenu, useMenu } from "./store";
 
 export function ContextMenuHost() {
   const t = useT();
   const ui = useUiStoreApi();
   const layout = useLayoutConfig();
-  const { dispatch } = useActions();
+  const { dispatch, isEnabled } = useActions();
   const open = useMenu((s) => s.open);
 
   useEffect(() => {
@@ -50,11 +52,17 @@ export function ContextMenuHost() {
     [dispatch, close],
   );
 
-  if (!open) return null;
+  // Actions that do not apply to the target are hidden, not greyed out.
+  const items = open ? withoutDisabled(open.menu.items, isEnabled) : [];
+  useEffect(() => {
+    if (open && items.length === 0) close(true);
+  }, [open, items.length, close]);
+
+  if (!open || items.length === 0) return null;
   return (
     <ContextMenu
       key={`${open.menu.name}-${open.x}-${open.y}`}
-      items={open.menu.items}
+      items={items}
       label={t(`context-menu-label-${open.target.part.replaceAll(".", "-")}`)}
       x={open.x}
       y={open.y}

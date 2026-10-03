@@ -15,10 +15,11 @@ the server in the background, also when you are offline for a while.
 on the navigation rail, or press **Ctrl+2**, **Ctrl+3** and **Ctrl+4**
 (also **g c**, **g p** and **g t**; **Ctrl+1** or **g m** goes back to
 Mail). A view stays as you left it when you switch away and back. The
-calendar view shows the mini-month, your calendars and tasks beside the
-calendar views, with a toolbar for **Find a time**, **New task**, **New
-contact** and **Sync calendars and contacts**; printing, importing and
-**Calendars and address books** are under its **More**. In the calendar
+calendar view shows the mini-month and your calendars beside the calendar
+views, with a toolbar for **Find a time** and **Sync calendars and
+contacts**; **New task**, **New contact**, printing, importing and
+**Calendars and address books** are under its **More**. **New event** in
+the calendar's own header is the view's main button. In the calendar
 view the keys **t** (today), **n** / **p** (next / previous), **d**, **w**,
 **m**, **y**, **a** (day, week, month, year, agenda) and **c** (new event)
 work.
@@ -27,16 +28,18 @@ work.
 
 A calendar widget shows one of these views. The toolbar shows **Today**,
 **Previous** and **Next**, the days shown, and a switch for the views (Day,
-Week, Month, Year, Agenda, Free time). Events show their title, time and
-place on a light tint of their calendar's colour.
+Week, Month, Year, Agenda, Free time). When the calendar is too narrow for
+the switch and the whole range, a **View** menu takes the switch's place.
+Events show their title, time and place on a light tint of their calendar's
+colour.
 
 | View | What it shows |
 | --- | --- |
 | Day, Days, Week, Work week | A time grid: the hours of the day from top to bottom, one column per day, all-day events in a row on top |
-| Month | Every day of the month with its events; **n more** opens the day when not all fit |
-| Year | Twelve small months; days with events are marked. Choose a day to see it |
+| Month | Every day of the month with its events (days of the months before and after are dimmed, today is framed); **n more** opens the day when not all fit |
+| Year | Twelve small months with their names; days with events are marked. Choose a day to see it |
 | Agenda | The events of the next days as a list |
-| Free time | When you are free during the working day (at least 30 minutes by default). Choose a free stretch to plan an event there |
+| Free time | When you are free during the working hours (8:00 to 18:00 and at least 30 minutes by default) of the next five working days, starting with the shown day; weekends are left out. Choose a free stretch to plan an event there |
 
 Events are shown in their calendar's colour. Overlapping events stand side by
 side. An event that repeats says so when you move to it with a screen reader.
@@ -144,7 +147,9 @@ snoozing applies to this computer.
 
 ## Contacts
 
-The contact list searches by name, address, phone number or organization,
+The Contacts view has a header with the search, **New contact** and a
+**More** menu (**Groups…**, **Find duplicates…**, and **Delete** while a
+contact is chosen). The contact list searches by name, address, phone number or organization,
 and filters by address book and group. Choose a contact to see its card:
 photo, every email address, phone number, address, web page and extra field,
 birthday and anniversary, notes, groups, the contacts it is linked with, and
@@ -185,7 +190,8 @@ contacts; **Unlink** separates one again.
 
 ## Tasks
 
-The task list shows open tasks of your task lists, subtasks below their
+The Tasks view has a header with **New task**. The task list shows open
+tasks of your task lists, subtasks below their
 task. Tick a task to complete it; a repeating task moves on to its next
 date instead. Overdue tasks are marked.
 
@@ -328,8 +334,8 @@ The widgets and their options (all optional):
 | `calendar` | `view` (`day`, `multi-day`, `week`, `work-week`, `month`, `year`, `agenda`, `free-time`), `views` (the views the switcher offers, separated by spaces), `days` (days of `multi-day`, `agenda`, `free-time`), `calendars` (calendar ids; default all shown), `time-zone`, `secondary-zone` (a second hour column), `hour-start`, `hour-end`, `scroll-to` (hour shown first), `max-events` (month), `duration` (free-time minutes), `work-start`, `work-end` (free-time hours), `header=#false` (no navigation bar), `view-switch` (`segmented`, the default, or `menu`: a drop-down) |
 | `mini-month` | `time-zone`, `calendars` |
 | `agenda` | `days` (default 1: today), `time-zone`, `calendars` |
-| `task-list` | `lists` (task list ids), `show-completed`, `sort` (`due`, `priority`, `title`, `manual`), `quick-add` |
-| `contact-list` | `address-books` (ids), `page-size` |
+| `task-list` | `lists` (task list ids), `show-completed`, `sort` (`due`, `priority`, `title`, `manual`), `quick-add`, `header=#true` (the Tasks view's header with the title and **New task**) |
+| `contact-list` | `address-books` (ids), `page-size`, `header=#true` (the Contacts view's header with the title, the search, **New contact** and **More**) |
 | `contact-card` | — |
 | `calendar-list` | `actions` (`menu`, the default: a **…** menu per calendar, or `buttons`), `show-sources` (`#false` = one list without source headers) |
 | `pim-settings` | — (the settings page's Calendar & contacts section) |

@@ -55,3 +55,13 @@ export const events: Feature["events"] = [
 
 /** Background components mounted once in the app shell. */
 export const effects: Feature["effects"] = [];
+
+/**
+ * Settings labels for the settings search (M5b review: the local rules are
+ * part of Settings → Mail & junk).
+ */
+export const settings: NonNullable<Feature["settings"]> = {
+  "rule-manager": {
+    labels: ["rules-title", "rules-new", "rules-list-label"],
+  },
+};

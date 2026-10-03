@@ -210,27 +210,43 @@ describe("context menu", () => {
     expect(menuStoreFor(env.store).getState().open).toBeNull();
   });
 
-  it("shows disabled actions as disabled and ignores them", async () => {
-    const user = userEvent.setup();
+  it("hides the actions that do not apply (M5b review) and opens nothing when none does", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
     const base = env.transport.data.layout;
-    const layout: ResolvedLayout = {
+    const menuOf = (items: ResolvedLayout["menus"][string]): ResolvedLayout => ({
       ...base,
-      menus: { "context:folder-tree.folder": [action("window.close"), action("mail.compose")] },
-    };
+      menus: { "context:folder-tree.folder": items },
+    });
+    const { unmount } = renderWithProviders(
+      <>
+        <NodeView node={widget("folder-tree")} path="t/0" />
+        <ContextMenuHost />
+      </>,
+      env,
+      {
+        layout: menuOf([action("window.close"), { type: "separator" }, action("mail.compose")]),
+      },
+    );
+    const folder = await screen.findByRole("treeitem", { name: /Archive/ });
+    fireEvent.contextMenu(folder, { clientX: 5, clientY: 5, button: 2 });
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByRole("menuitem", { name: /close/i })).toBeNull();
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(1);
+    // The separator that would start the menu is gone too.
+    expect(menu.querySelector('[data-part="context-menu.separator"]')).toBeNull();
+    unmount();
+
     renderWithProviders(
       <>
         <NodeView node={widget("folder-tree")} path="t/0" />
         <ContextMenuHost />
       </>,
       env,
-      { layout },
+      { layout: menuOf([action("window.close")]) },
     );
-    const folder = await screen.findByRole("treeitem", { name: /Archive/ });
-    fireEvent.contextMenu(folder, { clientX: 5, clientY: 5, button: 2 });
-    const close = await screen.findByRole("menuitem", { name: /close/i });
-    expect(close).toHaveAttribute("aria-disabled", "true");
-    await user.click(close);
-    expect(screen.getByRole("menu")).toBeInTheDocument();
+    const again = await screen.findByRole("treeitem", { name: /Archive/ });
+    fireEvent.contextMenu(again, { clientX: 5, clientY: 5, button: 2 });
+    await waitFor(() => expect(menuStoreFor(env.store).getState().open).toBeNull());
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

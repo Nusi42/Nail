@@ -33,6 +33,7 @@ describe("rail entries", () => {
       "view",
       "spacer",
       "action",
+      "action",
       "view",
     ]);
     expect(railViews(entries)).toEqual(["mail", "calendar", "contacts", "tasks", "settings"]);

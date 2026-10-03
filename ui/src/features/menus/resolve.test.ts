@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MenuItem, ResolvedLayout } from "../../api/generated";
-import { contextMenuName, keyContextOf, resolveMenu } from "./resolve";
+import { contextMenuName, keyContextOf, resolveMenu, withoutDisabled } from "./resolve";
 
 const item = (action: string): MenuItem => ({
   type: "action",
@@ -121,5 +121,47 @@ describe("context menus", () => {
     expect(resolveMenu(l, "context:nothing", "list")).toBeNull();
     expect(keyContextOf("composer")).toBe("composer");
     expect(keyContextOf("unknown.part")).toBe("global");
+  });
+});
+
+describe("withoutDisabled (M5b review)", () => {
+  const entry = (action: string) => ({
+    type: "action" as const,
+    action,
+    args: [],
+    label: null,
+    icon: null,
+    shortcut: null,
+  });
+  const off = new Set(["junk.not-junk", "gmail.apply-labels", "sync.download-message"]);
+  const enabled = (action: string) => !off.has(action);
+
+  it("drops what does not apply and normalizes headings and separators", () => {
+    const items = withoutDisabled(
+      [
+        entry("mail.reply"),
+        { type: "separator" },
+        { type: "header", label: "@g.message" },
+        entry("junk.mark"),
+        entry("junk.not-junk"),
+        entry("sync.download-message"),
+        { type: "separator" },
+        { type: "header", label: "@g.labels" },
+        entry("gmail.apply-labels"),
+        { type: "separator" },
+        { type: "submenu", label: "@more", items: [entry("gmail.apply-labels")] },
+      ],
+      enabled,
+    );
+    expect(items.map((e) => (e.type === "action" ? e.action : e.type))).toEqual([
+      "mail.reply",
+      "separator",
+      "header",
+      "junk.mark",
+    ]);
+  });
+
+  it("is empty when nothing applies", () => {
+    expect(withoutDisabled([entry("junk.not-junk"), { type: "separator" }], enabled)).toEqual([]);
   });
 });

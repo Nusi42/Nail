@@ -84,7 +84,7 @@ describe("toolbar model", () => {
     expect(tooltipMessage("Archive", null)).toBeNull();
   });
 
-  it("builds the More menu from its own entries and appends what did not fit", () => {
+  it("builds the More menu with what did not fit first, then its own entries", () => {
     const layout = layoutWith({
       keys: [{ context: "global", key: "u", action: "mail.toggle-read", args: [] }],
       toolbars: {
@@ -105,9 +105,9 @@ describe("toolbar model", () => {
     });
     const items = layout.toolbars.reader ?? [];
     const entries = moreMenuEntries(layout, items, [1], "global");
-    expect(entries.map((e) => e.type)).toEqual(["header", "action", "separator", "action"]);
-    expect(entries[1]).toMatchObject({ action: "mail.toggle-read", shortcut: "u" });
-    expect(entries[3]).toMatchObject({ action: "mail.archive" });
+    expect(entries.map((e) => e.type)).toEqual(["action", "separator", "header", "action"]);
+    expect(entries[0]).toMatchObject({ action: "mail.archive" });
+    expect(entries[3]).toMatchObject({ action: "mail.toggle-read", shortcut: "u" });
     // An orphaned heading (nothing below it) is dropped; nothing moved:
     // only the own entries.
     expect(moreMenuEntries(layout, items, [], "global").map((e) => e.type)).toEqual([
@@ -125,6 +125,29 @@ describe("toolbar model", () => {
       ),
     ).toMatchObject([{ type: "action", action: "mail.forward", args: [], shortcut: null }]);
     expect(moreMenuEntries(layout, [], [], "global")).toEqual([]);
+  });
+
+  it("lists overflowed actions in rank order, unranked ones after them (M5b review)", () => {
+    const bar = [
+      { ...action("mail.forward"), rank: 3 },
+      { ...action("plugin.x"), rank: null },
+      { ...action("mail.archive"), rank: 4 },
+      { ...action("snooze.open"), rank: 8 },
+      { ...action("mail.delete"), rank: 5 },
+      { type: "more", label: null, icon: null, items: [action("print.message")] },
+    ] as ToolbarItem[];
+    const layout = layoutWith({});
+    // The fitting rule moves the highest ranks first: Snooze, Delete, Archive, …
+    const entries = moreMenuEntries(layout, bar, [3, 4, 2, 1, 0], "global");
+    expect(entries.map((e) => (e.type === "action" ? e.action : e.type))).toEqual([
+      "mail.forward",
+      "mail.archive",
+      "mail.delete",
+      "snooze.open",
+      "plugin.x",
+      "separator",
+      "print.message",
+    ]);
   });
 
   it("removes separators that start a wrapped line and hides those ending one", () => {
@@ -252,13 +275,18 @@ describe("list header rules", () => {
     total: 9,
   };
 
-  it("titles unified folders like their favorite and others by name", () => {
+  it("titles unified folders like their favorite, special folders by role, others by name", () => {
     expect(folderTitle(inbox, "all")).toEqual({ id: "favorite-folder-all-inboxes" });
     expect(folderTitle({ ...inbox, role: "sent" }, "all")).toEqual({ id: "favorite-folder-sent" });
-    expect(folderTitle({ ...inbox, role: "archive", name: "Archive" }, "all")).toEqual({
-      text: "Archive",
+    expect(folderTitle({ ...inbox, role: "archive", name: "ARCHIVE" }, "all")).toEqual({
+      id: "folder-role-archive",
     });
-    expect(folderTitle(inbox, "acc-work")).toEqual({ text: "Inbox" });
+    expect(folderTitle({ ...inbox, name: "INBOX" }, "acc-work")).toEqual({
+      id: "folder-role-inbox",
+    });
+    expect(folderTitle({ ...inbox, role: "other", name: "Newsletters" }, "acc-work")).toEqual({
+      text: "Newsletters",
+    });
     expect(folderTitle(undefined, "all")).toBeNull();
   });
 

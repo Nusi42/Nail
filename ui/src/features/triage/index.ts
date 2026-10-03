@@ -11,7 +11,7 @@
  * `locales/{en,de}/triage.ftl`). The central registry (`../registry.ts`)
  * merges these exports into the app; see `../README.md`.
  */
-import type { MessageId } from "../../api/generated";
+import type { MessageBody, MessageId } from "../../api/generated";
 import type { ActionContext } from "../../actions/registry";
 import { queryKeys } from "../../state/queries";
 import { contextTarget } from "../menus";
@@ -41,12 +41,38 @@ function targets(ctx: ActionContext): MessageId[] {
 
 const hasTarget = (ctx: ActionContext) => targets(ctx).length > 0;
 
+/** Whether the list shows a Junk folder (of one account or All accounts). */
+function inJunkFolder(ctx: ActionContext): boolean {
+  const { activeAccountId, activeFolderId } = ctx.store.getState();
+  if (activeFolderId === null) return false;
+  const folders = ctx.queryClient.getQueryData<{ id: string; role: string }[]>(
+    queryKeys.folders(activeAccountId),
+  );
+  return folders?.find((f) => f.id === activeFolderId)?.role === "junk";
+}
+
+/** Whether the target is junk: shown in a Junk folder, or the classifier says so. */
+function looksJunk(ctx: ActionContext): boolean {
+  if (inJunkFolder(ctx)) return true;
+  const id = targets(ctx)[0];
+  if (id === undefined) return false;
+  const body = ctx.queryClient.getQueryData<MessageBody>(queryKeys.message(id));
+  return body?.junk?.junk === true;
+}
+
 /** Action ids → handlers. */
 export const actions: Feature["actions"] = {
   /** Marks the selected message as junk (trains the classifier, moves it to Junk). */
-  "junk.mark": { run: (ctx) => markJunk(ctx, targets(ctx), true), enabled: hasTarget },
+  "junk.mark": {
+    run: (ctx) => markJunk(ctx, targets(ctx), true),
+    enabled: (ctx) => hasTarget(ctx) && !inJunkFolder(ctx),
+  },
   /** Marks it as not junk (trains the classifier, moves it out of Junk). */
-  "junk.not-junk": { run: (ctx) => markJunk(ctx, targets(ctx), false), enabled: hasTarget },
+  "junk.not-junk": {
+    run: (ctx) => markJunk(ctx, targets(ctx), false),
+    // Only for mail in Junk or flagged as junk (M5b review: hidden otherwise).
+    enabled: (ctx) => hasTarget(ctx) && looksJunk(ctx),
+  },
   /** Opens the snooze picker for the selected message. */
   "snooze.open": {
     run: (ctx) => {

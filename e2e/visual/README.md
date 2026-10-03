@@ -1,8 +1,10 @@
 # e2e/visual — visual-regression harness (M5a WP154)
 
-Playwright screenshots of ten screens — the main window (navigation rail and
-mail view) with a message open, the reader's More menu (M5b), the composer,
-the settings page, the calendar view, a context menu, an HTML newsletter (reader
+Playwright screenshots of eighteen screens — the main window (navigation rail
+and mail view) with a message open, the reader's More menu (M5b), the composer,
+the settings page, the calendar's week, month, year, agenda and free-time views,
+the Contacts and Tasks views, the main window and the calendar at 1024 px (M5b
+review; `Screen.viewport`), a context menu, an HTML newsletter (reader
 column and remote-content banner), a message with attachment cards before and
 after saving one, and a dialog — for every
 built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) × density

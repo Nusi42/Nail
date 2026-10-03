@@ -16,6 +16,7 @@ import {
   endOfMonth,
   fromAbsolute,
   getLocalTimeZone,
+  isWeekend,
   parseAbsolute,
   parseDate,
   parseDateTime,
@@ -301,7 +302,7 @@ export function viewRange(
         count: Math.min(7, Math.max(1, options.workWeekDays)),
       };
     case "free-time":
-      return { start: startOfWeek(anchor, locale), count: Math.max(1, options.days) };
+      return workingDaysFrom(anchor, locale, Math.max(1, options.days));
     case "month": {
       const first = startOfWeek(startOfMonth(anchor), locale);
       const last = endOfMonth(anchor);
@@ -337,6 +338,67 @@ export function stepAnchor(
     case "year":
       return anchor.add({ years: direction });
   }
+}
+
+/**
+ * `count` working days from `anchor` (the free-time view): the range starts
+ * at the first day on or after the anchor that is no weekend day in the
+ * locale and spans as many calendar days as it takes to cover `count`
+ * working days; {@link workingDaysOf} leaves the weekend days out again.
+ */
+export function workingDaysFrom(anchor: CalendarDate, locale: string, count: number): ViewRange {
+  let start = anchor;
+  for (let i = 0; i < 7 && isWeekend(start, locale); i++) start = start.add({ days: 1 });
+  let days = 0;
+  let working = 0;
+  while (working < count && days < 7 * count) {
+    if (!isWeekend(start.add({ days }), locale)) working++;
+    days++;
+  }
+  return { start, count: Math.max(1, days) };
+}
+
+/** The days of a range that are no weekend days in the locale. */
+export function workingDaysOf(range: ViewRange, locale: string): CalendarDate[] {
+  const days = daysOf(range).filter((day) => !isWeekend(day, locale));
+  return days.length > 0 ? days : daysOf(range);
+}
+
+/** A free stretch as RFC 3339 UTC instants (`FreeSlot`). */
+export interface FreeStretch {
+  start: string;
+  end: string;
+}
+
+/**
+ * The free stretches of one day's working hours: every stretch the core
+ * found (`FindFreeTime` knows neither days nor working hours, so one stretch
+ * can span several days) is cut to `[startHour, endHour)` of `day` in `tz`;
+ * pieces shorter than `minutes` are dropped.
+ */
+export function freeStretchesOfDay(
+  slots: readonly FreeStretch[],
+  day: CalendarDate,
+  tz: string,
+  startHour: number,
+  endHour: number,
+  minutes: number,
+): FreeStretch[] {
+  const midnight = toZoned(day, tz);
+  const from = midnight.add({ hours: startHour }).toDate().getTime();
+  const to = midnight
+    .add({ hours: Math.max(startHour, endHour) })
+    .toDate()
+    .getTime();
+  const out: FreeStretch[] = [];
+  for (const slot of slots) {
+    const start = Math.max(from, instantMs(slot.start));
+    const end = Math.min(to, instantMs(slot.end));
+    if (end - start >= Math.max(1, minutes) * 60_000) {
+      out.push({ start: utcString(start), end: utcString(end) });
+    }
+  }
+  return out;
 }
 
 /** The days of a range. */

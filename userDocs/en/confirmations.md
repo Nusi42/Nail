@@ -56,7 +56,7 @@ In the plug-in manager, **Activity** shows a plug-in's mail hooks (how often the
 
 ## Where to find it
 
-The default layout shows a small counter under the status bar while something waits (click it to open the confirmations), a **Confirmations** tab in Settings, and the shortcut **G A** opens the confirmations from anywhere. A note in the corner also appears whenever a new request arrives; **Review** opens it.
+The shield button in the navigation rail opens the confirmations; while something waits, it shows how many requests there are. The confirmations and the AI clients are also in **Settings → Agents (MCP)**, and the shortcut **G A** opens the confirmations from anywhere. A note in the corner also appears whenever a new request arrives; **Review** opens it. (Layouts of your own can still show the `confirmation-indicator` counter.)
 
 ## Layout options
 

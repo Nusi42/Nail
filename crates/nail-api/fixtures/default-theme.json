@@ -9107,8 +9107,6 @@
       "conditions": [],
       "ancestors": [],
       "declarations": {
-        "display": "grid",
-        "grid-template-rows": "auto auto minmax(0, 1fr)",
         "min-height": "0",
         "height": "100%",
         "color": "var(--nail-color-fg)",
@@ -9454,57 +9452,6 @@
       "source": null
     },
     {
-      "selector": "calendar.month",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "width": "100%",
-        "border-collapse": "collapse"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.weekday",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "padding": "var(--nail-space-xs)",
-        "font-size": "var(--nail-font-size-xs)",
-        "color": "var(--nail-color-fg-muted)",
-        "font-weight": "var(--nail-font-weight-regular)"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.events",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-direction": "column",
-        "margin": "0",
-        "padding": "0"
-      },
-      "source": null
-    },
-    {
-      "selector": "calendar.month.more",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "border": "0",
-        "padding": "0",
-        "color": "var(--nail-color-accent)",
-        "background-color": "transparent",
-        "font-size": "var(--nail-font-size-xs)"
-      },
-      "source": null
-    },
-    {
       "selector": "calendar.year",
       "states": [],
       "conditions": [],
@@ -9512,6 +9459,8 @@
       "declarations": {
         "display": "grid",
         "grid-template-columns": "repeat(auto-fill, minmax(200px, 1fr))",
+        "align-content": "start",
+        "align-items": "start",
         "gap": "var(--nail-space-lg)",
         "padding": "var(--nail-space-md)",
         "overflow-y": "auto"
@@ -10644,7 +10593,7 @@
         "flex-direction": "column",
         "gap": "var(--nail-space-sm)",
         "min-height": "0",
-        "padding": "var(--nail-space-sm)"
+        "padding": "var(--nail-space-md) var(--nail-space-pane)"
       },
       "source": null
     },
@@ -10857,7 +10806,7 @@
         "flex-direction": "column",
         "gap": "var(--nail-space-sm)",
         "min-height": "0",
-        "padding": "var(--nail-space-sm)"
+        "padding": "var(--nail-space-md) var(--nail-space-pane)"
       },
       "source": null
     },
@@ -10871,19 +10820,6 @@
         "flex-wrap": "wrap",
         "align-items": "end",
         "gap": "var(--nail-space-sm)"
-      },
-      "source": null
-    },
-    {
-      "selector": "task-list.add",
-      "states": [],
-      "conditions": [],
-      "ancestors": [],
-      "declarations": {
-        "display": "flex",
-        "flex-wrap": "wrap",
-        "align-items": "end",
-        "gap": "var(--nail-space-xs)"
       },
       "source": null
     },

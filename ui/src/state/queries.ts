@@ -333,10 +333,11 @@ export function useDrafts() {
   });
 }
 
-export function useOutbox() {
+export function useOutbox(enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.outbox,
     queryFn: async () => (await client.request({ type: "ListOutbox" }, "Outbox")).entries,
+    enabled,
   });
 }

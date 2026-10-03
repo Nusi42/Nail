@@ -9,6 +9,7 @@
  * Options: `search`, `hint`, `title`, `counts` (all default #true), `chips`
  * (default "all unread flagged attachments").
  */
+import { folderRoleLabelId } from "./folderNames";
 import type { Account, AccountId, Folder, ListFilter } from "../api/generated";
 import { ariaShortcut, keyLabel } from "../features/menus";
 import { useLabel, useT } from "../i18n/I18nProvider";
@@ -43,8 +44,8 @@ export function searchShortcut(layout: ResolvedLayout): string | null {
 
 /**
  * The Fluent id (or literal folder name) of the list's title: the
- * favorite's name for a unified folder of "All accounts", else the folder's
- * own name; `null` without a folder.
+ * favorite's name for a unified folder of "All accounts", the role's name
+ * for a special-use folder, else the folder's own name; `null` without a folder.
  */
 export function folderTitle(
   folder: Folder | undefined,
@@ -55,7 +56,8 @@ export function folderTitle(
     ? UNIFIED_TITLES[folder.role]
     : undefined;
   if (accountId === ALL_ACCOUNTS && folder.parent_id === null && unified) return { id: unified };
-  return { text: folder.name };
+  const role = folderRoleLabelId(folder);
+  return role ? { id: role } : { text: folder.name };
 }
 
 /** How many real accounts a unified view covers (`null` for one account). */

@@ -20,6 +20,9 @@
  * Components for other packages to mount (the composer, the reader, the
  * account settings) are re-exported at the end of this file.
  */
+import type { MessageBody } from "../../api/generated";
+import type { ActionContext } from "../../actions/registry";
+import { queryKeys } from "../../state/queries";
 import type { ActionInfo } from "../../actions/palette";
 import type { Feature, FeatureEventHandler } from "../types";
 import { AUTOCRYPT_IMPORT_DIALOG, AutocryptImportDialog, AutocryptSetup } from "./Autocrypt";
@@ -57,6 +60,30 @@ export const widgets: Feature["widgets"] = {
   [SMARTCARDS_WIDGET]: SmartcardsWidget,
 };
 
+/** The MIME type of an Autocrypt Setup Message's attachment (Autocrypt 1.1, 4.4). */
+export const AUTOCRYPT_SETUP_MIME = "application/autocrypt-setup";
+/** The armour header of a setup message's payload (Autocrypt 1.1, 4.4). */
+const AUTOCRYPT_SETUP_ARMOR = "Passphrase-Format: numeric9x4";
+
+/**
+ * Whether the selected message (as the reader loaded it) is an Autocrypt
+ * Setup Message: an `application/autocrypt-setup` attachment, or the
+ * payload's armour in the text.
+ */
+export function isAutocryptSetupMessage(ctx: ActionContext): boolean {
+  const id = ctx.store.getState().selectedMessageId;
+  if (id === null) return false;
+  const body = ctx.queryClient.getQueryData<MessageBody>(queryKeys.message(id));
+  if (!body) return false;
+  return (
+    body.attachments.some(
+      (a) => a.mime.toLowerCase().split(";")[0]?.trim() === AUTOCRYPT_SETUP_MIME,
+    ) ||
+    // The core also finds a payload in the text (no attachment).
+    body.text.includes(AUTOCRYPT_SETUP_ARMOR)
+  );
+}
+
 /** M4c action ids. */
 export const RECOVERY_CREATE_ACTION = "security.recovery-key.create";
 export const RECOVERY_CHECK_ACTION = "security.recovery-key.check";
@@ -67,7 +94,8 @@ export const actions: Feature["actions"] = {
   /** Imports the selected Autocrypt setup message (asks for the setup code). */
   "security.autocrypt.import": {
     run: (ctx) => ctx.store.getState().openWindow(AUTOCRYPT_IMPORT_DIALOG),
-    enabled: (ctx) => ctx.store.getState().selectedMessageId !== null,
+    // Only for Autocrypt Setup Messages (M5b review: not in More for every mail).
+    enabled: (ctx) => isAutocryptSetupMessage(ctx),
   },
   /** Creates (or replaces) the vault recovery key. */
   [RECOVERY_CREATE_ACTION]: {

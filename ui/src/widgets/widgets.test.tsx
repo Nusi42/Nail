@@ -61,10 +61,39 @@ describe("folder-tree", () => {
 
     fireEvent.click(receipts);
     expect(env.store.getState().activeFolderId).toBe("acc-personal/Inbox/Receipts");
+    // Special folders come first in a fixed order: Inbox (and its
+    // children), Drafts, Sent, Archive, Junk, Trash.
     fireEvent.keyDown(receipts, { key: "ArrowDown" });
-    expect(env.store.getState().activeFolderId).toBe("acc-personal/Sent");
+    expect(env.store.getState().activeFolderId).toBe("acc-personal/Drafts");
     fireEvent.keyDown(receipts, { key: "Home" });
     expect(env.store.getState().activeFolderId).toBe(INBOX);
+  });
+
+  it("names special folders by role (raw name as tooltip) and lists them first (M5b review)", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    // A server that names its folders in capitals, in alphabetical order.
+    const raw = env.transport.data.folders
+      .filter((f) => f.account_id === "acc-personal")
+      .map((f) => (f.role === "other" ? f : { ...f, name: f.name.toUpperCase() }));
+    raw.sort((a, b) => a.name.localeCompare(b.name));
+    env.transport.data.folders = [
+      ...env.transport.data.folders.filter((f) => f.account_id !== "acc-personal"),
+      ...raw,
+    ];
+    const { container } = renderNode(widget("folder-tree"), env);
+    await screen.findByRole("treeitem", { name: /^Inbox/ });
+    const names = [...container.querySelectorAll('[data-part="folder-tree.item.name"]')];
+    expect(names.map((n) => n.textContent)).toEqual([
+      "Inbox",
+      "Receipts",
+      "Drafts",
+      "Sent",
+      "Archive",
+      "Junk",
+      "Trash",
+    ]);
+    expect(names[0]).toHaveAttribute("title", "INBOX");
+    expect(names[1]).not.toHaveAttribute("title");
   });
 
   it("hides unread counts when show-unread is false", async () => {

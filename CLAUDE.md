@@ -633,7 +633,7 @@ cargo run -p nail-bench --release -- --corpus small   # performance benchmark ag
 nail-bench check --report A --report B [--tolerant] [--out F]   # merge Rust + UI reports, check the budgets (CI tolerance 1.5)
 node e2e/perf/run-perf.mjs [--corpus standard|small] [--tolerant]   # whole perf job: needs `cargo build --release -p nail-cli -p nail-bench` + `npm run build`
 npx playwright test -c e2e/perf/playwright.perf.config.ts   # only the UI perf scenario (NAIL_PERF_CORPUS / _WORK / _TOLERANT / _FRESH, NAIL_BIN, NAIL_BENCH_BIN)
-npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 9 screens vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
+npm run visual                             # visual regression (M5a, ADR 0106): built-in themes × densities × 18 screens (e2e/visual/screens.ts; some at 1024 px) vs e2e/visual/baselines/<platform>; needs ui build + nail-cli
 npm run visual:update                      # also write baselines of new / changed screens; then review <build dir>/visual/review/index.html and commit
 npm run visual:review                      # rebuild the review page; npm run visual:selftest = harness self-test
 node scripts/build-installer.mjs [--skip-ui] [--arch x64|arm64] [--bundles nsis,msi] [--offline-webview] [--dev-updater-key]   # installers, portable zip, SBOMs → build dir (never the repo)

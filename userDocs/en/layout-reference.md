@@ -69,25 +69,31 @@ breakpoint max-width=899 {
 If your file defines a window (in any breakpoint), it replaces all of the
 default's trees for that window.
 
-Besides `main`, the default layout has these windows. They open over the
-main window (Escape or the close button closes them), and their content is
-laid out like any other window:
+Besides `main`, the default layout has these windows. The ones named in
+the `views` section (`mail`, `calendar`, `contacts`, `tasks`, `settings`)
+show as views inside `main`, behind the navigation rail (see
+[Views and the navigation rail](#views-and-the-navigation-rail)); in a
+layout without a `view-host` they open over the main window instead. The
+others always open over the main window (Escape or the close button closes
+them). Their content is laid out like any other window:
 
 | Window | Opened by | Default content |
 | --- | --- | --- |
+| `mail` | the rail, `view.mail` (Ctrl+1) | the folder pane, the list header and list, and the reader (a `split`, `tabs` when narrow) |
+| `calendar` | the rail, `view.calendar`, `pim.calendar.open` (Ctrl+2) | a `toolbar`, then the mini month and `calendar-list` beside the `calendar` |
+| `contacts` | the rail, `view.contacts`, `pim.contacts.open` (Ctrl+3) | `contact-list header=#true` beside `contact-card` |
+| `tasks` | the rail, `view.tasks`, `pim.tasks.open` (Ctrl+4) | `task-list header=#true` |
+| `settings` | the rail, `settings.open` (Ctrl+,) | `settings-page` (its sections come from the `settings-page` section) |
 | `composer` | `mail.compose`, `mail.reply`, `mail.reply-all`, `mail.forward` | `composer` with `security-composer` below it |
 | `outbox` | `outbox.open` | `outbox` |
 | `move` | `mail.move` | `folder-picker` |
 | `account-setup` | `account.add` | `account-setup` |
-| `rules` | `rules.open`, `rules.create-from-message` | `rule-manager` |
-| `settings` | `settings.open` | `tabs` with `account-settings`, `virtual-account-editor`, `mcp-clients`, `security-keys`, `security-identities`, `security-settings`, `security-autocrypt` and a "Customize" tab (a `toolbar` and `config-errors`) |
+| `rules` | `rules.open`, `rules.create-from-message` | `rule-manager` (also in Settings → Mail & junk) |
+| `snoozed` | `snooze.list` | `snooze-list` |
 
 ```kdl
 window "settings" {
-    tabs {
-        account-settings label="@settings.tab.accounts"
-        virtual-account-editor label="@settings.tab.virtual-accounts"
-    }
+    settings-page id="settings-page"
 }
 ```
 
@@ -386,7 +392,7 @@ toolbar "reader" hide-disabled=#true {
   the primary look (the reader's **Reply** in the default layout).
 - `more { … }` is the **More** menu with its own entries (`item`,
   `separator`, `submenu`, and `header "<label>"` for a group heading); items
-  that do not fit are added below them. A toolbar has at most one `more`;
+  that do not fit come first, in rank order, above its own entries. A toolbar has at most one `more`;
   without one, Nail adds it when something does not fit. The menu shows the
   key bound to each action.
 - `hide-disabled=#true` hides actions that cannot run right now (for
@@ -424,7 +430,10 @@ left out. Parts with a context menu:
 
 Text fields keep the usual Cut / Copy / Paste menu. Each entry shows the
 action's label and icon (or the item's `label` / `icon`) and the key bound
-to it. Separators at the start, at the end or twice in a row are dropped,
+to it. Actions that do not apply to what you right-clicked (for example
+**Not junk** outside the Junk folder, or Gmail labels on other mail) are
+left out, like in a toolbar with `hide-disabled=#true`; when nothing
+applies, no menu opens. Separators at the start, at the end or twice in a row are dropped,
 and so are empty submenus. The menu opens on a right-click and, from the
 keyboard, with the action `menu.context` (Shift+F10 and the menu key by
 default); see [Accessibility](accessibility.md#context-menus) for its keys.

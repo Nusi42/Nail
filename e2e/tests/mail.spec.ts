@@ -45,11 +45,11 @@ test("seeded folders and messages appear", async ({ page }) => {
   const rows = await openInbox(page);
   const folders = page.locator('[data-part="folder-tree.item"]');
   await expect(folders).toHaveCount(3);
-  await expect(folders.filter({ hasText: "INBOX" })).toHaveAttribute("data-role", "inbox");
+  await expect(folders.filter({ hasText: "Inbox" })).toHaveAttribute("data-role", "inbox");
   await expect(folders.filter({ hasText: "Sent" })).toHaveAttribute("data-role", "sent");
   await expect(folders.filter({ hasText: "Archive" })).toHaveAttribute("data-role", "archive");
   await expect(
-    folders.filter({ hasText: "INBOX" }).locator('[data-part="folder-tree.item.unread-count"]'),
+    folders.filter({ hasText: "Inbox" }).locator('[data-part="folder-tree.item.unread-count"]'),
   ).toHaveText(/\d+/);
 
   await expect(rows).toHaveCount(14);

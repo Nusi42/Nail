@@ -16,6 +16,7 @@
  * move, Right / Left expand / collapse (or step into / out of a section),
  * Enter and Space choose.
  */
+import { folderRoleLabelId, rolesFirst } from "./folderNames";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useId,
@@ -33,7 +34,13 @@ import { isActiveSearch, useSavedSearches } from "../features/customization/Smar
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
 import { optionBool, type WidgetNode, type WidgetProps } from "../layout/widgetRegistry";
-import { useAccountStatuses, useAccounts, useClient, useFolders } from "../state/queries";
+import {
+  useAccountStatuses,
+  useAccounts,
+  useClient,
+  useFolders,
+  useOutbox,
+} from "../state/queries";
 import { UI_STATE_COLLAPSED_SECTIONS, stringList, useUiStateValue } from "../state/uiState";
 import { useUi } from "../state/uiStore";
 import { ALL_ACCOUNTS, useAccountName } from "./AccountSwitcher";
@@ -55,7 +62,10 @@ import {
 } from "./folderPaneState";
 
 /** Folders in tree order (parents before children) with their depth. */
-export function flattenFolders(folders: readonly Folder[]): { folder: Folder; depth: number }[] {
+export function flattenFolders(
+  folders: readonly Folder[],
+  options: { rolesFirst?: boolean } = {},
+): { folder: Folder; depth: number }[] {
   const byParent = new Map<string | null, Folder[]>();
   const ids = new Set(folders.map((f) => f.id));
   for (const folder of folders) {
@@ -66,7 +76,8 @@ export function flattenFolders(folders: readonly Folder[]): { folder: Folder; de
   }
   const out: { folder: Folder; depth: number }[] = [];
   const visit = (parent: string | null, depth: number) => {
-    for (const folder of byParent.get(parent) ?? []) {
+    const siblings = byParent.get(parent) ?? [];
+    for (const folder of options.rolesFirst ? rolesFirst(siblings) : siblings) {
       out.push({ folder, depth });
       if (depth < 32) visit(folder.id, depth + 1);
     }
@@ -112,6 +123,7 @@ function FolderRow({
   rowRef,
 }: FolderRowProps) {
   const t = useT();
+  const roleLabel = folderRoleLabelId(folder);
   return (
     <li
       ref={rowRef}
@@ -129,7 +141,9 @@ function FolderRow({
       onClick={onChoose}
     >
       <Icon name={folder.role === "other" ? "folder" : folder.role} part="folder-tree.item.icon" />
-      <span data-part="folder-tree.item.name">{folder.name}</span>
+      <span data-part="folder-tree.item.name" title={roleLabel ? folder.name : undefined}>
+        {roleLabel ? t(roleLabel) : folder.name}
+      </span>
       <MailboxFolderBadge folder={folder} />
       {showUnread && folder.unread > 0 && (
         <span
@@ -153,7 +167,7 @@ function AccountFolderTree({ node }: WidgetProps) {
   const folders = useFolders(accountId);
   const showUnread = optionBool(node, "show-unread", true);
   const items = useRef(new Map<string, HTMLLIElement>());
-  const rows = flattenFolders(folders.data ?? []);
+  const rows = flattenFolders(folders.data ?? [], { rolesFirst: true });
 
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
     const index = rows.findIndex((r) => r.folder.id === activeFolderId);
@@ -251,6 +265,11 @@ function Section({
 }: SectionProps) {
   const t = useT();
   const headingId = useId();
+  const statusId = useId();
+  // Not online: the state shows as a tag beside the title.
+  const state: AccountState | null =
+    account?.state && account.state !== "online" ? account.state : null;
+  const offline = state !== null;
   const key = `section:${section.id}`;
   const expanded = !section.collapsed;
   const tabbable =
@@ -260,7 +279,7 @@ function Section({
     <li
       role="treeitem"
       aria-level={1}
-      aria-labelledby={headingId}
+      aria-labelledby={offline ? `${headingId} ${statusId}` : headingId}
       aria-expanded={pane.collapsible ? expanded : undefined}
       aria-selected={false}
       tabIndex={tabbable ? 0 : -1}
@@ -295,15 +314,21 @@ function Section({
             aria-hidden="true"
           />
         )}
-        <span data-part="folder-tree.section.title" id={headingId}>
+        <span data-part="folder-tree.section.title" id={headingId} title={title}>
           {title}
-          {/* Not online: the state, also for screen readers (part of the name). */}
-          {account?.state && account.state !== "online" && (
-            <span data-part="folder-tree.section.status" data-state={account.state}>
-              {t(`account-state-${account.state}`)}
-            </span>
-          )}
         </span>
+        {/* Not online: the state as a tag beside the title (only the title is cut),
+            also for screen readers (part of the section's name). */}
+        {state !== null && (
+          <span
+            data-part="folder-tree.section.status"
+            data-state={state}
+            id={statusId}
+            title={t(`account-state-${state}`)}
+          >
+            {t(`account-state-${state}`)}
+          </span>
+        )}
         {!expanded && collapsedCount !== null && collapsedCount > 0 && (
           <span
             data-part="folder-tree.section.unread-count"
@@ -342,8 +367,11 @@ function FavoritesSection({
   const setSearch = useUi((s) => s.setSearch);
   const setSearchInput = useUi((s) => s.setSearchInput);
 
+  const outbox = useOutbox(favorites.includes("outbox")).data;
   const rows = favorites.flatMap((favorite) => {
     const target = FAVORITE_TARGETS[favorite];
+    // The Outbox shows only while mail waits there (M5b review).
+    if (favorite === "outbox" && (outbox?.length ?? 0) === 0) return [];
     const folder = target.kind === "folder" ? unifiedFolder(folders, target.role) : null;
     // A unified folder no account has (no Sent anywhere) is left out.
     if (target.kind === "folder" && folder === null) return [];
@@ -369,7 +397,9 @@ function FavoritesSection({
         void dispatch(target.action);
       }
     };
-    return [{ favorite, selected, choose, count: favoriteCount(favorite, folders) }];
+    const count =
+      favorite === "outbox" ? (outbox?.length ?? null) : favoriteCount(favorite, folders);
+    return [{ favorite, selected, choose, count }];
   });
 
   return (
@@ -404,7 +434,9 @@ function FavoritesSection({
                 aria-label={
                   favorite === "drafts"
                     ? t("folder-tree-drafts", { count })
-                    : t("folder-tree-unread", { count })
+                    : favorite === "outbox"
+                      ? t("folder-tree-outbox", { count })
+                      : t("folder-tree-unread", { count })
                 }
               >
                 {count}
@@ -437,7 +469,7 @@ function AccountSection({
   const search = useUi((s) => s.search);
   const selectAccount = useUi((s) => s.selectAccount);
   const selectFolder = useUi((s) => s.selectFolder);
-  const rows = flattenFolders(folders.data ?? []);
+  const rows = flattenFolders(folders.data ?? [], { rolesFirst: true });
   const name = nameOf(account);
   const title =
     account.email !== "" && account.email !== name

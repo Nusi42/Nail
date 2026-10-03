@@ -74,6 +74,14 @@ folder-tree-unread = { $count ->
     [one] One unread message
    *[other] { $count } unread messages
 }
+# Names of special-use folders in the folder pane and the list title
+# (the server's own name, e.g. "INBOX", is the tooltip).
+folder-role-inbox = Inbox
+folder-role-drafts = Drafts
+folder-role-sent = Sent
+folder-role-archive = Archive
+folder-role-junk = Junk
+folder-role-trash = Trash
 
 ## Message list
 
@@ -266,6 +274,10 @@ toolbar-button-tooltip = { $label } ({ $shortcut })
 folder-tree-drafts = { $count ->
     [one] One draft
    *[other] { $count } drafts
+}
+folder-tree-outbox = { $count ->
+    [one] One message waiting to be sent
+   *[other] { $count } messages waiting to be sent
 }
 # The heading of an account's section in the folder pane.
 # $name (string) — the account's name; $email (string) — its address

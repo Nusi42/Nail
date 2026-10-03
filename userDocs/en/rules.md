@@ -11,7 +11,11 @@ condition `folder "Reading"` matches it.
 
 ## Managing rules
 
-Open **Filter rules** to see your rules in the order they run.
+Your rules are in **Settings → Mail & junk** (the gear at the bottom of the
+navigation rail, or **Ctrl+,**); **Filter rules** in the command palette
+(**Ctrl+K**, or **Command palette** on the navigation rail) opens them in a window of
+their own, and so does **Create rule from message** in a message's **More**
+menu. They are listed in the order they run.
 
 - **New rule** starts an empty rule. **Create rule from message** (on a
   selected message) starts one that already matches mail from the same

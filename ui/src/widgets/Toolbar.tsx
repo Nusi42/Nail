@@ -32,6 +32,7 @@ import {
   bindingOf,
   displayOf,
   moreMenuEntries,
+  TOOLBAR_KEY_CONTEXTS,
   toolbarSettingsOf,
   tooltipMessage,
   wrapEdges,
@@ -246,9 +247,11 @@ export function Toolbar({ node }: WidgetProps) {
   // Bindings are looked up in the toolbar's key context, then `global`.
   useLayoutEffect(() => {
     const context =
-      root.current?.closest("[data-key-context]")?.getAttribute("data-key-context") ?? "global";
+      root.current?.closest("[data-key-context]")?.getAttribute("data-key-context") ??
+      TOOLBAR_KEY_CONTEXTS[name] ??
+      "global";
     setKeyContext(context);
-  }, []);
+  }, [name]);
 
   // Measure (before paint) whenever nothing fitted the current items yet.
   useLayoutEffect(() => {

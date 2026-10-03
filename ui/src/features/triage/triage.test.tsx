@@ -6,6 +6,7 @@ import { createDispatcher } from "../../actions/registry";
 import { appRegistry } from "../registry";
 import { createEnv, renderWithProviders, widget, type Env } from "../../test/harness";
 import { NodeView } from "../../layout/LayoutRenderer";
+import { queryKeys } from "../../state/queries";
 import { useUiStoreApi } from "../../state/uiStore";
 import {
   fromLocalInput,
@@ -338,5 +339,37 @@ describe("web notifications", () => {
       (id, args) => `${id}:${String(args?.count ?? "")}`,
     );
     expect(texts).toEqual({ title: "title:2", body: undefined });
+  });
+});
+
+describe("junk actions apply only where they make sense (M5b review)", () => {
+  it("offers Not junk only in Junk or for mail the classifier flagged, Mark as junk outside Junk", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal", activeFolderId: INBOX } });
+    const d = dispatcher(env);
+    const folders = await env.client.request(
+      { type: "ListFolders", account_id: "acc-personal" },
+      "Folders",
+    );
+    env.queryClient.setQueryData(queryKeys.folders("acc-personal"), folders.folders);
+    const inboxMessage = env.transport.data.messages.find((m) => m.folder_id === INBOX)?.id ?? "";
+    act(() => env.store.getState().selectMessage(inboxMessage));
+    expect(d.isEnabled("junk.mark")).toBe(true);
+    expect(d.isEnabled("junk.not-junk")).toBe(false);
+    // The classifier's verdict on the loaded message.
+    env.queryClient.setQueryData(queryKeys.message(inboxMessage), {
+      id: inboxMessage,
+      junk: { junk: true, score: 0.97, source: "classifier" },
+    });
+    expect(d.isEnabled("junk.not-junk")).toBe(true);
+
+    const junkFolder = folders.folders.find((f) => f.role === "junk")?.id ?? "";
+    const junkMessage =
+      env.transport.data.messages.find((m) => m.folder_id === junkFolder)?.id ?? "";
+    act(() => {
+      env.store.getState().selectFolder(junkFolder);
+      env.store.getState().selectMessage(junkMessage);
+    });
+    expect(d.isEnabled("junk.not-junk")).toBe(true);
+    expect(d.isEnabled("junk.mark")).toBe(false);
   });
 });

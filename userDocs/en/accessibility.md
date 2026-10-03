@@ -20,8 +20,8 @@ contrast and without animations.
   sections and their folders; Left and Right fold or unfold a section.
 - In a **toolbar**, the left and right arrow keys, Home and End move between
   its buttons. Its **More** button opens the rest of the actions as a menu.
-- **Tabs** (for example in the settings) switch with the left and right
-  arrow keys, Home and End.
+- **Tabs** (for example the folder pane, list and reader of a narrow window)
+  switch with the left and right arrow keys, Home and End.
 - **Dividers** between panes move with the arrow keys (Shift for bigger
   steps).
 - Every other action has a shortcut or can get one: see

@@ -3,10 +3,12 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
 import {
+  accountSectionNamed,
   openSettings as openSection,
   openSettingsTab,
   readerAction,
   runFromPalette,
+  sectionInbox,
   showView,
 } from "../support/views";
 
@@ -128,10 +130,24 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   await expect(junk.getByText("Saved.", { exact: true })).toBeVisible();
   await showView(page, "Mail");
 
-  // "Not junk" for a normal message (from its context menu)…
+  // "Not junk" for a normal message: it applies only to mail in Junk (M5b
+  // review), so the welcome mail goes to Junk and comes back from there
+  // through its context menu — the filter learns it as wanted mail…
   const normal = rows(page).filter({ hasText: "Welcome to Nail" });
   await normal.click({ button: "right" });
-  await page.getByRole("menu").getByRole("menuitem", { name: "Not junk" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Not junk" })).toHaveCount(0);
+  await menu.getByRole("menuitem", { name: "Mark as junk" }).click();
+  await expect(normal).toHaveCount(0);
+  const work = accountSectionNamed(page, "Work");
+  await work.locator('[data-part="folder-tree.item"][data-role="junk"]').first().click();
+  const inJunk = rows(page).filter({ hasText: "Welcome to Nail" });
+  await inJunk.click({ button: "right" });
+  await expect(menu.getByRole("menuitem", { name: "Mark as junk" })).toHaveCount(0);
+  await menu.getByRole("menuitem", { name: "Not junk" }).click();
+  await expect(inJunk).toHaveCount(0);
+  await sectionInbox(work).click();
+  await expect(normal).toHaveCount(1);
   // …and "Mark as junk" for the spam (reader toolbar).
   await rows(page).filter({ hasText: "You are a lottery winner" }).click();
   await readerAction(page, "Mark as junk");

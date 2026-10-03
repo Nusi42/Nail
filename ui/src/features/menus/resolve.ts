@@ -117,3 +117,35 @@ export function resolveMenu(
   const resolved = resolveItems(layout, items, keyContext);
   return resolved.length > 0 ? { name, items: resolved } : null;
 }
+
+/**
+ * A resolved menu without the actions that do not apply now (M5b review:
+ * right-click menus hide disabled actions like the reader's bar does);
+ * submenus left empty are dropped and separators / headings normalized as
+ * in {@link resolveMenu}. Empty when nothing applies.
+ */
+export function withoutDisabled(
+  items: readonly ResolvedMenuEntry[],
+  isEnabled: (action: string, args: readonly JsonValue[]) => boolean,
+): ResolvedMenuEntry[] {
+  const out: ResolvedMenuEntry[] = [];
+  for (const entry of items) {
+    if (entry.type === "action") {
+      if (isEnabled(entry.action, entry.args)) out.push(entry);
+    } else if (entry.type === "separator") {
+      dropOrphanHeader(out);
+      const last = out[out.length - 1];
+      if (last !== undefined && last.type !== "separator") out.push(entry);
+    } else if (entry.type === "header") {
+      dropOrphanHeader(out);
+      out.push(entry);
+    } else {
+      const children = withoutDisabled(entry.items, isEnabled);
+      if (children.length > 0) out.push({ ...entry, items: children });
+    }
+  }
+  dropOrphanHeader(out);
+  if (out[out.length - 1]?.type === "separator") out.pop();
+  if (!out.some((e) => e.type === "action" || e.type === "submenu")) return [];
+  return out;
+}

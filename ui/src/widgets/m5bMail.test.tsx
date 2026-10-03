@@ -263,6 +263,58 @@ describe("grouped folder pane (M5b)", () => {
   });
 });
 
+describe("folder pane after the M5b review", () => {
+  it("shows an account's state as a tag beside its heading, outside the cut title", async () => {
+    const env = paneEnv();
+    const work = env.transport.data.statuses.find((x) => x.account_id === "acc-work");
+    if (work) work.state = "disabled";
+    renderNode(PANE, env);
+    await screen.findByText("Work · ada@work.example");
+    const heading = section("account:acc-work").querySelector('[data-part="folder-tree.account"]');
+    const title = heading?.querySelector('[data-part="folder-tree.section.title"]');
+    const status = await within(heading as HTMLElement).findByText("Disabled");
+    expect(status).toHaveAttribute("data-part", "folder-tree.section.status");
+    // A sibling of the title (only the title is cut with an ellipsis) …
+    expect(status.parentElement).toBe(heading);
+    expect(title?.contains(status)).toBe(false);
+    expect(title).toHaveAttribute("title", "Work · ada@work.example");
+    // … and still part of the section's name.
+    expect(section("account:acc-work")).toHaveAccessibleName("Work · ada@work.example Disabled");
+    expect(
+      section("account:acc-personal").querySelector('[data-part="folder-tree.section.status"]'),
+    ).toBeNull();
+  });
+
+  it("lists the Outbox as a favorite only while mail waits there", async () => {
+    const env = paneEnv();
+    const pane = widget("folder-tree", {
+      options: { ...PANE.options, favorites: "all-inboxes outbox" },
+    });
+    const { unmount } = renderNode(pane, env);
+    await screen.findByText("Favorites");
+    await settleQueries(env);
+    expect(document.querySelector('[data-favorite="outbox"]')).toBeNull();
+    unmount();
+    env.queryClient.clear();
+    env.transport.data.outbox.push({
+      id: "o1",
+      draft_id: "d1",
+      account_id: "acc-personal",
+      identity_id: "i1",
+      subject: "Later",
+      recipients: [],
+      send_at: "2026-10-03T12:00:00Z",
+      state: "scheduled",
+      attempts: 0,
+      error: null,
+      message: null,
+    } as (typeof env.transport.data.outbox)[number]);
+    renderNode(pane, env);
+    const outbox = await screen.findByRole("treeitem", { name: /Outbox/ });
+    expect(within(outbox).getByLabelText("One message waiting to be sent")).toHaveTextContent("1");
+  });
+});
+
 describe("list header (M5b)", () => {
   function headerLayout(env: Env): ResolvedLayout {
     return normalizeLayout({

@@ -5,7 +5,9 @@
  * recurring task completed moves on to its next occurrence (the core does
  * that). Options: `lists` (ids; default every visible list),
  * `show-completed`, `sort` (`due`, `priority`, `title`, `manual`),
- * `quick-add`.
+ * `quick-add`, `header` (M5b review: the Tasks view's header — the title and
+ * "New task" as the primary button). "New task" shows only while there is a
+ * list to add to.
  *
  * Keyboard: Up / Down move between tasks, Right / Left expand / collapse
  * subtasks, Space completes, Enter opens the editor, Delete deletes.
@@ -129,6 +131,7 @@ export function TaskList({ node }: WidgetProps) {
     ? (sortOption as TaskSort)
     : "due";
   const quickAdd = optionBool(node, "quick-add", true);
+  const header = optionBool(node, "header", false);
   const [showCompleted, setShowCompleted] = useState(optionBool(node, "show-completed", false));
   const [list, setList] = useState<string>("");
   const [title, setTitle] = useState("");
@@ -259,8 +262,27 @@ export function TaskList({ node }: WidgetProps) {
 
   const active = visible.find((r) => r.task.id === current)?.task.id ?? visible[0]?.task.id ?? null;
 
+  const newTask = (variant: "primary" | undefined) => (
+    <button
+      type="button"
+      data-part="form.button"
+      data-variant={variant}
+      data-action="new-task"
+      onClick={() => openNewTask(ctx, addTarget?.id ?? null)}
+    >
+      <Icon name="plus" part="form.button.icon" />
+      {t("pim-task-new")}
+    </button>
+  );
+
   return (
     <section data-part="task-list" data-key-context="tasks" aria-label={t("pim-tasks-label")}>
+      {header && (
+        <div data-part="pim.view-header">
+          <h2 data-part="pim.view-header.title">{t("pim-tasks-label")}</h2>
+          <div data-part="pim.view-header.actions">{addTarget && newTask("primary")}</div>
+        </div>
+      )}
       <div data-part="task-list.toolbar">
         {fixed.length !== 1 && (
           <TaskListChooser lists={taskLists} value={list} onChange={setList} />
@@ -273,16 +295,7 @@ export function TaskList({ node }: WidgetProps) {
           />
           <span>{t("pim-tasks-show-completed")}</span>
         </label>
-        <button
-          type="button"
-          data-part="form.button"
-          data-action="new-task"
-          disabled={!addTarget}
-          onClick={() => openNewTask(ctx, addTarget?.id ?? null)}
-        >
-          <Icon name="plus" part="form.button.icon" />
-          {t("pim-task-new")}
-        </button>
+        {!header && addTarget && newTask(undefined)}
       </div>
       {quickAdd && addTarget && (
         <form data-part="task-list.add" onSubmit={(e) => void add(e)}>

@@ -6,7 +6,9 @@ of your plug-ins — by typing a few letters. You never need the mouse.
 
 ## Opening it
 
-Press **Ctrl+K** or **Ctrl+Shift+P** (press it again to close the palette).
+Press **Ctrl+K** or **Ctrl+Shift+P** (press it again to close the palette),
+or click **Command palette** on the navigation rail (the ⌘ button above the
+confirmations).
 Both are ordinary key bindings: change or add your own in `layout.kdl`
 (see the [layout reference](layout-reference.md)), for example
 

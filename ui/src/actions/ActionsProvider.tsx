@@ -1,12 +1,12 @@
 /**
  * Provides the action dispatcher and installs the layout's key bindings.
  */
-import { useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import type { JsonValue, ResolvedLayout } from "../api/generated";
 import { useLocale, useT } from "../i18n/I18nProvider";
 import { useDialogRegistry } from "../layout/dialogRegistry";
-import { useClient } from "../state/queries";
+import { queryKeys, useClient } from "../state/queries";
 import { useUi, useUiStoreApi } from "../state/uiStore";
 import { KeyMatcher, comboFromEvent } from "./keys";
 import {
@@ -149,6 +149,12 @@ export function useActions(): ActionDispatcher {
   return dispatcher;
 }
 
+/** Re-renders when the selected message's cached body changes (no fetch of its own). */
+function useSelectedMessageData(): unknown {
+  const selected = useUi((s) => s.selectedMessageId);
+  return useQuery({ queryKey: queryKeys.message(selected), queryFn: skipToken }).data;
+}
+
 /**
  * Whether an action is enabled, re-evaluated when the UI state it depends
  * on changes.
@@ -161,5 +167,8 @@ export function useActionEnabled(id: string, args: readonly JsonValue[] = []): b
   useUi((s) => s.composer !== null);
   useUi((s) => s.windows.length);
   useUi((s) => s.lastSend?.state);
+  useUi((s) => s.activeFolderId);
+  // Checks that read the loaded message (Autocrypt setup, junk verdict).
+  useSelectedMessageData();
   return dispatcher.isEnabled(id, args);
 }

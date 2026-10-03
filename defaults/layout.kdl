@@ -30,11 +30,12 @@ layout "default" {
                 max-sizes="480px none none" \
                 collapsible="true false true" {
                 stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
-                    // New message, Favorites, one section per account (with its
-                    // colour), smart folders once you saved a search.
+                    // New message, Favorites (the Outbox only while mail waits
+                    // there), one section per account (with its colour), smart
+                    // folders once you saved a search.
                     folder-tree id="folders" show-unread=#true \
                         sections="favorites accounts smart-folders" \
-                        favorites="all-inboxes flagged snoozed drafts" \
+                        favorites="all-inboxes flagged snoozed drafts outbox" \
                         collapsible=#true account-colors=#true
                     // Gmail accounts: labels as views (nothing for other accounts).
                     label-list id="gmail-labels"
@@ -85,7 +86,7 @@ layout "default" {
                 stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
                     folder-tree id="folders" show-unread=#true \
                         sections="favorites accounts smart-folders" \
-                        favorites="all-inboxes flagged snoozed drafts" \
+                        favorites="all-inboxes flagged snoozed drafts outbox" \
                         collapsible=#true account-colors=#true
                     label-list id="gmail-labels"
                     exchange-mailboxes id="exchange-mailboxes"
@@ -122,24 +123,25 @@ layout "default" {
         stack id="calendar-root" sizes="auto 1fr" {
             toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
             split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
-                stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto auto 1fr" {
+                stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto 1fr" {
                     mini-month id="calendar-mini-month"
                     // Calendars by source with colour squares, "…" and "+" menus.
                     calendar-list id="calendar-list"
-                    task-list id="calendar-tasks" sort="due"
                 }
                 calendar id="calendar-main" view="week" views="day week month year agenda free-time" scroll-to=8
             }
         }
     }
+    // Contacts and Tasks: a header with the title, the search and "New …"
+    // as the primary button (the rest in "More"), like the calendar.
     window "contacts" {
         split "horizontal" id="contacts-panes" sizes="360px 1fr" {
-            contact-list id="contacts-list" label="@pim.pane.contacts"
+            contact-list id="contacts-list" label="@pim.pane.contacts" header=#true
             contact-card id="contacts-card" label="@pim.pane.contact"
         }
     }
     window "tasks" {
-        task-list id="tasks"
+        task-list id="tasks" header=#true
     }
     // The settings view: grouped sections with search (the `settings-page`
     // section below says which settings each section shows).
@@ -322,6 +324,8 @@ layout "default" {
         view "contacts"
         view "tasks"
         spacer
+        // The command palette: every action, searchable (Ctrl+K).
+        item "palette.open" icon="command"
         // Changes by AI agents or plug-ins waiting for your approval.
         item "agents.open-center" icon="shield-check" badge="confirmations"
         view "settings"
@@ -338,6 +342,8 @@ layout "default" {
             section "mail" label="@settings.section.mail" icon="mail" {
                 sync-folder-policies id="page-sync-policies"
                 junk-settings id="page-junk-settings"
+                // Your local filter rules (run by Nail on new mail).
+                rule-manager id="page-rules"
             }
             // Calendars, task lists, subscriptions and accounts, import.
             section "calendar" label="@settings.section.calendar" icon="calendar" {
@@ -544,14 +550,16 @@ layout "default" {
         }
     }
 
-    // The calendar window's toolbar (M3a).
+    // The calendar view's toolbar (M3a, M5b): "New event" in the calendar's
+    // own header is the view's one primary button.
     toolbar "calendar" {
-        item "scheduling.find-time" rank=1
-        item "tasks.new" rank=2
-        item "contacts.new" rank=3
+        item "scheduling.find-time" rank=2
         spacer
-        item "pim.sync" rank=4 display="icon"
+        item "pim.sync" rank=3 display="icon"
         more {
+            item "tasks.new"
+            item "contacts.new"
+            separator
             item "print.event"
             item "print.agenda"
             separator

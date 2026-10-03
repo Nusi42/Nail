@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { startNail, type NailServer } from "../support/nail";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { control, repoRoot, startNail, type NailServer } from "../support/nail";
 import { createUser, rpcOk } from "../support/remote";
 import {
   newMessageButton,
@@ -10,6 +12,21 @@ import {
   showView,
   toolbarAction,
 } from "../support/views";
+
+/** An Autocrypt Setup Message (the test corpus's). */
+const setupMessage = () =>
+  readFileSync(
+    path.join(
+      repoRoot,
+      "crates",
+      "nail-testkit",
+      "corpus",
+      "crypto",
+      "pgp",
+      "autocrypt-setup-bob.eml",
+    ),
+    "utf8",
+  );
 
 /**
  * M2c carry-over (WP65): axe on every window, every settings tab and every
@@ -275,10 +292,10 @@ for (const mode of MODES) {
       await contactsWindow.getByRole("option", { name: /Grace Hopper/ }).click();
       await expect(contactsWindow.getByRole("heading", { name: "Grace Hopper" })).toBeVisible();
       await sweep.scanWindow("contacts");
-      await contactsWindow.getByRole("button", { name: "Groups…" }).click();
+      await toolbarAction(page, contactsWindow, "Groups…");
       await sweep.scanWindow("pim-contact-groups");
       await sweep.close("pim-contact-groups");
-      await contactsWindow.getByRole("button", { name: "Find duplicates…" }).click();
+      await toolbarAction(page, contactsWindow, "Find duplicates…");
       await sweep.scanWindow("pim-merge-contacts");
       await sweep.close("pim-merge-contacts");
 
@@ -292,6 +309,11 @@ for (const mode of MODES) {
       await toolbarAction(page, actions, "Snooze…");
       await sweep.scanWindow("snooze");
       await sweep.close("snooze");
+      // The Autocrypt import applies only to setup messages (M5b review).
+      await control(server, "imap-deliver", { raw: setupMessage() });
+      const setup = rows.filter({ hasText: "Autocrypt Setup Message" }).first();
+      await expect(setup).toBeVisible({ timeout: 20_000 });
+      await setup.click();
       await toolbarAction(page, actions, "Import Autocrypt setup message");
       await sweep.scanWindow("security-autocrypt-import");
       await sweep.close("security-autocrypt-import");
@@ -309,7 +331,7 @@ for (const mode of MODES) {
       await sweep.scanWindow("move");
       await sweep.close("move");
       await page
-        .getByRole("treeitem", { name: /^INBOX/ })
+        .getByRole("treeitem", { name: /^Inbox/ })
         .first()
         .click({ button: "right" });
       await expect(page.getByRole("menu")).toBeVisible();

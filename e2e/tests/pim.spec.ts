@@ -257,7 +257,8 @@ test("duplicate contacts are merged", async ({ page }) => {
   await expect(editor).toBeHidden();
   await expect(contacts.getByRole("option", { name: /Grace Hopper/ })).toHaveCount(2);
 
-  await contacts.getByRole("button", { name: "Find duplicates…" }).click();
+  // In the Contacts view header's "More" menu (M5b review).
+  await toolbarAction(page, contacts, "Find duplicates…");
   const merge = page.getByRole("dialog", { name: "Merge contacts", exact: true });
   const groups = merge.getByRole("list", { name: "Possible duplicates" });
   await groups.getByRole("button", { name: "Merge these" }).first().click();

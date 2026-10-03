@@ -68,6 +68,8 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
             ("show-completed", Bool),
             ("sort", OneOf(&["due", "priority", "title", "manual"])),
             ("quick-add", Bool),
+            // M5b review: the Tasks view's header (title, "New task").
+            ("header", Bool),
         ],
         &[],
         false,
@@ -75,7 +77,13 @@ pub(crate) const WIDGETS: &[WidgetSpec] = &[
     // A contact list.
     widget(
         "contact-list",
-        &[("address-books", Str), ("page-size", UInt)],
+        // `header` (M5b review): the Contacts view's header (title, search,
+        // "New contact", "More").
+        &[
+            ("address-books", Str),
+            ("page-size", UInt),
+            ("header", Bool),
+        ],
         &[],
         false,
     ),
@@ -117,8 +125,8 @@ mod tests {
             calendar-list
             calendar view=\"week\" views=\"day week month\" scroll-to=8 header=#true
             agenda days=3
-            task-list sort=\"due\" show-completed=#false
-            contact-list page-size=50
+            task-list sort=\"due\" show-completed=#false header=#true
+            contact-list page-size=50 header=#true
             contact-card
             pim-settings
         }
