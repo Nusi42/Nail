@@ -101,8 +101,9 @@ describe("views (M5b)", () => {
       true,
     );
     expect(l.settings.map((g) => g.id)).toEqual([...SETTINGS_GROUPS]);
-    // Until WP165 puts a view-host into the main window, views open windows.
-    expect(hostsViews(l)).toBe(false);
+    // WP165: the main window hosts the views; the mail view shows `mail`.
+    expect(hostsViews(l)).toBe(true);
+    expect(l.views.mail?.window).toBe("mail");
     for (const toolbar of Object.keys(l.toolbars)) {
       expect(l.toolbar_settings[toolbar]).toBeDefined();
     }

@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
-import { readerAction } from "../support/views";
+import {
+  accountSectionNamed,
+  openSettingsTab,
+  readerAction,
+  sectionInbox,
+  showView,
+  viewRegion,
+} from "../support/views";
 
 /**
  * Wave M3b (ADR 0070): a Gmail API account of `nail serve --seed demo-multi`
@@ -20,19 +27,15 @@ test.afterEach(async () => {
 });
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-const accountItems = (page: Page) => page.locator('[data-part="account-switcher.item"]');
 
 const labelsOf = async (subject: string) =>
   (await control<{ id: string; labels: string[] }>(server, "gmail-message", { subject })).labels;
 
 /** Settings → Accounts → Gmail → "Synchronize this account". */
 async function enableGmail(page: Page) {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Accounts", exact: true }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Accounts");
   await settings.getByRole("button", { name: /^Gmail/ }).click();
   // A Gmail API account shows as one (not as IMAP) with its polling options.
   await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("gmail");
@@ -42,8 +45,7 @@ async function enableGmail(page: Page) {
   await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings.getByText("Settings saved.")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(settings).toBeHidden();
+  await showView(page, "Mail");
 }
 
 test("a Gmail account syncs, takes a label, archives, sends and picks up server changes", async ({
@@ -52,9 +54,9 @@ test("a Gmail account syncs, takes a label, archives, sends and picks up server 
   await page.goto(server.url);
   await expect(rows(page)).toHaveCount(17);
   await enableGmail(page);
-  const gmail = accountItems(page).filter({ hasText: "Gmail" });
+  const gmail = accountSectionNamed(page, "Gmail");
   await expect(gmail).toHaveAttribute("data-status", "online", { timeout: 30_000 });
-  await gmail.click();
+  await sectionInbox(gmail).click();
   // The inbox (labels → folders): four conversations; chats are not synced.
   await expect(rows(page)).toHaveCount(4, { timeout: 30_000 });
 

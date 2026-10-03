@@ -4,7 +4,7 @@ A Nail backup is one file (`.nailbackup`) that holds your settings and
 local data, encrypted with a passphrase you choose. Use it to move Nail to
 another computer or to get back to a known state.
 
-Back up and restore in **Settings → Backups** (**Back up…**,
+Back up and restore in **Settings → Data & backup** (**Back up…**,
 **Restore…**) or from the [command palette](command-palette.md). Backups
 are only available in the desktop app and in the local browser window, not
 in remote sessions.

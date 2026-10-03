@@ -15,6 +15,7 @@ import { SmartFolders, savedSearchesKey } from "./SmartFolders";
 import { SplitWriteBack } from "./SplitWriteBack";
 import { DIALOGS } from "./names";
 import { customizationStore } from "./state";
+import { LayoutMigration } from "./LayoutMigration";
 
 export { DIALOGS };
 
@@ -65,7 +66,7 @@ export const handleCustomizationEvent: FeatureEventHandler = (event, { queryClie
 export const events: Feature["events"] = [handleCustomizationEvent];
 
 /** Background components mounted once in the app shell. */
-export const effects: Feature["effects"] = [Inspector, SplitWriteBack];
+export const effects: Feature["effects"] = [Inspector, SplitWriteBack, LayoutMigration];
 
 /**
  * Settings labels per widget kind, for the settings search (M5b WP163, ADR

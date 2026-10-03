@@ -37,7 +37,8 @@ export const actualDir = (env: NodeJS.ProcessEnv = process.env) =>
   path.join(resultsDir(env), "actual");
 
 /** Viewport of every screenshot (CSS px, device scale 1). */
-export const VIEWPORT = { width: 1280, height: 800 } as const;
+// M5b: 1000 px high so the list under the list header shows the sample message.
+export const VIEWPORT = { width: 1280, height: 1000 } as const;
 
 /**
  * The comparison tolerance: the share of pixels that may differ

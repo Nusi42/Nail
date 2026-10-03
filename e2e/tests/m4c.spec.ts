@@ -10,6 +10,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { repoRoot, startNail, tempDir, type NailServer } from "../support/nail";
 import { rpcOk } from "../support/remote";
+import { accountSectionNamed, openSettingsTab, showView, viewRegion } from "../support/views";
 
 /**
  * M4c WP125 (ADRs 0094, 0096, 0099) through the web UI of `nail serve
@@ -116,18 +117,9 @@ async function openApp(page: Page, server: NailServer) {
   await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
 }
 
-/** Opens Settings (when it is not open) on a tab. */
-async function settingsTab(page: Page, tab: string): Promise<Locator> {
-  const settings = page.locator('[data-part="window"][data-window="settings"]');
-  if (!(await settings.isVisible())) {
-    await page
-      .getByRole("toolbar", { name: "Main" })
-      .getByRole("button", { name: "Settings" })
-      .click();
-  }
-  await expect(settings).toBeVisible();
-  await settings.getByRole("tablist").first().getByRole("tab", { name: tab, exact: true }).click();
-  return settings;
+/** The settings view at the section of a former settings tab (M5b). */
+function settingsTab(page: Page, tab: string): Promise<Locator> {
+  return openSettingsTab(page, tab);
 }
 
 async function closeWindow(page: Page, name: string) {
@@ -175,7 +167,7 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
   await closeWindow(page, "import-wizard");
   await importWith(page, "Maildir folder", "Folder", writeMaildir(files), "Server copy");
   await closeWindow(page, "import-wizard");
-  await closeWindow(page, "settings");
+  await showView(page, "Mail");
 
   const folders = await localFolders(server);
   const mbox = folders.find((f) => f.path === "Old mail/old-mail");
@@ -192,12 +184,10 @@ test("an mbox and a Maildir are imported with their flags", async ({ page }) => 
   expect(listMail[0]?.flags).toMatchObject({ seen: true, answered: true });
 
   // The imported mail is in the UI: the Local Folders account and its rows.
-  const account = page
-    .locator('[data-part="account-switcher.item"]')
-    .filter({ hasText: "Local Folders" });
+  // M5b: the Local Folders account's section in the folder pane.
+  const account = accountSectionNamed(page, "Local Folders");
   await expect(account).toBeVisible();
-  await account.click();
-  await page.getByRole("treeitem", { name: /old-mail/ }).click();
+  await account.getByRole("treeitem", { name: /old-mail/ }).click();
   const rows = page.locator('[data-part="message-list.row"]');
   await expect(rows).toHaveCount(2);
   await expect(rows.filter({ hasText: "Read and flagged" })).toHaveAttribute(
@@ -237,7 +227,7 @@ test("a Thunderbird profile offers its accounts and imports folders and address 
   const filters = dialog.getByRole("region", { name: "Filters found in Thunderbird" });
   await expect(filters.getByRole("checkbox")).toHaveCount(4);
   await closeWindow(page, "import-wizard");
-  await closeWindow(page, "settings");
+  await showView(page, "Mail");
 
   const accounts = await rpcOk(server, { type: "GetAccountsConfig" }, "AccountsConfig");
   const config = accounts.config as { accounts: { email: string }[] };
@@ -258,14 +248,12 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
   await openApp(page, server);
   await importWith(page, "mbox file", "File", writeMbox(files), "Source");
   await closeWindow(page, "import-wizard");
-  await closeWindow(page, "settings");
+  await showView(page, "Mail");
 
   // Export the imported folder (selected in the folder tree).
-  await page
-    .locator('[data-part="account-switcher.item"]')
-    .filter({ hasText: "Local Folders" })
+  await accountSectionNamed(page, "Local Folders")
+    .getByRole("treeitem", { name: /old-mail/ })
     .click();
-  await page.getByRole("treeitem", { name: /old-mail/ }).click();
   const first = path.join(files, "first.mbox");
   const settings = await settingsTab(page, "Import and export");
   await settings.getByRole("button", { name: "Export…" }).click();
@@ -277,12 +265,12 @@ test("a folder exported to mbox imports again identically", async ({ page }) => 
   await dialog.getByRole("button", { name: "Export", exact: true }).click();
   await expect(dialog.getByText(/^Export: Done/)).toBeVisible({ timeout: 60_000 });
   await closeWindow(page, "export-wizard");
-  await closeWindow(page, "settings");
+  await showView(page, "Mail");
 
   // Import the file again and export the new folder.
   await importWith(page, "mbox file", "File", first, "Again");
   await closeWindow(page, "import-wizard");
-  await closeWindow(page, "settings");
+  await showView(page, "Mail");
   const again = (await localFolders(server)).find((f) => f.path === "Again/first");
   expect(again).toBeDefined();
   const second = path.join(files, "second.mbox");
@@ -312,7 +300,7 @@ test("a backup restores into a wiped Nail", async ({ page }) => {
   await openApp(page, server);
   await importWith(page, "mbox file", "File", writeMbox(files), "Archive");
   await closeWindow(page, "import-wizard");
-  await closeWindow(page, "settings");
+  await showView(page, "Mail");
   let settings = await settingsTab(page, "Backups");
   await settings.getByRole("button", { name: "Back up…" }).click();
   let dialog = page.getByRole("dialog", { name: "Back up Nail" });
@@ -363,9 +351,10 @@ test("the command palette runs an action and remembers it", async ({ page }) => 
   await expect(option).toBeVisible();
   await option.click();
   await expect(palette).toBeHidden();
-  await expect(page.locator('[data-part="window"][data-window="settings"]')).toBeVisible();
+  // M5b: Settings is a view (`settings.open` and `view.settings` both show it).
+  await expect(viewRegion(page, "Settings")).toBeVisible();
   const recent = await rpcOk(server, { type: "GetRecentActions" }, "RecentActions");
-  expect((recent.recent as { actions: { action_id: string }[] }).actions[0]?.action_id).toBe(
-    "settings.open",
+  expect(["settings.open", "view.settings"]).toContain(
+    (recent.recent as { actions: { action_id: string }[] }).actions[0]?.action_id,
   );
 });

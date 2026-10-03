@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import {} from "../support/views";
 
 /**
  * Sending a plain-text mail through the core's outbox to the mock SMTP
@@ -68,7 +69,10 @@ test("a plain-text mail is sent, once cancelled by undo and once for real", asyn
       (await serverMessages(server, "Sent")).some((m) => m.subject === "Review notes"),
     )
     .toBe(true);
-  await page.locator('[data-part="folder-tree.item"][data-role="sent"]').click();
+  await page
+    .locator('[data-part="folder-tree.section"][data-account-kind="imap"]')
+    .locator('[data-part="folder-tree.item"][data-role="sent"]')
+    .click();
   await expect(
     page.locator('[data-part="message-list.row"]').filter({ hasText: "Review notes" }),
   ).toHaveCount(1);
@@ -79,7 +83,7 @@ test("the Sent copy of a mail sent while IMAP is down is filed later", async ({ 
   await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
   await control(server, "imap-offline", { offline: true });
   await expect(
-    page.locator('[data-part="account-switcher.item"][data-kind="imap"]'),
+    page.locator('[data-part="folder-tree.section"][data-account-kind="imap"]'),
   ).toHaveAttribute("data-status", "offline");
 
   // SMTP still works: the mail goes out and its copy shows in Sent at once.
@@ -87,7 +91,10 @@ test("the Sent copy of a mail sent while IMAP is down is filed later", async ({ 
   await body.press("Control+Enter");
   const status = page.getByRole("status", { name: "Status" });
   await expect(status.getByText("Message sent.")).toBeVisible({ timeout: 15_000 });
-  await page.locator('[data-part="folder-tree.item"][data-role="sent"]').click();
+  await page
+    .locator('[data-part="folder-tree.section"][data-account-kind="imap"]')
+    .locator('[data-part="folder-tree.item"][data-role="sent"]')
+    .click();
   const copy = page
     .locator('[data-part="message-list.row"]')
     .filter({ hasText: "Written offline" });

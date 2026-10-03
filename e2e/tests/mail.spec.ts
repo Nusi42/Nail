@@ -4,10 +4,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function openInbox(page: Page) {
   await page.goto("/");
-  await expect(page.locator('[data-part="folder-tree.item"][data-role="inbox"]')).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  // M5b: the unified inbox ("All inboxes" under Favorites) is selected.
+  await expect(
+    page.locator('[data-part="folder-tree.favorite"][data-favorite="all-inboxes"]'),
+  ).toHaveAttribute("aria-selected", "true");
   const rows = page.locator('[data-part="message-list.row"]');
   await expect(rows.first()).toBeVisible();
   return rows;

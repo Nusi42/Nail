@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
 import { examplePackage, packFiles } from "../support/plugins";
+import { openSettingsTab, showView } from "../support/views";
 
 /**
  * Wave M4a plug-in extension points wired into the core (plan WP105, ADR
@@ -25,14 +26,9 @@ const test = base.extend<{ nail: NailServer }>({
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
-async function openSettings(page: Page, tab: string): Promise<Locator> {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: tab, exact: true }).click();
-  return settings;
+/** The settings view at the section of a former settings tab (M5b). */
+function openSettings(page: Page, tab: string): Promise<Locator> {
+  return openSettingsTab(page, tab);
 }
 
 async function closeDialog(page: Page, name: string) {
@@ -56,7 +52,7 @@ async function install(page: Page, file: string, title: RegExp): Promise<void> {
   await expect(
     settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]').last(),
   ).toBeVisible();
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 }
 
 /** An RFC 5322 message for `imap-deliver`. */
@@ -297,7 +293,7 @@ test("a runaway arrival hook is stopped and the mail still arrives", async ({ pa
   await expect(
     settings.locator('[data-part="plugin-manager.plugin"][data-state="crashed"]'),
   ).toContainText("Stopped after a problem", { timeout: 20_000 });
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
   // Mail keeps arriving.
   await control(nail, "imap-deliver", { raw: mail("Arrives after the stop") });
   await expect(rows(page).filter({ hasText: "Arrives after the stop" })).toBeVisible({

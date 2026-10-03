@@ -46,6 +46,7 @@ settings-group-extensions = Extensions
 
 settings-section-accounts = Accounts
 settings-section-mail = Mail & junk
+settings-section-calendar = Calendar & contacts
 settings-section-server-rules = Server rules & vacation
 settings-section-notifications = Notifications
 settings-section-data = Data & backup
@@ -58,6 +59,8 @@ settings-section-privacy = Privacy & data protection
 settings-section-remote = Remote access
 settings-section-agents = Agents (MCP)
 settings-section-plugins = Plug-ins
+# The configuration error list on the Layout & toolbars section.
+settings-config-errors = Errors in your configuration files
 
 ## List filter chips (nail_api::views::ListFilter)
 

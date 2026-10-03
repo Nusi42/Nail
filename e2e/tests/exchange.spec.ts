@@ -1,6 +1,14 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
-import { readerAction } from "../support/views";
+import {
+  accountSectionNamed,
+  openSettingsTab,
+  readerAction,
+  runFromPalette,
+  sectionInbox,
+  showView,
+  viewRegion,
+} from "../support/views";
 
 /**
  * Wave M3c (ADR 0077) against `nail serve --seed demo-multi`: Exchange
@@ -22,8 +30,6 @@ test.afterEach(async () => {
 });
 
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
-const accountItems = (page: Page) => page.locator('[data-part="account-switcher.item"]');
-const mainToolbar = (page: Page) => page.getByRole("toolbar", { name: "Main toolbar" });
 
 interface GraphMessage {
   id: string;
@@ -77,26 +83,25 @@ async function enableContoso(page: Page) {
 /** Settings → Accounts → `name` → "Synchronize this account"; waits for
  * `messages` rows in its inbox. */
 async function enableAccount(page: Page, name: string, messages: number) {
-  await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Accounts", exact: true }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Accounts");
   await settings.getByRole("button", { name: new RegExp(`^${name}`) }).click();
   // An Exchange account shows its engine and options.
   await expect(settings.getByRole("combobox", { name: "Protocol" })).toHaveValue("exchange");
   await settings.getByRole("checkbox", { name: "Synchronize this account" }).check();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings.getByText("Settings saved.")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(settings).toBeHidden();
-  const account = accountItems(page).filter({ hasText: name });
+  await showView(page, "Mail");
+  const account = accountSectionNamed(page, name);
   await expect(account).toHaveAttribute("data-status", "online", { timeout: 30_000 });
-  await account.click();
+  await sectionInbox(account).click();
   await expect(rows(page)).toHaveCount(messages, { timeout: 30_000 });
 }
 
 /** Opens the Add account dialog and looks up `email`. */
 async function lookUp(page: Page, email: string): Promise<Locator> {
-  await mainToolbar(page).getByRole("button", { name: "Add account" }).click();
+  await runFromPalette(page, "add account", "Add account");
   const dialog = page.getByRole("dialog", { name: "Add account" });
   await dialog.getByRole("textbox", { name: "Your name" }).fill("Ada");
   await dialog.getByRole("textbox", { name: "Email address" }).fill(email);
@@ -141,8 +146,8 @@ test("an Exchange Online account is added through Autodiscover and syncs", async
   // Plays the browser: the mock signs in and redirects to Nail's listener.
   await page.request.get(authorize!);
   await finishSetup(page, dialog);
-  const grace = accountItems(page).filter({ hasText: "Ada" });
-  await expect(grace).toHaveAttribute("data-kind", "exchange");
+  const grace = accountSectionNamed(page, "grace@contoso.example");
+  await expect(grace).toHaveAttribute("data-account-kind", "exchange");
   await expect(grace).toHaveAttribute("data-status", "online", { timeout: 30_000 });
   await expect(rows(page).filter({ hasText: "Engine review on Monday" })).toHaveCount(1, {
     timeout: 30_000,
@@ -166,7 +171,7 @@ test("an on-premises Exchange account is added through Autodiscover (EWS)", asyn
   await dialog.getByRole("textbox", { name: "User name" }).fill("ada@corp.example");
   await dialog.getByLabel("Password", { exact: true }).fill("corp-secret");
   await finishSetup(page, dialog);
-  const ada = accountItems(page).filter({ hasText: "Ada" });
+  const ada = accountSectionNamed(page, "grace@corp.example");
   await expect(ada).toHaveAttribute("data-status", "online", { timeout: 30_000 });
   await expect(rows(page).filter({ hasText: "Quarterly numbers" })).toHaveCount(1, {
     timeout: 30_000,
@@ -271,15 +276,16 @@ test("a shared mailbox appears and automatic replies are set and read back", asy
   await expect(tree.locator('[data-part="exchange.mailbox-badge"]')).toBeVisible({
     timeout: 30_000,
   });
-  await tree.getByRole("treeitem", { name: /^Inbox/, level: 2 }).click();
+  // M5b: section (1) → mailbox (2) → its Inbox (3).
+  await tree.getByRole("treeitem", { name: /^Inbox/, level: 3 }).click();
   await expect(rows(page).filter({ hasText: "Ticket 4711: login fails" })).toHaveCount(1, {
     timeout: 30_000,
   });
 
   // Automatic replies: on, with a text, on the server.
-  await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Vacation reply" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Vacation reply");
   const vacation = settings.locator('[data-part="vacation-editor"]');
   await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: "Contoso" });
   await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
@@ -292,7 +298,7 @@ test("a shared mailbox appears and automatic replies are set and read back", asy
     })
     .toContain("Back on Monday.");
   // Read back through the Exchange editor.
-  await page.keyboard.press("Escape");
+  await showView(page, "Mail");
   await page
     .locator('[data-part="automatic-replies-banner"]')
     .getByRole("button", { name: /^Edit/ })
@@ -327,8 +333,8 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
   await page.goto(server.url);
   await enableContoso(page);
   // To Do: a task in the account's list is created on Graph.
-  await mainToolbar(page).getByRole("button", { name: "Tasks" }).click();
-  const tasks = page.getByRole("dialog", { name: "Tasks", exact: true });
+  await showView(page, "Tasks");
+  const tasks = viewRegion(page, "Tasks");
   await tasks.getByLabel("List").selectOption({ label: "Tasks" });
   await tasks.getByLabel(/^Add a task to/).fill("Order the badges");
   await tasks.getByRole("button", { name: "Add", exact: true }).click();
@@ -340,8 +346,8 @@ test("a room is booked, a meeting answered and a To Do task synced", async ({ pa
   await page.keyboard.press("Escape");
 
   // A meeting in the Exchange calendar with a room from the room finder.
-  await mainToolbar(page).getByRole("button", { name: "Calendar" }).click();
-  const calendar = page.getByRole("dialog", { name: "Calendar", exact: true });
+  await showView(page, "Calendar");
+  const calendar = viewRegion(page, "Calendar");
   await calendar.getByRole("button", { name: "New event" }).click();
   const editor = page.getByRole("dialog", { name: "Event", exact: true });
   await editor.getByLabel("Title").fill("Design review");
@@ -434,9 +440,9 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
     .toBe(true);
 
   // Automatic replies through the vacation editor (SetUserOofSettings).
-  await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Vacation reply" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Vacation reply");
   const vacation = settings.locator('[data-part="vacation-editor"]');
   await vacation.getByRole("combobox", { name: "Account" }).selectOption({ label: "Corp" });
   await vacation.getByRole("checkbox", { name: /Send a vacation reply/ }).check();
@@ -449,8 +455,8 @@ test("Exchange Server (EWS) mail moves, takes categories, sends, sets automatic 
 
   // An invitation in the Exchange Server calendar is answered through EWS
   // (AcceptItem), not by iMIP mail.
-  await mainToolbar(page).getByRole("button", { name: "Calendar" }).click();
-  const calendar = page.getByRole("dialog", { name: "Calendar", exact: true });
+  await showView(page, "Calendar");
+  const calendar = viewRegion(page, "Calendar");
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await calendar
     .getByRole("button", { name: /^Board review,/ })

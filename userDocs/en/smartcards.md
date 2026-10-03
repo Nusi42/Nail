@@ -21,7 +21,7 @@ available in the browser when you use Nail remotely.
 
 ## Setting it up
 
-1. In **Settings → Smartcards**, add the PKCS#11 module with its full path (**Add module**; in the desktop app **Browse…** opens the file dialog) and **Save**.
+1. In **Settings → Keys & encryption**, add the PKCS#11 module with its full path (**Add module**; in the desktop app **Browse…** opens the file dialog) and **Save**.
    Nail shows the modules it could not load and why.
 2. Insert the card. Nail lists the card with its keys and certificates:
    the algorithm, what each key may do (sign, decrypt) and, for
@@ -43,7 +43,7 @@ many wrong PINs the card locks its PIN, and you need the card's own tool
 
 **PINs are never stored.** Instead, Nail keeps the card unlocked for a
 while after you entered the PIN, so you are not asked for every message.
-Set how long in **Settings → Smartcards** (**Keep a card unlocked for**, from 0 = ask every time to 480 minutes).
+Set how long in **Settings → Keys & encryption** (**Keep a card unlocked for**, from 0 = ask every time to 480 minutes).
 Removing the card ends it at once.
 
 If you cancel the PIN prompt or the card is not inserted, the message is

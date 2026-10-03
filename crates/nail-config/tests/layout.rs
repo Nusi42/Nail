@@ -259,7 +259,8 @@ layout "Mine" extends="default" {
 "#,
     );
     // Windows not mentioned keep their default breakpoints.
-    assert_eq!(l.windows["main"].len(), 2);
+    assert_eq!(l.windows["mail"].len(), 2);
+    assert_eq!(l.windows["main"].len(), 1);
     assert!(l.windows.contains_key("composer"));
     // Actions merge field by field.
     assert_eq!(l.actions["mail.reply"].icon.as_deref(), Some("forward"));
@@ -629,7 +630,7 @@ fn shell_errors() {
             "defined twice",
         ),
         (
-            "views {\n    view \"a\" window=\"main\" badge=\"mail\"\n  }",
+            "views {\n    view \"a\" window=\"tasks\" badge=\"mail\"\n  }",
             "unread, confirmations",
         ),
         (
@@ -637,7 +638,7 @@ fn shell_errors() {
             "which the layout does not define",
         ),
         (
-            "views default=\"b\" {\n    view \"a\" window=\"main\"\n  }",
+            "views default=\"b\" {\n    view \"a\" window=\"tasks\"\n  }",
             "default view \"b\"",
         ),
         ("rail {\n    view \"ghost\"\n  }", "names view \"ghost\""),
@@ -703,17 +704,60 @@ fn shell_widgets_need_their_sections() {
 
 #[test]
 fn the_default_settings_page_keeps_every_settings_tab() {
-    // Nothing of the settings window may be lost on the settings page.
+    // Nothing of the pre-M5b settings window (its tabs) may be lost on the
+    // settings page; since WP165 the settings window is the page itself.
+    const FORMER_SETTINGS_TABS: &[&str] = &[
+        "account-settings",
+        "appearance-settings",
+        "virtual-account-editor",
+        "mcp-clients",
+        "confirmation-center",
+        "security-keys",
+        "security-identities",
+        "security-settings",
+        "security-autocrypt",
+        "security-recovery-key",
+        "security-smartcards",
+        "remote-settings",
+        "remote-users",
+        "remote-devices",
+        "remote-audit",
+        "remote-content-allows",
+        "sieve-status",
+        "exchange-rules",
+        "vacation-editor",
+        "junk-settings",
+        "notification-settings",
+        "sync-folder-policies",
+        "plugin-manager",
+        "update-settings",
+        "desktop-settings",
+        "default-apps",
+        "import-export",
+        "backup-restore",
+        "diagnostics",
+        "toolbar",
+        "config-errors",
+        "toolbar-editor",
+        "key-binding-editor",
+        "column-editor",
+    ];
     let l = nail_config::default_layout();
     let mut page = Vec::new();
     for section in l.settings.iter().flat_map(|g| g.sections.iter()) {
         page.extend(widgets(&section.root).into_iter().map(|(kind, _)| kind));
     }
-    for bp in &l.windows["settings"] {
-        for (kind, _) in widgets(&bp.root) {
-            assert!(page.contains(&kind), "{kind} is not on the settings page");
-        }
+    for kind in FORMER_SETTINGS_TABS {
+        assert!(
+            page.iter().any(|k| k == kind),
+            "{kind} is not on the settings page"
+        );
     }
+    let window: Vec<String> = l.windows["settings"]
+        .iter()
+        .flat_map(|bp| widgets(&bp.root).into_iter().map(|(kind, _)| kind))
+        .collect();
+    assert_eq!(window, ["settings-page"]);
     let groups: Vec<&str> = l.settings.iter().map(|g| g.id.as_str()).collect();
     assert_eq!(groups, nail_api::views::SETTINGS_GROUPS);
 }

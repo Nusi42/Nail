@@ -67,7 +67,7 @@ for (const variant of variants) {
     for (const screen of screens) {
       await test.step(screen.id, async () => {
         try {
-          const shot = await openAndShoot(page, nail.url, screen);
+          const shot = await openAndShoot(page, nail, screen);
           await expectDensity(page, variant.density);
           const entry = compareWithBaseline(test.info(), variant, screen, shot);
           if (entry.status === "error") failures.push(`${screen.id}: ${entry.message}`);

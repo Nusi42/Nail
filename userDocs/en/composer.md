@@ -110,7 +110,7 @@ Replying marks the original message as answered.
 
 ## The outbox
 
-**Outbox** in the toolbar (or `g` then `o`) lists messages waiting to be
+**Outbox** (in the command palette, as a favorite of the folder pane if you add it, or `g` then `o`) lists messages waiting to be
 sent: scheduled ones, ones in their undo-send delay, and ones that failed.
 **Edit** takes a message back into the composer; **Send now** sends it at
 once, for example after a failure has been fixed. Below them, **Drafts**

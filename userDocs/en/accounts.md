@@ -8,7 +8,7 @@ prefer to edit it by hand.
 
 ## Add an account
 
-Click **Add account** in the toolbar (or in **Settings → Accounts**).
+Open **Settings → Accounts** and choose **Add account** (or run **Add account** from the command palette, Ctrl+K).
 
 1. **Address.** Enter your name and email address and click **Continue**.
    Nail looks up the server settings: from your provider's own
@@ -130,7 +130,7 @@ moving or deleting it happens there.
 ## Virtual accounts
 
 A virtual account is your own combination of accounts — for example "Work"
-made of two work addresses. **Settings → Virtual accounts → New virtual
+made of two work addresses. **Settings → Accounts → New virtual
 account**:
 
 - **Name** and **Accounts in it.**

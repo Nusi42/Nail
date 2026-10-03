@@ -68,6 +68,8 @@ describe("settings page (M5b)", () => {
       ),
     ).toEqual(["Accounts", "Appearance", "Keys & encryption", "Agents (MCP)"]);
     expect(within(nav()).getByRole("group", { name: "Security" })).toBeInTheDocument();
+    // A named search landmark: section widgets bring search landmarks too.
+    expect(screen.getByRole("search", { name: "Search settings" })).toBeInTheDocument();
     const current = within(nav()).getByRole("button", { current: "page" });
     expect(current).toHaveTextContent("Accounts");
     expect(title()).toHaveTextContent("Accounts");
@@ -249,9 +251,8 @@ describe("settings actions (M5b)", () => {
     expect(action?.enabled?.(ctx, ["nope"])).toBe(false);
     expect(action?.enabled?.(ctx, [])).toBe(false);
     await action?.run(ctx, ["security-smartcards"]);
-    // The default layout has a `settings` view; without a view host the view
-    // opens as its window.
-    expect(env.store.getState().windows).toEqual(["settings"]);
+    // The default layout's view host shows the settings view (WP165).
+    expect(env.store.getState().windows).toEqual([]);
     expect(env.store.getState().activeView).toBe("settings");
     expect(settingsStoreFor(env.store).getState().reveal).toMatchObject({
       section: "keys",
@@ -299,7 +300,8 @@ describe("settings actions (M5b)", () => {
       void action?.run(ctx, []);
     });
     expect(screen.getByRole("searchbox", { name: "Search settings" })).toHaveFocus();
-    expect(env.store.getState().windows).toEqual(["settings"]);
+    expect(env.store.getState().activeView).toBe("settings");
+    expect(env.store.getState().windows).toEqual([]);
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "dark" } });
     expect(settingsStoreFor(env.store).getState().query).toBe("dark");
   });

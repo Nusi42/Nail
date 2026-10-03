@@ -12,7 +12,7 @@
  * re-fetches) the real one.
  */
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { errorMessageIdOf, type NailClient } from "../../api/client";
 import type {
   ConfigBackup,
@@ -28,6 +28,7 @@ import type { DialogProps } from "../../layout/dialogRegistry";
 import { queryKeys, useClient, type AppConfig } from "../../state/queries";
 import { chooseAll, choiceList, differs, summarize, takeOf, type Choices } from "./merge";
 import { MERGE_FILES } from "./names";
+import { customizationStore } from "./state";
 import { DATE_TIME_SECONDS, formatDateTime } from "../../i18n/format";
 
 /** Delay before the live preview follows a change of choices (ms). */
@@ -300,8 +301,10 @@ export function MergeDialog({ close }: DialogProps) {
   const queryClient = useQueryClient();
   const [live] = useState(() => new LivePreview(queryClient));
   const fieldId = useId();
-  const [file, setFile] = useState<ConfigFile>("theme");
-  const [incoming, setIncoming] = useState("");
+  // A prefill (the M5b layout offer) opens the dialog on that file.
+  const [prefill] = useState(() => customizationStore.getState().takeMergePrefill());
+  const [file, setFile] = useState<ConfigFile>(prefill?.file ?? "theme");
+  const [incoming, setIncoming] = useState(prefill?.incoming ?? "");
   const [stage, setStage] = useState<Stage>({ kind: "input" });
   const [choices, setChoices] = useState<Choices>({});
   const [showUnchanged, setShowUnchanged] = useState(false);
@@ -366,6 +369,16 @@ export function MergeDialog({ close }: DialogProps) {
       setBusy(false);
     }
   };
+
+  // A prefilled file is compared at once (once; after the first render).
+  const compared = useRef(false);
+  useEffect(() => {
+    if (prefill === null || compared.current) return;
+    compared.current = true;
+    void Promise.resolve().then(compare);
+    // `compare` reads the state of this render; it runs once for the prefill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const apply = async () => {
     if (!preview) return;

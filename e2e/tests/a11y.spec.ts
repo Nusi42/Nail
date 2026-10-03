@@ -1,7 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
-import { readerAction } from "../support/views";
+import { rpcOk } from "../support/remote";
+import {
+  newMessageButton,
+  openSettings,
+  readerAction,
+  readerToolbar,
+  runFromPalette,
+  settingsNav,
+  showView,
+} from "../support/views";
 
 /**
  * Every axe violation, whatever its impact: the scan must pass completely.
@@ -71,7 +80,6 @@ test.describe("windows and dialogs of demo-multi", () => {
     test.setTimeout(120_000);
     await page.goto(server.url);
     await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
-    const toolbar = page.getByRole("toolbar", { name: "Main toolbar" });
     const close = async (name: string) => {
       await page
         .getByRole("dialog", { name })
@@ -82,7 +90,7 @@ test.describe("windows and dialogs of demo-multi", () => {
     };
 
     // The rich composer, in each mode.
-    await toolbar.getByRole("button", { name: "New message" }).click();
+    await newMessageButton(page).click();
     const composer = page.getByRole("dialog", { name: "New message" });
     await expect(composer).toBeVisible();
     expect(await violations(page)).toEqual([]);
@@ -96,25 +104,25 @@ test.describe("windows and dialogs of demo-multi", () => {
     await expect(composer).toBeHidden();
 
     // Outbox, filter rules, account setup.
-    await toolbar.getByRole("button", { name: "Outbox" }).click();
+    await runFromPalette(page, "outbox", "Outbox");
     await expect(page.getByRole("dialog", { name: "Outbox" })).toBeVisible();
     expect(await violations(page)).toEqual([]);
     await close("Outbox");
 
-    await toolbar.getByRole("button", { name: "Filter rules" }).click();
+    await runFromPalette(page, "filter rules", "Filter rules");
     const rules = page.getByRole("dialog", { name: "Filter rules" });
     await rules.getByRole("button", { name: "New rule" }).click();
     await expect(rules.getByRole("form", { name: "Rule" })).toBeVisible();
     expect(await violations(page)).toEqual([]);
     await close("Filter rules");
 
-    await toolbar.getByRole("button", { name: "Add account" }).click();
+    await runFromPalette(page, "add account", "Add account");
     await expect(page.getByRole("dialog", { name: "Add account" })).toBeVisible();
     expect(await violations(page)).toEqual([]);
     await close("Add account");
 
     // M2c: the snoozed list, the snooze picker and a folder's sync dialog.
-    await toolbar.getByRole("button", { name: "Snoozed messages" }).click();
+    await runFromPalette(page, "snoozed", "Snoozed messages");
     await expect(page.getByRole("dialog", { name: "Snoozed messages" })).toBeVisible();
     expect(await violations(page), "snoozed").toEqual([]);
     await close("Snoozed messages");
@@ -129,7 +137,10 @@ test.describe("windows and dialogs of demo-multi", () => {
       .getByRole("dialog", { name: "Snooze" })
       .getByRole("button", { name: "Cancel" })
       .click();
-    await page.getByRole("treeitem", { name: /^INBOX/ }).click({ button: "right" });
+    await page
+      .getByRole("treeitem", { name: /^INBOX/ })
+      .first()
+      .click({ button: "right" });
     await expect(page.getByRole("menu")).toBeVisible();
     expect(await violations(page), "folder menu").toEqual([]);
     await page.getByRole("menu").getByRole("menuitem", { name: "Synchronization…" }).click();
@@ -150,44 +161,69 @@ test.describe("windows and dialogs of demo-multi", () => {
     expect(await violations(page), "move").toEqual([]);
     await close("Move to folder");
 
-    // Every settings tab (M2c: server rules, vacation, junk, notifications,
-    // synchronization, and the Customize editors).
-    await toolbar.getByRole("button", { name: "Settings" }).click();
-    const settings = page.getByRole("dialog", { name: "Settings" });
-    for (const tab of [
-      "Accounts",
-      "Virtual accounts",
-      "MCP clients",
-      "Server rules",
-      "Vacation reply",
-      "Junk mail",
-      "Notifications",
-      "Synchronization",
-      "Keys and certificates",
-      "Signing and encryption",
-      "Data protection",
-      "Autocrypt",
-      "Remote access",
-      "Remote users",
-      "Devices",
-      "Security log",
-      "Privacy",
-      "Customize",
-      "Toolbars",
-      "Keys",
-      "Columns",
-    ]) {
-      await settings.getByRole("tab", { name: tab, exact: true }).click();
-      await expect(settings.getByRole("tab", { name: tab, exact: true })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      expect(await violations(page), tab).toEqual([]);
+    // Every settings section (M5b: the settings page holds every former tab).
+    const settings = await openSettings(page);
+    const sections = await settingsNav(settings)
+      .getByRole("button")
+      .evaluateAll((items) => items.map((item) => item.textContent?.trim() ?? ""));
+    expect(sections.length).toBeGreaterThanOrEqual(15);
+    for (const section of sections) {
+      await openSettings(page, section);
+      expect(await violations(page), section).toEqual([]);
     }
-    await settings.getByRole("tab", { name: "Customize", exact: true }).click();
-    // The merge dialog, opened from the Customize tab.
+    await openSettings(page, "Layout & toolbars");
+    // The merge dialog, opened from the Layout & toolbars section.
     await settings.getByRole("button", { name: "Apply a theme or layout…", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Apply a theme or layout" })).toBeVisible();
     expect(await violations(page)).toEqual([]);
   });
+});
+
+/**
+ * M5b: every built-in theme (Frost, Sage, Graphite, Nocturne, High
+ * contrast), Follow Windows off, over the new shell: the mail view with a
+ * message and the reader's More menu open, the calendar view, the settings
+ * page (colour contrast included, which jsdom cannot check).
+ */
+test.describe("every built-in theme", () => {
+  for (const theme of ["frost", "sage", "graphite", "nocturne", "high-contrast"] as const) {
+    test(`${theme} has no accessibility violations in the views`, async ({ page }) => {
+      test.setTimeout(120_000);
+      const server = await startNail({ seed: "demo" });
+      try {
+        await rpcOk(server, { type: "SetTheme", theme_id: theme }, "Themes");
+        await rpcOk(
+          server,
+          {
+            type: "SetThemePreferences",
+            preferences: {
+              follow_system: false,
+              light: "frost",
+              dark: "graphite",
+              density: "comfortable",
+              overrides: {},
+            },
+          },
+          "Themes",
+        );
+        await page.goto(server.url);
+        const rows = page.locator('[data-part="message-list.row"]');
+        await rows.filter({ hasText: "Welcome to Nail" }).click();
+        await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(
+          "Welcome to Nail",
+        );
+        expect(await violations(page), `${theme}: mail`).toEqual([]);
+        await readerToolbar(page).getByRole("button", { name: "More", exact: true }).click();
+        await expect(page.getByRole("menu")).toBeVisible();
+        expect(await violations(page), `${theme}: More menu`).toEqual([]);
+        await page.keyboard.press("Escape");
+        await showView(page, "Calendar");
+        expect(await violations(page), `${theme}: calendar`).toEqual([]);
+        await openSettings(page, "Appearance");
+        expect(await violations(page), `${theme}: settings`).toEqual([]);
+      } finally {
+        await server.stop();
+      }
+    });
+  }
 });

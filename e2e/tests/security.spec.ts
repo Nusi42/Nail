@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { control, repoRoot, startNail, type NailServer } from "../support/nail";
+import { openSettingsTab, sectionInbox, showView, viewRegion } from "../support/views";
 
 /**
  * End-to-end encryption and data protection (M2a, ADR 0034) against the
@@ -84,7 +85,9 @@ async function sendProtected(page: Page, dialog: Locator) {
  * account, shows that account and returns the new message's row.
  */
 async function deliverHome(page: Page, raw: string): Promise<Locator> {
-  await page.locator('[data-part="account-switcher.item"][data-kind="pop3"]').click();
+  await sectionInbox(
+    page.locator('[data-part="folder-tree.section"][data-account-kind="pop3"]'),
+  ).click();
   const rows = page.locator('[data-part="message-list.row"]');
   await expect(rows).toHaveCount(3);
   await control(server, "pop3-deliver", { raw });
@@ -267,12 +270,9 @@ test("the sender check badge and a look-alike link warning", async ({ page }) =>
 test("sender checks count only for a receiving server the user configured", async ({ page }) => {
   await openApp(page);
   const openAccountSettings = async () => {
-    await page
-      .getByRole("toolbar", { name: "Main toolbar" })
-      .getByRole("button", { name: "Settings" })
-      .click();
-    const settings = page.getByRole("dialog", { name: "Settings" });
-    await settings.getByRole("tab", { name: "Accounts", exact: true }).click();
+    await showView(page, "Settings");
+    const settings = viewRegion(page, "Settings");
+    await openSettingsTab(page, "Accounts");
     await settings
       .getByRole("list", { name: "Accounts" })
       .getByRole("button", { name: /Work/ })
@@ -293,8 +293,7 @@ test("sender checks count only for a receiving server the user configured", asyn
   await expect(
     settings.getByText("Your recent mail names no receiving server Nail could suggest."),
   ).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(settings).toBeHidden();
+  await showView(page, "Mail");
 
   const raw = [
     "Received: from mail.example.org by mx.nail.example; Tue, 29 Sep 2026 08:00:00 +0000",
@@ -329,7 +328,8 @@ test("sender checks count only for a receiving server the user configured", asyn
     .fill("mx.nail.example");
   await settings.getByRole("button", { name: "Save" }).click();
   await expect(settings.getByText("Settings saved.")).toBeVisible();
-  await page.keyboard.press("Escape");
+  // Back to Mail first: the app reopens the last view after a reload.
+  await showView(page, "Mail");
   await page.reload();
   await page
     .locator('[data-part="message-list.row"]')
@@ -348,16 +348,15 @@ test("encryption at rest can be switched on and off with the data intact", async
   const subject = page.locator('[data-part="message-view.header.subject"]');
   await expect(subject).toContainText("Release notes for M1");
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Data protection" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Data protection");
   const state = settings.locator('[data-part="security-vault.state"]');
   await expect(state).toHaveAttribute("data-state", "plain");
   await settings.getByRole("button", { name: "Turn on encryption at rest" }).click();
   await settings.getByRole("button", { name: "Encrypt now" }).click();
   await expect(state).toHaveAttribute("data-state", "encrypted", { timeout: 30_000 });
-  await page.keyboard.press("Escape");
-  await expect(settings).toBeHidden();
+  await showView(page, "Mail");
 
   // Everything still reads and searches.
   await page
@@ -374,12 +373,12 @@ test("encryption at rest can be switched on and off with the data intact", async
   ).not.toHaveCount(0, { timeout: 20_000 });
   await search.press("Escape");
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  await settings.getByRole("tab", { name: "Data protection" }).click();
+  await showView(page, "Settings");
+  await openSettingsTab(page, "Data protection");
   await settings.getByRole("button", { name: "Turn off" }).click();
   await settings.getByRole("button", { name: "Turn off and decrypt" }).click();
   await expect(state).toHaveAttribute("data-state", "plain", { timeout: 30_000 });
-  await page.keyboard.press("Escape");
+  await showView(page, "Mail");
   await page
     .locator('[data-part="message-list.row"]')
     .filter({ hasText: "Release notes" })
@@ -394,15 +393,18 @@ test("an MCP client reads encrypted content only with its separate grant", async
   await dialog.getByRole("checkbox", { name: "Encrypt" }).check();
   await sendProtected(page, dialog);
   // The Sent copy is encrypted to the sender too.
-  await page.locator('[data-part="folder-tree.item"][data-role="sent"]').click();
+  await page
+    .locator('[data-part="folder-tree.section"][data-account-kind="imap"]')
+    .locator('[data-part="folder-tree.item"][data-role="sent"]')
+    .click();
   const sent = page.locator('[data-part="message-list.row"]').filter({ hasText: "..." }).first();
   await expect(sent).toBeVisible({ timeout: 20_000 });
   const messageId = await sent.getAttribute("data-message");
   expect(messageId).toBeTruthy();
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "MCP clients" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "MCP clients");
   const serverLine = settings.locator('[data-part="mcp-clients.server"]');
   await expect(serverLine).toHaveAttribute("data-state", "running");
   const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];

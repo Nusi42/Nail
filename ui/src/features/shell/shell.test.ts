@@ -9,6 +9,7 @@ import type { LayoutNode, ResolvedLayout } from "../../api/generated";
 import { normalizeLayout } from "../../api/normalize";
 import { createEnv } from "../../test/harness";
 import { actions, showView } from ".";
+import { fallbackLayout } from "./testing";
 
 function context(layout: ResolvedLayout): ActionContext {
   const env = createEnv();
@@ -26,7 +27,7 @@ const run = (ctx: ActionContext, id: string, ...args: string[]) => actions[id]?.
 
 describe("shell actions (M5b contract stage)", () => {
   it("opens a view's window while the layout has no view host", () => {
-    const ctx = context(normalizeLayout(defaultLayoutJson));
+    const ctx = context(fallbackLayout());
     expect(actions["view.show"]?.enabled?.(ctx, ["calendar"])).toBe(true);
     expect(actions["view.show"]?.enabled?.(ctx, ["ghost"])).toBe(false);
     expect(actions["view.show"]?.enabled?.(ctx, [])).toBe(false);
@@ -64,5 +65,15 @@ describe("shell actions (M5b contract stage)", () => {
     void run(ctx, "view.show", "tasks");
     expect(ctx.store.getState().activeView).toBe("tasks");
     expect(ctx.store.getState().windows).toEqual([]);
+  });
+
+  it("the default layout hosts the views (WP165)", () => {
+    const ctx = context(normalizeLayout(defaultLayoutJson));
+    void run(ctx, "view.show", "calendar");
+    expect(ctx.store.getState().activeView).toBe("calendar");
+    expect(ctx.store.getState().windows).toEqual([]);
+    // The old window aliases show the view, too (no dialog copy).
+    expect(ctx.layout.actions["pim.contacts.open"]?.alias_of).toBe("view.show");
+    expect(ctx.layout.actions["pim.contacts.open"]?.args).toEqual(["contacts"]);
   });
 });

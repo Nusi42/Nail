@@ -7,7 +7,7 @@ at any time (what was already imported or written stays). At the end you
 get a **report**: what was imported or written, and every item that was
 changed or left out, with the reason.
 
-Start an import or export from **Settings → Import and export**
+Start an import or export from **Settings → Data & backup**
 (**Import…**, **Export…**), from the welcome screen, or from the
 [command palette](command-palette.md). In the desktop app **Browse…** opens
 the Windows file dialog; in the browser you type the full path.

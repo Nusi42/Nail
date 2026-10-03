@@ -12,15 +12,21 @@ contrast and without animations.
 - In the **message list**, `j` / `k` or the arrow keys select the next or
   previous message. In the **folder list**, the arrow keys, Home and End
   move between folders.
+- On the **navigation rail**, the up and down arrow keys, Home and End move
+  between Mail, Calendar, Contacts, Tasks and the rest; Enter or Space
+  shows that view. **Ctrl+1** … **Ctrl+4** (and `g` then `m` for Mail)
+  switch views from anywhere, and the focus moves into the view.
+- In the **folder pane**, the arrow keys move through Favorites, the account
+  sections and their folders; Left and Right fold or unfold a section.
 - In a **toolbar**, the left and right arrow keys, Home and End move between
-  its buttons.
+  its buttons. Its **More** button opens the rest of the actions as a menu.
 - **Tabs** (for example in the settings) switch with the left and right
   arrow keys, Home and End.
 - **Dividers** between panes move with the arrow keys (Shift for bigger
   steps).
 - Every other action has a shortcut or can get one: see
   [Reading and organizing mail](mail.md#keyboard-shortcuts) and
-  Settings → Customize → Keys (below).
+  Settings → Keyboard shortcuts (below).
 
 ## Context menus
 
@@ -48,7 +54,7 @@ are ordinary shortcuts of the action `menu.context`, so you can change them.
 
 ## Changing shortcuts, toolbars and list columns
 
-Settings → Customize has three editors. Each writes your change into
+Settings → Layout & toolbars has three editors. Each writes your change into
 `layout.kdl`, keeping the rest of the file as it is (see
 [Customizing](customization.md#editing-toolbars-shortcuts-and-columns)):
 

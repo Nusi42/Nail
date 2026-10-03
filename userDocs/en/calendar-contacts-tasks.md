@@ -11,23 +11,24 @@ the server in the background, also when you are offline for a while.
 
 ## Opening the calendar, contacts and tasks
 
-In the default layout the main toolbar has **Calendar**, **Contacts** and
-**Tasks** (keys **g c**, **g p** and **g t**). The calendar window shows the
-mini-month, your calendars and tasks beside the calendar views, with a
-toolbar for **Sync calendars and contacts**, **New task**, **New contact**,
-**Import calendar or contacts** and **Calendars and address books**. In the
-calendar window the keys **t** (today), **n** / **p** (next / previous),
-**d**, **w**, **m**, **y**, **a** (day, week, month, year, agenda) and **c**
-(new event) work.
-
-Nail starts with a calendar (**My calendar**), a task list (**My tasks**)
-and an address book (**My contacts**) on this computer, plus **Collected
-addresses** for addresses you wrote to.
+**Calendar**, **Contacts** and **Tasks** are views of their own: click them
+on the navigation rail, or press **Ctrl+2**, **Ctrl+3** and **Ctrl+4**
+(also **g c**, **g p** and **g t**; **Ctrl+1** or **g m** goes back to
+Mail). A view stays as you left it when you switch away and back. The
+calendar view shows the mini-month, your calendars and tasks beside the
+calendar views, with a toolbar for **Find a time**, **New task**, **New
+contact** and **Sync calendars and contacts**; printing, importing and
+**Calendars and address books** are under its **More**. In the calendar
+view the keys **t** (today), **n** / **p** (next / previous), **d**, **w**,
+**m**, **y**, **a** (day, week, month, year, agenda) and **c** (new event)
+work.
 
 ## Calendar views
 
-A calendar widget shows one of these views. The buttons at the top switch
-between them, and **Previous**, **Today** and **Next** move through time.
+A calendar widget shows one of these views. The toolbar shows **Today**,
+**Previous** and **Next**, the days shown, and a switch for the views (Day,
+Week, Month, Year, Agenda, Free time). Events show their title, time and
+place on a light tint of their calendar's colour.
 
 | View | What it shows |
 | --- | --- |
@@ -201,10 +202,16 @@ and its subtasks.
 
 ## Calendars, address books and subscriptions
 
-The **calendar list** shows your calendars and task lists by where they come
-from. Untick a calendar to hide it from the views (it still syncs and
-reminds). **Settings** renames it, changes its colour and turns its reminders
-on or off. You can create calendars and task lists on this computer.
+The calendar list shows your calendars and task lists by where they come
+from: this computer, each account, and your subscriptions together. Click a
+calendar's colour square to hide or show it in the views (hidden calendars
+still sync and remind). Its **…** menu opens **Settings…** (name, colour,
+reminders), hides or shows it, picks a colour, and removes it (a
+subscription is unsubscribed; Nail asks first). The **+** next to a group
+creates a **New calendar** or **New task list** there (on this computer and
+on CalDAV servers), or adds a **New subscription…**, and opens **Calendars
+and address books…** and **Import…**. The same is in **Settings → Calendar &
+contacts**.
 
 **Calendars and address books…** shows every source with its state (up to
 date, syncing, offline, sign-in failed) and the last sync; **Sync now** and
@@ -318,22 +325,24 @@ The widgets and their options (all optional):
 
 | Widget | Options |
 | --- | --- |
-| `calendar` | `view` (`day`, `multi-day`, `week`, `work-week`, `month`, `year`, `agenda`, `free-time`), `views` (the views the switcher offers, separated by spaces), `days` (days of `multi-day`, `agenda`, `free-time`), `calendars` (calendar ids; default all shown), `time-zone`, `secondary-zone` (a second hour column), `hour-start`, `hour-end`, `scroll-to` (hour shown first), `max-events` (month), `duration` (free-time minutes), `work-start`, `work-end` (free-time hours), `header=#false` (no navigation bar) |
+| `calendar` | `view` (`day`, `multi-day`, `week`, `work-week`, `month`, `year`, `agenda`, `free-time`), `views` (the views the switcher offers, separated by spaces), `days` (days of `multi-day`, `agenda`, `free-time`), `calendars` (calendar ids; default all shown), `time-zone`, `secondary-zone` (a second hour column), `hour-start`, `hour-end`, `scroll-to` (hour shown first), `max-events` (month), `duration` (free-time minutes), `work-start`, `work-end` (free-time hours), `header=#false` (no navigation bar), `view-switch` (`segmented`, the default, or `menu`: a drop-down) |
 | `mini-month` | `time-zone`, `calendars` |
 | `agenda` | `days` (default 1: today), `time-zone`, `calendars` |
 | `task-list` | `lists` (task list ids), `show-completed`, `sort` (`due`, `priority`, `title`, `manual`), `quick-add` |
 | `contact-list` | `address-books` (ids), `page-size` |
 | `contact-card` | — |
-| `calendar-list` | — |
+| `calendar-list` | `actions` (`menu`, the default: a **…** menu per calendar, or `buttons`), `show-sources` (`#false` = one list without source headers) |
+| `pim-settings` | — (the settings page's Calendar & contacts section) |
 
 Actions for toolbars, menus and keys: `calendar.goto-today`,
 `calendar.next`, `calendar.previous`, `calendar.view "month"`,
 `calendar.new-event`, `calendar.calendars`, `calendar.event-from-message`,
 `tasks.new`, `tasks.from-message`, `contacts.new`, `contacts.groups`,
-`contacts.merge`, `pim.import`, `pim.sources`, `pim.sync`, and the window
-openers `pim.calendar.open`, `pim.contacts.open`, `pim.tasks.open`. The
-default layout's windows are `calendar`, `contacts` and `tasks`, with the
-toolbar `calendar`. Key bindings can use the contexts `calendar`,
+`contacts.merge`, `pim.import`, `pim.sources`, `pim.sync`, and
+`pim.calendar.open`, `pim.contacts.open`, `pim.tasks.open` (they show the
+view; `view.show "calendar"` does the same). The default layout's views show
+the windows `calendar`, `contacts` and `tasks`, with the toolbar
+`calendar`. Key bindings can use the contexts `calendar`,
 `contacts` and `tasks`:
 
 ```kdl

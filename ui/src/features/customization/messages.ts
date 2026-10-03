@@ -24,7 +24,12 @@ export const prefixes: readonly string[] = [
  * Literals with those prefixes that are not message ids: the `toolbar-order`
  * layout patch (the global `toolbar-` prefix catches it).
  */
-export const notMessages: readonly string[] = ["toolbar-order", "toolbar-editor"];
+export const notMessages: readonly string[] = [
+  "toolbar-order",
+  "toolbar-editor",
+  // The part of the M5b layout offer (`layout-` is a message prefix).
+  "layout-offer",
+];
 
 const SECTIONS: MergeSection[] = [
   "header",

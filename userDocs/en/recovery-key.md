@@ -41,7 +41,7 @@ A recovery key is a second way in that only you hold.
 
 ## Creating the recovery key
 
-In **Settings → Recovery key**, choose **Create recovery key**. Nail shows it
+In **Settings → Privacy & data protection**, choose **Create recovery key**. Nail shows it
 **once**, as 56 characters in groups of four, for example:
 
 ```
@@ -90,6 +90,6 @@ lost. Keep backups as well.
 
 ## Removing the recovery key
 
-You can remove the recovery key in **Settings → Recovery key**. Turning
+You can remove the recovery key in **Settings → Privacy & data protection**. Turning
 encryption at rest off removes it automatically, because the key it
 protects no longer exists.

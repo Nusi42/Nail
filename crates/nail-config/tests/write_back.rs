@@ -93,22 +93,19 @@ fn a_window_from_the_defaults_is_copied_before_it_changes() {
     let out = apply(
         Some("layout \"Mine\" extends=\"default\" {\n    // nothing yet\n}\n"),
         &[LayoutPatch::SplitSizes {
-            node: at("main", 0, &[2]),
+            node: at("mail", 0, &[]),
             sizes: vec!["200px".into(), "1fr".into(), "1fr".into()],
         }],
     );
     golden("copy_default_window", &out);
     let layout = parse_layout_all(&out, "layout.kdl").unwrap();
     let defaults = default_layout();
-    assert_eq!(layout.windows["main"].len(), defaults.windows["main"].len());
-    // Only the addressed split changed.
-    let json = |l: &nail_api::ResolvedLayout| serde_json::to_value(&l.windows["main"]).unwrap();
+    assert_eq!(layout.windows["mail"].len(), defaults.windows["mail"].len());
+    // Only the addressed split (the mail window's panes, M5b) changed.
+    let json = |l: &nail_api::ResolvedLayout| serde_json::to_value(&l.windows["mail"]).unwrap();
     let (mut ours, theirs) = (json(&layout), json(&defaults));
-    assert_eq!(
-        ours[0]["root"]["children"][2]["sizes"],
-        json!(["200px", "1fr", "1fr"])
-    );
-    ours[0]["root"]["children"][2]["sizes"] = theirs[0]["root"]["children"][2]["sizes"].clone();
+    assert_eq!(ours[0]["root"]["sizes"], json!(["200px", "1fr", "1fr"]));
+    ours[0]["root"]["sizes"] = theirs[0]["root"]["sizes"].clone();
     strip_sources(&mut ours);
     let mut theirs = theirs;
     strip_sources(&mut theirs);
@@ -131,23 +128,22 @@ fn the_narrow_breakpoint_is_addressed_by_index() {
     let out = apply(
         None,
         &[LayoutPatch::SplitSizes {
-            node: at("main", 1, &[]),
+            // The list pane inside the narrow mail window's tabs.
+            node: at("mail", 1, &[1]),
             sizes: vec![
                 "auto".into(),
                 "auto".into(),
                 "auto".into(),
+                "auto".into(),
                 "2fr".into(),
-                "auto".into(),
-                "auto".into(),
-                "auto".into(),
             ],
         }],
     );
     let layout = parse_layout_all(&out, "layout.kdl").unwrap();
-    let root = serde_json::to_value(&layout.windows["main"][1].root).unwrap();
+    let root = serde_json::to_value(&layout.windows["mail"][1].root).unwrap();
     assert_eq!(
-        root["sizes"],
-        json!(["auto", "auto", "auto", "2fr", "auto", "auto", "auto"])
+        root["children"][1]["sizes"],
+        json!(["auto", "auto", "auto", "auto", "2fr"])
     );
     golden("new_file_narrow_stack", &out);
 }

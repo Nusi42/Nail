@@ -3,7 +3,7 @@
   "windows": {
     "main": [
       {
-        "min_width": 900,
+        "min_width": null,
         "max_width": null,
         "root": {
           "type": "stack",
@@ -11,24 +11,11 @@
           "label": null,
           "sizes": [
             "auto",
-            "auto",
             "1fr",
-            "auto",
             "auto",
             "auto"
           ],
           "children": [
-            {
-              "type": "widget",
-              "id": "main-toolbar",
-              "label": "@toolbar.main",
-              "kind": "toolbar",
-              "options": {
-                "toolbar": "main"
-              },
-              "rows": [],
-              "source": null
-            },
             {
               "type": "widget",
               "id": "config-errors",
@@ -42,263 +29,35 @@
             },
             {
               "type": "split",
-              "id": "panes",
+              "id": "shell",
               "label": null,
               "orientation": "horizontal",
               "sizes": [
-                "240px",
-                "1fr",
-                "1.4fr"
+                "auto",
+                "1fr"
               ],
-              "min_sizes": [
-                "160px",
-                "280px",
-                "320px"
-              ],
-              "max_sizes": [
-                "480px",
-                null,
-                null
-              ],
-              "collapsible": [
-                true,
-                false,
-                true
-              ],
-              "resizable": true,
+              "min_sizes": [],
+              "max_sizes": [],
+              "collapsible": [],
+              "resizable": false,
               "children": [
                 {
-                  "type": "stack",
-                  "id": "sidebar",
-                  "label": "@layout.pane.folders",
-                  "sizes": [
-                    "auto",
-                    "auto",
-                    "1fr",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "search",
-                      "label": null,
-                      "kind": "search-bar",
-                      "options": {
-                        "scope": "account"
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "accounts",
-                      "label": null,
-                      "kind": "account-switcher",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "folders",
-                      "label": null,
-                      "kind": "folder-tree",
-                      "options": {
-                        "show-unread": true
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "gmail-labels",
-                      "label": null,
-                      "kind": "label-list",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "exchange-mailboxes",
-                      "label": null,
-                      "kind": "exchange-mailboxes",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "exchange-categories",
-                      "label": null,
-                      "kind": "exchange-categories",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "smart-folders",
-                      "label": "@saved-search-label",
-                      "kind": "smart-folders",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    }
-                  ]
+                  "type": "widget",
+                  "id": "nav-rail",
+                  "label": null,
+                  "kind": "nav-rail",
+                  "options": {},
+                  "rows": [],
+                  "source": null
                 },
                 {
-                  "type": "stack",
-                  "id": "list-pane",
-                  "label": "@layout.pane.messages",
-                  "sizes": [
-                    "auto",
-                    "auto",
-                    "auto",
-                    "1fr"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "automatic-replies",
-                      "label": null,
-                      "kind": "automatic-replies-banner",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "gmail-categories",
-                      "label": null,
-                      "kind": "category-tabs",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "exchange-focused",
-                      "label": null,
-                      "kind": "focused-tabs",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "list",
-                      "label": null,
-                      "kind": "message-list",
-                      "options": {
-                        "page-size": 100
-                      },
-                      "rows": [
-                        "{from.name}  {date | relative}",
-                        "{subject}",
-                        "{preview}"
-                      ],
-                      "source": null
-                    }
-                  ]
-                },
-                {
-                  "type": "stack",
-                  "id": "reader",
-                  "label": "@layout.pane.message",
-                  "sizes": [
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "1fr"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "reader-toolbar",
-                      "label": null,
-                      "kind": "toolbar",
-                      "options": {
-                        "toolbar": "reader"
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "thread",
-                      "label": null,
-                      "kind": "thread-view",
-                      "options": {
-                        "expand": "none"
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-security",
-                      "label": null,
-                      "kind": "security-message",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-warnings",
-                      "label": null,
-                      "kind": "security-warnings",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-remote-content",
-                      "label": null,
-                      "kind": "remote-content",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-junk",
-                      "label": null,
-                      "kind": "junk-verdict",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-body-status",
-                      "label": null,
-                      "kind": "sync-message-body",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message",
-                      "label": null,
-                      "kind": "message-view",
-                      "options": {
-                        "headers": "from to cc date"
-                      },
-                      "rows": [],
-                      "source": null
-                    }
-                  ]
+                  "type": "widget",
+                  "id": "view-host",
+                  "label": null,
+                  "kind": "view-host",
+                  "options": {},
+                  "rows": [],
+                  "source": null
                 }
               ]
             },
@@ -321,15 +80,256 @@
               "options": {},
               "rows": [],
               "source": null
+            }
+          ]
+        }
+      }
+    ],
+    "mail": [
+      {
+        "min_width": 900,
+        "max_width": null,
+        "root": {
+          "type": "split",
+          "id": "panes",
+          "label": null,
+          "orientation": "horizontal",
+          "sizes": [
+            "260px",
+            "1fr",
+            "1.4fr"
+          ],
+          "min_sizes": [
+            "200px",
+            "300px",
+            "320px"
+          ],
+          "max_sizes": [
+            "480px",
+            null,
+            null
+          ],
+          "collapsible": [
+            true,
+            false,
+            true
+          ],
+          "resizable": true,
+          "children": [
+            {
+              "type": "stack",
+              "id": "sidebar",
+              "label": "@layout.pane.folders",
+              "sizes": [
+                "1fr",
+                "auto",
+                "auto",
+                "auto"
+              ],
+              "children": [
+                {
+                  "type": "widget",
+                  "id": "folders",
+                  "label": null,
+                  "kind": "folder-tree",
+                  "options": {
+                    "account-colors": true,
+                    "collapsible": true,
+                    "favorites": "all-inboxes flagged snoozed drafts",
+                    "sections": "favorites accounts smart-folders",
+                    "show-unread": true
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "gmail-labels",
+                  "label": null,
+                  "kind": "label-list",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "exchange-mailboxes",
+                  "label": null,
+                  "kind": "exchange-mailboxes",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "exchange-categories",
+                  "label": null,
+                  "kind": "exchange-categories",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                }
+              ]
             },
             {
-              "type": "widget",
-              "id": "confirmation-indicator",
-              "label": null,
-              "kind": "confirmation-indicator",
-              "options": {},
-              "rows": [],
-              "source": null
+              "type": "stack",
+              "id": "list-pane",
+              "label": "@layout.pane.messages",
+              "sizes": [
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "1fr"
+              ],
+              "children": [
+                {
+                  "type": "widget",
+                  "id": "list-header",
+                  "label": null,
+                  "kind": "list-header",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "automatic-replies",
+                  "label": null,
+                  "kind": "automatic-replies-banner",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "gmail-categories",
+                  "label": null,
+                  "kind": "category-tabs",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "exchange-focused",
+                  "label": null,
+                  "kind": "focused-tabs",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "list",
+                  "label": null,
+                  "kind": "message-list",
+                  "options": {
+                    "page-size": 100
+                  },
+                  "rows": [
+                    "{from.name}  {date | relative}",
+                    "{subject}",
+                    "{preview}"
+                  ],
+                  "source": null
+                }
+              ]
+            },
+            {
+              "type": "stack",
+              "id": "reader",
+              "label": "@layout.pane.message",
+              "sizes": [
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "1fr"
+              ],
+              "children": [
+                {
+                  "type": "widget",
+                  "id": "reader-toolbar",
+                  "label": null,
+                  "kind": "toolbar",
+                  "options": {
+                    "toolbar": "reader"
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "thread",
+                  "label": null,
+                  "kind": "thread-view",
+                  "options": {
+                    "expand": "none"
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-security",
+                  "label": null,
+                  "kind": "security-message",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-warnings",
+                  "label": null,
+                  "kind": "security-warnings",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-remote-content",
+                  "label": null,
+                  "kind": "remote-content",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-junk",
+                  "label": null,
+                  "kind": "junk-verdict",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-body-status",
+                  "label": null,
+                  "kind": "sync-message-body",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message",
+                  "label": null,
+                  "kind": "message-view",
+                  "options": {
+                    "headers": "from to cc date"
+                  },
+                  "rows": [],
+                  "source": null
+                }
+              ]
             }
           ]
         }
@@ -338,310 +338,402 @@
         "min_width": null,
         "max_width": 899,
         "root": {
-          "type": "stack",
-          "id": "root",
+          "type": "tabs",
+          "id": "panes",
           "label": null,
-          "sizes": [
-            "auto",
-            "auto",
-            "auto",
-            "1fr",
-            "auto",
-            "auto",
-            "auto"
-          ],
+          "active": 1,
           "children": [
             {
-              "type": "widget",
-              "id": "main-toolbar",
-              "label": "@toolbar.main",
-              "kind": "toolbar",
-              "options": {
-                "toolbar": "main"
-              },
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "config-errors",
-              "label": null,
-              "kind": "config-errors",
-              "options": {
-                "hide-when-valid": true
-              },
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "search",
-              "label": null,
-              "kind": "search-bar",
-              "options": {
-                "scope": "account"
-              },
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "tabs",
-              "id": "panes",
-              "label": null,
-              "active": 1,
+              "type": "stack",
+              "id": "sidebar",
+              "label": "@layout.pane.folders",
+              "sizes": [
+                "1fr",
+                "auto",
+                "auto",
+                "auto"
+              ],
               "children": [
                 {
-                  "type": "stack",
-                  "id": "sidebar",
-                  "label": "@layout.pane.folders",
-                  "sizes": [
-                    "auto",
-                    "1fr",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "accounts",
-                      "label": null,
-                      "kind": "account-switcher",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "folders",
-                      "label": null,
-                      "kind": "folder-tree",
-                      "options": {
-                        "show-unread": true
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "gmail-labels",
-                      "label": null,
-                      "kind": "label-list",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "exchange-mailboxes",
-                      "label": null,
-                      "kind": "exchange-mailboxes",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "exchange-categories",
-                      "label": null,
-                      "kind": "exchange-categories",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "smart-folders",
-                      "label": "@saved-search-label",
-                      "kind": "smart-folders",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    }
-                  ]
+                  "type": "widget",
+                  "id": "folders",
+                  "label": null,
+                  "kind": "folder-tree",
+                  "options": {
+                    "account-colors": true,
+                    "collapsible": true,
+                    "favorites": "all-inboxes flagged snoozed drafts",
+                    "sections": "favorites accounts smart-folders",
+                    "show-unread": true
+                  },
+                  "rows": [],
+                  "source": null
                 },
                 {
-                  "type": "stack",
-                  "id": "list-pane",
-                  "label": "@layout.pane.messages",
-                  "sizes": [
-                    "auto",
-                    "auto",
-                    "auto",
-                    "1fr"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "automatic-replies",
-                      "label": null,
-                      "kind": "automatic-replies-banner",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "gmail-categories",
-                      "label": null,
-                      "kind": "category-tabs",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "exchange-focused",
-                      "label": null,
-                      "kind": "focused-tabs",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "list",
-                      "label": null,
-                      "kind": "message-list",
-                      "options": {
-                        "page-size": 100
-                      },
-                      "rows": [
-                        "{from.name}  {date | relative}",
-                        "{subject}"
-                      ],
-                      "source": null
-                    }
-                  ]
+                  "type": "widget",
+                  "id": "gmail-labels",
+                  "label": null,
+                  "kind": "label-list",
+                  "options": {},
+                  "rows": [],
+                  "source": null
                 },
                 {
-                  "type": "stack",
-                  "id": "reader",
-                  "label": "@layout.pane.message",
-                  "sizes": [
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "auto",
-                    "1fr"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "reader-toolbar",
-                      "label": null,
-                      "kind": "toolbar",
-                      "options": {
-                        "toolbar": "reader"
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "thread",
-                      "label": null,
-                      "kind": "thread-view",
-                      "options": {
-                        "expand": "none"
-                      },
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-security",
-                      "label": null,
-                      "kind": "security-message",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-warnings",
-                      "label": null,
-                      "kind": "security-warnings",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-remote-content",
-                      "label": null,
-                      "kind": "remote-content",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-junk",
-                      "label": null,
-                      "kind": "junk-verdict",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message-body-status",
-                      "label": null,
-                      "kind": "sync-message-body",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "message",
-                      "label": null,
-                      "kind": "message-view",
-                      "options": {
-                        "headers": "from date"
-                      },
-                      "rows": [],
-                      "source": null
-                    }
-                  ]
+                  "type": "widget",
+                  "id": "exchange-mailboxes",
+                  "label": null,
+                  "kind": "exchange-mailboxes",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "exchange-categories",
+                  "label": null,
+                  "kind": "exchange-categories",
+                  "options": {},
+                  "rows": [],
+                  "source": null
                 }
               ]
             },
             {
+              "type": "stack",
+              "id": "list-pane",
+              "label": "@layout.pane.messages",
+              "sizes": [
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "1fr"
+              ],
+              "children": [
+                {
+                  "type": "widget",
+                  "id": "list-header",
+                  "label": null,
+                  "kind": "list-header",
+                  "options": {
+                    "counts": false
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "automatic-replies",
+                  "label": null,
+                  "kind": "automatic-replies-banner",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "gmail-categories",
+                  "label": null,
+                  "kind": "category-tabs",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "exchange-focused",
+                  "label": null,
+                  "kind": "focused-tabs",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "list",
+                  "label": null,
+                  "kind": "message-list",
+                  "options": {
+                    "page-size": 100
+                  },
+                  "rows": [
+                    "{from.name}  {date | relative}",
+                    "{subject}"
+                  ],
+                  "source": null
+                }
+              ]
+            },
+            {
+              "type": "stack",
+              "id": "reader",
+              "label": "@layout.pane.message",
+              "sizes": [
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "auto",
+                "1fr"
+              ],
+              "children": [
+                {
+                  "type": "widget",
+                  "id": "reader-toolbar",
+                  "label": null,
+                  "kind": "toolbar",
+                  "options": {
+                    "toolbar": "reader"
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "thread",
+                  "label": null,
+                  "kind": "thread-view",
+                  "options": {
+                    "expand": "none"
+                  },
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-security",
+                  "label": null,
+                  "kind": "security-message",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-warnings",
+                  "label": null,
+                  "kind": "security-warnings",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-remote-content",
+                  "label": null,
+                  "kind": "remote-content",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-junk",
+                  "label": null,
+                  "kind": "junk-verdict",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message-body-status",
+                  "label": null,
+                  "kind": "sync-message-body",
+                  "options": {},
+                  "rows": [],
+                  "source": null
+                },
+                {
+                  "type": "widget",
+                  "id": "message",
+                  "label": null,
+                  "kind": "message-view",
+                  "options": {
+                    "headers": "from date"
+                  },
+                  "rows": [],
+                  "source": null
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "calendar": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "stack",
+          "id": "calendar-root",
+          "label": null,
+          "sizes": [
+            "auto",
+            "1fr"
+          ],
+          "children": [
+            {
               "type": "widget",
-              "id": "status",
-              "label": null,
-              "kind": "status-bar",
+              "id": "calendar-toolbar",
+              "label": "@pim.toolbar.calendar",
+              "kind": "toolbar",
               "options": {
-                "items": "sync-progress ops send-status"
+                "toolbar": "calendar"
               },
               "rows": [],
               "source": null
             },
             {
-              "type": "widget",
-              "id": "agent-indicator",
+              "type": "split",
+              "id": "calendar-panes",
               "label": null,
-              "kind": "mcp-context-indicator",
+              "orientation": "horizontal",
+              "sizes": [
+                "260px",
+                "1fr"
+              ],
+              "min_sizes": [
+                "200px",
+                "480px"
+              ],
+              "max_sizes": [],
+              "collapsible": [
+                true,
+                false
+              ],
+              "resizable": true,
+              "children": [
+                {
+                  "type": "stack",
+                  "id": "calendar-sidebar",
+                  "label": "@pim.pane.calendars",
+                  "sizes": [
+                    "auto",
+                    "auto",
+                    "1fr"
+                  ],
+                  "children": [
+                    {
+                      "type": "widget",
+                      "id": "calendar-mini-month",
+                      "label": null,
+                      "kind": "mini-month",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "calendar-list",
+                      "label": null,
+                      "kind": "calendar-list",
+                      "options": {},
+                      "rows": [],
+                      "source": null
+                    },
+                    {
+                      "type": "widget",
+                      "id": "calendar-tasks",
+                      "label": null,
+                      "kind": "task-list",
+                      "options": {
+                        "sort": "due"
+                      },
+                      "rows": [],
+                      "source": null
+                    }
+                  ]
+                },
+                {
+                  "type": "widget",
+                  "id": "calendar-main",
+                  "label": null,
+                  "kind": "calendar",
+                  "options": {
+                    "scroll-to": 8,
+                    "view": "week",
+                    "views": "day week month year agenda free-time"
+                  },
+                  "rows": [],
+                  "source": null
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "contacts": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "split",
+          "id": "contacts-panes",
+          "label": null,
+          "orientation": "horizontal",
+          "sizes": [
+            "360px",
+            "1fr"
+          ],
+          "min_sizes": [],
+          "max_sizes": [],
+          "collapsible": [],
+          "resizable": true,
+          "children": [
+            {
+              "type": "widget",
+              "id": "contacts-list",
+              "label": "@pim.pane.contacts",
+              "kind": "contact-list",
               "options": {},
               "rows": [],
               "source": null
             },
             {
               "type": "widget",
-              "id": "confirmation-indicator",
-              "label": null,
-              "kind": "confirmation-indicator",
+              "id": "contacts-card",
+              "label": "@pim.pane.contact",
+              "kind": "contact-card",
               "options": {},
               "rows": [],
               "source": null
             }
           ]
+        }
+      }
+    ],
+    "tasks": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "widget",
+          "id": "tasks",
+          "label": null,
+          "kind": "task-list",
+          "options": {},
+          "rows": [],
+          "source": null
+        }
+      }
+    ],
+    "settings": [
+      {
+        "min_width": null,
+        "max_width": null,
+        "root": {
+          "type": "widget",
+          "id": "settings-page",
+          "label": null,
+          "kind": "settings-page",
+          "options": {},
+          "rows": [],
+          "source": null
         }
       }
     ],
@@ -752,507 +844,6 @@
           "options": {},
           "rows": [],
           "source": null
-        }
-      }
-    ],
-    "calendar": [
-      {
-        "min_width": null,
-        "max_width": null,
-        "root": {
-          "type": "stack",
-          "id": "calendar-root",
-          "label": null,
-          "sizes": [
-            "auto",
-            "1fr"
-          ],
-          "children": [
-            {
-              "type": "widget",
-              "id": "calendar-toolbar",
-              "label": "@pim.toolbar.calendar",
-              "kind": "toolbar",
-              "options": {
-                "toolbar": "calendar"
-              },
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "split",
-              "id": "calendar-panes",
-              "label": null,
-              "orientation": "horizontal",
-              "sizes": [
-                "260px",
-                "1fr"
-              ],
-              "min_sizes": [
-                "200px",
-                "480px"
-              ],
-              "max_sizes": [],
-              "collapsible": [
-                true,
-                false
-              ],
-              "resizable": true,
-              "children": [
-                {
-                  "type": "stack",
-                  "id": "calendar-sidebar",
-                  "label": "@pim.pane.calendars",
-                  "sizes": [
-                    "auto",
-                    "auto",
-                    "1fr"
-                  ],
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "calendar-mini-month",
-                      "label": null,
-                      "kind": "mini-month",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "calendar-list",
-                      "label": null,
-                      "kind": "calendar-list",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "calendar-tasks",
-                      "label": null,
-                      "kind": "task-list",
-                      "options": {
-                        "sort": "due"
-                      },
-                      "rows": [],
-                      "source": null
-                    }
-                  ]
-                },
-                {
-                  "type": "widget",
-                  "id": "calendar-main",
-                  "label": null,
-                  "kind": "calendar",
-                  "options": {
-                    "scroll-to": 8,
-                    "view": "week",
-                    "views": "day work-week week month year agenda free-time"
-                  },
-                  "rows": [],
-                  "source": null
-                }
-              ]
-            }
-          ]
-        }
-      }
-    ],
-    "contacts": [
-      {
-        "min_width": null,
-        "max_width": null,
-        "root": {
-          "type": "split",
-          "id": "contacts-panes",
-          "label": null,
-          "orientation": "horizontal",
-          "sizes": [
-            "360px",
-            "1fr"
-          ],
-          "min_sizes": [],
-          "max_sizes": [],
-          "collapsible": [],
-          "resizable": true,
-          "children": [
-            {
-              "type": "widget",
-              "id": "contacts-list",
-              "label": "@pim.pane.contacts",
-              "kind": "contact-list",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "contacts-card",
-              "label": "@pim.pane.contact",
-              "kind": "contact-card",
-              "options": {},
-              "rows": [],
-              "source": null
-            }
-          ]
-        }
-      }
-    ],
-    "tasks": [
-      {
-        "min_width": null,
-        "max_width": null,
-        "root": {
-          "type": "widget",
-          "id": "tasks",
-          "label": null,
-          "kind": "task-list",
-          "options": {},
-          "rows": [],
-          "source": null
-        }
-      }
-    ],
-    "settings": [
-      {
-        "min_width": null,
-        "max_width": null,
-        "root": {
-          "type": "tabs",
-          "id": "settings-tabs",
-          "label": null,
-          "active": 0,
-          "children": [
-            {
-              "type": "widget",
-              "id": "account-settings",
-              "label": "@settings.tab.accounts",
-              "kind": "account-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "appearance",
-              "label": "@settings.tab.appearance",
-              "kind": "appearance-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "virtual-accounts",
-              "label": "@settings.tab.virtual-accounts",
-              "kind": "virtual-account-editor",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "mcp-clients",
-              "label": "@mcp.settings.tab",
-              "kind": "mcp-clients",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "confirmation-center",
-              "label": "@agents.center.tab",
-              "kind": "confirmation-center",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "security-keys",
-              "label": "@security.settings.tab.keys",
-              "kind": "security-keys",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "security-identities",
-              "label": "@security.settings.tab.identities",
-              "kind": "security-identities",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "security-settings",
-              "label": "@security.settings.tab.protection",
-              "kind": "security-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "security-autocrypt",
-              "label": "@security.settings.tab.autocrypt",
-              "kind": "security-autocrypt",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "security-recovery-key",
-              "label": "@security.settings.tab.recovery-key",
-              "kind": "security-recovery-key",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "security-smartcards",
-              "label": "@security.settings.tab.smartcards",
-              "kind": "security-smartcards",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "remote-settings",
-              "label": "@remote.settings.tab",
-              "kind": "remote-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "remote-users",
-              "label": "@remote.settings.tab.users",
-              "kind": "remote-users",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "remote-devices",
-              "label": "@remote.settings.tab.devices",
-              "kind": "remote-devices",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "remote-audit",
-              "label": "@remote.settings.tab.audit",
-              "kind": "remote-audit",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "remote-content-allows",
-              "label": "@remote.settings.tab.privacy",
-              "kind": "remote-content-allows",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "sieve-status",
-              "label": "@sieve.settings.tab",
-              "kind": "sieve-status",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "exchange-rules",
-              "label": "@exchange.settings.tab.rules",
-              "kind": "exchange-rules",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "vacation",
-              "label": "@vacation.settings.tab",
-              "kind": "vacation-editor",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "junk-settings",
-              "label": "@junk.settings.tab",
-              "kind": "junk-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "notification-settings",
-              "label": "@notification.settings.tab",
-              "kind": "notification-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "sync-policies",
-              "label": "@sync.settings.tab",
-              "kind": "sync-folder-policies",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "plugin-manager",
-              "label": "@plugin.manager.tab",
-              "kind": "plugin-manager",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "update-settings",
-              "label": "@system.settings.tab.updates",
-              "kind": "update-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "desktop-settings",
-              "label": "@system.settings.tab.desktop",
-              "kind": "desktop-settings",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "default-apps",
-              "label": "@system.settings.tab.default-apps",
-              "kind": "default-apps",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "import-export",
-              "label": "@portability.settings.tab.import-export",
-              "kind": "import-export",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "backup-restore",
-              "label": "@portability.settings.tab.backup",
-              "kind": "backup-restore",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "widget",
-              "id": "diagnostics",
-              "label": "@portability.settings.tab.diagnostics",
-              "kind": "diagnostics",
-              "options": {},
-              "rows": [],
-              "source": null
-            },
-            {
-              "type": "stack",
-              "id": "customize",
-              "label": "@settings.tab.customize",
-              "sizes": [
-                "auto",
-                "auto",
-                "1fr"
-              ],
-              "children": [
-                {
-                  "type": "widget",
-                  "id": "customize-toolbar",
-                  "label": "@toolbar.customize",
-                  "kind": "toolbar",
-                  "options": {
-                    "toolbar": "customize"
-                  },
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "widget",
-                  "id": "settings-config-errors",
-                  "label": null,
-                  "kind": "config-errors",
-                  "options": {},
-                  "rows": [],
-                  "source": null
-                },
-                {
-                  "type": "tabs",
-                  "id": "customize-editors",
-                  "label": "@customize.editors.tabs",
-                  "active": 0,
-                  "children": [
-                    {
-                      "type": "widget",
-                      "id": "toolbar-editor",
-                      "label": "@customize.toolbar.tab",
-                      "kind": "toolbar-editor",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "key-binding-editor",
-                      "label": "@customize.keys.tab",
-                      "kind": "key-binding-editor",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    },
-                    {
-                      "type": "widget",
-                      "id": "column-editor",
-                      "label": "@customize.columns.tab",
-                      "kind": "column-editor",
-                      "options": {},
-                      "rows": [],
-                      "source": null
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
         }
       }
     ]
@@ -1413,7 +1004,7 @@
     "settings.open": {
       "label": "@settings.action.open",
       "icon": "settings",
-      "alias_of": "window.open",
+      "alias_of": "view.show",
       "args": [
         "settings"
       ]
@@ -1565,7 +1156,7 @@
     "pim.calendar.open": {
       "label": "@pim.action.open-calendar",
       "icon": "calendar",
-      "alias_of": "window.open",
+      "alias_of": "view.show",
       "args": [
         "calendar"
       ]
@@ -1573,7 +1164,7 @@
     "pim.contacts.open": {
       "label": "@pim.action.open-contacts",
       "icon": "book-user",
-      "alias_of": "window.open",
+      "alias_of": "view.show",
       "args": [
         "contacts"
       ]
@@ -1581,7 +1172,7 @@
     "pim.tasks.open": {
       "label": "@pim.action.open-tasks",
       "icon": "list-checks",
-      "alias_of": "window.open",
+      "alias_of": "view.show",
       "args": [
         "tasks"
       ]
@@ -1895,6 +1486,12 @@
     "security.recovery-key.restore": {
       "label": null,
       "icon": "archive-restore",
+      "alias_of": null,
+      "args": []
+    },
+    "settings.section": {
+      "label": null,
+      "icon": "settings",
       "alias_of": null,
       "args": []
     },
@@ -2226,36 +1823,6 @@
     },
     {
       "context": "global",
-      "key": "g o",
-      "action": "outbox.open",
-      "args": []
-    },
-    {
-      "context": "global",
-      "key": "g c",
-      "action": "pim.calendar.open",
-      "args": []
-    },
-    {
-      "context": "global",
-      "key": "g p",
-      "action": "pim.contacts.open",
-      "args": []
-    },
-    {
-      "context": "global",
-      "key": "g t",
-      "action": "pim.tasks.open",
-      "args": []
-    },
-    {
-      "context": "global",
-      "key": "g a",
-      "action": "agents.open-center",
-      "args": []
-    },
-    {
-      "context": "global",
       "key": "ctrl+1",
       "action": "view.mail",
       "args": []
@@ -2282,6 +1849,36 @@
       "context": "global",
       "key": "g m",
       "action": "view.mail",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g o",
+      "action": "outbox.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g c",
+      "action": "pim.calendar.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g p",
+      "action": "pim.contacts.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g t",
+      "action": "pim.tasks.open",
+      "args": []
+    },
+    {
+      "context": "global",
+      "key": "g a",
+      "action": "agents.open-center",
       "args": []
     },
     {
@@ -2346,14 +1943,16 @@
         "action": "mail.compose",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 1
       },
       {
         "type": "action",
         "action": "sync.now",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 2
       },
       {
         "type": "separator"
@@ -2427,203 +2026,246 @@
         "action": "mail.reply",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 1
       },
       {
         "type": "action",
         "action": "mail.reply-all",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 2
       },
       {
         "type": "action",
         "action": "mail.forward",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 3
       },
       {
-        "type": "spacer"
+        "type": "separator"
       },
       {
         "type": "action",
         "action": "mail.archive",
         "args": [],
         "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "mail.move",
-        "args": [],
-        "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 4,
+        "display": "icon"
       },
       {
         "type": "action",
         "action": "mail.delete",
         "args": [],
         "label": null,
-        "icon": null
-      },
-      {
-        "type": "separator"
+        "icon": null,
+        "rank": 5,
+        "display": "icon"
       },
       {
         "type": "action",
-        "action": "mail.toggle-read",
+        "action": "mail.move",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 6,
+        "display": "icon"
       },
       {
         "type": "action",
         "action": "mail.toggle-flag",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 7,
+        "display": "icon"
       },
       {
         "type": "action",
         "action": "snooze.open",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 8,
+        "display": "icon"
       },
       {
-        "type": "action",
-        "action": "junk.mark",
-        "args": [],
-        "label": null,
-        "icon": null
+        "type": "spacer"
       },
       {
-        "type": "action",
-        "action": "rules.create-from-message",
-        "args": [],
+        "type": "more",
         "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "calendar.event-from-message",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "tasks.from-message",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "gmail.apply-labels",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "exchange.apply-categories",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "exchange.classify",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "security.autocrypt.import",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "print.message",
-        "args": [],
-        "label": null,
-        "icon": null
+        "icon": null,
+        "items": [
+          {
+            "type": "header",
+            "label": "@toolbar.group.message"
+          },
+          {
+            "type": "action",
+            "action": "mail.toggle-read",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "junk.mark",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "gmail.apply-labels",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "exchange.apply-categories",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "exchange.classify",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "security.autocrypt.import",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "print.message",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "type": "header",
+            "label": "@toolbar.group.turn-into"
+          },
+          {
+            "type": "action",
+            "action": "calendar.event-from-message",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "tasks.from-message",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "rules.create-from-message",
+            "args": [],
+            "label": null,
+            "icon": null
+          }
+        ]
       }
     ],
     "calendar": [
       {
         "type": "action",
-        "action": "pim.sync",
+        "action": "scheduling.find-time",
         "args": [],
         "label": null,
-        "icon": null
-      },
-      {
-        "type": "separator"
+        "icon": null,
+        "rank": 1
       },
       {
         "type": "action",
         "action": "tasks.new",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 2
       },
       {
         "type": "action",
         "action": "contacts.new",
         "args": [],
         "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "scheduling.find-time",
-        "args": [],
-        "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 3
       },
       {
         "type": "spacer"
       },
       {
         "type": "action",
-        "action": "print.event",
+        "action": "pim.sync",
         "args": [],
         "label": null,
-        "icon": null
+        "icon": null,
+        "rank": 4,
+        "display": "icon"
       },
       {
-        "type": "action",
-        "action": "print.agenda",
-        "args": [],
+        "type": "more",
         "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "pim.import",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "pim.sources",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "scheduling.settings",
-        "args": [],
-        "label": null,
-        "icon": null
+        "icon": null,
+        "items": [
+          {
+            "type": "action",
+            "action": "print.event",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "print.agenda",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "separator"
+          },
+          {
+            "type": "action",
+            "action": "pim.import",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "pim.sources",
+            "args": [],
+            "label": null,
+            "icon": null
+          },
+          {
+            "type": "action",
+            "action": "scheduling.settings",
+            "args": [],
+            "label": null,
+            "icon": null
+          }
+        ]
       }
     ],
     "customize": [
@@ -2678,7 +2320,21 @@
       },
       {
         "type": "action",
-        "action": "mail.toggle-read",
+        "action": "mail.archive",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.delete",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.move",
         "args": [],
         "label": null,
         "icon": null
@@ -2701,28 +2357,15 @@
         "type": "separator"
       },
       {
-        "type": "action",
-        "action": "mail.archive",
-        "args": [],
-        "label": null,
-        "icon": null
+        "type": "header",
+        "label": "@toolbar.group.message"
       },
       {
         "type": "action",
-        "action": "mail.move",
+        "action": "mail.toggle-read",
         "args": [],
         "label": null,
         "icon": null
-      },
-      {
-        "type": "action",
-        "action": "mail.delete",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "separator"
       },
       {
         "type": "action",
@@ -2741,30 +2384,6 @@
       {
         "type": "action",
         "action": "sync.download-message",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "separator"
-      },
-      {
-        "type": "action",
-        "action": "rules.create-from-message",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "calendar.event-from-message",
-        "args": [],
-        "label": null,
-        "icon": null
-      },
-      {
-        "type": "action",
-        "action": "tasks.from-message",
         "args": [],
         "label": null,
         "icon": null
@@ -2791,9 +2410,6 @@
         "icon": null
       },
       {
-        "type": "separator"
-      },
-      {
         "type": "action",
         "action": "print.message",
         "args": [],
@@ -2803,6 +2419,34 @@
       {
         "type": "action",
         "action": "print.thread",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "header",
+        "label": "@toolbar.group.turn-into"
+      },
+      {
+        "type": "action",
+        "action": "calendar.event-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "tasks.from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "rules.create-from-message",
         "args": [],
         "label": null,
         "icon": null
@@ -2875,7 +2519,49 @@
       },
       {
         "type": "action",
+        "action": "mail.archive",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.delete",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.move",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "mail.toggle-flag",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
         "action": "snooze.open",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "header",
+        "label": "@toolbar.group.message"
+      },
+      {
+        "type": "action",
+        "action": "mail.toggle-read",
         "args": [],
         "label": null,
         "icon": null
@@ -2902,7 +2588,32 @@
         "icon": null
       },
       {
-        "type": "separator"
+        "type": "action",
+        "action": "gmail.apply-labels",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.apply-categories",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.classify",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "security.autocrypt.import",
+        "args": [],
+        "label": null,
+        "icon": null
       },
       {
         "type": "action",
@@ -2914,6 +2625,34 @@
       {
         "type": "action",
         "action": "print.save-pdf",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "header",
+        "label": "@toolbar.group.turn-into"
+      },
+      {
+        "type": "action",
+        "action": "calendar.event-from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "tasks.from-message",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "rules.create-from-message",
         "args": [],
         "label": null,
         "icon": null
@@ -2955,6 +2694,48 @@
         "label": null,
         "icon": null
       }
+    ],
+    "context:folder-tree.account": [
+      {
+        "type": "action",
+        "action": "sync.now",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.automatic-replies",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "exchange.add-mailbox",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "action",
+        "action": "gmail.new-label",
+        "args": [],
+        "label": null,
+        "icon": null
+      },
+      {
+        "type": "separator"
+      },
+      {
+        "type": "action",
+        "action": "settings.section",
+        "args": [
+          "accounts"
+        ],
+        "label": "@settings.section.accounts",
+        "icon": "user-round"
+      }
     ]
   },
   "toolbar_settings": {
@@ -2963,7 +2744,7 @@
       "overflow": "more"
     },
     "reader": {
-      "hide_disabled": false,
+      "hide_disabled": true,
       "overflow": "more"
     },
     "calendar": {
@@ -2979,7 +2760,7 @@
     "mail": {
       "label": "@view.mail",
       "icon": "mail",
-      "window": "main",
+      "window": "mail",
       "badge": "unread"
     },
     "calendar": {
@@ -3114,6 +2895,21 @@
                 "source": null
               }
             ]
+          }
+        },
+        {
+          "id": "calendar",
+          "label": "@settings.section.calendar",
+          "icon": "calendar",
+          "keywords": null,
+          "root": {
+            "type": "widget",
+            "id": "page-pim-settings",
+            "label": null,
+            "kind": "pim-settings",
+            "options": {},
+            "rows": [],
+            "source": null
           }
         },
         {
@@ -3317,7 +3113,7 @@
               {
                 "type": "widget",
                 "id": "page-config-errors",
-                "label": null,
+                "label": "@settings.config-errors",
                 "kind": "config-errors",
                 "options": {},
                 "rows": [],

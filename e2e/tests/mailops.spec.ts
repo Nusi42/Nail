@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import { accountSectionNamed, sectionInbox } from "../support/views";
 
 /**
  * Writes go through the core's operation queue to the mock IMAP server of
@@ -21,7 +22,7 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 
 async function openWorkInbox(page: Page) {
   await page.goto(server.url);
-  await page.locator('[data-part="account-switcher.item"]').filter({ hasText: "Work" }).click();
+  await sectionInbox(accountSectionNamed(page, "Work")).click();
   await expect(rows(page)).toHaveCount(15);
 }
 
@@ -55,7 +56,9 @@ test("flag, move and delete reach the IMAP server", async ({ page }) => {
   await expect.poll(() => flagsOnServer("INBOX", "Release notes for M1")).toBeNull();
 
   // The Trash folder shows it; deleting it there removes it for good.
-  await page.locator('[data-part="folder-tree.item"][data-role="trash"]').click();
+  await accountSectionNamed(page, "Work")
+    .locator('[data-part="folder-tree.item"][data-role="trash"]')
+    .click();
   const trashed = rows(page).filter({ hasText: "Release notes for M1" });
   await expect(trashed).toHaveCount(1);
   await trashed.click();
@@ -84,7 +87,7 @@ test("a flag change on the server appears in the UI (IDLE)", async ({ page }) =>
 
 test("writes made offline replay after reconnecting", async ({ page }) => {
   await openWorkInbox(page);
-  const work = page.locator('[data-part="account-switcher.item"]').filter({ hasText: "Work" });
+  const work = accountSectionNamed(page, "Work");
   await expect(work).toHaveAttribute("data-status", "online");
 
   await control(server, "imap-offline", { offline: true });

@@ -524,6 +524,15 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        state/uiState.ts (useUiState / useSetUiState; App.tsx applies UiStateChanged), api/uiStateMock.ts,
                        UiState.activeView / listFilter, ActionInfo.icon (every registered action has an icon),
                        menu headers (`context-menu.header`), appearance applyAppearance (reporter applies its answer);
+                       M5b packages: features/shell = NavRail.tsx / ViewHost.tsx / badges.ts / model.ts, skin
+                       SHELL_SKIN_CSS (ADR 0110); widgets/ Toolbar.tsx + toolbarModel.ts (measured overflow into More,
+                       rank=1 primary), FolderTree.tsx + folderPaneState.ts (grouped pane), ListHeader.tsx + listFilter.ts,
+                       proposalToolbars.ts (ADR 0111); features/settings = page widgets, model.ts, store.ts, builtins.ts,
+                       formerTabs.json (ADR 0112); features/pim CalendarList.tsx / PimMenu.tsx / CalendarDialogs.tsx /
+                       PimSettings.tsx / colors.ts, skin PIM_SKIN_CSS (ADR 0113); M5b integration (ADR 0114):
+                       customization/LayoutMigration.tsx (offers the new default to a pre-rail layout once, UI-state key
+                       `customize.layout-offer`, merge dialog prefilled with defaults/layout.kdl via ?raw);
+                       i18n/localizer.ts availableLocales (browser languages only against non-empty catalogs);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -560,11 +569,16 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        list.perf.ts with its own playwright.perf.config.ts (not part of `npm run e2e`), run-perf.mjs
                        = Rust run → Playwright → check; reports in %LOCALAPPDATA%/nail-build/perf/<corpus>));
                        tests/m5a.spec.ts (themes, density, Follow Windows via `system-appearance`, user themes,
-                       attachment download); tests/m5b-contract.spec.ts (view shortcuts open the views' windows, palette);
+                       attachment download); tests/m5b-contract.spec.ts (fallback: view shortcuts open the views' windows
+                       with a pre-rail layout, palette); tests/m5b.spec.ts (rail / views / badges / remembered view, More,
+                       chips, settings search, calendar menu, dates in a German browser, layout offer, remote dark mode);
+                       support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
                        visual/ (M5a, ADR 0106: visual regression, built-in themes ×
                        densities × 9 screens; own Playwright config; baselines in visual/baselines/<platform>
                        (win32 = reference); review page from scripts/visual-review/)
-defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names); themes/ = the built-in
+defaults/              shipped theme.kdl (base + token schema) + layout.kdl (Lucide icon names; M5b: main = nav-rail +
+                       view-host, views mail / calendar / contacts / tasks / settings, the mail window, settings window =
+                       settings-page, ranked reader bar with More, no main toolbar); themes/ = the built-in
                        themes frost, sage (light), graphite, nocturne (dark), high-contrast (M5a, ADR 0102)
 locales/               Fluent catalogs (en, de); core*.ftl = texts built in Rust (M2c; core-plugins.ftl,
                        core-crypto.ftl (pgp-*, message-file-*) M2d); itip.ftl = iMIP mail texts (M3b);
@@ -904,6 +918,15 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   browser's light / dark mode (served)). The default layout has the views / rail / page sections but unchanged windows
   until WP165. Slots: WP161 `features/shell/` + shell.ftl, WP162 `widgets/` + `theme/skin.ts` + app.ftl, WP163
   `features/settings/` + the `settings` export of every feature but pim + settings.ftl, WP164 `features/pim/` + pim.ftl.
+- M5b integration (ADR 0114; packages ADRs 0110 shell, 0111 mail view, 0112 settings page, 0113 calendar view): the default
+  main window is `nav-rail` + `view-host` (plus config errors / status bar); the M5a panes live in `window "mail"`
+  (grouped folder-tree, list-header first in the list pane); no main toolbar (palette, folder pane, rail instead);
+  settings window = `settings-page` (+ section `calendar` with `pim-settings`); `pim.*.open` / `settings.open` alias
+  `view.show`. E2E: views are regions "<View> view", Settings sections via the page nav (`e2e/support/views.ts`),
+  window 1280 × 1000, the last view survives reloads (switch to Mail first). Split `auto` = content width.
+  Pre-rail user layouts keep their main window (views open as windows) and get the new default offered once through
+  the merge dialog. `ThemeInfo.preview` (a theme's own colours for the gallery); the UI negotiates browser languages
+  only against non-empty catalogs (an empty `locales/de` keeps dates English).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

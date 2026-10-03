@@ -83,10 +83,15 @@ describe("M1a flows", () => {
     const accounts = new Set(rows.map((r) => r.getAttribute("data-account")));
     expect(accounts).toEqual(new Set(["acc-personal", "acc-work"]));
     expect(env.store.getState().activeFolderId).toBe("all/inbox");
+    // M5b: one folder-pane section per account.
     const tree = screen.getByRole("tree", { name: "Folders" });
-    expect(within(tree).getByRole("treeitem", { name: /Personal/ })).toHaveAttribute(
-      "data-depth",
-      "0",
+    expect(within(tree).getByRole("treeitem", { name: /^Personal/ })).toHaveAttribute(
+      "data-part",
+      "folder-tree.section",
+    );
+    expect(within(tree).getByRole("treeitem", { name: /^Work/ })).toHaveAttribute(
+      "data-account",
+      "acc-work",
     );
   });
 
@@ -277,44 +282,51 @@ describe("M1a flows", () => {
     expect(input).toHaveValue("");
   });
 
-  it("opens settings and account setup from the main toolbar", async () => {
+  it("opens settings from the rail and account setup from its Accounts section", async () => {
     const user = userEvent.setup();
     renderApp();
     await ready();
-    const toolbar = screen.getByRole("toolbar", { name: "Main toolbar" });
-    await user.click(within(toolbar).getByRole("button", { name: "Settings" }));
+    const rail = screen.getByRole("navigation", { name: "Sections" });
+    await user.click(within(rail).getByRole("button", { name: /^Settings/ }));
     const settings = await settleUntil(
-      () => screen.queryByRole("dialog", { name: "Settings" }),
-      "'dialog', { name: 'Settings' }",
+      () => screen.queryByRole("region", { name: "Settings view" }),
+      "'region', { name: 'Settings view' }",
     );
-    expect(within(settings).getByRole("tab", { name: "Accounts" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    const nav = within(settings).getByRole("navigation", { name: "Settings sections" });
+    expect(within(nav).getByRole("button", { name: "Accounts" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
-    await user.click(within(settings).getByRole("tab", { name: "Virtual accounts" }));
+    // The Accounts section holds the virtual accounts too (former tab).
     expect(
       await settleUntil(
         () => within(settings).queryByText(/No virtual accounts yet/),
         "/No virtual accounts yet/",
       ),
     ).toBeVisible();
-    await user.click(within(toolbar).getByRole("button", { name: "Add account" }));
+    await user.click(within(settings).getByRole("button", { name: "Add account" }));
     const setup = await settleUntil(
       () => screen.queryByRole("dialog", { name: "Add account" }),
       "'dialog', { name: 'Add account' }",
     );
     expect(setup).toHaveAttribute("data-state", "active");
-    expect(settings).not.toHaveAttribute("data-state");
     await user.click(within(setup).getByRole("button", { name: "Close" }));
-    await eventually(() => expect(settings).toHaveAttribute("data-state", "active"));
+    await eventually(() =>
+      expect(screen.queryByRole("dialog", { name: "Add account" })).toBeNull(),
+    );
+    expect(screen.getByRole("region", { name: "Settings view" })).toBeVisible();
   });
 
   it("applies account status and account changes pushed by the core", async () => {
     const { env } = renderApp();
     await ready();
+    // M5b: the account's folder-pane section carries its state.
     const work = await settleUntil(
-      () => screen.queryByRole("button", { name: "Work" }),
-      "'button', { name: 'Work' }",
+      () =>
+        document.querySelector<HTMLElement>(
+          '[data-part="folder-tree.section"][data-account="acc-work"]',
+        ),
+      "the Work section",
     );
     await eventually(() => expect(work).toHaveAttribute("data-status", "online"));
     act(() =>
@@ -331,6 +343,8 @@ describe("M1a flows", () => {
     );
     // Query observers are notified asynchronously.
     await eventually(() => expect(work).toHaveAttribute("data-status", "offline"));
+    // Not online: the section names the state (also for screen readers).
+    expect(work).toHaveAccessibleName(/Offline/);
     expect(screen.getByRole("status", { name: "Status" })).toHaveTextContent("Work: Offline");
 
     env.transport.data.accounts[1] = {
@@ -340,8 +354,8 @@ describe("M1a flows", () => {
     act(() => env.transport.emit({ type: "AccountsChanged" }));
     expect(
       await settleUntil(
-        () => screen.queryByRole("button", { name: "Office" }),
-        "'button', { name: 'Office' }",
+        () => screen.queryByRole("treeitem", { name: /^Office/ }),
+        "'treeitem', { name: /^Office/ }",
       ),
     ).toBeInTheDocument();
   });

@@ -20,12 +20,13 @@ const bp = (min: number | null, max: number | null): Breakpoint => ({
 });
 
 describe("breakpoint selection", () => {
-  const main = defaultLayout().windows.main ?? [];
+  // M5b: the three panes are the mail view's window.
+  const main = defaultLayout().windows.mail ?? [];
 
   it("picks the wide three-pane tree from 900px", () => {
     expect(selectBreakpointIndex(main, 900)).toBe(0);
     expect(selectBreakpointIndex(main, 1920)).toBe(0);
-    expect(selectBreakpoint(main, 1200)?.root).toMatchObject({ type: "stack" });
+    expect(selectBreakpoint(main, 1200)?.root).toMatchObject({ type: "split" });
   });
 
   it("picks the tabs tree up to 899px (inclusive bounds)", () => {
@@ -53,6 +54,7 @@ describe("sizes", () => {
     expect(flexForSize("30%")).toBe("0 0 30%");
     expect(flexForSize("1.4fr")).toBe("1.4 1 0px");
     expect(flexForSize(undefined)).toBe("1 1 auto");
+    expect(flexForSize("auto")).toBe("0 0 auto");
     expect(flexForSize("bogus;")).toBe("1 1 0px");
   });
 

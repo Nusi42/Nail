@@ -113,7 +113,7 @@ split "horizontal" sizes="240px 1fr 1.4fr" \
 
 | Property | Meaning |
 | --- | --- |
-| `sizes` | Starting size of each pane: `px`, `%`, or `fr` (share of the free space). One value per pane. |
+| `sizes` | Starting size of each pane: `px`, `%`, `fr` (share of the free space), or `auto` (as wide as its content, like the navigation rail). One value per pane. |
 | `min-sizes`, `max-sizes` | Limits per pane; `none` for no limit. |
 | `collapsible` | `true` or `false` per pane. |
 | `resizable` | `#false` to lock the dividers. |
@@ -151,10 +151,10 @@ A widget is a node named after its kind. Its properties are its options.
 | Widget | Options |
 | --- | --- |
 | `account-switcher` | `show-status` (`#true`/`#false`): a dot per account showing its connection state |
-| `folder-tree` | `show-unread` (`#true`/`#false`), `show-account-badges` (`#true`/`#false`), `sections` (any of `favorites accounts smart-folders`, in the order shown; default all three), `favorites` (the unified folders under Favorites: any of `all-inboxes unread flagged snoozed drafts sent outbox`; default `all-inboxes flagged snoozed drafts`), `collapsible` (`#true`/`#false`: sections fold away; Nail remembers which), `account-colors` (`#true`/`#false`: a colour dot per account) |
-| `list-header` | above the message list: `search` and `hint` (the search field with its Ctrl+K hint), `title` and `counts` (the folder's name with its counts), `chips` (filter chips: any of `all unread flagged attachments`) — each `#true`/`#false` except `chips` |
-| `nav-rail` | the navigation rail (see [Views and the navigation rail](#views-and-the-navigation-rail)): `show-labels` (`#true`/`#false`: labels under the icons), `show-logo` (`#true`/`#false`) |
-| `view-host` | — (shows the active view; see [Views and the navigation rail](#views-and-the-navigation-rail)) |
+| `folder-tree` | `show-unread` (`#true`/`#false`), `show-account-badges` (`#true`/`#false`), `sections` (any of `favorites accounts smart-folders`, in the order shown; default all three), `favorites` (the unified folders under Favorites: any of `all-inboxes unread flagged snoozed drafts sent outbox`; default `all-inboxes flagged snoozed drafts`), `collapsible` (`#true`/`#false`: sections fold away; Nail remembers which), `account-colors` (`#true`/`#false`: a colour dot per account), `compose` (`#true`/`#false`, default `#true`: the **New message** button on top). The grouped pane (New message, Favorites, one section per account, smart folders) appears as soon as one of `sections`, `favorites`, `collapsible`, `account-colors` or `compose` is set; without them the older single-account tree is shown |
+| `list-header` | above the message list: `search` and `hint` (the search field with the key that focuses it — the default layout binds `/` to `search.focus`), `title` and `counts` (the folder's name with its counts, e.g. "All inboxes · 102 unread · 4 accounts"), `chips` (filter chips: any of `all unread flagged attachments`; they search with `is:unread`, `is:flagged`, `has:attachment` inside the shown folder) — each `#true`/`#false` except `chips` |
+| `nav-rail` | the navigation rail (see [Views and the navigation rail](#views-and-the-navigation-rail)): `show-labels` (`#true`/`#false`, default `#false`: visible labels under the icons; screen readers always hear them), `show-logo` (`#true`/`#false`, default `#true`) |
+| `view-host` | — (shows the active view, remembers the last one; see [Views and the navigation rail](#views-and-the-navigation-rail)) |
 | `settings-page` | `search` (`#true`/`#false`): the settings page of the `settings-page` section (see [The settings page](#the-settings-page)) |
 | `message-list` | `page-size` (number), `group-by` (`none`, `date`, `sender`), `threads` (`off`, `collapsed`: one row per conversation, `expanded`: one row per message), `follow-search` (`#true`/`#false`: show search results while a search is active), `columns` (column order, written back by Nail); `row` templates |
 | `message-view` | `headers` (e.g. `"from to cc date"`), `mark-read` (`#true`/`#false`: mark a message read when it is shown); `row` templates |
@@ -381,8 +381,9 @@ toolbar "reader" hide-disabled=#true {
 - `rank=` decides what moves first: items without a rank go first (from the
   end of the bar), then the highest rank; `rank=1` stays longest.
 - `display=` shows the `icon`, the `label` or both (`icon-label`, the
-  default). Icon-only buttons keep their label as tooltip and for screen
-  readers.
+  default). Icon-only buttons keep their label as tooltip (with the key, for
+  example "Archive (E)") and for screen readers. The item with `rank=1` gets
+  the primary look (the reader's **Reply** in the default layout).
 - `more { … }` is the **More** menu with its own entries (`item`,
   `separator`, `submenu`, and `header "<label>"` for a group heading); items
   that do not fit are added below them. A toolbar has at most one `more`;
@@ -417,6 +418,7 @@ left out. Parts with a context menu:
 | `message-view` | The shown message | `reader` |
 | `message-view.attachment` | An attachment of the shown message | `reader` |
 | `folder-tree.folder` | A folder (the folder is not opened; its actions use it) | global |
+| `folder-tree.account` | An account's heading in the folder pane | global |
 | `composer` | The composer outside its text fields | `composer` |
 | `calendar-list.calendar` | A calendar in the calendar list (its "…" button) | `calendar` |
 
@@ -485,9 +487,31 @@ rail {
   `view.calendar`, `view.contacts`, `view.tasks` and `view.settings`;
   `view.next` / `view.previous` step through the rail. Without a
   `view-host` in the main window, switching to a view opens its window
-  instead.
+  instead. The default layout's `pim.calendar.open`, `pim.contacts.open`,
+  `pim.tasks.open` and `settings.open` show their view, too.
+- The rail's badges: `unread` is the unread mail in the inboxes of all
+  accounts, `confirmations` the changes waiting for your approval; numbers
+  above 99 show as "99+".
+- The view host remembers the last view and shows it again at the next
+  start. Every view stays loaded once you opened it, so switching back keeps
+  the selected message, scroll positions and the calendar's dates.
+- Each view has its own keyboard context: `calendar`, `contacts`, `tasks`,
+  else the global keys (with the mail view's `list` / `reader` contexts
+  inside it). The keys of a hidden view never fire. On the rail, Up / Down /
+  Home / End move between its buttons.
 - A `views`, `rail` or `settings-page` section in your file replaces the
   default's as a whole; files without them keep the defaults.
+
+### Layouts from before the rail
+
+A `layout.kdl` written for an older Nail keeps working: its own
+`window "main"` still shows, the views, rail and settings page come from the
+default, and switching to a view (Ctrl+2, the command palette) opens the
+view's window over the main window. When Nail starts and your file defines
+its own main window without a `view-host`, it offers the new default once
+(**Review the new layout** opens the merge dialog with it, see
+[Customizing](customization.md#the-new-default-layout-for-layouts-of-your-own)),
+where you pick what to take over; nothing changes until you apply it.
 
 ## The settings page
 

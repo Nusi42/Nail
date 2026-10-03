@@ -88,7 +88,7 @@ describe("slot contributions", () => {
       "inspector.toggle",
     ]);
     expect(Object.keys(dialogs).sort()).toEqual(["config-errors", "config-merge"]);
-    expect(effects).toHaveLength(2);
+    expect(effects).toHaveLength(3);
     expect(runtimeIds()).toContain("window-config-merge");
     expect(runtimeIds()).toContain("merge-conflict-duplicate-key");
     for (const type of ["UpdateLayout", "OpenConfigFile", "ListSavedSearches"] as const) {
@@ -117,7 +117,7 @@ describe("mock core", () => {
     const patches = [
       {
         op: "split-sizes" as const,
-        node: { window: "main", breakpoint: 0, path: [2] },
+        node: { window: "mail", breakpoint: 0, path: [] },
         sizes: ["300px", "1fr", "2fr"],
       },
       {
@@ -131,14 +131,15 @@ describe("mock core", () => {
       { op: "toolbar-order" as const, toolbar: "reader", items: [{ type: "spacer" as const }] },
       {
         op: "column-order" as const,
-        node: { window: "main", breakpoint: 0, path: [2, 1, 1] },
+        node: { window: "mail", breakpoint: 0, path: [1, 4] },
         columns: ["subject", "from"],
       },
     ];
     expect(await call(env, { type: "UpdateLayout", patches })).toEqual({ type: "Done" });
     const layout = env.transport.data.layout;
-    const split = layout.windows.main?.[0]?.root;
-    expect(split?.type === "stack" && split.children[2]).toMatchObject({
+    // The M5b mail window's root is the panes split.
+    expect(layout.windows.mail?.[0]?.root).toMatchObject({
+      type: "split",
       sizes: ["300px", "1fr", "2fr"],
     });
     expect(layout.keys).toContainEqual({
@@ -516,16 +517,18 @@ describe("inspector", () => {
     render(
       <Providers env={env}>
         <main data-part="app">
-          <div data-part="message-list" data-node-id="list">
-            <button
-              type="button"
-              data-part="message-list.row"
-              data-state="selected"
-              onClick={clicked}
-            >
-              <span data-part="message-list.row.subject">Hello</span>
-            </button>
-          </div>
+          <section data-window="mail">
+            <div data-part="message-list" data-node-id="list">
+              <button
+                type="button"
+                data-part="message-list.row"
+                data-state="selected"
+                onClick={clicked}
+              >
+                <span data-part="message-list.row.subject">Hello</span>
+              </button>
+            </div>
+          </section>
         </main>
         <Inspector />
       </Providers>,
@@ -551,7 +554,7 @@ describe("inspector", () => {
     expect(document.querySelector('[data-part="inspector.highlight"]')).not.toBeNull();
     expect(within(panel).getByText(/Theme rules/)).toBeInTheDocument();
     expect(within(panel).getByText("message-list #list")).toBeInTheDocument();
-    expect(within(panel).getByText(/window “main”, breakpoint 0, path 2\/1/)).toBeInTheDocument();
+    expect(within(panel).getByText(/window “mail”, breakpoint 0, path 1\/4/)).toBeInTheDocument();
 
     // The click picks instead of pressing the row.
     await user.click(screen.getByRole("button", { name: "Hello" }));
@@ -619,7 +622,7 @@ describe("split write-back", () => {
         patches: [
           {
             op: "split-sizes",
-            node: { window: "main", breakpoint: 0, path: [2] },
+            node: { window: "mail", breakpoint: 0, path: [] },
             sizes: ["260px", "1fr", "1fr"],
           },
         ],

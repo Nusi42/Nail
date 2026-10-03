@@ -174,7 +174,8 @@ function SearchBox({ query, onQuery, onFirst, onDown, focusSignal }: SearchProps
     }
   };
   return (
-    <div data-part="settings-page.search" role="search">
+    // Named: a section's widgets may bring search landmarks of their own.
+    <div data-part="settings-page.search" role="search" aria-label={t("settings-search-label")}>
       <Icon name="search" part="settings-page.search.icon" />
       <input
         ref={input}

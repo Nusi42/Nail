@@ -6,7 +6,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ResolvedLayout } from "../../api/generated";
 import { WindowView } from "../../layout/LayoutRenderer";
-import { UI_STATE_VIEW } from "../../state/uiState";
+import { UI_STATE_VIEW, applyUiStateChange } from "../../state/uiState";
 import {
   createEnv,
   renderWithProviders,
@@ -99,6 +99,22 @@ describe("view-host", () => {
     fireEvent.click(railButton(/^Mail/));
     await settleQueries(env);
     expect(await storedView(env)).toBe("mail");
+  });
+
+  it("does not write its view back when another session remembers a different one", async () => {
+    const env = createEnv();
+    renderShell(env);
+    await settleQueries(env);
+    fireEvent.click(railButton(/^Tasks/));
+    await settleQueries(env);
+    expect(await storedView(env)).toBe("tasks");
+    // A remote browser (sharing the UI state) switches to Calendar.
+    await env.client.call({ type: "SetUiState", key: UI_STATE_VIEW, value: "calendar" });
+    act(() => applyUiStateChange(env.queryClient, UI_STATE_VIEW, "calendar"));
+    await settleQueries(env);
+    expect(await storedView(env)).toBe("calendar");
+    // This window keeps its own view.
+    expect(railButton(/^Tasks/)).toHaveAttribute("aria-current", "page");
   });
 
   it("starts with the remembered view without showing the start view first", async () => {

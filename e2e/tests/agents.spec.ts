@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { McpSession, type JsonRpcResponse } from "../support/mcp";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import { openSettings, rail, showView } from "../support/views";
 
 /**
  * Wave M4a (plan WP105, ADR 0084): an AI agent (MCP client) writes through
@@ -31,15 +32,9 @@ async function violations(page: Page) {
   }));
 }
 
-async function openSettings(page: Page, tab: string): Promise<Locator> {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: tab, exact: true }).click();
-  return settings;
-}
+/** The rail's confirmations badge (M5b; absent while nothing waits). */
+const confirmationsBadge = (page: Page) =>
+  page.locator('[data-part="nav-rail.badge"][data-badge="confirmations"]');
 
 async function closeDialog(page: Page, name: string) {
   const dialog = page.getByRole("dialog", { name });
@@ -56,7 +51,7 @@ async function agent(
   page: Page,
   scopes: string[],
 ): Promise<{ mcp: McpSession; settings: Locator }> {
-  const settings = await openSettings(page, "MCP clients");
+  const settings = await openSettings(page, "Agents (MCP)");
   const serverLine = settings.locator('[data-part="mcp-clients.server"]');
   await expect(serverLine).toHaveAttribute("data-state", "running");
   const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];
@@ -121,15 +116,18 @@ test("an agent's draft needs no confirmation, sending waits for approval and alw
   await page.goto(nail.url);
   await expect(rows(page).first()).toBeVisible();
   const { mcp } = await agent(page, ["Read mail", "Write drafts", "Send mail"]);
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 
   // A draft runs without asking.
   const first = await draft(mcp, "Agent plan");
-  await expect(page.locator('[data-part="confirmation-indicator"]')).toHaveCount(0);
+  await expect(confirmationsBadge(page)).toHaveCount(0);
 
   // Sending asks: the call waits while Nail shows the request.
   const sending = call(mcp, "send_message", { draft_id: first });
-  await expect(page.locator('[data-part="confirmation-indicator"]')).toContainText("1");
+  await expect(confirmationsBadge(page)).toHaveText("1");
+  await expect(
+    rail(page).getByRole("button", { name: /one change waiting for your approval/ }),
+  ).toBeVisible();
   const center = await review(page);
   const card = center.locator('[data-part="confirmation"]').first();
   await expect(card).toHaveAttribute("data-risk", "outgoing");
@@ -149,7 +147,7 @@ test("an agent's draft needs no confirmation, sending waits for approval and alw
   const again = result(await call(mcp, "send_message", { draft_id: second }));
   expect(again.status).toBe("done");
   expect(again.confirmation_id).toBeUndefined();
-  const settings = await openSettings(page, "MCP clients");
+  const settings = await openSettings(page, "Agents (MCP)");
   const policy = settings.getByRole("region", { name: "What Claude may do without asking" });
   await expect(
     policy.getByRole("group", { name: "Send mail" }).getByRole("radio", { name: "Without asking" }),
@@ -163,7 +161,7 @@ test("a denied delete changes nothing and a permanent delete always asks", async
   await page.goto(nail.url);
   await expect(rows(page).first()).toBeVisible();
   const { mcp } = await agent(page, ["Read mail", "Organize mail", "Delete mail permanently"]);
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
   const found = await call(mcp, "search_messages", { query: "subject:Welcome" });
   const id = /"id":"([^"]+)"/.exec(JSON.stringify(found.result))?.[1];
   expect(id).toBeDefined();

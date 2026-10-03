@@ -26,18 +26,18 @@ function renderApp(env = createEnv({ state: { connection: "connecting" } })) {
 const themeStyle = () => document.head.querySelector<HTMLStyleElement>("style[data-nail-theme]");
 
 describe("App", () => {
-  it("renders the default three-pane UI with the unified inbox", async () => {
+  it("renders the rail and the mail view with the unified inbox", async () => {
     const { container, env } = renderApp();
-    await screen.findByRole("treeitem", { name: /Inbox/ });
+    const favorite = await screen.findByRole("treeitem", { name: /^All inboxes/ });
     const app = container.querySelector('[data-part="app"]');
     expect(app).toHaveAttribute("data-layout", "default");
+    // M5b: the rail beside the view host, which shows the mail view.
+    expect(screen.getByRole("navigation", { name: "Sections" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Mail view" })).toBeInTheDocument();
     // The built-in "All accounts" virtual account comes first: the unified inbox.
     expect(env.store.getState().activeAccountId).toBe("all");
     expect(env.store.getState().activeFolderId).toBe("all/inbox");
-    expect(screen.getByRole("button", { name: "All accounts" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(favorite).toHaveAttribute("aria-selected", "true");
     expect((await screen.findAllByRole("option")).length).toBeGreaterThan(0);
     expect(screen.getByText("Select a message to read it.")).toBeInTheDocument();
     expect(themeStyle()?.textContent).toContain("--nail-color-accent");
@@ -71,8 +71,10 @@ describe("App", () => {
     expect(env.store.getState().selectedMessageId).toBe(`${INBOX}#2`);
 
     // j/k are list/reader bindings: inside the folder tree they do nothing.
-    const inbox = screen.getByRole("treeitem", { name: /Inbox/ });
-    inbox.focus();
+    const inbox = container.querySelector<HTMLElement>(
+      `[data-part="folder-tree.item"][data-folder="${INBOX}"]`,
+    ) as HTMLElement;
+    act(() => inbox.focus());
     fireEvent.keyDown(inbox, { key: "j" });
     expect(env.store.getState().selectedMessageId).toBe(`${INBOX}#2`);
 
@@ -102,15 +104,16 @@ describe("App", () => {
 
   it("hot-swaps theme and layout on ConfigChanged", async () => {
     const { container, env } = renderApp();
-    await screen.findByRole("treeitem", { name: /Inbox/ });
+    await screen.findByRole("treeitem", { name: /^All inboxes/ });
     const theme = defaultTheme();
     const layout = env.transport.data.layout;
+    // A layout whose main window is the narrow mail window (tabs), no views.
     const narrowOnly = {
       ...layout,
       name: "custom",
       windows: {
         main: [
-          layout.windows.main?.[1] ?? { min_width: null, max_width: null, root: { type: "stack" } },
+          layout.windows.mail?.[1] ?? { min_width: null, max_width: null, root: { type: "stack" } },
         ],
       },
     };

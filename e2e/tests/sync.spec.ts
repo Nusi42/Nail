@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { startNail } from "../support/nail";
+import { accountSections, sectionInbox } from "../support/views";
 
 test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) => {
   // The demo corpus served by an in-process mock IMAP server.
@@ -12,13 +13,12 @@ test("an IMAP account syncs into the UI and F5 syncs again", async ({ page }) =>
       ws.on("framereceived", (frame) => received.push(String(frame.payload)));
     });
     await page.goto(server.url);
-    // "All accounts" (the unified view, selected by default), then the account.
-    const accounts = page.locator('[data-part="account-switcher.item"]');
-    await expect(accounts).toHaveCount(2);
-    await expect(accounts.nth(0)).toHaveAttribute("data-kind", "virtual");
-    await expect(accounts.nth(1)).toHaveAttribute("data-kind", "imap");
+    // "All inboxes" (the unified view, selected by default), then the account.
+    const accounts = accountSections(page);
+    await expect(accounts).toHaveCount(1);
+    await expect(accounts.nth(0)).toHaveAttribute("data-account-kind", "imap");
 
-    const inbox = page.locator('[data-part="folder-tree.item"][data-role="inbox"]');
+    const inbox = sectionInbox(accounts.nth(0));
     await expect(inbox).toBeVisible();
     await inbox.click();
     const rows = page.locator('[data-part="message-list.row"]');

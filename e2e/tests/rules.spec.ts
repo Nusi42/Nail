@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { readerAction } from "../support/views";
+import { readerAction, runFromPalette } from "../support/views";
 
 /**
  * Filter rules (ADR 0024) against the `demo-multi` mock servers: an arrival
@@ -26,10 +26,7 @@ const rulesFile = () => readFileSync(path.join(server.configDir, "rules.kdl"), "
 async function openRules(page: Page): Promise<Locator> {
   await page.goto(server.url);
   await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Filter rules" })
-    .click();
+  await runFromPalette(page, "filter rules", "Filter rules");
   const window = page.getByRole("dialog", { name: "Filter rules" });
   await expect(window).toBeVisible();
   return window;

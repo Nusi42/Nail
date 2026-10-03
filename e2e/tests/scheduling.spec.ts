@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
-import { toolbarAction } from "../support/views";
+import { showView, toolbarAction, viewRegion } from "../support/views";
 
 /**
  * Wave M3b (ADR 0070) against `nail serve --seed demo-multi`: iMIP
@@ -123,11 +123,8 @@ interface SmtpMessage {
 const smtp = () => control<SmtpMessage[]>(server, "smtp-messages");
 
 async function openCalendar(page: Page): Promise<Locator> {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Calendar" })
-    .click();
-  const calendar = page.getByRole("dialog", { name: "Calendar", exact: true });
+  await showView(page, "Calendar");
+  const calendar = viewRegion(page, "Calendar");
   await expect(calendar).toBeVisible();
   await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   return calendar;
@@ -186,7 +183,7 @@ test("an organizer's update changes the event and a cancellation removes it", as
   const calendar = await openCalendar(page);
   await expect(chip(calendar, "Retro moved")).toBeVisible();
   await expect(chip(calendar, "Retro")).toHaveCount(0);
-  await calendar.getByRole("button", { name: "Close" }).first().click();
+  await showView(page, "Mail");
   await expect(calendar).toBeHidden();
 
   // The organizer cancels: "Remove from calendar".
@@ -242,7 +239,7 @@ test("a counter-proposal is accepted by the organizer and the update goes out", 
     )
     .not.toBe("");
   await editor.getByRole("button", { name: "Close" }).first().click();
-  await calendar.getByRole("button", { name: "Close" }).first().click();
+  await showView(page, "Mail");
 
   // Grace proposes another time.
   const counter = await deliver(
@@ -335,7 +332,7 @@ test("invitations go to the CalDAV calendar chosen in the settings and updates c
   await settings.getByLabel("Calendar for new invitations").selectOption({ label: "Personal" });
   await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings).toBeHidden();
-  await calendar.getByRole("button", { name: "Close" }).first().click();
+  await showView(page, "Mail");
   await expect(calendar).toBeHidden();
 
   const uid = "e2e-orion@example.org";

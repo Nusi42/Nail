@@ -8,6 +8,23 @@ decisions behind each change are in [`docs/adr/`](docs/adr/).
 
 ## [Unreleased]
 
+### Changed (M5b, ADRs 0109–0114)
+
+- **Navigation rail and views**: Mail, Calendar, Contacts, Tasks and
+  Settings are views behind a rail on the left (Ctrl+1 … Ctrl+4, `g m`),
+  with the unread count and pending confirmations as badges; Nail reopens
+  the last view.
+- **Mail view**: a folder pane with New message, Favorites, one section per
+  account (with its colour) and smart folders; a list header with search,
+  counts and the filter chips All / Unread / Flagged / Attachments; one
+  ranked action bar with "More" and matching right-click menus.
+- **Settings** are one searchable page grouped into General, Look & feel,
+  Security and Extensions (the old tabs open as links to their section).
+- **Calendar**: a one-line toolbar with a segmented view switch, calendar
+  menus instead of buttons, readable event cards.
+- Layouts of your own keep working; Nail offers the new default once
+  through the merge dialog.
+
 ### Changed (post-M4c, ADR 0101)
 
 - **Faster mail sync**: fetching, storing raw mail and indexing now overlap;

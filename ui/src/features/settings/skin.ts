@@ -183,7 +183,6 @@ ${p("settings-page.card")} > ${p("appearance")} { max-width: none; padding: 0; o
 const SEGMENTED = `${p("appearance")} ${p("segmented")}, ${p("settings-page")} ${p("segmented")} { justify-self: start; width: max-content; max-width: 100%; }
 ${p("appearance")} ${p("segmented.option")}[aria-checked="true"], ${p("settings-page")} ${p("segmented.option")}[aria-checked="true"] {
   box-shadow: inset 0 0 0 1px ${T.border}, var(--nail-shadow-raised);
-}
 }`;
 
 /** The whole settings-page skin. */

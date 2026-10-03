@@ -13,6 +13,7 @@ import {
   virtualAuthenticator,
   type RemoteUi,
 } from "../support/remote";
+import { openSettingsTab, showView, viewRegion } from "../support/views";
 
 /**
  * The remote UI (M2b, ADR 0041): the desktop turns it on (TLS with a
@@ -33,6 +34,8 @@ test.afterEach(async () => {
 
 /** The app of the remote UI is up (the demo inbox is listed). */
 async function expectApp(page: Page) {
+  // The UI state (the last view) is shared with the desktop (M5b): show Mail.
+  await showView(page, "Mail");
   await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible({
     timeout: 20_000,
   });
@@ -69,10 +72,10 @@ test("a second browser pairs with a code from the desktop", async ({ page }) => 
 
   // Desktop: Settings → Devices → Pair a device.
   await page.goto(server.url);
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Devices" }).click();
-  await settings.getByRole("button", { name: "Pair a device" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Devices");
+  await settings.getByRole("button", { name: "Pair a device" }).first().click();
   await page.getByRole("button", { name: "Create pairing code" }).click();
   const code = (await page.locator('[data-part="remote-pair.code"]').textContent())?.trim() ?? "";
   expect(code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
@@ -232,9 +235,9 @@ test("revoking a session on the desktop signs the browser out", async ({ page })
   await pairAndSkipPasskey(phone, remote, await pairingCode(server, user));
 
   await page.goto(server.url);
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Devices" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Devices");
   await settings.getByRole("button", { name: "Sign out ada on Phone" }).click();
 
   await expect(phone.getByRole("main", { name: "Sign in to Nail" })).toBeVisible({
@@ -245,9 +248,9 @@ test("revoking a session on the desktop signs the browser out", async ({ page })
 
 test("internet mode cannot be enabled", async ({ page }) => {
   await page.goto(server.url);
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Remote access" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Remote access");
   const internet = settings.getByRole("checkbox", { name: "Allow access from the internet" });
   await expect(internet).toBeDisabled();
   await expect(internet).toHaveAccessibleDescription(/penetration test/);

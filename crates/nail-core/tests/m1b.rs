@@ -813,11 +813,12 @@ async fn invalid_rules_are_refused_and_hand_edits_reported() {
 async fn layout_write_back_merge_backups_and_every_error() {
     let f = setup().await;
     let mut events = f.service.subscribe();
+    // The three panes: the mail view's window (M5b), its root split.
     let patch = LayoutPatch::SplitSizes {
         node: LayoutNodeRef {
-            window: "main".into(),
+            window: "mail".into(),
             breakpoint: 0,
-            path: vec![2],
+            path: vec![],
         },
         sizes: vec!["30%".into(), "1fr".into(), "1.4fr".into()],
     };

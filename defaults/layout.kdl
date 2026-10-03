@@ -1,115 +1,150 @@
-// Nail default layout: the three-pane mail window and its secondary windows.
+// Nail default layout: the navigation rail with the views (Mail, Calendar,
+// Contacts, Tasks, Settings) and the secondary windows.
 //
 // Your own layout.kdl can start with `layout "My layout" extends="default" { ... }`
 // and override only what you want to change. See userDocs/en/layout-reference.md.
 
 layout "default" {
-    // Wide windows: folders | message list | reader, with a toolbar on top and
-    // a status bar at the bottom.
+    // The main window (M5b): the navigation rail on the left and the active
+    // view next to it. Each view shows one of the windows below (see `views`).
+    window "main" {
+        stack id="root" sizes="auto 1fr auto auto" {
+            // Every error of every config file; nothing while all are valid.
+            config-errors id="config-errors" hide-when-valid=#true
+            split "horizontal" id="shell" sizes="auto 1fr" resizable=#false {
+                nav-rail id="nav-rail"
+                view-host id="view-host"
+            }
+            status-bar id="status" items="sync-progress account-status ops send-status folder-counts"
+            // Shown while an AI agent reads what you are looking at.
+            mcp-context-indicator id="agent-indicator"
+        }
+    }
+
+    // The mail view. Wide windows: folders | message list | reader.
     breakpoint min-width=900 {
-        window "main" {
-            stack id="root" sizes="auto auto 1fr auto auto auto" {
-                toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
-                // Every error of every config file; nothing while all are valid.
-                config-errors id="config-errors" hide-when-valid=#true
-                split "horizontal" id="panes" \
-                    sizes="240px 1fr 1.4fr" \
-                    min-sizes="160px 280px 320px" \
-                    max-sizes="480px none none" \
-                    collapsible="true false true" {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto auto 1fr auto auto auto auto" {
-                        search-bar id="search" scope="account"
-                        account-switcher id="accounts"
-                        folder-tree id="folders" show-unread=#true
-                        // Gmail accounts: labels as views (nothing for other accounts).
-                        label-list id="gmail-labels"
-                        // Exchange accounts: shared / delegate mailboxes and the
-                        // master category list (nothing for other accounts).
-                        exchange-mailboxes id="exchange-mailboxes"
-                        exchange-categories id="exchange-categories"
-                        smart-folders id="smart-folders" label="@saved-search-label"
-                    }
-                    stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto 1fr" {
-                        // While automatic replies (out of office) of an Exchange
-                        // account are on: a banner with Turn off / Edit.
-                        automatic-replies-banner id="automatic-replies"
-                        // Gmail inbox categories (nothing for other accounts).
-                        category-tabs id="gmail-categories"
-                        // Exchange Focused Inbox tabs (nothing for other accounts).
-                        focused-tabs id="exchange-focused"
-                        message-list id="list" page-size=100 {
-                            row "{from.name}  {date | relative}"
-                            row "{subject}"
-                            row "{preview}"
-                        }
-                    }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
-                        toolbar id="reader-toolbar" toolbar="reader"
-                        thread-view id="thread" expand="none"
-                        // Signature / encryption and sender check badges, then
-                        // warnings about deceptive links and risky attachments.
-                        security-message id="message-security"
-                        security-warnings id="message-warnings"
-                        // Remote images stay blocked until you allow them.
-                        remote-content id="message-remote-content"
-                        // Junk verdict with "Not junk"; a body that is not
-                        // stored yet with "Download full message".
-                        junk-verdict id="message-junk"
-                        sync-message-body id="message-body-status"
-                        message-view id="message" headers="from to cc date"
+        window "mail" {
+            split "horizontal" id="panes" \
+                sizes="260px 1fr 1.4fr" \
+                min-sizes="200px 300px 320px" \
+                max-sizes="480px none none" \
+                collapsible="true false true" {
+                stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
+                    // New message, Favorites, one section per account (with its
+                    // colour), smart folders once you saved a search.
+                    folder-tree id="folders" show-unread=#true \
+                        sections="favorites accounts smart-folders" \
+                        favorites="all-inboxes flagged snoozed drafts" \
+                        collapsible=#true account-colors=#true
+                    // Gmail accounts: labels as views (nothing for other accounts).
+                    label-list id="gmail-labels"
+                    // Exchange accounts: shared / delegate mailboxes and the
+                    // master category list (nothing for other accounts).
+                    exchange-mailboxes id="exchange-mailboxes"
+                    exchange-categories id="exchange-categories"
+                }
+                stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto auto 1fr" {
+                    // Search, the folder's title with counts, filter chips.
+                    list-header id="list-header"
+                    // While automatic replies (out of office) of an Exchange
+                    // account are on: a banner with Turn off / Edit.
+                    automatic-replies-banner id="automatic-replies"
+                    // Gmail inbox categories (nothing for other accounts).
+                    category-tabs id="gmail-categories"
+                    // Exchange Focused Inbox tabs (nothing for other accounts).
+                    focused-tabs id="exchange-focused"
+                    message-list id="list" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
+                        row "{preview}"
                     }
                 }
-                status-bar id="status" items="sync-progress account-status ops send-status folder-counts"
-                // Shown while an AI agent reads what you are looking at.
-                mcp-context-indicator id="agent-indicator"
-                // How many changes by AI agents or plug-ins wait for your
-                // approval (nothing while none waits); opens the confirmations.
-                confirmation-indicator id="confirmation-indicator"
+                stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
+                    toolbar id="reader-toolbar" toolbar="reader"
+                    thread-view id="thread" expand="none"
+                    // Signature / encryption and sender check badges, then
+                    // warnings about deceptive links and risky attachments.
+                    security-message id="message-security"
+                    security-warnings id="message-warnings"
+                    // Remote images stay blocked until you allow them.
+                    remote-content id="message-remote-content"
+                    // Junk verdict with "Not junk"; a body that is not
+                    // stored yet with "Download full message".
+                    junk-verdict id="message-junk"
+                    sync-message-body id="message-body-status"
+                    message-view id="message" headers="from to cc date"
+                }
             }
         }
     }
 
     // Narrow windows (phones, small browser windows): one pane at a time.
     breakpoint max-width=899 {
-        window "main" {
-            stack id="root" sizes="auto auto auto 1fr auto auto auto" {
-                toolbar id="main-toolbar" label="@toolbar.main" toolbar="main"
-                config-errors id="config-errors" hide-when-valid=#true
-                search-bar id="search" scope="account"
-                tabs id="panes" active=1 {
-                    stack id="sidebar" label="@layout.pane.folders" sizes="auto 1fr auto auto auto auto" {
-                        account-switcher id="accounts"
-                        folder-tree id="folders" show-unread=#true
-                        label-list id="gmail-labels"
-                        exchange-mailboxes id="exchange-mailboxes"
-                        exchange-categories id="exchange-categories"
-                        smart-folders id="smart-folders" label="@saved-search-label"
-                    }
-                    stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto 1fr" {
-                        automatic-replies-banner id="automatic-replies"
-                        category-tabs id="gmail-categories"
-                        focused-tabs id="exchange-focused"
-                        message-list id="list" page-size=100 {
-                            row "{from.name}  {date | relative}"
-                            row "{subject}"
-                        }
-                    }
-                    stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
-                        toolbar id="reader-toolbar" toolbar="reader"
-                        thread-view id="thread" expand="none"
-                        security-message id="message-security"
-                        security-warnings id="message-warnings"
-                        remote-content id="message-remote-content"
-                        junk-verdict id="message-junk"
-                        sync-message-body id="message-body-status"
-                        message-view id="message" headers="from date"
+        window "mail" {
+            tabs id="panes" active=1 {
+                stack id="sidebar" label="@layout.pane.folders" sizes="1fr auto auto auto" {
+                    folder-tree id="folders" show-unread=#true \
+                        sections="favorites accounts smart-folders" \
+                        favorites="all-inboxes flagged snoozed drafts" \
+                        collapsible=#true account-colors=#true
+                    label-list id="gmail-labels"
+                    exchange-mailboxes id="exchange-mailboxes"
+                    exchange-categories id="exchange-categories"
+                }
+                stack id="list-pane" label="@layout.pane.messages" sizes="auto auto auto auto 1fr" {
+                    list-header id="list-header" counts=#false
+                    automatic-replies-banner id="automatic-replies"
+                    category-tabs id="gmail-categories"
+                    focused-tabs id="exchange-focused"
+                    message-list id="list" page-size=100 {
+                        row "{from.name}  {date | relative}"
+                        row "{subject}"
                     }
                 }
-                status-bar id="status" items="sync-progress ops send-status"
-                mcp-context-indicator id="agent-indicator"
-                confirmation-indicator id="confirmation-indicator"
+                stack id="reader" label="@layout.pane.message" sizes="auto auto auto auto auto auto auto 1fr" {
+                    toolbar id="reader-toolbar" toolbar="reader"
+                    thread-view id="thread" expand="none"
+                    security-message id="message-security"
+                    security-warnings id="message-warnings"
+                    remote-content id="message-remote-content"
+                    junk-verdict id="message-junk"
+                    sync-message-body id="message-body-status"
+                    message-view id="message" headers="from date"
+                }
             }
         }
+    }
+
+    // The calendar, contacts and tasks views (M3a, M5b;
+    // userDocs/en/calendar-contacts-tasks.md). Opened with `window.open`
+    // they show as windows over the main window.
+    window "calendar" {
+        stack id="calendar-root" sizes="auto 1fr" {
+            toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
+            split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
+                stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto auto 1fr" {
+                    mini-month id="calendar-mini-month"
+                    // Calendars by source with colour squares, "…" and "+" menus.
+                    calendar-list id="calendar-list"
+                    task-list id="calendar-tasks" sort="due"
+                }
+                calendar id="calendar-main" view="week" views="day week month year agenda free-time" scroll-to=8
+            }
+        }
+    }
+    window "contacts" {
+        split "horizontal" id="contacts-panes" sizes="360px 1fr" {
+            contact-list id="contacts-list" label="@pim.pane.contacts"
+            contact-card id="contacts-card" label="@pim.pane.contact"
+        }
+    }
+    window "tasks" {
+        task-list id="tasks"
+    }
+    // The settings view: grouped sections with search (the `settings-page`
+    // section below says which settings each section shows).
+    window "settings" {
+        settings-page id="settings-page"
     }
 
     // Secondary windows, opened over the main window.
@@ -135,82 +170,6 @@ layout "default" {
     // Snoozed messages, with "Wake up now".
     window "snoozed" {
         snooze-list id="snoozed"
-    }
-    // Calendars, contacts and tasks (M3a; userDocs/en/calendar-contacts-tasks.md).
-    window "calendar" {
-        stack id="calendar-root" sizes="auto 1fr" {
-            toolbar id="calendar-toolbar" label="@pim.toolbar.calendar" toolbar="calendar"
-            split "horizontal" id="calendar-panes" sizes="260px 1fr" min-sizes="200px 480px" collapsible="true false" {
-                stack id="calendar-sidebar" label="@pim.pane.calendars" sizes="auto auto 1fr" {
-                    mini-month id="calendar-mini-month"
-                    calendar-list id="calendar-list"
-                    task-list id="calendar-tasks" sort="due"
-                }
-                calendar id="calendar-main" view="week" views="day work-week week month year agenda free-time" scroll-to=8
-            }
-        }
-    }
-    window "contacts" {
-        split "horizontal" id="contacts-panes" sizes="360px 1fr" {
-            contact-list id="contacts-list" label="@pim.pane.contacts"
-            contact-card id="contacts-card" label="@pim.pane.contact"
-        }
-    }
-    window "tasks" {
-        task-list id="tasks"
-    }
-    window "settings" {
-        tabs id="settings-tabs" {
-            account-settings id="account-settings" label="@settings.tab.accounts"
-            // Themes, Follow Windows, density, text size, corner radius and accent (M5a).
-            appearance-settings id="appearance" label="@settings.tab.appearance"
-            virtual-account-editor id="virtual-accounts" label="@settings.tab.virtual-accounts"
-            mcp-clients id="mcp-clients" label="@mcp.settings.tab"
-            // Changes by AI agents and plug-ins that wait for you, and the history.
-            confirmation-center id="confirmation-center" label="@agents.center.tab"
-            security-keys id="security-keys" label="@security.settings.tab.keys"
-            security-identities id="security-identities" label="@security.settings.tab.identities"
-            security-settings id="security-settings" label="@security.settings.tab.protection"
-            security-autocrypt id="security-autocrypt" label="@security.settings.tab.autocrypt"
-            // The vault recovery key and smartcards (PKCS#11) for signing / decrypting (M4c).
-            security-recovery-key id="security-recovery-key" label="@security.settings.tab.recovery-key"
-            security-smartcards id="security-smartcards" label="@security.settings.tab.smartcards"
-            remote-settings id="remote-settings" label="@remote.settings.tab"
-            remote-users id="remote-users" label="@remote.settings.tab.users"
-            remote-devices id="remote-devices" label="@remote.settings.tab.devices"
-            remote-audit id="remote-audit" label="@remote.settings.tab.audit"
-            remote-content-allows id="remote-content-allows" label="@remote.settings.tab.privacy"
-            // Server-side rules (Sieve) and the vacation reply.
-            sieve-status id="sieve-status" label="@sieve.settings.tab"
-            // Exchange accounts: Nail rules placed as inbox rules, the server's rules.
-            exchange-rules id="exchange-rules" label="@exchange.settings.tab.rules"
-            vacation-editor id="vacation" label="@vacation.settings.tab"
-            junk-settings id="junk-settings" label="@junk.settings.tab"
-            notification-settings id="notification-settings" label="@notification.settings.tab"
-            // What each folder downloads (full, headers only, recent days).
-            sync-folder-policies id="sync-policies" label="@sync.settings.tab"
-            // Installed plug-ins: on / off, permissions, settings, logs, placements.
-            plugin-manager id="plugin-manager" label="@plugin.manager.tab"
-            // The desktop app (Windows): updates and the installation, tray and
-            // startup, default apps. In a browser they say "desktop app only".
-            update-settings id="update-settings" label="@system.settings.tab.updates"
-            desktop-settings id="desktop-settings" label="@system.settings.tab.desktop"
-            default-apps id="default-apps" label="@system.settings.tab.default-apps"
-            // Import / export, backups and the diagnostics bundle (M4c).
-            import-export id="import-export" label="@portability.settings.tab.import-export"
-            backup-restore id="backup-restore" label="@portability.settings.tab.backup"
-            diagnostics id="diagnostics" label="@portability.settings.tab.diagnostics"
-            stack id="customize" label="@settings.tab.customize" sizes="auto auto 1fr" {
-                toolbar id="customize-toolbar" label="@toolbar.customize" toolbar="customize"
-                config-errors id="settings-config-errors"
-                // Toolbars, shortcuts and list columns, written into this file.
-                tabs id="customize-editors" label="@customize.editors.tabs" {
-                    toolbar-editor id="toolbar-editor" label="@customize.toolbar.tab"
-                    key-binding-editor id="key-binding-editor" label="@customize.keys.tab"
-                    column-editor id="column-editor" label="@customize.columns.tab"
-                }
-            }
-        }
     }
 
     // Icons are Lucide names (https://lucide.dev, M5a): "reply-all",
@@ -241,7 +200,7 @@ layout "default" {
         action "search.focus"     label="@search.action.focus"     icon="search"
         action "search.clear"     label="@search.action.clear" icon="x"
         action "account.add"      label="@account.action.add"      icon="user-plus"
-        action "settings.open"    label="@settings.action.open"    icon="settings" alias-of="window.open" "settings"
+        action "settings.open"    label="@settings.action.open"    icon="settings" alias-of="view.show" "settings"
         action "window.open"      label="@window.action.open" icon="external-link"
         action "window.close"     label="@window.action.close"     icon="x"
         action "view.toggle"      label="@view.action.toggle" icon="layout-panel-left"
@@ -266,10 +225,11 @@ layout "default" {
         action "plugins.manage"   label="@plugin.action.manage" icon="puzzle"
         action "plugins.install"  label="@plugin.action.install" icon="package-plus"
         action "plugins.load-dev" label="@plugin.action.load-dev" icon="code"
-        // Calendars, contacts and tasks (M3a).
-        action "pim.calendar.open" label="@pim.action.open-calendar" icon="calendar" alias-of="window.open" "calendar"
-        action "pim.contacts.open" label="@pim.action.open-contacts" icon="book-user" alias-of="window.open" "contacts"
-        action "pim.tasks.open"   label="@pim.action.open-tasks" icon="list-checks"   alias-of="window.open" "tasks"
+        // Calendars, contacts and tasks (M3a); the three `*.open` actions
+        // show their view (M5b).
+        action "pim.calendar.open" label="@pim.action.open-calendar" icon="calendar" alias-of="view.show" "calendar"
+        action "pim.contacts.open" label="@pim.action.open-contacts" icon="book-user" alias-of="view.show" "contacts"
+        action "pim.tasks.open"   label="@pim.action.open-tasks" icon="list-checks"   alias-of="view.show" "tasks"
         action "calendar.goto-today" label="@pim.action.calendar-today" icon="calendar-check"
         action "calendar.next"    label="@pim.action.calendar-next" icon="chevron-right"
         action "calendar.previous" label="@pim.action.calendar-previous" icon="chevron-left"
@@ -330,6 +290,8 @@ layout "default" {
         action "security.recovery-key.check" icon="key-round"
         action "security.recovery-key.create" icon="key-round"
         action "security.recovery-key.restore" icon="archive-restore"
+        // A section of the settings page (`settings.section "<id>"`, M5b).
+        action "settings.section" icon="settings"
         // Views behind the navigation rail (M5b): `view.show "<view>"`, and
         // one alias per view for the shortcuts and the command palette.
         action "view.show"        label="@view.action.show" icon="panels-top-left"
@@ -342,11 +304,11 @@ layout "default" {
         action "view.settings"    label="@view.settings" icon="settings" alias-of="view.show" "settings"
     }
 
-    // The top-level views (M5b). Each shows a window; a `view-host` in the
-    // main window shows the active one, and without one a view opens as its
-    // window. Mail shows the main window until the rail is in the default.
+    // The top-level views (M5b). Each shows a window; the `view-host` in the
+    // main window shows the active one (a layout whose main window has no
+    // view host opens a view as its window instead).
     views default="mail" {
-        view "mail"     label="@view.mail" icon="mail" window="main" badge="unread"
+        view "mail"     label="@view.mail" icon="mail" window="mail" badge="unread"
         view "calendar" label="@view.calendar" icon="calendar" window="calendar"
         view "contacts" label="@view.contacts" icon="users" window="contacts"
         view "tasks"    label="@view.tasks" icon="square-check-big" window="tasks"
@@ -377,6 +339,10 @@ layout "default" {
                 sync-folder-policies id="page-sync-policies"
                 junk-settings id="page-junk-settings"
             }
+            // Calendars, task lists, subscriptions and accounts, import.
+            section "calendar" label="@settings.section.calendar" icon="calendar" {
+                pim-settings id="page-pim-settings"
+            }
             section "server-rules" label="@settings.section.server-rules" icon="funnel" {
                 sieve-status id="page-sieve-status"
                 exchange-rules id="page-exchange-rules"
@@ -402,7 +368,8 @@ layout "default" {
             }
             section "layout" label="@settings.section.layout" icon="layout-panel-left" {
                 toolbar id="page-customize-toolbar" label="@toolbar.customize" toolbar="customize"
-                config-errors id="page-config-errors"
+                // Named apart from the Configuration errors window it opens.
+                config-errors id="page-config-errors" label="@settings.config-errors"
                 toolbar-editor id="page-toolbar-editor"
                 column-editor id="page-column-editor"
             }
@@ -502,17 +469,17 @@ layout "default" {
         bind "f5" "sync.now"
         bind "ctrl+b" "view.toggle \"sidebar\""
         bind "g r" "view.toggle \"reader\""
-        bind "g o" "outbox.open"
-        bind "g c" "pim.calendar.open"
-        bind "g p" "pim.contacts.open"
-        bind "g t" "pim.tasks.open"
-        bind "g a" "agents.open-center"
-        // Views (M5b).
+        // Views (M5b; the rail's tooltips name the first key of a view).
         bind "ctrl+1" "view.mail"
         bind "ctrl+2" "view.calendar"
         bind "ctrl+3" "view.contacts"
         bind "ctrl+4" "view.tasks"
         bind "g m" "view.mail"
+        bind "g o" "outbox.open"
+        bind "g c" "pim.calendar.open"
+        bind "g p" "pim.contacts.open"
+        bind "g t" "pim.tasks.open"
+        bind "g a" "agents.open-center"
         bind "ctrl+," "settings.open"
         bind "ctrl+shift+i" "inspector.toggle"
         bind "f1" "system.about"
@@ -526,9 +493,12 @@ layout "default" {
         bind "contextmenu" "menu.context"
     }
 
+    // The toolbar of the pre-M5b main window. The default layout no longer
+    // shows it (the rail and the folder pane took over); layouts of your own
+    // that still place `toolbar="main"` keep it.
     toolbar "main" {
-        item "mail.compose"
-        item "sync.now"
+        item "mail.compose" rank=1
+        item "sync.now" rank=2
         separator
         item "outbox.open"
         item "rules.open"
@@ -542,42 +512,53 @@ layout "default" {
         item "settings.open"
     }
 
-    toolbar "reader" {
-        item "mail.reply"
-        item "mail.reply-all"
-        item "mail.forward"
-        spacer
-        item "mail.archive"
-        item "mail.move"
-        item "mail.delete"
+    // The reader's action bar (M5b): the three most used actions with
+    // labels (Reply is the primary one), the common ones as icons, the rest
+    // in "More". When the bar gets narrow, the highest ranks move into "More"
+    // first; actions that do not apply to the message are hidden.
+    toolbar "reader" hide-disabled=#true {
+        item "mail.reply" rank=1
+        item "mail.reply-all" rank=2
+        item "mail.forward" rank=3
         separator
-        item "mail.toggle-read"
-        item "mail.toggle-flag"
-        item "snooze.open"
-        item "junk.mark"
-        item "rules.create-from-message"
-        item "calendar.event-from-message"
-        item "tasks.from-message"
-        item "gmail.apply-labels"
-        item "exchange.apply-categories"
-        item "exchange.classify"
-        item "security.autocrypt.import"
-        item "print.message"
+        item "mail.archive" rank=4 display="icon"
+        item "mail.delete" rank=5 display="icon"
+        item "mail.move" rank=6 display="icon"
+        item "mail.toggle-flag" rank=7 display="icon"
+        item "snooze.open" rank=8 display="icon"
+        spacer
+        more {
+            header "@toolbar.group.message"
+            item "mail.toggle-read"
+            item "junk.mark"
+            item "gmail.apply-labels"
+            item "exchange.apply-categories"
+            item "exchange.classify"
+            item "security.autocrypt.import"
+            item "print.message"
+            separator
+            header "@toolbar.group.turn-into"
+            item "calendar.event-from-message"
+            item "tasks.from-message"
+            item "rules.create-from-message"
+        }
     }
 
     // The calendar window's toolbar (M3a).
     toolbar "calendar" {
-        item "pim.sync"
-        separator
-        item "tasks.new"
-        item "contacts.new"
-        item "scheduling.find-time"
+        item "scheduling.find-time" rank=1
+        item "tasks.new" rank=2
+        item "contacts.new" rank=3
         spacer
-        item "print.event"
-        item "print.agenda"
-        item "pim.import"
-        item "pim.sources"
-        item "scheduling.settings"
+        item "pim.sync" rank=4 display="icon"
+        more {
+            item "print.event"
+            item "print.agenda"
+            separator
+            item "pim.import"
+            item "pim.sources"
+            item "scheduling.settings"
+        }
     }
 
     toolbar "customize" {
@@ -586,33 +567,34 @@ layout "default" {
         item "inspector.toggle"
     }
 
-    // Right-click menus (also Shift+F10 and the menu key), per part.
+    // Right-click menus (also Shift+F10 and the menu key), per part. The
+    // message menus follow the reader's action bar (M5b).
     menu "context:message-list.row" {
         item "mail.reply"
         item "mail.reply-all"
         item "mail.forward"
         separator
-        item "mail.toggle-read"
+        item "mail.archive"
+        item "mail.delete"
+        item "mail.move"
         item "mail.toggle-flag"
         item "snooze.open"
         separator
-        item "mail.archive"
-        item "mail.move"
-        item "mail.delete"
-        separator
+        header "@toolbar.group.message"
+        item "mail.toggle-read"
         item "junk.mark"
         item "junk.not-junk"
         item "sync.download-message"
-        separator
-        item "rules.create-from-message"
-        item "calendar.event-from-message"
-        item "tasks.from-message"
         item "gmail.apply-labels"
         item "exchange.apply-categories"
         item "exchange.classify"
-        separator
         item "print.message"
         item "print.thread"
+        separator
+        header "@toolbar.group.turn-into"
+        item "calendar.event-from-message"
+        item "tasks.from-message"
+        item "rules.create-from-message"
     }
 
     menu "context:thread-view.message" {
@@ -629,13 +611,28 @@ layout "default" {
         item "mail.reply-all"
         item "mail.forward"
         separator
+        item "mail.archive"
+        item "mail.delete"
+        item "mail.move"
+        item "mail.toggle-flag"
         item "snooze.open"
+        separator
+        header "@toolbar.group.message"
+        item "mail.toggle-read"
         item "junk.mark"
         item "junk.not-junk"
         item "sync.download-message"
-        separator
+        item "gmail.apply-labels"
+        item "exchange.apply-categories"
+        item "exchange.classify"
+        item "security.autocrypt.import"
         item "print.message"
         item "print.save-pdf"
+        separator
+        header "@toolbar.group.turn-into"
+        item "calendar.event-from-message"
+        item "tasks.from-message"
+        item "rules.create-from-message"
     }
 
     menu "context:folder-tree.folder" {
@@ -644,5 +641,15 @@ layout "default" {
         item "gmail.new-label"
         item "exchange.add-mailbox"
         item "exchange.new-category"
+    }
+
+    // An account's heading in the folder pane (M5b).
+    menu "context:folder-tree.account" {
+        item "sync.now"
+        item "exchange.automatic-replies"
+        item "exchange.add-mailbox"
+        item "gmail.new-label"
+        separator
+        item "settings.section" "accounts" label="@settings.section.accounts" icon="user-round"
     }
 }

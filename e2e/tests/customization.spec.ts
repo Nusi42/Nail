@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test as base } from "@playwright/test";
 import { startNail, type NailServer } from "../support/nail";
+import { openSettings, toolbarAction } from "../support/views";
 
 /**
  * Customization tooling (ADR 0026) on a private `nail serve`: the inspector,
@@ -36,7 +37,8 @@ test("the inspector shows the part path, theme rules and layout node", async ({ 
   );
   await expect(pathItems.filter({ hasText: /^message-list$/ })).toBeVisible();
   await expect(panel.getByText("message-list #list")).toBeVisible();
-  await expect(panel.getByText(/window “main”, breakpoint 0, path 2\/1/)).toBeVisible();
+  // M5b: the panes live in the mail view's window.
+  await expect(panel.getByText(/window “mail”, breakpoint 0, path 1\/4/)).toBeVisible();
   await expect(panel.getByText(/defaults\/layout\.kdl:\d+:\d+/)).toBeVisible();
   await expect(page.locator('[data-part="inspector.highlight"]')).toBeVisible();
   // List rows are styled by the UI skin since M5a; the pane divider still
@@ -76,7 +78,7 @@ test("dragging a divider writes the sizes into layout.kdl", async ({ page, nail 
   const text = readFileSync(layoutFile, "utf8");
   expect(text).toContain('extends="default"');
   const width = Number(/sizes="(\d+)px/.exec(text)?.[1]);
-  expect(width).toBeGreaterThan(260);
+  expect(width).toBeGreaterThan(280);
   // Still one pane layout after reloading from the file.
   await page.reload();
   await expect(
@@ -101,10 +103,12 @@ test("the merge dialog applies a shared theme and reverts it", async ({ page, na
   await page.goto(nail.url);
   await expect.poll(() => page.evaluate(accent)).toBe("#115599");
 
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Customize" }).click();
-  await settings.getByRole("button", { name: "Apply a theme or layout…", exact: true }).click();
+  const settings = await openSettings(page, "Layout & toolbars");
+  await toolbarAction(
+    page,
+    settings.getByRole("toolbar", { name: "Customization" }),
+    "Apply a theme or layout…",
+  );
   const dialog = page.getByRole("dialog", { name: "Apply a theme or layout" });
   await dialog.getByRole("textbox").fill(SHARED_THEME);
   await dialog.getByRole("button", { name: "Compare with mine" }).click();

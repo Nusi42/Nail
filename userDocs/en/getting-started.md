@@ -34,24 +34,36 @@ broken or hostile messages. They show how Nail protects you.
 
 ## Find your way around
 
-The default window has a toolbar at the top (new message, check for mail,
-outbox, add account, settings) and three panes:
+The **navigation rail** on the left switches between Nail's views: **Mail**,
+**Calendar**, **Contacts**, **Tasks** and, at the bottom, **Settings**. The
+number on Mail is your unread mail in all inboxes; the shield button shows
+how many changes by AI agents or plug-ins wait for your approval. Your
+account's avatar sits at the very bottom. Nail opens the view you used last.
 
-1. **Folders** (left): the search bar, your accounts and the folder tree.
-   "All accounts" shows every account together (the unified inbox). The dot
-   next to an account shows whether it is connected. The number next to a
-   folder is its count of unread messages.
-2. **Messages** (middle): the selected folder, newest first. Unread
-   messages are bold.
-3. **Message** (right): the actions for the message, the other messages of
-   its conversation, and the selected message with its headers,
-   attachments and text.
+The Mail view has three panes:
+
+1. **Folders** (left): **New message** on top, then **Favorites** (All
+   inboxes, Flagged, Snoozed, Drafts — the same folders of every account
+   together), then one section per account with its colour and its folders,
+   and your smart folders once you saved a search. Click a section's heading
+   to fold it away; Nail remembers which ones you folded. The number next to
+   a folder is its count of unread messages.
+2. **Messages** (middle): the search field, the folder's name with its
+   counts, the filter chips **All**, **Unread**, **Flagged** and
+   **Attachments**, and the messages, newest first. Unread messages are
+   bold.
+3. **Message** (right): the action bar for the message (Reply, Reply all
+   and Forward with labels, the common actions as icons, the rest under
+   **More**), the other messages of its conversation, and the selected
+   message with its headers, attachments and text.
 
 The status bar at the bottom shows whether Nail is up to date, the progress
 of a running check for new mail, and the number of messages in the folder.
 
 You can drag the dividers between the panes to resize them. When the window
-is narrow, the panes become tabs.
+is narrow, the panes become tabs. Actions without a button of their own
+(filter rules, the outbox, adding an account, …) are in the command palette
+(**Ctrl+K**).
 
 ### Keyboard shortcuts
 
@@ -75,6 +87,9 @@ is narrow, the panes become tabs.
 | `Ctrl+B` | Show or hide the folder pane |
 | `g` then `r` | Show or hide the message pane |
 | `Ctrl+K` | The command palette: find and run any action by typing |
+| `Ctrl+1` … `Ctrl+4` | Mail, Calendar, Contacts, Tasks |
+| `g` then `m` | Back to Mail |
+| `↑` / `↓`, `Home` / `End` | On the navigation rail: the previous / next view button, the first / last |
 | `Ctrl+P` | Print the selected message |
 
 You can change every shortcut in `layout.kdl`; see the

@@ -374,7 +374,8 @@ describe("plug-in commands, dialogs and notifications", () => {
   it("disables the command when the plug-in is off or nothing is selected", async () => {
     const { env, unsubscribe } = await setup();
     act(() => env.store.getState().selectMessage(null));
-    expect(screen.getByRole("button", { name: "Follow up" })).toBeDisabled();
+    // The reader bar hides actions that cannot run (M5b `hide-disabled`).
+    expect(screen.queryByRole("button", { name: "Follow up" })).toBeNull();
     unsubscribe();
   });
 

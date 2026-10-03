@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
-import { readerAction } from "../support/views";
+import {
+  openSettings as openSection,
+  openSettingsTab,
+  readerAction,
+  runFromPalette,
+  showView,
+} from "../support/views";
 
 /**
  * Wave M2c (ADR 0048) against the `demo-multi` mock servers: server-side
@@ -43,14 +49,9 @@ function deliver(subject: string, body: string, id: string) {
   });
 }
 
-async function openSettings(page: Page, tab: string): Promise<Locator> {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: tab, exact: true }).click();
-  return settings;
+/** The settings view at the section of a former settings tab (M5b). */
+function openSettings(page: Page, tab: string): Promise<Locator> {
+  return openSettingsTab(page, tab);
 }
 
 async function closeDialog(page: Page, name: string) {
@@ -64,10 +65,7 @@ const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 test("a rule runs on the server and the vacation reply is uploaded", async ({ page }) => {
   await open(page);
   // A rule, saved in the rule editor's text view.
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Filter rules" })
-    .click();
+  await runFromPalette(page, "filter rules", "Filter rules");
   const rules = page.getByRole("dialog", { name: "Filter rules" });
   await rules.getByRole("button", { name: "New rule" }).click();
   const editor = rules.getByRole("form", { name: "Rule" });
@@ -84,7 +82,8 @@ test("a rule runs on the server and the vacation reply is uploaded", async ({ pa
 
   // Settings → Server rules: turn ManageSieve on for the account.
   const settings = await openSettings(page, "Server rules");
-  const section = settings.getByRole("tabpanel", { name: "Server rules" });
+  // The Server rules & vacation section: the ManageSieve card.
+  const section = settings.locator('[data-part="sieve-status"]');
   await section.getByRole("checkbox", { name: "Run rules on the server when possible" }).check();
   await section.getByRole("button", { name: "Save", exact: true }).click();
   await expect(section.getByText("Up to date on the server")).toBeVisible({ timeout: 20_000 });
@@ -94,15 +93,15 @@ test("a rule runs on the server and the vacation reply is uploaded", async ({ pa
   expect(await nailScript()).toContain("receipt");
 
   // The vacation reply lands in the same script.
-  await settings.getByRole("tab", { name: "Vacation reply", exact: true }).click();
-  const vacation = settings.getByRole("tabpanel", { name: "Vacation reply" });
+  await openSettingsTab(page, "Vacation reply");
+  const vacation = settings.locator('[data-part="vacation-editor"]');
   await vacation.getByRole("checkbox", { name: "Send a vacation reply" }).check();
   await vacation.getByRole("textbox", { name: "Message" }).fill("I am away until Monday.");
   await vacation.getByRole("button", { name: "Save", exact: true }).click();
   await expect(vacation.getByText("Saved. Nail uploads the reply with your rules.")).toBeVisible();
   await expect.poll(nailScript, { timeout: 20_000 }).toContain("I am away until Monday.");
   expect(await nailScript()).toContain("vacation");
-  await settings.getByRole("tab", { name: "Server rules", exact: true }).click();
+  await openSettingsTab(page, "Server rules");
   await expect(section.getByText("Active on the server")).toBeVisible({ timeout: 20_000 });
 });
 
@@ -119,7 +118,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
 
   // Nail's filter on, trained after one message of each kind.
   const settings = await openSettings(page, "Junk mail");
-  const junk = settings.getByRole("tabpanel", { name: "Junk mail" });
+  const junk = settings.locator('[data-part="junk-settings"]');
   await junk
     .getByRole("checkbox", { name: "Classify arriving mail with Nail's junk filter" })
     .check();
@@ -127,7 +126,7 @@ test("marking junk trains the filter and the next similar message lands in Junk"
   await junk.getByRole("spinbutton", { name: "Training needed" }).fill("1");
   await junk.getByRole("button", { name: "Save", exact: true }).click();
   await expect(junk.getByText("Saved.", { exact: true })).toBeVisible();
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 
   // "Not junk" for a normal message (from its context menu)…
   const normal = rows(page).filter({ hasText: "Welcome to Nail" });
@@ -169,10 +168,7 @@ test("a snoozed message hides and returns at the wake time", async ({ page }) =>
     .toContain("Welcome to Nail");
 
   // The snoozed list shows it.
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Snoozed messages" })
-    .click();
+  await runFromPalette(page, "snoozed", "Snoozed messages");
   const list = page.getByRole("dialog", { name: "Snoozed messages" });
   await expect(list.getByText("Welcome to Nail")).toBeVisible();
   await closeDialog(page, "Snoozed messages");
@@ -221,13 +217,13 @@ test("new mail notifies, and quiet hours suppress it", async ({ page, context })
 
   // Quiet hours around noon: the next mail does not notify.
   const settings = await openSettings(page, "Notifications");
-  const form = settings.getByRole("tabpanel", { name: "Notifications" });
+  const form = settings.locator('[data-part="notification-settings"]');
   await form.getByRole("checkbox", { name: "No notifications during quiet hours" }).check();
   await form.getByLabel("From").fill("11:00");
   await form.getByLabel("Until").fill("13:00");
   await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(form.getByText("Saved.", { exact: true })).toBeVisible();
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
   await deliver("Quiet please", "Shh.", "quiet-1");
   await expect(rows(page).filter({ hasText: "Quiet please" })).toHaveCount(1, { timeout: 20_000 });
   await page.waitForTimeout(4_000);
@@ -286,9 +282,8 @@ test("the right-click menu of a message works, also from the keyboard", async ({
 
 test("a rebound key is written to layout.kdl and works", async ({ page }) => {
   await open(page);
-  const settings = await openSettings(page, "Customize");
-  await settings.getByRole("tab", { name: "Keys", exact: true }).click();
-  const keys = settings.getByRole("tabpanel", { name: "Keys" });
+  // M5b: the shortcut editor has its own settings section.
+  const keys = await openSection(page, "Keyboard shortcuts");
   await keys.getByRole("combobox", { name: "Where" }).selectOption("global");
   await keys.getByRole("combobox", { name: "Action" }).selectOption("mail.toggle-flag");
   const capture = keys.getByRole("textbox", { name: "Keys" });
@@ -299,7 +294,7 @@ test("a rebound key is written to layout.kdl and works", async ({ page }) => {
   await expect(keys.getByText("Shortcut saved to layout.kdl.")).toBeVisible();
   const layout = readFileSync(path.join(server.configDir, "layout.kdl"), "utf8");
   expect(layout).toContain("ctrl+shift+y");
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 
   const row = rows(page).filter({ hasText: "Welcome to Nail" });
   await row.click();

@@ -138,7 +138,7 @@ While replies are on, a banner says so, with **Turn off** and **Edit…**.
 "Saved in Nail; not on the server yet" means the change is still on its
 way to the server.
 
-**Settings → Vacation reply** works for Exchange accounts too: it sets the
+**Settings → Server rules & vacation** works for Exchange accounts too: it sets the
 automatic replies, with the same text for people inside and outside your
 organization. Use the editor above for different texts.
 
@@ -148,7 +148,7 @@ For Exchange accounts, Nail places your rules as Exchange inbox rules where
 Exchange can run them, so they work while Nail is closed; the others run in
 Nail. The rule list shows for each rule where it runs on each Exchange
 account, and why it stays in Nail (for example "uses a search query").
-**Settings → Exchange inbox rules** shows every inbox rule on the server:
+**Settings → Server rules & vacation** shows every inbox rule on the server:
 rules created in Outlook can be switched on or off or deleted there, and
 **Sync now** writes your rules again. **Run rules on the server where
 Exchange can** switches the placing off for an account.

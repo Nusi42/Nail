@@ -69,9 +69,11 @@ describe("shortcuts", () => {
   it("finds the aliases' bindings of a view, global ones first", () => {
     const layout = base();
     expect(viewShortcuts(layout, "mail")).toEqual(["ctrl+1", "g m"]);
-    expect(viewShortcuts(layout, "calendar")).toEqual(["ctrl+2"]);
-    expect(viewShortcuts(layout, "tasks")).toEqual(["ctrl+4"]);
-    expect(viewShortcuts(layout, "settings")).toEqual([]);
+    // The view shortcuts come first, then the older window keys (`g c`,
+    // `g t`, `ctrl+,`), which show the view since WP165.
+    expect(viewShortcuts(layout, "calendar")).toEqual(["ctrl+2", "g c"]);
+    expect(viewShortcuts(layout, "tasks")).toEqual(["ctrl+4", "g t"]);
+    expect(viewShortcuts(layout, "settings")).toEqual(["ctrl+,"]);
   });
 
   it("finds direct view.show bindings with the view as argument", () => {

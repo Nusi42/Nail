@@ -158,7 +158,7 @@ never sees your address. In a remote browser, Nail fetches at most 300
 files a minute for one session; more wait. The bar then says why the content is shown and
 offers to block it again.
 
-**Settings → Privacy** lists everything you allowed — messages, senders
+**Settings → Privacy & data protection** lists everything you allowed — messages, senders
 and domains — and removes entries.
 
 ## More about security

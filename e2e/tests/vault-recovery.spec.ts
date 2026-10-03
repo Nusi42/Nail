@@ -4,6 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { startNail, tempDir, type NailServer } from "../support/nail";
 import { rpcOk } from "../support/remote";
+import { openSettingsTab, showView } from "../support/views";
 
 /**
  * M4c WP125 (ADRs 0095, 0099): the recovery key opens encrypted data after
@@ -56,16 +57,7 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   await expect
     .poll(async () => (await vaultState(server!)).state, { timeout: 60_000 })
     .toBe("encrypted");
-  await page
-    .getByRole("toolbar", { name: "Main" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.locator('[data-part="window"][data-window="settings"]');
-  await settings
-    .getByRole("tablist")
-    .first()
-    .getByRole("tab", { name: "Recovery key", exact: true })
-    .click();
+  const settings = await openSettingsTab(page, "Recovery key");
   await settings.getByRole("button", { name: "Create recovery key" }).click();
   const createWindow = '[data-part="window"][data-window="security-recovery-create"]';
   const create = page.locator(createWindow);
@@ -87,6 +79,9 @@ test("a recovery key opens the data after the keychain entry was lost", async ({
   await create.getByRole("button", { name: "Check", exact: true }).click();
   await expect(create.getByText("Your recovery key works. Keep it safe.")).toBeVisible();
   await expectAccessible(page, createWindow);
+  // The app reopens its last view after restarts (M5b): leave it on Mail.
+  await create.locator('[data-part="window.close"]').click();
+  await showView(page, "Mail");
   await server.stop();
 
   // The data key's entry disappears from the (demo) keychain.

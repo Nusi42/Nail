@@ -81,9 +81,11 @@ describe("axe: windows of the default layout", () => {
 
   it("covers the windows", () => {
     expect(names).toEqual(
-      expect.arrayContaining(["main", "composer", "outbox", "move", "settings", "rules"]),
+      expect.arrayContaining(["main", "mail", "composer", "outbox", "move", "settings", "rules"]),
     );
-    expect(cases.length).toBeGreaterThan(names.length);
+    // M5b: the settings window is the settings page (no tabs any more); the
+    // page's sections are scanned in features/settings/a11y.test.tsx.
+    expect(cases.length).toBeGreaterThanOrEqual(names.length);
   });
 
   it.each(cases)(

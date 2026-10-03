@@ -1,15 +1,16 @@
 /**
- * The screens of the visual-regression harness (plan M5a WP154): the main
- * window with a message open, the composer, Settings, the calendar, a
- * context menu and a dialog. Each starts from a freshly loaded main window
- * (so one screen never leaks state into the next) and ends with the screen
- * open and its content present; `support.ts` then settles and captures it.
+ * The screens of the visual-regression harness (plan M5a WP154, M5b): the
+ * main window (rail + mail view) with a message open, the reader's "More"
+ * menu, the composer, the settings page, the calendar view, a context menu,
+ * HTML and attachment messages and a dialog. Each starts from a freshly
+ * loaded main window (so one screen never leaks state into the next) and
+ * ends with the screen open and its content present; `support.ts` then
+ * settles and captures it.
  *
- * Windows are found by their layout window name
- * (`[data-part="window"][data-window=…]`), controls by role and accessible
- * name, as in the regular e2e suite. When the shell changes (M5b: the
- * navigation rail and full-page views), the `open` functions here are the
- * only place that needs to follow.
+ * Dialogs are found by their layout window name
+ * (`[data-part="window"][data-window=…]`), views by their region in the
+ * view host ("<View> view", from the navigation rail), controls by role and
+ * accessible name, as in the regular e2e suite.
  */
 import { expect, type Locator, type Page } from "@playwright/test";
 
@@ -61,7 +62,18 @@ export interface Screen {
   mask?(page: Page): Locator[];
 }
 
-export const mainToolbar = (page: Page) => page.getByRole("toolbar", { name: "Main toolbar" });
+/** The navigation rail (M5b). */
+export const rail = (page: Page) => page.getByRole("navigation", { name: "Sections", exact: true });
+
+/** Shows a view from the rail; returns its region. */
+async function showView(page: Page, name: "Calendar" | "Settings"): Promise<Locator> {
+  await rail(page)
+    .getByRole("button", { name: new RegExp(`^${name}(,|$)`) })
+    .click();
+  const region = page.getByRole("region", { name: `${name} view`, exact: true });
+  await expect(region).toBeVisible();
+  return region;
+}
 const rows = (page: Page) => page.locator('[data-part="message-list.row"]');
 export const layoutWindow = (page: Page, name: string) =>
   page.locator(`[data-part="window"][data-window="${name}"]`);
@@ -100,7 +112,7 @@ export const SCREENS: readonly Screen[] = [
     id: "composer",
     title: "Composer",
     async open(page) {
-      await mainToolbar(page).getByRole("button", { name: "New message" }).click();
+      await page.locator('[data-part="folder-tree.compose"]').click();
       const composer = layoutWindow(page, "composer");
       await expect(composer).toBeVisible();
       await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
@@ -114,8 +126,8 @@ export const SCREENS: readonly Screen[] = [
     id: "settings",
     title: "Settings",
     async open(page) {
-      await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
-      await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+      const settings = await showView(page, "Settings");
+      await expect(settings.locator('[data-part="settings-page.title"]')).toHaveText("Accounts");
     },
   },
   {
@@ -124,14 +136,24 @@ export const SCREENS: readonly Screen[] = [
     // The app reads "today" when it loads, so the whole page starts at this time.
     time: CALENDAR_TIME,
     async open(page) {
-      await mainToolbar(page).getByRole("button", { name: "Calendar", exact: true }).click();
-      const calendar = layoutWindow(page, "calendar");
-      await expect(calendar).toBeVisible();
+      const calendar = await showView(page, "Calendar");
       for (const event of CALENDAR_EVENTS) {
         await expect(
           calendar.getByRole("button", { name: new RegExp(`^${event.title},`) }).first(),
         ).toBeVisible();
       }
+    },
+  },
+  {
+    id: "more",
+    title: "The reader's action bar with its More menu open (M5b)",
+    async open(page) {
+      await selectSample(page);
+      await page
+        .getByRole("toolbar", { name: "Message actions" })
+        .getByRole("button", { name: "More", exact: true })
+        .click();
+      await expect(page.getByRole("menu")).toBeVisible();
     },
   },
   {

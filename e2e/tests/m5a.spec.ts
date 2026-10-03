@@ -2,6 +2,7 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
+import { openSettingsTab, showView, viewRegion } from "../support/views";
 
 /**
  * Wave M5a (ADRs 0102–0107) against `nail serve --seed demo-multi`: the
@@ -52,12 +53,9 @@ async function expectAccent(page: Page, value: string) {
 }
 
 async function openAppearance(page: Page): Promise<Locator> {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Appearance");
   const region = settings.getByRole("region", { name: "Appearance" });
   await expect(region.getByRole("radiogroup", { name: "Themes" })).toBeVisible();
   return region;
@@ -132,8 +130,11 @@ test("Compact density applies to every theme and hides the tag line", async ({ p
     .click();
   await expect(page.locator("html")).toHaveAttribute("data-nail-density", "compact");
   await expect.poll(themeFile).toContain('density="compact"');
+  // Back to Mail to see the rows (M5b: Settings is a view of its own).
+  await showView(page, "Mail");
   await expect(tagLines.first()).toBeHidden();
   expect(await rowHeight()).toBeLessThan(comfortable);
+  await openAppearance(page);
 
   // Still compact in another theme.
   await appearance

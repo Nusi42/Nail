@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { control, startNail, type NailServer } from "../support/nail";
+import { openSettingsTab, showView, viewRegion } from "../support/views";
 
 /**
  * Remote content (M2b, ADR 0041) against `--seed demo-multi`: its proxy
@@ -115,11 +116,8 @@ test("remote content can be loaded once without remembering the sender", async (
     .poll(() => logo.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
     .toBe(1);
   // Nothing was added to the allow-lists (Settings → Privacy).
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "Privacy", exact: true }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "Privacy");
   await expect(settings.getByText("hello@tea.example")).toHaveCount(0);
 });

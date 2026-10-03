@@ -9,7 +9,7 @@ you allowed it.
 ## How access works
 
 - Each agent is an **MCP client** with its own **token** (a long random
-  password). You create clients in **Settings → MCP clients**.
+  password). You create clients in **Settings → Agents (MCP)**.
 - A new client can read **nothing** until you grant it access.
 - You choose **permissions** and **accounts** per client, and you can hide
   single folders.
@@ -29,7 +29,7 @@ computers on the network cannot reach it.
 
 ## Adding a client
 
-1. Open **Settings → MCP clients**.
+1. Open **Settings → Agents (MCP)**.
 2. Type a name for the agent, for example `Claude Desktop`, and choose
    **Create client**.
 3. Nail shows the client's **token once**. Copy it now: Nail only keeps a
@@ -91,7 +91,7 @@ not read.
 
 ## Configuring your agent
 
-Settings → MCP clients shows the server's address, usually
+Settings → Agents (MCP) shows the server's address, usually
 `http://127.0.0.1:<port>/mcp`. By default Nail picks a free port each time
 it starts, so the address can change; `nail mcp` (below) always finds the
 current one. For agents that can only be given a fixed address, set a
@@ -270,7 +270,7 @@ requests stay in the **History** (more in [confirmations](confirmations.md)).
 
 ### What a client may do without asking
 
-**Settings → MCP clients → Confirmations** chooses, for each kind of
+**Settings → Agents (MCP) → Confirmations** chooses, for each kind of
 change, whether the client has to *Ask first* or may act *Without asking*:
 
 | Kind of change | Default | |
@@ -307,7 +307,7 @@ confirmations above.
 
 ## Limits
 
-Each client has three limits (**Settings → MCP clients → Limits**):
+Each client has three limits (**Settings → Agents (MCP) → Limits**):
 
 | Limit | Default | Counts |
 | --- | --- | --- |
@@ -345,7 +345,7 @@ the AI agent “Claude Desktop”"). See
   *Ask first* unless you trust the agent with them, and read what a
   confirmation says before you approve it: a prompt hidden in a message
   could try to make an agent send or forward mail.
-- **Check the activity log** in Settings → MCP clients. It shows the time,
+- **Check the activity log** in Settings → Agents (MCP). It shows the time,
   client, call (for example *Read nail://messages/…* or *Tool
   search_messages*) and whether it was allowed or denied; for changes also
   what changed, and whether you approved or denied them or they expired. Tick *Show

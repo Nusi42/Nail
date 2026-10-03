@@ -1,6 +1,7 @@
 import { chromium, expect, test, type Browser, type Page } from "@playwright/test";
 import { skipFirstRun, startDesktop, type DesktopApp } from "../support/desktop";
 import { freePort } from "../support/nail";
+import { newMessageButton, openSettingsTab, showView, viewRegion } from "../support/views";
 
 /**
  * Smoke test of the desktop app (Tauri 2 + WebView2): the real
@@ -72,10 +73,7 @@ test("Shift+F10 opens the context menu of the selected message", async () => {
 });
 
 test("the rich composer renders Markdown in the core and the MCP server runs", async () => {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "New message" })
-    .click();
+  await newMessageButton(page).click();
   const dialog = page.getByRole("dialog", { name: "New message" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("radio", { name: "Markdown" }).click();
@@ -88,9 +86,9 @@ test("the rich composer renders Markdown in the core and the MCP server runs", a
   await expect(dialog).toBeHidden();
 
   // The app starts the MCP server with the core as its data provider.
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "MCP clients" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "MCP clients");
   await expect(settings.locator('[data-part="mcp-clients.server"]')).toHaveAttribute(
     "data-state",
     "running",

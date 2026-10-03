@@ -51,7 +51,14 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // M5b: a taller window than Playwright's 720 px, so the message list
+  // (below the list header) renders every row of the demo inboxes.
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1000 } },
+    },
+  ],
   webServer: {
     command: [
       quote(process.env.NAIL_BIN),

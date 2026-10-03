@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { normalizeLayout } from "../api/normalize";
 import { createEnv, renderWithProviders, setWindowWidth } from "../test/harness";
 import { WindowView } from "./LayoutRenderer";
@@ -26,7 +26,7 @@ function geometryOf(element: Element): string {
 afterEach(() => setWindowWidth(1024));
 
 describe("layout engine", () => {
-  it("renders the wide default layout as stack → split with three panes", async () => {
+  it("renders the main window as the rail beside the view host (M5b)", async () => {
     setWindowWidth(1200);
     const env = createEnv();
     const { container } = renderWithProviders(
@@ -35,30 +35,40 @@ describe("layout engine", () => {
     );
     const root = container.querySelector('[data-node-id="root"]');
     expect(root).toHaveAttribute("data-part", "stack");
+    const shell = container.querySelector('[data-node-id="shell"]') as HTMLElement;
+    expect(shell).toHaveAttribute("data-part", "split");
+    // Not resizable: the line between the rail and the views is no separator.
+    expect(within(shell).queryByRole("separator", { name: "Resize panes" })).toBeNull();
+    // The view host waits for the remembered view (one UI-state request).
+    await waitFor(() =>
+      expect(container.querySelector('[data-part="view-host"]')).toBeInTheDocument(),
+    );
+    for (const kind of ["nav-rail", "status-bar"]) {
+      expect(container.querySelector(`[data-part="${kind}"]`)).toBeInTheDocument();
+    }
+    // The config errors render nothing while every file is valid: no track.
+    expect(container.querySelector('[data-part="config-errors"]')).toBeNull();
+  });
+
+  it("renders the wide mail window as a split with three panes", async () => {
+    setWindowWidth(1200);
+    const env = createEnv();
+    const { container } = renderWithProviders(
+      <WindowView layout={env.transport.data.layout} name="mail" />,
+      env,
+    );
     const split = container.querySelector('[data-node-id="panes"]') as HTMLElement;
     expect(split).toHaveAttribute("data-part", "split");
     expect(split).toHaveAttribute("data-orientation", "horizontal");
     const panes = split.querySelectorAll(':scope > [data-part="split.pane"]');
     expect(panes).toHaveLength(3);
     expect(split.querySelectorAll(':scope > [data-part="split.divider"]')).toHaveLength(2);
-    expect(geometryOf(panes[0] as Element)).toContain("flex: 0 0 240px");
-    expect(geometryOf(panes[0] as Element)).toContain("min-width: 160px");
+    expect(geometryOf(panes[0] as Element)).toContain("flex: 0 0 260px");
+    expect(geometryOf(panes[0] as Element)).toContain("min-width: 200px");
     expect(geometryOf(panes[0] as Element)).toContain("max-width: 480px");
     expect(geometryOf(panes[2] as Element)).toContain("flex: 1.4 1 0px");
-    // The config errors render nothing while every file is valid: no track.
-    expect(container.querySelector('[data-part="config-errors"]')).toBeNull();
-    expect(geometryOf(root as Element)).toContain(
-      "grid-template-rows: auto minmax(0, 1fr) auto auto;",
-    );
     // Widgets from the registry.
-    for (const kind of [
-      "account-switcher",
-      "folder-tree",
-      "message-list",
-      "toolbar",
-      "message-view",
-      "status-bar",
-    ]) {
+    for (const kind of ["folder-tree", "list-header", "message-list", "toolbar", "message-view"]) {
       expect(container.querySelector(`[data-part="${kind}"]`)).toBeInTheDocument();
     }
     expect(await screen.findByRole("region", { name: "Folders" })).toBe(
@@ -70,7 +80,7 @@ describe("layout engine", () => {
     setWindowWidth(1200);
     const env = createEnv();
     const { container } = renderWithProviders(
-      <WindowView layout={env.transport.data.layout} />,
+      <WindowView layout={env.transport.data.layout} name="mail" />,
       env,
     );
     expect(container.querySelector('[data-part="split"]')).toBeInTheDocument();
@@ -93,7 +103,7 @@ describe("layout engine", () => {
   it("switches tabs by click and arrow keys", () => {
     setWindowWidth(600);
     const env = createEnv();
-    renderWithProviders(<WindowView layout={env.transport.data.layout} />, env);
+    renderWithProviders(<WindowView layout={env.transport.data.layout} name="mail" />, env);
     const tabs = screen.getAllByRole("tab");
     fireEvent.click(tabs[2] as HTMLElement);
     expect(tabs[2]).toHaveAttribute("aria-selected", "true");
@@ -109,34 +119,34 @@ describe("layout engine", () => {
     setWindowWidth(1200);
     const env = createEnv();
     const { container } = renderWithProviders(
-      <WindowView layout={env.transport.data.layout} />,
+      <WindowView layout={env.transport.data.layout} name="mail" />,
       env,
     );
     const [divider] = screen.getAllByRole("separator", { name: "Resize panes" });
     const pane = container.querySelector('[data-part="split.pane"]') as HTMLElement;
 
     fireEvent.keyDown(divider as HTMLElement, { key: "ArrowRight" });
-    expect(env.store.getState().splitSizes.panes?.[0]).toBe("256px");
-    expect(geometryOf(pane)).toContain("flex: 0 0 256px");
+    expect(env.store.getState().splitSizes.panes?.[0]).toBe("276px");
+    expect(geometryOf(pane)).toContain("flex: 0 0 276px");
     fireEvent.keyDown(divider as HTMLElement, { key: "ArrowLeft", shiftKey: true });
-    expect(env.store.getState().splitSizes.panes?.[0]).toBe("192px");
-    // Clamped at the pane's minimum (160px).
+    expect(env.store.getState().splitSizes.panes?.[0]).toBe("212px");
+    // Clamped at the pane's minimum (200px).
     fireEvent.keyDown(divider as HTMLElement, { key: "ArrowLeft", shiftKey: true });
-    expect(env.store.getState().splitSizes.panes?.[0]).toBe("160px");
+    expect(env.store.getState().splitSizes.panes?.[0]).toBe("200px");
 
     fireEvent.pointerDown(divider as HTMLElement, { pointerId: 1, button: 0, clientX: 100 });
     fireEvent.pointerMove(divider as HTMLElement, { pointerId: 1, clientX: 150 });
-    expect(env.store.getState().splitSizes.panes?.[0]).toBe("210px");
+    expect(env.store.getState().splitSizes.panes?.[0]).toBe("250px");
     fireEvent.pointerUp(divider as HTMLElement, { pointerId: 1 });
     fireEvent.pointerMove(divider as HTMLElement, { pointerId: 1, clientX: 400 });
-    expect(env.store.getState().splitSizes.panes?.[0]).toBe("210px");
+    expect(env.store.getState().splitSizes.panes?.[0]).toBe("250px");
   });
 
   it("hides and shows nodes via the UI store (view.toggle)", () => {
     setWindowWidth(1200);
     const env = createEnv();
     const { container } = renderWithProviders(
-      <WindowView layout={env.transport.data.layout} />,
+      <WindowView layout={env.transport.data.layout} name="mail" />,
       env,
     );
     act(() => env.store.getState().toggleNode("sidebar"));

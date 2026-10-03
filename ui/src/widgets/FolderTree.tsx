@@ -26,14 +26,14 @@ import {
   type ReactNode,
 } from "react";
 import { errorMessageIdOf } from "../api/client";
-import type { Account, FavoriteFolder, Folder, SavedSearch } from "../api/generated";
+import type { Account, AccountState, FavoriteFolder, Folder, SavedSearch } from "../api/generated";
 import { useActions } from "../actions/ActionsProvider";
 import { MailboxFolderBadge } from "../features/exchange";
 import { isActiveSearch, useSavedSearches } from "../features/customization/SmartFolders";
 import { useLabel, useT } from "../i18n/I18nProvider";
 import { useLayoutConfig } from "../layout/LayoutContext";
 import { optionBool, type WidgetNode, type WidgetProps } from "../layout/widgetRegistry";
-import { useAccounts, useClient, useFolders } from "../state/queries";
+import { useAccountStatuses, useAccounts, useClient, useFolders } from "../state/queries";
 import { UI_STATE_COLLAPSED_SECTIONS, stringList, useUiStateValue } from "../state/uiState";
 import { useUi } from "../state/uiStore";
 import { ALL_ACCOUNTS, useAccountName } from "./AccountSwitcher";
@@ -233,6 +233,8 @@ interface SectionProps {
   collapsedCount: number | null;
   /** Keys of the rows inside (a collapsed section takes their Tab stop). */
   childKeys: readonly string[];
+  /** An account section's account kind and connection state (M5b integration). */
+  account?: { kind: Account["kind"]; state: AccountState | null };
   children: ReactNode;
 }
 
@@ -244,6 +246,7 @@ function Section({
   colorSlot,
   collapsedCount,
   childKeys,
+  account,
   children,
 }: SectionProps) {
   const t = useT();
@@ -266,6 +269,8 @@ function Section({
       data-kind={section.kind}
       data-state={expanded ? undefined : "collapsed"}
       data-account={section.accountId ?? undefined}
+      data-account-kind={account?.kind}
+      data-status={account?.state ?? undefined}
       data-key={key}
     >
       <div
@@ -292,6 +297,12 @@ function Section({
         )}
         <span data-part="folder-tree.section.title" id={headingId}>
           {title}
+          {/* Not online: the state, also for screen readers (part of the name). */}
+          {account?.state && account.state !== "online" && (
+            <span data-part="folder-tree.section.status" data-state={account.state}>
+              {t(`account-state-${account.state}`)}
+            </span>
+          )}
         </span>
         {!expanded && collapsedCount !== null && collapsedCount > 0 && (
           <span
@@ -420,6 +431,7 @@ function AccountSection({
   const t = useT();
   const nameOf = useAccountName();
   const folders = useFolders(account.id);
+  const status = useAccountStatuses().data?.find((s) => s.account_id === account.id);
   const activeAccountId = useUi((s) => s.activeAccountId);
   const activeFolderId = useUi((s) => s.activeFolderId);
   const search = useUi((s) => s.search);
@@ -441,6 +453,7 @@ function AccountSection({
       colorSlot={showColor ? section.colorSlot : null}
       collapsedCount={inbox?.unread ?? null}
       childKeys={rows.map((r) => `folder:${r.folder.id}`)}
+      account={{ kind: account.kind, state: status?.state ?? null }}
     >
       {folders.isError && (
         <li data-part="folder-tree.error" role="none">

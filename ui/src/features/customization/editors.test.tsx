@@ -78,7 +78,7 @@ describe("editor helpers", () => {
     const layout = createEnv().transport.data.layout;
     const lists = messageLists(layout);
     expect(lists.length).toBeGreaterThanOrEqual(2);
-    expect(lists[0]?.ref.window).toBe("main");
+    expect(lists[0]?.ref.window).toBe("mail");
     expect(lists[0]?.node.kind).toBe("message-list");
   });
 });
@@ -203,7 +203,7 @@ describe("column-editor", () => {
     const [update] = sent(env, "UpdateLayout");
     expect(update?.patches[0]).toMatchObject({
       op: "column-order",
-      node: { window: "main", breakpoint: 0 },
+      node: { window: "mail", breakpoint: 0 },
       columns: ["from", "subject", "date"],
     });
     const node = messageLists(env.transport.data.layout)[0]?.node;

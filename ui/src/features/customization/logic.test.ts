@@ -183,20 +183,20 @@ describe("inspector queries", () => {
 
   it("maps an element to the layout node that placed it", () => {
     const layout = createMockData(5).layout;
-    const folders = must(findNodeById(must(layout.windows.main?.[0]).root, "folders")).node;
+    const folders = must(findNodeById(must(layout.windows.mail?.[0]).root, "folders")).node;
     if (folders.type === "widget") folders.source = { file: "layout.kdl", line: 21, column: 25 };
     const root = dom(`
-      <div data-part="stack" data-node-id="sidebar">
+      <section data-window="mail"><div data-part="stack" data-node-id="sidebar">
         <nav data-part="folder-tree" data-node-id="folders"><span id="f" data-part="folder-tree.item"></span></nav>
-      </div>
+      </div></section>
       <div data-window="outbox"><section data-part="outbox" data-node-id="outbox"><i id="o"></i></section></div>
       <p data-part="x" id="none"></p>`);
     const wide = layoutNodeOf(must(root.querySelector("#f")), layout, 1200);
-    expect(wide).toMatchObject({ window: "main", breakpoint: 0, kind: "folder-tree" });
-    expect(wide?.path).toEqual([2, 0, 2]);
+    expect(wide).toMatchObject({ window: "mail", breakpoint: 0, kind: "folder-tree" });
+    expect(wide?.path).toEqual([0, 0]);
     expect(wide?.source).toEqual({ file: "layout.kdl", line: 21, column: 25 });
     const narrow = layoutNodeOf(must(root.querySelector("#f")), layout, 600);
-    expect(narrow).toMatchObject({ breakpoint: 1, path: [3, 0, 1] });
+    expect(narrow).toMatchObject({ breakpoint: 1, path: [0, 0] });
     expect(layoutNodeOf(must(root.querySelector("#o")), layout, 1200)).toMatchObject({
       window: "outbox",
       kind: "outbox",
@@ -273,21 +273,22 @@ describe("split write-back addressing", () => {
   const layout = createMockData(5).layout;
 
   it("maps tree paths and node ids to layout node refs", () => {
-    expect(splitRefOf("main/0/2", layout, 1200)).toEqual({
-      window: "main",
+    // M5b: the panes live in the mail view's window.
+    expect(splitRefOf("mail/0", layout, 1200)).toEqual({
+      window: "mail",
       breakpoint: 0,
-      path: [2],
+      path: [],
     });
-    expect(splitRefOf("main/0/2/0", layout, 1200)).toEqual({
-      window: "main",
+    expect(splitRefOf("mail/0/0", layout, 1200)).toEqual({
+      window: "mail",
       breakpoint: 0,
-      path: [2, 0],
+      path: [0],
     });
     // `panes` is a split when wide and tabs when narrow: only the split fits.
-    expect(splitRefOf("panes", layout, 1200)).toEqual({ window: "main", breakpoint: 0, path: [2] });
-    expect(splitRefOf("panes", layout, 600)).toEqual({ window: "main", breakpoint: 0, path: [2] });
-    expect(splitRefOf("root", layout, 600)).toEqual({ window: "main", breakpoint: 1, path: [] });
-    expect(splitRefOf("main/0/0", layout, 1200)).toBeNull(); // a toolbar
+    expect(splitRefOf("panes", layout, 1200)).toEqual({ window: "mail", breakpoint: 0, path: [] });
+    expect(splitRefOf("panes", layout, 600)).toEqual({ window: "mail", breakpoint: 0, path: [] });
+    expect(splitRefOf("root", layout, 600)).toEqual({ window: "main", breakpoint: 0, path: [] });
+    expect(splitRefOf("main/0/0", layout, 1200)).toBeNull(); // the config errors
     expect(splitRefOf("nope", layout, 1200)).toBeNull();
     expect(splitRefOf("test", layout, 1200)).toBeNull();
   });
@@ -298,7 +299,7 @@ describe("split write-back addressing", () => {
     expect(splitPatches(sizes, written, layout, 1200)).toEqual([
       {
         op: "split-sizes",
-        node: { window: "main", breakpoint: 0, path: [2] },
+        node: { window: "mail", breakpoint: 0, path: [] },
         sizes: ["200px", "1fr", "1fr"],
       },
     ]);

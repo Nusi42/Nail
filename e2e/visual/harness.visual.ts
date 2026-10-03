@@ -40,8 +40,8 @@ test("every screen opens, settles and is reproducible (current theme)", async ({
   for (const screen of screens) {
     await test.step(screen.id, async () => {
       try {
-        const first = await openAndShoot(page, nail.url, screen);
-        const second = await openAndShoot(page, nail.url, screen);
+        const first = await openAndShoot(page, nail, screen);
+        const second = await openAndShoot(page, nail, screen);
         const actual = saveActual(variant.id, screen.id, second.png);
         const problems: string[] = [];
         if (!first.stable || !second.stable) {

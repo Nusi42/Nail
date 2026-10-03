@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { control, serverMessages, startNail, type NailServer } from "../support/nail";
+import { runFromPalette } from "../support/views";
 
 /**
  * The rich composer (ADR 0023) against the `demo-multi` mock servers: HTML
@@ -210,7 +211,7 @@ test("drafts are autosaved to the server and continued after a reload", async ({
   // A reload forgets the open composer; the outbox window lists the draft.
   await page.reload();
   await expect(page.locator('[data-part="message-list.row"]')).toHaveCount(17);
-  await page.getByRole("button", { name: "Outbox" }).click();
+  await runFromPalette(page, "outbox", "Outbox");
   const drafts = page.getByRole("region", { name: "Drafts" });
   const item = drafts.locator('[data-part="outbox.item"]').filter({ hasText: "Plans for Friday" });
   await item.getByRole("button", { name: "Continue writing" }).click();

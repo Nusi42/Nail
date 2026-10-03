@@ -217,7 +217,7 @@ describe("feature slots in the app shell", () => {
 
     const env = createEnv();
     render(<App client={env.client} queryClient={env.queryClient} store={env.store} />);
-    await screen.findByRole("treeitem", { name: /Inbox/ });
+    expect((await screen.findAllByRole("treeitem", { name: /Inbox/ })).length).toBeGreaterThan(0);
     expect(mounted).toBe(1);
 
     act(() => env.transport.emit({ type: "RulesChanged" }));

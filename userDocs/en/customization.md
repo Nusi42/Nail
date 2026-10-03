@@ -17,7 +17,7 @@ help you change them:
 ## The inspector
 
 Turn the inspector on with `Ctrl+Shift+I`, or with **Inspector** in
-**Settings → Customize** (the action `inspector.toggle`). While it is on:
+**Settings → Layout & toolbars** (the action `inspector.toggle`). While it is on:
 
 - point at anything in the window: it is outlined and the inspector panel
   shows it;
@@ -81,7 +81,7 @@ below.
 
 ## Editing toolbars, shortcuts and columns
 
-Settings → Customize has three editors under the error list. Nothing is
+Settings → Layout & toolbars has three editors under the error list. Nothing is
 written until you click **Save to layout.kdl**; **Undo changes** forgets
 what you did since.
 
@@ -150,6 +150,19 @@ Conflicts are marked on the item before you take it:
 If the file you loaded has mistakes, the dialog lists all of them with line
 and column instead of comparing.
 
+### The new default layout for layouts of your own
+
+When your `layout.kdl` defines its own main window from before the
+navigation rail, it keeps working: your window shows, and switching to
+Calendar, Contacts, Tasks or Settings opens them as windows over it. Nail
+offers the new default once, in a small card at the bottom right: **Review
+the new layout** opens this dialog with Nail's default layout already
+compared with yours — take `main` under **Windows** to get the rail, and
+anything else you like — and **Not now** dismisses the card. Either way it
+does not come back by itself (to see it again, remove the
+`customize.layout-offer` entry from `ui-state.json` in your configuration
+folder).
+
 ## All configuration errors at once
 
 When `theme.kdl`, `layout.kdl`, `accounts.kdl` or `rules.kdl` has mistakes,
@@ -158,7 +171,7 @@ each file with its line and column — you can fix them all in one go. Each
 entry has **Open in editor**.
 
 The default layout shows the list above the panes of the main window as
-soon as a file has a mistake, and always in **Settings → Customize**. It is
+soon as a file has a mistake, and always in **Settings → Layout & toolbars**. It is
 the `config-errors` widget; the action `customize.errors` opens it as a
 dialog. To place it yourself, in a pane that only appears when something is
 wrong:

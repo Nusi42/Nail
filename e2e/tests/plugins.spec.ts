@@ -6,6 +6,13 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { nailBinary, startNail, type NailServer } from "../support/nail";
 import { commandManifest, followUpPackage, packFiles, writePluginFolder } from "../support/plugins";
+import {
+  openSettingsTab,
+  readerAction,
+  readerToolbar,
+  showView,
+  viewRegion,
+} from "../support/views";
 
 /**
  * Plug-ins (plan WP64 / WP105, ADRs 0055, 0084) on a private `nail serve
@@ -36,14 +43,9 @@ async function violations(page: Page) {
   }));
 }
 
-async function openSettings(page: Page, tab: string): Promise<Locator> {
-  await page
-    .getByRole("toolbar", { name: "Main toolbar" })
-    .getByRole("button", { name: "Settings" })
-    .click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: tab, exact: true }).click();
-  return settings;
+/** The settings view at the section of a former settings tab (M5b). */
+function openSettings(page: Page, tab: string): Promise<Locator> {
+  return openSettingsTab(page, tab);
 }
 
 async function closeDialog(page: Page, name: string) {
@@ -116,20 +118,20 @@ test("the full Follow-up example installs with its permissions, creates a task a
   await dialog.getByRole("button", { name: /^Add \d+ items? to the layout$/ }).click();
   await expect(dialog.getByText(/Added to your layout/)).toBeVisible();
   const layout = readFileSync(path.join(nail.configDir, "layout.kdl"), "utf8");
-  expect(layout).toMatch(/item "mail\.forward"\s+item "plugin\.follow-up\.follow-up"/);
+  // M5b: the ranked reader bar (`item "mail.forward" rank=3`).
+  expect(layout).toMatch(/item "mail\.forward"[^\n]*\s+item "plugin\.follow-up\.follow-up"/);
   expect(layout).toContain('bind "shift+f" "plugin.follow-up.follow-up"');
   await dialog.getByRole("button", { name: "Close" }).first().click();
   await expect(
     settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]'),
   ).toBeVisible();
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 
   // Its button sits in the reader toolbar; it opens the plug-in's dialog.
   const row = rows(page).filter({ hasText: "Welcome to Nail" });
   await row.click();
-  const followUp = page.getByRole("button", { name: "Follow up…" });
-  await expect(followUp).toBeEnabled();
-  await followUp.click();
+  // Unranked, it may sit in "More" when the bar is narrow (M5b).
+  await readerAction(page, "Follow up…");
   const plugin = page.getByRole("dialog", { name: "Follow up" });
   await expect(plugin.getByText("from Follow up")).toBeVisible();
   await expect(plugin.getByText(/Follow up on “Welcome to Nail/)).toBeVisible();
@@ -145,7 +147,7 @@ test("the full Follow-up example installs with its permissions, creates a task a
   await expect(toast.filter({ hasText: "Follow-up task created, due 2031-03-05" })).toBeVisible();
   expect(await violations(page), "plug-in notification").toEqual([]);
   // …the dialog now knows about it…
-  await followUp.click();
+  await readerAction(page, "Follow up…");
   await expect(
     plugin.getByText("A follow-up task for this message is due 2031-03-05."),
   ).toBeVisible();
@@ -154,10 +156,10 @@ test("the full Follow-up example installs with its permissions, creates a task a
   // …and the task is in Nail's task list, linked to the message.
   await page.keyboard.press("g");
   await page.keyboard.press("t");
-  const tasks = page.getByRole("dialog", { name: "Tasks" });
+  const tasks = viewRegion(page, "Tasks");
   await expect(tasks.getByText(/Follow up: Welcome to Nail/)).toBeVisible();
   // The plug-in's log records the write.
-  await closeDialog(page, "Tasks");
+  await showView(page, "Mail");
   const log = await openSettings(page, "Plug-ins");
   await log.getByRole("button", { name: "Log" }).click();
   await expect(log.getByText("Changed your data: nail.tasks.create")).toBeVisible();
@@ -185,10 +187,10 @@ test("a plug-in without mail.read.body is refused the message body", async ({ pa
   await page.goto(nail.url);
   await expect(rows(page).first()).toBeVisible();
   await install(page, file, /^Peek 1\.0\.0$/);
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 
   await rows(page).filter({ hasText: "Welcome to Nail" }).click();
-  await page.getByRole("button", { name: "Peek at the body" }).click();
+  await readerAction(page, "Peek at the body");
   await expect(
     page.locator('[data-part="plugin.notification"]').filter({ hasText: "Refused: forbidden" }),
   ).toBeVisible();
@@ -218,10 +220,10 @@ test("a runaway plug-in is stopped and flagged while the UI stays responsive", a
   await page.goto(nail.url);
   await expect(rows(page).first()).toBeVisible();
   await install(page, file, /^Spinner 1\.0\.0$/);
-  await closeDialog(page, "Settings");
+  await showView(page, "Mail");
 
   await rows(page).filter({ hasText: "Welcome to Nail" }).click();
-  await page.getByRole("button", { name: "Spin forever" }).click();
+  await readerAction(page, "Spin forever");
   // The UI keeps working while the plug-in loops: another message opens.
   const other = rows(page).nth(1);
   const subject = (
@@ -240,9 +242,14 @@ test("a runaway plug-in is stopped and flagged while the UI stays responsive", a
   const entry = settings.locator('[data-part="plugin-manager.plugin"][data-state="crashed"]');
   await expect(entry).toBeVisible();
   await expect(entry).toContainText("Stopped after a problem");
-  // Its button is disabled until it is turned on again.
-  await closeDialog(page, "Settings");
-  await expect(page.getByRole("button", { name: "Spin forever" })).toBeDisabled();
+  // Its action cannot run until it is turned on again: the reader bar
+  // hides it (M5b `hide-disabled`), in "More" too.
+  await showView(page, "Mail");
+  await expect(page.getByRole("button", { name: "Spin forever" })).toHaveCount(0);
+  await readerToolbar(page).getByRole("button", { name: "More", exact: true }).click();
+  const spin = page.getByRole("menuitem", { name: /^Spin forever/ });
+  if ((await spin.count()) > 0) await expect(spin).toBeDisabled();
+  await page.keyboard.press("Escape");
 });
 
 /** A running `nail plugin dev` console: its stdout lines. */
@@ -313,9 +320,9 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
     await entry.getByRole("button", { name: "Place in layout" }).click();
     await settings.getByRole("button", { name: /^Add \d+ items? to the layout$/ }).click();
     await expect(settings.getByText(/Added to your layout/)).toBeVisible();
-    await closeDialog(page, "Settings");
+    await showView(page, "Mail");
     await rows(page).filter({ hasText: "Welcome to Nail" }).click();
-    await page.getByRole("button", { name: "Say hello" }).click();
+    await readerAction(page, "Say hello");
     const toasts = page.locator('[data-part="plugin.notification"]');
     await expect(toasts.filter({ hasText: "Hello one" })).toBeVisible();
 
@@ -327,13 +334,13 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
     // The host's lines name the plug-in by its resolved name.
     await dev.waitFor("Dev hello is being reloaded.");
     expect(dev.lines.filter((l) => l.includes("%plugin-name%"))).toEqual([]);
-    await page.getByRole("button", { name: "Say hello" }).click();
+    await readerAction(page, "Say hello");
     await expect(toasts.filter({ hasText: "Hello two" })).toBeVisible();
     const again = await openSettings(page, "Plug-ins");
     await expect(again.locator('[data-part="plugin-manager.plugin"]')).toContainText(
       "Dev hello 1.0.1",
     );
-    await closeDialog(page, "Settings");
+    await showView(page, "Mail");
 
     // A change of only its locale file (same manifest, same version)
     // reloads its texts too.
@@ -344,7 +351,16 @@ test("nail plugin dev loads a folder and reloads it on changes", async ({ page, 
         timeout: 20_000,
       })
       .toBeGreaterThan(reloads);
-    await expect(page.getByRole("button", { name: "Say hello again" })).toBeVisible();
+    // The action's new label (in the bar or, unranked, in its More menu).
+    await expect(async () => {
+      const button = readerToolbar(page).getByRole("button", { name: "Say hello again" });
+      if ((await button.count()) > 0) return;
+      await readerToolbar(page).getByRole("button", { name: "More", exact: true }).click();
+      await expect(page.getByRole("menuitem", { name: /^Say hello again/ })).toBeVisible({
+        timeout: 1_000,
+      });
+      await page.keyboard.press("Escape");
+    }).toPass({ timeout: 15_000 });
     const edited = await openSettings(page, "Plug-ins");
     await expect(edited.locator('[data-part="plugin-manager.plugin"]')).toContainText(
       "Dev hello edited 1.0.1",

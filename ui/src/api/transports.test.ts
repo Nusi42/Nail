@@ -63,7 +63,9 @@ describe("MockTransport", () => {
 
   it("answers the reference config", async () => {
     const config = await client().request({ type: "GetConfig" }, "Config");
-    expect(config.layout.windows.main).toHaveLength(2);
+    // M5b: one main window (rail + views); the mail view has two breakpoints.
+    expect(config.layout.windows.main).toHaveLength(1);
+    expect(config.layout.windows.mail).toHaveLength(2);
     expect(config.theme.parts.length).toBeGreaterThan(10);
   });
 

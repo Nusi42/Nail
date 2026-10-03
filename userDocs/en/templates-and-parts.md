@@ -100,7 +100,21 @@ toasts); their events carry the states `selected`, `today`, `outside`,
 `busy`, `recurring`, `overridden`, `read-only`, `tentative`, `free`,
 `all-day` and `dragging`, tasks `done` and `overdue`. Positions and
 calendar colours come from the theme's geometry rules; see the default
-theme (`defaults/theme.kdl`) for every part.
+theme (`defaults/theme.kdl`) for every part. Since M5b the calendar's
+navigation bar is `calendar.toolbar` (Today and Previous / Next in
+`calendar.nav`, the range `calendar.title`, the view switch
+`segmented[field="calendar-view"]`, New event), an event's texts are
+`event-card.title`, `event-card.time` and `event-card.location`, and a
+calendar's colour square is its check box `calendar-list.toggle`.
+
+The M5b shell (ADR 0109) adds: `nav-rail` (`.logo`, `.item` with the state
+`active`, `.label`, `.badge`, `.spacer`, `.separator`, `.account`),
+`view-host` (`.view` per view), the folder pane's `folder-tree.compose`,
+`folder-tree.section` (`.header`, `.dot`, `.title`, `.unread-count`),
+`folder-tree.account`, `folder-tree.favorite`, `folder-tree.smart-folder`,
+`list-header` (`.title`, `.counts`, `.chips`), the toolbar's `toolbar.more`,
+and the settings page `settings-page` (`.nav`, `.nav.item`, `.search`,
+`.card`, `.title`, `.breadcrumb`).
 
 Conditions (`part "x[key=\"value\"]"`): `folder-tree.item[role="inbox"]`,
 `folder-tree.item[depth="1"]` (nesting level), `message-list.row[account="…"]`,

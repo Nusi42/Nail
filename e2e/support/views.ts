@@ -41,16 +41,21 @@ export async function openSettings(page: Page, section?: string): Promise<Locato
     const item = settingsNav(view).getByRole("button", { name: section, exact: true });
     await item.click();
     await expect(item).toHaveAttribute("aria-current", "page");
-    await expect(view.getByRole("heading", { level: 2, name: section, exact: true })).toBeVisible();
+    // The page's title (a widget may repeat it in its own heading).
+    await expect(view.locator('[data-part="settings-page.title"]')).toHaveText(section);
   }
   return view;
 }
 
 /** Runs an action from the command palette by searching for `query`. */
 export async function runFromPalette(page: Page, query: string, option: string | RegExp) {
-  await page.keyboard.press("Control+k");
   const palette = page.getByRole("dialog", { name: "Command palette" });
-  await expect(palette).toBeVisible();
+  // The key binding works once the app is loaded (the rail shows).
+  await expect(rail(page).or(page.locator('[data-part="app"]')).first()).toBeVisible();
+  await expect(async () => {
+    if (!(await palette.isVisible())) await page.keyboard.press("Control+k");
+    await expect(palette).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
   await palette.getByRole("combobox").fill(query);
   await palette
     .getByRole("option", { name: typeof option === "string" ? new RegExp(`^${option}`) : option })
@@ -96,3 +101,58 @@ export async function toolbarAction(page: Page, toolbar: Locator, name: string):
 /** Runs a reader action (see `toolbarAction`). */
 export const readerAction = (page: Page, name: string) =>
   toolbarAction(page, readerToolbar(page), name);
+
+/** The settings section that holds what a pre-M5b settings tab showed. */
+export const FORMER_SETTINGS_TABS: Readonly<Record<string, string>> = {
+  Accounts: "Accounts",
+  "Virtual accounts": "Accounts",
+  Appearance: "Appearance",
+  "MCP clients": "Agents (MCP)",
+  Confirmations: "Agents (MCP)",
+  "Keys and certificates": "Keys & encryption",
+  "Signing and encryption": "Keys & encryption",
+  Autocrypt: "Keys & encryption",
+  Smartcards: "Keys & encryption",
+  "Data protection": "Privacy & data protection",
+  "Recovery key": "Privacy & data protection",
+  Privacy: "Privacy & data protection",
+  "Remote access": "Remote access",
+  "Remote users": "Remote access",
+  Devices: "Remote access",
+  "Security log": "Remote access",
+  "Server rules": "Server rules & vacation",
+  "Exchange inbox rules": "Server rules & vacation",
+  "Vacation reply": "Server rules & vacation",
+  "Junk mail": "Mail & junk",
+  Synchronization: "Mail & junk",
+  Notifications: "Notifications",
+  "Plug-ins": "Plug-ins",
+  Updates: "Desktop app",
+  "Tray and startup": "Desktop app",
+  "Default apps": "Desktop app",
+  "Import and export": "Data & backup",
+  Backups: "Data & backup",
+  Diagnostics: "Data & backup",
+  Customize: "Layout & toolbars",
+};
+
+/** Shows the settings section of a former settings tab (see `FORMER_SETTINGS_TABS`). */
+export function openSettingsTab(page: Page, tab: string): Promise<Locator> {
+  const section = FORMER_SETTINGS_TABS[tab];
+  if (section === undefined) throw new Error(`no settings section for the former tab ${tab}`);
+  return openSettings(page, section);
+}
+
+/** The account sections of the folder pane, in account order. */
+export const accountSections = (page: Page) =>
+  page.locator('[data-part="folder-tree.section"][data-kind="accounts"]');
+
+/** The folder-pane section of the account whose heading contains `name`. */
+export const accountSectionNamed = (page: Page, name: string) =>
+  accountSections(page).filter({
+    has: page.locator('[data-part="folder-tree.section.title"]', { hasText: name }),
+  });
+
+/** A section's top-level inbox. */
+export const sectionInbox = (section: Locator) =>
+  section.locator('[data-part="folder-tree.item"][data-role="inbox"][data-depth="0"]').first();

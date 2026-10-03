@@ -272,33 +272,32 @@ describe("message-view", () => {
 describe("toolbar", () => {
   it("renders items from the layout with i18n labels, icons and disabled states", async () => {
     const env = createEnv({ state: { activeAccountId: "acc-personal" } });
-    const { container } = renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env);
+    // The default reader bar (M5b: ranked, "More", hide-disabled), shown here
+    // with disabled actions and wrapping so jsdom (no widths) sees every item.
+    const base = env.transport.data.layout;
+    const layout = normalizeLayout({
+      ...base,
+      toolbar_settings: {
+        ...base.toolbar_settings,
+        reader: { hide_disabled: false, overflow: "wrap" },
+      },
+    });
+    const { container } = renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env, {
+      layout,
+    });
     const toolbar = screen.getByRole("toolbar", { name: "Message actions" });
     const buttons = within(toolbar).getAllByRole("button");
-    // M2c (WP54) adds "Snooze…" and "Mark as junk" to the default reader
-    // toolbar; the reference fixture gains them when WP55 regenerates it.
-    const m2c = ["Snooze…", "Mark as junk"];
-    expect(buttons.map((b) => b.textContent).filter((l) => !m2c.includes(l ?? ""))).toEqual([
+    const names = buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent);
+    expect(names).toEqual([
       "Reply",
       "Reply all",
       "Forward",
       "Archive",
-      "Move to…",
       "Delete",
-      "Mark as read/unread",
+      "Move to…",
       "Flag",
-      "Create rule from message",
-      // M3a: calendars and tasks.
-      "Create event from email",
-      "Create task from email",
-      // M3b: labels of a Gmail message.
-      "Labels…",
-      // M3c: categories and Focused Inbox of an Exchange message.
-      "Categories…",
-      "Move to Focused / Other…",
-      "Import Autocrypt setup message",
-      // M4c: printing.
-      "Print the message…",
+      "Snooze…",
+      "More",
     ]);
     expect(buttons[0]).toHaveAttribute("data-part", "toolbar.button");
     expect(buttons[0]).toBeDisabled(); // no message selected
@@ -307,8 +306,22 @@ describe("toolbar", () => {
       "data-icon",
       "reply",
     );
+    // Icon buttons keep their label as tooltip, with the key.
+    expect(within(toolbar).getByRole("button", { name: "Archive" })).toHaveAttribute(
+      "title",
+      "Archive (E)",
+    );
     expect(container.querySelectorAll('[data-part="toolbar.spacer"]')).toHaveLength(1);
     expect(container.querySelectorAll('[data-part="toolbar.separator"]')).toHaveLength(1);
+  });
+
+  it("hides the reader bar's disabled actions (hide-disabled)", async () => {
+    const env = createEnv({ state: { activeAccountId: "acc-personal" } });
+    renderNode(widget("toolbar", { options: { toolbar: "reader" } }), env);
+    const toolbar = screen.getByRole("toolbar", { name: "Message actions" });
+    // Nothing selected: every message action is disabled, so none shows.
+    expect(within(toolbar).queryByRole("button", { name: "Reply" })).toBeNull();
+    expect(within(toolbar).queryByRole("button", { name: "Archive" })).toBeNull();
   });
 
   it("dispatches enabled actions", async () => {

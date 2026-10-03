@@ -98,8 +98,8 @@ describe("nav-rail", () => {
     const calendar = item(/^Calendar/);
     expect(calendar).toHaveAttribute("title", "Calendar (Ctrl+2)");
     expect(calendar).toHaveAttribute("aria-keyshortcuts", "Control+2");
-    // Settings has no binding in the default layout.
-    expect(item(/^Settings/)).toHaveAttribute("title", "Settings");
+    // Settings shows through `settings.open` (Ctrl+,), an alias of view.show.
+    expect(item(/^Settings/)).toHaveAttribute("title", "Settings (Ctrl+,)");
   });
 
   it("moves focus with Up / Down / Home / End", async () => {

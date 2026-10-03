@@ -1,7 +1,8 @@
 # e2e/visual — visual-regression harness (M5a WP154)
 
-Playwright screenshots of nine screens — the main window with a message open,
-the composer, Settings, the calendar, a context menu, an HTML newsletter (reader
+Playwright screenshots of ten screens — the main window (navigation rail and
+mail view) with a message open, the reader's More menu (M5b), the composer,
+the settings page, the calendar view, a context menu, an HTML newsletter (reader
 column and remote-content banner), a message with attachment cards before and
 after saving one, and a dialog — for every
 built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) × density
@@ -53,7 +54,7 @@ skipped). Open the file in a browser; nothing is served.
    page load with a fixed clock (`2026-09-30T10:00Z`; the calendar
    `2026-08-12T10:00Z`, a week before anything the demo data derives from the
    real date), time zone UTC, locale en-US, light colour scheme (the theme
-   decides colours, not the OS), reduced motion, viewport 1280 × 800 at scale
+   decides colours, not the OS), reduced motion, viewport 1280 × 1000 (M5b; 800 before) at scale
    1. It waits for the demo mail and settled account states, fonts
       (`document.fonts.ready`), parks the pointer, and captures with animations
       disabled and the caret hidden once two consecutive screenshots are

@@ -34,7 +34,7 @@ development build), for whom (just you or all users of the PC), the
 architecture, the update channel, the folder and the WebView2 version.
 Below that is the update status.
 
-In **Settings → Updates** you choose:
+In **Settings → Desktop app** you choose:
 
 - **Update channel.** *Stable* or *Beta (early versions)*.
 - **Check for updates automatically.** At start and once a day.
@@ -76,7 +76,7 @@ empty message), **Check mail** (synchronizes every account now) and **Quit
 Nail**. Starting Nail again (from the Start menu, a link or a file) brings
 a hidden window back.
 
-In **Settings → Tray and startup**:
+In **Settings → Desktop app**:
 
 - **Keep Nail running in the notification area** when you close the
   window. Mail sync, rules, reminders and connected AI apps keep working.
@@ -95,7 +95,7 @@ In **Settings → Tray and startup**:
 
 ## Default apps
 
-**Settings → Default apps** lists what Nail can open — e-mail links
+**Settings → Desktop app** lists what Nail can open — e-mail links
 (`mailto:`), calendar links (`webcal:`, `webcals:`), e-mail files
 (`.eml`), calendar files (`.ics`), contact files (`.vcf`) — and whether
 Nail is the mail program other programs use for "Send to → Mail

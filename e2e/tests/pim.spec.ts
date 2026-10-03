@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { control, startNail, tempDir, type NailServer } from "../support/nail";
-import { toolbarAction } from "../support/views";
+import { openSettingsTab, showView, toolbarAction, viewRegion } from "../support/views";
 
 /**
  * Wave M3a (ADR 0063) against `nail serve --seed demo-multi`: calendars,
@@ -25,12 +25,10 @@ async function openApp(page: Page) {
   await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
 }
 
-const mainToolbar = (page: Page) => page.getByRole("toolbar", { name: "Main toolbar" });
-
 /** Opens the calendar window from the main toolbar. */
 async function openCalendar(page: Page): Promise<Locator> {
-  await mainToolbar(page).getByRole("button", { name: "Calendar" }).click();
-  const window = page.getByRole("dialog", { name: "Calendar", exact: true });
+  await showView(page, "Calendar");
+  const window = viewRegion(page, "Calendar");
   await expect(window).toBeVisible();
   return window;
 }
@@ -211,8 +209,8 @@ test("a reminder fires at the controlled clock time", async ({ page }) => {
 test("a contact syncs to CardDAV and is suggested in the composer", async ({ page }) => {
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
-  await mainToolbar(page).getByRole("button", { name: "Contacts" }).click();
-  const contacts = page.getByRole("dialog", { name: "Contacts", exact: true });
+  await showView(page, "Contacts");
+  const contacts = viewRegion(page, "Contacts");
   await expect(contacts.getByRole("option", { name: /Grace Hopper/ })).toBeVisible();
   await contacts.getByRole("button", { name: "New contact" }).click();
   const editor = page.getByRole("dialog", { name: "Contact", exact: true });
@@ -228,7 +226,7 @@ test("a contact syncs to CardDAV and is suggested in the composer", async ({ pag
       (await davObjects("contacts")).some((o) => o.data.includes("FN:Katherine Johnson")),
     )
     .toBe(true);
-  await contacts.getByRole("button", { name: "Close" }).first().click();
+  await showView(page, "Mail");
 
   await page.keyboard.press("c");
   const composer = page.getByRole("dialog", { name: "New message", exact: true });
@@ -244,8 +242,8 @@ test("a contact syncs to CardDAV and is suggested in the composer", async ({ pag
 test("duplicate contacts are merged", async ({ page }) => {
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
-  await mainToolbar(page).getByRole("button", { name: "Contacts" }).click();
-  const contacts = page.getByRole("dialog", { name: "Contacts", exact: true });
+  await showView(page, "Contacts");
+  const contacts = viewRegion(page, "Contacts");
   await expect(contacts.getByRole("option", { name: /Grace Hopper/ })).toHaveCount(1);
   // The same person in the local address book.
   await contacts.getByRole("button", { name: "New contact" }).click();
@@ -272,8 +270,8 @@ test("duplicate contacts are merged", async ({ page }) => {
 test("a task gets subtasks", async ({ page }) => {
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
-  await mainToolbar(page).getByRole("button", { name: "Tasks" }).click();
-  const window = page.getByRole("dialog", { name: "Tasks", exact: true });
+  await showView(page, "Tasks");
+  const window = viewRegion(page, "Tasks");
   const tree = window.getByRole("tree", { name: "Tasks" });
   await window.getByLabel(/^Add a task to/).fill("Plan the trip");
   await window.getByRole("button", { name: "Add", exact: true }).click();
@@ -314,9 +312,9 @@ test("an .ics file given at launch is imported", async ({ page }) => {
 test("an MCP client lists events after a grant", async ({ page }) => {
   server = await startNail({ seed: "demo-multi" });
   await openApp(page);
-  await mainToolbar(page).getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
-  await settings.getByRole("tab", { name: "MCP clients" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "MCP clients");
   const serverLine = settings.locator('[data-part="mcp-clients.server"]');
   await expect(serverLine).toHaveAttribute("data-state", "running");
   const url = /(http:\/\/127\.0\.0\.1:\d+\/mcp)/.exec((await serverLine.textContent()) ?? "")?.[1];

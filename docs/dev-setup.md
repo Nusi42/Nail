@@ -294,6 +294,17 @@ How it works:
   `e2e/support/plugins.ts`) into `%LOCALAPPDATA%\nail-build\e2e\plugins\`
   and hands the package paths to the workers (`NAIL_E2E_EXAMPLE_<NAME>`,
   read with `examplePackage(name)`).
+- The browser window is 1280 × 1000 (M5b: the message list under the list
+  header shows every row of the demo inboxes). Shared helpers for the M5b
+  shell are in `e2e/support/views.ts`: `showView` / `viewRegion` (a view is
+  a region "<View> view" in the view host), `openSettings` (a section of the
+  settings page) and `openSettingsTab` (the section of a former settings
+  tab), `runFromPalette` (actions without a button), `toolbarAction` /
+  `readerAction` (a bar's button, else its More menu), `accountSections` /
+  `accountSectionNamed` / `sectionInbox` (the folder pane's account
+  sections). The app reopens the last view after a reload or restart (UI
+  state, shared with remote sessions): switch back to Mail before reloading
+  when a test expects the mail list.
 - Traces, screenshots and the CI HTML report go to
   `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
   `NAIL_BUILD_DIR` overrides the base), not into the repository.
@@ -307,7 +318,7 @@ How it works:
 | `e2e/tests/mailops.spec.ts` | `--seed demo-multi`: flag / archive / delete reach the mock IMAP server, a server-side flag change arrives through IDLE, writes made offline replay after reconnecting |
 | `e2e/tests/search-threads.spec.ts` | `--seed demo-multi`: the query language (fields, quotes, OR / NOT, error position), the thread view across folders |
 | `e2e/tests/send.spec.ts` | `--seed demo-multi`: a plain-text mail cancelled by undo send, then sent to the mock SMTP server, with the Sent copy on the IMAP server; a Sent copy queued while IMAP is offline and filed once it is back |
-| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, the snoozed list, the snooze picker, a folder's context menu and sync dialog, every settings tab (incl. Server rules, Vacation reply, Junk mail, Notifications, Synchronization and the Customize editors) and the merge dialog; any violation, whatever its impact, fails |
+| `e2e/tests/a11y.spec.ts` | axe-core scan of the main window, the reader and dark mode, and (`--seed demo-multi`) of the composer in each mode, the outbox, filter rules, account setup, the snoozed list, the snooze picker, a folder's context menu and sync dialog, every section of the settings page and the merge dialog; M5b: every built-in theme (Frost, Sage, Graphite, Nocturne, High contrast) over the mail view, the reader's More menu, the calendar view and the settings page, colour contrast included; any violation, whatever its impact, fails |
 | `e2e/tests/composer.spec.ts` | `--seed demo-multi`: HTML and Markdown mails (bold text, Markdown source part, attachment, core-rendered preview) with their MIME parts as the mock SMTP server received them; reply quoting in HTML (blockquote) and Markdown (`>`); drafts autosaved to the server's Drafts folder, continued from the outbox after a reload, removed after sending |
 | `e2e/tests/rules.spec.ts` | `--seed demo-multi`: an arrival rule (entered in the text view) moves and flags new mail on the IMAP server and its run is undone as one unit; the test-rule preview with "why it matches"; a rule created from a message and written to `rules.kdl` |
 | `e2e/tests/mcp.spec.ts` | an MCP client created in the settings is denied until "Read mail" is granted, then reads `nail://accounts` and finds messages with `search_messages` over Streamable HTTP (`e2e/support/mcp.ts`); the activity log shows both |
@@ -318,7 +329,7 @@ How it works:
 | `e2e/tests/remote.spec.ts` | the remote UI (turned on over the local WebSocket: TLS with a self-signed certificate, host name `localhost`) in a second browser context: pairing with a code from the desktop's dialog (fingerprint, used code refused, Trusted Types block an injected script), passkey registration and login with a CDP virtual authenticator, password + TOTP (a used code refused), password guessing slowed down (backoff, audit), session revoke on the desktop logs the browser out, internet mode locked in the settings and in the core, the local UI's CSP blocking an inline script (`e2e/support/remote.ts`: `rpc`, `enableRemoteUi`, `totp`, `trustingBrowser`) |
 | `e2e/tests/remote-content.spec.ts` | `--seed demo-multi`: remote images blocked, then loaded through the proxy after "Always load from" the sender; a private target is refused (403), a forged token is a 404, a loopback literal is never signed; "Load once" loads without adding an allow-list entry |
 | `e2e/tests/plugins.spec.ts` | plug-ins (private `--seed demo` each): the full Follow-up example installed through Settings → Plug-ins with its six permissions (write marked), placed (toolbar item after Forward and Shift+F in `layout.kdl`), run from the reader toolbar (dialog, the task it creates in the task window, notification, log line; axe on dialog and toast); a plug-in without `mail.read.body` refused a body (toast, log line); a runaway plug-in stopped and flagged while another message opens; `nail plugin dev` loading a folder, its console and a hot reload |
-| `e2e/tests/a11y-windows.spec.ts` | axe on every layout window, settings tab (nested ones too) and feature dialog (incl. the plug-in install dialog) in default, high-contrast and dark mode against `--seed demo-multi`; checks its own coverage against the layout |
+| `e2e/tests/a11y-windows.spec.ts` | axe on every layout window (the views' windows in the view host), settings page section and feature dialog (incl. the plug-in install dialog) in default, high-contrast and dark mode against `--seed demo-multi`; checks its own coverage against the layout |
 | `e2e/tests/pim.spec.ts` | `--seed demo-multi` (M3a): a weekly event edited "this and following" (two series); an event created in the CalDAV calendar reaches the mock CalDAV server and another client's event (`dav-put`) appears after "Sync"; the ICS subscription's holiday is read-only and a second feed is added from the sources dialog; a reminder fires at the controlled clock time (`clock-set`) and is dismissed; a contact created in the CardDAV book reaches the server and is suggested in the composer; duplicate contacts (local + CardDAV) merged into one linked person; a task with a subtask completed; an `.ics` given with `--launch` previewed and imported; an MCP client lists events only after a grant |
 | `e2e/tests/scheduling.spec.ts` | `--seed demo-multi` (M3b): an iMIP invitation (delivered with `imap-deliver`) is added on arrival and accepted from the reader's card, the `REPLY` reaches the mock SMTP server and the event is in the calendar; an organizer's update moves the event and the cancellation is removed with "Remove from calendar"; a meeting created in the event editor is sent ("Send invitations"), Grace's `COUNTER` is accepted from the card and the updated `REQUEST` goes out; the attendee picker shows `bob`'s busy blocks from the mock CalDAV server's outbox |
 | `e2e/tests/gmail.spec.ts` | `--seed demo-multi` (M3b): the Gmail account switched on in the settings syncs (four inbox conversations, chat skipped), category tabs filter the inbox, a label applied with "Labels…" reaches the mock Gmail server, archive removes `INBOX`, mail is sent through the API (`gmail-sent`), a message delivered on the server (`gmail-deliver`) arrives by history polling |
@@ -326,12 +337,16 @@ How it works:
 | `e2e/tests/agents.spec.ts` | `--seed demo-multi` (M4a): an MCP client created and granted in the settings writes a draft without confirmation; its send waits until approved in the confirmation center ("always allow" then lets the next send run at once; axe on the center); a denied Trash and a permanent delete (always asks, no always-allow) change nothing; the `summarize_thread` prompt; a rate limit saved in the settings trips and is audited as denied |
 | `e2e/tests/extensions.spec.ts` | `--seed demo-multi` (M4a): the before-send example vetoes ("Keep editing", "Send anyway"; axe on the veto dialog); an arrival hook tags new mail (keyword on the IMAP server) and an open hook's banner button reaches the plug-in; the CSV preview renders a table; an hourly job runs after `clock-advance` and "Run now"; a runaway arrival hook is stopped while mail keeps arriving; a composer action inserts text attributed to its plug-in |
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
+| `e2e/tests/m5b.spec.ts` | `--seed demo` / `demo-multi` (M5b): the rail and Ctrl+1 … 4 / `g m` switch views with the focus moving into the view, rail arrow keys; the Mail badge matches the All inboxes count; the last view survives a reload (`ui-state.json` `shell.view`); the reader bar's labelled / icon actions, More from the keyboard and actions moving into More when narrow; filter chips; settings search → the setting marked, the remembered section; the calendar view switch and a calendar's "…" menu (recolour); dates in English with a German browser; a pre-rail `layout.kdl` keeps working and is offered the new default through the merge dialog; a remote browser in dark mode next to a light desktop; views from the command palette |
+| `e2e/tests/m5b-contract.spec.ts` | the contract's fallback with a pre-rail `layout.kdl`: view shortcuts and the palette open the views as windows |
 | `e2e/tests/m5a.spec.ts` | `--seed demo-multi` (M5a): the five themes picked in Settings → Appearance and written to `theme.kdl` (Follow Windows off), the accent override and "Use theme defaults", Compact density across themes (tag line hidden, smaller rows, `data-nail-density`), Follow Windows driven by `system-appearance` (Graphite, High contrast, another pair), a user theme added to `themes/` while running and a broken one listed, an attachment card's Save downloading the file |
 
 ### Visual regression (M5a, ADR 0106)
 
-Screenshots of six screens (main window with a message, composer, Settings,
-calendar week, a context menu, the Move dialog) for every built-in theme
+Screenshots of ten screens (the main window with the rail and a message,
+the reader's More menu, the composer, the settings page, the calendar week
+view, a context menu, an HTML message, attachment cards before and after
+saving, the Move dialog) for every built-in theme
 (Frost, Sage, Graphite, Nocturne, High contrast) × density (Comfortable,
 Compact), compared with reviewed baselines. Its own Playwright config
 (`e2e/visual/playwright.visual.config.ts`), not part of `npm run e2e`.
@@ -353,7 +368,7 @@ npm run visual:selftest    # end-to-end self-test of the harness with temporary 
   "new" / "changed" screen on the page, commit `e2e/visual/baselines/`.
 - Each worker runs its own `nail serve --seed demo-multi` on a free port;
   every screen starts from a fresh page with a fixed clock, UTC, en-US,
-  reduced motion, 1280 × 800.
+  reduced motion, 1280 × 1000.
 - Variables: `NAIL_VISUAL_THEMES`, `NAIL_VISUAL_DENSITIES`,
   `NAIL_VISUAL_SCREENS` (comma-separated filters), `NAIL_VISUAL_WORKERS`
   (default 2), `NAIL_VISUAL_MAX_DIFF_RATIO` (default 0.002 of the pixels),

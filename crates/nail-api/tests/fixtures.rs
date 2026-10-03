@@ -201,38 +201,44 @@ fn widget_kinds(node: &LayoutNode) -> Vec<String> {
 #[test]
 fn layout_describes_three_panes_and_a_narrow_fallback() {
     let layout = layout();
-    let main = &layout.windows["main"];
 
+    // M5b: the main window is the navigation rail beside the view host,
+    // for every width, with the status bar below.
+    let main = &layout.windows["main"];
+    assert_eq!(main.len(), 1);
+    let main_kinds = widget_kinds(&main[0].root);
+    for kind in ["nav-rail", "view-host", "status-bar", "config-errors"] {
+        assert!(main_kinds.contains(&kind.to_owned()), "main has {kind}");
+    }
+    assert_eq!(layout.views["mail"].window, "mail");
+
+    // The mail view's window: three panes, tabs when narrow.
+    let mail = &layout.windows["mail"];
     for width in [0, 320, 899, 900, 1280, 3840] {
         assert_eq!(
-            main.iter().filter(|bp| bp.matches(width)).count(),
+            mail.iter().filter(|bp| bp.matches(width)).count(),
             1,
             "exactly one breakpoint must match width {width}"
         );
     }
 
-    let wide = main.iter().find(|bp| bp.matches(1280)).unwrap();
-    let split = wide
-        .root
-        .children()
-        .iter()
-        .find(|n| matches!(n, LayoutNode::Split { .. }))
-        .unwrap();
+    let wide = mail.iter().find(|bp| bp.matches(1280)).unwrap();
     let LayoutNode::Split {
         sizes, children, ..
-    } = split
+    } = &wide.root
     else {
-        unreachable!()
+        panic!("the wide mail window is a split: {:?}", wide.root);
     };
     assert_eq!(sizes.len(), children.len());
     let pane_kinds: Vec<Vec<String>> = children.iter().map(widget_kinds).collect();
-    assert!(pane_kinds[0].contains(&"folder-tree".to_owned()));
-    // The list pane: the Exchange automatic-replies banner, the Gmail
-    // category tabs (M3b) and the Exchange Focused tabs (M3c) above the
-    // message list.
+    assert_eq!(pane_kinds[0][0], "folder-tree");
+    // The list pane: the list header (M5b), the Exchange automatic-replies
+    // banner, the Gmail category tabs (M3b) and the Exchange Focused tabs
+    // (M3c) above the message list.
     assert_eq!(
         pane_kinds[1],
         [
+            "list-header",
             "automatic-replies-banner",
             "category-tabs",
             "focused-tabs",
@@ -241,18 +247,11 @@ fn layout_describes_three_panes_and_a_narrow_fallback() {
     );
     assert!(pane_kinds[2].contains(&"message-view".to_owned()));
     assert!(pane_kinds[2].contains(&"toolbar".to_owned()));
-    assert!(widget_kinds(&wide.root).contains(&"status-bar".to_owned()));
 
-    let narrow = main.iter().find(|bp| bp.matches(600)).unwrap();
-    assert!(
-        narrow
-            .root
-            .children()
-            .iter()
-            .any(|n| matches!(n, LayoutNode::Tabs { .. }))
-    );
+    let narrow = mail.iter().find(|bp| bp.matches(600)).unwrap();
+    assert!(matches!(narrow.root, LayoutNode::Tabs { .. }));
 
-    for bp in main {
+    for bp in main.iter().chain(mail) {
         bp.root.walk(&mut |n| match n {
             LayoutNode::Split {
                 sizes, children, ..

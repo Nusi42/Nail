@@ -18,6 +18,7 @@ import {
 import { freePort, nailBinary, tempDir } from "../support/nail";
 import { commandManifest, writePluginFolder } from "../support/plugins";
 import { startUpdateServer, updateKey } from "../support/updates";
+import { openSettingsTab } from "../support/views";
 
 /**
  * The Windows integration of wave M4b (plan WP115, ADR 0092) on the real
@@ -75,12 +76,9 @@ test.afterEach(async () => {
   }
 });
 
-async function openSettings(page: Page, tab: string): Promise<Locator> {
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await expect(settings).toBeVisible();
-  await settings.getByRole("tab", { name: tab }).click();
-  return settings;
+/** The settings view at the section of a former settings tab (M5b). */
+function openSettings(page: Page, tab: string): Promise<Locator> {
+  return openSettingsTab(page, tab);
 }
 
 /** An accounts.kdl with one identity (switched off: nothing connects). */
@@ -133,7 +131,7 @@ test("the first run, About Nail and the desktop settings", async () => {
     settings.getByRole("checkbox", { name: "Start in the notification area, without a window" }),
   ).toBeEnabled();
   // Default apps: what Windows tells, and the button to Settings.
-  await settings.getByRole("tab", { name: "Default apps" }).click();
+  await openSettingsTab(page, "Default apps");
   await expect(settings.locator('[data-part="default-apps.item"]').first()).toBeVisible();
   await expect(settings.getByRole("button", { name: "Choose in Default apps" })).toBeVisible();
 });
@@ -347,7 +345,7 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
     await expect
       .poll(() => lines.some((l) => l.includes("activated on the desktop")), { timeout: 30_000 })
       .toBe(true);
-    await settings.getByRole("tab", { name: "Plug-ins" }).click();
+    await openSettingsTab(page, "Plug-ins");
     const entry = settings.locator('[data-part="plugin-manager.plugin"][data-state="running"]');
     await expect(entry).toContainText("Desktop hello 1.0.0");
     await expect(entry).toContainText("Loaded from the development folder");
@@ -356,7 +354,7 @@ test("nail plugin dev loads a plug-in into the desktop app", async () => {
   }
 
   // Switched off again: the endpoint file is gone.
-  await settings.getByRole("tab", { name: "Tray and startup" }).click();
+  await openSettingsTab(page, "Tray and startup");
   await settings
     .getByRole("checkbox", { name: "Allow “nail plugin dev” to load plug-ins into this app" })
     .click();

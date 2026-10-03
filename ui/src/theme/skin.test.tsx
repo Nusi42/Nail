@@ -4,6 +4,9 @@ import { defaultTheme } from "../api/mockData";
 import { BASE_CSS, COMPACT_VARIANT, compileTheme, resolveTokenRefs } from "./compile";
 import { AVATAR_COLORS, SKIN_CSS, colorSlot, stableHash } from "./skin";
 import { ThemeProvider } from "./ThemeProvider";
+import { PIM_SKIN_CSS } from "../features/pim/skin";
+import { SETTINGS_SKIN_CSS } from "../features/settings/skin";
+import { SHELL_SKIN_CSS } from "../features/shell/skin";
 
 /** WCAG relative luminance of `#rrggbb`. */
 function luminance(hex: string): number {
@@ -70,6 +73,23 @@ describe("M5a skin (theme/skin.ts)", () => {
     }
     for (const variant of ["primary", "danger", "ghost", "icon"]) {
       expect(SKIN_CSS).toContain(`[data-variant~="${variant}"]`);
+    }
+  });
+
+  it("every skin closes each block it opens (a stray brace drops the next rule)", () => {
+    for (const [name, css] of Object.entries({
+      SKIN_CSS,
+      SHELL_SKIN_CSS,
+      SETTINGS_SKIN_CSS,
+      PIM_SKIN_CSS,
+    })) {
+      let depth = 0;
+      for (const char of css) {
+        if (char === "{") depth += 1;
+        if (char === "}") depth -= 1;
+        expect(depth, `${name} closes a block it never opened`).toBeGreaterThanOrEqual(0);
+      }
+      expect(depth, `${name} leaves a block open`).toBe(0);
     }
   });
 

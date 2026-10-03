@@ -54,12 +54,19 @@ export function ViewHost({ node }: WidgetProps) {
     if (activeView === null && remembered !== null) setActiveView(remembered);
   }, [ready, activeView, remembered, setActiveView]);
 
-  // Remember every switch.
+  // Remember every switch of this window's view — only a switch: when
+  // another session (a remote browser shares the UI state) remembers its
+  // view, writing ours back would make the two answer each other forever.
   const { mutate } = setUiState;
+  const lastSaved = useRef<string | null>(null);
   useEffect(() => {
     if (!ready || activeView === null || viewDef(layout, activeView) === null) return;
+    if (lastSaved.current === activeView) return;
+    lastSaved.current = activeView;
     if (storedValue !== activeView) mutate({ key: UI_STATE_VIEW, value: activeView });
-  }, [ready, activeView, storedValue, layout, mutate]);
+    // `storedValue` is read, not watched (see above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, activeView, layout, mutate]);
 
   // Views shown so far stay mounted (hidden).
   const [visited, setVisited] = useState<readonly string[]>([]);

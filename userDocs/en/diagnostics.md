@@ -7,7 +7,7 @@ sends it anywhere — you pass the file on yourself.
 
 ## Creating a bundle
 
-Open **Settings → Diagnostics** and choose **Create diagnostics bundle…**,
+Open **Settings → Data & backup** and choose **Create diagnostics bundle…**,
 or run **Create a diagnostics bundle…** from the
 [command palette](command-palette.md).
 

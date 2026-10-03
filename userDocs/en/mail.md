@@ -1,5 +1,48 @@
 # Reading and organizing mail
 
+## The folder pane
+
+**New message** sits on top. Below it:
+
+- **Favorites** — the same folders of all accounts together: **All
+  inboxes**, **Flagged** and **Unread** (searches across every account),
+  **Snoozed**, **Drafts**, **Sent** and the **Outbox** (which favorites you
+  see is the `favorites` option of the `folder-tree`, see the
+  [layout reference](layout-reference.md#widgets)).
+- **One section per account**, in your account order, with the account's
+  colour (the same colour marks its messages in the list) and its folders.
+  A folded account still shows its inbox's unread count.
+- **Smart folders** — your saved searches, only once you saved one.
+
+Click a section's heading (or press Enter / ← / → on it) to fold or unfold
+it; Nail remembers what you folded across restarts. The arrow keys move
+through the whole pane. Right-click an account's heading for its actions
+(check for mail, automatic replies, account settings).
+
+## The list header
+
+Above the messages: the search field (the key that focuses it, `/` by
+default, is shown in it), the folder's name with its counts (for example
+"All inboxes · 102 unread · 4 accounts"), and the filter chips **All**,
+**Unread**, **Flagged** and **Attachments**. A chip shows only the matching
+messages of the folder; while you search, it narrows your search the same
+way (it adds `is:unread`, `is:flagged` or `has:attachment`, see
+[Searching](search.md)). When nothing matches, the list says so.
+
+## The action bar and More
+
+The bar above the message shows **Reply** (highlighted), **Reply all** and
+**Forward** with their labels, then **Archive**, **Delete**, **Move**,
+**Flag** and **Snooze** as icons (the tooltip names the key, for example
+"Archive (E)"). Everything else is under **More**, grouped under
+**Message** (mark read / unread, junk, labels, categories, print, …) and
+**Turn into** (an event, a task, a filter rule), each with its key.
+Actions that do not apply to the message (Gmail labels on other mail, for
+example) are hidden rather than greyed out. When the pane gets narrow, the
+icons move into **More** one by one and come back when there is room.
+
+The message's right-click menu has the same actions in the same groups.
+
 ## Conversations
 
 Replies are grouped into conversations. When the selected message belongs
@@ -36,7 +79,7 @@ attachment actions.
 
 ## Flag, archive, move, delete
 
-The toolbar above the message, the message's right-click menu (or
+The action bar above the message, the message's right-click menu (or
 **Shift+F10** / the menu key on the selected message) and these keys act on
 the selected message.
 
@@ -64,8 +107,8 @@ archive, move or delete one.
 
 Press `b`, click **Snooze…** or choose it in the message's menu, then pick
 **Later today**, **Tomorrow**, **This weekend**, **Next week** or a date and
-time: the message is out of the way until then. **Snoozed messages** in the
-main toolbar lists them; **Wake up now** brings one back at once. How
+time: the message is out of the way until then. **Snoozed** under Favorites
+in the folder pane lists them; **Wake up now** brings one back at once. How
 snoozing works (also offline and on other devices) is explained in
 [Junk mail, snooze and notifications](junk-snooze-notifications.md#snooze).
 
@@ -74,15 +117,15 @@ snoozing works (also offline and on other devices) is explained in
 **Mark as junk** (`Shift+J`, the toolbar or the message's menu) moves a
 message to the Junk folder; **Not junk** moves it back. When a message is
 junk, the reader says so above it (and who decided) with a **Not junk**
-button. Nail's own junk filter is set up per account in Settings → **Junk
-mail**: turn it on, choose the threshold and how much training it needs,
+button. Nail's own junk filter is set up per account in Settings → **Mail & junk**
+(the junk filter card): turn it on, choose the threshold and how much training it needs,
 see how far it is, or reset it. See
 [Junk mail, snooze and notifications](junk-snooze-notifications.md#junk-mail).
 
 ## Messages that are not downloaded yet
 
 Per folder you can choose to keep only the headers, or only the last few
-days in full: Settings → **Synchronization** (choose the account and the
+days in full: Settings → **Mail & junk** (choose the account and the
 folder), or **Synchronization…** in a folder's right-click menu. "As the
 account" removes the folder's own setting. Such messages are marked in the
 list; opening one downloads it. If that fails (for example offline), the

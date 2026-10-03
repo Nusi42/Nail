@@ -172,9 +172,15 @@ export interface Shot {
 }
 
 /** Opens `screen` on a freshly loaded main window and captures it once it settled. */
-export async function openAndShoot(page: Page, url: string, screen: Screen): Promise<Shot> {
+export async function openAndShoot(page: Page, server: NailServer, screen: Screen): Promise<Shot> {
   await preparePage(page, screen.time);
-  await loadMainWindow(page, url);
+  // The app reopens the last view (M5b UI state): every screen starts on
+  // Mail. Leave the previous screen first, or its view host saves its view
+  // again when it hears of the reset.
+  await page.goto("about:blank");
+  const reset = await rpc(server, { type: "SetUiState", key: "shell.view", value: null });
+  expect(reset.type, `SetUiState: ${JSON.stringify(reset)}`).toBe("UiState");
+  await loadMainWindow(page, server.url);
   await screen.open(page);
   await settle(page);
   return captureStable(() =>

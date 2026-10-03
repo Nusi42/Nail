@@ -50,7 +50,10 @@ function px(size: string | null | undefined): number | null {
 
 /** `flex` shorthand for a split pane of the given size. */
 export function flexForSize(size: string | undefined): string {
-  if (size === undefined || size === "auto") return "1 1 auto";
+  // No size: the panes share the space. `auto`: as wide as the content
+  // (M5b: the navigation rail beside the view host).
+  if (size === undefined) return "1 1 auto";
+  if (size === "auto") return "0 0 auto";
   const parsed = parseSize(size);
   if (!parsed) return "1 1 0px";
   if (parsed.unit === "fr") return `${parsed.value} 1 0px`;

@@ -11,7 +11,7 @@ waits.
 
 ## Keys and certificates
 
-Open **Settings → Keys and certificates**. The list holds both kinds:
+Open **Settings → Keys & encryption**. The list holds both kinds:
 
 - **OpenPGP keys** (marked *PGP*) — used with most privacy-minded mail
   programs (Thunderbird, GnuPG, Proton, …).
@@ -87,7 +87,7 @@ Export a backup first.
 
 ## Defaults per address
 
-**Settings → Signing and encryption** sets defaults for new messages from
+**Settings → Keys & encryption** sets defaults for new messages from
 each of your addresses:
 
 - **Technology** — automatic, prefer OpenPGP, or prefer S/MIME.
@@ -179,7 +179,7 @@ Each link warning shows the link's **real target**.
 
 ## Data protection
 
-**Settings → Data protection**:
+**Settings → Privacy & data protection**:
 
 - **Encryption at rest** encrypts the data Nail stores on your computer —
   the whole database file, messages, drafts and the search index — with a
@@ -190,7 +190,7 @@ Each link warning shows the link's **real target**.
   data; the progress is shown, you can keep working, and if Nail closes it
   continues on the next start. If it stops with an error, choose **Try
   again**. Afterwards create a **[recovery key](recovery-key.md)**
-  (**Settings → Recovery key**): it is the only way back to your data if
+  (**Settings → Privacy & data protection**): it is the only way back to your data if
   the key in the Credential Manager is ever lost.
 - **Finding keys online** — *Never*, *When I ask* (default), or
   *Automatically while writing*, and which directories to ask. Automatic
@@ -274,7 +274,7 @@ certificate, so you can answer encrypted.
 
 ## Using your key on another device (Autocrypt)
 
-**Settings → Autocrypt**:
+**Settings → Keys & encryption**:
 
 1. Under **Use your key on another device**, choose the address and
    **Send setup message**. Nail sends your OpenPGP secret key to yourself,

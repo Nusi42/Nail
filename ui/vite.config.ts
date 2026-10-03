@@ -8,6 +8,8 @@ const localesDir = fileURLToPath(new URL("../locales", import.meta.url));
 const fixturesDir = fileURLToPath(new URL("../crates/nail-api/fixtures", import.meta.url));
 // The built-in theme files, read by the mock core (`features/appearance/themes.ts`).
 const themesDir = fileURLToPath(new URL("../defaults/themes", import.meta.url));
+// The shipped layout, offered to pre-rail layouts (`features/customization/LayoutMigration.tsx`).
+const defaultLayoutFile = fileURLToPath(new URL("../defaults/layout.kdl", import.meta.url));
 
 // No fixed development ports (plan section 10): `npm run dev` / `npm run tauri
 // dev` (scripts/dev.mjs) pick a free port and pass it as NAIL_DEV_PORT, which
@@ -27,7 +29,7 @@ export default defineConfig({
     host: "127.0.0.1",
     port: devPort,
     strictPort: Boolean(process.env.NAIL_DEV_PORT),
-    fs: { allow: [".", localesDir, fixturesDir, themesDir] },
+    fs: { allow: [".", localesDir, fixturesDir, themesDir, defaultLayoutFile] },
   },
   build: {
     outDir: "dist",

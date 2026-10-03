@@ -5,7 +5,8 @@
 //! item, else at the end; a missing toolbar or menu is created; an item
 //! already there is never added twice), `plugin-panel "<id>.<panel>"` after
 //! / before the first widget of the named kind (else at the end of the
-//! main window), `bind` lines for the suggested keys (never replacing a key
+//! mail window: `main` in a layout from before the rail, else the mail
+//! view's window `mail`), `bind` lines for the suggested keys (never replacing a key
 //! the user or the defaults bind). The core answers
 //! `Request::PreviewPluginPlacements` with that text and the merge preview;
 //! the user confirms in the merge dialog (`ApplyConfigMerge`).
@@ -35,8 +36,49 @@ use crate::render;
 use crate::write_back::{EditError, LayoutEditor, NEW_LAYOUT};
 use crate::{LAYOUT_FILE, LayoutFile, parse_layout_all};
 
-/// The window panels go to when their anchor is not found.
+/// The main window: panels go there in a layout from before the rail.
 pub const MAIN_WINDOW: &str = "main";
+
+/// The mail view's window of the default layout (M5b): panels go there
+/// when the main window hosts the views.
+pub const MAIL_WINDOW: &str = "mail";
+
+/// Whether a window of the file (any breakpoint) holds a node of `kind`.
+fn window_has(body: &KdlDocument, window: &str, kind: &str) -> bool {
+    fn has(node: &KdlNode, kind: &str) -> bool {
+        node.children().is_some_and(|c| {
+            c.nodes()
+                .iter()
+                .any(|n| n.name().value() == kind || has(n, kind))
+        })
+    }
+    LayoutEditor::window_sites(body, window)
+        .into_iter()
+        .any(|site| {
+            let top = &body.nodes()[site.top];
+            match site.inner {
+                None => has(top, kind),
+                Some(inner) => top
+                    .children()
+                    .and_then(|c| c.nodes().get(inner))
+                    .is_some_and(|w| has(w, kind)),
+            }
+        })
+}
+
+/// The window a panel goes into: the file's own main window when it shows
+/// mail itself (no `view-host`, a layout from before the rail) or holds the
+/// anchor, else the mail view's window.
+fn panel_window(body: &KdlDocument, anchor: Option<&str>) -> &'static str {
+    if !LayoutEditor::window_sites(body, MAIN_WINDOW).is_empty()
+        && (!window_has(body, MAIN_WINDOW, "view-host")
+            || anchor.is_some_and(|kind| window_has(body, MAIN_WINDOW, kind)))
+    {
+        MAIN_WINDOW
+    } else {
+        MAIL_WINDOW
+    }
+}
 
 /// The commands and panels of the installed plug-ins (for the merge
 /// preview's "not installed" conflicts).
@@ -261,25 +303,26 @@ fn list_default(container: &str, prop: &str) -> Option<&'static str> {
     }
 }
 
-/// Places `plugin-panel "<panel>"` in every breakpoint of the main window:
-/// after / before the first widget of the anchor kind, else as the last
-/// child of the window's root container.
+/// Places `plugin-panel "<panel>"` in every breakpoint of the mail window
+/// ([`panel_window`]): after / before the first widget of the anchor kind,
+/// else as the last child of the window's root container.
 fn place_panel(
     editor: &mut LayoutEditor,
     panel: &str,
     placement: &PluginPlacement,
 ) -> Result<(), EditError> {
-    if LayoutEditor::window_sites(editor.body(), MAIN_WINDOW).is_empty() {
+    let anchor = placement.after.as_deref().or(placement.before.as_deref());
+    let target = panel_window(editor.body(), anchor);
+    if LayoutEditor::window_sites(editor.body(), target).is_empty() {
         if editor_is_sparse(editor) {
-            editor.copy_default_window(MAIN_WINDOW)?;
+            editor.copy_default_window(target)?;
         } else {
             return Ok(());
         }
     }
     let style = editor.style.clone();
-    let anchor = placement.after.as_deref().or(placement.before.as_deref());
     let after = placement.after.is_some();
-    let sites = LayoutEditor::window_sites(editor.body(), MAIN_WINDOW);
+    let sites = LayoutEditor::window_sites(editor.body(), target);
     for site in sites {
         let body = editor.body();
         let window = match site.inner {
@@ -460,9 +503,10 @@ mod tests {
         assert!(layout.keys.iter().any(|k| k.context == "list"
             && k.key == "shift+f"
             && k.action == "plugin.follow-up.follow-up"));
-        // The panel sits after the message list in both breakpoints (inside
-        // the list pane's stack, under the automatic-replies banner, the Gmail category / Focused tabs and the
-        // list); the stack's size list grew with it.
+        // The panel sits after the message list in both breakpoints of the
+        // mail view's window (inside the list pane's stack, under the list
+        // header, the automatic-replies banner, the Gmail category / Focused
+        // tabs and the list); the stack's size list grew with it.
         assert_eq!(
             placed_panels(&layout),
             HashSet::from(["follow-up.due".to_owned()])
@@ -470,7 +514,7 @@ mod tests {
         assert_eq!(text.matches("plugin-panel \"follow-up.due\"").count(), 2);
         assert_eq!(
             text.matches(
-                "stack id=\"list-pane\" label=\"@layout.pane.messages\" sizes=\"auto auto auto 1fr auto\""
+                "stack id=\"list-pane\" label=\"@layout.pane.messages\" sizes=\"auto auto auto auto 1fr auto\""
             )
             .count(),
             2,

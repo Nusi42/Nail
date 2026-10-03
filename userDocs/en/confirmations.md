@@ -27,7 +27,7 @@ For changes that do not delete anything you can tick **From now on, let … do t
 
 ## Confirmation policies
 
-Each MCP client (Settings → MCP clients) and each plug-in that may change data (Plug-ins → **Confirmations**) has a list of kinds of changes, each set to **Ask first** or **Without asking**. The defaults:
+Each MCP client (Settings → Agents (MCP)) and each plug-in that may change data (Plug-ins → **Confirmations**) has a list of kinds of changes, each set to **Ask first** or **Without asking**. The defaults:
 
 | Asks first | Runs without asking |
 | --- | --- |
@@ -37,7 +37,7 @@ Every change still goes through Nail like your own, appears in the activity log 
 
 ## MCP clients: what they may change and how often
 
-Under Settings → MCP clients, **What it may change** grants the writing permissions (organise mail, delete permanently, write drafts, send mail, change calendars, change contacts and tasks, filter rules). **Limits** caps how many calls, changes and sent messages a client may make; calls over a limit are refused and shown as denied in the activity.
+Under Settings → Agents (MCP), **What it may change** grants the writing permissions (organise mail, delete permanently, write drafts, send mail, change calendars, change contacts and tasks, filter rules). **Limits** caps how many calls, changes and sent messages a client may make; calls over a limit are refused and shown as denied in the activity.
 
 ## Plug-ins in the reader and composer
 

@@ -144,7 +144,9 @@ describe("PIM skin", () => {
   });
 
   it("keeps the avatar's own text colour in a selected contact row", () => {
-    expect(PIM_SKIN_CSS).not.toContain('[data-part="contact-list.item"][aria-selected="true"] > * ');
+    expect(PIM_SKIN_CSS).not.toContain(
+      '[data-part="contact-list.item"][aria-selected="true"] > * ',
+    );
     expect(PIM_SKIN_CSS).toContain(
       '[data-part="contact-list.item"][aria-selected="true"] > :not([data-part="contact-list.avatar"]) { color: inherit; }',
     );

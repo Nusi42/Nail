@@ -15,6 +15,7 @@ The sections are grouped like this in the default layout:
 | ----------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | General     | Accounts                  | Your accounts (servers, sign-in, identities, signatures, sender checks) and virtual accounts                    |
 | General     | Mail & junk               | What each folder downloads (synchronization) and the junk filter                                                |
+| General     | Calendar & contacts       | Your calendars and task lists, calendar sources and subscriptions, importing calendar and contact files         |
 | General     | Server rules & vacation   | Rules that run on your mail server (Sieve), Exchange inbox rules, the vacation reply                            |
 | General     | Notifications             | New-mail notifications, quiet hours, per account and folder                                                     |
 | General     | Data & backup             | Import and export, backups and restoring, the diagnostics bundle                                                |

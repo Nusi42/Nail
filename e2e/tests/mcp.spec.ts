@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { McpSession } from "../support/mcp";
 import { startNail, type NailServer } from "../support/nail";
+import { openSettingsTab, showView, viewRegion } from "../support/views";
 
 /**
  * The read-only MCP server (ADR 0025) started by `nail serve` with the core
@@ -21,9 +22,9 @@ test.afterEach(async () => {
 test("an MCP client lists messages only after a grant", async ({ page }) => {
   await page.goto(server.url);
   await expect(page.locator('[data-part="message-list.row"]').first()).toBeVisible();
-  await page.getByRole("button", { name: "Settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("tab", { name: "MCP clients" }).click();
+  await showView(page, "Settings");
+  const settings = viewRegion(page, "Settings");
+  await openSettingsTab(page, "MCP clients");
 
   // The server runs; its URL is shown.
   const serverLine = settings.locator('[data-part="mcp-clients.server"]');

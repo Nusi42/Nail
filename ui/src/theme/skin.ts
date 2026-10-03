@@ -525,6 +525,24 @@ ${HC} ${p("segmented.option")}[aria-checked="true"], ${HC} ${p("segmented.option
   ${p("segmented.option")}[aria-checked="true"], ${p("segmented.option")}[aria-pressed="true"] { forced-color-adjust: none; color: HighlightText; background-color: Highlight; outline: 2px solid CanvasText; outline-offset: -2px; }
 }`;
 
+/**
+ * M5b integration (ADR 0114): the one-time offer of the new default layout
+ * (a small card at the bottom right, never modal), and the composer's Sign /
+ * Encrypt / Technology row on one line (the Technology label beside its
+ * select).
+ */
+const M5B_INTEGRATION = `${p("layout-offer")} {
+  position: fixed; inset-inline-end: ${T.xl}; inset-block-end: ${T.xl}; z-index: 30;
+  display: grid; gap: ${T.sm}; max-width: calc(24 * ${T.lg}); padding: ${T.lg};
+  border: 1px solid ${T.border}; border-radius: ${T.rLg}; color: ${T.fg}; background-color: ${T.bg}; box-shadow: ${T.overlay};
+}
+${p("layout-offer.title")} { margin: 0; font-size: ${T.heading}; font-weight: ${T.semibold}; line-height: ${T.tight}; }
+${p("layout-offer.text")} { margin: 0; font-size: ${T.body}; line-height: ${T.normal}; color: ${T.muted}; }
+${p("layout-offer.actions")} { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: ${T.sm}; }
+${p("security-compose.toggles")} > ${p("form.field")} { display: inline-flex; align-items: center; gap: ${T.sm}; }
+${p("folder-tree.section.status")} { margin-inline-start: ${T.xs}; font-weight: ${T.regular}; text-transform: none; letter-spacing: 0; color: ${T.muted}; }
+${p("folder-tree.section.status")}[data-state="auth-error"] { color: ${T.danger}; }`;
+
 /** Tokens used above that are not in the schema yet (derived defaults). */
 const DERIVED = `:root { --nail-skin-unread-dot: var(--nail-color-unread, var(--nail-color-accent)); }`;
 
@@ -547,5 +565,6 @@ export const SKIN_CSS = [
   MESSAGE_LIST,
   READER,
   PALETTES,
+  M5B_INTEGRATION,
   HIGH_CONTRAST,
 ].join("\n");

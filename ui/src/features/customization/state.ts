@@ -10,13 +10,19 @@
  */
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type { ConfigIssue, Event as NailEvent } from "../../api/generated";
+import type { ConfigFile, ConfigIssue, Event as NailEvent } from "../../api/generated";
 
 /** The errors of one configuration file. */
 export interface FileErrors {
   issues: ConfigIssue[];
   /** `true` when only the M1a first-error event reported them. */
   legacy: boolean;
+}
+
+/** A file the merge dialog opens with, already compared (M5b layout offer). */
+export interface MergePrefill {
+  file: ConfigFile;
+  incoming: string;
 }
 
 export interface CustomizationState {
@@ -30,10 +36,15 @@ export interface CustomizationState {
   inspected: Element | null;
   /** `true` once the user clicked an element (the panel stays on it). */
   pinned: boolean;
+  /** What the merge dialog opens with next (taken once by the dialog). */
+  mergePrefill: MergePrefill | null;
 
   applyEvent(event: NailEvent): void;
   setInspecting(on: boolean): void;
   inspect(element: Element | null, pinned: boolean): void;
+  prefillMerge(prefill: MergePrefill | null): void;
+  /** Returns and clears the merge prefill. */
+  takeMergePrefill(): MergePrefill | null;
   reset(): void;
 }
 
@@ -50,6 +61,7 @@ function initial() {
     inspecting: false,
     inspected: null as Element | null,
     pinned: false,
+    mergePrefill: null as MergePrefill | null,
   };
 }
 
@@ -113,6 +125,12 @@ export const customizationStore = createStore<CustomizationState>()((set, get) =
       inspecting ? { inspecting, pinned: false } : { inspecting, inspected: null, pinned: false },
     ),
   inspect: (inspected, pinned) => set({ inspected, pinned }),
+  prefillMerge: (mergePrefill) => set({ mergePrefill }),
+  takeMergePrefill: () => {
+    const prefill = get().mergePrefill;
+    if (prefill) set({ mergePrefill: null });
+    return prefill;
+  },
   reset: () => set(initial()),
 }));
 

@@ -228,3 +228,10 @@ customize-columns-items = Columns in display order
 customize-columns-add = Add a column
 customize-columns-column = Column
 customize-columns-add-column = Add column
+
+## The new default layout offered to layouts of your own (M5b WP165)
+
+customize-layout-offer-title = A new layout with a navigation rail
+customize-layout-offer-text = Nail now switches between Mail, Calendar, Contacts, Tasks and Settings with a rail on the left. Your own layout keeps working; review the new default to take over what you like.
+customize-layout-offer-review = Review the new layout
+customize-layout-offer-dismiss = Not now

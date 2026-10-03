@@ -102,8 +102,10 @@ describe("mail actions", () => {
     expect(ctx.store.getState().windows).toEqual([]);
     expect(isEnabled("window.close")).toBe(false);
     await dispatch("account.add");
-    await dispatch("settings.open"); // alias of window.open "settings"
+    await dispatch("window.open", ["settings"]);
     expect(ctx.store.getState().windows).toEqual(["account-setup", "settings"]);
+    // M5b: settings.open shows the settings view (an alias of view.show).
+    expect(ctx.layout.actions["settings.open"]?.alias_of).toBe("view.show");
     expect(isEnabled("window.open", ["nope"])).toBe(false);
     await dispatch("window.close", ["account-setup"]);
     expect(ctx.store.getState().windows).toEqual(["settings"]);
