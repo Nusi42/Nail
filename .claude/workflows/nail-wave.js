@@ -26,6 +26,7 @@ Mandatory rules:
 - React components never use inline styles or literal classNames; data-part attributes only; styling only from the compiled theme; structure only from layout.kdl.
 - The core owns data; UI talks only through NailClient; every write goes through the operation queue.
 - Licences: Nail is closed source for now — do not add GPL/LGPL/AGPL dependencies (MPL-2.0, MIT, Apache-2.0, BSD, ISC, Zlib, Unicode are fine). Check licences before adding a crate/package. Avoid an OpenSSL build dependency unless an ADR justifies it.
+- The machine is shared with other development work (other Vite / tauri dev projects may be running and holding ports and memory): run cargo with -j 4 (os error 1455 = out of page file -> rerun with -j 2), never bind fixed development ports (take free ports), and never kill processes you did not start.
 - Never write build output into the repo (OneDrive). No network except localhost mocks and package registries. A Vite dev server / 'tauri dev' may be running from the user's session: never kill it; if npm ci hits a locked file use npm install and say so.
 - Prefer well-maintained crates/packages; verify real APIs in ~/.cargo/registry or node_modules rather than guessing.`
 
