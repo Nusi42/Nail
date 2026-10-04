@@ -79,7 +79,7 @@ describe("calendar widget", () => {
   });
 
   it("navigates, switches views and returns to today", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "day" } }), env);
     await screen.findByRole("button", { name: /Lunch with Grace/ });
@@ -102,7 +102,7 @@ describe("calendar widget", () => {
   });
 
   it("creates events from the keyboard in the slot grid", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week", "scroll-to": 9 } }), env);
     await settle(env);
@@ -121,7 +121,7 @@ describe("calendar widget", () => {
   });
 
   it("keeps one tab stop in the hours when the view gets fewer days", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week" } }), env);
     await settle(env);
@@ -220,7 +220,7 @@ describe("calendar widget", () => {
   });
 
   it("opens the editor on an event and moves events between days in the month view", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "month", "max-events": 2 } }), env);
     const planning = await screen.findByRole("button", { name: /Sprint planning/ });
@@ -255,7 +255,7 @@ describe("calendar widget", () => {
   });
 
   it("follows the mini-month and shows today's agenda", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderWithProviders(
       <>
@@ -297,7 +297,7 @@ describe("calendar widget", () => {
 
 describe("calendar toolbar and event cards (M5b)", () => {
   it("puts Today, previous / next, the range, the view switch and New event on one line", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(
       widget("calendar", {
@@ -357,7 +357,7 @@ describe("calendar toolbar and event cards (M5b)", () => {
   });
 
   it("switches views from a drop-down with view-switch=menu", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar", { options: { view: "week", "view-switch": "menu" } }), env);
     await settle(env);

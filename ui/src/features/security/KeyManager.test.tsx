@@ -10,7 +10,7 @@ function requestsOf<T extends Request["type"]>(env: Env, type: T) {
 }
 
 async function open(env = createEnv()) {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   renderNode(widget("security-keys"), env);
   const list = await screen.findByRole("list", { name: "Keys" });
   return { user, env, list };

@@ -15,6 +15,10 @@ export async function violations(root: Element): Promise<string[]> {
   const result = await act(() =>
     axe.run(root, {
       iframes: false,
+      // Only violations are reported: axe then builds a node list (with a
+      // CSS selector per node, the costliest part in jsdom) for violations
+      // alone instead of for every passing node.
+      resultTypes: ["violations"],
       rules: {
         // jsdom has no layout: contrast is checked in the browser (Playwright).
         "color-contrast": { enabled: false },

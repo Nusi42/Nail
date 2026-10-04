@@ -23,6 +23,7 @@ import { ClientContext } from "../state/queries";
 import { UiStoreContext, createUiStore, type UiState, type UiStore } from "../state/uiStore";
 import { ThemeProvider } from "../theme/ThemeProvider";
 import { NodeView } from "../layout/LayoutRenderer";
+import { trackEnv } from "./liveEnvs";
 
 export interface Env {
   transport: MockTransport;
@@ -33,7 +34,7 @@ export interface Env {
 
 export function createEnv(options: { inboxSize?: number; state?: Partial<UiState> } = {}): Env {
   const transport = new MockTransport({ data: createMockData(options.inboxSize ?? 30) });
-  return {
+  const env: Env = {
     transport,
     client: new TransportClient(transport),
     store: createUiStore({ connection: "connected", ...options.state }),
@@ -41,6 +42,9 @@ export function createEnv(options: { inboxSize?: number; state?: Partial<UiState
       defaultOptions: { queries: { retry: false, gcTime: Number.POSITIVE_INFINITY } },
     }),
   };
+  // `setup.ts` lets it settle before unmounting the test's DOM.
+  trackEnv(env);
+  return env;
 }
 
 export interface ProvidersProps {

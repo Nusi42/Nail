@@ -142,7 +142,7 @@ describe("calendar groups", () => {
 
 describe("calendar list widget", () => {
   it("groups calendars, shows colour squares and hides a calendar with its square", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar-list"), env);
     const work = await screen.findByRole("checkbox", { name: /^Work/ });
@@ -176,7 +176,7 @@ describe("calendar list widget", () => {
   });
 
   it("opens the … menu from the keyboard, recolours and shows a hidden calendar", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     for (const c of pimOf(env).calendars) if (c.id === "cal-personal") c.settings.visible = false;
     renderNode(widget("calendar-list"), env);
@@ -229,7 +229,7 @@ describe("calendar list widget", () => {
   });
 
   it("closes a menu on a click elsewhere and offers unsubscribing for a subscription", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar-list"), env);
     await user.click(await screen.findByRole("button", { name: "Actions for Public holidays" }));
@@ -248,7 +248,7 @@ describe("calendar list widget", () => {
   });
 
   it("creates a task list in the group's source through the + menu and its dialog", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar-list"), env);
     await user.click(await screen.findByRole("button", { name: "Add to Work calendars" }));
@@ -282,7 +282,7 @@ describe("calendar list widget", () => {
   });
 
   it("edits a calendar's settings in the settings dialog", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar-list"), env);
     await user.click(await screen.findByRole("button", { name: "Actions for Work" }));
@@ -315,7 +315,7 @@ describe("calendar list widget", () => {
   });
 
   it("removes a local calendar and unsubscribes from a subscription after asking", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("calendar-list"), env);
     await user.click(await screen.findByRole("button", { name: "Actions for Personal" }));
@@ -359,7 +359,7 @@ describe("calendar list widget", () => {
   });
 
   it("shows settings and remove as buttons and one list without source headers", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(
       widget("calendar-list", { options: { actions: "buttons", "show-sources": false } }),
@@ -391,7 +391,7 @@ describe("calendar & contacts settings section", () => {
     // The sources panel without its dialog's Close button; settings as buttons.
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.getByRole("button", { name: "Settings of Personal" })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Import…" }));
+    await userEvent.setup({ delay: null }).click(screen.getByRole("button", { name: "Import…" }));
     expect(windows(env)).toContain(IMPORT_DIALOG);
   });
 });

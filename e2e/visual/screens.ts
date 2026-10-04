@@ -134,6 +134,68 @@ export const ATTACHMENT_MESSAGE = "Your invoice for September 2026";
 async function selectMessage(page: Page, subject: string) {
   await rows(page).filter({ hasText: subject }).first().click();
   await expect(page.locator('[data-part="message-view.header.subject"]')).toContainText(subject);
+  await pinListScroll(page, subject);
+}
+
+/**
+ * Waits until the message list stops scrolling: its scroll position is the
+ * same over several animation frames (the virtualizer scrolls to the
+ * selected row, measures the rows, and corrects over a few frames).
+ */
+async function listScrollSettled(page: Page): Promise<void> {
+  await page
+    .locator('[data-part="message-list"]')
+    .first()
+    .evaluate(async (list) => {
+      const frame = () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      let last = list.scrollTop;
+      let same = 0;
+      for (let i = 0; i < 120 && same < 5; i++) {
+        await frame();
+        same = list.scrollTop === last ? same + 1 : 0;
+        last = list.scrollTop;
+      }
+    });
+}
+
+/**
+ * Puts the message list at a scroll position that depends only on the
+ * layout (P1 WP193): scrolled from the top just far enough to show the
+ * selected row at its bottom edge, or not at all when the row is visible
+ * from the top — where the virtualizer's "keep the selection visible"
+ * aims. The virtualizer itself scrolls with estimated row heights
+ * first and corrects after measuring, so where it stopped depended on
+ * timing (High contrast · comfortable `main-1024` / `html` differed between
+ * runs under load).
+ */
+async function pinListScroll(page: Page, subject: string): Promise<void> {
+  const row = rows(page).filter({ hasText: subject }).first();
+  // Scrolling renders and measures further rows, which can move the row
+  // again: repeat until the position holds (twice at most in practice).
+  for (let pass = 0; pass < 5; pass++) {
+    await listScrollSettled(page);
+    const moved = await row.evaluate((element) => {
+      const list = element.closest('[data-part="message-list"]');
+      const spacer = list?.querySelector('[data-part="message-list.spacer"]');
+      if (!(list instanceof HTMLElement) || !spacer) {
+        throw new Error("the row is not in a message list");
+      }
+      // The virtualizer's own rule for `align: "auto"` from the top: the
+      // row's end (measured from the first row's spacer) at the bottom edge.
+      const end = element.getBoundingClientRect().bottom - spacer.getBoundingClientRect().top;
+      const target = Math.max(0, Math.round(end - list.clientHeight));
+      const before = list.scrollTop;
+      list.scrollTop = target;
+      return Math.abs(list.scrollTop - before) >= 1;
+    });
+    if (!moved) break;
+  }
+  await expect(row).toBeInViewport();
 }
 
 /** Runs an action from the command palette (Ctrl+K) by searching for `query`. */

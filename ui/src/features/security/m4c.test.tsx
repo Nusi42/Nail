@@ -63,7 +63,7 @@ describe("recovery key", () => {
     env.transport.data.features.security.vault.state = "encrypted";
     env.transport.data.features.security.vault.key_in_keychain = true;
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(env, <NodeView node={widget("security-recovery-key")} path="t" />);
     expect(await screen.findByText(/There is no recovery key yet/)).toBeVisible();
     expect(await violations(container)).toEqual([]);
@@ -114,7 +114,7 @@ describe("recovery key", () => {
     env.transport.data.features.portability.desktop = true;
     env.transport.data.features.portability.pickAnswers = ["C:\\Users\\Ada\\kit.txt"];
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env, <NodeView node={widget("security-recovery-key")} path="t" />);
     await user.click(await screen.findByRole("button", { name: "Create recovery key" }));
     const dialog = await screen.findByRole("dialog", { name: "Recovery key" });
@@ -140,7 +140,7 @@ describe("recovery key", () => {
     env.transport.data.features.security.vault.state = "encrypted";
     const created = await env.transport.send({ type: "CreateRecoveryKey", save_to: null });
     if (created.type !== "RecoveryKeyCreated") throw new Error(created.type);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env, <NodeView node={widget("security-recovery-key")} path="t" />);
     await user.click(await screen.findByRole("button", { name: "Check recovery key" }));
     const dialog = await screen.findByRole("dialog", { name: "Check the recovery key" });
@@ -169,7 +169,7 @@ describe("recovery key", () => {
     const env = createEnv();
     const key = simulateLostVaultKey(env.transport);
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(
       env,
       <>
@@ -201,7 +201,7 @@ describe("recovery key", () => {
     const key = simulateLostVaultKey(env.transport);
     env.transport.data.features.vault.restartAfterRestore = true;
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env, <RecoveryGate />);
     const dialog = await screen.findByRole("dialog", {
       name: "Open your data with the recovery key",
@@ -215,7 +215,7 @@ describe("recovery key", () => {
 
   it("lets the create dialog explain the vault state when it is plain", async () => {
     const env = createEnv();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env, null);
     act(() => {
       env.store.getState().openWindow(RECOVERY_CREATE_DIALOG);
@@ -234,7 +234,7 @@ describe("smartcards", () => {
     env.transport.data.features.portability.desktop = true;
     env.transport.data.features.portability.pickAnswers = [MODULE];
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(env, <NodeView node={widget("security-smartcards")} path="t" />);
     expect(await screen.findByText("No module yet.")).toBeVisible();
     await user.type(screen.getByLabelText("Module (DLL)"), "opensc.dll");
@@ -285,7 +285,7 @@ describe("PIN dialog", () => {
   it("asks for the PIN, asks again after a wrong one and closes when right", async () => {
     const env = createEnv();
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = render(env, null);
     act(() => {
       simulatePinRequest(env.transport, { purpose: "decrypt", attempts_left: 3 });
@@ -321,7 +321,7 @@ describe("PIN dialog", () => {
   it("cancels and says why the core stopped waiting", async () => {
     const env = createEnv();
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env, null);
     let prompt = { prompt_id: "" };
     act(() => {
@@ -356,7 +356,7 @@ describe("PIN dialog", () => {
   it("cancels a waiting prompt when the dialog is closed", async () => {
     const env = createEnv();
     const stop = listen(env);
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(env, null);
     let prompt = { prompt_id: "" };
     act(() => {

@@ -88,7 +88,7 @@ describe("editor helpers", () => {
 
 describe("toolbar-editor", () => {
   it("reorders with buttons and Alt+arrows, adds items and saves", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { env } = renderEditor("toolbar-editor");
     const section = await screen.findByRole("region", { name: "Toolbar editor" });
     await user.selectOptions(within(section).getByLabelText("Toolbar"), "reader");
@@ -123,7 +123,7 @@ describe("toolbar-editor", () => {
 
 describe("key-binding-editor", () => {
   it("records a shortcut, warns about conflicts, removes and resets", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { env } = renderEditor("key-binding-editor");
     const section = await screen.findByRole("region", { name: "Key binding editor" });
     const table = within(section).getByRole("table", { name: "Shortcuts" });
@@ -185,7 +185,7 @@ describe("key-binding-editor", () => {
 
 describe("column-editor", () => {
   it("switches a list to columns and the list renders them", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { env } = renderEditor("column-editor");
     const section = await screen.findByRole("region", { name: "Column editor" });
     expect(within(section).getByText(/shows rows made from templates/)).toBeVisible();

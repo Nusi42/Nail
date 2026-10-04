@@ -28,7 +28,7 @@ async function settle(env: Env): Promise<void> {
 
 describe("Contacts view header", () => {
   it("shows the title, the search, New contact as primary and the rest in More", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("contact-list", { options: { header: true } }), env);
     await settle(env);
@@ -84,7 +84,7 @@ describe("Contacts view header", () => {
 
 describe("Tasks view header", () => {
   it("shows the title and New task as the primary button", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     renderNode(widget("task-list", { options: { header: true } }), env);
     await settle(env);

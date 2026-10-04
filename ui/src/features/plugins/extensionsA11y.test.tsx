@@ -46,7 +46,7 @@ describe("axe: plug-in extensions", () => {
     );
     const body = m ? env.transport.data.bodies.get(m.id) : undefined;
     if (!m || !body?.attachments[0] || !body.attachments[1]) throw new Error("no attachments");
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = renderWithProviders(
       <article>
         <PluginBadges messageId={m.id} />
@@ -67,7 +67,7 @@ describe("axe: plug-in extensions", () => {
 
   it("composer parts and the veto dialog have no violations", async () => {
     const env = setup();
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = renderWithProviders(
       <>
         <ComposerExtensionBar
@@ -111,7 +111,7 @@ describe("axe: plug-in extensions", () => {
     const env = setup();
     const snippets = env.transport.data.features.plugins.plugins.find((p) => p.id === "snippets");
     if (snippets) snippets.manifest.permissions = ["composer", "tasks.write"];
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { container } = renderWithProviders(<PluginManagerDialog />, env);
     await settle(env);
     for (const id of ["digest", "attachment-check"]) {

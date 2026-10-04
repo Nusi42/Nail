@@ -2,6 +2,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeEach } from "vitest";
 import { consoleProblems, installConsoleRecorder, resetConsole } from "./console";
+import { installFastStyles } from "./fastStyles";
+import { settleLiveEnvs } from "./liveEnvs";
 
 // `findBy…` / `waitFor` give up after 1 s by default; when cargo builds run
 // on the same machine, the larger widget suites (PIM calendar, editors)
@@ -31,6 +33,10 @@ if (typeof Element !== "undefined") {
   polyfill(Element.prototype, "releasePointerCapture", nothing);
   polyfill(Element.prototype, "hasPointerCapture", () => false);
   polyfill(Document.prototype, "elementFromPoint", () => null);
+  // jsdom matches every theme rule against every element in
+  // `getComputedStyle`; skip the `[data-part]` rules that cannot match
+  // (`./fastStyles.ts`; `fastStyles.test.tsx` fails if this stops working).
+  installFastStyles();
 }
 
 function fail(problems: string[], when: string): void {
@@ -43,7 +49,11 @@ beforeEach(() => {
   resetConsole();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Let the test's envs finish what they still do (a refetch after a save,
+  // the mock core's next answer) inside act: under machine load it would
+  // otherwise land after the test, outside act (`./liveEnvs.ts`).
+  await settleLiveEnvs();
   // Unmount first (Testing Library's own cleanup is a no-op afterwards), so
   // what the unmount logs counts for this test.
   cleanup();

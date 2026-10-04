@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { build, type InlineConfig } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
-import { strictBuild } from "./strictBuild";
+import { largeChunks, strictBuild } from "./strictBuild";
 
 const dirs: string[] = [];
 
@@ -55,7 +55,11 @@ describe("strictBuild", () => {
     const root = project(`document.body.dataset.list = [${big}].join(" ");\n`);
     const { strict, inline } = config(root, { chunkSizeWarningLimit: 1 });
     await expect(build(inline)).rejects.toThrow(/zero warnings/);
-    expect(strict.warnings.join("\n")).toMatch(/larger than 1 kB/);
+    // The plugin's own check, not only the native reporter's log (which may
+    // reach the logger after the build ended on a busy machine).
+    expect(strict.warnings.join("\n")).toMatch(
+      /larger than 1 kB after minification: assets\/index-[\w-]+\.js \(\d+\.\d\d kB\)/,
+    );
   });
 
   it("fails on a Rolldown warning", async () => {
@@ -63,5 +67,28 @@ describe("strictBuild", () => {
     const { strict, inline } = config(root);
     await expect(build(inline)).rejects.toThrow(/zero warnings/);
     expect(strict.warnings.join("\n")).toMatch(/eval/i);
+  });
+});
+
+describe("largeChunks", () => {
+  const build = { minify: "oxc", lib: false, chunkSizeWarningLimit: 1 } as const;
+  const bundle = {
+    "a.js": { type: "chunk", fileName: "a.js", code: "x".repeat(1500) },
+    "b.js": { type: "chunk", fileName: "b.js", code: "x".repeat(900) },
+    "c.css": { type: "asset", fileName: "c.css" },
+    // Bytes, not characters: 600 × 2 bytes.
+    "d.js": { type: "chunk", fileName: "d.js", code: "ä".repeat(600) },
+  };
+  const of = (extra: object) => ({ build: { ...build, ...extra } }) as never;
+
+  it("lists the chunks over the limit, in bytes / 1000", () => {
+    expect(largeChunks(of({}), "client", bundle)).toEqual(["a.js (1.50 kB)", "d.js (1.20 kB)"]);
+  });
+
+  it("follows the reporter: no warning for libraries, unminified or server builds", () => {
+    expect(largeChunks(of({ lib: { entry: "x" } }), "client", bundle)).toEqual([]);
+    expect(largeChunks(of({ minify: false }), "client", bundle)).toEqual([]);
+    expect(largeChunks(of({}), "server", bundle)).toEqual([]);
+    expect(largeChunks(undefined, "client", bundle)).toEqual([]);
   });
 });

@@ -35,18 +35,24 @@ function must<T>(value: T | null | undefined): T {
 const EVENT_LABEL = "event";
 const MERGE_LABEL = "merge";
 
-// Loading the lazy editor chunks can take long on a busy machine (the
-// default hook timeout of 10 s once failed the whole file under load).
 beforeAll(async () => {
   setLocalTimeZone("Europe/Berlin");
   await loadPimEditors();
-}, 60_000);
+});
 afterAll(() => {
   resetLocalTimeZone();
 });
 
+/**
+ * Waits until the queries are idle and nothing shows "Loading…" any more:
+ * a lazily loaded editor first renders its Suspense fallback (React reveals
+ * the content up to ~300 ms later), then its own loading state while its
+ * queries run. Scanning before that checked only the fallback, and later
+ * tests found the editor only when an earlier one had loaded it.
+ */
 async function settle(env: Env): Promise<void> {
   await waitFor(() => {
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
     expect(env.queryClient.isFetching()).toBe(0);
   });
   await act(async () => {
@@ -55,24 +61,19 @@ async function settle(env: Env): Promise<void> {
 }
 
 describe("axe: calendar views", () => {
-  it.each(VIEW_KINDS)(
-    "view %s has no violations",
-    async (view) => {
-      const env = createEnv();
-      const { container } = renderWithProviders(
-        <NodeView
-          node={widget("calendar", { options: { view, "secondary-zone": "America/New_York" } })}
-          path="t/0"
-        />,
-        env,
-      );
-      await settle(env);
-      expect(container.querySelector('[data-part="calendar"]')).not.toBeNull();
-      expect(await violations(container)).toEqual([]);
-      // The year view's twelve grids take over 20 s under full-suite load.
-    },
-    60_000,
-  );
+  it.each(VIEW_KINDS)("view %s has no violations", async (view) => {
+    const env = createEnv();
+    const { container } = renderWithProviders(
+      <NodeView
+        node={widget("calendar", { options: { view, "secondary-zone": "America/New_York" } })}
+        path="t/0"
+      />,
+      env,
+    );
+    await settle(env);
+    expect(container.querySelector('[data-part="calendar"]')).not.toBeNull();
+    expect(await violations(container)).toEqual([]);
+  });
 });
 
 describe("axe: PIM widgets", () => {
@@ -185,7 +186,7 @@ describe("axe: PIM dialogs", () => {
   });
 
   it("the event editor's open date picker and filled lists have no violations", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const env = createEnv();
     await prepare(env, "pim-event-editor");
     const Dialog = must(dialogs["pim-event-editor"]);
@@ -196,15 +197,14 @@ describe("axe: PIM dialogs", () => {
       env,
     );
     await settle(env);
-    await user.click(screen.getByRole("radio", { name: "All occurrences" }));
+    await user.click(await screen.findByRole("radio", { name: "All occurrences" }));
     await user.click(screen.getByRole("button", { name: "Add a call link" }));
     await user.selectOptions(screen.getByLabelText("Also show the times in"), "Asia/Tokyo");
     await user.click(screen.getByRole("checkbox", { name: "The end is in another time zone" }));
     await user.click(screen.getByRole("button", { name: /Choose the date for Start/ }));
     expect(screen.getAllByRole("grid").length).toBeGreaterThan(0);
     expect(await violations(container)).toEqual([]);
-    // The fullest dialog scan: ~14 s alone, over 20 s under full-suite load.
-  }, 60_000);
+  });
 
   it("the merge dialog's list of duplicates has no violations", async () => {
     const env = createEnv();
@@ -278,7 +278,7 @@ describe("axe: calendar, contacts and tasks in every theme (M5b)", () => {
         expect(await violations(container), name).toEqual([]);
         unmount();
       }
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const env = createEnv();
       const { container } = renderWithProviders(
         <>
@@ -297,6 +297,5 @@ describe("axe: calendar, contacts and tasks in every theme (M5b)", () => {
       expect(screen.getByRole("menuitem", { name: "New calendar" })).toBeInTheDocument();
       expect(await violations(container)).toEqual([]);
     },
-    180_000,
   );
 });
