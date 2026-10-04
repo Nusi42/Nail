@@ -13,7 +13,10 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 base64.workspace = true
-async-compression = { version = "0.4.48", default-features = false, features = ["tokio", "deflate"] }
+async-compression = { version = "0.4.48", default-features = false, features = [
+    "tokio",
+    "deflate",
+] }
 mail-parser.workspace = true
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring", "pem"] }
 tokio-rustls.workspace = true

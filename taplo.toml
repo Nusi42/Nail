@@ -1,0 +1,22 @@
+# taplo (TOML formatter and linter): `npx taplo fmt` / `npx taplo fmt --check`
+# and `npx taplo check` (syntax + schemas). Part of `npm run check` and the
+# pre-commit hook (docs/dev-setup.md, ADR 0123).
+include = ["**/*.toml"]
+exclude = [
+    "node_modules/**",
+    "**/node_modules/**",
+    "**/target/**",
+    ".nail-build/**",
+    # Local, gitignored (points target-dir outside OneDrive).
+    ".cargo/config.toml",
+]
+
+[formatting]
+# Match the existing Cargo.toml style: 4-space indentation, 100 columns
+# (rustfmt's max_width), keys in their written order.
+indent_string = "    "
+column_width = 100
+reorder_keys = false
+reorder_arrays = false
+array_auto_collapse = false
+allowed_blank_lines = 1

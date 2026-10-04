@@ -19,7 +19,11 @@ nail-auth.workspace = true
 # Server side plus the Streamable HTTP client the stdio bridge forwards with.
 # `elicitation` (M4a): confirmations are also asked in the MCP client's own
 # form where it supports one (adds `url`, MIT / Apache-2.0, already in the lock).
-rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest", "elicitation"] }
+rmcp = { workspace = true, features = [
+    "client",
+    "transport-streamable-http-client-reqwest",
+    "elicitation",
+] }
 # M4a: prompt templates, confirmation values and elicitation texts are
 # rendered from the Fluent catalogs (core-mcp.ftl) in the core's locale.
 nail-config.workspace = true

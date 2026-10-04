@@ -139,25 +139,50 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl", "indexmap-impl"] }
 # Errors, async, logging
 thiserror = "2.0.21"
 anyhow = "1.0.104"
-tokio = { version = "1.53", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
+tokio = { version = "1.53", features = [
+    "macros",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "net",
+    "io-util",
+    "fs",
+] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 
 # Mail, TLS, storage (shared by several crates)
 mail-parser = "0.11.9"
-tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "logging", "tls12"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = [
+    "ring",
+    "logging",
+    "tls12",
+] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 
 # M1a engines (ADR 0012). TLS everywhere is rustls with the `ring` provider,
 # chosen explicitly per connection (no aws-lc, no process-wide default).
 # SMTP submission: tokio + rustls, raw MIME is built elsewhere.
-lettre = { version = "0.11.23", default-features = false, features = ["smtp-transport", "pool", "hostname", "tokio1", "tokio1-rustls", "ring", "rustls-platform-verifier"] }
+lettre = { version = "0.11.23", default-features = false, features = [
+    "smtp-transport",
+    "pool",
+    "hostname",
+    "tokio1",
+    "tokio1-rustls",
+    "ring",
+    "rustls-platform-verifier",
+] }
 # OS keychain (Windows Credential Manager, macOS Keychain, Secret Service).
 keyring = "4.2.0"
 # OAuth2 client (PKCE, token exchange/refresh); HTTP through our reqwest.
 oauth2 = { version = "5.0.0", default-features = false }
 # HTTP client for OAuth2 and autoconfig; TLS config supplied by the caller.
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "json", "charset", "http2"] }
+reqwest = { version = "0.13.5", default-features = false, features = [
+    "rustls-no-provider",
+    "json",
+    "charset",
+    "http2",
+] }
 url = "2.5.8"
 rustls-platform-verifier = "0.7.1"
 # DNS (RFC 6186 SRV lookups; mock DNS answers in tests).
@@ -182,7 +207,12 @@ regex = "1.13.1"
 # MCP server (Streamable HTTP + stdio) and client (tests).
 # Server side here; tests add `client` + `transport-streamable-http-client-reqwest`
 # (reqwest stays on the workspace's `rustls-no-provider` build, no aws-lc).
-rmcp = { version = "3.5.0", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
+rmcp = { version = "3.5.0", features = [
+    "server",
+    "macros",
+    "transport-io",
+    "transport-streamable-http-server",
+] }
 
 # M2a (ADR 0029). Licences: MIT / Apache-2.0 / BSD only (no GPL family;
 # Sequoia-PGP is LGPL, so OpenPGP uses rPGP). No OpenSSL: everything below
@@ -242,7 +272,12 @@ hmac = "0.13.0"
 ipnet = "2.12.2"
 # Remote-UI TLS (nail-server, WP42): TLS 1.3 / 1.2 with rustls + ring,
 # self-signed certificates, ACME (usable only in the locked internet mode).
-rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+rustls = { version = "0.23.45", default-features = false, features = [
+    "ring",
+    "std",
+    "tls12",
+    "logging",
+] }
 rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "pem", "ring"] }
 instant-acme = { version = "0.8.5", default-features = false, features = ["ring", "hyper-rustls"] }
 
@@ -266,7 +301,14 @@ tauri-plugin-notification = "2.5.0"
 # features.
 # M4a (ADR 0079): `array-buffer` for binary `nail.http.fetch` bodies and
 # attachment bytes (Uint8Array / ArrayBuffer; no extra dependency).
-rquickjs = { version = "0.14.0", features = ["futures", "loader", "macro", "classes", "properties", "array-buffer"] }
+rquickjs = { version = "0.14.0", features = [
+    "futures",
+    "loader",
+    "macro",
+    "classes",
+    "properties",
+    "array-buffer",
+] }
 # `.nailplugin` archives (zip): deflate through zlib-rs (pure Rust, Zlib
 # licence); no bzip2 / zstd / lzma C code, no AES.
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
