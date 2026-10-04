@@ -324,8 +324,12 @@ test("a modal confirmation blocks only its own flow", async ({ page }) => {
   await expect(own.getByRole("textbox", { name: "Subject" })).toHaveValue("Unsaved thoughts");
 
   // A confirmation from the main window ("Delete permanently?") covers the
-  // main window, not the composer.
-  await rows(page).first().click();
+  // main window, not the composer (snapped right, out of the list's way).
+  await dragTitleTo(page, own, { x: page.viewportSize()!.width - 4, y: 400 });
+  await expect(own).toHaveAttribute("data-snap", "right");
+  await rows(page)
+    .first()
+    .click({ position: { x: 40, y: 20 } });
   await page.keyboard.press("Shift+Delete");
   const remove = win(page, "mail-delete-permanently");
   await expect(remove).toBeVisible();

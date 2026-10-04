@@ -108,7 +108,7 @@ CI (`.github/workflows/ci.yml`) runs these jobs:
 | Job | Runner | What |
 | --- | --- | --- |
 | `build-test` | `windows-latest` | build, `cargo test --workspace`, clippy, fmt, Vitest, lint, the Playwright web tests, the script tests |
-| `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke tests (`desktop.spec.ts`, `desktop-m4b.spec.ts`) with `NAIL_E2E_DESKTOP=1` |
+| `desktop` | `windows-latest` | `npm run build:desktop`, then the WebView2 smoke tests (`desktop.spec.ts`, `desktop-m4b.spec.ts`, `desktop-m4c.spec.ts`, `desktop-m5c.spec.ts`) with `NAIL_E2E_DESKTOP=1` |
 | `mapi` | `windows-latest` | `nail-mapi` tests as x86 under WOW64, release builds of `nail_mapi.dll` for x64 / x86 / ARM64, every export checked on the x64 and x86 DLLs (`nail-mapi-harness exports`) |
 | `installer` | `windows-latest` | `node scripts/build-installer.mjs --offline-webview …` (NSIS, MSI, offline-WebView2 NSIS, portable zip, SBOMs, update signatures with a throwaway key), the next patch version as the update, the loopback update server, `installer-smoke.ps1` (install → start → update → start → uninstall), `msi-smoke.ps1` (elevated silent MSI install with properties → start: the app reports msi-managed updates → upgrade → uninstall), winget manifests; uploads everything |
 | `installer-arm64` | `windows-latest` | the ARM64 installers, cross-built (not run: no ARM64 runner) |
@@ -305,6 +305,17 @@ How it works:
   sections). The app reopens the last view after a reload or restart (UI
   state, shared with remote sessions): switch back to Mail before reloading
   when a test expects the mail list.
+- M5c: every message has its own composer window (`composer:<key>`, titled
+  by its subject): find it with `composerWindow(page)` (the newest) /
+  `composerWindows(page)`, and discard one with `discardComposer(page, w)`
+  (it answers the "Discard?" confirmation a saved or changed message asks).
+  Windows are non-modal and several can be visible: address a window by
+  `[data-part="window"][data-window="<id>"]` rather than a bare
+  `getByRole("dialog")`, and use `getByLabel(…, { exact: true })` inside a
+  window when the label is part of its title bar's name ("Title bar of
+  …"). Remembered geometry lives in the server's config dir
+  (`window-state.json`), so scenarios that move windows start their own
+  server (`startNail`).
 - Traces, screenshots and the CI HTML report go to
   `%LOCALAPPDATA%\nail-build\e2e\` (`$TMPDIR/nail-build/e2e/` elsewhere;
   `NAIL_BUILD_DIR` overrides the base), not into the repository.
@@ -339,6 +350,8 @@ How it works:
 | `e2e/tests/m2c.spec.ts` | `--seed demo-multi` (M2c): a rule placed "Server" with its Sieve script and the vacation reply on the mock ManageSieve server; "Not junk" / "Mark as junk" train the filter and the next similar message is filed in Junk; a snoozed message leaves the list and returns when the core's clock passes the wake time; a new-mail notification (recorded Web Notification) and quiet hours suppressing the next; the server search finds a message of the headers-only folder and opening it fetches the body; the right-click menu (and Shift+F10); a key recorded in Settings → Customize → Keys is written to `layout.kdl` and works |
 | `e2e/tests/m5b.spec.ts` | `--seed demo` / `demo-multi` (M5b): the rail and Ctrl+1 … 4 / `g m` switch views with the focus moving into the view, rail arrow keys; the Mail badge matches the All inboxes count; the last view survives a reload (`ui-state.json` `shell.view`); the reader bar's labelled / icon actions, More from the keyboard and actions moving into More when narrow; filter chips; settings search → the setting marked, the remembered section; the calendar view switch and a calendar's "…" menu (recolour); dates in English with a German browser; a pre-rail `layout.kdl` keeps working and is offered the new default through the merge dialog; a remote browser in dark mode next to a light desktop; views from the command palette |
 | `e2e/tests/m5b-contract.spec.ts` | the contract's fallback with a pre-rail `layout.kdl`: view shortcuts and the palette open the views as windows |
+| `e2e/tests/m5c.spec.ts` | `--seed demo` / `demo-multi` (M5c): the window manager — move by the title bar, resize from each edge and corner down to the minimum size, snap left / right (preview, coming loose), maximize by double-click and button, keyboard move / resize (arrows, Alt+F7 / Alt+F8 with Enter / Escape), geometry remembered across a reload (`window-state.json`) and Reset window positions, two composers side by side (one sent, the other kept), a confirmation blocking only its composer and "Delete permanently?" blocking only the main window, Escape |
+| `e2e/tests/desktop-m5c.spec.ts` | the desktop app (M5c): a composer pops out into its own OS window (`nail_test_shell("pop-outs")`), is sent there and the OS window closes; a popped-out composer returns to the main window with what was typed |
 | `e2e/tests/m5a.spec.ts` | `--seed demo-multi` (M5a): the five themes picked in Settings → Appearance and written to `theme.kdl` (Follow Windows off), the accent override and "Use theme defaults", Compact density across themes (tag line hidden, smaller rows, `data-nail-density`), Follow Windows driven by `system-appearance` (Graphite, High contrast, another pair), a user theme added to `themes/` while running and a broken one listed, an attachment card's Save downloading the file |
 
 ### Visual regression (M5a, ADR 0106)

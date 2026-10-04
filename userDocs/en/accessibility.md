@@ -9,6 +9,10 @@ contrast and without animations.
   window over the main window (the composer, the settings, a dialog), Tab
   stays in that window: after its last control it goes back to its first.
   **Escape** closes the window, and the focus returns to where you were.
+  **Ctrl+F6** moves between Nail's windows and the main window,
+  **Ctrl+Shift+F6** goes back to the main window, and the title bar moves
+  and resizes a window from the keyboard (arrow keys, **Alt+F7** /
+  **Alt+F8**): see [Windows](windows.md#using-the-keyboard).
 - In the **message list**, `j` / `k` or the arrow keys select the next or
   previous message. In the **folder list**, the arrow keys, Home and End
   move between folders.

@@ -124,7 +124,7 @@ jobs:
         run: npx -w e2e playwright install --with-deps chromium
 
       - name: Playwright (desktop)
-        run: npm run e2e:only -- tests/desktop.spec.ts tests/desktop-m4b.spec.ts tests/desktop-m4c.spec.ts
+        run: npm run e2e:only -- tests/desktop.spec.ts tests/desktop-m4b.spec.ts tests/desktop-m4c.spec.ts tests/desktop-m5c.spec.ts
         env:
           NAIL_E2E_DESKTOP: "1"
 

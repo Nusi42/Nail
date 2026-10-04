@@ -50,11 +50,13 @@ left it.
   buttons wrap. **Send**, **Save draft** and **Discard** always stay at the
   bottom of the window, also when the message is longer than the window.
 
-Only questions that need an answer before anything else can happen —
-closing with unsaved changes, discarding a draft, the plug-in veto's **Send
-anyway**, deleting something for good — block the rest of Nail until you
-answer them. Settings, rules, the plug-in manager and the other tool
-windows never do.
+Only questions that need an answer first — closing with unsaved changes,
+discarding a draft, the plug-in veto's **Send anyway** — are modal, and they
+block only their own composer: it is dimmed until you answer, while the main
+window and other composers keep working. Settings, rules, the plug-in
+manager and the other tool windows never block anything. In the desktop app
+a composer can also open in a window of its own (**Open in new window**);
+see [Windows](windows.md).
 
 ## Plain text, HTML and Markdown
 

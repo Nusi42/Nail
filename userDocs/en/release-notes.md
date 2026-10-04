@@ -10,6 +10,17 @@ please keep a [backup](backup-restore.md) of your data.
 
 ### New in this version
 
+- **Real windows** — every window over the main window can be moved,
+  resized from any edge or corner, maximized (double-click the title bar),
+  snapped to the left or right half and moved / resized from the keyboard
+  (`Alt+F7` / `Alt+F8`, `Ctrl+F6` between windows). Nail remembers where
+  you put each kind of window. Tool windows no longer block the main
+  window; questions block only the window they came from. See
+  [Windows](windows.md).
+- **Several messages at once** — each message has its own composer window,
+  titled by its subject; in the desktop app a window can pop out into its
+  own window on your desktop.
+- **Delete permanently?** now asks before deleting.
 - **Import from other programs** — Thunderbird profiles (local folders,
   address books, and your accounts and filters as suggestions; passwords
   are never imported), mbox and Maildir files, folders of `.eml` files,

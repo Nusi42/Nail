@@ -34,7 +34,9 @@ import {
 } from "./lib/matrix.ts";
 import { actualDir, manifestDir, VIEWPORT } from "./lib/paths.ts";
 import {
+  ATTACHMENT_MESSAGE,
   CALENDAR_EVENTS,
+  HTML_MESSAGE,
   MAIN_TIME,
   calendarEventIcs,
   loadMainWindow,
@@ -143,6 +145,44 @@ export async function preparePage(page: Page, time: Date = MAIN_TIME): Promise<v
 }
 
 /**
+ * Marks the messages with these subjects unread again. The screens that
+ * open them (HTML, attachments) mark them read, and the worker's server is
+ * shared by every variant: without this, whether the main window shows
+ * them read depended on which variants ran before on that worker.
+ */
+async function markUnread(server: NailServer, subjects: readonly string[]): Promise<void> {
+  for (const subject of subjects) {
+    const found = await rpc(server, {
+      type: "Search",
+      query: {
+        text: `subject:"${subject}"`,
+        account_id: null,
+        folder_id: null,
+        offset: 0,
+        limit: 10,
+        sort: "date",
+      },
+    });
+    const hits = (found.hits as { message: { id: string; flags: { seen: boolean } } }[]) ?? [];
+    const ids = hits.filter((h) => h.message.flags.seen).map((h) => h.message.id);
+    if (ids.length === 0) continue;
+    const answer = await rpc(server, {
+      type: "UpdateFlags",
+      message_ids: ids,
+      change: {
+        seen: false,
+        flagged: null,
+        answered: null,
+        draft: null,
+        add_tags: [],
+        remove_tags: [],
+      },
+    });
+    expect(answer.type, `UpdateFlags: ${JSON.stringify(answer)}`).not.toBe("Error");
+  }
+}
+
+/**
  * Waits until the UI shows `density` (`data-nail-density` on the root;
  * absent = comfortable, ADR 0102), so a capture is never mislabelled.
  */
@@ -183,6 +223,7 @@ export async function openAndShoot(page: Page, server: NailServer, screen: Scree
   await page.goto("about:blank");
   const reset = await rpc(server, { type: "SetUiState", key: "shell.view", value: null });
   expect(reset.type, `SetUiState: ${JSON.stringify(reset)}`).toBe("UiState");
+  await markUnread(server, [HTML_MESSAGE, ATTACHMENT_MESSAGE]);
   await loadMainWindow(page, server.url);
   await screen.open(page);
   await settle(page);

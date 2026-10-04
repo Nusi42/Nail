@@ -545,7 +545,7 @@ describe("window model", () => {
     expect(resolveWindowSpec("composer", null, appRegistry.windows)).toMatchObject({
       modal: false,
       instances: "multiple",
-      size: { width: 780, height: 640 },
+      size: { width: 820, height: 720 },
     });
     // Its confirmations open per composer too.
     expect(resolveWindowSpec("composer-close:w3", null, appRegistry.windows)).toMatchObject({

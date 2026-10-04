@@ -173,14 +173,9 @@ fn theme_parts_are_well_formed() {
         }
     }
     // The part rules the default UI relies on (list rows, folders, the
-    // reader and toolbars are styled by the UI skin since M5a).
-    for part in [
-        "app",
-        "split.divider",
-        "window",
-        "composer",
-        "thread-view.item",
-    ] {
+    // reader and toolbars are styled by the UI skin since M5a; windows by
+    // the window manager's skin and their size by the window spec since M5c).
+    for part in ["app", "split.divider", "composer", "thread-view.item"] {
         assert!(
             theme.parts.iter().any(|r| r.selector == part),
             "missing part {part}"

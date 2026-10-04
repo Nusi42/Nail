@@ -4,7 +4,7 @@
  * menu, the composer, the settings page, the calendar's week, month, year,
  * agenda and free-time views, the Contacts and Tasks views, the main window
  * and the calendar at 1024 px (M5b review), a context menu, HTML and
- * attachment messages and a dialog. Each starts from a freshly
+ * attachment messages, a dialog and a modal confirmation (M5c). Each starts from a freshly
  * loaded main window (so one screen never leaks state into the next) and
  * ends with the screen open and its content present; `support.ts` then
  * settles and captures it.
@@ -151,13 +151,19 @@ export const SCREENS: readonly Screen[] = [
     title: "Composer",
     async open(page) {
       await page.locator('[data-part="folder-tree.compose"]').click();
-      const composer = layoutWindow(page, "composer");
+      // M5c: every message has its own window `composer:<key>`.
+      const composer = page.locator('[data-part="window"][data-window^="composer:"]');
       await expect(composer).toBeVisible();
       await composer.getByRole("textbox", { name: "To" }).fill("grace@navy.example");
       await composer.getByRole("textbox", { name: "Subject" }).fill("Quarterly numbers");
       await composer
         .getByRole("textbox", { name: "Message" })
         .fill("Hi Grace,\n\nthe numbers for the third quarter are attached.\n\nAda");
+      // M5c: the security panel checks this composer's own recipients
+      // (debounced); capture after its answer, not before.
+      await expect(
+        composer.getByRole("button", { name: "Look up the missing key online" }),
+      ).toBeVisible();
     },
   },
   {
@@ -316,6 +322,18 @@ export const SCREENS: readonly Screen[] = [
       await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click({ button: "right" });
       await page.getByRole("menu").getByRole("menuitem", { name: "Move to…" }).click();
       await expect(layoutWindow(page, "move")).toBeVisible();
+    },
+  },
+  {
+    id: "confirmation",
+    title: "Modal confirmation (Delete permanently?)",
+    async open(page) {
+      await selectSample(page);
+      await rows(page).filter({ hasText: SAMPLE_MESSAGE }).first().click();
+      await page.keyboard.press("Shift+Delete");
+      const confirm = layoutWindow(page, "mail-delete-permanently");
+      await expect(confirm).toBeVisible();
+      await expect(page.locator('[data-part="window-scrim"]')).toBeVisible();
     },
   },
 ];

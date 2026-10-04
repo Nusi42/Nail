@@ -119,7 +119,7 @@ export const dialogs: Feature["dialogs"] = {
 export const windows: NonNullable<Feature["windows"]> = {
   [COMPOSER_KIND]: {
     modal: false,
-    size: { width: 780, height: 640 },
+    size: { width: 820, height: 720 },
     min_size: { width: 520, height: 400 },
     instances: "multiple",
   },

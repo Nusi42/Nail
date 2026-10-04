@@ -100,7 +100,7 @@ the selected message.
 | `e` | Archive (to the account's Archive folder) |
 | `v` | Move to a folder: type part of its name, then click it or press Enter |
 | `Delete` | Move to Trash (in Trash: delete for good) |
-| `Shift+Delete` | Delete for good |
+| `Shift+Delete` | Delete for good (asks first: **Delete permanently?**) |
 | `r`, `a`, `f` | Reply, reply all, forward |
 | `b` | Snooze (see below) |
 | `Shift+J` | Mark as junk |

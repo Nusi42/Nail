@@ -140,6 +140,14 @@ program reports that the attachment is too large. If Nail has no e-mail
 account yet, the program is told to set one up first. If Nail is not
 running, it is started.
 
+## Pop-out windows
+
+Any window but a question can leave Nail's main window and become a window
+of its own on your desktop — **Open in new window** in its title bar — for
+example a message on a second monitor. It has its own taskbar entry, Nail
+remembers where it was (also across monitors), and **Return to main
+window** puts it back. See [Windows](windows.md#pop-out-windows-desktop-app).
+
 ## File dialogs, printing and PDF files
 
 Wherever Nail needs a file or folder — importing, exporting, backups, the

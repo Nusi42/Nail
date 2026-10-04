@@ -153,7 +153,7 @@ layout "default" {
     // Secondary windows, opened over the main window (M5c: movable,
     // resizable and non-modal; `size` / `min-size` in pixels; several
     // composers at once, one per draft).
-    window "composer" size="780x640" min-size="520x400" instances="multiple" {
+    window "composer" size="820x720" min-size="520x400" instances="multiple" {
         stack id="composer-stack" sizes="1fr auto" {
             composer id="composer"
             // Sign and Encrypt with the key status of every recipient.

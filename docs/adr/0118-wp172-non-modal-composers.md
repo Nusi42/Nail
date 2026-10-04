@@ -96,7 +96,7 @@ Registered by each feature (`windows` export next to `dialogs`):
   "Delete permanently?" has no dialog yet (the action deletes at once) —
   requested from WP174.
 - **Everything else non-modal** with a default and a minimum size: the
-  composer (780 × 640, min 520 × 400, `instances: "multiple"`), rules
+  composer (820 × 720, min 520 × 400, `instances: "multiple"`), rules
   (900 × 640), the plug-in manager (900 × 640), the confirmation center, the
   wizards, editors and pickers (sizes in each `index.ts`). The command
   palette does not pop out. A test checks every feature dialog has a

@@ -19,7 +19,7 @@ fn the_default_layout_sizes_its_windows_and_allows_several_composers() {
     let layout = default_layout();
     let composer = layout.window_frames["composer"];
     assert_eq!(composer.instances, Some(WindowInstances::Multiple));
-    assert_eq!(composer.size, Some(WindowSize::new(780, 640)));
+    assert_eq!(composer.size, Some(WindowSize::new(820, 720)));
     assert_eq!(composer.min_size, Some(WindowSize::new(520, 400)));
     // No default window is modal (only confirmations are, and those are
     // feature dialogs).
@@ -48,7 +48,7 @@ fn the_default_layout_sizes_its_windows_and_allows_several_composers() {
     assert_eq!(
         spec,
         WindowSpec {
-            size: WindowSize::new(780, 640),
+            size: WindowSize::new(820, 720),
             min_size: WindowSize::new(520, 400),
             instances: WindowInstances::Multiple,
             ..DEFAULT_WINDOW_SPEC
@@ -184,7 +184,7 @@ fn the_merge_dialog_shows_and_takes_window_properties() {
         item.mine
             .as_deref()
             .unwrap()
-            .contains(r#"size="780x640" min-size="520x400" instances="multiple""#)
+            .contains(r#"size="820x720" min-size="520x400" instances="multiple""#)
     );
     let outcome = resolve_merge(
         ConfigFile::Layout,
@@ -229,7 +229,7 @@ fn the_write_back_keeps_window_properties() {
     .unwrap();
     assert!(
         patched.contains(
-            r#"window "composer" size="780x640" min-size="520x400" instances="multiple""#
+            r#"window "composer" size="820x720" min-size="520x400" instances="multiple""#
         ),
         "{patched}"
     );

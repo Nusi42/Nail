@@ -553,6 +553,17 @@ ui/                    React renderer; feature slots in ui/src/features/<name>/ 
                        PopOutChanged), api/windowStateMock.ts (enableMockPopOuts / simulatePopOutReport), UiState.windows =
                        window ids in z-order + focusWindow, UiState.composers (per instance), Feature.windows; slots
                        features/windows (WP171), features/popout (WP173: PopOutHost rendered by App.tsx on a pop-out route);
+                       M5c packages / integration (ADRs 0117–0121): layout/WindowLayer.tsx (layer, z-order, modality with
+                       owners `modalOwner`, Ctrl+F6, openingOrder), layout/WindowFrame.tsx (frame, title bar + PopOutButton,
+                       8 handles, snap preview, keyboard move / size, debounced saves; tabbables / trapTab),
+                       layout/windowSpecs.ts (WindowSpecsContext, WindowTitlesContext = Feature.windowTitles),
+                       features/windows/{geometry,commands,useViewport,skin}.ts (WINDOWS_SKIN_CSS); features/composer
+                       sessions.ts (composer:<key> windows, UiState.composer = focused composer mirror, close guard),
+                       ConfirmDialogs.tsx, popOut.ts (preparer / pop-out page / return), windowOf.ts (composerOf,
+                       useComposerWindowOf), skin.ts (COMPOSER_SKIN_CSS); features/popout (PopOutButton, PopOutRouter,
+                       hooks, model, parts POPOUT_BASE_CSS); widgets/DeletePermanently.tsx; features/plugins/windows.ts
+                       (plug-in dialogs `plugin-dialog|modal-<size>:<key>`, `plugin-send-veto`);
+                       features/remote/ReauthWindow.tsx (`remote-reauth`); src/m5c.test.tsx (every window);
                        RemoteGate.tsx
                        (login gate), api/reauth.ts, theme/trustedHtml.ts (Trusted Types for srcdoc),
                        i18n/format.ts (the only place that formats dates: useDateFormat / formatDateTime;
@@ -592,6 +603,8 @@ e2e/                   Playwright tests (support/desktop.ts: WebView2 CDP smoke 
                        attachment download); tests/m5b-contract.spec.ts (fallback: view shortcuts open the views' windows
                        with a pre-rail layout, palette); tests/m5b.spec.ts (rail / views / badges / remembered view, More,
                        chips, settings search, calendar menu, dates in a German browser, layout offer, remote dark mode);
+                       tests/m5c.spec.ts (window manager scenarios) + tests/desktop-m5c.spec.ts (pop-out composer);
+                       support/views.ts composerWindow / composerWindows / discardComposer (M5c);
                        support/views.ts (rail, viewRegion, showView, openSettings, readerAction, runFromPalette);
                        visual/ (M5a, ADR 0106: visual regression, built-in themes ×
                        densities × 9 screens; own Playwright config; baselines in visual/baselines/<platform>
@@ -960,6 +973,15 @@ npm run tauri dev                          # desktop app with Vite hot reload (s
   `ui/src/layout/` + `features/windows/` + windows.ftl, WP172 `features/composer/` + `windows` registrations in other
   features, WP173 `app/src-tauri/` + `features/popout/` + popout.ftl, WP175 `nail-core/tests/{gmail,exchange}.rs` + the
   Gmail / Exchange engine sources.
+- M5c integration (ADR 0121; packages ADRs 0117 window manager, 0118 non-modal windows + several composers, 0119
+  desktop pop-outs, 0120 Gmail / Exchange sync races): every dialog is a window of the window manager (also plug-in
+  dialogs, the send veto, remote re-authentication, "Delete permanently?"); only confirmations are modal and they block
+  only their owner (`modalOwner`: same instance key, else the window focused when it opened, else the main window —
+  page-modal = `data-owner="main"`, scrim below every window, the only `aria-modal`); modal windows stack above the
+  others. Composers are `composer:<draft|wN>` windows titled by their subject; `UiState.composer` mirrors the focused
+  one. Skins `WINDOWS_SKIN_CSS` / `COMPOSER_SKIN_CSS` follow the shared skin; window sizes come only from specs
+  (`layout.kdl` `size=` / `min-size=`, `Feature.windows`), never from theme rules. API messages are stored with their
+  remote id / Exchange / Gmail data in one transaction (`Store::merge_with_remote`, `ingest_with_remote`).
 - `nail serve` and the desktop app start the MCP server (the settings' fixed port; `--mcp-port`,
   `--no-mcp` for serve); the endpoint is in `<data-dir>/mcp-endpoint.json`. `nail serve` and seeded
   runs never open an editor (`open_editor`). One process per data directory (`DataDirLock`: serve,

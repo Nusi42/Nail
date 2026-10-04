@@ -12,6 +12,7 @@ Guides and references for people using Nail.
 | [Invitations, scheduling and Gmail labels](invitations-and-gmail-labels.md) | The invitation card (answering, proposing a new time, the spoofing warning, the mail Nail sends, calendar servers that schedule themselves), organizing meetings, finding a time with free/busy, Gmail accounts, labels and categories |
 | [Microsoft Exchange and Microsoft 365](exchange.md) | Adding an Exchange Online or Exchange Server account (Autodiscover, signing in), shared mailboxes and delegate access, categories, Focused Inbox, automatic replies, rules on the server, booking a room, Microsoft To Do |
 | [Searching](search.md) | The search bar and the search language: fields, AND / OR / NOT, quotes, error messages |
+| [Windows](windows.md) | Moving, resizing, maximizing and snapping windows, keyboard control (`Alt+F7` / `Alt+F8`, `Ctrl+F6`), remembered positions, which questions block what, pop-out windows in the desktop app |
 | [Writing mail](composer.md) | The composer: plain text, HTML and Markdown, attachments and the reminder, replies and signatures, drafts saved to the server, undo send, send later, the outbox |
 | [Markdown mail](markdown-mail.md) | What Markdown can do, what recipients get, the mail stylesheet and code colours per identity |
 | [Settings](settings.md) | The settings page: sections and where the old tabs went, searching settings, links to a section (`settings.section` / `settings.search`) |
